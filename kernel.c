@@ -214,7 +214,9 @@ R lam1(Clos this, WORD _) {
 
 R ping(Actor self, WORD q, Clos then) {
     self->state[0] +=1;
-    printf("Ping %d\n", (int)self->state[0]*(int)q);
+    int j = (int)self->state[0]*(int)q;
+    if (j % 10000 == 0)
+        printf("Ping %d\n", j);
     return (R){RCONT, CLOS3(lam1,self,q,then), None};
 }
 
@@ -223,7 +225,9 @@ R ping1(Clos this, WORD th) {
 }
 
 R pong(Actor self, WORD n, WORD q, Clos then) {
-    printf("     %d Pong\n", (int)n*(int)q);
+    int j = (int)n*(int)q;
+    if (j % 10000 == 0)
+        printf("     %d Pong\n", j);
     ASYNC(self, CLOS2(ping1,self,q));
     return (R){RCONT, then, None};
 }
