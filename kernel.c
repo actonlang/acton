@@ -214,7 +214,7 @@ R lam1(Clos this, WORD _) {
 }
 
 R ping(Actor self, WORD q, Clos then) {
-    *((int64_t *)self->state[0]) += 1;
+    self->state[0] = (WORD)((int64_t)self->state[0] + 1);
     int64_t j = (int64_t)self->state[0]*(int64_t)q;
     if (j % 100000 == 0)
         printf("Ping %ld\n", j);
