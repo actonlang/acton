@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define None (WORD)0
 
@@ -213,7 +214,7 @@ R lam1(Clos this, WORD _) {
 }
 
 R ping(Actor self, WORD q, Clos then) {
-    self->state[0] +=1;
+    *((int64_t *)self->state[0]) += 1;
     int64_t j = (int64_t)self->state[0]*(int64_t)q;
     if (j % 100000 == 0)
         printf("Ping %ld\n", j);
@@ -245,6 +246,8 @@ R Pingpong(Clos this, WORD then) {
 
 int main(int argc, char **argv) {
     Actor root = bootstrap(CLOS1(Pingpong, (WORD)1));
+    (void)root;  // unused
+
     loop();
 }
 
