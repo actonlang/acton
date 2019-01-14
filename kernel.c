@@ -178,7 +178,7 @@ void loop() {
                 case RWAIT:
                     if (((Msg)r.value)->clos) {                 // MUTEX M(r.value)
                         m->clos = r.cont;                       //
-                        ENQUEUE(a, ((Msg)r.value)->waiting);    //
+                        ENQUEUE(a, ((Msg)r.value)->waiting);    // (Order is not important here)
                     } else {                                    //
                         m->clos = r.cont;                       //
                         m->value = ((Msg)r.value)->value;       //
