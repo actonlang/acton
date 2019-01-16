@@ -81,8 +81,8 @@ bool    ENQ_msg(Msg m, Actor a);
 // return true if the queue still holds messages.
 bool    DEQ_msg(Actor a);
 
-// Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen.
-// Else return false.
+// Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen (and return true),
+// else immediately return false.
 bool    ADD_waiting(Actor a, Msg m);
 // Atomically freeze message "m" and return its list of waiting actors. 
 Actor   FREEZE_waiting(Msg m);
