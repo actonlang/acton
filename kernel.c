@@ -1,61 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <pthread.h>
-#include <stdint.h>
+#include "kernelops.h"
 
 #define None (WORD)0
 
-typedef void *WORD;
-
-struct Clos;
-struct Msg;
-struct Actor;
-struct Thread;
-
-typedef struct R R;
-typedef struct Clos *Clos;
-typedef struct Msg *Msg;
-typedef struct Actor *Actor;
-typedef struct Thread *Thread;
-
-enum RTAG { RDONE, RCONT, RWAIT };
-
-struct R {
-    int tag;
-    Clos cont;
-    WORD value;
-};
-
-struct Clos {
-    R (*code)(Clos, WORD);
-    WORD var[];
-};
-
-struct Msg {
-    Msg next;
-    Actor waiting;
-    Clos clos;
-    WORD value;
-};
-
-struct Actor {
-    Actor next;
-    Msg msg;
-    WORD state[];
-};
-
-struct Thread {
-    Thread next;
-    Actor current;
-    pthread_t id;
-};
-
-Clos CLOS(R (*code)(Clos, WORD), int n) {
-    Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
-    c->code = code;
-    return c;
-}
 
 Clos CLOS1(R (*code)(Clos,WORD), WORD v0) {
     Clos c = CLOS(code,1);
@@ -78,56 +24,6 @@ Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2) {
     return c;
 }
 
-Msg MSG(Clos clos) {
-    Msg m = malloc(sizeof(struct Msg));
-    m->next = NULL;
-    m->waiting = NULL;
-    m->clos = clos;
-    return m;
-}
-
-Actor ACTOR(int n) {
-    Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
-    a->next = NULL;
-    a->msg = NULL;
-    return a;
-}
-
-struct QNode {
-    struct QNode *next;
-};
-
-typedef struct QNode *QNode;
-
-void enqueue(QNode n, QNode *anchor) {
-    if (*anchor) {
-        QNode a = *anchor;
-        while (a->next)
-            a = a->next;
-        a->next = n;
-    } else {
-        *anchor = n;
-    }
-    n->next = NULL;
-}
-
-void *dequeue(QNode *anchor) {
-    if (*anchor) {
-        QNode n = *anchor;
-        *anchor = n->next;
-        n->next = NULL;
-        return n;
-    } else {
-        return NULL;
-    }
-}
-
-#define ENQUEUE(n,q)    enqueue((QNode)n, (QNode*)&q)
-#define DEQUEUE(q)      dequeue((QNode*)&q)
-#define EMPTY(q)        ((q)==NULL)
-
-Actor readyQ = NULL;
-
 R DONE(Clos this, WORD val) {
     return (R){RDONE, NULL, val};
 }
@@ -137,12 +33,8 @@ struct Clos doneC = { DONE };
 Msg ASYNC(Actor to, Clos c) {
     Msg m = MSG(c);
     m->value = &doneC;
-    if (EMPTY(to->msg)) {           // MUTEX A(to)
-        ENQUEUE(m, to->msg);        //
-        ENQUEUE(to, readyQ);        //
-    } else {                        //
-        ENQUEUE(m, to->msg);        //
-    }                               //
+    if (ENQ_msg(m, to))
+        ENQ_ready(to);
     return m;
 }
 
@@ -152,40 +44,38 @@ R AWAIT(Msg m, Clos th) {
 
 void loop() {
     while (1) {
-        Actor a = DEQUEUE(readyQ);
-        if (a) {
-            Msg m = a->msg;
+        Actor current = DEQ_ready();
+        if (current) {
+            Msg m = current->msg;
             R r = m->clos->code(m->clos, m->value);
             switch (r.tag) {
-                case RDONE:
+                case RDONE: {
                     m->value = r.value;
-                    m->clos = NULL;                             // MUTEX M(m)
-                    while (1) {
-                        Actor b = DEQUEUE(m->waiting);
-                        if (!b)
-                            break;
+                    Actor b = FREEZE_waiting(m);
+                    while (b) {
                         b->msg->value = r.value;
-                        ENQUEUE(b, readyQ);
+                        ENQ_ready(b);
+                        b = b->next;
                     }
-                    DEQUEUE(a->msg);                            // MUTEX A(a)
-                    if (!EMPTY(a->msg))
-                        ENQUEUE(a, readyQ);
+                    if (DEQ_msg(current))
+                        ENQ_ready(current);
                     break;
-                case RCONT:
+                }
+                case RCONT: {
                     m->clos = r.cont;
                     m->value = r.value;
-                    ENQUEUE(a, readyQ);
+                    ENQ_ready(current);
                     break;
-                case RWAIT:
-                    if (((Msg)r.value)->clos) {                 // MUTEX M(r.value)
-                        m->clos = r.cont;                       //
-                        ENQUEUE(a, ((Msg)r.value)->waiting);    // (Order is not important here)
-                    } else {                                    //
-                        m->clos = r.cont;                       //
-                        m->value = ((Msg)r.value)->value;       //
-                        ENQUEUE(a, readyQ);                     //
-                    }                                           //
+                }
+                case RWAIT: {
+                    m->clos = r.cont;
+                    Msg x = (Msg)r.value;
+                    if (!ADD_waiting(current, x)) {
+                        m->value = x->value;
+                        ENQ_ready(current);
+                    }
                     break;
+                }
             }
         } else {
             printf("OUT OF WORK!\n");
