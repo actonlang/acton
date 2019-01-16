@@ -35,19 +35,19 @@ pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 #if defined(BASIC_OPS) || defined(MUTEX_OPS)
-void ENQ_ready(Actor n) {
+void ENQ_ready(Actor a) {
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&ready_mut);
 #endif
     if (readyQ) {
-        Actor a = readyQ;
-        while (a->next)
-            a = a->next;
-        a->next = n;
+        Actor x = readyQ;
+        while (x->next)
+            x = x->next;
+        x->next = a;
     } else {
-        readyQ = n;
+        readyQ = a;
     }
-    n->next = NULL;
+    a->next = NULL;
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&ready_mut);
 #endif
@@ -59,10 +59,10 @@ Actor DEQ_ready() {
     pthread_mutex_lock(&ready_mut);
 #endif
     if (readyQ) {
-        Actor n = readyQ;
-        readyQ = n->next;
-        n->next = NULL;
-        res = n;
+        Actor x = readyQ;
+        readyQ = x->next;
+        x->next = NULL;
+        res = x;
     }
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&ready_mut);
@@ -70,40 +70,40 @@ Actor DEQ_ready() {
     return res;
 }
 
-bool ENQ_msg(Msg m, Actor to) {
+bool ENQ_msg(Msg m, Actor a) {
     bool res = true;
 #if defined(MUTEX_OPS)
-    pthread_mutex_lock(&to->mut);
+    pthread_mutex_lock(&a->mut);
 #endif
     m->next = NULL;
-    if (to->msg) {
-        Msg a = to->msg;
-        while (a->next)
-            a = a->next;
-        a->next = m;
+    if (a->msg) {
+        Msg x = a->msg;
+        while (x->next)
+            x = x->next;
+        x->next = m;
         res = false;
     } else {
-        to->msg = m;
+        a->msg = m;
     }
 #if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&to->mut);
+    pthread_mutex_unlock(&a->mut);
 #endif
     return res;
 }
 
-bool DEQ_msg(Actor to) {
+bool DEQ_msg(Actor a) {
     bool res = false;
 #if defined(MUTEX_OPS)
-    pthread_mutex_lock(&to->mut);
+    pthread_mutex_lock(&a->mut);
 #endif
-    if (to->msg) {
-        Msg m = to->msg;
-        to->msg = m->next;
-        m->next = NULL;
+    if (a->msg) {
+        Msg x = a->msg;
+        a->msg = x->next;
+        x->next = NULL;
         res = true;
     }
 #if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&to->mut);
+    pthread_mutex_unlock(&a->mut);
 #endif
     return res;
 }
@@ -132,6 +132,8 @@ Actor FREEZE_waiting(Msg m) {
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&m->mut);
 #endif
-    return m->waiting;
+    Actor res = m->waiting;
+    m->waiting = NULL;
+    return res;
 }
 #endif

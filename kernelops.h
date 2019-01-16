@@ -61,15 +61,28 @@ struct Actor {
     WORD state[];
 };
 
+// Allocate a Clos node with space for n var words.
 Clos    CLOS(R (*code)(Clos, WORD), int n);
+// Allocate a Msg node.
 Msg     MSG(Clos clos);
+// Allocate an Actor node with space for n state words.
 Actor   ACTOR(int n);
 
-void    ENQ_ready(Actor n);
+// Atomically enqueue actor "a" onto the global ready-queue.
+void    ENQ_ready(Actor a);
+// Atomically dequeue and return the first actor from the global ready-queue, 
+// or return NULL.
 Actor   DEQ_ready();
 
-bool    ENQ_msg(Msg m, Actor to);
-bool    DEQ_msg(Actor to);
+// Atomically enqueue message "m" onto the queue of actor "a", 
+// return true if the queue was previously empty.
+bool    ENQ_msg(Msg m, Actor a);
+// Atomically dequeue the first message from the queue of actor "a",
+// return true if the queue still holds messages.
+bool    DEQ_msg(Actor a);
 
+// Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen.
+// Else return false.
 bool    ADD_waiting(Actor a, Msg m);
+// Atomically freeze message "m" and return its list of waiting actors. 
 Actor   FREEZE_waiting(Msg m);
