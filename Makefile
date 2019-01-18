@@ -1,10 +1,12 @@
 all:
-	cc -std=c11 -O3 \
+	cc -std=c11 -g \
 		-Wall -Werror -pedantic -pedantic-errors \
-		-Wno-int-to-void-pointer-cast 	\
-		kernel.c 						\
-		-lpthread 						\
-		-lm 							\
+		-Wno-int-to-void-pointer-cast \
+		kernelops.c \
+		kernel.c \
+		-pthread \
+		-lpthread \
+		-lm \
 		-o kernel
 
 clean:

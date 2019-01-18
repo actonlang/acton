@@ -1,8 +1,14 @@
+#include <assert.h>
+
 #include "kernelops.h"
 
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
     c->code = code;
+    c->nvar = n;
+    for(int x = 0; x < n; ++x) {
+        c->var[x] = (WORD)0xbadf00d; // "bad food"
+    }
     return c;
 }
 
@@ -36,6 +42,7 @@ pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 
 #if defined(BASIC_OPS) || defined(MUTEX_OPS)
 void ENQ_ready(Actor a) {
+	assert(a->msg != NULL);
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&ready_mut);
 #endif
@@ -71,7 +78,7 @@ Actor DEQ_ready() {
 }
 
 bool ENQ_msg(Msg m, Actor a) {
-    bool res = true;
+    bool did_enq = true;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&a->mut);
 #endif
@@ -81,18 +88,18 @@ bool ENQ_msg(Msg m, Actor a) {
         while (x->next)
             x = x->next;
         x->next = m;
-        res = false;
+        did_enq = false;
     } else {
         a->msg = m;
     }
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&a->mut);
 #endif
-    return res;
+    return did_enq;
 }
 
 bool DEQ_msg(Actor a) {
-    bool res = false;
+    bool has_more = false;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&a->mut);
 #endif
@@ -100,28 +107,28 @@ bool DEQ_msg(Actor a) {
         Msg x = a->msg;
         a->msg = x->next;
         x->next = NULL;
-        res = true;
+        has_more = a->msg != NULL;
     }
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&a->mut);
 #endif
-    return res;
+    return has_more;
 }
 
 bool ADD_waiting(Actor a, Msg m) {
-    bool res = false;
+    bool did_add = false;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&m->mut);
 #endif
     if (m->clos) {
         a->next = m->waiting;
         m->waiting = a;
-        res = true;
+        did_add = true;
     }
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&m->mut);
 #endif
-    return res;
+    return did_add;
 }
 
 Actor FREEZE_waiting(Msg m) {

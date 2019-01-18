@@ -1,23 +1,46 @@
+#define _POSIX_C_SOURCE 200112L  // clock_nanosleep()
+#include <time.h>
+#include <math.h> // round()
+#include <stdatomic.h>
+#include <unistd.h>  // sysconf()
+#include <pthread.h>
+#include <assert.h>
+
 #include "kernelops.h"
 
 #define None (WORD)0
 
+#define _DONE(cont, value) (R){RDONE, (cont), (value)}
+#define _CONT(cont, value) (R){RCONT, (cont), (value)}
+#define _WAIT(cont, value) (R){RWAIT, (cont), (value)}
+#define _EXIT(cont, value) (R){REXIT, (cont), (value)}
+
+char *RTAG_name(RTAG tag) {
+    switch (tag) {
+        case RDONE: return "RDONE"; break;
+        case RCONT: return "RCONT"; break;
+        case RWAIT: return "RWAIT"; break;
+        case REXIT: return "REXIT"; break;
+    }
+}
+
+void dump_clos(Clos c);
 
 Clos CLOS1(R (*code)(Clos,WORD), WORD v0) {
-    Clos c = CLOS(code,1);
+    Clos c = CLOS(code, 1);
     c->var[0] = v0;
     return c;
 }
 
 Clos CLOS2(R (*code)(Clos,WORD), WORD v0, WORD v1) {
-    Clos c = CLOS(code,2);
+    Clos c = CLOS(code, 2);
     c->var[0] = v0;
     c->var[1] = v1;
     return c;
 }
     
 Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2) {
-    Clos c = CLOS(code,3);
+    Clos c = CLOS(code, 3);
     c->var[0] = v0;
     c->var[1] = v1;
     c->var[2] = v2;
@@ -25,29 +48,49 @@ Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2) {
 }
 
 R DONE(Clos this, WORD val) {
-    return (R){RDONE, NULL, val};
+    return _DONE(NULL, val);
 }
 
 struct Clos doneC = { DONE };
 
 Msg ASYNC(Actor to, Clos c) {
+    printf("+ ASYNC to:%p\n", (void *)to);
     Msg m = MSG(c);
     m->value = &doneC;
-    if (ENQ_msg(m, to))
+	printf(">>> ENQ_msg -> %p\n", (void *)to);
+    if (ENQ_msg(m, to)) {
+		printf(">>> ENQ_ready %p\n", (void *)to);
         ENQ_ready(to);
+	}
     return m;
 }
 
 R AWAIT(Msg m, Clos th) {
-    return (R){RWAIT, th, m};
+    printf("+ AWAIT\n");
+    return _WAIT(th, m);
 }
 
 void loop() {
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
+			printf("<<< DEQ_ready %p\n", (void *)current);
+
             Msg m = current->msg;
+            assert(m != NULL);
+
+            printf("MSG value:%p ", m->value);
+            dump_clos(m->clos);
+            
             R r = m->clos->code(m->clos, m->value);
+
+            if (r.tag == RCONT) {
+                printf("RCONT ");
+                dump_clos(r.cont);
+            } else {
+                printf("%s\n", RTAG_name(r.tag));
+            }
+
             switch (r.tag) {
                 case RDONE: {
                     m->value = r.value;
@@ -57,13 +100,17 @@ void loop() {
                         ENQ_ready(b);
                         b = b->next;
                     }
-                    if (DEQ_msg(current))
+					printf("<<< DEQ_msg %p\n", (void *)current);
+                    if (DEQ_msg(current)) {
+						printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
+					}
                     break;
                 }
                 case RCONT: {
                     m->clos = r.cont;
                     m->value = r.value;
+					printf(">>> ENQ_ready %p\n", (void *)current);
                     ENQ_ready(current);
                     break;
                 }
@@ -72,19 +119,26 @@ void loop() {
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
                         m->value = x->value;
+						printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
+                case REXIT:
+                    fprintf(stderr, "[thread exit; %ld]\n", pthread_self());
+                    exit((int)r.value);
                 }
             }
         } else {
             printf("OUT OF WORK!\n");
-            getchar();
-        }
+            //getchar();
+            static struct timespec idle_wait = { 0, 20000000 };  // 20ms
+            clock_nanosleep(CLOCK_MONOTONIC, 0, &idle_wait, NULL);
+       }
     }
 }
 
 WORD bootstrap(Clos c) {
+    printf("> bootstrap\n");
     WORD v = &doneC;
     while (1) {
         R r = c->code(c, v);
@@ -93,268 +147,93 @@ WORD bootstrap(Clos c) {
         c = r.cont;
         v = r.value;
     }
+    printf("< bootstrap\n");
 }
+
+
+void *thread_main(void *arg) {
+    (void)arg; // unused
+
+    loop();
+
+    return NULL;
+}
+
+double timestamp() {
+    struct timespec t;
+
+    clock_gettime(CLOCK_MONOTONIC, &t);
+
+    time_t s = t.tv_sec;
+    long µs = round(t.tv_nsec / 1.0e3);   // ns -> µs
+    if (µs > 999999) {
+        ++s;
+        µs = 0;
+    }
+    return (double)s + µs/1e6;
+}
+
+void print_timestamp(double t) {
+    printf("time stamp: %.6f\n", t);
+}
+
+static double t0 = 0.0;
+
+void cleanup() {
+    printf("END\n");
+
+    double t = timestamp();
+    printf("total duration: %.6f\n", t - t0);
+}
+
 
 ///////////////////////////////////////////////////////////////////////
 
-R pong(Actor self, WORD n, WORD q, Clos then);
+#include "pingpong2.c"
 
-R lam1(Clos this, WORD _) {
-    return pong(this->var[0], ((Actor)this->var[0])->state[0], this->var[1], this->var[2]);
-}
-
-R ping(Actor self, WORD q, Clos then) {
-    self->state[0] = (WORD)((int)self->state[0] + 1);
-    int j = (int)self->state[0]*(int)q;
-    if (j % 100000 == 0)
-        printf("Ping %d\n", j);
-    return (R){RCONT, CLOS3(lam1,self,q,then), None};
-}
-
-R ping1(Clos this, WORD th) {
-    return ping(this->var[0], this->var[1], th);
-}
-
-R pong(Actor self, WORD n, WORD q, Clos then) {
-    int j = (int)n*(int)q;
-    if (j % 100000 == 0)
-        printf("     %d Pong\n", j);
-    ASYNC(self, CLOS2(ping1,self,q));
-    return (R){RCONT, then, None};
-}
-
-R ping2(Clos this, WORD th) {
-    return ping(this->var[0], this->var[1], th);
-}
-
-R Pingpong(Clos this, WORD then) {
-    Actor self = ACTOR(1);
-    self->state[0] = 0;
-    ASYNC(self, CLOS2(ping2,self,this->var[0]));
-    return (R){RCONT, then, self};
-}
 
 int main(int argc, char **argv) {
-    Actor root = bootstrap(CLOS1(Pingpong, (WORD)1));
+    atexit(cleanup);
+
+    long num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    if (argc > 1) {
+        int n = atoi(argv[1]);
+        if (n > 0) {
+            num_threads = n;
+        }
+    }
+
+    Actor root = bootstrap(BOOSTRAP_CLOSURE);
     (void)root;  // unused
 
-    loop();
+    printf("%ld worker threads\n", num_threads);
+
+    t0 = timestamp();
+
+    // start worker threads, one per CPU
+    pthread_t *threads = malloc(sizeof(pthread_t)*num_threads);
+    for(int idx = 0; idx < num_threads; ++idx) {
+        pthread_create(&threads[idx], NULL, thread_main, NULL);
+    }
+    
+    // TODO: run I/O polling thread
+
+    for(int idx = 0; idx < num_threads; ++idx) {
+        pthread_join(threads[idx], NULL);
+    }
 }
 
-/*
--------------------------------- original
 
-actor Pingpong(i):
-    var count = 0
-    async def ping(q):
-        count += 1
-        print('Ping %d', count*q)
-        _ = pong(count, q)
-        return None
-    def pong(n,q):
-        print('     %d Pong', n*q)
-        ping(q)
-        return None
-    ping(i)
-
--------------------------------- explicit ASYNC
-
-actor Pingpong(i):
-    var count = 0
-    def ping(q):
-        count += 1
-        print('Ping %d', count*q)
-        _ = pong(count, q)
-        return None
-    def pong(n,q):
-        print('     %d Pong', n*q)
-        ASYNC_(self, lambda: ping(q))
-        return None
-    ASYNC_(self, lambda: ping(i))
-
--------------------------------- explicit ACTOR
-
-def Pingpong(i):
-    self = ACTOR(1)
-    self.count = 0
-    def ping(q):
-        self.count += 1
-        print('Ping %d', self.count*q)
-        _ = pong(self.count, q)
-        return None
-    def pong(n,q):
-        print('     %d Pong', n*q)
-        ASYNC_(self, lambda: ping(q))
-        return None
-    ASYNC_(self, lambda: ping(i))
-    return self
-
--------------------------------- CPS
-
-def Pingpong(i, then):
-    self = ACTOR(1)
-    self.count = 0
-    def ping(q, then):
-        self.count +=1
-        print('Ping %d', self.count*q)
-        return RCONT(lambda _: pong(self.count, q, then), None)
-    def pong(n, q, then):
-        print('     %d Pong', n*q)
-        ASYNC(self, lambda th: ping(q,th))
-        return RCONT(then, None)
-    ASYNC(self, lambda th: ping(i,th))
-    return RCONT(then, self)
-
--------------------------------- explicit lambdas
-
-def Pingpong(i, then):
-    self = ACTOR(1)
-    self.count = 0
-    def ping(q, then):
-        self.count +=1
-        print('Ping %d', self.count*q)
-        def lam1(_):
-            return pong(self.count, q, then)
-        return RCONT(lam1, None)
-    def pong(n, q, then):
-        print('     %d Pong', n*q)
-        def ping1(th):
-            return ping(q, th)
-        ASYNC(self, ping1)
-        return RCONT(then, None)
-    def ping2(th):
-        return ping(i, th)
-    ASYNC(self, ping2)
-    return RCONT(then, self)
-
--------------------------------- closure-conversion
-
-def Pingpong(i, then):
-    self = ACTOR(1)
-    self.count = 0
-    def ping(self, q, then):
-        self.count +=1
-        print('Ping %d', self.count*q)
-        def lam1(self, q, then, _):
-            return pong(self, self.count, q, then)
-        return RCONT(CLOS3(lam1,self,q,then), None)
-    def pong(self, n, q, then):
-        print('     %d Pong', n*q)
-        def ping1(self, q, th):
-            return ping(self, q, th)
-        ASYNC(self, CLOS2(ping1,self,q))
-        return RCONT(then, None)
-    def ping2(self, i, th):
-        return ping(self, i, th)
-    ASYNC(self, CLOS2(ping2,self,i))
-    return RCONT(then, self)
-
--------------------------------- lambda-lifting
-
-def lam1(self, q, then, _):
-    return pong(self, self.count, q, then)
-
-def ping(self, q, then):
-    self.count +=1
-    print('Ping %d', self.count*q)
-    return RCONT(CLOS3(lam1,self,q,then), None)
-
-def ping1(self, q, th):
-    return ping(self, q, th)
-
-def pong(self, n, q, then):
-    print('     %d Pong', n*q)
-    ASYNC(self, CLOS2(ping1,self,q))
-    return RCONT(then, None)
-
-def ping2(self, i, th):
-    return ping(self, i, th)
-
-def Pingpong(i, then):
-    self = ACTOR(1)
-    self.count = 0
-    ASYNC(self, CLOS2(ping2,self,i))
-    return RCONT(then, self)
-
--------------------------------- explicit this
-
-def lam1(this, _):
-    return pong(this.self, this.self.count, this.q, this.then)
-
-def ping(self, q, then):
-    self.count +=1
-    print('Ping %d', self.count*q)
-    return RCONT(CLOS3(lam1,self,q,then), None)
-
-def ping1(this, th):
-    return ping(this.self, this.q, th)
-
-def pong(self, n, q, then):
-    print('     %d Pong', n*q)
-    ASYNC(self, CLOS2(ping1,self,q))
-    return RCONT(then, None)
-
-def ping2(this, th):
-    return ping(this.self, this.i, th)
-
-def Pingpong(this, then):
-    self = ACTOR(1)
-    self.count = 0
-    ASYNC(self, CLOS2(ping2,self,this.i))
-    return RCONT(then, self)
-
--------------------------------- anonymous variable arrays
-
-def lam1(this, _):
-    return pong(this[0], this[0][0], this[1], this[2])
-
-def ping(self, q, then):
-    self[0] +=1
-    print('Ping %d', self[0]*q)
-    return RCONT(CLOS3(lam1,self,q,then), None)
-
-def ping1(this, th):
-    return ping(this[0], this[1], th)
-
-def pong(self, n, q, then):
-    print('     %d Pong', n*q)
-    ASYNC(self, CLOS2(ping1,self,q))
-    return RCONT(then, None)
-
-def ping2(this, th):
-    return ping(this[0], this[1], th)
-
-def Pingpong(this, then):
-    self = ACTOR(1)
-    self[0] = 0
-    ASYNC(self, CLOS2(ping2,self,this[0]))
-    return RCONT(then, self)
-
--------------------------------- explicit var and state offsets
-
-def lam1(this, _):
-    return pong(this.var[0], this.var[0].state[0], this.var[1], this.var[2])
-
-def ping(self, q, then):
-    self.state[0] +=1
-    print('Ping %d', self.state[0]*q)
-    return RCONT(CLOS3(lam1,self,q,then), None)
-
-def ping1(this, th):
-    return ping(this.var[0], this.var[1], th)
-
-def pong(self, n, q, then):
-    print('     %d Pong', n*q)
-    ASYNC(self, CLOS2(ping1,self,q))
-    return RCONT(then, None)
-
-def ping2(this, th):
-    return ping(this.var[0], this.var[1], th)
-
-def Pingpong(this, then):
-    self = ACTOR(1)
-    self.state[0] = 0
-    ASYNC(self, CLOS2(ping2,self,this.var[0]))
-    return RCONT(then, self)
-
-*/
+void dump_clos(Clos c) {
+    if (c == NULL) {
+        printf("<NULL cont>");
+    } else {
+        printf("[");
+        for (int idx = 0; idx < c->nvar; ++idx) {
+            if (idx > 0) printf(", ");
+            printf("%p", c->var[idx]);
+        }
+        printf("]");
+    }
+    printf("\n");
+}

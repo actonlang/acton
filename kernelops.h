@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//#define BASIC_OPS
+//#define  BASIC_OPS
 #define  MUTEX_OPS
 //#define  LFREE_OPS
 //#define  OPSYS_OPS
@@ -29,16 +29,18 @@ typedef struct Clos *Clos;
 typedef struct Msg *Msg;
 typedef struct Actor *Actor;
 
-enum RTAG { RDONE, RCONT, RWAIT };
+enum RTAG { RDONE, RCONT, RWAIT, REXIT };
+typedef enum RTAG RTAG;
 
 struct R {
-    int tag;
+    RTAG tag;
     Clos cont;
     WORD value;
 };
 
 struct Clos {
     R (*code)(Clos, WORD);
+    int nvar;
     WORD var[];
 };
 
