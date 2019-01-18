@@ -1,4 +1,4 @@
-#define _POSIX_C_SOURCE 200112L  // clock_nanosleep()
+//#define _POSIX_C_SOURCE 200112L  // clock_nanosleep()//
 #include <time.h>
 #include <math.h> // round()
 #include <stdatomic.h>
@@ -72,31 +72,24 @@ R AWAIT(Msg m, Clos th) {
 
 _Atomic int msg_count = 0;
 
-void loop() {
+void loop(void *arg) {
+    int idx = (int)arg;
+    printf("Hello, I'm %d\n", idx);
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
-            //printf("<<< DEQ_ready %p\n", (void *)current);
+            //printf("<<< DEQ_ready %d %p\n", idx, (void *)current);
 
             Msg m = current->msg;
 			atomic_fetch_add(&msg_count, 1);
 
             assert(m != NULL);
 
-            //printf("MSG value:%p ", m->value);
-            //dump_clos(m->clos);
-            
             R r = m->clos->code(m->clos, m->value);
-
-            //if (r.tag == RCONT) {
-            //    printf("RCONT ");
-            //    dump_clos(r.cont);
-            //} else {
-            //    printf("%s\n", RTAG_name(r.tag));
-            //}
 
             switch (r.tag) {
                 case RDONE: {
+                    //printf("RDONE %d %d\n", idx, (int)r.value);
                     m->value = r.value;
                     Actor b = FREEZE_waiting(m);
                     while (b) {
@@ -112,6 +105,7 @@ void loop() {
                     break;
                 }
                 case RCONT: {
+                    //printf("RCONT %d %d\n", idx, (int)r.value);
                     m->clos = r.cont;
                     m->value = r.value;
                     //printf(">>> ENQ_ready %p\n", (void *)current);
@@ -119,6 +113,7 @@ void loop() {
                     break;
                 }
                 case RWAIT: {
+                    //printf("RWAIT %d %lx\n", idx, (long)r.value);
                     m->clos = r.cont;
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
@@ -128,15 +123,15 @@ void loop() {
                     }
                     break;
                 case REXIT:
-                    fprintf(stderr, "[thread exit; %ld]\n", pthread_self());
+                    //fprintf(stderr, "[thread exit; %ld]\n", (long)pthread_self());
                     exit((int)r.value);
                 }
             }
         } else {
-            //printf("OUT OF WORK!   (%ld)\n", pthread_self());
+            printf("OUT OF WORK!   (%d)\n", idx);
             //getchar();
             static struct timespec idle_wait = { 0, 50000000 };  // 500ms
-            clock_nanosleep(CLOCK_MONOTONIC, 0, &idle_wait, NULL);
+            nanosleep(&idle_wait, NULL);
        }
     }
 }
@@ -156,9 +151,7 @@ WORD bootstrap(Clos c) {
 
 
 void *thread_main(void *arg) {
-    (void)arg; // unused
-
-    loop();
+    loop(arg);
 
     return NULL;
 }
@@ -196,7 +189,7 @@ void cleanup() {
 
 const int PRINT_INTERVAL = 100000;
 
-#include "pingpong2.c"
+#include "pingpong.c"
 
 
 int main(int argc, char **argv) {
@@ -210,17 +203,18 @@ int main(int argc, char **argv) {
         }
     }
 
-    Actor root = bootstrap(BOOSTRAP_CLOSURE);
-    (void)root;  // unused
+    Actor roots[num_threads];
+    for (int i = 0; i<num_threads; i++)
+        roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
     printf("%ld worker threads\n", num_threads);
 
     t0 = timestamp();
 
     // start worker threads, one per CPU
-    pthread_t *threads = malloc(sizeof(pthread_t)*num_threads);
+    pthread_t threads[num_threads];
     for(int idx = 0; idx < num_threads; ++idx) {
-        pthread_create(&threads[idx], NULL, thread_main, NULL);
+        pthread_create(&threads[idx], NULL, thread_main, (void*)idx);
     }
     
     // TODO: run I/O polling thread

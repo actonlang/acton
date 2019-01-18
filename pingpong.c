@@ -1,6 +1,4 @@
 
-const long PRINT_INTERVAL = 1000000;
-
 /*
 -------------------------------- original
 
@@ -227,13 +225,13 @@ R pong1(Clos this, WORD th);
 //}
 
 R ping(Actor self, WORD q, Clos then) {
-    self->state[0] = (WORD)((int64_t)self->state[0] + 1);
-    int64_t j = (int64_t)self->state[0]*(int64_t)q;
+    self->state[0] = (WORD)((int)self->state[0] + 1);
+    int j = (int)self->state[0]*(int)q;
     if (j % PRINT_INTERVAL == 0) {
-        printf("Ping %8ld\n", j);
+        printf("Ping %8d\n", j);
     }
     ASYNC(self, CLOS3(pong1, self, self->state[0], q));
-    return (R){RCONT, then, None};
+    return (R){RCONT, then, (WORD)j};
     //return (R){RCONT, CLOS3(lam1, self, q, then), None};
 }
 
@@ -242,9 +240,9 @@ R ping1(Clos this, WORD th) {
 }
 
 R pong(Actor self, WORD n, WORD q, Clos then) {
-    int64_t j = (int64_t)n*(int64_t)q;
+    int j = (int)n*(int)q;
     if (j % PRINT_INTERVAL == 0) {
-        printf("     %8ld Pong\n", j);
+        printf("     %8d Pong\n", j);
         if(j == PRINT_INTERVAL * 10) {
             printf("ping limit reached\n");
             return (R){REXIT, NULL, 0};
