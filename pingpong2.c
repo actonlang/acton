@@ -1,5 +1,5 @@
 
-const long PRINT_INTERVAL = 1000000;
+const int SPAM_COUNT = 20;
 
 /*
 -------------------------------- original
@@ -25,8 +25,7 @@ actor Pingpong(i):
             if count % 10 == 0:
                 pong.ping(count, False)
                 pong.ping(count, False)
-            else:
-                pong.ping(count + 1, True)
+            pong.ping(count + 1, True)
         return None
     def set_pong(p):
         pong = p
@@ -54,8 +53,7 @@ actor Pingpong(i):
             if count % 10 == 0:
                 ASYNC(pong, lambda: pong.ping(count, False))
                 ASYNC(pong, lambda: pong.ping(count, False))
-            else:
-                ASYNC(pong, lambda: pong.ping(count + 1, True))
+            ASYNC(pong, lambda: pong.ping(count + 1, True))
         return None
     def set_pong(p):
         pong = p
@@ -86,8 +84,7 @@ def Pingpong(i):
             if count % 10 == 0:
                 ASYNC(self.pong, lambda: self.pong.ping(count, False))
                 ASYNC(self.pong, lambda: self.pong.ping(count, False))
-            else:
-                ASYNC(self.pong, lambda: self.pong.ping(count + 1, True))
+             ASYNC(self.pong, lambda: self.pong.ping(count + 1, True))
         return None
     def set_pong(p):
         self.pong = p
@@ -119,8 +116,7 @@ def Pingpong(i, then):
             if count % 10 == 0:
                 ASYNC(self.pong, lambda th: self.pong.ping(count, False, th))
                 ASYNC(self.pong, lambda th: self.pong.ping(count, False, th))
-            else:
-                ASYNC(self.pong, lambda th: self.pong.ping(count + 1, True, th))
+            ASYNC(self.pong, lambda th: self.pong.ping(count + 1, True, th))
         return RCONT(then, None)
     def set_pong(p, then):
         self.pong = p
@@ -161,10 +157,9 @@ def Pingpong(i, then):
                     self.pong.ping(count, False, th)
                 ASYNC(self.pong, ping_spam)
                 ASYNC(self.pong, ping_spam)
-            else:
-                def ping_fw(th):
-                    self.pong.ping(count + 1, True, th)
-                ASYNC(self.pong, ping_fw)
+            def ping_fw(th):
+                self.pong.ping(count + 1, True, th)
+            ASYNC(self.pong, ping_fw)
         return RCONT(then, None)
     def set_pong(p, then):
         self.pong = p
@@ -207,10 +202,9 @@ def Pingpong(i, then):
                     pong.ping(count, False, th)
                 ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
                 ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
-            else:
-                def ping_fw(pong, count, th):
-                    pong.ping(count + 1, True, th)
-                ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
+            def ping_fw(pong, count, th):
+                pong.ping(count + 1, True, th)
+            ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
         return RCONT(then, None)
     def set_pong(p, then):
         self.pong = p
@@ -257,8 +251,7 @@ def ping(self, count, forward, then):
         if count % 10 == 0:
             ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
             ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
-        else:
-            ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
+        ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
     return RCONT(then, None)
 
 def set_pong(self, p, then):
@@ -310,8 +303,7 @@ def ping(self, count, forward, then):
         if count % 10 == 0:
             ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
             ASYNC(self.pong, CLOS2(ping_spam, self.pong, count))
-        else:
-            ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
+        ASYNC(self.pong, CLOS2(ping_fw, self.pong, count))
     return RCONT(then, None)
 
 def set_pong(self, p, then):
@@ -363,8 +355,7 @@ def ping(self, count, forward, then):
         if count % 10 == 0:
             ASYNC(self[0], CLOS2(ping_spam, self[0], count))
             ASYNC(self[0], CLOS2(ping_spam, self[0], count))
-        else:
-            ASYNC(self[0], CLOS2(ping_fw, self[0], count))
+        ASYNC(self[0], CLOS2(ping_fw, self[0], count))
     return RCONT(then, None)
 
 def set_pong(self, p, then):
@@ -416,8 +407,7 @@ def ping(self, count, forward, then):
         if count % 10 == 0:
             ASYNC(self.state[0], CLOS2(ping_spam, self.state[0], count))
             ASYNC(self.state[0], CLOS2(ping_spam, self.state[0], count))
-        else:
-            ASYNC(self.state[0], CLOS2(ping_fw, self.state[0], count))
+        ASYNC(self.state[0], CLOS2(ping_fw, self.state[0], count))
     return RCONT(then, None)
 
 def set_pong(self, p, then):
@@ -435,13 +425,13 @@ R set_pong(Actor self, WORD p, WORD then);
 
 R set_pong1(Clos this, WORD th) {
     assert(this->nvar == 2);
-    printf("+ set_pong1 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
+    //printf("+ set_pong1 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
     return set_pong(this->var[0], this->var[1], th);
 }
 
 R set_pong2(Clos this, WORD th) {
     assert(this->nvar == 2);
-    printf("+ set_pong2 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
+    //printf("+ set_pong2 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
     return set_pong(this->var[0], this->var[1], th);
 }
 
@@ -449,7 +439,7 @@ R ping(Actor self, WORD count, WORD forward, WORD then);
 
 R first_ping(Clos this, WORD th) {
     assert(this->nvar == 1);
-    printf("+ first_ping 0:%p th:%p\n", this->var[0], th);
+    //printf("+ first_ping 0:%p th:%p\n", this->var[0], th);
     return ping(this->var[0], 0, (WORD)true, th);
 }
 
@@ -459,7 +449,7 @@ Actor Pingpong(WORD i);//, WORD then);
 
 R PingStarter(Clos this, WORD then) {
     assert(this->nvar == 2);
-    printf("> PingStarter\n");
+    //printf("> PingStarter\n");
     Actor self = ACTOR(0);
     WORD first = None;
     WORD prev = None;
@@ -476,7 +466,7 @@ R PingStarter(Clos this, WORD then) {
     }
     ASYNC(prev, CLOS2(set_pong2, prev, first));
     ASYNC(first, CLOS1(first_ping, first));
-    printf("< PingStarter\n");
+    //printf("< PingStarter\n");
     return _CONT(then, self);
 }
 
@@ -484,35 +474,38 @@ R PingStarter(Clos this, WORD then) {
 
 R ping_spam(Clos this, WORD th) {
     assert(this->nvar == 2);
-    printf("+ ping_spam 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
+    //printf("+ ping_spam 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
     return ping(this->var[0], this->var[1], false, th);
 }
 
 R ping_fw(Clos this, WORD th) {
     assert(this->nvar == 2);
-    printf("+ ping_fw 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
+    //printf("+ ping_fw 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
     return ping(this->var[0], (WORD)(((int)this->var[1]) + 1), (WORD)true, th);
 }
 
 R ping(Actor self, WORD count, WORD forward, WORD then) {
-    printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
-    if ((int)count % 1000000 == 0) {
+    //printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
+    if ((int)count % PRINT_INTERVAL == 0 && (_Bool)forward != false) {
         printf("Ping %8d\n", (int)count);
+        if ((int)count >= PRINT_INTERVAL*30) {
+            return _EXIT(then, None);
+        }
     }
     if ((_Bool)forward != false) {
         if ((int)count % 10 == 0) {
-            ASYNC(self->state[0], CLOS2(ping_spam, self->state[0], count));
-            ASYNC(self->state[0], CLOS2(ping_spam, self->state[0], count));
-        } else {
-            ASYNC(self->state[0], CLOS2(ping_fw, self->state[0], count));
+            for(int idx = 0; idx < SPAM_COUNT; ++idx) {
+                ASYNC(self->state[0], CLOS2(ping_spam, self->state[0], count));
+            }
         }
+        ASYNC(self->state[0], CLOS2(ping_fw, self->state[0], count));
     }
-    printf("< ping\n");
+    //printf("< ping\n");
     return _CONT(then, None);
 }
 
 R set_pong(Actor self, WORD p, WORD then) {
-    printf("+ set_pong self:%p 0:%p then:%p\n", (void *)self, p, then);
+    //printf("+ set_pong self:%p 0:%p then:%p\n", (void *)self, p, then);
     self->state[0] = p;
     return _CONT(then, None);
 }
@@ -520,7 +513,7 @@ R set_pong(Actor self, WORD p, WORD then) {
 // TODO: should be:
 //  R Pingpong(WORD i, WORD then);
 Actor Pingpong(WORD i) {
-    printf("+ Pingpong\n");
+    //printf("+ Pingpong\n");
     Actor self = ACTOR(1);
     self->state[0] = None;
     //return RCONT(then, self);

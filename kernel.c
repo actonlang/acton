@@ -54,42 +54,46 @@ R DONE(Clos this, WORD val) {
 struct Clos doneC = { DONE };
 
 Msg ASYNC(Actor to, Clos c) {
-    printf("+ ASYNC to:%p\n", (void *)to);
+    //printf("+ ASYNC to:%p\n", (void *)to);
     Msg m = MSG(c);
     m->value = &doneC;
-	printf(">>> ENQ_msg -> %p\n", (void *)to);
+    //printf(">>> ENQ_msg -> %p\n", (void *)to);
     if (ENQ_msg(m, to)) {
-		printf(">>> ENQ_ready %p\n", (void *)to);
+        //printf(">>> ENQ_ready %p\n", (void *)to);
         ENQ_ready(to);
-	}
+    }
     return m;
 }
 
 R AWAIT(Msg m, Clos th) {
-    printf("+ AWAIT\n");
+    //printf("+ AWAIT\n");
     return _WAIT(th, m);
 }
+
+_Atomic int msg_count = 0;
 
 void loop() {
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
-			printf("<<< DEQ_ready %p\n", (void *)current);
+            //printf("<<< DEQ_ready %p\n", (void *)current);
 
             Msg m = current->msg;
+			atomic_fetch_add(&msg_count, 1);
+
             assert(m != NULL);
 
-            printf("MSG value:%p ", m->value);
-            dump_clos(m->clos);
+            //printf("MSG value:%p ", m->value);
+            //dump_clos(m->clos);
             
             R r = m->clos->code(m->clos, m->value);
 
-            if (r.tag == RCONT) {
-                printf("RCONT ");
-                dump_clos(r.cont);
-            } else {
-                printf("%s\n", RTAG_name(r.tag));
-            }
+            //if (r.tag == RCONT) {
+            //    printf("RCONT ");
+            //    dump_clos(r.cont);
+            //} else {
+            //    printf("%s\n", RTAG_name(r.tag));
+            //}
 
             switch (r.tag) {
                 case RDONE: {
@@ -100,17 +104,17 @@ void loop() {
                         ENQ_ready(b);
                         b = b->next;
                     }
-					printf("<<< DEQ_msg %p\n", (void *)current);
+                    //printf("<<< DEQ_msg %p\n", (void *)current);
                     if (DEQ_msg(current)) {
-						printf(">>> ENQ_ready %p\n", (void *)current);
+                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
-					}
+                    }
                     break;
                 }
                 case RCONT: {
                     m->clos = r.cont;
                     m->value = r.value;
-					printf(">>> ENQ_ready %p\n", (void *)current);
+                    //printf(">>> ENQ_ready %p\n", (void *)current);
                     ENQ_ready(current);
                     break;
                 }
@@ -119,7 +123,7 @@ void loop() {
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
                         m->value = x->value;
-						printf(">>> ENQ_ready %p\n", (void *)current);
+                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
@@ -129,9 +133,9 @@ void loop() {
                 }
             }
         } else {
-            printf("OUT OF WORK!\n");
+            //printf("OUT OF WORK!   (%ld)\n", pthread_self());
             //getchar();
-            static struct timespec idle_wait = { 0, 20000000 };  // 20ms
+            static struct timespec idle_wait = { 0, 50000000 };  // 500ms
             clock_nanosleep(CLOCK_MONOTONIC, 0, &idle_wait, NULL);
        }
     }
@@ -184,10 +188,13 @@ void cleanup() {
 
     double t = timestamp();
     printf("total duration: %.6f\n", t - t0);
+	printf("message count: %d   (%.2f Mmsg/s)\n", msg_count, (msg_count/1e6)/(t - t0));
 }
 
 
 ///////////////////////////////////////////////////////////////////////
+
+const int PRINT_INTERVAL = 100000;
 
 #include "pingpong2.c"
 
