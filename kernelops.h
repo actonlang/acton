@@ -4,8 +4,8 @@
 #include <stdbool.h>
 
 //#define  BASIC_OPS
-#define  MUTEX_OPS
-//#define  LFREE_OPS
+//#define  MUTEX_OPS
+#define  LFREE_OPS
 //#define  OPSYS_OPS
 
 #ifdef MUTEX_OPS
@@ -44,24 +44,39 @@ struct Clos {
     WORD var[];
 };
 
+#if defined(BASIC_OPS) || defined(LFREE_OPS)
 struct Msg {
     Msg next;
     Actor waiting;
     Clos clos;
-#if defined(MUTEX_OPS)
-    pthread_mutex_t mut;
-#endif
     WORD value;
 };
 
 struct Actor {
     Actor next;
-    Msg msg;
-#if defined(MUTEX_OPS)
-    pthread_mutex_t mut;
-#endif
+    Msg msgQ;
+    Msg msgTail;
     WORD state[];
 };
+#endif
+
+#if defined(MUTEX_OPS)
+struct Msg {
+    Msg next;
+    Actor waiting;
+    Clos clos;
+    pthread_mutex_t mut;
+    WORD value;
+};
+
+struct Actor {
+    Actor next;
+    Msg msgQ;
+    Msg msgTail;
+    pthread_mutex_t mut;
+    WORD state[];
+};
+#endif
 
 // Allocate a Clos node with space for n var words.
 Clos    CLOS(R (*code)(Clos, WORD), int n);

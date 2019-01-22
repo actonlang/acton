@@ -78,51 +78,42 @@ void loop(void *arg) {
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
-            //printf("<<< DEQ_ready %d %p\n", idx, (void *)current);
-
-            Msg m = current->msg;
+            Msg m = current->msgQ;
 			atomic_fetch_add(&msg_count, 1);
-
             assert(m != NULL);
 
             R r = m->clos->code(m->clos, m->value);
 
             switch (r.tag) {
                 case RDONE: {
-                    //printf("RDONE %d %d\n", idx, (int)r.value);
                     m->value = r.value;
                     Actor b = FREEZE_waiting(m);
                     while (b) {
-                        b->msg->value = r.value;
+                        b->msgQ->value = r.value;
                         ENQ_ready(b);
                         b = b->next;
                     }
-                    //printf("<<< DEQ_msg %p\n", (void *)current);
                     if (DEQ_msg(current)) {
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
                 }
                 case RCONT: {
-                    //printf("RCONT %d %d\n", idx, (int)r.value);
                     m->clos = r.cont;
                     m->value = r.value;
-                    //printf(">>> ENQ_ready %p\n", (void *)current);
                     ENQ_ready(current);
                     break;
                 }
                 case RWAIT: {
-                    //printf("RWAIT %d %lx\n", idx, (long)r.value);
                     m->clos = r.cont;
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
                         m->value = x->value;
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
-                case REXIT:
+                }
+                case REXIT: {
                     //fprintf(stderr, "[thread exit; %ld]\n", (long)pthread_self());
                     exit((int)r.value);
                 }
