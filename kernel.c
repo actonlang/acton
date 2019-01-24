@@ -204,6 +204,10 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i<num_threads; i++)
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
+    PING_LIMIT = PRINT_INTERVAL + PRINT_INTERVAL*(num_cpu - num_threads);
+    if (PING_LIMIT < 0) {
+        PING_LIMIT = PRINT_INTERVAL;
+    }
     printf("\x1b[34mPing limit:\x1b[m \x1b[1m%'d\x1b[m  \x1b[34m~~  Print interval:\x1b[m \x1b[1m%'d\x1b[m\n", PING_LIMIT, PRINT_INTERVAL);
 
     printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m  \x1b[34m~~  CPU cores: \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
