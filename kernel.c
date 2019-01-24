@@ -90,8 +90,10 @@ void loop(int thread_id) {
                     while (b) {
                         ++count;
                         b->msg->value = r.value;
-                        b = b->next;
+                        Actor next = b->next;  // need to copy b->next; ready_PUSH will reset it
                         ready_PUSH(b);
+
+                        b = next;
                     }
                     if(wait_count_max < count) {  // no, this isn't atomic...
                         wait_count_max = count;
