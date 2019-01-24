@@ -488,7 +488,8 @@ R ping(Actor self, WORD count, WORD forward, WORD then) {
     //printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
     if ((int)count % PRINT_INTERVAL == 0 && (_Bool)forward != false) {
         printf("Ping %8d\n", (int)count);
-        if ((int)count >= PRINT_INTERVAL*30) {
+        if ((int)count >= PING_LIMIT) {
+            printf("\x1b[m31mping limit reached\x1b[m\n");
             return _EXIT(then, None);
         }
     }

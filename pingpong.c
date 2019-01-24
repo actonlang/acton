@@ -243,8 +243,8 @@ R pong(Actor self, WORD n, WORD q, Clos then) {
     int j = (int)n*(int)q;
     if (j % PRINT_INTERVAL == 0) {
         printf("     %8d Pong\n", j);
-        if(j == PRINT_INTERVAL * 10) {
-            printf("ping limit reached\n");
+        if(j >= PING_LIMIT) {
+            printf("\x1b[m31mping limit reached\x1b[m\n");
             return _EXIT(NULL, 0);
         }
     }

@@ -149,7 +149,10 @@ WORD bootstrap(Clos c) {
     printf("< bootstrap\n");
 }
 
+const int PRINT_INTERVAL = 500000;
+int PING_LIMIT = PRINT_INTERVAL * 6;  // must be multiple of PRINT_INTERVAL
 
+#include "pingpong2.c"
 void *thread_main(void *arg) {
     loop(arg);
 
@@ -187,9 +190,6 @@ void cleanup() {
 
 ///////////////////////////////////////////////////////////////////////
 
-const int PRINT_INTERVAL = 100000;
-
-#include "pingpong.c"
 
 
 int main(int argc, char **argv) {
