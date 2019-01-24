@@ -22,7 +22,7 @@ Msg MSG(Clos clos) {
     m->waiting = NULL;
     m->clos = clos;
 #if defined(MUTEX_OPS)
-    pthread_mutex_init(&m->mut, NULL);
+    m->mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
     return m;
 }
@@ -32,7 +32,7 @@ Actor ACTOR(int n) {
     a->next = NULL;
     a->msg = NULL;
 #if defined(MUTEX_OPS)
-    pthread_mutex_init(&a->mut, NULL);
+    a->mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
     return a;
 }
