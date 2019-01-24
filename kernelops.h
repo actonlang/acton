@@ -12,10 +12,17 @@
 #include <pthread.h>
 #endif
 
-#ifdef LFREE_OPS
-#include <stdatomic.h>
-#endif
 
+
+//#ifdef LFREE_OPS
+#include <stdatomic.h>
+//#endif
+
+extern _Atomic uint32_t msg_created;
+extern _Atomic uint32_t readyQ_max;
+extern _Atomic uint32_t msg_enq_count;
+extern _Atomic uint32_t msgQ_max;
+extern _Atomic uint32_t wait_freeze_count;
 
 typedef void *WORD;
 

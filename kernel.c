@@ -1,4 +1,3 @@
-//#define _POSIX_C_SOURCE 200112L  // clock_nanosleep()//
 #include <time.h>
 #include <math.h> // round()
 #include <stdatomic.h>
@@ -67,7 +66,9 @@ R AWAIT(Msg m, Clos th) {
     return _WAIT(th, m);
 }
 
-_Atomic int msg_count = 0;
+_Atomic int loop_count = 0;
+_Atomic int wait_count_max = 0;
+
 
 void loop(void *arg) {
     int idx = (int)arg;
@@ -77,9 +78,9 @@ void loop(void *arg) {
         if (current) {
 
             Msg m = current->msg;
-			atomic_fetch_add(&msg_count, 1);
 
             assert(m != NULL);
+            atomic_fetch_add(&loop_count, 1);
 
             R r = m->clos->code(m->clos, m->value);
 
@@ -87,10 +88,15 @@ void loop(void *arg) {
                 case RDONE: {
                     m->value = r.value;
                     Actor b = waiting_FREEZE(m);
+                    uint32_t count = 0;
                     while (b) {
+                        ++count;
                         b->msg->value = r.value;
                         b = b->next;
                         ready_PUSH(b);
+                    }
+                    if(wait_count_max < count) {  // no, this isn't atomic...
+                        wait_count_max = count;
                     }
 
                     if (msg_DEQ(current)) {
@@ -99,7 +105,6 @@ void loop(void *arg) {
                     break;
                 }
                 case RCONT: {
-                    //printf("RCONT %d %d\n", idx, (int)r.value);
                     m->clos = r.cont;
                     m->value = r.value;
 
@@ -116,7 +121,6 @@ void loop(void *arg) {
                     }
                     break;
                 case REXIT:
-                    //fprintf(stderr, "[thread exit; %ld]\n", (long)pthread_self());
                     exit((int)r.value);
                 }
             }
@@ -173,11 +177,17 @@ void print_timestamp(double t) {
 static double t0 = 0.0;
 
 void cleanup() {
-    printf("END\n");
+    printf("======================================================================\n");
 
     double t = timestamp();
-    printf("total duration: %.6f\n", t - t0);
-	printf("message count: %d   (%.2f Mmsg/s)\n", msg_count, (msg_count/1e6)/(t - t0));
+    printf("total duration:      \x1b[1m%.3f\x1b[m seconds\n", t - t0);
+    printf("total loops:         \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mloops/s\n", loop_count, (loop_count/1e6)/(t - t0));
+    printf("messages created:    \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_created, (msg_created/1e6)/(t - t0));
+    printf("waiting_FREEZEs:     \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mfreeze/s\n", wait_freeze_count, (wait_freeze_count/1e6)/(t - t0));
+    printf("msg_ENQs:            \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_enq_count, (msg_enq_count/1e6)/(t - t0));
+    printf("ready Q max size:    \x1b[1m%'d\x1b[m\n", readyQ_max);
+    printf("msg Q max size:      \x1b[1m%'d\x1b[m\n", msgQ_max);
+    printf("waiting max size:    \x1b[1m%'d\x1b[m\n", wait_count_max);
 }
 
 

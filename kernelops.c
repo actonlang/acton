@@ -7,12 +7,16 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
     c->code = code;
     c->nvar = n;
     for(int x = 0; x < n; ++x) {
-        c->var[x] = (WORD)0xbadf00d; // "bad food"
+        c->var[x] = (WORD)0xbadf00d; // "bad food", i.e. uninitialized variable
     }
     return c;
 }
 
+_Atomic uint32_t msg_created = 0;
+
 Msg MSG(Clos clos) {
+    atomic_fetch_add(&msg_created, 1);
+
     Msg m = malloc(sizeof(struct Msg));
     m->next = NULL;
     m->waiting = NULL;
@@ -33,13 +37,14 @@ Actor ACTOR(int n) {
     return a;
 }
 
-
+// ready queue head
 Actor readyQ = NULL;
 
 #if defined(MUTEX_OPS)
 pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
+_Atomic uint32_t readyQ_max = 0;
 #if defined(BASIC_OPS) || defined(MUTEX_OPS)
 void ready_PUSH(Actor a) {
     assert(a->msg != NULL);
@@ -48,8 +53,14 @@ void ready_PUSH(Actor a) {
 #endif
     if (readyQ) {
         Actor x = readyQ;
-        while (x->next)
+        uint32_t count = 0;
+        while (x->next) {
+            ++count;
             x = x->next;
+        }
+        if(readyQ_max < count) {  // no, this isn't atomic...
+            readyQ_max = count;
+        }
         x->next = a;
     } else {
         readyQ = a;
@@ -77,16 +88,26 @@ Actor ready_POP() {
     return res;
 }
 
+_Atomic uint32_t msg_enq_count = 0;
+_Atomic uint32_t msgQ_max = 0;
+
 bool msg_ENQ(Msg m, Actor a) {
     bool did_enq = true;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&a->mut);
 #endif
+    atomic_fetch_add(&msg_enq_count, 1);
     m->next = NULL;
     if (a->msg) {
         Msg x = a->msg;
-        while (x->next)
+        uint32_t count = 0;
+        while (x->next) {
+            ++count;
             x = x->next;
+        }
+        if(msgQ_max < count) {  // no, this isn't atomic...
+            msgQ_max = count;
+        }
         x->next = m;
         did_enq = false;
     } else {
@@ -121,7 +142,7 @@ bool waiting_ADD(Actor a, Msg m) {
     pthread_mutex_lock(&m->mut);
 #endif
     if (m->clos) {
-        a->next = m->waiting;
+        a->next = m->waiting; // no lock needed; this actor can not be in the ready Q at this time
         m->waiting = a;
         did_add = true;
     }
@@ -131,16 +152,19 @@ bool waiting_ADD(Actor a, Msg m) {
     return did_add;
 }
 
+_Atomic uint32_t wait_freeze_count = 0;
+
 Actor waiting_FREEZE(Msg m) {
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&m->mut);
 #endif
+    atomic_fetch_add(&wait_freeze_count, 1);
     m->clos = NULL;
 #if defined(MUTEX_OPS)
     pthread_mutex_unlock(&m->mut);
 #endif
-    Actor res = m->waiting;
+    Actor waiting = m->waiting;
     m->waiting = NULL;
-    return res;
+    return waiting;
 }
 #endif
