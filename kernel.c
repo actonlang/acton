@@ -71,17 +71,13 @@ R AWAIT(Msg m, Clos th) {
 _Atomic int loop_count = 0;
 _Atomic int wait_count_max = 0;
 
+void loop(int thread_id) {
+    printf("[%d] message loop\n", thread_id);
 
-void loop(void *arg) {
-    int idx = (int)arg;
-    printf("Hello, I'm %d\n", idx);
     while (1) {
         Actor current = ready_POP();
         if (current) {
-
             Msg m = current->msg;
-
-            assert(m != NULL);
             atomic_fetch_add(&loop_count, 1);
 
             R r = m->clos->code(m->clos, m->value);
@@ -127,7 +123,7 @@ void loop(void *arg) {
                 }
             }
         } else {
-            printf("OUT OF WORK!   (%d)\n", idx);
+            printf("[%d] unemployed!\n", thread_id);
             //getchar();
             static struct timespec idle_wait = { 0, 50000000 };  // 500ms
             nanosleep(&idle_wait, NULL);
@@ -136,7 +132,6 @@ void loop(void *arg) {
 }
 
 WORD bootstrap(Clos c) {
-    printf("> bootstrap\n");
     WORD v = &doneC;
     while (1) {
         R r = c->code(c, v);
@@ -145,15 +140,15 @@ WORD bootstrap(Clos c) {
         c = r.cont;
         v = r.value;
     }
-    printf("< bootstrap\n");
 }
 
 const int PRINT_INTERVAL = 500000;
 int PING_LIMIT = PRINT_INTERVAL * 6;  // must be multiple of PRINT_INTERVAL
 
 #include "pingpong2.c"
+
 void *thread_main(void *arg) {
-    loop(arg);
+    loop((int)arg);
 
     return NULL;
 }
@@ -170,10 +165,6 @@ double timestamp() {
         µs = 0;
     }
     return (double)s + µs/1e6;
-}
-
-void print_timestamp(double t) {
-    printf("time stamp: %.6f\n", t);
 }
 
 static double t0 = 0.0;
@@ -196,8 +187,7 @@ void cleanup() {
 ///////////////////////////////////////////////////////////////////////
 
 
-
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
     atexit(cleanup);
     setlocale(LC_ALL, "");  // for printf's thousand separators to work
 
@@ -214,7 +204,9 @@ int main(int argc, char **argv) {
     for (int i = 0; i<num_threads; i++)
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
-    printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m\x1b[34m  ~~  CPU cores: \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
+    printf("\x1b[34mPing limit:\x1b[m \x1b[1m%'d\x1b[m  \x1b[34m~~  Print interval:\x1b[m \x1b[1m%'d\x1b[m\n", PING_LIMIT, PRINT_INTERVAL);
+
+    printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m  \x1b[34m~~  CPU cores: \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
 
     t0 = timestamp();
 
