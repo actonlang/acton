@@ -264,7 +264,7 @@ R Pingpong(Clos this, WORD then) {
     Actor self = ACTOR(1);
     self->state[0] = 0;
     ASYNC(self, CLOS2(ping2,self,this->var[0]));
-    return (R){RCONT, then, self};
+    return _CONT(then, self);
 }
 
 #define BOOSTRAP_CLOSURE CLOS1(Pingpong, (WORD)1)
