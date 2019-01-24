@@ -54,19 +54,15 @@ R DONE(Clos this, WORD val) {
 struct Clos doneC = { DONE };
 
 Msg ASYNC(Actor to, Clos c) {
-    //printf("+ ASYNC to:%p\n", (void *)to);
     Msg m = MSG(c);
     m->value = &doneC;
-    //printf(">>> ENQ_msg -> %p\n", (void *)to);
-    if (ENQ_msg(m, to)) {
-        //printf(">>> ENQ_ready %p\n", (void *)to);
-        ENQ_ready(to);
+    if (msg_ENQ(m, to)) {
+        ready_PUSH(to);
     }
     return m;
 }
 
 R AWAIT(Msg m, Clos th) {
-    //printf("+ AWAIT\n");
     return _WAIT(th, m);
 }
 
@@ -76,9 +72,8 @@ void loop(void *arg) {
     int idx = (int)arg;
     printf("Hello, I'm %d\n", idx);
     while (1) {
-        Actor current = DEQ_ready();
+        Actor current = ready_POP();
         if (current) {
-            //printf("<<< DEQ_ready %d %p\n", idx, (void *)current);
 
             Msg m = current->msg;
 			atomic_fetch_add(&msg_count, 1);
@@ -89,18 +84,16 @@ void loop(void *arg) {
 
             switch (r.tag) {
                 case RDONE: {
-                    //printf("RDONE %d %d\n", idx, (int)r.value);
                     m->value = r.value;
-                    Actor b = FREEZE_waiting(m);
+                    Actor b = waiting_FREEZE(m);
                     while (b) {
                         b->msg->value = r.value;
-                        ENQ_ready(b);
                         b = b->next;
+                        ready_PUSH(b);
                     }
-                    //printf("<<< DEQ_msg %p\n", (void *)current);
-                    if (DEQ_msg(current)) {
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
-                        ENQ_ready(current);
+
+                    if (msg_DEQ(current)) {
+                        ready_PUSH(current);
                     }
                     break;
                 }
@@ -108,18 +101,17 @@ void loop(void *arg) {
                     //printf("RCONT %d %d\n", idx, (int)r.value);
                     m->clos = r.cont;
                     m->value = r.value;
-                    //printf(">>> ENQ_ready %p\n", (void *)current);
-                    ENQ_ready(current);
+
+                    ready_PUSH(current);
                     break;
                 }
                 case RWAIT: {
-                    //printf("RWAIT %d %lx\n", idx, (long)r.value);
                     m->clos = r.cont;
                     Msg x = (Msg)r.value;
-                    if (!ADD_waiting(current, x)) {
+
+                    if (! waiting_ADD(current, x)) {
                         m->value = x->value;
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
-                        ENQ_ready(current);
+                        ready_PUSH(current);
                     }
                     break;
                 case REXIT:
