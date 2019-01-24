@@ -41,8 +41,8 @@ pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 #if defined(BASIC_OPS) || defined(MUTEX_OPS)
-void ENQ_ready(Actor a) {
-	assert(a->msg != NULL);
+void ready_PUSH(Actor a) {
+    assert(a->msg != NULL);
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&ready_mut);
 #endif
@@ -60,7 +60,7 @@ void ENQ_ready(Actor a) {
 #endif
 }
 
-Actor DEQ_ready() {
+Actor ready_POP() {
     Actor res = NULL;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&ready_mut);
@@ -77,7 +77,7 @@ Actor DEQ_ready() {
     return res;
 }
 
-bool ENQ_msg(Msg m, Actor a) {
+bool msg_ENQ(Msg m, Actor a) {
     bool did_enq = true;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&a->mut);
@@ -98,7 +98,7 @@ bool ENQ_msg(Msg m, Actor a) {
     return did_enq;
 }
 
-bool DEQ_msg(Actor a) {
+bool msg_DEQ(Actor a) {
     bool has_more = false;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&a->mut);
@@ -115,7 +115,7 @@ bool DEQ_msg(Actor a) {
     return has_more;
 }
 
-bool ADD_waiting(Actor a, Msg m) {
+bool waiting_ADD(Actor a, Msg m) {
     bool did_add = false;
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&m->mut);
@@ -131,7 +131,7 @@ bool ADD_waiting(Actor a, Msg m) {
     return did_add;
 }
 
-Actor FREEZE_waiting(Msg m) {
+Actor waiting_FREEZE(Msg m) {
 #if defined(MUTEX_OPS)
     pthread_mutex_lock(&m->mut);
 #endif
