@@ -228,7 +228,7 @@ R ping(Actor self, WORD q, Clos then) {
     self->state[0] = (WORD)((int)self->state[0] + 1);
     int j = (int)self->state[0]*(int)q;
     if (j % PRINT_INTERVAL == 0) {
-        printf("Ping %8d\n", j);
+        printf("Ping %'8d\n", j);
     }
     ASYNC(self, CLOS3(pong1, self, self->state[0], q));
     return _CONT(then, (WORD)j);
@@ -242,7 +242,7 @@ R ping1(Clos this, WORD th) {
 R pong(Actor self, WORD n, WORD q, Clos then) {
     int j = (int)n*(int)q;
     if (j % PRINT_INTERVAL == 0) {
-        printf("     %8d Pong\n", j);
+        printf("     %'8d Pong\n", j);
         if(j >= PING_LIMIT) {
             printf("\x1b[m31mping limit reached\x1b[m\n");
             return _EXIT(NULL, 0);

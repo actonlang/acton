@@ -5,6 +5,7 @@
 #include <unistd.h>  // sysconf()
 #include <pthread.h>
 #include <assert.h>
+#include <locale.h> // setlocale()
 
 #include "kernelops.h"
 
@@ -186,6 +187,7 @@ void cleanup() {
 
 int main(int argc, char **argv) {
     atexit(cleanup);
+    setlocale(LC_ALL, "");  // for printf's thousand separators to work
 
     long num_threads = sysconf(_SC_NPROCESSORS_ONLN);
     if (argc > 1) {
