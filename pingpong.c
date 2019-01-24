@@ -231,7 +231,7 @@ R ping(Actor self, WORD q, Clos then) {
         printf("Ping %8d\n", j);
     }
     ASYNC(self, CLOS3(pong1, self, self->state[0], q));
-    return (R){RCONT, then, (WORD)j};
+    return _CONT(then, (WORD)j);
     //return (R){RCONT, CLOS3(lam1, self, q, then), None};
 }
 
@@ -245,11 +245,11 @@ R pong(Actor self, WORD n, WORD q, Clos then) {
         printf("     %8d Pong\n", j);
         if(j == PRINT_INTERVAL * 10) {
             printf("ping limit reached\n");
-            return (R){REXIT, NULL, 0};
+            return _EXIT(NULL, 0);
         }
     }
     ASYNC(self, CLOS2(ping1, self, q));
-    return (R){RCONT, then, None};
+    return _CONT(then, None);
 }
 
 R ping2(Clos this, WORD th) {
