@@ -1,3 +1,5 @@
+#define _GNU_SOURCE  // pthread_setaffinity_np(), CPU_SET, etc
+
 #include <time.h>
 #include <math.h> // round()
 #include <stdatomic.h>
@@ -199,7 +201,8 @@ int main(int argc, char **argv) {
     atexit(cleanup);
     setlocale(LC_ALL, "");  // for printf's thousand separators to work
 
-    long num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    long num_cpu = sysconf(_SC_NPROCESSORS_ONLN);
+    long num_threads = num_cpu;
     if (argc > 1) {
         int n = atoi(argv[1]);
         if (n > 0) {
@@ -211,20 +214,36 @@ int main(int argc, char **argv) {
     for (int i = 0; i<num_threads; i++)
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
-    printf("%ld worker threads\n", num_threads);
+    printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m\x1b[34m  ~~  CPU cores: \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
 
     t0 = timestamp();
 
     // start worker threads, one per CPU
     pthread_t threads[num_threads];
-    for(int idx = 0; idx < num_threads; ++idx) {
-        pthread_create(&threads[idx], NULL, thread_main, (void*)idx);
+    pthread_attr_t attrs;
+    cpu_set_t cpu_set;
+    for(int th_id = 0; th_id < num_threads; ++th_id) {
+        pthread_attr_init(&attrs);
+        CPU_ZERO(&cpu_set);
+        int core_id = th_id % num_cpu;
+        CPU_SET(core_id, &cpu_set);
+#if defined(__linux__)
+        printf("[%d] CPU affinity: %d\n", th_id, core_id);
+        pthread_attr_setaffinity_np(&attrs, sizeof(cpu_set_t), &cpu_set);
+#else
+        printf("setting thread affinity is not supported for your OS\n");
+        // __APPLE__
+        // __FreeBSD__
+        // __unix__
+#endif
+
+        pthread_create(&threads[th_id], &attrs, thread_main, (void *)th_id);
     }
     
-    // TODO: run I/O polling thread
+    // TODO: run I/O thread
 
-    for(int idx = 0; idx < num_threads; ++idx) {
-        pthread_join(threads[idx], NULL);
+    for(int th_id = 0; th_id < num_threads; ++th_id) {
+        pthread_join(threads[th_id], NULL);
     }
 }
 
