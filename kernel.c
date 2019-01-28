@@ -263,13 +263,13 @@ int main(int argc, char *argv[]) {
     for(int th_id = 0; th_id < num_threads; ++th_id) {
         pthread_attr_init(&attrs);
         CPU_ZERO(&cpu_set);
-        int core_id = th_id % num_cpu;
+        // assume we're hyperthreaded; use every other core
+        int core_id = ((th_id * 2) % num_cpu) + (th_id*2/num_cpu);
         CPU_SET(core_id, &cpu_set);
 #if defined(__linux__)
-        printf("[%d] CPU affinity: %d\n", th_id, core_id);
         pthread_attr_setaffinity_np(&attrs, sizeof(cpu_set_t), &cpu_set);
 #else
-        printf("setting thread affinity is not supported for your OS\n");
+        printf("\x1b[41;1mSetting thread affinity is not implemented for your OS\x1b[m\n");
         // __APPLE__
         // __FreeBSD__
         // __unix__
