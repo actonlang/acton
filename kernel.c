@@ -72,10 +72,12 @@ _Atomic int loop_count = 0;
 _Atomic int wait_count_max = 0;
 _Atomic int idle_count = 0;
 
-void loop(int thread_id) {
-    printf("[%d] message loop\n", thread_id);
+atomic_bool thread_stop_flag = false;
 
-    while (1) {
+void loop(int thread_id) {
+    //printf("[%d] message loop\n", thread_id);
+
+    while (atomic_load(&thread_stop_flag) == false) {
         Actor current = ready_POP();
         if (current) {
             Msg m = current->msg;
@@ -122,7 +124,9 @@ void loop(int thread_id) {
                     }
                     break;
                 case REXIT:
-                    exit((int)r.value);
+                    // flag all threads to stop
+                    atomic_store(&thread_stop_flag, true);
+                    break;
                 }
             }
         } else {
