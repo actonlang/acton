@@ -15,9 +15,7 @@
 
 
 
-//#ifdef LFREE_OPS
 #include <stdatomic.h>
-//#endif
 
 extern _Atomic uint32_t clos_created;
 extern _Atomic uint64_t clos_create_time;
