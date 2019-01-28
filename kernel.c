@@ -189,6 +189,10 @@ void cleanup() {
 }
 
 
+void print_usage(char *name) {
+    fprintf(stderr, "Usage: %s [-t num-threads] [-l ping-limit] [-i print-interval]\n", name);
+}
+
 ///////////////////////////////////////////////////////////////////////
 
 
