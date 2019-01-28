@@ -70,6 +70,8 @@ Actor ACTOR(int n) {
     a->msg = NULL;
 #if defined(MSGQ_MUTEX)
     a->msg_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+#elif defined(MSGQ_SPIN)
+    atomic_flag_clear(&a->msg_lock);
 #endif
 
     return a;
@@ -199,6 +201,8 @@ bool msg_ENQ(Msg m, Actor a) {
     bool was_first = true;
 #if defined(MSGQ_MUTEX)
     pthread_mutex_lock(&a->msg_lock);
+#elif defined(MSGQ_SPIN)
+    spinlock_lock(&a->msg_lock);
 #endif
     m->next = NULL;
     if (a->msg) {
@@ -218,6 +222,8 @@ bool msg_ENQ(Msg m, Actor a) {
     }
 #if defined(MSGQ_MUTEX)
     pthread_mutex_unlock(&a->msg_lock);
+#elif defined(MSGQ_SPIN)
+    spinlock_unlock(&a->msg_lock);
 #endif
     return was_first;
 }
@@ -226,6 +232,8 @@ bool msg_DEQ(Actor a) {
     bool has_more = false;
 #if defined(MSGQ_MUTEX)
     pthread_mutex_lock(&a->msg_lock);
+#elif defined(MSGQ_SPIN)
+    spinlock_lock(&a->msg_lock);
 #endif
     if (a->msg) {
         Msg x = a->msg;
@@ -235,6 +243,8 @@ bool msg_DEQ(Actor a) {
     }
 #if defined(MSGQ_MUTEX)
     pthread_mutex_unlock(&a->msg_lock);
+#elif defined(MSGQ_SPIN)
+    spinlock_unlock(&a->msg_lock);
 #endif
     return has_more;
 }
