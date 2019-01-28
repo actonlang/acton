@@ -253,6 +253,8 @@ int main(int argc, char *argv[]) {
 
     t0 = timestamp();
 
+    printf("======================================================================\n");
+
     // start worker threads, one per CPU
     pthread_t threads[num_threads];
     pthread_attr_t attrs;
