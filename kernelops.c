@@ -178,6 +178,7 @@ void ready_PUSH(Actor a) {
         }
         x->next = a;
     } else {
+        readyTail = a;
         readyQ = a;
     }
     a->next = NULL;
@@ -199,6 +200,8 @@ Actor ready_POP() {
     if (readyQ) {
         Actor x = readyQ;
         readyQ = x->next;
+        if (!readyQ)
+            readyTail = NULL;
         x->next = NULL;
         actor = x;
     }
@@ -239,7 +242,8 @@ bool msg_ENQ(Msg m, Actor a) {
         x->next = m;
         was_first = false;
     } else {
-        a->msg = m;
+        a->msgTail = m;
+        a->msgQ = m;
     }
 #if defined(MSGQ_MUTEX)
     pthread_mutex_unlock(&a->msg_lock);
@@ -260,7 +264,7 @@ bool msg_DEQ(Actor a) {
         Msg x = a->msg;
         a->msg = x->next;
         x->next = NULL;
-        has_more = a->msg != NULL;
+        has_more = a->msgQ != NULL;
     }
 #if defined(MSGQ_MUTEX)
     pthread_mutex_unlock(&a->msg_lock);
@@ -305,3 +309,4 @@ Actor waiting_FREEZE(Msg m) {
     m->waiting = NULL;
     return waiting;
 }
+
