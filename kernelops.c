@@ -137,10 +137,11 @@ void kernelops_CLOSE() {
 #endif
 }
 
+_Atomic uint32_t readyQ_pushes = 0;
 _Atomic uint32_t readyQ_max = 0;
 
 void ready_PUSH(Actor a) {
-    assert(a->msg != NULL);
+    atomic_fetch_add(&readyQ_pushes, 1);
 #if defined(READYQ_MUTEX)
     pthread_mutex_lock(&ready_lock);
 #endif

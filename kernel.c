@@ -172,15 +172,26 @@ static double t0 = 0.0;
 void cleanup() {
     printf("======================================================================\n");
 
-    double t = timestamp();
-    printf("total duration:      \x1b[1m%.3f\x1b[m seconds\n", t - t0);
-    printf("total loops:         \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mloops/s\n", loop_count, (loop_count/1e6)/(t - t0));
-    printf("waiting_FREEZEs:     \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mfreeze/s\n", wait_freeze_count, (wait_freeze_count/1e6)/(t - t0));
-    printf("msg_ENQs:            \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_enq_count, (msg_enq_count/1e6)/(t - t0));
-    printf("ready Q max size:    \x1b[1m%'d\x1b[m\n", readyQ_max);
-    printf("msg Q max size:      \x1b[1m%'d\x1b[m\n", msgQ_max);
+    const double t = timestamp();
+    const double dur = t - t0;
+
+    printf("total duration:    \x1b[1m%.3f\x1b[m seconds\n", t - t0);
+    printf("total loops:       \x1b[1m%'17d\x1b[m   \x1b[33;1m%.4f\x1b[me6/s\n", loop_count, (loop_count/1e6)/dur);
     printf("messages created:  \x1b[1m%'17d\x1b[m\n", msg_created);
     printf("CLOS created:      \x1b[1m%'17d\x1b[m\n", clos_created);
+    printf("msg_ENQs:          \x1b[1m%'17d\x1b[m\n", msg_enq_count);
+    printf("waiting_FREEZEs:   \x1b[1m%'17d\x1b[m\n", wait_freeze_count);
+    printf("ready Q pushes:    \x1b[1m%'17d\x1b[m\n", readyQ_pushes);
+#if !defined(READYQ_LF)
+    printf("ready Q max size:  \x1b[1m%17d\x1b[m\n", readyQ_max);
+#else
+    printf("ready Q max size:  \x1b[33mnot possible\x1b[m (lock-free impl.)\n");
+#endif
+#if !defined(MSGQ_LF)
+    printf("msg Q max size:    \x1b[1m%17d\x1b[m\n", msgQ_max);
+#else
+    printf("msg Q max size:    \x1b[33mnot possible\x1b[m (lock-free impl.)\n");
+#endif
     printf("idle thread count: \x1b[1m%'17d\x1b[m\n", idle_count);
 
     printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&clos_create_time)/1e6, ((double)atomic_load(&clos_create_time))/clos_created);
