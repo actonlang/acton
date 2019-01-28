@@ -25,7 +25,6 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
     Clos c = aligned_alloc(64, size);
-    //Clos c = malloc(size);
     assert(c != NULL);
     c->code = code;
     c->nvar = n;
@@ -49,7 +48,6 @@ Msg MSG(Clos clos) {
 
     const size_t size = sizeof(struct Msg);
     Msg m = aligned_alloc(64, size);
-    //Msg m = malloc(size);
     assert(m != NULL);
     m->next = NULL;
     m->waiting = NULL;
@@ -65,12 +63,15 @@ Msg MSG(Clos clos) {
 }
 
 Actor ACTOR(int n) {
-    Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
+    const size_t size = sizeof(struct Actor) + n * sizeof(WORD);
+    Actor a = aligned_alloc(64, size);
+    assert(a != NULL);
     a->next = NULL;
     a->msg = NULL;
 #if defined(MSGQ_MUTEX)
     a->msg_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
+
     return a;
 }
 
