@@ -70,6 +70,7 @@ R AWAIT(Msg m, Clos th) {
 
 _Atomic int loop_count = 0;
 _Atomic int wait_count_max = 0;
+_Atomic int idle_count = 0;
 
 void loop(int thread_id) {
     printf("[%d] message loop\n", thread_id);
@@ -125,9 +126,9 @@ void loop(int thread_id) {
                 }
             }
         } else {
-            printf("[%d] unemployed!\n", thread_id);
-            //getchar();
-            static struct timespec idle_wait = { 0, 50000000 };  // 500ms
+            printf("[%d] idle!\n", thread_id);
+            atomic_fetch_add(&idle_count, 1);
+            static struct timespec idle_wait = { 0, 1000000 };
             nanosleep(&idle_wait, NULL);
        }
     }
@@ -179,6 +180,7 @@ void cleanup() {
     printf("ready Q max size:    \x1b[1m%'d\x1b[m\n", readyQ_max);
     printf("msg Q max size:      \x1b[1m%'d\x1b[m\n", msgQ_max);
     printf("waiting max size:    \x1b[1m%'d\x1b[m\n", wait_count_max);
+    printf("idle thread count: \x1b[1m%'17d\x1b[m\n", idle_count);
 }
 
 
