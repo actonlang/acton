@@ -84,22 +84,33 @@ Actor   ACTOR(int n);
 
 // Atomic operaions required by the inner-most message processing loop:
 
-// Atomically push actor "a" to the global ready-set.
+// Initialize some global things ~ must be called precisely once.
+void kernelops_INIT();
+// Undos what INIT did ~ no kernel ops functions must be called after.
+void kernelops_CLOSE();
+
+// Operations for: Global ready queue
+//   these operations accesses the ready queue atomically.
+// Push actor "a" to the global ready-set.
 void    ready_PUSH(Actor a);
-// Atomically pops an actor from the global ready-set and,
-// returns actor, or NULL if none are ready.
+// Pops an actor from the global ready-set and,
+//   returns actor, or NULL if none are ready.
 Actor   ready_POP();
 
-// Atomically enqueue message "m" onto the message queue of actor "a", 
-// return true if this was the first message in the queue.
+// Operations for: An actor's message queue
+//   these operations accesses an actor's message queue atomically.
+// Enqueue message "m" onto the message queue of actor "a",
+//   return true if this was the first message in the queue.
 bool    msg_ENQ(Msg m, Actor a);
-// Atomically dequeue the first message from the queue of actor "a",
-// return true if the queue still holds messages after operation.
+// Dequeue the first message from the queue of actor "a",
+//   return true if the queue still holds messages after operation.
 bool    msg_DEQ(Actor a);
 
-// Atomically add actor "a" to the waiting list of message "m" if list is not frozen,
-// return whether the message was added or not.
+// Operations for: A message's waiting queue
+//   these operations accesses a message's queue of waiting actors atomically.
+// Add actor "a" to the waiting list of message "m" if list is not frozen,
+//   return whether the message was added or not.
 bool    waiting_ADD(Actor a, Msg m);
-// Atomically "freeze" waiting list of message "m",
-// return waiting actors.
+// "freeze" waiting list of message "m",
+//   return waiting actors.
 Actor   waiting_FREEZE(Msg m);

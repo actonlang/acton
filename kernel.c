@@ -186,6 +186,7 @@ void cleanup() {
     printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&clos_create_time)/1e6, ((double)atomic_load(&clos_create_time))/clos_created);
     printf("MSG create time:   \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&msg_create_time)/1e6, ((double)atomic_load(&clos_create_time))/msg_created);
 
+    kernelops_CLOSE();
 }
 
 

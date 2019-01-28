@@ -66,6 +66,12 @@ Actor readyQ = NULL;
 pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
+void kernelops_INIT() {
+}
+
+void kernelops_CLOSE() {
+}
+
 _Atomic uint32_t readyQ_max = 0;
 #if defined(BASIC_OPS) || defined(MUTEX_OPS)
 void ready_PUSH(Actor a) {
