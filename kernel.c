@@ -282,7 +282,9 @@ int main(int argc, char *argv[]) {
 
     for(int th_id = 0; th_id < num_threads; ++th_id) {
         pthread_join(threads[th_id], NULL);
+        printf("[%d] exited\n", th_id);
     }
+    printf("\x1b[33;1mall threads stopped\x1b[m\n");
 }
 
 
