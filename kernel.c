@@ -69,7 +69,6 @@ R AWAIT(Msg m, Clos th) {
 }
 
 _Atomic int loop_count = 0;
-_Atomic int wait_count_max = 0;
 _Atomic int idle_count = 0;
 
 atomic_bool thread_stop_flag = false;
@@ -89,17 +88,12 @@ void loop(int thread_id) {
                 case RDONE: {
                     m->value = r.value;
                     Actor b = waiting_FREEZE(m);
-                    uint32_t count = 0;
                     while (b) {
-                        ++count;
                         b->msg->value = r.value;
                         Actor next = b->next;  // need to copy b->next; ready_PUSH will reset it
                         ready_PUSH(b);
 
                         b = next;
-                    }
-                    if(wait_count_max < count) {  // no, this isn't atomic...
-                        wait_count_max = count;
                     }
 
                     if (msg_DEQ(current)) {
@@ -183,7 +177,6 @@ void cleanup() {
     printf("msg_ENQs:            \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_enq_count, (msg_enq_count/1e6)/(t - t0));
     printf("ready Q max size:    \x1b[1m%'d\x1b[m\n", readyQ_max);
     printf("msg Q max size:      \x1b[1m%'d\x1b[m\n", msgQ_max);
-    printf("waiting max size:    \x1b[1m%'d\x1b[m\n", wait_count_max);
     printf("idle thread count: \x1b[1m%'17d\x1b[m\n", idle_count);
 }
 
