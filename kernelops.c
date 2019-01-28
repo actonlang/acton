@@ -91,7 +91,7 @@ void kernelops_CLOSE() {
 }
 
 _Atomic uint32_t readyQ_max = 0;
-#if defined(BASIC_OPS) || defined(MUTEX_OPS)
+
 void ready_PUSH(Actor a) {
     assert(a->msg != NULL);
 #if defined(MUTEX_OPS)
@@ -213,4 +213,3 @@ Actor waiting_FREEZE(Msg m) {
     m->waiting = NULL;
     return waiting;
 }
-#endif

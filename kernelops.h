@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//#define  BASIC_OPS
 #define  MUTEX_OPS
 //#define  LFREE_OPS
 //#define  OPSYS_OPS
