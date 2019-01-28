@@ -54,8 +54,8 @@ Msg MSG(Clos clos) {
     m->next = NULL;
     m->waiting = NULL;
     m->clos = clos;
-#if defined(MUTEX_OPS)
-    m->mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+#if defined(WAITQ_MUTEX)
+    m->wait_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
 
     clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -68,25 +68,71 @@ Actor ACTOR(int n) {
     Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
     a->next = NULL;
     a->msg = NULL;
-#if defined(MUTEX_OPS)
-    a->mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+#if defined(MSGQ_MUTEX)
+    a->msg_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
     return a;
 }
 
-// ready queue head
-Actor readyQ = NULL;
+// global ready queue
+#if defined(READYQ_LF)
+#else
+Actor readyQ;
+#endif
 
-#if defined(MUTEX_OPS)
-pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
+#if defined(READYQ_MUTEX)
+pthread_mutex_t ready_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 void kernelops_INIT() {
+    printf("\x1b[34;1m|\x1b[m \x1b[34mReady Q    :\x1b[m  ");
+#if defined(READYQ_LF)
+    printf("\x1b[32;1mlock-free\x1b[m\n");
+#elif defined(READYQ_MUTEX)
+    printf("\x1b[31mmutex\x1b[m\n");
+#endif
+
+    printf("\x1b[34;1m|\x1b[m \x1b[34mMessage Q  :\x1b[m  ");
+#if defined(MSGQ_LF)
+    printf("\x1b[32;1mlock-free\x1b[m\n");
+#elif defined(MSGQ_SPIN)
+    printf("\x1b[33mspinlock\x1b[m\n");
+#elif defined(MSGQ_MUTEX)
+    printf("\x1b[31;mmutex\x1b[m\n");
+#endif
+
+    printf("\x1b[34;1m|\x1b[m \x1b[34mWaiting Q  :\x1b[m  ");
+#if defined(WAITQ_LF)
+    printf("\x1b[32;1mlock-free\x1b[m\n");
+#elif defined(WAITQ_MUTEX)
+    printf("\x1b[31mmutex\x1b[m\n");
+#endif
+
+    printf("\x1b[34;1m|\x1b[m \x1b[34mAllocator  :\x1b[m  ");
+#if defined(USE_JEMALLOC)
+    printf("\x1b[32;1mjemalloc\x1b[m\n");
+#else
+    printf("\x1b[33mglibc\x1b[m\n");
+#endif
+
+#if defined(READYQ_LF)
+#else
+    readyQ = NULL;
+#endif
+
+#if defined(MSGQ_LF)
+
+#endif
 }
 
 void kernelops_CLOSE() {
 #if defined(USE_JEMALLOC)
     //malloc_stats_print(NULL, NULL, NULL);
+#endif
+
+#if defined(READYQ_LF)
+#else
+    readyQ = NULL;
 #endif
 }
 
@@ -94,8 +140,8 @@ _Atomic uint32_t readyQ_max = 0;
 
 void ready_PUSH(Actor a) {
     assert(a->msg != NULL);
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&ready_mut);
+#if defined(READYQ_MUTEX)
+    pthread_mutex_lock(&ready_lock);
 #endif
     if (readyQ) {
         Actor x = readyQ;
@@ -112,37 +158,46 @@ void ready_PUSH(Actor a) {
         readyQ = a;
     }
     a->next = NULL;
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&ready_mut);
+#if defined(READYQ_MUTEX)
+    pthread_mutex_unlock(&ready_lock);
+#endif
 #endif
 }
 
 Actor ready_POP() {
-    Actor res = NULL;
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&ready_mut);
+    Actor actor = NULL;
+#if defined(READYQ_LF)
+#else
+#if defined(READQ_MUTEX)
+    pthread_mutex_lock(&ready_lock);
 #endif
     if (readyQ) {
         Actor x = readyQ;
         readyQ = x->next;
         x->next = NULL;
-        res = x;
+        actor = x;
     }
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&ready_mut);
+#if defined(READQ_MUTEX)
+    pthread_mutex_unlock(&ready_lock);
 #endif
-    return res;
+#endif
+    return actor;
 }
+
+
+#if defined(MSGQ_LF)
+#error Message Q lock-free is not implemented!
+#endif
 
 _Atomic uint32_t msg_enq_count = 0;
 _Atomic uint32_t msgQ_max = 0;
 
 bool msg_ENQ(Msg m, Actor a) {
-    bool did_enq = true;
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&a->mut);
-#endif
     atomic_fetch_add(&msg_enq_count, 1);
+    bool was_first = true;
+#if defined(MSGQ_MUTEX)
+    pthread_mutex_lock(&a->msg_lock);
+#endif
     m->next = NULL;
     if (a->msg) {
         Msg x = a->msg;
@@ -155,20 +210,20 @@ bool msg_ENQ(Msg m, Actor a) {
             msgQ_max = count;
         }
         x->next = m;
-        did_enq = false;
+        was_first = false;
     } else {
         a->msg = m;
     }
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&a->mut);
+#if defined(MSGQ_MUTEX)
+    pthread_mutex_unlock(&a->msg_lock);
 #endif
-    return did_enq;
+    return was_first;
 }
 
 bool msg_DEQ(Actor a) {
     bool has_more = false;
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&a->mut);
+#if defined(MSGQ_MUTEX)
+    pthread_mutex_lock(&a->msg_lock);
 #endif
     if (a->msg) {
         Msg x = a->msg;
@@ -176,24 +231,24 @@ bool msg_DEQ(Actor a) {
         x->next = NULL;
         has_more = a->msg != NULL;
     }
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&a->mut);
+#if defined(MSGQ_MUTEX)
+    pthread_mutex_unlock(&a->msg_lock);
 #endif
     return has_more;
 }
 
 bool waiting_ADD(Actor a, Msg m) {
     bool did_add = false;
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&m->mut);
+#if defined(WAITQ_MUTEX)
+    pthread_mutex_lock(&m->wait_lock);
 #endif
     if (m->clos) {
         a->next = m->waiting; // no lock needed; this actor can not be in the ready Q at this time
         m->waiting = a;
         did_add = true;
     }
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&m->mut);
+#if defined(WAITQ_MUTEX)
+    pthread_mutex_unlock(&m->wait_lock);
 #endif
     return did_add;
 }
@@ -201,13 +256,13 @@ bool waiting_ADD(Actor a, Msg m) {
 _Atomic uint32_t wait_freeze_count = 0;
 
 Actor waiting_FREEZE(Msg m) {
-#if defined(MUTEX_OPS)
-    pthread_mutex_lock(&m->mut);
-#endif
     atomic_fetch_add(&wait_freeze_count, 1);
+#if defined(WAITQ_MUTEX)
+    pthread_mutex_lock(&m->wait_lock);
+#endif
     m->clos = NULL;
-#if defined(MUTEX_OPS)
-    pthread_mutex_unlock(&m->mut);
+#if defined(WAITQ_MUTEX)
+    pthread_mutex_unlock(&m->wait_lock);
 #endif
     Actor waiting = m->waiting;
     m->waiting = NULL;

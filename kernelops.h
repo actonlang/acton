@@ -5,11 +5,29 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define  MUTEX_OPS
-//#define  LFREE_OPS
-//#define  OPSYS_OPS
+//#define READYQ_MUTEX
+#define READYQ_LF
 
-#ifdef MUTEX_OPS
+//#define MSGQ_MUTEX
+//#define MSGQ_LF
+#define MSGQ_SPIN
+
+#define WAITQ_MUTEX
+//#define WAITQ_LF
+
+
+// validate ops implementation selection
+#if !defined(READYQ_MUTEX) && !defined(READYQ_LF)
+#error Either READYQ_MUTEX or READYQ_LF must be defined
+#endif
+#if !defined(MSGQ_MUTEX) && !defined(MSGQ_LF) && !defined(MSGQ_SPIN)
+#error Either MSGQ_MUTEX, MSGQ_LF or MSGQ_SPIN must be defined
+#endif
+#if !defined(WAITQ_MUTEX) && !defined(WAITQ_LF)
+#error Either WAITQ_MUTEX or WAITQ_LF must be defined
+#endif
+
+#if defined(READYQ_MUTEX) || defined(MSGQ_MUTEX) || defined(WAITQ_MUTEX)
 #include <pthread.h>
 #endif
 
@@ -58,8 +76,8 @@ struct Msg {
     Msg next;
     Actor waiting;
     Clos clos;
-#if defined(MUTEX_OPS)
-    pthread_mutex_t mut;
+#if defined(WAITQ_MUTEX)
+    pthread_mutex_t wait_lock;
 #endif
     WORD value;
 };
@@ -67,8 +85,10 @@ struct Msg {
 struct Actor {
     Actor next;
     Msg msg;
-#if defined(MUTEX_OPS)
-    pthread_mutex_t mut;
+#if defined(MSGQ_MUTEX)
+    pthread_mutex_t msg_lock;
+#elif defined(MSGQ_SPIN)
+    volatile atomic_flag msg_lock;
 #endif
     WORD state[];
 };
