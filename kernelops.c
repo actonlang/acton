@@ -2,13 +2,26 @@
 
 #include "kernelops.h"
 
+_Atomic uint32_t clos_created = 0;
+_Atomic uint64_t clos_create_time = 0;
 Clos CLOS(R (*code)(Clos, WORD), int n) {
-    Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
+    atomic_fetch_add(&clos_created, 1);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
+    const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
+    Clos c = aligned_alloc(64, size);
+    //Clos c = malloc(size);
+    assert(c != NULL);
     c->code = code;
     c->nvar = n;
     for(int x = 0; x < n; ++x) {
         c->var[x] = (WORD)0xbadf00d; // "bad food", i.e. uninitialized variable
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    atomic_fetch_add(&clos_create_time, (t1.tv_sec - t0.tv_sec)*1000000000 + (t1.tv_nsec - t0.tv_nsec));
+
     return c;
 }
 
@@ -16,14 +29,23 @@ _Atomic uint32_t msg_created = 0;
 
 Msg MSG(Clos clos) {
     atomic_fetch_add(&msg_created, 1);
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
 
-    Msg m = malloc(sizeof(struct Msg));
+    const size_t size = sizeof(struct Msg);
+    Msg m = aligned_alloc(64, size);
+    //Msg m = malloc(size);
+    assert(m != NULL);
     m->next = NULL;
     m->waiting = NULL;
     m->clos = clos;
 #if defined(MUTEX_OPS)
     m->mut = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    atomic_fetch_add(&msg_create_time, (t1.tv_sec - t0.tv_sec)*1000000000 + (t1.tv_nsec - t0.tv_nsec));
+
     return m;
 }
 

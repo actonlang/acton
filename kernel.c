@@ -175,12 +175,17 @@ void cleanup() {
     double t = timestamp();
     printf("total duration:      \x1b[1m%.3f\x1b[m seconds\n", t - t0);
     printf("total loops:         \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mloops/s\n", loop_count, (loop_count/1e6)/(t - t0));
-    printf("messages created:    \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_created, (msg_created/1e6)/(t - t0));
     printf("waiting_FREEZEs:     \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mfreeze/s\n", wait_freeze_count, (wait_freeze_count/1e6)/(t - t0));
     printf("msg_ENQs:            \x1b[1m%'d\x1b[m   \x1b[33;1m%.3f\x1b[m Mmsg/s\n", msg_enq_count, (msg_enq_count/1e6)/(t - t0));
     printf("ready Q max size:    \x1b[1m%'d\x1b[m\n", readyQ_max);
     printf("msg Q max size:      \x1b[1m%'d\x1b[m\n", msgQ_max);
+    printf("messages created:  \x1b[1m%'17d\x1b[m\n", msg_created);
+    printf("CLOS created:      \x1b[1m%'17d\x1b[m\n", clos_created);
     printf("idle thread count: \x1b[1m%'17d\x1b[m\n", idle_count);
+
+    printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&clos_create_time)/1e6, ((double)atomic_load(&clos_create_time))/clos_created);
+    printf("MSG create time:   \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&msg_create_time)/1e6, ((double)atomic_load(&clos_create_time))/msg_created);
+
 }
 
 
