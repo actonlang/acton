@@ -3,7 +3,7 @@
 #include <time.h>
 #include <math.h> // round()
 #include <stdatomic.h>
-#include <unistd.h>  // sysconf()
+#include <unistd.h>  // sysconf(), getopt()
 #include <pthread.h>
 #include <assert.h>
 #include <locale.h> // setlocale()
@@ -190,29 +190,69 @@ void cleanup() {
 
 
 int main(int argc, char *argv[]) {
-    atexit(cleanup);
-    setlocale(LC_ALL, "");  // for printf's thousand separators to work
+    setlocale(LC_NUMERIC, "");  // to get thousand separators
 
-    long num_cpu = sysconf(_SC_NPROCESSORS_ONLN);
+    const long num_cpu = sysconf(_SC_NPROCESSORS_ONLN);
     long num_threads = num_cpu;
-    if (argc > 1) {
-        int n = atoi(argv[1]);
-        if (n > 0) {
-            num_threads = n;
+
+	// initial interval and limit
+    PRINT_INTERVAL = 1000000/(int)pow(num_threads, 1.3);
+    PING_LIMIT = 10*PRINT_INTERVAL;
+    if (PING_LIMIT > 10000000) {
+        PING_LIMIT = 10000000;
+    }
+
+    int opt;
+    while ((opt = getopt(argc, argv, "t:l:p:")) != -1) {
+        switch (opt) {
+            case 't': {
+                int n = atoi(optarg);
+                if (n > 0 && n <= num_cpu) {
+                    num_threads = n;
+                    PRINT_INTERVAL = 1000000/(int)pow(num_threads, 1.3);
+                    PING_LIMIT = 10*PRINT_INTERVAL;
+                }
+            }
+            break;
+            case 'l': {
+                int n = atoi(optarg);
+                if (n > 0) {
+                    PING_LIMIT = n;
+                    PRINT_INTERVAL = PING_LIMIT / 10;
+                }
+            }
+            break;
+            case 'p': {
+                int n = atoi(optarg);
+                if (n > 0) {
+                    PRINT_INTERVAL = n;
+                    PING_LIMIT = 10*PRINT_INTERVAL;
+                }
+            }
+            break;
+            default:
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
         }
     }
+
+    if (optind < argc) {  // unepxected extra args
+        print_usage(argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    atexit(cleanup);
+
+    printf("\x1b[34mPrint interval:\x1b[m \x1b[1m%'d\x1b[m  \x1b[34m~~  Ping limit:\x1b[m \x1b[1m%'d\x1b[m\n", PRINT_INTERVAL, PING_LIMIT);
+
+    printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m  \x1b[34m~~  CPU cores:\x1b[m \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
+
+    // initialize the global ready queue
+    kernelops_INIT();
 
     Actor roots[num_threads];
     for (int i = 0; i<num_threads; i++)
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
-
-    PING_LIMIT = PRINT_INTERVAL + PRINT_INTERVAL*(num_cpu - num_threads);
-    if (PING_LIMIT < 0) {
-        PING_LIMIT = PRINT_INTERVAL;
-    }
-    printf("\x1b[34mPing limit:\x1b[m \x1b[1m%'d\x1b[m  \x1b[34m~~  Print interval:\x1b[m \x1b[1m%'d\x1b[m\n", PING_LIMIT, PRINT_INTERVAL);
-
-    printf("\x1b[34mWorker threads:\x1b[m \x1b[1m%'ld\x1b[m  \x1b[34m~~  CPU cores: \x1b[1m%ld\x1b[m\n", num_threads, num_cpu);
 
     t0 = timestamp();
 
