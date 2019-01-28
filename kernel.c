@@ -149,7 +149,9 @@ int PING_LIMIT;  // must be multiple of PRINT_INTERVAL
 #include "pingpong2.c"
 
 void *thread_main(void *arg) {
-    loop((int)arg);
+    const int thread_id = (int)arg;
+
+    loop(thread_id);
 
     return NULL;
 }
