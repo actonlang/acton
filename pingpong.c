@@ -224,12 +224,13 @@ R pong1(Clos this, WORD th);
 //    return pong(this->var[0], ((Actor)this->var[0])->state[0], this->var[1], this->var[2]);
 //}
 
+_Atomic int next_count_print = 0;
+
 R ping(Actor self, WORD q, Clos then) {
     self->state[0] = (WORD)((int)self->state[0] + 1);
     int j = (int)self->state[0]*(int)q;
-    if (j % PRINT_INTERVAL == 0) {
-        printf("Ping %'8d\n", j);
-    }
+    if (atomic_compare_exchange_weak(&next_count_print, &j, j + PRINT_INTERVAL))
+        printf("Ping %'10d\n", j);
     ASYNC(self, CLOS3(pong1, self, self->state[0], q));
     return _CONT(then, (WORD)j);
     //return (R){RCONT, CLOS3(lam1, self, q, then), None};
@@ -242,11 +243,12 @@ R ping1(Clos this, WORD th) {
 R pong(Actor self, WORD n, WORD q, Clos then) {
     int j = (int)n*(int)q;
     if (j % PRINT_INTERVAL == 0) {
-        printf("     %'8d Pong\n", j);
-        if(j >= PING_LIMIT) {
-            printf("\x1b[m31mping limit reached\x1b[m\n");
-            return _EXIT(NULL, 0);
-        }
+        if (atomic_compare_exchange_weak(&next_count_print, &j, j + PRINT_INTERVAL))
+            printf("     %'10d Pong\n", j);
+    }
+    if(j >= PING_LIMIT) {
+        printf("\x1b[31;1mping limit reached\x1b[m\n");
+        return _EXIT(NULL, 0);
     }
     ASYNC(self, CLOS2(ping1, self, q));
     return _CONT(then, None);

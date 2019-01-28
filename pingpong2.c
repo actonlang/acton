@@ -484,14 +484,18 @@ R ping_fw(Clos this, WORD th) {
     return ping(this->var[0], (WORD)(((int)this->var[1]) + 1), (WORD)true, th);
 }
 
+_Atomic int next_count_print = 0;
+
 R ping(Actor self, WORD count, WORD forward, WORD then) {
     //printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
     if ((int)count % PRINT_INTERVAL == 0 && (_Bool)forward != false) {
-        printf("Ping %'8d\n", (int)count);
-        if ((int)count >= PING_LIMIT) {
-            printf("\x1b[m31mping limit reached\x1b[m\n");
-            return _EXIT(then, None);
-        }
+        const int curr_count = (int)count; // need lvalue for compare
+        if (atomic_compare_exchange_weak(&next_count_print, &curr_count, curr_count + PRINT_INTERVAL))
+            printf("Ping %'10d\n", (int)count);
+    }
+    if ((int)count >= PING_LIMIT) {
+        printf("\x1b[31;1mping limit reached\x1b[m\n");
+        return _EXIT(then, None);
     }
     if ((_Bool)forward != false) {
         if ((int)count % 10 == 0) {
