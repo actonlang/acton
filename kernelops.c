@@ -238,13 +238,17 @@ bool msg_DEQ(Actor a) {
     return has_more;
 }
 
+#if defined(WAITQ_LF)
+#error Wait Q lock-free is not implemented!
+#endif
+
 bool waiting_ADD(Actor a, Msg m) {
     bool did_add = false;
 #if defined(WAITQ_MUTEX)
     pthread_mutex_lock(&m->wait_lock);
 #endif
     if (m->clos) {
-        a->next = m->waiting; // no lock needed; this actor can not be in the ready Q at this time
+        a->next = m->waiting; // the actor can't be in the ready Q at this time
         m->waiting = a;
         did_add = true;
     }
