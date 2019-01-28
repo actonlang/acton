@@ -144,8 +144,8 @@ WORD bootstrap(Clos c) {
     }
 }
 
-const int PRINT_INTERVAL = 500000;
-int PING_LIMIT = PRINT_INTERVAL * 6;  // must be multiple of PRINT_INTERVAL
+int PRINT_INTERVAL;
+int PING_LIMIT;  // must be multiple of PRINT_INTERVAL
 
 #include "pingpong2.c"
 
