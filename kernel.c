@@ -59,6 +59,7 @@ Msg ASYNC(Actor to, Clos c) {
     Msg m = MSG(c);
     m->value = &doneC;
     if (msg_ENQ(m, to)) {
+        // as we were first, add the actor to the ready Q
         ready_PUSH(to);
     }
     return m;
