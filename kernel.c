@@ -160,13 +160,9 @@ double timestamp() {
 
     clock_gettime(CLOCK_MONOTONIC, &t);
 
-    time_t s = t.tv_sec;
-    long µs = round(t.tv_nsec / 1.0e3);   // ns -> µs
-    if (µs > 999999) {
-        ++s;
-        µs = 0;
-    }
-    return (double)s + µs/1e6;
+    double s = (double)t.tv_sec;
+    double frac = t.tv_nsec / 1e9;   // ns -> s
+    return s + frac;
 }
 
 static double t0 = 0.0;
