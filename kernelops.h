@@ -31,6 +31,10 @@
 #include <pthread.h>
 #endif
 
+#if defined(READYQ_LF) || defined(MSGQ_LF) || defined(WAITQ_LF)
+#define CAS(v, c, n) atomic_compare_exchange_weak(&(v), &(c), n)
+#include "liblfds711.h"
+#endif
 
 
 #include <stdatomic.h>

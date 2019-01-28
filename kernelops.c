@@ -79,6 +79,8 @@ Actor ACTOR(int n) {
 
 // global ready queue
 #if defined(READYQ_LF)
+struct lfds711_ringbuffer_state readyQ;
+struct lfds711_ringbuffer_element *readyQ_elems;
 #else
 Actor readyQ;
 #endif
@@ -119,6 +121,12 @@ void kernelops_INIT() {
 #endif
 
 #if defined(READYQ_LF)
+    const int N = 10000;
+    printf("\x1b[34mReady Q LF:\x1b[m \x1b[1m%d\x1b[m \x1b[34melements,\x1b[m \x1b[1m%ld\x1b[m \x1b[34mbytes each\x1b[m\n", N, sizeof(struct lfds711_ringbuffer_element));
+
+    readyQ_elems = aligned_alloc(64, sizeof(struct lfds711_ringbuffer_element)*(N + 1));
+    assert(readyQ_elems != NULL);
+    lfds711_ringbuffer_init_valid_on_current_logical_core(&readyQ, readyQ_elems, N + 1, NULL);
 #else
     readyQ = NULL;
 #endif
@@ -134,6 +142,7 @@ void kernelops_CLOSE() {
 #endif
 
 #if defined(READYQ_LF)
+    free((void *)readyQ_elems);
 #else
     readyQ = NULL;
 #endif
@@ -144,6 +153,16 @@ _Atomic uint32_t readyQ_max = 0;
 
 void ready_PUSH(Actor a) {
     atomic_fetch_add(&readyQ_pushes, 1);
+#if defined(READYQ_LF)
+    enum lfds711_misc_flag overwrote;
+    void *overwritten;
+    lfds711_ringbuffer_write(&readyQ, (void *)a, NULL, &overwrote, &overwritten, NULL);
+    if(overwrote == LFDS711_MISC_FLAG_RAISED) {
+        printf("overwrote!\n");
+        // TODO: mutex lock to allocate another buffer
+        // TODO: write 'overwritten' to new buffer
+    }
+#else
 #if defined(READYQ_MUTEX)
     pthread_mutex_lock(&ready_lock);
 #endif
@@ -171,6 +190,8 @@ void ready_PUSH(Actor a) {
 Actor ready_POP() {
     Actor actor = NULL;
 #if defined(READYQ_LF)
+    // TODO: read from all existing buffers
+    lfds711_ringbuffer_read(&readyQ, (void **)&actor, NULL);
 #else
 #if defined(READQ_MUTEX)
     pthread_mutex_lock(&ready_lock);
