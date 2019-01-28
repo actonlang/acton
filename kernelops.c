@@ -26,6 +26,7 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
 }
 
 _Atomic uint32_t msg_created = 0;
+_Atomic uint64_t msg_create_time = 0;
 
 Msg MSG(Clos clos) {
     atomic_fetch_add(&msg_created, 1);
