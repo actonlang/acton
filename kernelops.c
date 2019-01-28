@@ -1,4 +1,7 @@
 #include <assert.h>
+#if defined(USE_JEMALLOC)
+#include <jemalloc/jemalloc.h>
+#endif
 
 #include "kernelops.h"
 
@@ -71,6 +74,9 @@ void kernelops_INIT() {
 }
 
 void kernelops_CLOSE() {
+#if defined(USE_JEMALLOC)
+    //malloc_stats_print(NULL, NULL, NULL);
+#endif
 }
 
 _Atomic uint32_t readyQ_max = 0;
