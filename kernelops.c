@@ -5,8 +5,19 @@
 
 #include "kernelops.h"
 
+void spinlock_lock(volatile atomic_flag *f) {
+    while (atomic_flag_test_and_set(f) == true) {
+        // wait for it...
+    }
+}
+void spinlock_unlock(volatile atomic_flag *f) {
+    atomic_flag_clear(f);
+}
+
+
 _Atomic uint32_t clos_created = 0;
 _Atomic uint64_t clos_create_time = 0;
+
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     atomic_fetch_add(&clos_created, 1);
     struct timespec t0, t1;
