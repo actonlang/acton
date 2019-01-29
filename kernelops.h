@@ -93,7 +93,8 @@ struct Msg {
 
 struct Actor {
     Actor next;
-    Msg msg;
+    Msg msgQ;
+    Msg msgTail;
 #if defined(MSGQ_MUTEX)
     pthread_mutex_t msg_lock;
 #elif defined(MSGQ_SPIN)

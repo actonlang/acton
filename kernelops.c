@@ -67,7 +67,8 @@ Actor ACTOR(int n) {
     Actor a = aligned_alloc(64, size);
     assert(a != NULL);
     a->next = NULL;
-    a->msg = NULL;
+    a->msgQ = NULL;
+    a->msgTail = NULL;
 #if defined(MSGQ_MUTEX)
     a->msg_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #elif defined(MSGQ_SPIN)
@@ -83,6 +84,7 @@ struct lfds711_ringbuffer_state readyQ;
 struct lfds711_ringbuffer_element *readyQ_elems;
 #else
 Actor readyQ;
+Actor readyTail;
 #endif
 
 #if defined(READYQ_MUTEX)
@@ -135,10 +137,7 @@ void kernelops_INIT() {
     atomic_flag_clear(&readyQ_lock);
 #else
     readyQ = NULL;
-#endif
-
-#if defined(MSGQ_LF)
-
+    readyTail = NULL;
 #endif
 }
 
@@ -171,7 +170,7 @@ void ready_PUSH(Actor a) {
     lfds711_ringbuffer_write(&readyQ, (void *)a, NULL, &overwrote, &overwritten, NULL);
     if(overwrote == LFDS711_MISC_FLAG_RAISED) {
         printf("overwrote!\n");
-        // TODO: mutex lock to allocate another buffer
+        // TODO: mutex lock to allocate another buffer - must lock ALL threads!
         // TODO: write 'overwritten' to new buffer
     }
 #else
@@ -180,20 +179,12 @@ void ready_PUSH(Actor a) {
 #elif defined(READYQ_MUTEX)
     pthread_mutex_lock(&readyQ_lock);
 #endif
-    if (readyQ) {
-        Actor x = readyQ;
-        uint32_t count = 0;
-        while (x->next) {
-            ++count;
-            x = x->next;
-        }
-        if(readyQ_max < count) {  // no, this isn't atomic...
-            readyQ_max = count;
-        }
-        x->next = a;
+    if (readyTail) {
+      readyTail->next = a;
+      readyTail = a;
     } else {
-        readyTail = a;
-        readyQ = a;
+      readyTail = a;
+      readyQ = a;
     }
     a->next = NULL;
 #if defined(READYQ_SPIN)
@@ -220,12 +211,11 @@ Actor ready_POP() {
     pthread_mutex_lock(&readyQ_lock);
 #endif
     if (readyQ) {
-        Actor x = readyQ;
-        readyQ = x->next;
+        actor = readyQ;
+        readyQ = actor->next;
         if (!readyQ)
             readyTail = NULL;
-        x->next = NULL;
-        actor = x;
+        actor->next = NULL;
     }
 #if defined(READQ_MUTEX)
     pthread_mutex_unlock(&readyQ_lock);
@@ -253,17 +243,10 @@ bool msg_ENQ(Msg m, Actor a) {
     spinlock_lock(&a->msg_lock);
 #endif
     m->next = NULL;
-    if (a->msg) {
-        Msg x = a->msg;
-        uint32_t count = 0;
-        while (x->next) {
-            ++count;
-            x = x->next;
-        }
-        if(msgQ_max < count) {  // no, this isn't atomic...
-            msgQ_max = count;
-        }
-        x->next = m;
+    m->next = NULL;
+    if (a->msgTail) {
+        a->msgTail->next = m;
+        a->msgTail = m;
         was_first = false;
     } else {
         a->msgTail = m;
@@ -284,9 +267,11 @@ bool msg_DEQ(Actor a) {
 #elif defined(MSGQ_SPIN)
     spinlock_lock(&a->msg_lock);
 #endif
-    if (a->msg) {
-        Msg x = a->msg;
-        a->msg = x->next;
+    if (a->msgQ) {
+        Msg x = a->msgQ;
+        a->msgQ = x->next;
+        if (!a->msgQ)
+            a->msgTail = NULL;
         x->next = NULL;
         has_more = a->msgQ != NULL;
     }

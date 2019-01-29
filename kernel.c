@@ -80,7 +80,7 @@ void loop(int thread_id) {
     while (atomic_load(&thread_stop_flag) == false) {
         Actor current = ready_POP();
         if (current) {
-            Msg m = current->msg;
+            Msg m = current->msgQ;
             atomic_fetch_add(&loop_count, 1);
 
             R r = m->clos->code(m->clos, m->value);
@@ -90,7 +90,7 @@ void loop(int thread_id) {
                     m->value = r.value;
                     Actor b = waiting_FREEZE(m);
                     while (b) {
-                        b->msg->value = r.value;
+                        b->msgQ->value = r.value;
                         Actor next = b->next;  // need to copy b->next; ready_PUSH will reset it
                         ready_PUSH(b);
 
