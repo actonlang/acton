@@ -489,7 +489,7 @@ _Atomic int next_count_print = 0;
 R ping(Actor self, WORD count, WORD forward, WORD then) {
     //printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
     if ((int)count % PRINT_INTERVAL == 0 && (_Bool)forward != false) {
-        const int curr_count = (int)count; // need lvalue for compare
+        int curr_count = (int)count; // need lvalue for compare
         if (atomic_compare_exchange_weak(&next_count_print, &curr_count, curr_count + PRINT_INTERVAL))
             printf("Ping %'10d\n", (int)count);
     }
