@@ -86,13 +86,17 @@ Actor readyQ;
 #endif
 
 #if defined(READYQ_MUTEX)
-pthread_mutex_t ready_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t readyQ_lock = PTHREAD_MUTEX_INITIALIZER;
+#elif defined(READYQ_SPIN)
+volatile atomic_flag readyQ_lock;
 #endif
 
 void kernelops_INIT() {
     printf("\x1b[34;1m|\x1b[m \x1b[34mReady Q    :\x1b[m  ");
 #if defined(READYQ_LF)
     printf("\x1b[32;1mlock-free\x1b[m\n");
+#elif defined(READYQ_SPIN)
+    printf("\x1b[33mspinlock\x1b[m\n");
 #elif defined(READYQ_MUTEX)
     printf("\x1b[31mmutex\x1b[m\n");
 #endif
@@ -127,6 +131,8 @@ void kernelops_INIT() {
     readyQ_elems = aligned_alloc(64, sizeof(struct lfds711_ringbuffer_element)*(N + 1));
     assert(readyQ_elems != NULL);
     lfds711_ringbuffer_init_valid_on_current_logical_core(&readyQ, readyQ_elems, N + 1, NULL);
+#elif defined(READYQ_SPIN)
+    atomic_flag_clear(&readyQ_lock);
 #else
     readyQ = NULL;
 #endif
@@ -163,8 +169,10 @@ void ready_PUSH(Actor a) {
         // TODO: write 'overwritten' to new buffer
     }
 #else
-#if defined(READYQ_MUTEX)
-    pthread_mutex_lock(&ready_lock);
+#if defined(READYQ_SPIN)
+    spinlock_lock(&readyQ_lock);
+#elif defined(READYQ_MUTEX)
+    pthread_mutex_lock(&readyQ_lock);
 #endif
     if (readyQ) {
         Actor x = readyQ;
@@ -182,8 +190,10 @@ void ready_PUSH(Actor a) {
         readyQ = a;
     }
     a->next = NULL;
-#if defined(READYQ_MUTEX)
-    pthread_mutex_unlock(&ready_lock);
+#if defined(READYQ_SPIN)
+    spinlock_unlock(&readyQ_lock);
+#elif defined(READYQ_MUTEX)
+    pthread_mutex_unlock(&readyQ_lock);
 #endif
 #endif
 }
@@ -195,7 +205,7 @@ Actor ready_POP() {
     lfds711_ringbuffer_read(&readyQ, (void **)&actor, NULL);
 #else
 #if defined(READQ_MUTEX)
-    pthread_mutex_lock(&ready_lock);
+    pthread_mutex_lock(&readyQ_lock);
 #endif
     if (readyQ) {
         Actor x = readyQ;
@@ -206,7 +216,7 @@ Actor ready_POP() {
         actor = x;
     }
 #if defined(READQ_MUTEX)
-    pthread_mutex_unlock(&ready_lock);
+    pthread_mutex_unlock(&readyQ_lock);
 #endif
 #endif
     return actor;

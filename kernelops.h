@@ -5,19 +5,23 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// select implementation for ready Q
 //#define READYQ_MUTEX
-#define READYQ_LF
+//#define READYQ_LF
+#define READYQ_SPIN
 
+// select implementation for message Q
 //#define MSGQ_MUTEX
 //#define MSGQ_LF
 #define MSGQ_SPIN
 
+// select implementation for waiting Q
 #define WAITQ_MUTEX
 //#define WAITQ_LF
 
 
 // validate ops implementation selection
-#if !defined(READYQ_MUTEX) && !defined(READYQ_LF)
+#if !defined(READYQ_MUTEX) && !defined(READYQ_LF) && !defined(READYQ_SPIN)
 #error Either READYQ_MUTEX or READYQ_LF must be defined
 #endif
 #if !defined(MSGQ_MUTEX) && !defined(MSGQ_LF) && !defined(MSGQ_SPIN)
