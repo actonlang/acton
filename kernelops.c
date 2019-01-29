@@ -5,6 +5,8 @@
 
 #include "kernelops.h"
 
+extern double timestamp();  // in kernel.c
+
 void spinlock_lock(volatile atomic_flag *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // wait for it...
@@ -20,8 +22,8 @@ _Atomic uint64_t clos_create_time = 0;
 
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     atomic_fetch_add(&clos_created, 1);
-    struct timespec t0, t1;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
+
+    const double t0 = timestamp();
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
     Clos c = aligned_alloc(64, size);
@@ -32,8 +34,7 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
         c->var[x] = (WORD)0xbadf00d; // "bad food", i.e. uninitialized variable
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    atomic_fetch_add(&clos_create_time, (t1.tv_sec - t0.tv_sec)*1000000000 + (t1.tv_nsec - t0.tv_nsec));
+    atomic_fetch_add(&clos_create_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
 
     return c;
 }
@@ -43,8 +44,8 @@ _Atomic uint64_t msg_create_time = 0;
 
 Msg MSG(Clos clos) {
     atomic_fetch_add(&msg_created, 1);
-    struct timespec t0, t1;
-    clock_gettime(CLOCK_MONOTONIC, &t0);
+
+    const double t0 = timestamp();
 
     const size_t size = sizeof(struct Msg);
     Msg m = aligned_alloc(64, size);
@@ -56,8 +57,7 @@ Msg MSG(Clos clos) {
     m->wait_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
 
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    atomic_fetch_add(&msg_create_time, (t1.tv_sec - t0.tv_sec)*1000000000 + (t1.tv_nsec - t0.tv_nsec));
+    atomic_fetch_add(&msg_create_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
 
     return m;
 }
@@ -155,10 +155,16 @@ void kernelops_CLOSE() {
 }
 
 _Atomic uint32_t readyQ_pushes = 0;
-_Atomic uint32_t readyQ_max = 0;
+_Atomic uint32_t readyQ_pops = 0;
+
+_Atomic uint64_t readyQ_push_time = 0;
+_Atomic uint64_t readyQ_pop_time = 0;
 
 void ready_PUSH(Actor a) {
     atomic_fetch_add(&readyQ_pushes, 1);
+
+    const double t0 = timestamp();
+
 #if defined(READYQ_LF)
     enum lfds711_misc_flag overwrote;
     void *overwritten;
@@ -196,9 +202,15 @@ void ready_PUSH(Actor a) {
     pthread_mutex_unlock(&readyQ_lock);
 #endif
 #endif
+
+    atomic_fetch_add(&readyQ_push_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
 }
 
 Actor ready_POP() {
+    atomic_fetch_add(&readyQ_pops, 1);
+
+    const double t0 = timestamp();
+
     Actor actor = NULL;
 #if defined(READYQ_LF)
     // TODO: read from all existing buffers
@@ -219,6 +231,9 @@ Actor ready_POP() {
     pthread_mutex_unlock(&readyQ_lock);
 #endif
 #endif
+
+    atomic_fetch_add(&readyQ_pop_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
+
     return actor;
 }
 
@@ -228,7 +243,6 @@ Actor ready_POP() {
 #endif
 
 _Atomic uint32_t msg_enq_count = 0;
-_Atomic uint32_t msgQ_max = 0;
 
 bool msg_ENQ(Msg m, Actor a) {
     atomic_fetch_add(&msg_enq_count, 1);

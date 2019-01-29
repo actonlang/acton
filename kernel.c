@@ -181,21 +181,14 @@ void cleanup() {
     printf("CLOS created:      \x1b[1m%'17d\x1b[m\n", clos_created);
     printf("msg_ENQs:          \x1b[1m%'17d\x1b[m\n", msg_enq_count);
     printf("waiting_FREEZEs:   \x1b[1m%'17d\x1b[m\n", wait_freeze_count);
-    printf("ready Q pushes:    \x1b[1m%'17d\x1b[m\n", readyQ_pushes);
-#if !defined(READYQ_LF)
-    printf("ready Q max size:  \x1b[1m%17d\x1b[m\n", readyQ_max);
-#else
-    printf("ready Q max size:  \x1b[33mnot possible\x1b[m (lock-free impl.)\n");
-#endif
-#if !defined(MSGQ_LF)
-    printf("msg Q max size:    \x1b[1m%17d\x1b[m\n", msgQ_max);
-#else
-    printf("msg Q max size:    \x1b[33mnot possible\x1b[m (lock-free impl.)\n");
-#endif
     printf("idle thread count: \x1b[1m%'17d\x1b[m\n", idle_count);
+    printf("ready Q pushes:    \x1b[1m%'17d\x1b[m\n", readyQ_pushes);
+    printf("ready Q pops:      \x1b[1m%'17d\x1b[m\n", readyQ_pops);
+    printf("ready Q push time: \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/push\x1b[m\n", readyQ_push_time/1e6, ((double)readyQ_push_time)/readyQ_pushes);
+    printf("ready Q pop time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/pop\x1b[m\n", readyQ_pop_time/1e6, ((double)readyQ_pop_time)/readyQ_pops);
+    printf("MSG create time:   \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", msg_create_time/1e6, ((double)msg_create_time)/msg_created);
+    printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", clos_create_time/1e6, ((double)clos_create_time)/clos_created);
 
-    printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&clos_create_time)/1e6, ((double)atomic_load(&clos_create_time))/clos_created);
-    printf("MSG create time:   \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", atomic_load(&msg_create_time)/1e6, ((double)atomic_load(&clos_create_time))/msg_created);
 
     kernelops_CLOSE();
 }
@@ -214,7 +207,7 @@ int main(int argc, char *argv[]) {
     const long num_cpu = sysconf(_SC_NPROCESSORS_ONLN);
     long num_threads = num_cpu;
 
-	// initial interval and limit
+    // initial interval and limit
     PRINT_INTERVAL = 1000000/(int)pow(num_threads, 1.3);
     PING_LIMIT = 10*PRINT_INTERVAL;
     if (PING_LIMIT > 10000000) {

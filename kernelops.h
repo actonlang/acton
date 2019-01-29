@@ -48,9 +48,10 @@ extern _Atomic uint64_t clos_create_time;
 extern _Atomic uint32_t msg_created;
 extern _Atomic uint64_t msg_create_time;
 extern _Atomic uint32_t readyQ_pushes;
-extern _Atomic uint32_t readyQ_max;
+extern _Atomic uint32_t readyQ_pops;
+extern _Atomic uint64_t readyQ_push_time;
+extern _Atomic uint64_t readyQ_pop_time;
 extern _Atomic uint32_t msg_enq_count;
-extern _Atomic uint32_t msgQ_max;
 extern _Atomic uint32_t wait_freeze_count;
 
 typedef void *WORD;
