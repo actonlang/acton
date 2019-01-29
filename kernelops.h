@@ -76,7 +76,6 @@ struct Clos {
     WORD var[];
 };
 
-#if defined(BASIC_OPS) || defined(LFREE_OPS)
 struct Msg {
     Msg next;
     Actor waiting;
@@ -97,7 +96,6 @@ struct Actor {
 #endif
     WORD state[];
 };
-#endif
 
 // Allocate a Clos node with space for n var words.
 Clos    CLOS(R (*code)(Clos, WORD), int n);
