@@ -2,19 +2,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
+#include <pthread.h>
 
 //#define  BASIC_OPS
 //#define  MUTEX_OPS
-#define  LFREE_OPS
-//#define  OPSYS_OPS
-
-#ifdef MUTEX_OPS
-#include <pthread.h>
-#endif
-
-#ifdef LFREE_OPS
-#include <stdatomic.h>
-#endif
+#define  LSPIN_OPS
+//#define  LFREE_OPS
 
 
 typedef void *WORD;
@@ -44,7 +38,9 @@ struct Clos {
     WORD var[];
 };
 
-#if defined(BASIC_OPS) || defined(LFREE_OPS)
+extern Actor readyQ;
+
+#if defined(BASIC_OPS)
 struct Msg {
     Msg next;
     Actor waiting;
@@ -77,6 +73,44 @@ struct Actor {
     WORD state[];
 };
 #endif
+
+#if defined(LSPIN_OPS)
+
+extern volatile int readySize;
+
+struct Msg {
+    Msg next;
+    Actor waiting;
+    Clos clos;
+    _Atomic(int) lock;
+    WORD value;
+};
+
+struct Actor {
+    Actor next;
+    Msg msgQ;
+    Msg msgTail;
+    _Atomic(int) lock;
+    WORD state[];
+};
+#endif
+
+#if defined(LFREE_OPS)
+struct Msg {
+    Msg next;
+    Actor waiting;
+    Clos clos;
+    WORD value;
+};
+
+struct Actor {
+    Actor next;
+    Msg msgQ;
+    Msg msgTail;
+    WORD state[];
+};
+#endif
+
 
 // Allocate a Clos node with space for n var words.
 Clos    CLOS(R (*code)(Clos, WORD), int n);

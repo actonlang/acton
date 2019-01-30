@@ -79,8 +79,11 @@ void loop(void *arg) {
         Actor current = DEQ_ready();
         if (current) {
             Msg m = current->msgQ;
+            if (!m) {
+                printf("Inactive actor in readyQ (%d)\n", idx);
+                exit(-1);
+            }
 			atomic_fetch_add(&msg_count, 1);
-            assert(m != NULL);
 
             R r = m->clos->code(m->clos, m->value);
 
@@ -128,7 +131,7 @@ void loop(void *arg) {
 }
 
 WORD bootstrap(Clos c) {
-    printf("> bootstrap\n");
+    printf("bootstrap\n");
     WORD v = &doneC;
     while (1) {
         R r = c->code(c, v);
@@ -137,7 +140,6 @@ WORD bootstrap(Clos c) {
         c = r.cont;
         v = r.value;
     }
-    printf("< bootstrap\n");
 }
 
 
@@ -199,7 +201,7 @@ int main(int argc, char **argv) {
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
     printf("%ld worker threads\n", num_threads);
-
+    
     t0 = timestamp();
 
     // start worker threads, one per CPU

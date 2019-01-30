@@ -1,5 +1,4 @@
 #include <assert.h>
-
 #include "kernelops.h"
 
 Clos CLOS(R (*code)(Clos, WORD), int n) {
@@ -12,10 +11,10 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
     return c;
 }
 
+#if defined(BASIC_OPS)
+
 Actor readyQ = NULL;
 Actor readyTail = NULL;
-
-#if defined(BASIC_OPS)
 
 Msg MSG(Clos clos) {
     Msg m = malloc(sizeof(struct Msg));
@@ -107,6 +106,11 @@ Actor FREEZE_waiting(Msg m) {
 
 #if defined(MUTEX_OPS)
 
+Actor readyQ = NULL;
+Actor readyTail = NULL;
+
+pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
+
 Msg MSG(Clos clos) {
     Msg m = malloc(sizeof(struct Msg));
     m->next = NULL;
@@ -124,8 +128,6 @@ Actor ACTOR(int n) {
     pthread_mutex_init(&a->mut, NULL);
     return a;
 }
-
-pthread_mutex_t ready_mut = PTHREAD_MUTEX_INITIALIZER;
 
 void ENQ_ready(Actor a) {
 	assert(a->msgQ != NULL);
@@ -210,7 +212,133 @@ Actor FREEZE_waiting(Msg m) {
 #endif
 
 
+#if defined(LSPIN_OPS)
+
+Actor readyQ = NULL;
+Actor readyTail = NULL;
+
+_Atomic(int) ready_lock = 0;
+volatile int readySize = 0;
+
+#define ACQUIRE(l) while (1) {int zero=0; if (atomic_compare_exchange_weak(&l,&zero,1)) break;}
+#define RELEASE(l) (l) = false
+
+Msg MSG(Clos clos) {
+    Msg m = malloc(sizeof(struct Msg));
+    m->next = NULL;
+    m->waiting = NULL;
+    m->clos = clos;
+    m->lock = 0;
+    return m;
+}
+
+Actor ACTOR(int n) {
+    Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
+    a->next = NULL;
+    a->msgQ = NULL;
+    a->msgTail = NULL;
+    a->lock = 0;
+    return a;
+}
+
+int readysize() {
+    int n = 0;
+    Actor a = readyQ;
+    while (a) {
+        n++;
+        a = a->next;
+    }
+    return n;
+}
+
+void ENQ_ready(Actor a) {
+	assert(a->msgQ != NULL);
+    a->next = NULL;
+    ACQUIRE(ready_lock);
+    if (readyTail) {
+        readyTail->next = a;
+        readyTail = a;
+    } else {
+        readyTail = a;
+        readyQ = a;
+    }
+    RELEASE(ready_lock);
+}
+
+Actor DEQ_ready() {
+    Actor res = NULL;
+    ACQUIRE(ready_lock);
+    if (readyQ) {
+        Actor x = readyQ;
+        readyQ = x->next;
+        if (!readyQ)
+            readyTail = NULL;
+        x->next = NULL;
+        res = x;
+    }
+    RELEASE(ready_lock);
+    return res;
+}
+
+bool ENQ_msg(Msg m, Actor a) {
+    bool was_empty = true;
+    ACQUIRE(a->lock);
+    m->next = NULL;
+    if (a->msgTail) {
+        a->msgTail->next = m;
+        a->msgTail = m;
+        was_empty = false;
+    } else {
+        a->msgTail = m;
+        a->msgQ = m;
+    }
+    RELEASE(a->lock);
+    return was_empty;
+}
+
+bool DEQ_msg(Actor a) {
+    bool has_more = false;
+    ACQUIRE(a->lock);
+    if (a->msgQ) {
+        Msg x = a->msgQ;
+        a->msgQ = x->next;
+        if (!a->msgQ)
+            a->msgTail = NULL;
+        x->next = NULL;
+        has_more = a->msgQ != NULL;
+    }
+    RELEASE(a->lock);
+    return has_more;
+}
+
+bool ADD_waiting(Actor a, Msg m) {
+    bool did_add = false;
+    ACQUIRE(m->lock);
+    if (m->clos) {
+        a->next = m->waiting;
+        m->waiting = a;
+        did_add = true;
+    }
+    RELEASE(m->lock);
+    return did_add;
+}
+
+Actor FREEZE_waiting(Msg m) {
+    ACQUIRE(m->lock);
+    m->clos = NULL;
+    RELEASE(m->lock);
+    Actor res = m->waiting;
+    m->waiting = NULL;
+    return res;
+}
+#endif
+
+
 #if defined(LFREE_OPS)
+
+_Atomic(Actor) readyQ = NULL;
+_Atomic(Actor) readyTail = NULL;
+Actor nullActor = NULL;
 
 Msg MSG(Clos clos) {
     Msg m = malloc(sizeof(struct Msg));
@@ -230,26 +358,47 @@ Actor ACTOR(int n) {
 
 void ENQ_ready(Actor a) {
     a->next = NULL;
-    if (readyTail) {
-        readyTail->next = a;
-        readyTail = a;
-    } else {
-        readyTail = a;
-        readyQ = a;
+    while (1) {
+        Actor t = readyTail;
+        // ...
+        if (t) {
+            // ???
+            break;
+        } else {
+            if (CAS(&readyTail,&nullActor,a)) { readyQ = a; break; }
+        }
     }
+//    if (readyTail) {
+//        readyTail->next = a;
+//        readyTail = a;
+//    } else {
+//        readyTail = a;
+//        readyQ = a;
+//    }
 }
 
 Actor DEQ_ready() {
-    Actor res = NULL;
-    if (readyQ) {
-        Actor x = readyQ;
-        readyQ = x->next;
-        if (!readyQ)
+    while (1) {
+        Actor h = readyQ;
+        if (!h) return NULL;
+        // ...
+        Actor next = h->next;
+        if (!next)
             readyTail = NULL;
-        x->next = NULL;
-        res = x;
+        readyQ = next;
+        h->next = NULL;
+        return h;
     }
-    return res;
+//    Actor res = NULL;
+//    if (readyQ) {
+//        Actor x = readyQ;
+//        readyQ = x->next;
+//        if (!readyQ)
+//            readyTail = NULL;
+//        x->next = NULL;
+//        res = x;
+//    }
+//    return res;
 }
 
 bool ENQ_msg(Msg m, Actor a) {
