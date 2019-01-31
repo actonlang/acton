@@ -22,13 +22,13 @@
 
 // validate ops implementation selection
 #if !defined(READYQ_MUTEX) && !defined(READYQ_LF) && !defined(READYQ_SPIN)
-#error Either READYQ_MUTEX or READYQ_LF must be defined
+#error One of these must be defined: READYQ_MUTEX, READYQ_LF, READYQ_SPIN
 #endif
 #if !defined(MSGQ_MUTEX) && !defined(MSGQ_LF) && !defined(MSGQ_SPIN)
-#error Either MSGQ_MUTEX, MSGQ_LF or MSGQ_SPIN must be defined
+#error One of these must be defined: MSGQ_MUTEX, MSGQ_LF, MSGQ_SPIN
 #endif
 #if !defined(WAITQ_MUTEX) && !defined(WAITQ_LF)
-#error Either WAITQ_MUTEX or WAITQ_LF must be defined
+#error One of these must be defined: WAITQ_MUTEX, WAITQ_L
 #endif
 
 #if defined(READYQ_MUTEX) || defined(MSGQ_MUTEX) || defined(WAITQ_MUTEX)
@@ -36,7 +36,6 @@
 #endif
 
 #if defined(READYQ_LF) || defined(MSGQ_LF) || defined(WAITQ_LF)
-#define CAS(v, c, n) atomic_compare_exchange_weak(&(v), &(c), n)
 #include "liblfds711.h"
 #endif
 
@@ -143,3 +142,8 @@ bool    waiting_ADD(Actor a, Msg m);
 // "freeze" waiting list of message "m",
 //   return waiting actors.
 Actor   waiting_FREEZE(Msg m);
+
+
+inline void spinlock_lock(volatile atomic_flag *f);
+inline void spinlock_unlock(volatile atomic_flag *f);
+inline double timestamp_ns();

@@ -10,6 +10,7 @@
 
 #include "kernelops.h"
 
+
 #define None (WORD)0
 
 #define _DONE(cont, value) (R){RDONE, (cont), (value)}
@@ -71,6 +72,7 @@ R AWAIT(Msg m, Clos th) {
 
 _Atomic int loop_count = 0;
 _Atomic int idle_count = 0;
+_Atomic uint64_t clos_exec_time = 0;
 
 atomic_bool thread_stop_flag = false;
 
@@ -79,11 +81,20 @@ void loop(int thread_id) {
 
     while (atomic_load(&thread_stop_flag) == false) {
         Actor current = ready_POP();
+        assert(current != NULL);
+
         if (current) {
             Msg m = current->msgQ;
+            assert(m != NULL);
+
             atomic_fetch_add(&loop_count, 1);
 
+            assert(m->clos != NULL);
+            assert(m->clos->code != NULL);
+
+			double t0 = timestamp_ns();
             R r = m->clos->code(m->clos, m->value);
+			atomic_fetch_add(&clos_exec_time, (uint64_t)(timestamp_ns() - t0));
 
             switch (r.tag) {
                 case RDONE: {
@@ -157,26 +168,17 @@ void *thread_main(void *arg) {
     return NULL;
 }
 
-double timestamp() {
-    struct timespec t;
-
-    clock_gettime(CLOCK_MONOTONIC, &t);
-
-    double s = (double)t.tv_sec;
-    double frac = t.tv_nsec / 1e9;   // ns -> s
-    return s + frac;
-}
-
-static double t0 = 0.0;
+static uint64_t t0 = 0;
 
 void cleanup() {
     printf("======================================================================\n");
 
-    const double t = timestamp();
-    const double dur = t - t0;
+    const double t = timestamp_ns();
+    const double dur = (t - t0);
+    const double dur_s = dur/1e9;
 
-    printf("total duration:    \x1b[1m%.3f\x1b[m seconds\n", t - t0);
-    printf("total loops:       \x1b[1m%'17d\x1b[m   \x1b[33;1m%.4f\x1b[me6/s\n", loop_count, (loop_count/1e6)/dur);
+    printf("total duration:    \x1b[1m%.4f\x1b[m seconds\n", dur_s);
+    printf("total loops:       \x1b[1m%'17d\x1b[m   \x1b[33;1m%.4f\x1b[me6/s\n", loop_count, (loop_count/1e6)/dur_s);
     printf("messages created:  \x1b[1m%'17d\x1b[m\n", msg_created);
     printf("CLOS created:      \x1b[1m%'17d\x1b[m\n", clos_created);
     printf("msg_ENQs:          \x1b[1m%'17d\x1b[m\n", msg_enq_count);
@@ -188,7 +190,7 @@ void cleanup() {
     printf("ready Q pop time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/pop\x1b[m\n", readyQ_pop_time/1e6, ((double)readyQ_pop_time)/readyQ_pops);
     printf("MSG create time:   \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", msg_create_time/1e6, ((double)msg_create_time)/msg_created);
     printf("CLOS create time:  \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/create\x1b[m\n", clos_create_time/1e6, ((double)clos_create_time)/clos_created);
-
+	printf("CLOS exec time:    \x1b[1m%.3f\x1b[m ms  \x1b[33;1m%.1f ns/exec\x1b[m\n", clos_exec_time/1e6, ((double)clos_exec_time)/loop_count);
 
     kernelops_CLOSE();
 }
@@ -266,7 +268,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i<num_threads; i++)
         roots[i] = bootstrap(BOOSTRAP_CLOSURE);
 
-    t0 = timestamp();
+    t0 = timestamp_ns();
 
     printf("======================================================================\n");
 

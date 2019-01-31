@@ -5,15 +5,9 @@
 
 #include "kernelops.h"
 
-extern double timestamp();  // in kernel.c
-
-void spinlock_lock(volatile atomic_flag *f) {
-    while (atomic_flag_test_and_set(f) == true) {
-        // wait for it...
-    }
-}
-void spinlock_unlock(volatile atomic_flag *f) {
-    atomic_flag_clear(f);
+double timestamp_ns() {
+	static const double tsc2ns = 1.0/2.23;   // 1 / (CPU clock frequency / 1e9)
+	return __rdtsc()*tsc2ns;
 }
 
 
@@ -23,7 +17,7 @@ _Atomic uint64_t clos_create_time = 0;
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     atomic_fetch_add(&clos_created, 1);
 
-    const double t0 = timestamp();
+    const double t0 = timestamp_ns();
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
     Clos c = aligned_alloc(64, size);
@@ -34,7 +28,7 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
         c->var[x] = (WORD)0xbadf00d; // "bad food", i.e. uninitialized variable
     }
 
-    atomic_fetch_add(&clos_create_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
+    atomic_fetch_add(&clos_create_time, (uint64_t)(timestamp_ns() - t0));
 
     return c;
 }
@@ -45,7 +39,7 @@ _Atomic uint64_t msg_create_time = 0;
 Msg MSG(Clos clos) {
     atomic_fetch_add(&msg_created, 1);
 
-    const double t0 = timestamp();
+    const double t0 = timestamp_ns();
 
     const size_t size = sizeof(struct Msg);
     Msg m = aligned_alloc(64, size);
@@ -57,7 +51,7 @@ Msg MSG(Clos clos) {
     m->wait_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 #endif
 
-    atomic_fetch_add(&msg_create_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
+    atomic_fetch_add(&msg_create_time,  (uint64_t)(timestamp_ns() - t0));
 
     return m;
 }
@@ -162,7 +156,7 @@ _Atomic uint64_t readyQ_pop_time = 0;
 void ready_PUSH(Actor a) {
     atomic_fetch_add(&readyQ_pushes, 1);
 
-    const double t0 = timestamp();
+    const double t0 = timestamp_ns();
 
 #if defined(READYQ_LF)
     enum lfds711_misc_flag overwrote;
@@ -174,6 +168,7 @@ void ready_PUSH(Actor a) {
         // TODO: write 'overwritten' to new buffer
     }
 #else
+
 #if defined(READYQ_SPIN)
     spinlock_lock(&readyQ_lock);
 #elif defined(READYQ_MUTEX)
@@ -192,22 +187,26 @@ void ready_PUSH(Actor a) {
 #elif defined(READYQ_MUTEX)
     pthread_mutex_unlock(&readyQ_lock);
 #endif
+
 #endif
 
-    atomic_fetch_add(&readyQ_push_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
+    atomic_fetch_add(&readyQ_push_time,  (uint64_t)(timestamp_ns() - t0));
 }
 
 Actor ready_POP() {
     atomic_fetch_add(&readyQ_pops, 1);
 
-    const double t0 = timestamp();
+    const double t0 = timestamp_ns();
 
     Actor actor = NULL;
 #if defined(READYQ_LF)
     // TODO: read from all existing buffers
     lfds711_ringbuffer_read(&readyQ, (void **)&actor, NULL);
 #else
-#if defined(READQ_MUTEX)
+
+#if defined(READYQ_SPIN)
+    spinlock_lock(&readyQ_lock);
+#elif defined(READQ_MUTEX)
     pthread_mutex_lock(&readyQ_lock);
 #endif
     if (readyQ) {
@@ -217,12 +216,15 @@ Actor ready_POP() {
             readyTail = NULL;
         actor->next = NULL;
     }
-#if defined(READQ_MUTEX)
+#if defined(READYQ_SPIN)
+    spinlock_unlock(&readyQ_lock);
+#elif defined(READQ_MUTEX)
     pthread_mutex_unlock(&readyQ_lock);
 #endif
+
 #endif
 
-    atomic_fetch_add(&readyQ_pop_time, (uint64_t)(timestamp()*1e9 - t0*1e9));
+    atomic_fetch_add(&readyQ_pop_time, (uint64_t)(timestamp_ns() - t0));
 
     return actor;
 }
@@ -319,3 +321,11 @@ Actor waiting_FREEZE(Msg m) {
     return waiting;
 }
 
+void spinlock_lock(volatile atomic_flag *f) {
+    while (atomic_flag_test_and_set(f) == true) {
+        // wait for it...
+    }
+}
+void spinlock_unlock(volatile atomic_flag *f) {
+    atomic_flag_clear(f);
+}
