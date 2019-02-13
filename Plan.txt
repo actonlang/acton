@@ -1,0 +1,440 @@
+Acton II
+--------
+
+@. Terminology:
+    world    - A cluster consisting of 1-N nodes, on a non-partitioning network.
+               in MMO server terms: "an instance" :)
+               Multiple worlds might communicate, but only through a developer-defined
+               interface using sockets.
+    node     - A single process contributing in a cluster.
+               The same physical hardware might run multiple node processes (even non-virtualized).
+
+First release prio marked as [1]
+
+A. Language
+    * Inheritance vs. delegation, examples and convenient syntax.
+    The current Acton language makes use of a limited form of actor inheritance, which leaves
+    several questions (such as access to overridden methods, or visibility of a parent's state
+    variables) unresolved. Define a set of typical examples of inheritance and explore whether
+    the same functionality can be obtained by replacing the super-actor with a local actor instance
+    (a delegate), which is explicitly invoked via its regular interface. Ensure that large sets
+    of the delegate's attributes can be conveniently reexported by the wrapping actor (perhaps
+    using the **var pattern and expression syntax). Then generalize the examples to multiple
+    delegates, and (if experiment is successful) remove actor inheritance from the language.
+
+    * Import with version hashes/tags
+    Choose a lexical syntax for version hashes/tags that "blends" well with Python's identifier
+    syntax (so that version-completed )
+
+    * Syntax of types.
+    Define a concrete syntax of type expressions, to replace the annotation terms in the current
+    Acton grammar. Stay as close to the general Python expression syntax as possible. Some natural
+    choices: (int,bool,str) for tuple types, (x=int,y=float) for anonymous struct types,
+    (int,bool,x=str,y=float)->None for function types, 'tag' for singleton string constant types,
+    int|'tag1'|'tag2' for union types, ?int for option types, single upper-case characters for
+    type variables, any other name for user-defined type constructors, mycon(int,A) for type
+    application, [int] for int lists, {str:int} for dicts, {str} for sets, etc. Things to resolve:
+    distinction between mutable and immutable lists, dicts and sets (use list(A), dict(A,B) and
+    set(B) for the mutable variants?), polymorphic rows (perhaps **R), qualified types (use at
+    all in concrete syntax?), effect annotations on functions (idea: ro sync (A)->B). To recall:
+    type constructors and variables constitute a namespace entirely distinct from the regular
+    terms, even though some constructor names (int, str, list, ...) also exist as valid terms
+    (mostly built-in conversion functions). Invent a syntax for type abbreviations (macros).
+
+    * Named strutcs / tagged variants
+    Propose a Pythonic construct for declaring immutable named structs (interfaces), that allows
+    multiple super-types (extension), explicit polymorphic type arguments, and preferably also
+    multiple sibling subtypes (tagged variants) to be expressed with little syntactic overhead.
+    Make each name a valid term constructor as well (possily excluding the basetype of variants).
+    Allow type recursion, and a mixture of positional and keyword (field name) arguments in the
+    term constructors. Important to sort out the exact rules that govern field name clashes.
+
+    * Pattern matching
+    Extend the language with a switch statement, that allows nested patterns of (tagged) structs,
+    tuples, lists, dicts, and atomic types. Allow variable binding, wildcard patterns and guard
+    expressions. Make the syntax "pythonic" and compatible with the tagged variant type declarations.
+    Also introduce an infix case expression that can match against a pattern and bind its variables
+    in any if-branch taken as a direct consequence of a positive match. Define the semantics of
+    pattern-matching in terms of a translation into a form that only uses tag tests (isinstance).
+
+    * Comprehension syntax
+    Try out an alternative syntax for list comprehensions: '[' COMP EXPR ']', where COMP is
+    'for' GEN ':' COMP | 'if' EXPR ':' COMP | /* empty */, and GEN is PAT 'in' EXPR. That is, a
+    grammar that mimics the intuitive form of nested statements. Also experiment with the concept
+    of "zip" comprehensions, where GEN can also be GEN 'and' GEN.
+
+    * Semantics of classes
+    Complete the formal semantics regarding classes and instances. Things to decide: support
+    mutation of the classes themselves? (no...) Make method lookup in base classes explicit?
+    How should the 'isinstance' operator be defined? Can classes inherit from lists/dicts/sets
+    (yes...)? From primitive or immutable types (no...)?
+
+    * Semantics of recursion
+    Revisit the formal semantics of recursive definitions and see if an explicit notion of
+    top-level bindings can be expressed, which would natively support recursion. If so, ensure
+    that recursion on other levels can be defined in terms of simple lifting to the top level.
+
+    * Semantics of break/continue
+    Formalize the control flow of loops with break/continue in terms of encodings using
+    exceptions, in order to firmly explain how these features interact.
+
+B. Type-system
+    * Encoding of the union type using rows
+    Define the meaning of union types, and the atomic types that can participate in a union, in
+    terms of rows (pretty much analogous to the way effects are expressed as rows). Consequence:
+    atomic types in positive (constructed) positions must become singleton rows with a polymorphic
+    tail, whereas the same types in negative positions must stand for singleton rows with empty
+    tails. Concrete atomic type names are thus mere short-hands for these singleton unions. Also
+    investigate whether the opt type can be encoded in a similar manner (as a union between atomic
+    type None and *any* other type), or whether sub-typing (back-tracking) must be deployed here.
+
+    * Inference of overloaded constructs using back-tracking
+    Define the set of overloaded constructs that Acton should support as a built-in set of
+    Qualified Types predicates, so that overloading resolution can be implemented as a back-
+    tracking constraint solver. Candidates: truth-value (of almost any type), conversion to/from
+    strings, equality, inequality, identity, attribute selection, indexing, and the overloading
+    required to allow positional function arguments to match named function parameters. Possibly:
+    the subtyping relation between named structs and classes, and the opt type as subtyping.
+    Also investigate which Python "abstractions" that are worth preserving (iterable, sequence,
+    dict view, hashable, context mgr, ...).
+
+    * Struct comprehensions
+    Explore the theory required to support struct comprehensions, i.e., abstractions over unknown
+    struct types in the form of a set of unknown types indexed by an unknown set of tags. Sort out
+    the details of the struct comprehension expression, as well as any consequences to type
+    inference.
+
+    * Subtyping or row polymorphism for extended named structs?
+    Evaluate the best way to encode nominal subtyping between user-defined structs and classes --
+    either using row-polymorphism as the internal representation (which is as fast as unification
+    but requires the compiler to insert type coercion operators at select program places), or by
+    direct subtype constraint solving (which requires weighted searching among the declared subtype
+    axioms but enables subtyping coercions wherever they are required).
+
+    * Deadlock avoidance analysis
+    Explore the possibility of performing a safe deadlock avoidance analysis at compile-time. Idea:
+    Extend the types of actor ids, actor methods and message handles with a (hidden) unique type
+    variable denoting the *depth* of the receiving actor. Generate inequality constraints at
+    inference time which guarantee that every synchronous call or await operation is directed to an
+    actor of strictly greater depth than the sender. Perform unification and constraint solving as
+    usual, ignoring the depth constraints. Since depth variables can only be unified with other
+    depth variables, the resulting depth constraints must remain a partial order. Use topological
+    sorting to determine whether this order is free of cycles, i.e., whether the synchronous call
+    chain of the original program is deadlock-free.
+
+C. Compiler
+    [1] * C back-end
+    Define an abstract syntax of (suitably constrained) C programs and replace the current Acton-
+    to-Python translator with a pass that generates C instead. Avoid the need to maintain type
+    information by approximating every primitive value or pointer to WORD. Map values of primitive
+    types to their C equivalents. Explore 64-bit words for tagging primitive values in unions.
+    Translate class definitions to (linked) method tables. Avoid the idea of terminating each
+    iteration by an exception.
+
+    [1] * C representation of data
+    Investigate what C representation to use for dicts, lists and sets. Check out what Python does
+    internally. See if list concatenation/extension can be made cheaper at run-time by means of
+    a concat constructor, hidden behind the iterator interface. Sync with the needs of (E).
+
+    [1] * Reinstalled CPS pass
+    Recover the abandoned CPS code and update it, especially regarding the formal semantics of
+    exceptions and break/continue. Redress it to work on the Acton AST, not Python. Ensure that
+    the decision points (to convert or not convert a function/call) are based solely on inferred
+    effects (no remnants of syntax-based short-cuts). Also convert the lambda-lifter and
+    closure-converter passes to use the proper Acton AST.
+
+    * More refined effect inference
+    Extend the current effect inference to capture mutation and sync/awaits calls at minimum,
+    possibly also async calls, actor creation and exception-throwing.
+
+    [1] * Unique name generation
+    Make an overhaul of all compiler passes to ensure they all generate unique names using a
+    global (monadic) name supply. (This means no more semi-clever use of source locations to
+    establish uniqueness!)
+
+    [1] * Binary interface files
+    Merge in Björn's code to use new (fast!) binary interface files format.
+
+    * New combinator parser
+    Replace the old LR parser generated by Happy with Björn's alternative based on Megaparsec
+    combinators. Linked to the unique name generation fix above, which will remove the need to
+    retain the old (and heavy) representation of SrcLocations.
+
+    * Retrofit the type-checker with witness translation to meet the demands of overloading
+    (and possibly subtype coercions).
+
+    * Complete the code that implements a redesigned tracking of type errors, where unification
+    failures only print the parts of a type that actually differ (git branch 'better-errors').
+
+D. Local RTS
+    [1]
+        Event-loop/reactor, 1 thread-per-logical-core
+            IO via kqueue/epoll/..., files/sockets/devices/...
+            Scheduler:
+                1. Timer queue
+                    Monotonic clock - (perf counter not steady)
+                    Via kqueue/(epoll timeout)
+                2. (Actor) ready queue
+                3. IO
+        Basic memory management:
+            Malloc wrapper (jemalloc?)
+            No GC
+        Investigate good-enough concurrent data structures (queues, task pool, hashtable, ...)
+            libcuckoo, liblfds, spinlock, mutex
+        Design of async Env
+            Table mapping events/connections to actor context
+            Env:
+                Socket data - std read/write user allocated buffers
+                (DNS lookup?)
+                Exit
+        Implementation of
+            ACTOR
+            MSG
+            CLOSURE
+            ASYNC
+                Post message to target actor queue + ready?
+                Return awaitable-handle
+            SYNC/AWAIT
+                Accepts awaitable-handle
+            POSTPONE
+                Add continuation to timer queue
+                Return cancelable-handle
+            CANCEL
+                Accept cancelable-handle
+        Exception handler stack (per message?)
+            PUSH/POP?
+    [2]
+        Memory management, slab allocator, local garbage-collector
+            Sharing message parameters across continuations?
+            Region-inference for locally used results...?
+        Investigate optimal lock-free shared data structures (queues, task pool, hashtable, ...)
+        Argument and result conventions for various execution contexts
+        Tagging and propagation of root events through method call chains
+        Access to compiled code in the form of dynamic C libraries
+
+E. Distributed RTS
+    Conversion from global ids to node id + local pointers (DHT + dynamic placement table?)
+    Conversion from local pointer to global id (globale table or embedded in heap data?)
+    Distributed garbage collection
+    Control message protocol between nodes (multicast/broadcast?)
+        CLI messages for inspection and control
+        Gossip protocol for spreading cluster membership knowledge
+        Dedicated thread for cluster protocol and persistence to disk?  I/O?
+
+    Check-pointing mechanism
+
+        After an actor has completed a mutating message call, a (diff-)snapshot is made and distributed.
+        Guidance to the snapshot content could probably be provided by the compiler.
+
+        Track state updates using custom functions at each checkpoint, or use run-time book-keeping machinery
+
+    Load-balancing based on actor connectivity graph and A * traffic load + B * cpu load + C * memory usage
+
+F. Code repository
+    Summary of the global module system design:
+    -   All Acton code is conceptually part of a global module structure, that allows unambiguous identification
+        of every Acton module in the world.
+    -   An Acton module definition has the following form, where a NAMEPATH is one or more module names
+        connected by a dot (and the indentation of DEFINITIONS is voluntary):
+
+            module NAMEPATH:
+                DEFINITIONS
+
+    -   A compilation unit is a file containing a module definition. The name and location of such a file
+        is irrelevant, it is the NAMEPATH of the contained module definition that determines the module's
+        place in the Acton module hierarchy.
+    -   On the top level, the Acton module system is partitioned into a set of namespaces:
+        *   The Acton standard library namespace, identified as 'acton', visible to all Acton developers.
+        *   One namespace for every user on every computer where the Acton development system is installed.
+            These namespaces are identified as 'localhost/USERNAME', and are only visible to the users on each
+            particular computer.
+        *   A set of namespaces on every internet-connected computer on which an Acton code server runs. These
+            namespaces are written 'DOMAIN.NAME/PATH' and are accessible by every Acton developer on the
+            internet who owns appropriate access credentials.
+    -   To cater for evolving code, each Acton namespace exposes a set of versions. A version is identified by
+        a human-friendly version tag, whose exact lexical structure is left unspecified for now.
+    -   An Acton development system maintains a local cache of namespace contents at different versions,
+        managed via explicit tool commands. The contents of this cache can also be queried and the result
+        listed as Acton source code.
+    -   A module is imported from a specific namespace and at an explicit version by prepending the import
+        statement with a custom "decorator":
+
+            @NAMESPACE!VERSION
+            import NAMEPATH
+
+    -   A module defined in a specific namespace and at an explicit version is written an analogous way:
+
+            @NAMESPACE!VERSION
+            module NAMEPATH:
+                DEFINITIONS
+
+        However, such a definition is only accepted by the Acton compiler if VERSION is either unused in
+        NAMESPACE, or VERSION exists and the new module definition is identical to the existing version.
+    -   When a set of modules are compiled at a new version, all other modules of the same namespace are
+        automatically lifted to the new version as well, but with their contents unchanged. This feature can
+        be disabled on the compiler command line for select modules, effectively deleting them from the
+        new version of the namespace.
+    -   A module can also be defined with an empty VERSION field:
+
+            @NAMESPACE
+            module NAMEPATH:
+                DEFINITIONS
+
+        This results in code being placed in NAMESPACE under an internally generated version string, that is
+        guaranteed to be unique.
+    -   Likewise, importing a module without specifying a version implicitly selects the latest version of
+        the referenced namespace that is available in the local namespace cache:
+
+            @NAMESPACE
+            import NAMEPATH
+
+        The compiled code is nevertheless stored with the selected namespace version spelled out, making it
+        insensitive to future version upgrades to the local namespace cache.
+    -   For completely undecorated module definitions and imports, the following defaults are used:
+    -   A module definition without a namespace decoration is equivalent to specifying the namespace
+        'localhost/USERNAME'.
+    -   An un-decorated import statement is resolved in the namespace 'localhost/USERNAME', provided the
+        imported module actually exists in the latest version of 'localhost/USERNAME'. Otherwise the 'acton'
+        namespace is assumed. In both cases, however, the module being compiled is stored in the local module
+        cache with the selected namespace explicitly written out.
+    -   It should be noted that the design above makes it fully possible to compile privately produced code
+        into a namespace that legally belongs to some external organization. This is not a security flaw,
+        as the important aspect is not what self-deceptions a developer chooses to believe, but to what
+        extent such deceptions can remain undetected by others. The Acton system takes serious measures to
+        prohibit the latter, although the details of how this is implemented will be deferred to a later
+        discussion.
+
+    A first implementation sketch:
+    ...
+
+G. CLI
+    Creating a running Acton "world" (bootstrap, references an actor def in the global module namespace)
+    Monitor/inspect a running instance (meta info like cpu load, mem usage, traffic, downtimes, io, etc...)
+    Commit new modules (compile and install into repo)
+    Inspect repo (at specific version)
+    Inspect and interact with live actors / run Acton code in sandbox
+
+    Add/remove cluster nodes
+        A new node is started in a "stand-by" mode, and then instructing the cluster to add the new node
+        Removing a node similarly: instructing the cluster to remove a specific node,
+        making the affected node to enter the same "stand-by" mode.
+
+H. Live code upgrade
+    Replacing the living code pointers (atomically or via a message "wave"), using
+        Should the "wave" perform it's update bottom-up?
+    aggregate of conversion functions (lifted to full state converter) if state types don't match
+
+I. Security architecture
+    Analysis...
+
+    When a world is started it is given a private key/cert.
+        This key acts as a CA when adding nodes to the cluster; they must pass a key exchange authentication.
+        BUT: the key must be distributed among all nodes. Is this regarded as "safe"?
+    A new node (to be added into a cluster) is started with a public key, matching the cluster's private key.
+
+J. Libraries
+    Basic python:
+        Primitive types:
+            Now:
+                int (bounded to machine word length (64) or overrideable default)
+                bool
+                float64
+            When needed:
+                (u)int8/16/32/64/128
+                bigint/integer
+                float32
+        Data structures:
+            (frozen)list, (frozen)(sorted/ordered)set, (frozen)(sorted/ordered)dict, tuple, str (utf-8), bytes, bytearray, Decimal, BigFloat
+                klib
+                Representation of anonymous structs
+        Built-ins:
+            Now:
+                Data constructors:
+                    bool, bytes, bytearray, dict, float, int, list, set, str, tuple
+                Other:
+                    enumerate, format, hash, len, (print), range, round, sorted
+            When needed:
+                abs, all, any, ascii, bin, chr, divmod, filter, hex, isinstance, map, max, min, ord, pow, reversed, sum, zip
+            Probably not:
+                frozenset, complex, (.id), iter, next, object, oct, (property), (repr), slice, (super)
+        Source of time duration (monotonic) as python float64 seconds
+        Stopwatch -> float64 (s)
+        String support functions:
+            format, endswith, find, index, is(alnum/...), join, lower, partition, replace, split, startswith, strip, upper
+        Type classes:
+            ContextManager, Hashable, Ordered, Numeric, PrintParse(T1<->bytes/str) (Codec(T1<->T2))
+            Iterable > Sequence/Indexed
+            Keyed/Dictionary
+            TODO: Design standard typeclasses(-hierarchy)
+        Exceptions - (Those already known to the compiler)
+    [1] NETCONF client
+	    utf-8 <-> bytes (stub encode/decode)
+        Struct/dict <-> XML string (parse/print-library) (convert existing python impl to acton)
+	    socket, connection interfaces (inspired or modeled after asyncio)
+        IP address/port types
+	    Cryptography functionality
+	    ssh interface
+
+    [2] NETCONF server
+        NMDA RFC 8342
+        NETCONF push
+        NETCONF call home
+        tls interface (?)
+        DateTime (time of day, calendar and such)
+        Binary serialization of primitives etc (byte-order?)
+    Tracker
+    Multi-actor transactions
+    Transactional Causal Consistency with CRDTs (Shapiro's "Cure")
+    Sharding combinators
+    Optimized time-series actors
+    RESTconf server and client
+    Data serialization
+    Converted Python stdlibs
+
+    REST API server
+    Communication between two Acton worlds.
+    Higher-level protocol services (built upon the async socket IO)
+        http, sctp, etc.
+        These APIs are of course also asynchronous in nature.
+
+    Wrapped C libraries (ssl, ssh, ...)
+        Akin to swig-wrapped code.
+
+K. Examples
+    [1] The classic Demo1!
+    OCP
+    Kristian's core services
+    DT's link provisioning (our demo2++)
+    Time-series illustrative example
+
+L. Documentation
+    Tutorial
+    Language reference
+    CLI manual (including sysadmin guide)
+
+M. GUI
+    Blinkenlights
+
+    Web
+    Possibly started by using the CLI, e.g.: `acton web :8000`
+    The same as, or subset of, the read-only operations possible in the CLI, but more "flashy"
+        Live graphs possible
+    Intended for administrators/executives; not a mega visitor-capable web site.
+
+N. YANG compiler
+
+    Perform the two steps (yangc and actc) in one go.
+
+O. Installation
+    Make target for building an installer
+    Native MacOS, Ubuntu, RedHat & CentOS
+    No external dependencies!
+
+P. Performance tests
+    TBD
+
+Q. Open-source (verb!) the classic Acton code
+
+R. Automatic test environment
+    How install basic tools?
+    Yes.

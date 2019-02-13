@@ -1,0 +1,260 @@
+Acton II (scribble)
+-------------------
+
+A. Language
+
+    * Syntax of types.
+
+        fun1 : (int) -> (float,float) -> str
+        fun2 : (int,int,bool) -> bool
+        fun3 : (int,int,bool) -> (int,int)
+        fun4 : ((int,int),bool) -> (int,int)
+        fun5 : ((int,int,bool)) -> (int,int)
+        fun6 : (int,(int,),bool) -> str
+        fun7 : () -> str
+    
+        dict1 : {str:(float,float)}
+        dict2 : {(int,str):apa}
+    
+        fun8 : (A,B) -> bool \\ ElementOf(A,B)
+    
+        fun9 : (A,B) -> {A:B} \\ Hashable(A)    
+        fun9 : (A,B) -> {A:B} / Hashable(A)    
+
+        fun9 : apa(A) \\ Hashable(A)
+        def fun9(a,b):
+            return {a:b}
+
+        x = fun9([1,2,3],"apa")
+    
+        def fun2(x:int, y:int, z:bool) -> bool:
+            c = (a,b) = f(3)
+            return z
+        
+        type apa(A) = (A,B) -> {A:B}
+
+        f : (A) -> Apa(A) \\ Hashable(A)
+        g : (int) -> Apa(int)
+    
+        fun13 : (Apa(int),(int)->str) -> Apa(str)
+        fun14 : (Apa(A),(A)->B) -> Apa(B)
+    
+        fun15 : ((apa:[A],bepa:{int:A}), (A)->B) -> (apa:[A],bepa:{int:B})
+    
+    * Named interfaces / tagged unions
+    
+        abstract struct Apa(A):
+            pass
+
+        struct Bepa(A):
+            Apa(A)
+            b : A
+    
+        struct Cepa(A):
+            Apa(A)
+            Basetype()
+            c1 : str
+            c2 : Apa(A)
+    
+        struct Depa(A):
+            Apa(A)
+
+        x : Apa(int)
+        x = f(...)
+    
+        if isinstance(x,Bepa):
+            b=x.b
+            return b
+        elif isinstance(x,Cepa):
+            if x.c1 == "" and isinstance(x.c2,Fepa):
+                return 0
+            else:
+                s = x.c1
+                a = x.c2
+                return ...
+        else:
+            ...
+    
+        return x.b if isinstance(x,Bepa) else (0 if x.c1=="" and isinstance(x.c2,Fepa) else ...) if isinstance(x,Cepa) else ...
+    
+        ######### (c.f. Haskell)
+
+        data Apa a = Bepa a | Cepa {c1::String, c2::Apa a} | Depa
+
+        f (Bepa b)    v
+          | v > 0       = r+g
+          where r       = ...
+                g       = ...
+        f (Cepa "" 0) 6 = ...
+        f a           x = ...
+
+        f a x = case (a,x) of
+                    (Bepa b, _) -> ...
+                    (Cepa "" 0, 6) -> ...
+                    _  -> ...
+
+        max :: Ord a => [a] -> a
+
+        ############## (Selection from tuples)
+
+        t = (1,"",false)
+
+        t[0]
+        t[1]
+        t[2]
+
+        def f(x,i):
+            t = (1,"",false)
+            return t.0
+            return t[0]
+            return t[i]
+            return x[i]
+
+        ##############  (Subtyping / type inheritance)
+
+        struct Basetype:
+            Embryo()
+            base : str = ""
+        
+        struct Apa(A):
+            case Bepa(A,int,z:A)
+            case Cepa:
+                Basetype
+                int
+                c1 : str
+                c2 : Apa(A)
+            case Depa:
+                b:int
+            case Epa(s:str, r:Apa(A), b:int)
+            case Fepa()
+
+        ############ (The diamond problem)
+
+        module M:
+
+            struct A:
+                x: [int]
+
+        module N:
+            import M
+
+            struct A:
+                x: int
+
+            struct B:
+                y: str
+
+            struct C:
+                A
+                B
+                ma: M.A
+
+            v: C = ...
+    
+            v.x   v.b.x   v.ma.x   v.B.x     v.A.x    v.M.A.x
+
+            f(v)     g(v)    f(v.ma)
+    
+        def f(p):
+            print(p.x)
+
+        def f(p):
+            print(p.y)
+
+            struct A(T):
+                a: T
+    
+            struct B:
+                A(int)
+    
+            struct C:
+                A(str)
+    
+            struct D:
+                B
+                C
+    
+            d = D(a=3)
+    
+            b: B = d
+            b.a
+    
+            c: C = d
+            c.a == b.a == d.a
+    
+    * Pattern matching
+
+        ##### Clumsy:
+        
+        def f(Bepa(b)):
+            ....
+        def f(Cepa("",Fepa)):
+            ...
+
+        ##### Nice:
+        
+        def f(a, x):
+            switch a, x:
+                case (Bepa(b),v) and v>b and fib(b) > 100000000 :
+                    ...
+                case Cepa("",0), 6:
+                    ...
+                case Cepa(c1,c2), i:
+                    ...
+                case (Bepa(b),v):
+                    ...
+                else:
+                    ...
+    
+        def f(u):
+
+            var x : Apa(_)
+            y : str
+            z : Blaj({str})
+
+            x = Bepa(base="",b=u)
+            x = Bepa(Fepa)
+            x = Cepa("",Epa("huh",Fepa))
+    
+            switch x:
+                case Bepa:
+                    b = x.b
+                    x.base      x.0.base
+                case Bepa(b):
+                    return b+23
+                case Cepa(c2=Fepa,c1=""):
+                    return 0
+                case Cepa(s, a):
+                    return ...
+                else:
+
+            return b if x case Bepa(b) and b>0 else 0
+    
+            return x if f(x) else None
+    
+            if f(x):
+                return x
+            else:
+                return None
+
+    * Comprehension syntax
+    
+        for x,y in zip("abcdefghij", range(10)):
+            print(x,y)
+
+        for x in "abcdefghij" and y in range(10):
+            print(x,y)
+    
+        return [ for x in "abcdefghij" and y in range(10): (x,y) ]
+
+        return [ for x in "abcdefghij": for y in range(10): (x,y) ]
+
+        return [ for x in range(10): if x%3==0: for y in range(x): (x,y) ]
+
+        for x in range(10): 
+            if x%3==0: 
+                for y in range(x): 
+                    print(x,y)
+
+        return [ (x,y) for x in range(10) if x%3==0 for y in range(x) ]
+
