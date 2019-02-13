@@ -1,31 +1,39 @@
-# jemalloc is faster so let's use it by default
-JEM_LIBS:=
-JEM_FLAGS:=
+DEBUG ?= 0
 
+CFLAGS := -std=c11 -Wall -Werror -pedantic -pedantic-errors
+CXXFLAGS := -std=c++11 -Wall -Werror -pedantic -pedantic-errors
+LIBS :=
+
+ifeq ($(DEBUG), 1)
+	CFLAGS += -g -DDEBUG
+	CXXFLAGS += -g -DDEBUG
+else
+	CFLAGS += -DNDEBUG
+	CXXFLAGS += -DNDEBUG
+endif
+
+# jemalloc is faster so let's use it by default
 # there's no pkg-config ??
 JEM_LIB?=$(wildcard /usr/lib/x86_64-linux-gnu/libjemalloc.a)
-
 ifeq ($(JEM_LIB),)
 $(info ** Not using jemalloc)
 else
 $(info Using jemalloc: $(JEM_LIB))
-JEM_FLAGS:=-DUSE_JEMALLOC
-JEM_LIBS:=$(JEM_LIB)
+CFLAGS := -DUSE_JEMALLOC
+LIBS += $(JEM_LIB)
 endif
 
-CFLAGS:=$(JEM_FLAGS) $(LDFS_FLAGS)
-LIBS:=$(JEM_LIBS) $(LDFS_LIBS)
+CFLAGS += $(LDFS_FLAGS)
+LIBS += $(LDFS_LIBS)
 
-
-all: kernel
+all: kernel test_io
 
 kernel: kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
-	cc -std=c11 -O3 \
-		-Wall -Werror -pedantic -pedantic-errors \
+	$(CC) $(CFLAGS) \
+		-O3 \
 		-Wno-int-to-void-pointer-cast \
 		-Wno-unknown-pragmas \
 		-Iliblfds7.1.1/liblfds711/inc \
-		$(CFLAGS) \
 		kernelops.c \
 		kernel.c \
 		liblfds7.1.1/liblfds711/bin/liblfds711.a \
@@ -35,5 +43,16 @@ kernel: kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
 		-lm \
 		-o kernel
 
+hashtable.o: hashtable.cc hashtable.h
+	$(CXX) $(CXXFLAGS) -I deps/libcuckoo -c hashtable.cc
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+test_io: test_io.o hashtable.o
+	$(CXX) $(CXXFLAGS) -pthread -o $@ $^
+
 clean:
+	rm -f *.a *.o
+	rm -f test_io
 	rm -f kernel
