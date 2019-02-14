@@ -3,6 +3,7 @@ DEBUG ?= 0
 CFLAGS := -std=c11 -Wall -Werror -pedantic -pedantic-errors
 CXXFLAGS := -std=c++11 -Wall -Werror -pedantic -pedantic-errors
 LIBS :=
+LDFLAGS :=
 
 ifeq ($(DEBUG), 1)
 	CFLAGS += -g -DDEBUG
@@ -10,6 +11,10 @@ ifeq ($(DEBUG), 1)
 else
 	CFLAGS += -DNDEBUG
 	CXXFLAGS += -DNDEBUG
+endif
+
+ifeq ($(shell $(CC) -v |& grep -c "clang version"), 1)
+LDFLAGS += -stdlib=libc++ -fuse-ld=bfd
 endif
 
 # jemalloc is faster so let's use it by default
@@ -38,19 +43,20 @@ kernel: kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
 		kernel.c \
 		liblfds7.1.1/liblfds711/bin/liblfds711.a \
 		$(LIBS) \
+		$(LDFLAGS) \
 		-pthread \
 		-lpthread \
 		-lm \
 		-o kernel
 
-hashtable.o: hashtable.cc hashtable.h
-	$(CXX) $(CXXFLAGS) -I deps/libcuckoo -c hashtable.cc
+hashtable_impl.o: hashtable_impl.cc
+	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-test_io: test_io.o hashtable.o
-	$(CXX) $(CXXFLAGS) -pthread -o $@ $^
+test_io: test_io.o hashtable_impl.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
 
 clean:
 	rm -f *.a *.o
