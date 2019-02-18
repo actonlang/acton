@@ -1,26 +1,25 @@
 #include <assert.h>
+
 #if defined(USE_JEMALLOC)
 #include <jemalloc/jemalloc.h>
 #endif
 
 #include "kernelops.h"
 
-double timestamp_ns() {
-	static const double tsc2ns = 1.0/2.23;   // 1 / (CPU clock frequency / 1e9)
-	return __rdtsc()*tsc2ns;
-}
 
+static const size_t MEM_ALIGN = 64;
 
-_Atomic uint32_t clos_created = 0;
+_Atomic uint32_t clos_create_count = 0;
 _Atomic uint64_t clos_create_time = 0;
 
 Clos CLOS(R (*code)(Clos, WORD), int n) {
-    atomic_fetch_add(&clos_created, 1);
+    atomic_fetch_add(&clos_create_count, 1);
 
-    const double t0 = timestamp_ns();
+    const tsc_t t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
-    Clos c = aligned_alloc(64, size);
+    //Clos c = aligned_alloc(MEM_ALIGN, size);
+	Clos c = malloc(size);
     assert(c != NULL);
     c->code = code;
     c->nvar = n;
@@ -28,44 +27,50 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
         c->var[x] = (WORD)0xbadf00d; // "bad food", i.e. uninitialized variable
     }
 
-    atomic_fetch_add(&clos_create_time, (uint64_t)(timestamp_ns() - t0));
+    atomic_fetch_add(&clos_create_time, (uint64_t)(timestamp_tsc() - t0));
 
     return c;
 }
 
-_Atomic uint32_t msg_created = 0;
+_Atomic uint32_t msg_create_count = 0;
 _Atomic uint64_t msg_create_time = 0;
 
-Msg MSG(Clos clos) {
-    atomic_fetch_add(&msg_created, 1);
+Msg MSG(Actor to, Clos clos) {
+    atomic_fetch_add(&msg_create_count, 1);
 
-    const double t0 = timestamp_ns();
+    const double t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Msg);
-    Msg m = aligned_alloc(64, size);
+    //Msg m = aligned_alloc(MEM_ALIGN, size);
+    Msg m = malloc(size);
     assert(m != NULL);
+    m->to = to;
     m->next = NULL;
     m->waiting = NULL;
     m->clos = clos;
-#if defined(WAITQ_MUTEX)
+    m->time_baseline = 0;
+#if WAITQ == MUTEX
     m->wait_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+#elif WAITQ == SPIN
+    atomic_flag_clear(&m->wait_lock);
 #endif
 
-    atomic_fetch_add(&msg_create_time,  (uint64_t)(timestamp_ns() - t0));
+    atomic_fetch_add(&msg_create_time,  (uint64_t)(timestamp_tsc() - t0));
 
     return m;
 }
 
 Actor ACTOR(int n) {
     const size_t size = sizeof(struct Actor) + n * sizeof(WORD);
-    Actor a = aligned_alloc(64, size);
+    //Actor a = aligned_alloc(MEM_ALIGN, size);
+    Actor a = malloc(size);
     assert(a != NULL);
     a->next = NULL;
     a->msgQ = NULL;
     a->msgTail = NULL;
-#if defined(MSGQ_MUTEX)
+#if MSGQ == MUTEX
     a->msg_lock = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
-#elif defined(MSGQ_SPIN)
+#elif MSGQ == SPIN
     atomic_flag_clear(&a->msg_lock);
 #endif
 
@@ -73,66 +78,98 @@ Actor ACTOR(int n) {
 }
 
 // global ready queue
-#if defined(READYQ_LF)
-struct lfds711_ringbuffer_state readyQ;
-struct lfds711_ringbuffer_element *readyQ_elems;
-#else
 Actor readyQ;
 Actor readyTail;
-#endif
 
-#if defined(READYQ_MUTEX)
+#include "pqueue.h"
+
+pqueue_t timerQ;
+
+
+int timerQ_cmppri(pqueue_pri_t next_prio, pqueue_pri_t curr_prio) {
+    // This callback should return 0 for 'lower' and non-zero
+    //for 'higher', or vice versa if reverse priority is desired
+
+    return curr_prio < next_prio ? 1 : 0;  // "less" is "higher prio" in the timer Q
+}
+pqueue_pri_t timerQ_getpri(void *item) {
+    return ((TimedMsg)item)->trigger_time;
+}
+void timerQ_setpri(void *item, pqueue_pri_t prio) {
+    ((TimedMsg)item)->trigger_time = prio;
+}
+size_t timerQ_getpos(void *item) {
+    return ((TimedMsg)item)->pqueue_pos;
+}
+void timerQ_setpos(void *item, size_t pos) {
+    ((TimedMsg)item)->pqueue_pos = pos;
+}
+void *timerQ_realloc(void *oldbuf, size_t newsize) {
+    if (oldbuf)
+        printf("\x1b[34;1mre-allocating\x1b[m timer Q buffer -> %ld\n", newsize);
+    return realloc(oldbuf, newsize);
+}
+
+
+#if READYQ == MUTEX
 pthread_mutex_t readyQ_lock = PTHREAD_MUTEX_INITIALIZER;
-#elif defined(READYQ_SPIN)
+#elif READYQ == SPIN
 volatile atomic_flag readyQ_lock;
 #endif
 
+#if TIMERQ == MUTEX
+pthread_mutex_t timerQ_lock = PTHREAD_MUTEX_INITIALIZER;
+#elif TIMERQ == SPIN
+volatile atomic_flag timerQ_lock;
+#endif
+
+void print_impl(char *title, int impl) {
+    printf("\x1b[34;1m|\x1b[m \x1b[34m%-10s:\x1b[m  ", title);
+
+    if (impl == LFREE)
+        printf("\x1b[32;1mlock-free\x1b[m\n");
+    else if (impl == SPIN)
+        printf("\x1b[33mspinlock\x1b[m\n");
+    else if (impl == MUTEX)
+        printf("\x1b[31mmutex\x1b[m\n");
+}
+
+double _tsc2ns = 1.0/2.35; // TODO: should be calibrated at runtime
+
 void kernelops_INIT() {
-    printf("\x1b[34;1m|\x1b[m \x1b[34mReady Q    :\x1b[m  ");
-#if defined(READYQ_LF)
-    printf("\x1b[32;1mlock-free\x1b[m\n");
-#elif defined(READYQ_SPIN)
-    printf("\x1b[33mspinlock\x1b[m\n");
-#elif defined(READYQ_MUTEX)
-    printf("\x1b[31mmutex\x1b[m\n");
-#endif
+    print_impl("Ready Q", READYQ);
+    print_impl("Message Q", MSGQ);
+    print_impl("Waiting Q", WAITQ);
 
-    printf("\x1b[34;1m|\x1b[m \x1b[34mMessage Q  :\x1b[m  ");
-#if defined(MSGQ_LF)
-    printf("\x1b[32;1mlock-free\x1b[m\n");
-#elif defined(MSGQ_SPIN)
-    printf("\x1b[33mspinlock\x1b[m\n");
-#elif defined(MSGQ_MUTEX)
-    printf("\x1b[31;mmutex\x1b[m\n");
-#endif
-
-    printf("\x1b[34;1m|\x1b[m \x1b[34mWaiting Q  :\x1b[m  ");
-#if defined(WAITQ_LF)
-    printf("\x1b[32;1mlock-free\x1b[m\n");
-#elif defined(WAITQ_MUTEX)
-    printf("\x1b[31mmutex\x1b[m\n");
-#endif
-
-    printf("\x1b[34;1m|\x1b[m \x1b[34mAllocator  :\x1b[m  ");
+    printf("\x1b[34;1m|\x1b[m \x1b[34mAllocator :\x1b[m  ");
 #if defined(USE_JEMALLOC)
     printf("\x1b[32;1mjemalloc\x1b[m\n");
 #else
     printf("\x1b[33mglibc\x1b[m\n");
 #endif
 
-#if defined(READYQ_LF)
-    const int N = 10000;
-    printf("\x1b[34mReady Q LF:\x1b[m \x1b[1m%d\x1b[m \x1b[34melements,\x1b[m \x1b[1m%ld\x1b[m \x1b[34mbytes each\x1b[m\n", N, sizeof(struct lfds711_ringbuffer_element));
-
-    readyQ_elems = aligned_alloc(64, sizeof(struct lfds711_ringbuffer_element)*(N + 1));
-    assert(readyQ_elems != NULL);
-    lfds711_ringbuffer_init_valid_on_current_logical_core(&readyQ, readyQ_elems, N + 1, NULL);
-#elif defined(READYQ_SPIN)
+#if READYQ == SPIN
     atomic_flag_clear(&readyQ_lock);
 #else
     readyQ = NULL;
     readyTail = NULL;
 #endif
+
+    const size_t timerQ_initsize = 5000;
+    printf("Timer Q initial size: %ld\n", timerQ_initsize);
+    pqueue_init(
+            &timerQ,
+            timerQ_initsize,
+            timerQ_realloc,
+            timerQ_cmppri,
+            timerQ_getpri,
+            timerQ_setpri,
+            timerQ_getpos,
+            timerQ_setpos);
+}
+
+double tsc2ns(tsc_t tsc) {
+    return tsc*_tsc2ns;
 }
 
 void kernelops_CLOSE() {
@@ -140,40 +177,36 @@ void kernelops_CLOSE() {
     //malloc_stats_print(NULL, NULL, NULL);
 #endif
 
-#if defined(READYQ_LF)
-    free((void *)readyQ_elems);
-#else
     readyQ = NULL;
-#endif
+    readyTail = NULL;
+
+    pqueue_free(&timerQ);
 }
 
-_Atomic uint32_t readyQ_pushes = 0;
-_Atomic uint32_t readyQ_pops = 0;
 
-_Atomic uint64_t readyQ_push_time = 0;
-_Atomic uint64_t readyQ_pop_time = 0;
+// ################========   Ready Q  ========################
 
-void ready_PUSH(Actor a) {
-    atomic_fetch_add(&readyQ_pushes, 1);
-
-    const double t0 = timestamp_ns();
-
-#if defined(READYQ_LF)
-    enum lfds711_misc_flag overwrote;
-    void *overwritten;
-    lfds711_ringbuffer_write(&readyQ, (void *)a, NULL, &overwrote, &overwritten, NULL);
-    if(overwrote == LFDS711_MISC_FLAG_RAISED) {
-        printf("overwrote!\n");
-        // TODO: mutex lock to allocate another buffer - must lock ALL threads!
-        // TODO: write 'overwritten' to new buffer
-    }
-#else
-
-#if defined(READYQ_SPIN)
-    spinlock_lock(&readyQ_lock);
-#elif defined(READYQ_MUTEX)
-    pthread_mutex_lock(&readyQ_lock);
+#if READYQ == LFREE
+#error Lock-free Ready Q is not implemented!
 #endif
+
+_Atomic uint32_t readyQ_ins_count = 0;
+_Atomic uint64_t readyQ_ins_time = 0;
+
+_Atomic uint32_t readyQ_poll_count = 0;
+_Atomic uint64_t readyQ_poll_time = 0;
+
+void ready_INSERT(Actor a) {
+    atomic_fetch_add(&readyQ_ins_count, 1);
+
+    const double t0 = timestamp_tsc();
+
+#if READYQ == MUTEX
+    pthread_mutex_lock(&readyQ_lock);
+#elif READYQ == SPIN
+    spinlock_lock(&readyQ_lock);
+#endif
+
     if (readyTail) {
       readyTail->next = a;
       readyTail = a;
@@ -182,69 +215,69 @@ void ready_PUSH(Actor a) {
       readyQ = a;
     }
     a->next = NULL;
-#if defined(READYQ_SPIN)
-    spinlock_unlock(&readyQ_lock);
-#elif defined(READYQ_MUTEX)
+
+#if READYQ == MUTEX
     pthread_mutex_unlock(&readyQ_lock);
+#elif READYQ == SPIN
+    spinlock_unlock(&readyQ_lock);
 #endif
 
-#endif
-
-    atomic_fetch_add(&readyQ_push_time,  (uint64_t)(timestamp_ns() - t0));
+    atomic_fetch_add(&readyQ_ins_time,  (uint64_t)(timestamp_tsc() - t0));
 }
 
-Actor ready_POP() {
-    atomic_fetch_add(&readyQ_pops, 1);
+Actor ready_POLL() {
+    atomic_fetch_add(&readyQ_poll_count, 1);
 
-    const double t0 = timestamp_ns();
+    const double t0 = timestamp_tsc();
 
     Actor actor = NULL;
-#if defined(READYQ_LF)
-    // TODO: read from all existing buffers
-    lfds711_ringbuffer_read(&readyQ, (void **)&actor, NULL);
-#else
-
-#if defined(READYQ_SPIN)
-    spinlock_lock(&readyQ_lock);
-#elif defined(READQ_MUTEX)
+#if READYQ == MUTEX
     pthread_mutex_lock(&readyQ_lock);
+#elif READYQ == SPIN
+    spinlock_lock(&readyQ_lock);
 #endif
+
     if (readyQ) {
         actor = readyQ;
         readyQ = actor->next;
-        if (!readyQ)
+        if (! readyQ)
             readyTail = NULL;
         actor->next = NULL;
     }
-#if defined(READYQ_SPIN)
-    spinlock_unlock(&readyQ_lock);
-#elif defined(READQ_MUTEX)
+
+#if READYQ == MUTEX
     pthread_mutex_unlock(&readyQ_lock);
+#elif READYQ == SPIN
+    spinlock_unlock(&readyQ_lock);
 #endif
 
-#endif
-
-    atomic_fetch_add(&readyQ_pop_time, (uint64_t)(timestamp_ns() - t0));
+    atomic_fetch_add(&readyQ_poll_time, (uint64_t)(timestamp_tsc() - t0));
 
     return actor;
 }
 
 
-#if defined(MSGQ_LF)
-#error Message Q lock-free is not implemented!
+// ################========   Message Q  ========################
+
+#if MSGQ == LFREE
+#error Lock-free Message Q is not implemented!
 #endif
 
 _Atomic uint32_t msg_enq_count = 0;
+_Atomic uint64_t msg_enq_time = 0;
 
 bool msg_ENQ(Msg m, Actor a) {
     atomic_fetch_add(&msg_enq_count, 1);
+    const double t0 = timestamp_tsc();
+
     bool was_first = true;
-#if defined(MSGQ_MUTEX)
+
+#if MSGQ == MUTEX
     pthread_mutex_lock(&a->msg_lock);
-#elif defined(MSGQ_SPIN)
+#elif MSGQ == SPIN
     spinlock_lock(&a->msg_lock);
 #endif
-    m->next = NULL;
+
     m->next = NULL;
     if (a->msgTail) {
         a->msgTail->next = m;
@@ -254,21 +287,33 @@ bool msg_ENQ(Msg m, Actor a) {
         a->msgTail = m;
         a->msgQ = m;
     }
-#if defined(MSGQ_MUTEX)
+
+#if MSGQ == MUTEX
     pthread_mutex_unlock(&a->msg_lock);
-#elif defined(MSGQ_SPIN)
+#elif MSGQ == SPIN
     spinlock_unlock(&a->msg_lock);
 #endif
+
+    atomic_fetch_add(&msg_enq_time, (uint64_t)(timestamp_tsc() - t0));
+
     return was_first;
 }
 
+_Atomic uint32_t msg_deq_count = 0;
+_Atomic uint64_t msg_deq_time = 0;
+
+
 bool msg_DEQ(Actor a) {
+    atomic_fetch_add(&msg_deq_count, 1);
+    const double t0 = timestamp_tsc();
+
     bool has_more = false;
-#if defined(MSGQ_MUTEX)
+#if MSGQ == MUTEX
     pthread_mutex_lock(&a->msg_lock);
-#elif defined(MSGQ_SPIN)
+#elif MSGQ == SPIN
     spinlock_lock(&a->msg_lock);
 #endif
+
     if (a->msgQ) {
         Msg x = a->msgQ;
         a->msgQ = x->next;
@@ -277,21 +322,28 @@ bool msg_DEQ(Actor a) {
         x->next = NULL;
         has_more = a->msgQ != NULL;
     }
-#if defined(MSGQ_MUTEX)
+
+#if MSGQ == MUTEX
     pthread_mutex_unlock(&a->msg_lock);
-#elif defined(MSGQ_SPIN)
+#elif MSGQ == SPIN
     spinlock_unlock(&a->msg_lock);
 #endif
+
+    atomic_fetch_add(&msg_deq_time, (uint64_t)(timestamp_tsc() - t0));
+
     return has_more;
 }
 
-#if defined(WAITQ_LF)
-#error Wait Q lock-free is not implemented!
+
+// ################========   Waiting Q  ========################
+
+#if WAITQ == LFREE
+#error Lock-free Waiting Q is not implemented!
 #endif
 
-bool waiting_ADD(Actor a, Msg m) {
+bool waiting_INSERT(Actor a, Msg m) {
     bool did_add = false;
-#if defined(WAITQ_MUTEX)
+#if WAITQ == MUTEX
     pthread_mutex_lock(&m->wait_lock);
 #endif
     if (m->clos) {
@@ -299,7 +351,7 @@ bool waiting_ADD(Actor a, Msg m) {
         m->waiting = a;
         did_add = true;
     }
-#if defined(WAITQ_MUTEX)
+#if WAITQ == MUTEX
     pthread_mutex_unlock(&m->wait_lock);
 #endif
     return did_add;
@@ -309,23 +361,89 @@ _Atomic uint32_t wait_freeze_count = 0;
 
 Actor waiting_FREEZE(Msg m) {
     atomic_fetch_add(&wait_freeze_count, 1);
-#if defined(WAITQ_MUTEX)
+#if WAITQ == MUTEX
     pthread_mutex_lock(&m->wait_lock);
+#elif WAITQ == SPIN
+    spinlock_lock(&m->wait_lock);
 #endif
+
     m->clos = NULL;
-#if defined(WAITQ_MUTEX)
+
+#if WAITQ == MUTEX
     pthread_mutex_unlock(&m->wait_lock);
+#elif WAITQ == SPIN
+    spinlock_unlock(&m->wait_lock);
 #endif
+
     Actor waiting = m->waiting;
     m->waiting = NULL;
+
     return waiting;
 }
 
-void spinlock_lock(volatile atomic_flag *f) {
-    while (atomic_flag_test_and_set(f) == true) {
-        // wait for it...
+
+// ################========   Timer Q  ========################
+
+_Atomic uint32_t timer_ins_count = 0;
+_Atomic uint64_t timer_ins_time = 0;
+_Atomic uint32_t timer_poll_count = 0;
+_Atomic uint64_t timer_poll_time = 0;
+
+TimedMsg timer_INSERT(monotonic_time trigger_time, Msg m) {
+    atomic_fetch_add(&timer_ins_count, 1);
+    const double t0 = timestamp_tsc();
+
+    TimedMsg tm = aligned_alloc(MEM_ALIGN, sizeof(struct TimedMsg));
+    if(tm != NULL) {
+        tm->m = m;
+        tm->trigger_time = trigger_time;
+
+#if TIMERQ == MUTEX
+        pthread_mutex_lock(&timerQ_lock);
+#elif TIMERQ == SPIN
+        spinlock_lock(&timerQ_lock);
+#endif
+
+        pqueue_insert(&timerQ, tm);
+
+#if TIMERQ == MUTEX
+        pthread_mutex_unlock(&timerQ_lock);
+#elif TIMERQ == SPIN
+        spinlock_unlock(&timerQ_lock);
+#endif
     }
+
+    atomic_fetch_add(&timer_ins_time, (uint64_t)(timestamp_tsc() - t0));
+
+    return tm;
 }
-void spinlock_unlock(volatile atomic_flag *f) {
-    atomic_flag_clear(f);
+
+TimedMsg timer_POLL(monotonic_time now) {
+    atomic_fetch_add(&timer_poll_count, 1);
+    const double t0 = timestamp_tsc();
+
+    TimedMsg tm;
+
+#if TIMERQ == MUTEX
+    pthread_mutex_lock(&timerQ_lock);
+#elif TIMERQ == SPIN
+    spinlock_lock(&timerQ_lock);
+#endif
+
+    tm = (TimedMsg)pqueue_peek(&timerQ);
+    if (tm != NULL && now >= tm->trigger_time) {
+        pqueue_remove(&timerQ, tm);
+    } else {
+        tm = NULL;
+    }
+
+#if TIMERQ == MUTEX
+    pthread_mutex_unlock(&timerQ_lock);
+#elif TIMERQ == SPIN
+    spinlock_unlock(&timerQ_lock);
+#endif
+
+    atomic_fetch_add(&timer_poll_time, (uint64_t)(timestamp_tsc() - t0));
+
+    return tm;
 }
