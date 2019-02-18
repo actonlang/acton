@@ -1,3 +1,5 @@
+#include "platform.h"
+
 #define _GNU_SOURCE  // pthread_setaffinity_np(), CPU_SET, etc
 
 #include <time.h>
@@ -275,19 +277,22 @@ int main(int argc, char *argv[]) {
     // start worker threads, one per CPU
     pthread_t threads[num_threads];
     pthread_attr_t attrs;
+#if defined(IS_GNU_LINUX)
     cpu_set_t cpu_set;
+#elif defined(IS_FREEBSD)
+    cpuset_t cpu_set;
+#endif
     for(int th_id = 0; th_id < num_threads; ++th_id) {
         pthread_attr_init(&attrs);
+#if defined(IS_GNU_LINUX) || defined(IS_FREEBSD)
         CPU_ZERO(&cpu_set);
         // assume we're hyperthreaded; use every other core
         int core_id = ((th_id * 2) % num_cpu) + (th_id*2/num_cpu);
         CPU_SET(core_id, &cpu_set);
-#if defined(__linux__)
         pthread_attr_setaffinity_np(&attrs, sizeof(cpu_set_t), &cpu_set);
 #else
         printf("\x1b[41;1mSetting thread affinity is not implemented for your OS\x1b[m\n");
         // __APPLE__
-        // __FreeBSD__
         // __unix__
 #endif
 
