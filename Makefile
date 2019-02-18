@@ -13,7 +13,7 @@ else
 	CXXFLAGS += -DNDEBUG
 endif
 
-ifeq ($(shell $(CC) -v |& grep -c "clang version"), 1)
+ifeq ($(shell $(CC) -v 2>&1 grep -c "clang version"), 1)
 LDFLAGS += -stdlib=libc++ -fuse-ld=bfd
 endif
 
