@@ -21,5 +21,7 @@ CFLAGS := -std=c11 \
 	-I$(ACTON_DIR)/deps/libpqueue/src \
 	-D_XOPEN_SOURCE=600
 
+# necessary linker flags, if any
+#LDFLAGS :=
 
 include ../Makefile.test
