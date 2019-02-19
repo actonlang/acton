@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 #include <pthread.h>
+#include <time.h>  // e.g. clock_gettime
 
 #define MUTEX 0
 #define LFREE 1
@@ -48,23 +49,23 @@
 
 #include <stdatomic.h>
 
-extern _Atomic uint32_t clos_create_count;
-extern _Atomic uint64_t clos_create_time;
-extern _Atomic uint32_t msg_create_count;
-extern _Atomic uint64_t msg_create_time;
-extern _Atomic uint32_t readyQ_ins_count;
-extern _Atomic uint64_t readyQ_ins_time;
-extern _Atomic uint32_t readyQ_poll_count;
-extern _Atomic uint64_t readyQ_poll_time;
-extern _Atomic uint32_t msg_enq_count;
-extern _Atomic uint64_t msg_enq_time;
-extern _Atomic uint32_t msg_deq_count;
-extern _Atomic uint64_t msg_deq_time;
-extern _Atomic uint32_t wait_freeze_count;
-extern _Atomic uint32_t timer_ins_count;
-extern _Atomic uint64_t timer_ins_time;
-extern _Atomic uint32_t timer_poll_count;
-extern _Atomic uint64_t timer_poll_time;
+extern atomic_uint_least32_t clos_create_count;
+extern atomic_uint_least64_t clos_create_time;
+extern atomic_uint_least32_t msg_create_count;
+extern atomic_uint_least64_t msg_create_time;
+extern atomic_uint_least32_t readyQ_ins_count;
+extern atomic_uint_least64_t readyQ_ins_time;
+extern atomic_uint_least32_t readyQ_poll_count;
+extern atomic_uint_least64_t readyQ_poll_time;
+extern atomic_uint_least32_t msg_enq_count;
+extern atomic_uint_least64_t msg_enq_time;
+extern atomic_uint_least32_t msg_deq_count;
+extern atomic_uint_least64_t msg_deq_time;
+extern atomic_uint_least32_t wait_freeze_count;
+extern atomic_uint_least32_t timer_ins_count;
+extern atomic_uint_least64_t timer_ins_time;
+extern atomic_uint_least32_t timer_poll_count;
+extern atomic_uint_least64_t timer_poll_time;
 
 typedef void *WORD;
 

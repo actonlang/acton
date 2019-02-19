@@ -2,11 +2,8 @@
 
 #define _GNU_SOURCE  // pthread_setaffinity_np(), CPU_SET, etc
 
-#include <time.h>
 #include <math.h> // round()
-#include <stdatomic.h>
 #include <unistd.h>  // sysconf(), getopt()
-#include <pthread.h>
 #include <assert.h>
 #include <locale.h> // setlocale()
 
@@ -71,7 +68,7 @@ TimedMsg POSTPONE(monotonic_time trigger_time, Msg m) {
     return timer_INSERT(trigger_time, m);
 }
 
-_Bool postpone_CANCEL(TimedMsg tm) {
+bool postpone_CANCEL(TimedMsg tm) {
     // spin until someone cleared the message pointer
     while (1) {
         Msg m = tm->m;
@@ -83,9 +80,9 @@ _Bool postpone_CANCEL(TimedMsg tm) {
     }
 }
 
-_Atomic int loop_count = 0;
-_Atomic int idle_count = 0;
-_Atomic uint64_t clos_exec_time = 0;
+atomic_int loop_count = 0;
+atomic_int idle_count = 0;
+atomic_uint_least64_t clos_exec_time = 0;
 
 atomic_bool thread_stop_flag = false;
 

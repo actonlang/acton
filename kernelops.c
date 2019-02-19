@@ -1,16 +1,19 @@
 #include <assert.h>
+#include <stdio.h>  // pqueue.h needs FILE
+#include <pqueue.h>
+
+#include "kernelops.h"
 
 #if defined(USE_JEMALLOC)
 #include <jemalloc/jemalloc.h>
 #endif
 
-#include "kernelops.h"
 
 
 static const size_t MEM_ALIGN = 64;
 
-_Atomic uint32_t clos_create_count = 0;
-_Atomic uint64_t clos_create_time = 0;
+atomic_uint_least32_t clos_create_count = 0;
+atomic_uint_least64_t clos_create_time = 0;
 
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     atomic_fetch_add(&clos_create_count, 1);
@@ -32,8 +35,8 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
     return c;
 }
 
-_Atomic uint32_t msg_create_count = 0;
-_Atomic uint64_t msg_create_time = 0;
+atomic_uint_least32_t msg_create_count = 0;
+atomic_uint_least64_t msg_create_time = 0;
 
 Msg MSG(Actor to, Clos clos) {
     atomic_fetch_add(&msg_create_count, 1);
@@ -81,8 +84,7 @@ Actor ACTOR(int n) {
 Actor readyQ;
 Actor readyTail;
 
-#include "pqueue.h"
-
+// global timer queue
 pqueue_t timerQ;
 
 
@@ -190,11 +192,11 @@ void kernelops_CLOSE() {
 #error Lock-free Ready Q is not implemented!
 #endif
 
-_Atomic uint32_t readyQ_ins_count = 0;
-_Atomic uint64_t readyQ_ins_time = 0;
+atomic_uint_least32_t readyQ_ins_count = 0;
+atomic_uint_least64_t readyQ_ins_time = 0;
 
-_Atomic uint32_t readyQ_poll_count = 0;
-_Atomic uint64_t readyQ_poll_time = 0;
+atomic_uint_least32_t readyQ_poll_count = 0;
+atomic_uint_least64_t readyQ_poll_time = 0;
 
 void ready_INSERT(Actor a) {
     atomic_fetch_add(&readyQ_ins_count, 1);
@@ -263,8 +265,8 @@ Actor ready_POLL() {
 #error Lock-free Message Q is not implemented!
 #endif
 
-_Atomic uint32_t msg_enq_count = 0;
-_Atomic uint64_t msg_enq_time = 0;
+atomic_uint_least32_t msg_enq_count = 0;
+atomic_uint_least64_t msg_enq_time = 0;
 
 bool msg_ENQ(Msg m, Actor a) {
     atomic_fetch_add(&msg_enq_count, 1);
@@ -299,8 +301,8 @@ bool msg_ENQ(Msg m, Actor a) {
     return was_first;
 }
 
-_Atomic uint32_t msg_deq_count = 0;
-_Atomic uint64_t msg_deq_time = 0;
+atomic_uint_least32_t msg_deq_count = 0;
+atomic_uint_least64_t msg_deq_time = 0;
 
 
 bool msg_DEQ(Actor a) {
@@ -357,7 +359,7 @@ bool waiting_INSERT(Actor a, Msg m) {
     return did_add;
 }
 
-_Atomic uint32_t wait_freeze_count = 0;
+atomic_uint_least32_t wait_freeze_count = 0;
 
 Actor waiting_FREEZE(Msg m) {
     atomic_fetch_add(&wait_freeze_count, 1);
@@ -384,10 +386,10 @@ Actor waiting_FREEZE(Msg m) {
 
 // ################========   Timer Q  ========################
 
-_Atomic uint32_t timer_ins_count = 0;
-_Atomic uint64_t timer_ins_time = 0;
-_Atomic uint32_t timer_poll_count = 0;
-_Atomic uint64_t timer_poll_time = 0;
+atomic_uint_least32_t timer_ins_count = 0;
+atomic_uint_least64_t timer_ins_time = 0;
+atomic_uint_least32_t timer_poll_count = 0;
+atomic_uint_least64_t timer_poll_time = 0;
 
 TimedMsg timer_INSERT(monotonic_time trigger_time, Msg m) {
     atomic_fetch_add(&timer_ins_count, 1);
