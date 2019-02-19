@@ -139,15 +139,15 @@ void print_impl(char *title, int impl) {
 double _tsc2ns = 1.0/2.35; // TODO: should be calibrated at runtime
 
 void kernelops_INIT() {
-    print_impl("Ready Q", READYQ);
-    print_impl("Message Q", MSGQ);
-    print_impl("Waiting Q", WAITQ);
+    //print_impl("Ready Q", READYQ);
+    //print_impl("Message Q", MSGQ);
+    //print_impl("Waiting Q", WAITQ);
 
-    printf("\x1b[34;1m|\x1b[m \x1b[34mAllocator :\x1b[m  ");
+    //printf("\x1b[34;1m|\x1b[m \x1b[34mAllocator :\x1b[m  ");
 #if defined(USE_JEMALLOC)
-    printf("\x1b[32;1mjemalloc\x1b[m\n");
+    //printf("\x1b[32;1mjemalloc\x1b[m\n");
 #else
-    printf("\x1b[33mglibc\x1b[m\n");
+    //printf("\x1b[33mglibc\x1b[m\n");
 #endif
 
 #if READYQ == SPIN
@@ -158,7 +158,7 @@ void kernelops_INIT() {
 #endif
 
     const size_t timerQ_initsize = 5000;
-    printf("Timer Q initial size: %ld\n", timerQ_initsize);
+    //printf("Timer Q initial size: %ld\n", timerQ_initsize);
     pqueue_init(
             &timerQ,
             timerQ_initsize,
