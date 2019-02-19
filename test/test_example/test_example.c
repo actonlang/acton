@@ -1,4 +1,3 @@
-#include "kernelops.h"
 #include "unity.h"
 
 
@@ -17,4 +16,3 @@ void test_Test1() {
 void test_WillFail() {
     TEST_ASSERT_TRUE(0);
 }
-

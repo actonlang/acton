@@ -1,6 +1,3 @@
-NAME := example
-TARGET := test_$(NAME)
-
 ACTON_DIR ?= ../..
 
 # source files

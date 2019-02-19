@@ -1,17 +1,27 @@
 # this Makefile is included from the tests
 
-CC := cc
+# extract the name of the test directory
+TARGET := $(shell basename $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST)))))
 
 RUNNER_SRC := $(TARGET).c
-RUNNER_GEN := generated_$(TARGET).c
+
+# produce a somewhat relevant error message if the test runner source file doesn't exist
+ifeq ($(wildcard $(RUNNER_SRC)),)
+$(error $(RUNNER_SRC) - test runner source file does not exist)
+endif
+
 
 UNITY_DIR ?= ../Unity
+
+RUNNER_GEN := generated_$(TARGET).c
+
 
 # all sources
 SRC := $(UNITY_DIR)/src/unity.c \
 	$(TARGET).c \
 	$(SRC)
 
+CC := cc
 CFLAGS += -I$(UNITY_DIR)/src
 
 .PHONY: run
