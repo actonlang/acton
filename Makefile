@@ -73,6 +73,10 @@ hashtable_impl.o: hashtable_impl.cc
 test_io: test_io.o hashtable_impl.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
 
+.PHONY: test
+test:
+	@make -C test
+
 clean:
 	rm -f *.a *.o
 	rm -f test_io

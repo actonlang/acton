@@ -376,7 +376,7 @@ int main(int argc, char *argv[]) {
         // assume we're hyperthreaded; use every other core
         int core_id = ((th_id * 2) % num_cpu) + (th_id*2/num_cpu);
         CPU_SET(core_id, &cpu_set);
-		pthread_setaffinity_np(threads[th_id], sizeof(cpu_set), &cpu_set);
+        pthread_setaffinity_np(threads[th_id], sizeof(cpu_set), &cpu_set);
 #else
         printf("\x1b[41;1mSetting thread affinity is not implemented for your OS\x1b[m\n");
         // __unix__
@@ -414,7 +414,7 @@ char *RTAG_name(RTAG tag) {
         case RWAIT: return "RWAIT"; break;
         case REXIT: return "REXIT"; break;
     }
-	return "<BAD tag!>";
+    return "<BAD tag!>";
 }
 
 #if defined(IS_MACOS)

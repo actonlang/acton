@@ -22,7 +22,7 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
     //Clos c = aligned_alloc(MEM_ALIGN, size);
-	Clos c = malloc(size);
+    Clos c = malloc(size);
     assert(c != NULL);
     c->code = code;
     c->nvar = n;
