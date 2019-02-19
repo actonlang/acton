@@ -13,6 +13,6 @@ void test_Test1() {
     TEST_ASSERT_TRUE(1);
 }
 
-void test_WillFail() {
-    TEST_ASSERT_TRUE(0);
+void test_Test2() {
+    TEST_ASSERT_EQUAL(42, 42);
 }
