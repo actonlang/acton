@@ -7,7 +7,6 @@ CXX := c++
 
 CFLAGS := -std=c11 -Wall -Werror -pedantic -pedantic-errors
 CXXFLAGS := -std=c++11 -Wall -Werror -pedantic -pedantic-errors
-LIBS :=
 LDFLAGS :=
 
 ifeq ($(DEBUG), 1)
@@ -32,13 +31,17 @@ $(error jemalloc library not in assumed location, use JEM_LIB=<file location>)
 endif
 $(info Using jemalloc: $(JEM_LIB))
 CFLAGS += -DUSE_JEMALLOC
-LIBS += $(JEM_LIB)
+LDFLAGS += $(JEM_LIB)
 endif
 
+# for e.g. clock_gettime
+CFLAGS += -D_XOPEN_SOURCE=600
+
+PQUEUE_LIB := deps/libpqueue/libpqueue.a
 
 all: kernel test_io
 
-kernel: Makefile kernelops.c kernelops.h kernel.c deps/libpqueue/src/pqueue.h deps/libpqueue/src/pqueue.c pingpong.c pingpong2.c
+kernel: Makefile deps/libpqueue/libpqueue.a kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
 	cc -std=c11 \
 		-Wall -Werror -pedantic -pedantic-errors \
 		-Wno-int-to-void-pointer-cast \
@@ -50,13 +53,16 @@ kernel: Makefile kernelops.c kernelops.h kernel.c deps/libpqueue/src/pqueue.h de
 		$(CFLAGS) \
 		kernelops.c \
 		kernel.c \
-		deps/libpqueue/src/pqueue.c \
-		$(LIBS) \
+		$(PQUEUE_LIB) \
 		$(LDFLAGS) \
 		-pthread \
 		-lpthread \
 		-lm \
 		-o kernel
+
+
+$(PQUEUE_LIB):
+	@make -C deps/libpqueue
 
 hashtable_impl.o: hashtable_impl.cc
 	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
