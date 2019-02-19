@@ -1,0 +1,33 @@
+# this Makefile is included from the tests
+
+CC := cc
+
+RUNNER_SRC := $(TARGET).c
+RUNNER_GEN := generated_$(TARGET).c
+
+UNITY_DIR ?= ../Unity
+
+# all sources
+SRC := $(UNITY_DIR)/src/unity.c \
+	$(TARGET).c \
+	$(SRC)
+
+CFLAGS += -I$(UNITY_DIR)/src
+
+.PHONY: run
+run: $(TARGET)
+	@echo "  run   ./$(TARGET)"
+	@./$(TARGET)
+
+$(TARGET): $(SRC) $(RUNNER_GEN)
+	@echo "  cc    $(TARGET)"
+	@$(CC) $(CFLAGS) $^ $(LIBS) $(LDFLAGS) -o $@
+
+$(RUNNER_GEN): $(RUNNER_SRC)
+	@echo "  gen   $@"
+	ruby $(UNITY_DIR)/auto/generate_test_runner.rb $^ $@
+
+.PHONY: clean
+clean:
+	@echo "  ***   clean"
+	rm -f $(TARGET) $(RUNNER_GEN)
