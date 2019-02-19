@@ -35,9 +35,9 @@ $(TARGET): $(SRC) $(RUNNER_GEN)
 
 $(RUNNER_GEN): $(RUNNER_SRC)
 	@echo "  gen   $@"
-	ruby $(UNITY_DIR)/auto/generate_test_runner.rb $^ $@
+	@ruby $(UNITY_DIR)/auto/generate_test_runner.rb $^ $@
 
 .PHONY: clean
 clean:
 	@echo "  ***   clean"
-	rm -f $(TARGET) $(RUNNER_GEN)
+	@rm -f $(TARGET) $(RUNNER_GEN)
