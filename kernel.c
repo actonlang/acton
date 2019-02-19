@@ -366,28 +366,26 @@ int main(int argc, char *argv[]) {
 
     // start worker threads, one per CPU
     pthread_t threads[num_threads];
-    pthread_attr_t attrs;
 #if defined(IS_GNU_LINUX) || defined(IS_MACOS)
     cpu_set_t cpu_set;
 #elif defined(IS_FREEBSD)
     cpuset_t cpu_set;
 #endif
     for(int th_id = 0; th_id < num_threads; ++th_id) {
-        pthread_attr_init(&attrs);
+        pthread_create(&threads[th_id], NULL, thread_main, (void *)th_id);
+
 #if defined(IS_GNU_LINUX) || defined(IS_FREEBSD) || defined(IS_MACOS)
         CPU_ZERO(&cpu_set);
         // assume we're hyperthreaded; use every other core
         int core_id = ((th_id * 2) % num_cpu) + (th_id*2/num_cpu);
         CPU_SET(core_id, &cpu_set);
-        pthread_attr_setaffinity_np(&attrs, sizeof(cpu_set), &cpu_set);
+		pthread_setaffinity_np(threads[th_id], sizeof(cpu_set), &cpu_set);
 #else
         printf("\x1b[41;1mSetting thread affinity is not implemented for your OS\x1b[m\n");
         // __unix__
 #endif
-
-        pthread_create(&threads[th_id], &attrs, thread_main, (void *)th_id);
     }
-    
+
     // TODO: run I/O thread
 
     for(int th_id = 0; th_id < num_threads; ++th_id) {
