@@ -1,11 +1,12 @@
-# find all top-level directories prefixed with 'test_'
-TESTDIRS := $(shell find * -maxdepth 1 -type d -name 'test_*')
+# find all top-level directories prefixed with 'test_'  (exclude the example test)
+TESTDIRS := $(shell find * -maxdepth 1 -type d -name 'test_*' ! -name 'test_example' )
 
 .PHONY: $(TESTDIRS)
 $(TESTDIRS):
 	@for td in $(TESTDIRS); do \
-	$(MAKE) -C $$td | sed -r "s#(Entering|Leaving) directory '$(PWD)/#\1 directory '#g"; \
+	$(MAKE) -C $$td | ./testfilter "$(PWD)"; \
 	done
+
 
 .PHONY: list
 list:
@@ -21,5 +22,5 @@ endif
 .PHONY: clean
 clean:
 	@for td in $(TESTDIRS); do \
-	$(MAKE) -C $$td clean | sed -r "s#(Entering|Leaving) directory '$(PWD)/#\1 directory '#g"; \
+	$(MAKE) -C $$td clean | sed -r "s#make\[.*?(Entering|Leaving) directory '$(PWD)/(.*)'#\1 test: \2#g"; \
 	done
