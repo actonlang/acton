@@ -12,7 +12,7 @@ void tearDown() {
 
 void test_InsertAndPollOne() {
     monotonic_time t0 = 0;
-    Msg m = (void *)1;   // we're not using it
+    Msg m = (void *)1;   // we're not using it, just need a "unique" value
     TimedMsg itm = timer_INSERT(t0, m);
     
     TEST_ASSERT_EQUAL(itm->trigger_time, t0);
@@ -26,7 +26,7 @@ void test_InsertAndPollOne() {
 
 void test_InsertAndPollFail() {
     monotonic_time t0 = 0;
-    Msg m = (void *)1;   // we're not using it
+    Msg m = (void *)1;
     timer_INSERT(t0 + 1, m);
 
     // poll with an earlier time
@@ -35,66 +35,50 @@ void test_InsertAndPollFail() {
 }
 
 void test_InsertAndPollMultiple() {
-    monotonic_time t0 = 0;
-    Msg m0 = (void *)1;   // we're not using it
-    TimedMsg itm0 = timer_INSERT(t0, m0);
-    Msg m1 = (void *)2;   // we're not using it
-    TimedMsg itm1 = timer_INSERT(t0 + 1, m1);
-    Msg m2 = (void *)3;   // we're not using it
-    TimedMsg itm2 = timer_INSERT(t0 + 2, m2);
-    
-    TEST_ASSERT_EQUAL(itm0->trigger_time, t0);
-    TEST_ASSERT_EQUAL(itm0->m, m0);
-    TEST_ASSERT_EQUAL(itm1->trigger_time, t0 + 1);
-    TEST_ASSERT_EQUAL(itm1->m, m1);
-    TEST_ASSERT_EQUAL(itm2->trigger_time, t0 + 2);
-    TEST_ASSERT_EQUAL(itm2->m, m2);
+    Msg m[3];
+    TimedMsg itm[3];
+    for(int idx = 0; idx < 3; idx++) {
+        m[idx] = (void *)idx;
+        monotonic_time tt = idx;
+        itm[idx] = timer_INSERT(tt, m[idx]);
+        TEST_ASSERT_EQUAL(itm[idx]->trigger_time, tt);
+        TEST_ASSERT_EQUAL(itm[idx]->m, m[idx]);
+    }
 
-
-    TimedMsg ptm0 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm0, itm0);
-    TEST_ASSERT_EQUAL(ptm0->trigger_time, t0);
-    TEST_ASSERT_EQUAL(ptm0->m, m0);
-
-    TimedMsg ptm1 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm1, itm1);
-    TEST_ASSERT_EQUAL(ptm1->trigger_time, t0 + 1);
-    TEST_ASSERT_EQUAL(ptm1->m, m1);
-
-    TimedMsg ptm2 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm2, itm2);
-    TEST_ASSERT_EQUAL(ptm2->trigger_time, t0 + 2);
-    TEST_ASSERT_EQUAL(ptm2->m, m2);
+    // expect them in the "same" order (by increasing time)
+    for(int idx = 0; idx < 3; idx++) {
+        TimedMsg ptm = timer_POLL(10);
+        TEST_ASSERT_EQUAL(ptm, itm[idx]);
+        TEST_ASSERT_EQUAL(ptm->trigger_time, idx);  // increasing time
+        TEST_ASSERT_EQUAL(ptm->m, m[idx]);
+    }
 }
 
 void test_InsertReversedAndPollMultiple() {
-    monotonic_time t0 = 0;
-    Msg m2 = (void *)3;   // we're not using it
-    TimedMsg itm2 = timer_INSERT(t0 + 2, m2);
-    Msg m1 = (void *)2;   // we're not using it
-    TimedMsg itm1 = timer_INSERT(t0 + 1, m1);
-    Msg m0 = (void *)1;   // we're not using it
-    TimedMsg itm0 = timer_INSERT(t0, m0);
-    
-    TEST_ASSERT_EQUAL(itm0->trigger_time, t0);
-    TEST_ASSERT_EQUAL(itm0->m, m0);
-    TEST_ASSERT_EQUAL(itm1->trigger_time, t0 + 1);
-    TEST_ASSERT_EQUAL(itm1->m, m1);
-    TEST_ASSERT_EQUAL(itm2->trigger_time, t0 + 2);
-    TEST_ASSERT_EQUAL(itm2->m, m2);
+    Msg m[3];
+    TimedMsg itm[3];
+    for(int idx = 0; idx < 3; idx++) {
+        m[idx] = (void *)idx;
+        monotonic_time tt = 2 - idx;
+        itm[idx] = timer_INSERT(tt, m[idx]);
+        TEST_ASSERT_EQUAL(itm[idx]->trigger_time, tt);
+        TEST_ASSERT_EQUAL(itm[idx]->m, m[idx]);
+    }
 
-    TimedMsg ptm0 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm0, itm0);
-    TEST_ASSERT_EQUAL(ptm0->trigger_time, t0);
-    TEST_ASSERT_EQUAL(ptm0->m, m0);
+    // expect them in "reverse" order (by increasing time)
+    for(int idx = 0; idx < 3; idx++) {
+        TimedMsg ptm = timer_POLL(10);
+        TEST_ASSERT_EQUAL(ptm, itm[2 - idx]);
+        TEST_ASSERT_EQUAL(ptm->trigger_time, idx);   // increasing time
+        TEST_ASSERT_EQUAL(ptm->m, m[2 - idx]);
+    }
+}
 
-    TimedMsg ptm1 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm1, itm1);
-    TEST_ASSERT_EQUAL(ptm1->trigger_time, t0 + 1);
-    TEST_ASSERT_EQUAL(ptm1->m, m1);
+void test_InsertOneAndPollEarly() {
+    monotonic_time tt = 100;  // a later time
+    Msg m = (void *)1;
+    timer_INSERT(tt, m);
 
-    TimedMsg ptm2 = timer_POLL(t0 + 3);
-    TEST_ASSERT_EQUAL(ptm2, itm2);
-    TEST_ASSERT_EQUAL(ptm2->trigger_time, t0 + 2);
-    TEST_ASSERT_EQUAL(ptm2->m, m2);
+    TimedMsg tm = timer_POLL(5);   // earlier than 100
+    TEST_ASSERT_EQUAL(tm, 0);
 }
