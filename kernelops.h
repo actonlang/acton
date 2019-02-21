@@ -110,8 +110,10 @@ typedef struct {
     WORD value;
 } R;
 
+typedef R (*code_t)(Clos, WORD);
+
 struct Clos {
-    R (*code)(Clos, WORD);
+    code_t code;
     monotonic_time time_baseline;
     int nvar;
     WORD var[];
@@ -155,7 +157,7 @@ typedef struct TimedMsg *TimedMsg;
 
 
 // Allocate a Clos node with space for n var words.
-Clos    CLOS(R (*code)(Clos, WORD), int n);
+Clos    CLOS(code_t code, int n);
 // Allocate a Msg node.
 Msg     MSG(Actor to, Clos clos);
 // Allocate an Actor node with space for n state words.

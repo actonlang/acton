@@ -12,10 +12,11 @@
 
 static const size_t MEM_ALIGN = 64;
 
+
 atomic_uint_least32_t clos_create_count = 0;
 atomic_uint_least64_t clos_create_time = 0;
 
-Clos CLOS(R (*code)(Clos, WORD), int n) {
+Clos CLOS(code_t code, int n) {
     atomic_fetch_add(&clos_create_count, 1);
 
     const tsc_t t0 = timestamp_tsc();
@@ -88,25 +89,25 @@ Actor readyTail;
 pqueue_t timerQ;
 
 
-int timerQ_cmppri(pqueue_pri_t next_prio, pqueue_pri_t curr_prio) {
+static int timerQ_cmppri(pqueue_pri_t next_prio, pqueue_pri_t curr_prio) {
     // This callback should return 0 for 'lower' and non-zero
     //for 'higher', or vice versa if reverse priority is desired
 
     return curr_prio < next_prio ? 1 : 0;  // "less" is "higher prio" in the timer Q
 }
-pqueue_pri_t timerQ_getpri(void *item) {
+static pqueue_pri_t timerQ_getpri(void *item) {
     return ((TimedMsg)item)->trigger_time;
 }
-void timerQ_setpri(void *item, pqueue_pri_t prio) {
+static void timerQ_setpri(void *item, pqueue_pri_t prio) {
     ((TimedMsg)item)->trigger_time = prio;
 }
-size_t timerQ_getpos(void *item) {
+static size_t timerQ_getpos(void *item) {
     return ((TimedMsg)item)->pqueue_pos;
 }
-void timerQ_setpos(void *item, size_t pos) {
+static void timerQ_setpos(void *item, size_t pos) {
     ((TimedMsg)item)->pqueue_pos = pos;
 }
-void *timerQ_realloc(void *oldbuf, size_t newsize) {
+static void *timerQ_realloc(void *oldbuf, size_t newsize) {
     if (oldbuf)
         printf("\x1b[34;1mre-allocating\x1b[m timer Q buffer -> %ld\n", newsize);
     return realloc(oldbuf, newsize);
