@@ -70,6 +70,7 @@ TimedMsg POSTPONE(monotonic_time trigger_time, Msg m) {
 
 bool postpone_CANCEL(TimedMsg tm) {
     // spin until someone cleared the message pointer
+    // return bool whether WE were the one that did it
     while (1) {
         Msg m = tm->m;
         if (! m)
@@ -91,7 +92,7 @@ size_t SLOWDOWN = 500;
 void loop(int thread_id) {
 
     monotonic_time timer_last_poll = 0;
-    const monotonic_duration timer_poll_interval = 10*MT_MICROS;
+    const monotonic_duration timer_poll_interval = 10*MT_MICROS; // don't poll _all_ the time
 
     while (atomic_load(&thread_stop_flag) == false) {
 
@@ -104,9 +105,10 @@ void loop(int thread_id) {
 
         const monotonic_time now = monotonic_now();
 
-        if (now - timer_last_poll > timer_poll_interval) { // don't poll _every_ time
+        if (now - timer_last_poll > timer_poll_interval) { // don't poll _all_ the time
             timer_last_poll = now;
             TimedMsg tm;
+            // get all messages that are scheduled to be delivered
             while ((tm = timer_POLL(now)) != NULL) {
                 if (tm->m == NULL) {  // postpone was cancelled
                     printf("[%d] postpone message was cancelled\n", thread_id);
@@ -129,7 +131,7 @@ void loop(int thread_id) {
             Msg m = msg_PEEK(current);
             assert(m != NULL);
 
-            if (m->time_baseline == 0)
+            if (m->time_baseline == 0)  // this message has no baseline (i.e. was not postponed), use 'now' as baseline
                 m->time_baseline = now;
 
             assert(m->clos != NULL);
