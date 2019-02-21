@@ -75,9 +75,8 @@ bool postpone_CANCEL(TimedMsg tm) {
         Msg m = tm->m;
         if (! m)
             return false;
-        if (atomic_compare_exchange_weak(&tm->m, &m, NULL)) {
+        if (atomic_compare_exchange_weak(&tm->m, &m, NULL))
             return true;
-        }
     }
 }
 
