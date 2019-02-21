@@ -1,5 +1,5 @@
 # find all top-level directories prefixed with 'test_'  (exclude the example test)
-TESTDIRS := $(shell find * -maxdepth 1 -type d -name 'test_*' ! -name 'test_example' )
+TESTDIRS := $(shell find * -prune -type d -name 'test_*' ! -name 'test_example' )
 
 .PHONY: $(TESTDIRS)
 $(TESTDIRS):
