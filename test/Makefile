@@ -22,5 +22,5 @@ endif
 .PHONY: clean
 clean:
 	@for td in $(TESTDIRS); do \
-	$(MAKE) -C $$td clean | sed -r "s#make\[.*?(Entering|Leaving) directory '$(PWD)/(.*)'#\1 test: \2#g"; \
+	$(MAKE) -C $$td clean | ./testfilter "$(PWD)"; \
 	done

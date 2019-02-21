@@ -28,6 +28,7 @@ CFLAGS += -I$(UNITY_DIR)/src
 
 .PHONY: run
 run: $(TARGET)
+	@./$(TARGET) | ../testfilter "$(PWD)"
 
 $(TARGET): $(SRC)
 	@echo "  cc    $(TARGET)"
