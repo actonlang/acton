@@ -185,6 +185,9 @@ Actor   ready_POLL();
 // Enqueue message "m" onto the message queue of actor "a",
 //   return true if this was the first message in the queue.
 bool    msg_ENQ(Msg m, Actor a);
+// Peeks at first message of actor "a"
+//   returns NULL if there are no messages.
+Msg     msg_PEEK(Actor a);
 // Dequeue the first message from the queue of actor "a",
 //   return true if the queue still holds messages after operation.
 bool    msg_DEQ(Actor a);

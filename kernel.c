@@ -126,7 +126,7 @@ void loop(int thread_id) {
         Actor current = ready_POLL();
 
         if (current) {
-            Msg m = current->msgQ;
+            Msg m = msg_PEEK(current);
             assert(m != NULL);
 
             if (m->time_baseline == 0)
@@ -151,7 +151,7 @@ void loop(int thread_id) {
                     m->value = r.value;
                     Actor b = waiting_FREEZE(m);
                     while (b) {
-                        b->msgQ->value = r.value;
+                        msg_PEEK(b)->value = r.value;
                         Actor next = b->next;  // ready_INSERT() clears b->next
                         ready_INSERT(b);
 

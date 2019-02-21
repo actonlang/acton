@@ -301,8 +301,14 @@ bool msg_ENQ(Msg m, Actor a) {
     return was_first;
 }
 
+Msg msg_PEEK(Actor a) {
+	return a->msgQ;
+}
+
+
 atomic_uint_least32_t msg_deq_count = 0;
 atomic_uint_least64_t msg_deq_time = 0;
+
 
 
 bool msg_DEQ(Actor a) {
