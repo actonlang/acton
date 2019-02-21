@@ -4,15 +4,15 @@
 
 
 void setUp() {
-	kernelops_INIT();
+    kernelops_INIT();
 }
 
 void tearDown() {
-	kernelops_CLOSE();
+    kernelops_CLOSE();
 }
 
 void test_ACTOR() {
-	Actor a = ACTOR(2);
+    Actor a = ACTOR(2);
     TEST_ASSERT_EQUAL(a->next, NULL);
     TEST_ASSERT_NOT_EQUAL(a->state, NULL);
     TEST_ASSERT_EQUAL(a->msgQ, NULL);
@@ -20,13 +20,13 @@ void test_ACTOR() {
 }
 
 void test_CLOS() {
-	Clos c = CLOS((code_t)1, 2);
+    Clos c = CLOS((code_t)1, 2);
     TEST_ASSERT_EQUAL(c->code, 1);
     TEST_ASSERT_NOT_EQUAL(c->var, NULL);
 }
 
 void test_MSG() {
-	Msg m = MSG((Actor)1, (Clos)2);
+    Msg m = MSG((Actor)1, (Clos)2);
     TEST_ASSERT_EQUAL(m->to, 1);
     TEST_ASSERT_EQUAL(m->next, NULL);
     TEST_ASSERT_EQUAL(m->waiting, NULL);

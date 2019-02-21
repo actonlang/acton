@@ -303,7 +303,7 @@ bool msg_ENQ(Msg m, Actor a) {
 }
 
 Msg msg_PEEK(Actor a) {
-	return a->msgQ;
+    return a->msgQ;
 }
 
 
