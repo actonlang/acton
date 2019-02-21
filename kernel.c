@@ -109,11 +109,11 @@ void loop(int thread_id) {
             TimedMsg tm;
             // get all messages that are scheduled to be delivered
             while ((tm = timer_POLL(now)) != NULL) {
-                if (tm->m == NULL) {  // postpone was cancelled
+                Msg m = tm->m;
+                if (m == NULL) {  // postpone was cancelled
                     printf("[%d] postpone message was cancelled\n", thread_id);
                 } else {
                     printf("[%d] posting timed message, t.time: %lu lag: %.2f µs\n", thread_id, tm->trigger_time, (now - tm->trigger_time)/1e3);
-                    Msg m = tm->m;
                     tm->m = NULL;  // this timed message can no longer be cancelled
                     m->time_baseline = tm->trigger_time;
                     ASYNC(m);
