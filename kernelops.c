@@ -22,8 +22,7 @@ Clos CLOS(code_t code, int n) {
     const tsc_t t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
-    //Clos c = aligned_alloc(MEM_ALIGN, size);
-    Clos c = malloc(size);
+    Clos c = aligned_alloc(MEM_ALIGN, size);
     assert(c != NULL);
     c->code = code;
     c->nvar = n;
@@ -45,8 +44,7 @@ Msg MSG(Actor to, Clos clos) {
     const double t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Msg);
-    //Msg m = aligned_alloc(MEM_ALIGN, size);
-    Msg m = malloc(size);
+    Msg m = aligned_alloc(MEM_ALIGN, size);
     assert(m != NULL);
     m->to = to;
     m->next = NULL;
@@ -66,8 +64,7 @@ Msg MSG(Actor to, Clos clos) {
 
 Actor ACTOR(int n) {
     const size_t size = sizeof(struct Actor) + n * sizeof(WORD);
-    //Actor a = aligned_alloc(MEM_ALIGN, size);
-    Actor a = malloc(size);
+    Actor a = aligned_alloc(MEM_ALIGN, size);
     assert(a != NULL);
     a->next = NULL;
     a->msgQ = NULL;
