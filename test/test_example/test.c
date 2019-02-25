@@ -2,11 +2,11 @@
 
 
 void setUp() {
-    printf(">>>  setUp()\n");
+	// called before each test
 }
 
 void tearDown() {
-    printf("<<<  tearDown()\n");
+	// called after each test
 }
 
 void test_Test1() {

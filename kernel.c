@@ -70,13 +70,13 @@ TimedMsg POSTPONE(monotonic_time trigger_time, Msg m) {
 
 bool postpone_CANCEL(TimedMsg tm) {
     // spin until someone cleared the message pointer
+    // return bool whether WE were the one that did it
     while (1) {
         Msg m = tm->m;
         if (! m)
             return false;
-        if (atomic_compare_exchange_weak(&tm->m, &m, NULL)) {
+        if (atomic_compare_exchange_weak(&tm->m, &m, NULL))
             return true;
-        }
     }
 }
 
@@ -91,7 +91,7 @@ size_t SLOWDOWN = 500;
 void loop(int thread_id) {
 
     monotonic_time timer_last_poll = 0;
-    const monotonic_duration timer_poll_interval = 10*MT_MICROS;
+    const monotonic_duration timer_poll_interval = 10*MT_MICROS; // don't poll _all_ the time
 
     while (atomic_load(&thread_stop_flag) == false) {
 
@@ -104,15 +104,16 @@ void loop(int thread_id) {
 
         const monotonic_time now = monotonic_now();
 
-        if (now - timer_last_poll > timer_poll_interval) { // don't poll _every_ time
+        if (now - timer_last_poll > timer_poll_interval) { // don't poll _all_ the time
             timer_last_poll = now;
             TimedMsg tm;
+            // get all messages that are scheduled to be delivered
             while ((tm = timer_POLL(now)) != NULL) {
-                if (tm->m == NULL) {  // postpone was cancelled
+                Msg m = tm->m;
+                if (m == NULL) {  // postpone was cancelled
                     printf("[%d] postpone message was cancelled\n", thread_id);
                 } else {
                     printf("[%d] posting timed message, t.time: %lu lag: %.2f µs\n", thread_id, tm->trigger_time, (now - tm->trigger_time)/1e3);
-                    Msg m = tm->m;
                     tm->m = NULL;  // this timed message can no longer be cancelled
                     m->time_baseline = tm->trigger_time;
                     ASYNC(m);
@@ -126,10 +127,10 @@ void loop(int thread_id) {
         Actor current = ready_POLL();
 
         if (current) {
-            Msg m = current->msgQ;
+            Msg m = msg_PEEK(current);
             assert(m != NULL);
 
-            if (m->time_baseline == 0)
+            if (m->time_baseline == 0)  // this message has no baseline (i.e. was not postponed), use 'now' as baseline
                 m->time_baseline = now;
 
             assert(m->clos != NULL);
@@ -151,7 +152,7 @@ void loop(int thread_id) {
                     m->value = r.value;
                     Actor b = waiting_FREEZE(m);
                     while (b) {
-                        b->msgQ->value = r.value;
+                        msg_PEEK(b)->value = r.value;
                         Actor next = b->next;  // ready_INSERT() clears b->next
                         ready_INSERT(b);
 

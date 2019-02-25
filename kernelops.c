@@ -12,17 +12,17 @@
 
 static const size_t MEM_ALIGN = 64;
 
+
 atomic_uint_least32_t clos_create_count = 0;
 atomic_uint_least64_t clos_create_time = 0;
 
-Clos CLOS(R (*code)(Clos, WORD), int n) {
+Clos CLOS(code_t code, int n) {
     atomic_fetch_add(&clos_create_count, 1);
 
     const tsc_t t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Clos) + n * sizeof(WORD);
-    //Clos c = aligned_alloc(MEM_ALIGN, size);
-    Clos c = malloc(size);
+    Clos c = aligned_alloc(MEM_ALIGN, size);
     assert(c != NULL);
     c->code = code;
     c->nvar = n;
@@ -44,8 +44,7 @@ Msg MSG(Actor to, Clos clos) {
     const double t0 = timestamp_tsc();
 
     const size_t size = sizeof(struct Msg);
-    //Msg m = aligned_alloc(MEM_ALIGN, size);
-    Msg m = malloc(size);
+    Msg m = aligned_alloc(MEM_ALIGN, size);
     assert(m != NULL);
     m->to = to;
     m->next = NULL;
@@ -65,8 +64,7 @@ Msg MSG(Actor to, Clos clos) {
 
 Actor ACTOR(int n) {
     const size_t size = sizeof(struct Actor) + n * sizeof(WORD);
-    //Actor a = aligned_alloc(MEM_ALIGN, size);
-    Actor a = malloc(size);
+    Actor a = aligned_alloc(MEM_ALIGN, size);
     assert(a != NULL);
     a->next = NULL;
     a->msgQ = NULL;
@@ -88,25 +86,25 @@ Actor readyTail;
 pqueue_t timerQ;
 
 
-int timerQ_cmppri(pqueue_pri_t next_prio, pqueue_pri_t curr_prio) {
+static int timerQ_cmppri(pqueue_pri_t next_prio, pqueue_pri_t curr_prio) {
     // This callback should return 0 for 'lower' and non-zero
     //for 'higher', or vice versa if reverse priority is desired
 
     return curr_prio < next_prio ? 1 : 0;  // "less" is "higher prio" in the timer Q
 }
-pqueue_pri_t timerQ_getpri(void *item) {
+static pqueue_pri_t timerQ_getpri(void *item) {
     return ((TimedMsg)item)->trigger_time;
 }
-void timerQ_setpri(void *item, pqueue_pri_t prio) {
+static void timerQ_setpri(void *item, pqueue_pri_t prio) {
     ((TimedMsg)item)->trigger_time = prio;
 }
-size_t timerQ_getpos(void *item) {
+static size_t timerQ_getpos(void *item) {
     return ((TimedMsg)item)->pqueue_pos;
 }
-void timerQ_setpos(void *item, size_t pos) {
+static void timerQ_setpos(void *item, size_t pos) {
     ((TimedMsg)item)->pqueue_pos = pos;
 }
-void *timerQ_realloc(void *oldbuf, size_t newsize) {
+static void *timerQ_realloc(void *oldbuf, size_t newsize) {
     if (oldbuf)
         printf("\x1b[34;1mre-allocating\x1b[m timer Q buffer -> %ld\n", newsize);
     return realloc(oldbuf, newsize);
@@ -301,8 +299,14 @@ bool msg_ENQ(Msg m, Actor a) {
     return was_first;
 }
 
+Msg msg_PEEK(Actor a) {
+    return a->msgQ;
+}
+
+
 atomic_uint_least32_t msg_deq_count = 0;
 atomic_uint_least64_t msg_deq_time = 0;
+
 
 
 bool msg_DEQ(Actor a) {

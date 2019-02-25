@@ -1,7 +1,4 @@
 # no generated files
 generated_*.c
 # ignore the build test binaries
-test_*
-# but handle the directories and source files named similarly
-!test_*/
-!test_*.c
+run_test

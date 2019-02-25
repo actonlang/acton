@@ -10,6 +10,11 @@ void tearDown() {
     kernelops_CLOSE();
 }
 
+void test_PollEmpty() {
+    TimedMsg ptm = timer_POLL(10);   // any time, really
+    TEST_ASSERT_EQUAL(ptm, 0);
+}
+
 void test_InsertAndPollOne() {
     monotonic_time t0 = 0;
     Msg m = (void *)1;   // we're not using it, just need a "unique" value

@@ -2,15 +2,20 @@
 
 PWD="$1"
 
+echo $COLUMNS
+
 sed -r \
-	-e "s#^make\[.*?(Entering|Leaving) directory '${PWD}/(.*)'#\x1b[2;3m\1 test: \x1b[0;1;3m\2\x1b[m#g" \
-	-e 's/^(.*):PASS$/\x1b[32m OK\x1b[m  \1/g' \
-	-e 's/^(.*):FAIL: (.*)$/\x1b[31;1mFAIL\x1b[m \1 \x1b[33m\2\x1b[m/g' \
-	-e 's/^([0-9]+) Tests/\x1b[1m\1\x1b[m Tests/g' \
+	-e "s#^make\[.*?Entering directory '${PWD}/(.*)'.*#\x1b[45;37;3m==== \1   \x1b[K\x1b[m#g" \
+	-e 's/^(.*):PASS$/\x1b[32m  OK\x1b[m  \1/g' \
+	-e 's/^(.*):FAIL: (.*)$/\x1b[31;1mFAIL\x1b[m  \1 \x1b[33m\2\x1b[m/g' \
+	-e 's/ (.+):([0-9]+):(test_.+)/\1\x1b[32m:\x1b[0;32m\2\x1b[m: \3/g' \
+	-e 's/^([0-9]+) Tests/Summary: \x1b[1m\1\x1b[m Tests/g' \
+	-e 's/ 0 Failures/ \x1b[2m0 Failures\x1b[m/g' \
 	-e 's/ ([1-9]|[1-9][0-9]+) Failures/ \x1b[31;1m\1 Failures\x1b[m/g' \
 	-e 's/ 0 Ignored/ \x1b[2m0 Ignored\x1b[m/g' \
 	-e 's/ ([1-9]|[1-9][0-9]+) Ignored/ \x1b[34;1m\1 Ignored\x1b[m/g' \
-	-e 's/^OK$/\x1b[42;30m                OK                \x1b[m/g' \
 	-e 's/^FAIL$/\x1b[41;1m               FAIL               \x1b[m/g' \
-	| grep -v '^$'
-
+	| grep -v \
+		   -e '^$' \
+		   -e '^OK$' \
+		   -e 'Leaving directory'

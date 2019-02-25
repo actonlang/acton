@@ -1,9 +1,11 @@
 # this Makefile is included from the tests
 
 # extract the name of the test directory
-TARGET := $(shell basename $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST)))))
+TARGET := run_test
+#$(shell basename $(shell dirname $(abspath $(firstword $(MAKEFILE_LIST)))))
 
-RUNNER_SRC := $(TARGET).c
+RUNNER_SRC ?= test.c
+RUNNER_GEN := generated_$(TARGET).c
 
 # produce a somewhat relevant error message if the test runner source file doesn't exist
 ifeq ($(wildcard $(RUNNER_SRC)),)
@@ -13,12 +15,12 @@ endif
 
 UNITY_DIR ?= ../Unity
 
-RUNNER_GEN := generated_$(TARGET).c
 
 
 # all sources
 SRC := $(UNITY_DIR)/src/unity.c \
-	$(TARGET).c \
+	$(RUNNER_GEN) \
+	$(RUNNER_SRC) \
 	$(SRC)
 
 CC := cc
@@ -26,10 +28,9 @@ CFLAGS += -I$(UNITY_DIR)/src
 
 .PHONY: run
 run: $(TARGET)
-	@echo "  run   ./$(TARGET)"
-	@./$(TARGET)
+	@./$(TARGET) | ../testfilter "$(PWD)"
 
-$(TARGET): $(SRC) $(RUNNER_GEN)
+$(TARGET): $(SRC)
 	@echo "  cc    $(TARGET)"
 	@$(CC) $(CFLAGS) $^ $(LIBS) $(LDFLAGS) -o $@
 
