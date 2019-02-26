@@ -39,7 +39,7 @@ CFLAGS += -D_XOPEN_SOURCE=600
 
 PQUEUE_LIB := deps/libpqueue/libpqueue.a
 
-all: kernel test_io
+all: kernel test_io act_io_test
 
 kernel: Makefile deps/libpqueue/libpqueue.a kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
 	cc -std=c11 \
@@ -64,13 +64,19 @@ kernel: Makefile deps/libpqueue/libpqueue.a kernelops.c kernelops.h kernel.c pin
 $(PQUEUE_LIB):
 	@make -C deps/libpqueue
 
-hashtable_impl.o: hashtable_impl.cc
+test_io_cuckoo.o: test_io_cuckoo.cc
+	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
+
+act_io_cuckoo.o: act_io_cuckoo.cc
 	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-test_io: test_io.o hashtable_impl.o
+test_io: test_io.o test_io_cuckoo.o
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
+
+act_io_test: act_io_common.o act_io_cuckoo.o act_io_epoll.o act_io_kqueue.o act_io_test.o act_io_trace.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
 
 .PHONY: test

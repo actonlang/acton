@@ -1,6 +1,6 @@
 #pragma once
 
-#include "platform.h"
+#include "act_platform.h"
 
 #include <stdint.h>
 #include <unistd.h>
