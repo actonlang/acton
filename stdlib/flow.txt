@@ -1,0 +1,50 @@
+# Definitions for interface between producing and consuming sides of
+# a data flow with rudimentary flow control á la Alternating bit
+
+struct Consumer(Type):
+    # methods that may be called by corresponding producer
+    
+    close: () -> None		  # soft close - process what you've got first
+    abort: () -> None		  # hard close - stop immediately
+    is_closing: () -> bool	  # True iff has closed or is closing
+
+    deliver_data: Type -> bool    # Data to be consumed. No partial operations.
+    		       	  	  # return True equivalent with encourage()
+				  # return False equivalent with discourage()
+
+struct Producer(Type):		  # Do we need Type?
+    # methods that may be called by corresponding consumer
+    
+    close: () -> None             # soft close - drain produced data first 
+    abort: () -> None             # hard close - stop immediately
+    is_closing: () -> bool	  # True iff has closed or is closing
+    
+    discourage: () -> None        # consumer asks producer to slow down
+    encourage: () -> None	  # consumer asks producer to deliver
+    is_discouraged: () -> bool    # Am I discouraged?
+
+
+# Flow control:
+#     deliver_data(data) always succeeds. Consumer buffers as needed.
+#     If Consumer deems it is busy or it has buffered too much, it will
+#     return False and/or call discourage() to inform Producer.
+#     When at some later time the Consumer deems it is ready to accept more
+#     data, it informs producer by calling encourage().
+#     Calls to discourage() and deliver_data() returning False are idempotent.
+#     Calls to encourage() and deliver_data() returning True are idempotent.
+#
+#     A Consumer that represents an outgoing OS socket, SHOULD call
+#     discourage() or have deliver_data() return False whenever an OS send()
+#     operation would have blocked. It SHOULD call encourage() when it has sent
+#     all its buffered data and can send() without blocking.
+#
+#     A Producer that represents an incoming OS socket, SHOULD react to
+#     discourage() or deliver_data() returning False by no longer receiving
+#     data from the socket. It MUST NOT receive data from the socket only to
+#     buffer it. The intended sequence of events is that discourage() stops
+#     receiving from the socket, so that the receive buffer of the socket
+#     fills up, which will cause the flow-control mechanisms of TCP (assuming
+#     a TCP socket) to pace or stop the network peer sending to the socket.
+#     It SHOULD react to encourage() by again receiving from the socket
+#     whenever there is data to receive, and delivering received data to its
+#     associated consumer using its deliver_data() method. 
