@@ -1,18 +1,20 @@
 Processing of an incoming NETCONF RPC
+=====================================
 
+IP + TCP + receive buf + sockets in OS kernel
 
-IP + TCP in OS kernel
   |
   | stream of bytes, delivered in chunks by OS recv() syscall 
   |
   V
+
 SSH impl 
      processes an encrypted stream consisting of ssh packets.
      After key exchange, the stream is decrypted and then deframed
-     and demultiplexed, producing a number of ssh packet streams,
+     and demultiplexed, producing sequences of ssh packet streams,
      one per open ssh channel.
 
-  SSH decrypt + deframing + trimming of frames + demultiplexing
+  SSH decrypt + byte order + deframing + trimming of frames + demultiplexing
   
   |                             |   |   |  ...  |
   | decrypted ssh packets       |   |   |  ...  |
@@ -20,13 +22,14 @@ SSH impl
   V                             V   V   V       V
 
 NETCONF subsystem
+  One NETCONF session per SSH channel
   processes stream of channel data chunks
   produces sequence of NETCONF frames
 
   NETCONF deframing + trimming of frames
 
   |
-  | utf-8 encoded XML documents representing NETCONF RPC
+  | utf-8 encoded XML documents representing NETCONF RPC:s
   |
   V
   
@@ -58,14 +61,14 @@ NETCONF subsystem
 			  |
 			  V
  			  
-                          utf-8 encoding
+                          utf-8 encoding (string -> bytes)
 
                           |
                           | utf-8 encoded XML for NETCONF RPC-REPLIES
                           |
 			  V
 
-                          NETCONF framing (adding framing headers & tails
+                          NETCONF framing (adding framing headers & trailers)
 			  
                           |                  |   |  . . .  |
                           | NETCONF frames   |   |  . . .  |
@@ -74,8 +77,9 @@ NETCONF subsystem
 
                         SSH system
 
-                          multiplexing channels into single SSH pipe
-			  adding headers & tails to data chunks
+                          multiplexing per-channel data into single SSH pipe
+			  adding headers & trailers to data chunks
+                          byte ordering
 
                           |
                           |  plaintext SSH packets
@@ -90,4 +94,4 @@ NETCONF subsystem
 			  V
 
                         OS send() syscall
-			IP & TCP system in OS			
+			OS sockets + send buf + TCP + IP

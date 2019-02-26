@@ -1,6 +1,5 @@
 # Python version of bytesview
 
-
 ##################################################
 ### Bytesview
 
@@ -270,22 +269,23 @@ def report(bv, name):
     bv.show()
 
 by = b'0123456789abcdef'
-l = len(by)
-print("by = ",by)
-print("l = ", l)
 
-bv1 = Bytesview(by)
-bv2 = Bytesview(by, n=16)
-                 
-report(bv1, "bv1")
-report(bv2, "bv2")
+#l = len(by)
+#print("by = ",by)
+#print("l = ", l)
+#
+#bv1 = Bytesview(by)
+#bv2 = Bytesview(by, n=16)
+#                 
+#report(bv1, "bv1")
+#report(bv2, "bv2")
 
 bv3 = bv2.append(by, n=16)
-report(bv2, "bv2")
-report(bv3, "bv3")
+#report(bv2, "bv2")
+#report(bv3, "bv3")
 
 bv4 = bv3.append(by)
-report(bv4,"bv4")
+#report(bv4,"bv4")
 
 #bv = bv4
 #n=0

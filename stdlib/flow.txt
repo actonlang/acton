@@ -1,32 +1,47 @@
 # Definitions for interface between producing and consuming sides of
-# a data flow with rudimentary flow control á la Alternating bit
+# a data flow with simple flow control.
+#
+# Producer delivers data by calling deliver_data() of Consumer. 
 
-struct Consumer(Type):
-    # methods that may be called by corresponding producer
+struct Consumer(Type, Error):
+    # methods that may be called by associated producer
     
-    close: () -> None		  # soft close - process what you've got first
-    abort: () -> None		  # hard close - stop immediately
-    is_closing: () -> bool	  # True iff has closed or is closing
-
-    deliver_data: Type -> bool    # Data to be consumed. No partial operations.
+    deliver_data: (Type) -> bool  # Delivery of data to be consumed.
+                                  # Always succeeds.
     		       	  	  # return True equivalent with encourage()
 				  # return False equivalent with discourage()
 
-struct Producer(Type):		  # Do we need Type?
-    # methods that may be called by corresponding consumer
-    
-    close: () -> None             # soft close - drain produced data first 
-    abort: () -> None             # hard close - stop immediately
-    is_closing: () -> bool	  # True iff has closed or is closing
+    is_closed: () -> bool	  # True when any data delivered will be ignored
+
+    producer_closed: () -> None   # Producer promises it will never call
+                                  # deliver_data() again. Called exactly once.
+
+    producer_error: (Error) -> None # Error condition reported by Producer
+                                  
+				  
+struct Producer(Error):
+    # methods that may be called by associated consumer
     
     discourage: () -> None        # consumer asks producer to slow down
     encourage: () -> None	  # consumer asks producer to deliver
-    is_discouraged: () -> bool    # Am I discouraged?
+    is_discouraged: () -> bool    # Am I delivering or am I slowed down?
+
+    close: (opt(bool)) -> None    # close(True) - Consumer wants all data
+                                  #    currently available, but
+				  #    nothing more after that. Default.
+				  # close(False) - Consumer wants no more data,
+				  #    effective immediately
+
+    is_closed: () -> bool	  # True iff producer will not deliver any more
+                                  #    data.
+				  
+    consumer_error: (Error) -> None # Error condition reported by Consumer.
 
 
 # Flow control:
-#     deliver_data(data) always succeeds. Consumer buffers as needed.
-#     If Consumer deems it is busy or it has buffered too much, it will
+#     Consumer buffers data delivered by deliver_data(data) as needed.
+#     No blocking.
+#     If Consumer deems it is busy or has buffered enough, it will
 #     return False and/or call discourage() to inform Producer.
 #     When at some later time the Consumer deems it is ready to accept more
 #     data, it informs producer by calling encourage().
@@ -45,6 +60,6 @@ struct Producer(Type):		  # Do we need Type?
 #     receiving from the socket, so that the receive buffer of the socket
 #     fills up, which will cause the flow-control mechanisms of TCP (assuming
 #     a TCP socket) to pace or stop the network peer sending to the socket.
-#     It SHOULD react to encourage() by again receiving from the socket
-#     whenever there is data to receive, and delivering received data to its
-#     associated consumer using its deliver_data() method. 
+#     A Producer SHOULD react to encourage() by again receiving from the socket
+#     whenever there is data to receive, and delivering received data using the
+#     deliver_data() method of its associated consumer. 
