@@ -479,6 +479,8 @@ R ping_fw(Clos this, WORD then) {
 R timed_func(Clos this, WORD then);
 
 R timed_func_msgwrap(Clos this, WORD then) {
+    // we only want to return a Msg instance, but we need to return an R.
+    // we'll use use its 'value' attribute
     return _DONE(then, (WORD)MSG(this->var[0], CLOS1(timed_func, this->var[1])));
 }
 
@@ -493,7 +495,7 @@ R timed_func(Clos this, WORD then) {
     const monotonic_time mt_now = monotonic_now();
     printf("\x1b[35;1mtimed_func()\x1b[m count = %d @ %lu\n", (int)this->var[1], mt_now);
 
-    // this would normally call the timed_func_msgwrap() function
+    // this would normally call timed_func_msgwrap()
     //R msg_cont = timed_func_wrap(CLOS2(timed_func_wrap, this->var[0], (WORD)((int)this->var[1] + 1)), NULL);
     //Msg async_msg = (Msg)msg_conf.value;
     // the above, inlined:
@@ -513,18 +515,21 @@ R ping(Actor self, WORD count, WORD forward, WORD then) {
             printf("Ping %10d\n", (int)count);
     }
     if ((int)count == 0 && (_Bool)forward != false) {
-        // this would normally call the timed_func_msgwrap() function
+        // this would normally call timed_func_msgwrap()
         //R msg_cont = timed_func_wrap(CLOS2(timed_func_wrap, this->var[0], (WORD)((int)this->var[1] + 1)), NULL);
         //Msg async_msg = (Msg)msg_conf.value;
         // the above, inlined:
         Msg async_msg = MSG(self, CLOS2(timed_func, self, 0));
         tmsg = POSTPONE(curr_msg->time_baseline + 3*MT_SECOND, async_msg);
     }
-    if ((int)count == 200000) {
+    if ((int)count >= 300000 && tmsg != NULL) {
         if (postpone_CANCEL(tmsg)) {
             printf("postpone cancelled\n");
+        } else {
+            printf("postpone already cancelled!\n");
         }
-    }
+		tmsg = NULL;
+	}
     if ((int)count >= PING_LIMIT) {
         printf("\x1b[31;1mping limit reached\x1b[m\n");
         return _EXIT(then, None);
