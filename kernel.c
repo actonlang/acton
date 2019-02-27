@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "act_platform.h"
 
 #define _GNU_SOURCE  // pthread_setaffinity_np(), CPU_SET, etc
 
