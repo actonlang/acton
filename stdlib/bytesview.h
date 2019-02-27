@@ -1,54 +1,96 @@
+/* bytesview.h */
+
 /* C version of bytesview
  */
 
+#include <stdint.h>
 #include <sys/types.h>
 
-#define DEFAULT_IO_BUFFER_SIZE 65536
+#define ACT_BV_DEFAULT_BUFFER_SIZE 8192
 
 typedef struct {
-    size_t _begin
-    size_t _end
-    uint8_t _bytes[DEFAULT_IO_BUFFER_SIZE]
+    size_t _start;
+    size_t _end;
+    uint8_t *_bytes;         /* will usually have size ACT_BV_DEFAULT_BUFFER_SIZE */
 } bytesview_data_buffer_t;
 
-typedef struct {
-    bytesview_t *_pre;
+typedef struct bytesview_t {
+    struct bytesview_t *_pre;
     int _eof;
-    bytesview_data_buffer_t *buf;
+    bytesview_data_buffer_t buf;
 } bytesview_t;
 
-bytesview_t *act_io_bv_init(bytesview_t *self, uint8_t *b, size_t n, size_t start, bytesview_t *pre, int closed);
+extern void act_bv_class_init();
 
-bytesview_t *act_io_bv_empty();
+/* ### Creation ### */
 
-bytesview_t *act_io_bv_from_buf(bytesview_data_buffer_t *buf);
+bytesview_t *act_bv_init(const uint8_t *b, size_t n, size_t start, const bytesview_t *pre, int closed);
 
-bytesview_t *act_io_bv_n(bytesview_t *self);
+bytesview_t *act_bv_empty();
 
-char *act_io_bv_to_bytes(bytesview_t *self);
+bytesview_t *act_bv_frombuf(const bytesview_data_buffer_t *buf);
 
-bytesview_t *act_io_bv_show(bytewview_t *self);
+bytesview_t *act_bv_fromstr(const char *s);
 
-bytesview_t *act_io_bv_consume(bytesview_t *self, size_t amount);
+/* ### Analysis ### */
 
-bytesview_t *act_io_bv_read(bytesview_t *self, size_t n);
+size_t act_bv_n(const bytesview_t *self);
 
-bytesview_t *act_io_bv_readline(bytesview_t *self);
+bytesview_data_buffer_t *act_bv_tobuf(const bytesview_t *self);   /* return value SHOULD NOT be mutated */
 
-bytesview_t *act_io_bv_readexactly(bytesview_t *self, size_t n);
+char *act_bv_tostr(const bytesview_t *self);   /* return value SHOULD NOT be mutated */
 
-bytesview_t *act_io_bv_readuntil(bytesview_t *self, void const *separator);
+int act_bv_at_eof (const bytesview_t *self);
 
-int act_io_bv_at_eof (bytesview_t *self, ...);
+/* ### De-lousing ### */
 
-bytesview_t *act_io_bv_append(bytesview_t *self, void const *b, size_t n);
+void act_bv_show(const bytesview_t *self);
 
-bytesview_t *act_io_bv_write(bytesview_t *self, void const *b, size_t n);
+void act_bv_showbuf(const bytesview_data_buffer_t *buf);
 
-bytesview_t *act_io_bv_writelines(bytesview_t *self, void const **data);
+void raise_IncompleteReadError(char *msg);
 
-bytesview_t *act_io_bv_close (bytesview_t *self);
+void raise_IndexError(char *msg);
 
-struct act_io_bv_methods {
-  bytesview init 
+void raise_ValueError(char *msg);
+
+/* ### Consuming data ### */
+
+bytesview_t *act_bv_consume(const bytesview_t *self, size_t amount);
+
+bytesview_t *act_bv_read(const bytesview_t *self, size_t n);
+
+bytesview_t *act_bv_readline(const bytesview_t *self);
+
+bytesview_t *act_bv_readexactly(const bytesview_t *self, size_t n);
+
+bytesview_t *act_bv_readuntil(const bytesview_t *self, void const *separator);
+
+/* ### Adding data ### */
+
+bytesview_t *act_bv_append(const bytesview_t *self, void const *b, size_t n);
+
+bytesview_t *act_bv_write(const bytesview_t *self, void const *b, size_t n);
+
+bytesview_t *act_bv_writelines(const bytesview_t *self, void const **data);
+
+bytesview_t *act_bv_close (const bytesview_t *self);
+
+
+typedef int (*BV_INT_T)(int);
+typedef bytesview_t * (*BYTESVIEW_INIT_T)(const uint8_t *b, size_t n, size_t start, const bytesview_t *pre, int closed);
+typedef bytesview_t * (*BYTESVIEW_EMPTY_T)(const bytesview_t *self);
+typedef bytesview_t * (*BYTESVIEW_FROMBUF_T)(const bytesview_data_buffer_t *buf);
+typedef bytesview_t * (*BYTESVIEW_FROMSTR_T)(const char *s);
+
+
+
+typedef struct {
+  BV_INT_T intfunc;
+  BYTESVIEW_INIT_T init;      		/*  = act_bv_init; */
+  BYTESVIEW_EMPTY_T empty;    		/*  = act_bv_empty; */
+  BYTESVIEW_FROMBUF_T frombuf;    	/*  = act_bv_frombuf; */
+
+} act_bv_method_table_t;
+
 

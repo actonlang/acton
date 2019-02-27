@@ -135,7 +135,7 @@ class Bytesview():
     def read(self, n=-1):                  # (int) -> (bytes, Bytesview) 
        if n == -1:
            if not self._eof:
-               raise IncompleteRead("read(-1) on non-closed Bytesview")
+               raise IncompleteReadError("read(-1) on non-closed Bytesview")
            else:
                return self
        else:
@@ -194,7 +194,7 @@ class Bytesview():
         else:
             (last, initial, found) = (b'', None, False)
 
-        # last is potential beginning of separator at end of previous Bytesviews
+        # last is potential beginning of separator at end of previous Bytesview(s)
 
         if found:
             return (b'',initial, found)
