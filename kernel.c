@@ -69,6 +69,7 @@ TimedMsg POSTPONE(monotonic_time trigger_time, Msg m) {
 }
 
 bool postpone_CANCEL(TimedMsg tm) {
+    assert(tm != NULL);
     // spin until someone cleared the message pointer
     // return bool whether WE were the one that did it
     while (1) {
