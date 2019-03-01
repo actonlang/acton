@@ -8,7 +8,7 @@
 
 #include "bytesview.h"
 
-bytesview_t _empty = {
+bytesview_t const _empty = {
     ._pre = NULL,
     ._eof = 0,
     .buf = { ._start = 0, ._end = 0, ._bytes = (uint8_t *) ""}
@@ -19,7 +19,7 @@ act_bv_method_table_t *_bv_meth;
 
 /* ### creation ### */
 
-bytesview_t *act_bv_init (const uint8_t *b, size_t n, size_t start, const bytesview_t *pre, int closed)
+bytesview_t const *act_bv_init (const uint8_t *b, size_t n, size_t start, const bytesview_t *pre, int closed)
 {
     size_t len;
     bytesview_t *bv = (bytesview_t *) malloc(sizeof(bytesview_t));
@@ -42,17 +42,17 @@ bytesview_t *act_bv_init (const uint8_t *b, size_t n, size_t start, const bytesv
     return bv;
 }
 
-bytesview_t *act_bv_empty()
+bytesview_t const *act_bv_empty()
 {
     return &_empty;
 }
 
-bytesview_t *act_bv_fromstr (const char *s)
+bytesview_t const *act_bv_fromstr (char const *s)
 {
-    return act_bv_init((const uint8_t *)s, strlen(s), 0, NULL, 0);
+    return act_bv_init((uint8_t const *)s, strlen(s), 0, NULL, 0);
 }
 
-bytesview_t *act_bv_frombuf(const bytesview_data_buffer_t *buf)
+bytesview_t const *act_bv_frombuf(bytesview_data_buffer_t const *buf)
 {
     bytesview_t *bv = (bytesview_t *) malloc(sizeof(bytesview_t));
 
@@ -67,7 +67,7 @@ bytesview_t *act_bv_frombuf(const bytesview_data_buffer_t *buf)
 
 /* ### analysis ### */
 
-size_t act_bv_n(const bytesview_t *self)
+size_t act_bv_n(bytesview_t const *self)
 {
     size_t prelen;
 
@@ -79,7 +79,7 @@ size_t act_bv_n(const bytesview_t *self)
     return prelen + self->buf._end - self->buf._start;
 }
 
-static uint8_t *act_bv_cpybuf(const bytesview_t *self, uint8_t *p)
+static uint8_t *act_bv_cpybuf(bytesview_t const *self, uint8_t *p)
 {
     /* copy all bytes to *p */
 
@@ -96,34 +96,45 @@ static uint8_t *act_bv_cpybuf(const bytesview_t *self, uint8_t *p)
     return q+thislen;
 }
 
-bytesview_data_buffer_t *act_bv_tobuf(const bytesview_t *self)
+bytesview_data_buffer_t const *act_bv_tobuf(bytesview_t const *self)
 {
     size_t n = act_bv_n(self);
     bytesview_data_buffer_t *p;
+
+#if NDEBUG
+#else
     uint8_t *q;
+#endif
 
     if (self->buf._end - self->buf._start == n) {
         /* no more than one buffer */
-        p = (bytesview_data_buffer_t *) &(self->buf);       /* disable warning: discards const qualifier */
+        p = (bytesview_data_buffer_t *) &(self->buf);
     } else {
         /* several buffers, must concatenate */
         p = (bytesview_data_buffer_t *) malloc(sizeof(bytesview_data_buffer_t));
-        p->_bytes = (uint8_t *) malloc (n+1);  /* room for NUL character at end */
-        q = act_bv_cpybuf(self, p->_bytes);
+        p->_bytes = (uint8_t *) malloc (n);
+#if NDEBUG
+        act_bv_cpybuf(self, p->_bytes);
+#else
+        q  = act_bv_cpybuf(self, p->_bytes);
         assert(q-p->_bytes == n);
+#endif		      
         p->_start = 0;
         p->_end = n;
-        *q = 0;
     }
     return p;
 }
 
-char *act_bv_tostr(const bytesview_t *self)
+char *act_bv_tostr(bytesview_t const *self)
 {
-    bytesview_data_buffer_t *bp;
-
-    bp = act_bv_tobuf(self);
-    return (char *) bp->_bytes;
+    size_t n = act_bv_n(self);
+    uint8_t *p, *q;
+    
+    p = (uint8_t *) malloc(n+1);  /* room for NUL character at end */
+    q = act_bv_cpybuf(self, p);
+    assert(q-p == n);
+    *q = 0;    /* NUL character at end */
+    return (char *) p;
 }
 
 
@@ -162,26 +173,27 @@ void act_bv_show(const bytesview_t *self)
 void raise_IncompleteReadError(char *msg)
 {
     fprintf(stderr, "IncompleteReadError: %s\n", msg);
-    assert(0==1);
+    // assert(0==1);
 }
       
 void raise_IndexError(char *msg)
 {
     fprintf(stderr, "IndexError: %s\n", msg);
-    assert(0==1);
+    // assert(0==1);
 }
 
 void raise_ValueError(char *msg)
 {
     fprintf(stderr, "ValueError: %s\n", msg);
-    assert(0==1);
+    // assert(0==1);
 }
 
 /* ### consuming data */
 
-void act_bv__consume(const bytesview_t *self, int amount, bytesview_t **prep, size_t *remainingp)
+void act_bv__consume(bytesview_t const *self, int amount, bytesview_t const **prep, size_t *remainingp)
 {
-    bytesview_t *pre, *newthis;
+    bytesview_t const *pre;
+    bytesview_t const *newthis;
     size_t remaining, newremaining;
     size_t thislen;
     
@@ -204,14 +216,15 @@ void act_bv__consume(const bytesview_t *self, int amount, bytesview_t **prep, si
     return;
 }
 
-bytesview_t *act_bv_consume(const bytesview_t *self, size_t amount)
+bytesview_t const *act_bv_consume(bytesview_t const *self, size_t amount)
 {
-    bytesview_t *newview;
+    bytesview_t const *newview;
     size_t remaining;
 
     act_bv__consume(self, amount, &newview, &remaining);
     if (remaining > 0) {
         raise_IndexError("Not enough data to consume");
+        return NULL;
     }
 
     if (newview != NULL) {
@@ -222,9 +235,9 @@ bytesview_t *act_bv_consume(const bytesview_t *self, size_t amount)
 }
 
 
-void act_bv__read(const bytesview_t *self, int n, int *remainingp, bytesview_t **initialp)
+void act_bv__read(bytesview_t const *self, int n, int *remainingp, bytesview_t const **initialp)
 {
-    bytesview_t *initial;
+    bytesview_t const *initial;
     int remaining;
     size_t thislen;
 
@@ -242,7 +255,7 @@ void act_bv__read(const bytesview_t *self, int n, int *remainingp, bytesview_t *
         *initialp = initial;
     } else if (remaining >= thislen) {
         *remainingp = remaining-thislen;
-        *initialp = (bytesview_t *) self;
+        *initialp = self;
     } else {
         /*  0 < remaining < thislen */
         *remainingp = 0;
@@ -251,9 +264,9 @@ void act_bv__read(const bytesview_t *self, int n, int *remainingp, bytesview_t *
     return;
 }
 
-bytesview_t *act_bv_read(const bytesview_t *self, size_t n)
+bytesview_t const *act_bv_read(bytesview_t const *self, size_t n)
 {
-    bytesview_t *initial;
+    bytesview_t const *initial;
     int remaining;
     int thislen;
       
@@ -295,14 +308,14 @@ bytesview_t *act_bv_read(const bytesview_t *self, size_t n)
     } 
 }
 
-bytesview_t *act_bv_readline(const bytesview_t *self)
+bytesview_t const *act_bv_readline(bytesview_t const *self)
 {
     return act_bv_readuntil(self, "\n");
 }
 
-static void act_bv__readexactly(const bytesview_t *self, size_t n, bytesview_t **initialp, size_t *remainsp)
+static void act_bv__readexactly(bytesview_t const *self, size_t n, bytesview_t const **initialp, size_t *remainsp)
 {
-    bytesview_t *initial;
+    bytesview_t const *initial;
     size_t remains, thislen;
 
     thislen = self->buf._end - self->buf._start;
@@ -326,8 +339,8 @@ static void act_bv__readexactly(const bytesview_t *self, size_t n, bytesview_t *
     }
 }
 
-bytesview_t *act_bv_readexactly(const bytesview_t *self, size_t n) {
-    bytesview_t *initial;
+bytesview_t const *act_bv_readexactly(const bytesview_t *self, size_t n) {
+    bytesview_t const *initial;
     size_t remains;
 
     act_bv__readexactly(self, n, &initial, &remains);
@@ -343,39 +356,97 @@ bytesview_t *act_bv_readexactly(const bytesview_t *self, size_t n) {
     return initial;
 }
 
-static int act_bv__readuntil(const bytesview_t *self, void const *separator, size_t seplen,
-    bytesview_data_buffer_t *last,
-    bytesview_t **initialp)
+static size_t act_bv_min(size_t a, size_t b)
 {
-    bytesview_t *initial;
-    int found;
-    uint8_t *buf;
+    if (a <= b) return a;
+    else return b;
+}
 
-    /* len(last) < len(separator) */
+static int act_bv__readuntil(bytesview_t const *self, void const *separator, size_t seplen,
+    bytesview_data_buffer_t *last,
+    bytesview_t const ** initialp)
+{
+    bytesview_t const *initial;
+    int found;
+    uint8_t *m;
+    size_t idx, lastlen, cpylen, thislen, keeplen;
 
     if (self->_pre != NULL) {
-        found = act_bv__readuntil(self->_pre, separator, seplen, &last, &initial)
+      found = act_bv__readuntil(self->_pre, separator, seplen, last, &initial);
     } else {
-        last = "";
+        /* last initialized in act_bv_readuntil() */
         initial = NULL;
         found = 0;
     }
 
-    // last is potential beginning of separator at end of previous Bytesview(s)
+    // last is potential beginning of separator at end of previous buffer(s)
 
     if (found) {
-        *lastp = "";
+        /* last made empty in recursive call */
         *initialp = initial;
         return found;
-    } else {
-        XXXXX
+    } 
+
+    /* still looking - is separator straddling buffers? */
+    lastlen = last->_end - last->_start;
+    cpylen = act_bv_min(seplen-1, self->buf._end - self->buf._start);
+    memcpy(last->_bytes+last->_end, self->buf._bytes+self->buf._start, cpylen);
+    last->_end += cpylen;
+    *(last->_bytes+last->_end) = 0;
+    /* now, last contains last part of previous plus first part of this */
+    m = (uint8_t *) strstr((const char *)last->_bytes+last->_start, separator);
+    if (m != NULL) {
+	found = 1;
+	idx = m - (last->_bytes+last->_start);
+	// end of separator at idx + seplen - len(last)
+	// last->_start = last->_end = 0;
+	*initialp = act_bv_init(self->buf._bytes, idx-self->buf._start+seplen, self->buf._start, self->_pre, 0); 
+	return found;
     }
+    
+    /* Nope, so search this buffer */
+    m = memmem(self->buf._bytes+self->buf._start, self->buf._end-self->buf._start, separator, seplen);
+    if (m != NULL) {
+	found = 1;
+	idx = m - (self->buf._bytes + self->buf._start);
+	// last->_start = last->_end = 0;
+	*initialp = act_bv_init(self->buf._bytes, idx-self->buf._start + seplen, self->buf._start, self->_pre, 0);
+	return found;
+    }
+    
+    /* Nope, so return last part of this buffer in case it's straddling there */
+    found = 0;
+    thislen = self->buf._end - self->buf._start;
+    if (thislen >= seplen-1) {
+	/* discard old contents of last */
+	last->_start = 0;
+	last->_end = seplen-1;
+	memcpy(last->_bytes, self->buf._bytes+self->buf._end-(seplen-1), seplen-1);
+	*(last->_bytes+last->_end) = 0;
+    } else {
+	/* keep some part of last */
+        keeplen = act_bv_min((seplen-1)-thislen, lastlen);
+	if (keeplen < lastlen) {
+	    memcpy(last->_bytes, last->_bytes+last->_start+(lastlen-keeplen), keeplen);
+	    last->_start = 0;
+	    last->_end = keeplen;
+	} else {
+	    /* keep all of last */
+	}
+	/* ... and all of this */
+	memcpy(last->_bytes+last->_end, self->buf._bytes+self->buf._start, thislen);
+	last->_end += thislen;
+	*(last->_bytes+last->_end) = 0;
+    }
+    *initialp = self;
+    return found;
 }
 
-bytesview_t *act_bv_readuntil(const bytesview_t *self, void const *separator)  {
+bytesview_t const *act_bv_readuntil(bytesview_t const *self, void const *separator)
+{
     bytesview_data_buffer_t buf, *last;
     size_t seplen;
-    bytesview_t *initial;
+    bytesview_t const *initial;
     int found;
 
     seplen = strlen(separator);
@@ -383,7 +454,8 @@ bytesview_t *act_bv_readuntil(const bytesview_t *self, void const *separator)  {
     last->_start = 0;
     last->_end = 0;
     last->_bytes = (uint8_t *) malloc (seplen + seplen -1);   // room for (seplen-1)*2 bytes + nul byte
-
+    *(last->_bytes) = 0;
+    
     found = act_bv__readuntil(self, separator, seplen, last, &initial);
 
     if (found) {
@@ -405,9 +477,11 @@ bytesview_t *act_bv_readuntil(const bytesview_t *self, void const *separator)  {
 
 /* ### feeding data & closing */
 
-bytesview_t *act_bv_append(const bytesview_t *self, void const *b, size_t n)  {
+bytesview_t const *act_bv_append(bytesview_t const *self, void const *b, size_t n)
+{
     if (self->_eof) {
         raise_ValueError("append() on closed Bytesview");
+	return NULL;
     }
     if (self->buf._start < self->buf._end) {
         return act_bv_init(b, n, 0, self, 0);
@@ -416,14 +490,17 @@ bytesview_t *act_bv_append(const bytesview_t *self, void const *b, size_t n)  {
     }
 }
 
-bytesview_t *act_bv_write(const bytesview_t *self, void const *b, size_t n)  {
+bytesview_t const *act_bv_write(bytesview_t const *self, void const *b, size_t n)
+{
     if (self->_eof) {
         raise_ValueError("write() on closed Bytesview");
+	return NULL;
     } 
     return act_bv_append(self, b, n);
 }
 
-bytesview_t *act_bv_writelines(const bytesview_t *self, void const **data)  {
+bytesview_t const *act_bv_writelines(bytesview_t const *self, void const **data)
+{
     if (self->_eof) {
         raise_ValueError("writelines() on closed Bytesview");
     }
@@ -431,10 +508,10 @@ bytesview_t *act_bv_writelines(const bytesview_t *self, void const **data)  {
     /* XXX */
     assert(0);
     return act_bv_empty();
-    
 }
 
-bytesview_t *act_bv_close (const bytesview_t *self)  {
+bytesview_t const *act_bv_close (bytesview_t const *self)
+{
     if (self->_eof) return (bytesview_t *) self;             /* disable warning: discards const qualifier */
     return act_bv_init(self->buf._bytes, self->buf._end-self->buf._start, self->buf._start, self->_pre, 1);
 }

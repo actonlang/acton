@@ -35,7 +35,7 @@ LDFLAGS += $(JEM_LIB)
 endif
 
 # for e.g. clock_gettime
-CFLAGS += -D_XOPEN_SOURCE=600
+CFLAGS += -D_GNU_SOURCE -D_XOPEN_SOURCE=600
 
 PQUEUE_LIB := ../deps/libpqueue/libpqueue.a
 
@@ -45,7 +45,7 @@ all: bvtest
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 bvtest: bytesview_test.o bytesview.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 .PHONY: test
 test:

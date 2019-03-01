@@ -65,7 +65,8 @@ class Bytesview():
         # assert(self.n()>=amount)
         (newview, remaining) = self._consume(amount)
         if remaining > 0:
-            raise IndexError
+            # raise IndexError
+            return None
 
         if newview is not None:
             return newview
@@ -136,6 +137,7 @@ class Bytesview():
        if n == -1:
            if not self._eof:
                raise IncompleteReadError("read(-1) on non-closed Bytesview")
+               return None
            else:
                return self
        else:
@@ -156,7 +158,8 @@ class Bytesview():
                if self._eof:
                    return self
                else:
-                   raise IncompleteReadError("read(n) on non-closed Bytesview with less than n bytes")
+                   #raise IncompleteReadError("read(n) on non-closed Bytesview with less than n bytes")
+                   return None
            else:
                # remaining == thislen
                return self
@@ -182,7 +185,8 @@ class Bytesview():
     def readexactly(self, n):
         (initial, remains) = self._readexactly(n)
         if remains > 0:
-            raise IncompleteReadError("readexactly(): Too few bytes available")
+            #raise IncompleteReadError("readexactly(): Too few bytes available")
+            return None
         if initial is None:
             initial = Bytesview(b'')
         return initial 
@@ -224,9 +228,11 @@ class Bytesview():
             return initial if initial is not None else Bytesview(b'')
         else:
             if self._eof:
-                raise IncompleteReadError("Separator not found and Bytesview closed")
+                #raise IncompleteReadError("Separator not found and Bytesview closed")
+                return None
             else:
-                raise IncompleteReadError("Separator not found")
+                #raise IncompleteReadError("Separator not found")
+                return None
     
     def at_eof(self):
         return self._eof and self._pre is None and self._start == self._end
@@ -235,7 +241,8 @@ class Bytesview():
     
     def append(self, b, n=None):
         if self._eof:
-            raise ValueError("append() on closed Bytesview")
+            #raise ValueError("append() on closed Bytesview")
+            return None
         if self._start < self._end:
             return Bytesview(b, n=n, pre=self)
         else:
@@ -243,12 +250,14 @@ class Bytesview():
 
     def write(self, b, n=None):  	# same as append(self, b, n=None)
         if self._eof:
-            raise ValueError("write() on closed Bytesview")
+            #raise ValueError("write() on closed Bytesview")
+            return None
         return self.append(b, n)
         
     def writelines(self,data):
         if self._eof:
-            raise ValueError("writelines() on closed Bytesview")
+            #raise ValueError("writelines() on closed Bytesview")
+            return None
         for b in data:
             self.append(b)
         
