@@ -19,20 +19,30 @@ void report(bytesview_t const *bv, char *name)
 }
 
 
-void consumetest(bytesview_t const *bv)
+void consumetest(bytesview_t const *bv, int additional, int show)
 {  
     bytesview_t const *bvr;
 
     size_t i, iterations;
 
-    printf("consume test\n");
-    printf("============\n");
+    printf("consume test (show=%d)\n", show);
+    printf("=====================\n");
+    printf("bv: b'%s'\n", act_bv_tostr(bv));
+    printf("additional: %d\n", additional);
+    printf("---\n");
+
     iterations = act_bv_n(bv) + 2;
     i = 0;
     while (i < iterations) {
         bvr = act_bv_consume(bv, i);
-        if (bvr != NULL) printf("b'%s'\n", act_bv_tostr(bvr));
-	else printf("NULL\n");
+	if (additional>0 && bvr != NULL) bvr = act_bv_consume(bvr, additional);
+        if (show) {
+	    if (bvr != NULL) report(bvr,"bvr");
+	    else printf("NULL\n");
+        } else {
+	    if (bvr != NULL) printf("bvr: b'%s'\n", act_bv_tostr(bvr));
+	    else printf("NULL\n");
+	}
         i++;
     }
 }
@@ -102,18 +112,22 @@ void readuntiltest(bytesview_t const *bv, char *sep, int show)
     printf("---\n");
     
     iterations = act_bv_n(bv) + 2;
-    // iterations = 3;
+
     i = 0;
     while (i < iterations) {
         bvr = act_bv_consume(bv, i);
         if (bvr != NULL) {
 	    bvs = act_bv_readuntil(bvr, sep);
 	    if (show) {
-		if (bvr != NULL) report(bvs,"bv");
-		else printf("NULL\n");
+		if (bvr != NULL) printf("bvr: b'%s'\n", act_bv_tostr(bvr));
+		else printf("bvr: NULL\n");
+		if (bvs != NULL) report(bvs,"bvs");
+		else printf("bvs: NULL\n");
 	    } else {
-		if (bvs != NULL) printf("b'%s'\n", act_bv_tostr(bvs));
+		if (bvr != NULL) printf("b'%s'\n", act_bv_tostr(bvr));
 		else printf("NULL\n");
+		if (bvs != NULL) printf("b'%s'\n", act_bv_tostr(bvs));
+		else printf("NULL\n");		
 	    }
 	}
         i++;
@@ -127,6 +141,7 @@ int main() {
     bytesview_data_buffer_t b = { ._start = 0, ._end = 16, ._bytes = (uint8_t *) by };
 
     size_t l = strlen(by);
+    //int j;
     
     bytesview_t const *bv1;
     bytesview_t const *bv2;
@@ -145,7 +160,6 @@ int main() {
     
     bv4 = act_bv_append(bv1, "x", 1);
     bv4 = act_bv_append(bv4, by, 16);
-    bv4 = act_bv_append(bv4, "y", 1);
     bv4 = act_bv_append(bv4, by, 16);
     bv4 = act_bv_append(bv4, "z", 1);
     bv4 = act_bv_append(bv4, by, 16);
@@ -153,29 +167,39 @@ int main() {
     report(bv4, "bv4");
 
     bv5 = act_bv_close(bv4);
+    report(bv5, "bv5");
     
-    consumetest(bv4);
-    consumetest(bv5);
+    //consumetest(bv4, 20, 1);
     
-    readtest(bv4,1);
-    readtest(bv4,0);
+    //consumetest(bv5);
+    
+    //readtest(bv4,1);
+    //readtest(bv4,0);
 
-    readtest(bv5,1);
-    readtest(bv5,0);
+    //readtest(bv5,1);
+    //readtest(bv5,0);
 
     //readexactlytest(bv4,1);
-    readexactlytest(bv4,0);
+    //readexactlytest(bv4,0);
 
     //readexactlytest(bv5,1);
-    readexactlytest(bv5,0);
+    //readexactlytest(bv5,0);
 
-    //readuntiltest(bv4,bv4,7,1);
-    readuntiltest(bv4,"0123456",0);
-    readuntiltest(bv4,"x",0);
-    readuntiltest(bv4,"y",0);
-    readuntiltest(bv4,"z",0);
-    readuntiltest(bv4,"w",0);
-    readuntiltest(bv4,"fz0",0);
+    //    readuntiltest(bv4,"0123456",0);  // OK!
+    //    readuntiltest(bv4,"x",0);  // OK!
+    //    readuntiltest(bv4,"fz",0);  // OK!
+    //    readuntiltest(bv4,"z0",0);  // OK!
+    //    readuntiltest(bv4,"fz0",0);  // OK!
+    //    readuntiltest(bv4,"efz",0);  // OK!
+    //    readuntiltest(bv4,"z01",0);  //OK!
+    //    readuntiltest(bv4,"9ab",0);  //OK!
+    //readuntiltest(bv4,"def012",0);  //OK!
+    //readuntiltest(bv4,"def012",0);  //OK
+    readuntiltest(bv4,"f0123",0);  //OK!
+    readuntiltest(bv4,"cdef0",0);  //OK!
+
+    //readuntiltest(bv4,"9",1);
+    //readuntiltest(bv4,"9a",0);
 
     //readuntiltest(bv5,,1);
     //readuntiltest(bv5,bv4,0);

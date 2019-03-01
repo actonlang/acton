@@ -151,7 +151,7 @@ void act_bv_showbuf(const bytesview_data_buffer_t *buf)
     uint8_t *p;
 
     thislen = buf->_end - buf->_start;
-    p = buf->_bytes;
+    p = buf->_bytes+buf->_start;
     
     printf("[%lu,%lu] b'", buf->_start, buf->_end);
     i = 0;
@@ -372,36 +372,44 @@ static int act_bv__readuntil(bytesview_t const *self, void const *separator, siz
     size_t idx, lastlen, cpylen, thislen, keeplen;
 
     if (self->_pre != NULL) {
-      found = act_bv__readuntil(self->_pre, separator, seplen, last, &initial);
+        found = act_bv__readuntil(self->_pre, separator, seplen, last, &initial);
     } else {
         /* last initialized in act_bv_readuntil() */
         initial = NULL;
         found = 0;
+        //printf("-");	
     }
-
     // last is potential beginning of separator at end of previous buffer(s)
 
     if (found) {
         /* last made empty in recursive call */
         *initialp = initial;
         return found;
-    } 
-
+    }
+    //printf("-\n");
+    
     /* still looking - is separator straddling buffers? */
     lastlen = last->_end - last->_start;
-    cpylen = act_bv_min(seplen-1, self->buf._end - self->buf._start);
+    thislen = self->buf._end - self->buf._start;
+    cpylen = act_bv_min(seplen-1, thislen);
     memcpy(last->_bytes+last->_end, self->buf._bytes+self->buf._start, cpylen);
-    last->_end += cpylen;
-    *(last->_bytes+last->_end) = 0;
+    lastlen = last->_end += cpylen;
     /* now, last contains last part of previous plus first part of this */
-    m = (uint8_t *) strstr((const char *)last->_bytes+last->_start, separator);
-    if (m != NULL) {
-	found = 1;
-	idx = m - (last->_bytes+last->_start);
-	// end of separator at idx + seplen - len(last)
-	// last->_start = last->_end = 0;
-	*initialp = act_bv_init(self->buf._bytes, idx-self->buf._start+seplen, self->buf._start, self->_pre, 0); 
-	return found;
+    //printf("lastlen = %ld, cpylen = %ld\n", lastlen, cpylen);
+    //printf("last: ");
+    //act_bv_showbuf(last);
+    if (lastlen >= seplen) {
+        // might be straddling, check!
+        m = (uint8_t *) strstr((const char *)last->_bytes+last->_start, separator);
+        if (m != NULL) {
+            found = 1;
+	    idx = m - (last->_bytes+last->_start);
+            //printf("straddling! idx=%ld cpylen=%ld last: [%ld, %ld]\n", idx, cpylen, last->_start, last->_end);
+	    // end of separator at idx + seplen - len(last)
+	    *initialp = act_bv_init(self->buf._bytes, cpylen-(last->_end-(idx+seplen)), self->buf._start, self->_pre, 0); 
+	    // last->_start = last->_end = 0;
+	    return found;
+	}
     }
     
     /* Nope, so search this buffer */
@@ -409,14 +417,13 @@ static int act_bv__readuntil(bytesview_t const *self, void const *separator, siz
     if (m != NULL) {
 	found = 1;
 	idx = m - (self->buf._bytes + self->buf._start);
-	// last->_start = last->_end = 0;
-	*initialp = act_bv_init(self->buf._bytes, idx-self->buf._start + seplen, self->buf._start, self->_pre, 0);
+        //printf("inbuf [%ld, %ld]: idx == %ld\n", self->buf._start, self->buf._end, idx);
+	*initialp = act_bv_init(self->buf._bytes, idx+seplen, self->buf._start, self->_pre, 0);
 	return found;
     }
     
-    /* Nope, so return last part of this buffer in case it's straddling there */
+    /* Nope, so return last part of this buffer in case separator is straddling */
     found = 0;
-    thislen = self->buf._end - self->buf._start;
     if (thislen >= seplen-1) {
 	/* discard old contents of last */
 	last->_start = 0;
@@ -424,19 +431,17 @@ static int act_bv__readuntil(bytesview_t const *self, void const *separator, siz
 	memcpy(last->_bytes, self->buf._bytes+self->buf._end-(seplen-1), seplen-1);
 	*(last->_bytes+last->_end) = 0;
     } else {
-	/* keep some part of last */
-        keeplen = act_bv_min((seplen-1)-thislen, lastlen);
+        /* entire this is in last, so just keep end of last */
+        keeplen = act_bv_min(seplen-1, lastlen);
 	if (keeplen < lastlen) {
-	    memcpy(last->_bytes, last->_bytes+last->_start+(lastlen-keeplen), keeplen);
+	    // move end of last up front  
+	    memcpy(last->_bytes, last->_bytes+last->_end-keeplen, keeplen);
 	    last->_start = 0;
 	    last->_end = keeplen;
+ 	    *(last->_bytes+last->_end) = 0;
 	} else {
 	    /* keep all of last */
 	}
-	/* ... and all of this */
-	memcpy(last->_bytes+last->_end, self->buf._bytes+self->buf._start, thislen);
-	last->_end += thislen;
-	*(last->_bytes+last->_end) = 0;
     }
     *initialp = self;
     return found;
