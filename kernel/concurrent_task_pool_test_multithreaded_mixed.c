@@ -199,7 +199,8 @@ int main(int argc, char **argv) {
 	long total_put_errs = 0, total_get_errs = 0;
 	clock_t start, end;
 
-	srand(time(NULL));
+	unsigned int seed = time(NULL);
+	srand(seed);
 	fast_srand(seed);
 
     while ((opt = getopt(argc, argv, "t:h:k:T:B:R:v")) != -1)
