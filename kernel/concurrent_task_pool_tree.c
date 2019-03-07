@@ -68,6 +68,7 @@ int update_father(int index, concurrent_tree_pool_node* pool, unsigned char valu
 			new, IS_EMPTY(new), VERSION(new),
 			success);
 #endif
+
 	atomic_fetch_add(&(pool[index].pending), -1);
 
 	return success;
@@ -102,15 +103,22 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 		else
 			needs_update = (IS_EMPTY(pool[parent_index].tasks_right) == have_tasks);
 
-#ifdef TASKPOOL_DEBUG
-		printf("update_node_metadata(index=%d, value=%d), updating parent index %d\n", index, value, parent_index);
-#endif
 		if(needs_update || pool[crt_index].pending > 0)
 		{
+#ifdef TASKPOOL_DEBUG
+			printf("update_node_metadata(index=%d, value=%d), updating parent index %d\n", index, value, parent_index);
+#endif
+
 			trials++;
 
-			if(!update_father(crt_index, pool, value) && trials < 2)
-				continue;
+			if(!update_father(crt_index, pool, value))
+			{
+#ifdef TASKPOOL_DEBUG
+				printf("update_node_metadata(index=%d, value=%d), update_father() failed on parent index %d, trials=%d\n", index, value, parent_index, trials);
+#endif
+				if(trials < 2)
+					continue;
+			}
 		}
 		else
 		{
@@ -180,6 +188,9 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 			pool[0].data = task;
 		}
 
+#ifdef TASKPOOL_DEBUG
+		printf("Successfully put task %ld at index 0\n", (long) task);
+#endif
 		return 0;
 	}
 
@@ -287,7 +298,10 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 		if(old == 0 && atomic_compare_exchange_strong(&pool[index].grabbed, &old, 1))
 		{
 			*task = pool[index].data;
-			update_node_metadata(index, pool, 0);
+
+			if(index > 0)
+				update_node_metadata(index, pool, 0);
+
 			return 0;
 		}
 		else // Didn't manage to grab the task. Keep trying to get a task from the current tree:
