@@ -186,29 +186,23 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 		if(atomic_compare_exchange_strong(&pool[0].dirty, &old, 1))
 		{
 			pool[0].data = task;
+			return 0;
 		}
-
-#ifdef TASKPOOL_DEBUG
-		printf("Successfully put task %ld at index 0\n", (long) task);
-#endif
-		return 0;
 	}
 
 	if(tree_height==1)
+	{
 		return -1;
+	}
 
 	int index = find_node_for_put(task, pool, tree_height, k_no_trials, precomputed_level_sizes);
 
 	if(index==-1)
 		return -1;
 
-#ifdef TASKPOOL_DEBUG
-	printf("Successfully put task %ld at index %d\n", (long) task, index);
-#endif
-
 	update_node_metadata(index, pool, 1);
 
-	return 0;
+	return index;
 }
 
 // Returns either a node with an existing, non-grabbed task, or a node with empty children:

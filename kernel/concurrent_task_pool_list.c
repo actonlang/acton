@@ -230,12 +230,12 @@ int put(WORD task, concurrent_pool* pool)
 	while(1)
 	{
 		producer_tree = atomic_load(&pool->producer_tree);
+		int put_index = put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
 
-
-		if(put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes) == 0)
+		if(put_index >= 0)
 		{
 #ifdef TASKPOOL_DEBUG
-			printf("Successfully put task %ld in tree %d\n", (long) task, producer_tree->node_id);
+			printf("Successfully put task %ld in tree %d at index %d\n", (long) task, producer_tree->node_id, put_index);
 #endif
 			// Put succeeded in current tree, but we may need to move back consumer pointer if it overshot us:
 
@@ -250,6 +250,10 @@ int put(WORD task, concurrent_pool* pool)
 		}
 		else // current producer tree is "full"
 		{
+#ifdef TASKPOOL_DEBUG
+			printf("put_in_tree() returned status %d when attempting to put task %ld in full tree %d. Next pointer is: %d\n", status, (long) task, producer_tree->node_id, (atomic_load(&producer_tree->next) != NULL)?((atomic_load(&producer_tree->next))->node_id):(-1));
+#endif
+
 			// It might be that another producer already inserted a new tree, so first check for that:
 
 			if(atomic_load(&producer_tree->next) == NULL)
@@ -276,7 +280,8 @@ int put(WORD task, concurrent_pool* pool)
 			status = atomic_compare_exchange_strong(&(pool->producer_tree), &old, atomic_load(&producer_tree->next));
 
 #ifdef TASKPOOL_DEBUG
-			printf("CAS returned status %d when attempting to progress producer pointer from %d to %d (after put failed in full tree %d). Next pointer is: %d\n", status, old->node_id, (atomic_load(&producer_tree->next))->node_id, old->node_id);
+			if(status != 1)
+				printf("CAS returned status %d when attempting to progress producer pointer from %d to %d (after put failed in full tree %d).\n", status, old->node_id, (atomic_load(&producer_tree->next))->node_id, old->node_id);
 #endif
 		}
 	}
@@ -310,7 +315,7 @@ int get(WORD* task, concurrent_pool* pool)
 		if(consumer_ptrs.crt != NULL)
 		{
 #ifdef TASKPOOL_DEBUG
-			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.prev->node_id);
+			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
 			if(get_from_tree(task, consumer_ptrs.crt->tree)==0)
