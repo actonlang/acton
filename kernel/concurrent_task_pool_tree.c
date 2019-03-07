@@ -200,7 +200,9 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 	return 0;
 }
 
-int find_node_for_get(concurrent_tree_pool_node* pool)
+// Returns either a node with an existing, non-grabbed task, or a node with empty children:
+
+int find_node_for_get(concurrent_tree_pool_node* pool, int * index_p)
 {
 	int index = 0;
 
@@ -212,17 +214,29 @@ int find_node_for_get(concurrent_tree_pool_node* pool)
 				pool[index].tasks_left, IS_EMPTY(pool[index].tasks_left), VERSION(pool[index].tasks_left),
 				pool[index].tasks_right, IS_EMPTY(pool[index].tasks_right), VERSION(pool[index].tasks_right));
 #endif
-		if(((pool[index].data != NULL) && (atomic_load(&pool[index].grabbed) == 0))
-				|| (IS_EMPTY(pool[index].tasks_left) && IS_EMPTY(pool[index].tasks_right)))
+
+		// Return this node's task if it exists:
+
+		if((pool[index].data != NULL) && (atomic_load(&pool[index].grabbed) == 0))
 		{
-			return index;
+			*index_p = index;
+			return 0;
 		}
 
-		if(!IS_EMPTY(pool[index].tasks_left) && IS_EMPTY(pool[index].tasks_right))
+		int empty_left = IS_EMPTY(pool[index].tasks_left);
+		int empty_right = IS_EMPTY(pool[index].tasks_right);
+
+		if(empty_left && empty_right)
+		{
+			*index_p = index;
+			return -1;
+		}
+
+		if(!empty_left && empty_right)
 		{
 			index = LEFT_CHILD(index);
 		}
-		else if(IS_EMPTY(pool[index].tasks_left) && !IS_EMPTY(pool[index].tasks_right))
+		else if(empty_left && !empty_right)
 		{
 			index = RIGHT_CHILD(index);
 		}
@@ -237,18 +251,33 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 {
 	while(1)
 	{
+		// Check if tree is empty:
+
 		if(!has_tasks(pool[0]))
+		{
 			return -1;
+		}
 
-		int index = find_node_for_get(pool);
+		// Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
-		if(pool[index].data == NULL || (atomic_load(&pool[index].grabbed) == 1))
+		int index = -1;
+		int status = find_node_for_get(pool, &index);
+
+		// This is the case when find_node_for_get() returned a node with empty children.
+		// Update its ancestor's metadata and keep trying to get a task from the current tree:
+
+		if(status < 0)
 		{
 #ifdef TASKPOOL_DEBUG
 			printf("find_node_for_get() found no tasks (index=%d)\n", index);
 #endif
-			return -1;
+
+			update_node_metadata(index, pool, 0);
+
+			continue;
 		}
+
+		// We have a valid node index with a task. Attempt to grab it:
 
 		unsigned char old = atomic_load(&pool[index].grabbed);
 
@@ -261,7 +290,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 			update_node_metadata(index, pool, 0);
 			return 0;
 		}
-		else
+		else // Didn't manage to grab the task. Keep trying to get a task from the current tree:
 		{
 			continue;
 		}
