@@ -114,7 +114,7 @@ void free_pool(concurrent_pool * p)
 
 	while(pn != NULL)
 	{
-		next_pn = atomic_load(&pn->next);
+		next_pn = pn->next;
 		free_pool_node(pn);
 		pn = next_pn;
 	}
@@ -157,7 +157,7 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 	// Find end of tree list:
 
 	if(pool->producer_tree != NULL)
-		for(crt_tree = atomic_load(&pool->producer_tree); atomic_load(&crt_tree->next) != NULL; crt_tree = atomic_load(&crt_tree->next));
+		for(crt_tree = pool->producer_tree; crt_tree->next != NULL; crt_tree = crt_tree->next);
 
 	for(int i=0;i<no_trees;i++)
 	{
@@ -229,7 +229,7 @@ int put(WORD task, concurrent_pool* pool)
 
 	while(1)
 	{
-		producer_tree = atomic_load(&pool->producer_tree);
+		producer_tree = pool->producer_tree;
 		int put_index = put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
 
 		if(put_index >= 0)
@@ -239,7 +239,7 @@ int put(WORD task, concurrent_pool* pool)
 #endif
 			// Put succeeded in current tree, but we may need to move back consumer pointer if it overshot us:
 
-			concurrent_pool_node_ptr_pair c_ptrs = atomic_load(&pool->consumer_trees);
+			concurrent_pool_node_ptr_pair c_ptrs = pool->consumer_trees;
 
 			if(c_ptrs.crt->node_id > producer_tree->node_id)
 			{
@@ -251,17 +251,17 @@ int put(WORD task, concurrent_pool* pool)
 		else // current producer tree is "full"
 		{
 #ifdef TASKPOOL_DEBUG
-			printf("put_in_tree() returned status %d when attempting to put task %ld in full tree %d. Next pointer is: %d\n", status, (long) task, producer_tree->node_id, (atomic_load(&producer_tree->next) != NULL)?((atomic_load(&producer_tree->next))->node_id):(-1));
+			printf("put_in_tree() returned status %d when attempting to put task %ld in full tree %d. Next pointer is: %d\n", status, (long) task, producer_tree->node_id, (producer_tree->next != NULL)?(producer_tree->next->node_id):(-1));
 #endif
 
 			// It might be that another producer already inserted a new tree, so first check for that:
 
-			if(atomic_load(&producer_tree->next) == NULL)
+			if(producer_tree->next == NULL)
 			{
 				status = insert_new_tree(pool);
 
 #ifdef TASKPOOL_DEBUG
-				printf("insert_new_tree() returned status %d when attempting to put task %ld in full tree %d. Next pointer is: %d\n", status, (long) task, producer_tree->node_id, (atomic_load(&producer_tree->next))->node_id);
+				printf("insert_new_tree() returned status %d when attempting to put task %ld in full tree %d. Next pointer is: %d\n", status, (long) task, producer_tree->node_id, producer_tree->next->node_id);
 #endif
 
 				// Note the only failure condition is failure to allocate memory, otherwise inserts s'd always succeed:
@@ -275,13 +275,13 @@ int put(WORD task, concurrent_pool* pool)
 			// some other producer managed to progress it before us, which is OK: we just continue and attempt
 			// to put our task in the current producer tree of the pool:
 
-			concurrent_pool_node * old = producer_tree;
+			concurrent_pool_node * old = atomic_load(&pool->producer_tree);
 
-			status = atomic_compare_exchange_strong(&(pool->producer_tree), &old, atomic_load(&producer_tree->next));
+			status = atomic_compare_exchange_strong(&(pool->producer_tree), &old, producer_tree->next);
 
 #ifdef TASKPOOL_DEBUG
 			if(status != 1)
-				printf("CAS returned status %d when attempting to progress producer pointer from %d to %d (after put failed in full tree %d).\n", status, old->node_id, (atomic_load(&producer_tree->next))->node_id, old->node_id);
+				printf("CAS returned status %d when attempting to progress producer pointer from %d to %d (after put failed in full tree %d).\n", status, old->node_id, producer_tree->next->node_id, old->node_id);
 #endif
 		}
 	}
@@ -289,8 +289,8 @@ int put(WORD task, concurrent_pool* pool)
 
 int get(WORD* task, concurrent_pool* pool)
 {
-	concurrent_pool_node_ptr producer_tree = atomic_load(&pool->producer_tree);
-	concurrent_pool_node_ptr_pair consumer_ptrs = atomic_load(&pool->consumer_trees);
+	concurrent_pool_node_ptr producer_tree = pool->producer_tree;
+	concurrent_pool_node_ptr_pair consumer_ptrs = pool->consumer_trees;
 
 	while(1)
 	{
@@ -336,12 +336,14 @@ int get(WORD* task, concurrent_pool* pool)
 			return 1;
 		}
 
-		concurrent_pool_node_ptr_pair new_cts = { .prev = consumer_ptrs.crt, .crt = atomic_load(&consumer_ptrs.crt->next) };
+		concurrent_pool_node_ptr_pair new_cts = { .prev = consumer_ptrs.crt, .crt = consumer_ptrs.crt->next };
 
 		if(atomic_load(&pool->old_producers) == 0)
 		{
 			// Whether my CAS to update consumer pointers succeeds or not, use the most recent value
 			// of the (prev, crt) pointer pair to retry grabbing tasks from the new tree pointers:
+
+			consumer_ptrs = atomic_load(&pool->consumer_trees);
 
 			atomic_compare_exchange_strong(&(pool->consumer_trees), &consumer_ptrs, new_cts);
 		}
