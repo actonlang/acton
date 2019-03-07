@@ -48,41 +48,42 @@ void free_pool_node(concurrent_pool_node * p)
 
 concurrent_pool * _allocate_pool(int tree_height, int k_no_trials)
 {
-	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, tree_height, NULL); // allocate the first tree
-	concurrent_pool * p = NULL;
-
-	if(pool_node == NULL)
-		return NULL;
-
-	p = (concurrent_pool *) malloc(sizeof(struct concurrent_pool));
+	concurrent_pool * p = (concurrent_pool *) malloc(sizeof(struct concurrent_pool));
 
 	if(p == NULL)
 	{
-		free_pool_node(pool_node);
 		return NULL;
 	}
 
 	memset(p, 0, sizeof(struct concurrent_pool));
 
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	p->level_sizes = (int *) malloc(tree_height * sizeof(int));
 
 	if(p->level_sizes == NULL)
 	{
-		free_pool_node(pool_node);
 		free(p);
 		return NULL;
 	}
 
+	for(int i=0;i<tree_height;i++)
+		p->level_sizes[i]=CALCULATE_TREE_SIZE(i+1);
+#endif
+
 	p->tree_height = tree_height;
 	p->k_no_trials = k_no_trials;
 
-	p->head = pool_node;
+	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES);
+
+	if(allocated < 1)
+	{
+		free_pool(p);
+		return NULL;
+	}
+
 	atomic_init(&p->producer_tree, p->head);
 	concurrent_pool_node_ptr_pair cts = { .prev = NULL, .crt = p->head };
 	atomic_init(&p->consumer_trees, cts); // Set consumer pointer pair to (prev=NULL, current=producer=head)
-
-	for(int i=0;i<tree_height;i++)
-		p->level_sizes[i]=calculate_tree_pool_size(i+1);
 
 	return p;
 }
@@ -118,7 +119,9 @@ void free_pool(concurrent_pool * p)
 		pn = next_pn;
 	}
 
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	free(p->level_sizes);
+#endif
 	free(p);
 }
 
@@ -144,10 +147,54 @@ int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_node_ptr produ
 	return 0;
 }
 
+// Note: This function is NOT supposed to be thread safe. Only call in pool constructor.
+// Returns the number of successfully pre-allocated tree pools.
+
+int preallocate_trees(concurrent_pool* pool, int no_trees)
+{
+	concurrent_pool_node_ptr crt_tree = NULL;
+
+	// Find end of tree list:
+
+	if(pool->producer_tree != NULL)
+		for(crt_tree = atomic_load(&pool->producer_tree); atomic_load(&crt_tree->next) != NULL; crt_tree = atomic_load(&crt_tree->next));
+
+	for(int i=0;i<no_trees;i++)
+	{
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
+#else
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, NULL);
+#endif
+
+		if(pool_node == NULL)
+			return i;
+
+		if(crt_tree != NULL)
+		{
+			pool_node->node_id = crt_tree->node_id + 1;
+			atomic_init(&crt_tree->next, pool_node);
+		}
+		else
+		{
+			pool->head = pool_node;
+		}
+
+		crt_tree = pool_node;
+	}
+
+	return no_trees;
+}
+
+
 int insert_new_tree(concurrent_pool* pool)
 {
 	concurrent_pool_node_ptr producer_tree = NULL;
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
+#else
+	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, NULL);
+#endif
 
 	if(pool_node == NULL)
 		return -1;
@@ -174,12 +221,18 @@ int put(WORD task, concurrent_pool* pool)
 {
 	concurrent_pool_node_ptr producer_tree = NULL;
 	int status = 0;
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
+	int * precalculated_level_sizes = pool->level_sizes;
+#else
+	int * precalculated_level_sizes = NULL;
+#endif
 
 	while(1)
 	{
 		producer_tree = atomic_load(&pool->producer_tree);
 
-		if(put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, pool->level_sizes) == 0)
+
+		if(put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes) == 0)
 		{
 #ifdef TASKPOOL_DEBUG
 			printf("Successfully put task %ld in tree %d\n", (long) task, producer_tree->node_id);

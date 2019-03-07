@@ -16,8 +16,9 @@
 #include <time.h>
 #include <pthread.h>
 #include <unistd.h>
-
 #include <sched.h>
+
+#include "fastrand.h"
 
 #include "concurrent_task_pool.h"
 
@@ -198,7 +199,9 @@ int main(int argc, char **argv) {
 	long total_put_errs = 0, total_get_errs = 0;
 	clock_t start_put, end_put, start_get, end_get;
 
-	srand(time(NULL));
+	unsigned int seed = time(NULL);
+	srand(seed);
+	fast_srand(seed);
 
     while ((opt = getopt(argc, argv, "t:h:k:T:B:R:v")) != -1)
     {

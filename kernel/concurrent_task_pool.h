@@ -13,6 +13,14 @@
 #define DEFAULT_TREE_HEIGHT 5
 #define DEFAULT_K_NO_TRIALS 8
 
+#define PRECALCULATE_TREE_LEVEL_SIZES
+#define NO_PREALLOCATED_ELEMENTS 10000000
+
+#define CALCULATE_TREE_SIZE(h) (((int) pow(2, h)) - 1)
+#define _NO_PREALLOCATED_TREES (NO_PREALLOCATED_ELEMENTS / (CALCULATE_TREE_SIZE(DEFAULT_TREE_HEIGHT)))
+#define MAX(a, b) ((a>b)?(a):(b))
+#define NO_PREALLOCATED_TREES (MAX(_NO_PREALLOCATED_TREES,1))
+
 // #define TASKPOOL_DEBUG
 
 #define LEFT_CHILD(i) (2*(i)+1)
@@ -25,6 +33,10 @@
 #define IS_EMPTY(n) (!((n) & (1 << 31)))
 #define VERSION(n) ((n) & ~(1 << 31))
 #define NEW_VERSION(n, v) ((v) | ((n) & (1 << 31)))
+
+#define BITMASK(len) ((1 << len) - 1)
+// A 'slice' of a 32 bit integer, encompassing bits [start,start+len-1]:
+#define SLICE(n,start,len) ((n >> (32 - start - len)) & ((1 << len) - 1))
 
 typedef void *WORD;
 
@@ -49,7 +61,9 @@ typedef struct concurrent_pool
 	atomic_concurrent_pool_node_ptr_pair consumer_trees;	// pair of pointers to (previous ,current) consumer trees
 	atomic_uint old_producers;							// producers that currently attempt to move producer_tree backwards
 
+#ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	int * level_sizes;									// precomputed array of level sizes (used to speed up pool inserts)
+#endif
 } concurrent_pool;
 
 typedef struct concurrent_tree_pool_node
@@ -87,5 +101,6 @@ void free_tree_pool(concurrent_tree_pool_node * p);
 int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes);
 int get_from_tree(WORD* task, concurrent_tree_pool_node* pool);
 int calculate_tree_pool_size(int tree_height);
+int preallocate_trees(concurrent_pool* pool, int no_trees);
 
 #endif /* KERNEL_CONCURRENT_TASK_POOL_H_ */

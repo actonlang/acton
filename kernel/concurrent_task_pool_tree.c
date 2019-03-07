@@ -13,26 +13,8 @@
 #include <stdatomic.h>
 #include <time.h>
 #include <string.h>
-
 #include "concurrent_task_pool.h"
-
-// Returns the size of a complete binary tree of height tree_height:
-
-int calculate_tree_pool_size(int tree_height)
-{
-	if(tree_height == 0)
-		return 0;
-
-	int pool_size = 1, width = 1;
-
-	for(int i=0;i<tree_height-1;i++)
-	{
-		width *= 2;
-		pool_size += width;
-	}
-
-	return pool_size;
-}
+#include "fastrand.c"
 
 int random_in_level(int level, int * precomputed_level_sizes)
 {
@@ -48,11 +30,11 @@ int random_in_level(int level, int * precomputed_level_sizes)
 	}
 	else
 	{
-		first_in_level = calculate_tree_pool_size(level);
-		last_in_level = calculate_tree_pool_size(level+1) - 1;
+		first_in_level = CALCULATE_TREE_SIZE(level);
+		last_in_level = CALCULATE_TREE_SIZE(level+1) - 1;
 	}
 
-	return (rand() % (last_in_level - first_in_level + 1)) + first_in_level;
+	return (fastrand() % (last_in_level - first_in_level + 1)) + first_in_level;
 }
 
 void set_version(unsigned int* meta, unsigned int version)
@@ -170,7 +152,7 @@ int put_in_node(int index, concurrent_tree_pool_node* pool, WORD task)
 
 int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes)
 {
-	for(int level=0;level<tree_height;level++)
+	for(int level=1;level<tree_height;level++)
 	{
 		int no_trials = ((level==tree_height-1)?k_no_trials:1);
 
@@ -187,6 +169,23 @@ int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_heigh
 
 int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes)
 {
+	// Handle root insertions separately for higher speed:
+
+	unsigned char old = atomic_load(&pool[0].dirty);
+
+	if(old == 0)
+	{
+		if(atomic_compare_exchange_strong(&pool[0].dirty, &old, 1))
+		{
+			pool[0].data = task;
+		}
+
+		return 0;
+	}
+
+	if(tree_height==1)
+		return -1;
+
 	int index = find_node_for_put(task, pool, tree_height, k_no_trials, precomputed_level_sizes);
 
 	if(index==-1)
@@ -229,7 +228,7 @@ int find_node_for_get(concurrent_tree_pool_node* pool)
 		}
 		else
 		{
-			index = (rand() % 2)?(LEFT_CHILD(index)):(RIGHT_CHILD(index));
+			index = (fastrand() % 2)?(LEFT_CHILD(index)):(RIGHT_CHILD(index));
 		}
 	}
 }
@@ -271,14 +270,12 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 
 concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int * precomputed_level_sizes)
 {
-//	int total_size = ((precomputed_level_sizes!=NULL)?precomputed_level_sizes[tree_height-1]:calculate_tree_pool_size(tree_height)) * sizeof(struct concurrent_tree_pool_node);
-
 	int total_size;
 
 	if(precomputed_level_sizes!=NULL)
 		total_size = precomputed_level_sizes[tree_height-1] * sizeof(struct concurrent_tree_pool_node);
 	else
-		total_size = calculate_tree_pool_size(tree_height) * sizeof(struct concurrent_tree_pool_node);
+		total_size = CALCULATE_TREE_SIZE(tree_height) * sizeof(struct concurrent_tree_pool_node);
 
 	concurrent_tree_pool_node * tpn = (concurrent_tree_pool_node *) malloc(total_size);
 
