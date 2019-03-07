@@ -44,7 +44,7 @@ void set_version(unsigned int* meta, unsigned int version)
 
 int has_tasks(concurrent_tree_pool_node node)
 {
-	return !IS_EMPTY(node.tasks_left) || !IS_EMPTY(node.tasks_right) || (node.data != NULL && !atomic_load(&node.grabbed));
+	return !IS_EMPTY(node.tasks_left) || !IS_EMPTY(node.tasks_right) || (node.data != NULL);
 }
 
 int update_father(int index, concurrent_tree_pool_node* pool, unsigned char value)
@@ -222,7 +222,7 @@ int find_node_for_get(concurrent_tree_pool_node* pool, int * index_p)
 
 		// Return this node's task if it exists:
 
-		if((pool[index].data != NULL) && (atomic_load(&pool[index].grabbed) == 0))
+		if((pool[index].data != NULL))
 		{
 			*index_p = index;
 			return 0;
@@ -292,6 +292,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 		if(old == 0 && atomic_compare_exchange_strong(&pool[index].grabbed, &old, 1))
 		{
 			*task = pool[index].data;
+			pool[index].data=(WORD) NULL;
 
 			if(index > 0)
 				update_node_metadata(index, pool, 0);
