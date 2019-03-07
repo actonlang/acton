@@ -38,6 +38,8 @@
 // A 'slice' of a 32 bit integer, encompassing bits [start,start+len-1]:
 #define SLICE(n,start,len) ((n >> (32 - start - len)) & ((1 << len) - 1))
 
+#define HAS_TASKS(node) (!IS_EMPTY(node.tasks_left) || !IS_EMPTY(node.tasks_right) || (node.data != NULL))
+
 // #define TASKPOOL_DEBUG
 
 typedef void *WORD;

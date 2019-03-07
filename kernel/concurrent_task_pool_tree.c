@@ -42,11 +42,6 @@ void set_version(unsigned int* meta, unsigned int version)
 	*meta = NEW_VERSION(*meta, version);
 }
 
-int has_tasks(concurrent_tree_pool_node node)
-{
-	return !IS_EMPTY(node.tasks_left) || !IS_EMPTY(node.tasks_right) || (node.data != NULL);
-}
-
 int update_father(int index, concurrent_tree_pool_node* pool, unsigned char value)
 {
 	atomic_fetch_add(&(pool[index].pending), 1);
@@ -84,7 +79,7 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 
 	while(HAS_PARENT(crt_index))
 	{
-		int have_tasks = has_tasks(pool[crt_index]);
+		int have_tasks = HAS_TASKS(pool[crt_index]);
 
 		if(value != have_tasks)
 		{
@@ -258,7 +253,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 	{
 		// Check if tree is empty:
 
-		if(!has_tasks(pool[0]))
+		if(!HAS_TASKS(pool[0]))
 		{
 			return -1;
 		}
