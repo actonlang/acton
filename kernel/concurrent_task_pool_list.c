@@ -139,7 +139,7 @@ int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_node_ptr produ
 	{
 		concurrent_pool_node_ptr_pair new_cts = { .prev = NULL, .crt = producer_tree };
 
-		if(atomic_compare_exchange_strong(&(pool->consumer_trees), &c_ptrs, new_cts))
+		if(atomic_compare_exchange_weak(&(pool->consumer_trees), &c_ptrs, new_cts))
 			break;
 
 		if(c_ptrs.crt->node_id <= producer_tree->node_id)
