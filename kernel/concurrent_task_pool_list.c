@@ -189,7 +189,7 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 
 int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree_in)
 {
-	concurrent_pool_node_ptr producer_tree = producer_tree_in;
+	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = atomic_load(&producer_tree_in->next);
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
 #else
@@ -201,7 +201,11 @@ int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tre
 
 	// Find end of tree list:
 
-//	for(;atomic_load(&producer_tree->next) != NULL;producer_tree = atomic_load(&producer_tree->next));
+	while(next_ptr != NULL)
+	{
+		producer_tree = next_ptr;
+		next_ptr = atomic_load(&producer_tree->next);
+	}
 
 	pool_node->node_id = producer_tree->node_id + 1;
 
