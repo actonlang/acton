@@ -73,7 +73,9 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials)
 	p->tree_height = tree_height;
 	p->k_no_trials = k_no_trials;
 
-	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES);
+	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height));
+
+	printf("Allocated %d / %d trees\n", allocated, NO_PREALLOCATED_TREES(tree_height));
 
 	if(allocated < 1)
 	{
@@ -189,7 +191,7 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 
 int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree_in)
 {
-	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = atomic_load(&producer_tree_in->next);
+	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = atomic_load_explicit(&producer_tree_in->next, memory_order_relaxed);
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
 #else
@@ -204,7 +206,7 @@ int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tre
 	while(next_ptr != NULL)
 	{
 		producer_tree = next_ptr;
-		next_ptr = atomic_load(&producer_tree->next);
+		next_ptr = atomic_load_explicit(&producer_tree->next, memory_order_relaxed);
 	}
 
 	pool_node->node_id = producer_tree->node_id + 1;
