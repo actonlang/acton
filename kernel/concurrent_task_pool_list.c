@@ -187,9 +187,9 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 }
 
 
-int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree)
+int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree_in)
 {
-//	concurrent_pool_node_ptr producer_tree = NULL;
+	concurrent_pool_node_ptr producer_tree = producer_tree_in;
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
 #else
@@ -201,7 +201,7 @@ int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tre
 
 	// Find end of tree list:
 
-//	for(producer_tree = atomic_load(&pool->producer_tree); atomic_load(&producer_tree->next) != NULL; producer_tree = atomic_load(&producer_tree->next));
+//	for(;atomic_load(&producer_tree->next) != NULL;producer_tree = atomic_load(&producer_tree->next));
 
 	pool_node->node_id = producer_tree->node_id + 1;
 
@@ -278,7 +278,7 @@ int put(WORD task, concurrent_pool* pool)
 			// some other producer managed to progress it before us, which is OK: we just continue and attempt
 			// to put our task in the current producer tree of the pool:
 
-			status = atomic_compare_exchange_strong(&(pool->producer_tree), &producer_tree, producer_tree_next);
+			status = atomic_compare_exchange_strong(&(pool->producer_tree), &producer_tree, atomic_load_explicit(&producer_tree->next, memory_order_relaxed));
 
 #ifdef TASKPOOL_DEBUG
 			if(status != 1)
