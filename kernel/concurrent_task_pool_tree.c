@@ -14,7 +14,7 @@
 #include <time.h>
 #include <string.h>
 #include "concurrent_task_pool.h"
-#include "fastrand.c"
+#include "fastrand.h"
 
 int random_in_level(int level, int * precomputed_level_sizes)
 {
@@ -50,7 +50,7 @@ int update_father(int index, concurrent_tree_pool_node* pool, unsigned char valu
 	unsigned int old = 0, new = 0;
 	int success = 0;
 
-	old = atomic_load(am_left_child?(&pool[parent_index].tasks_left):(&pool[parent_index].tasks_right));
+	old = atomic_load_explicit(am_left_child?(&pool[parent_index].tasks_left):(&pool[parent_index].tasks_right), memory_order_relaxed);
 	new = (value)?(FULL_0_VERSION):(EMPTY_0_VERSION);
 	new = NEW_VERSION(new, VERSION(old) + 1);
 
@@ -139,7 +139,7 @@ int put_in_node(int index, concurrent_tree_pool_node* pool, WORD task)
 	while(HAS_PARENT(crt_index) && pool[PARENT(crt_index)].data==NULL)
 		crt_index=PARENT(crt_index);
 
-	unsigned char old = atomic_load(&pool[crt_index].dirty);
+	unsigned char old = atomic_load_explicit(&pool[crt_index].dirty, memory_order_relaxed);
 
 	if(old == 0 && atomic_compare_exchange_strong(&pool[crt_index].dirty, &old, 1))
 	{
@@ -174,7 +174,7 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 {
 	// Handle root insertions separately for higher speed:
 
-	unsigned char old = atomic_load(&pool[0].dirty);
+	unsigned char old = atomic_load_explicit(&pool[0].dirty, memory_order_relaxed);
 
 	if(old == 0)
 	{
@@ -279,7 +279,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 
 		// We have a valid node index with a task. Attempt to grab it:
 
-		unsigned char old = atomic_load(&pool[index].grabbed);
+		unsigned char old = atomic_load_explicit(&pool[index].grabbed, memory_order_relaxed);
 
 #ifdef TASKPOOL_DEBUG
 		printf("find_node_for_get() found a task at index=%d, task=%ld, grabbed=%d, dirty=%d\n", index, (long) pool[index].data, old, atomic_load(&pool[index].dirty));
