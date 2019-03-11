@@ -57,11 +57,11 @@ static inline int update_father(int index, concurrent_tree_pool_node* pool, int 
 	unsigned int old = 0, new = 0;
 	int success = 0;
 
-	old = atomic_load_explicit(&(pool[parent_index].child_has_tasks[child_index]), memory_order_relaxed);
+	old = LOAD(pool[parent_index].child_has_tasks[child_index]);
 	new = (value)?(FULL_0_VERSION):(EMPTY_0_VERSION);
 	new = NEW_VERSION(new, VERSION(old) + 1);
 
-	success = atomic_compare_exchange_strong(&(pool[parent_index].child_has_tasks[child_index]), &old, new);
+	success = CAS(&(pool[parent_index].child_has_tasks[child_index]), &old, new);
 
 #ifdef TASKPOOL_DEBUG
 	printf("update_father(): Updating parent index %d of index %d from (%d, %d, %d) to (%d, %d, %d) returned %d\n",
@@ -141,9 +141,9 @@ static inline int put_in_node(int index, concurrent_tree_pool_node* pool, int de
 	while(HAS_PARENT(crt_index) && pool[PARENT_K(crt_index, degree)].data==NULL)
 		crt_index=PARENT_K(crt_index, degree);
 
-	unsigned char old = atomic_load_explicit(&pool[crt_index].dirty, memory_order_relaxed);
+	unsigned char old = LOAD(pool[crt_index].dirty);
 
-	if(old == 0 && atomic_compare_exchange_strong(&pool[crt_index].dirty, &old, 1))
+	if(old == 0 && CAS(&pool[crt_index].dirty, &old, 1))
 	{
 		pool[crt_index].data = task;
 
@@ -176,11 +176,11 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 {
 	// Handle root insertions separately for higher speed:
 
-	unsigned char old = atomic_load_explicit(&pool[0].dirty, memory_order_relaxed);
+	unsigned char old = LOAD(&pool[0].dirty);
 
 	if(old == 0)
 	{
-		if(atomic_compare_exchange_strong(&pool[0].dirty, &old, 1))
+		if(CAS(&pool[0].dirty, &old, 1))
 		{
 			pool[0].data = task;
 			return 0;
@@ -283,12 +283,12 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree)
 
 		// We have a valid node index with a task. Attempt to grab it:
 
-		unsigned char old = atomic_load_explicit(&pool[index].grabbed, memory_order_relaxed);
+		unsigned char old = LOAD(pool[index].grabbed);
 
 #ifdef TASKPOOL_DEBUG
 		printf("find_node_for_get() found a task at index=%d, task=%ld, grabbed=%d, dirty=%d\n", index, (long) pool[index].data, old, atomic_load(&pool[index].dirty));
 #endif
-		if(old == 0 && atomic_compare_exchange_strong(&pool[index].grabbed, &old, 1))
+		if(old == 0 && CAS(&pool[index].grabbed, &old, 1))
 		{
 			*task = pool[index].data;
 			pool[index].data=(WORD) NULL;

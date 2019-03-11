@@ -49,6 +49,38 @@
 #define CHILD_K(p,k,d) (d*(p) + (k) + 1)
 #define PARENT_K(i,d) (((i)-1)/d)
 
+// CAS and atomic load utility macros:
+
+#define USE_ATOMIC_LOAD
+#define USE_MEMORY_ORDER_RELAXED
+
+#ifdef USE_ATOMIC_LOAD
+#ifdef USE_MEMORY_ORDER_RELAXED
+#define LOAD(a) (atomic_load_explicit(&(a), memory_order_relaxed))
+#else
+#define LOAD(a) (atomic_load_(&(a)))
+#endif
+#else
+#define LOAD(a) (a)
+#endif
+
+#define USE_WEAK_CAS_IN_LOOPS
+// #define USE_WEAK_CAS_OUT_OF_LOOPS
+
+#ifdef USE_WEAK_CAS_IN_LOOPS
+#define LOOP_CAS atomic_compare_exchange_weak
+#else
+#define LOOP_CAS atomic_compare_exchange_strong
+#endif
+
+#ifdef USE_WEAK_CAS_OUT_OF_LOOPS
+#define CAS atomic_compare_exchange_weak
+#else
+#define CAS atomic_compare_exchange_strong
+#endif
+
+
+
 // #define TASKPOOL_DEBUG
 
 typedef void *WORD;
