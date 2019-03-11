@@ -176,7 +176,7 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 {
 	// Handle root insertions separately for higher speed:
 
-	unsigned char old = LOAD(&pool[0].dirty);
+	unsigned char old = LOAD(pool[0].dirty);
 
 	if(old == 0)
 	{
