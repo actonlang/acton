@@ -140,7 +140,7 @@ void free_pool(concurrent_pool * p)
 	free(p);
 }
 
-int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree, concurrent_pool_node_ptr_pair c_ptrs_in)
+static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree, concurrent_pool_node_ptr_pair c_ptrs_in)
 {
 	atomic_fetch_add(&(pool->old_producers), 1);
 
@@ -202,7 +202,7 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 }
 
 
-int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree_in)
+static inline int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree_in)
 {
 	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = atomic_load_explicit(&producer_tree_in->next, memory_order_relaxed);
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
