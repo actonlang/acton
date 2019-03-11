@@ -16,10 +16,10 @@
 
 #include "concurrent_task_pool.h"
 
-concurrent_pool_node * allocate_pool_node(int node_id, int tree_height, int * precomputed_level_sizes)
+concurrent_pool_node * allocate_pool_node(int node_id, int tree_height, int degree, int * precomputed_level_sizes)
 {
 	concurrent_pool_node * pn = NULL;
-	concurrent_tree_pool_node * tree_pool = allocate_tree_pool(tree_height, precomputed_level_sizes);
+	concurrent_tree_pool_node * tree_pool = allocate_tree_pool(tree_height, degree, precomputed_level_sizes);
 
 	if(tree_pool == NULL)
 		return NULL;
@@ -46,7 +46,7 @@ void free_pool_node(concurrent_pool_node * p)
 	free(p);
 }
 
-concurrent_pool * _allocate_pool(int tree_height, int k_no_trials)
+concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 {
 	concurrent_pool * p = (concurrent_pool *) malloc(sizeof(struct concurrent_pool));
 
@@ -67,16 +67,17 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials)
 	}
 
 	for(int i=0;i<tree_height;i++)
-		p->level_sizes[i]=CALCULATE_TREE_SIZE(i+1);
+		p->level_sizes[i]=CALCULATE_TREE_SIZE(i+1, degree);
 #endif
 
 	p->tree_height = tree_height;
+	p->degree = degree;
 	p->k_no_trials = k_no_trials;
 
-	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height));
+	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height, degree));
 
 #ifdef TASKPOOL_DEBUG
-	printf("Allocated %d / %d trees\n", allocated, NO_PREALLOCATED_TREES(tree_height));
+	printf("Allocated %d / %d trees\n", allocated, NO_PREALLOCATED_TREES(tree_height, degree));
 #endif
 
 	if(allocated < 1)
@@ -92,19 +93,29 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials)
 	return p;
 }
 
+concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree)
+{
+	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, degree);
+}
+
 concurrent_pool * allocate_pool_with_tree_height(int tree_height)
 {
-	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS);
+	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE);
 }
 
 concurrent_pool * allocate_pool()
 {
-	return _allocate_pool(DEFAULT_TREE_HEIGHT, DEFAULT_K_NO_TRIALS);
+	return _allocate_pool(DEFAULT_TREE_HEIGHT, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE);
 }
 
 void set_tree_height(concurrent_pool * pool, int tree_height)
 {
 	pool->tree_height = tree_height;
+}
+
+void set_degree(concurrent_pool * pool, int degree)
+{
+	pool->degree = degree;
 }
 
 void set_no_trials(concurrent_pool * pool, int no_trials)
@@ -166,9 +177,9 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 	for(int i=0;i<no_trees;i++)
 	{
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
-		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, pool->level_sizes);
 #else
-		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, NULL);
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, NULL);
 #endif
 
 		if(pool_node == NULL)
@@ -195,9 +206,9 @@ int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_ptr producer_tre
 {
 	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = atomic_load_explicit(&producer_tree_in->next, memory_order_relaxed);
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
-	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->level_sizes);
+	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, pool->level_sizes);
 #else
-	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, NULL);
+	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, NULL);
 #endif
 
 	if(pool_node == NULL)
@@ -239,7 +250,7 @@ int put(WORD task, concurrent_pool* pool)
 
 	while(1)
 	{
-		int put_index = put_in_tree(task, producer_tree->tree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
+		int put_index = put_in_tree(task, producer_tree->tree, pool->tree_height, pool->degree, pool->k_no_trials, precalculated_level_sizes);
 
 		if(put_index >= 0)
 		{
@@ -290,7 +301,7 @@ int put(WORD task, concurrent_pool* pool)
 
 #ifdef TASKPOOL_DEBUG
 			if(status != 1)
-				printf("CAS returned status %d when attempting to progress producer pointer from %d to %d (after put failed in full tree %d).\n", status, old->node_id, producer_tree->next->node_id, old->node_id);
+				printf("CAS returned status %d when attempting to progress producer pointer (after put failed in full tree).\n", status);
 #endif
 		}
 	}
@@ -311,7 +322,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in prev tree %d\n", consumer_ptrs.prev->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.prev->tree)==0)
+			if(get_from_tree(task, consumer_ptrs.prev->tree, pool->degree)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 			printf("get() found task %ld in prev tree %d\n", (long) *task, consumer_ptrs.prev->node_id);
@@ -327,7 +338,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.crt->tree)==0)
+			if(get_from_tree(task, consumer_ptrs.crt->tree, pool->degree)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 				printf("get() found task %ld in crt tree %d\n", (long) *task, consumer_ptrs.crt->node_id);

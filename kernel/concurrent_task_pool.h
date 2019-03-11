@@ -12,21 +12,18 @@
 
 #define DEFAULT_TREE_HEIGHT 5
 #define DEFAULT_K_NO_TRIALS 8
+#define DEFAULT_DEGREE 2
+#define MAX_DEGREE 200
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
 #define NO_PREALLOCATED_ELEMENTS 20000000
 
-#define CALCULATE_TREE_SIZE(h) (((int) pow(2, h)) - 1)
-#define _NO_PREALLOCATED_TREES(h) (((int) (2 * NO_PREALLOCATED_ELEMENTS)) / (CALCULATE_TREE_SIZE(h)))
+#define CALCULATE_TREE_SIZE(h,d) (((int) pow(d, h)) - 1)
+#define _NO_PREALLOCATED_TREES(h,d) (((int) (d * NO_PREALLOCATED_ELEMENTS)) / (CALCULATE_TREE_SIZE(h,d)))
 #define MAX(a, b) ((a>b)?(a):(b))
-#define NO_PREALLOCATED_TREES(h) (MAX(_NO_PREALLOCATED_TREES(h),1))
+#define NO_PREALLOCATED_TREES(h,d) (MAX(_NO_PREALLOCATED_TREES(h,d),1))
 
-// #define TASKPOOL_DEBUG
-
-#define LEFT_CHILD(i) (2*(i)+1)
-#define RIGHT_CHILD(i) (2*(i)+2)
-#define PARENT(i) (((i)-1)/2)
-#define HAS_PARENT(i) ((i)>0)
+// Macros for version handling (ABA etc):
 
 #define EMPTY_0_VERSION 0
 #define FULL_0_VERSION (1 << 31)
@@ -38,7 +35,19 @@
 // A 'slice' of a 32 bit integer, encompassing bits [start,start+len-1]:
 #define SLICE(n,start,len) ((n >> (32 - start - len)) & ((1 << len) - 1))
 
+// Macros for binary trees:
+
+#define LEFT_CHILD(i) (2*(i)+1)
+#define RIGHT_CHILD(i) (2*(i)+2)
+#define PARENT(i) (((i)-1)/2)
+#define HAS_PARENT(i) ((i)>0)
+
 #define HAS_TASKS(node) (!IS_EMPTY(node.tasks_left) || !IS_EMPTY(node.tasks_right) || (node.data != NULL))
+
+// Macros for k-ary trees:
+
+#define CHILD_K(p,k,d) (d*(p) + (k) + 1)
+#define PARENT_K(i,d) (((i)-1)/d)
 
 // #define TASKPOOL_DEBUG
 
@@ -58,6 +67,7 @@ typedef _Atomic concurrent_pool_node_ptr_pair atomic_concurrent_pool_node_ptr_pa
 typedef struct concurrent_pool
 {
 	int tree_height;										// tree height for component complete tree pools
+	int degree;											// tree degree for component complete tree pools
 	int k_no_trials;										// number of retries upon a failed put (influences fill factor of component trees)
 
 	concurrent_pool_node_ptr head; 						// head of concurrent tree list
@@ -72,11 +82,14 @@ typedef struct concurrent_pool
 
 typedef struct concurrent_tree_pool_node
 {
-	atomic_uint tasks_left; 	// any tasks to the left? (+ version)
-	atomic_uint tasks_right;	// any tasks to the right? (+ version)
+	atomic_uint * child_has_tasks; // any tasks in K-th child? (+ version)
+	atomic_uint tasks_left;
+	atomic_uint tasks_right;
 	atomic_uchar dirty;		// any task was placed in this node?
 	atomic_uchar grabbed;	// was this task grabbed?
 	atomic_uint pending;		// pending concurrent updates to parent
+
+	atomic_uint * _child_has_tasks; // pointer containing all child_has_tasks regions for all nodes in a tree (to optimize malloc overhead)
 
 	WORD data;					// actual task
 } concurrent_tree_pool_node;
@@ -92,7 +105,9 @@ typedef struct concurrent_pool_node
 
 concurrent_pool * allocate_pool();
 concurrent_pool * allocate_pool_with_tree_height(int tree_height);
+concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree);
 void set_tree_height(concurrent_pool * pool, int tree_height);
+void set_tree_degree(concurrent_pool * pool, int degree);
 void set_no_trials(concurrent_pool * pool, int no_trials);
 void free_pool(concurrent_pool * p);
 int put(WORD task, concurrent_pool* pool);
@@ -100,11 +115,10 @@ int get(WORD* task, concurrent_pool* pool);
 
 // Lower level API to access tree pools directly:
 
-concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int * precomputed_level_sizes);
+concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int * precomputed_level_sizes);
 void free_tree_pool(concurrent_tree_pool_node * p);
-int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes);
-int get_from_tree(WORD* task, concurrent_tree_pool_node* pool);
-int calculate_tree_pool_size(int tree_height);
+int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes);
+int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree);
 int preallocate_trees(concurrent_pool* pool, int no_trees);
 
 #endif /* KERNEL_CONCURRENT_TASK_POOL_H_ */

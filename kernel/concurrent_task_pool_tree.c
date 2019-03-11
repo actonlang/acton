@@ -16,7 +16,19 @@
 #include "concurrent_task_pool.h"
 #include "fastrand.h"
 
-int random_in_level(int level, int * precomputed_level_sizes)
+static inline int has_tasks_k(concurrent_tree_pool_node node, int degree)
+{
+	if(node.data != NULL)
+		return 1;
+
+	for(int i=0;i< degree;i++)
+		if(!IS_EMPTY(node.child_has_tasks[i]))
+			return 1;
+
+	return 0;
+}
+
+int random_in_level(int level, int degree, int * precomputed_level_sizes)
 {
 	int first_in_level, last_in_level;
 
@@ -30,31 +42,26 @@ int random_in_level(int level, int * precomputed_level_sizes)
 	}
 	else
 	{
-		first_in_level = CALCULATE_TREE_SIZE(level);
-		last_in_level = CALCULATE_TREE_SIZE(level+1) - 1;
+		first_in_level = CALCULATE_TREE_SIZE(level, degree);
+		last_in_level = CALCULATE_TREE_SIZE(level+1, degree) - 1;
 	}
 
 	return (fastrand() % (last_in_level - first_in_level + 1)) + first_in_level;
 }
 
-void set_version(unsigned int* meta, unsigned int version)
-{
-	*meta = NEW_VERSION(*meta, version);
-}
-
-int update_father(int index, concurrent_tree_pool_node* pool, unsigned char value)
+int update_father(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
 {
 	atomic_fetch_add(&(pool[index].pending), 1);
-	int parent_index=PARENT(index);
-	int am_left_child = index % 2;
+	int parent_index=PARENT_K(index, degree);
+	int child_index = (index - 1) % degree;
 	unsigned int old = 0, new = 0;
 	int success = 0;
 
-	old = atomic_load_explicit(am_left_child?(&pool[parent_index].tasks_left):(&pool[parent_index].tasks_right), memory_order_relaxed);
+	old = atomic_load_explicit(&(pool[parent_index].child_has_tasks[child_index]), memory_order_relaxed);
 	new = (value)?(FULL_0_VERSION):(EMPTY_0_VERSION);
 	new = NEW_VERSION(new, VERSION(old) + 1);
 
-	success = atomic_compare_exchange_strong(am_left_child?(&pool[parent_index].tasks_left):(&pool[parent_index].tasks_right), &old, new);
+	success = atomic_compare_exchange_strong(&(pool[parent_index].child_has_tasks[child_index]), &old, new);
 
 #ifdef TASKPOOL_DEBUG
 	printf("update_father(): Updating parent index %d of index %d from (%d, %d, %d) to (%d, %d, %d) returned %d\n",
@@ -69,7 +76,7 @@ int update_father(int index, concurrent_tree_pool_node* pool, unsigned char valu
 	return success;
 }
 
-void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned char value)
+void update_node_metadata(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
 {
 	int trials = 0, crt_index = index;
 
@@ -79,7 +86,7 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 
 	while(HAS_PARENT(crt_index))
 	{
-		int have_tasks = HAS_TASKS(pool[crt_index]);
+		int have_tasks = has_tasks_k(pool[crt_index], degree);
 
 		if(value != have_tasks)
 		{
@@ -89,16 +96,11 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 			return;
 		}
 
-		int parent_index=PARENT(crt_index);
+		int parent_index=PARENT_K(crt_index, degree);
 		concurrent_tree_pool_node parent_node = pool[parent_index];
-		int am_left_child = crt_index % 2, needs_update;
+		int child_index = (crt_index - 1) % degree;
 
-		if(am_left_child)
-			needs_update = (IS_EMPTY(pool[parent_index].tasks_left) == have_tasks);
-		else
-			needs_update = (IS_EMPTY(pool[parent_index].tasks_right) == have_tasks);
-
-		if(needs_update || pool[crt_index].pending > 0)
+		if(IS_EMPTY(pool[parent_index].child_has_tasks[child_index]) == have_tasks || pool[crt_index].pending > 0)
 		{
 #ifdef TASKPOOL_DEBUG
 			printf("update_node_metadata(index=%d, value=%d), updating parent index %d\n", index, value, parent_index);
@@ -106,7 +108,7 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 
 			trials++;
 
-			if(!update_father(crt_index, pool, value))
+			if(!update_father(crt_index, pool, degree, value))
 			{
 #ifdef TASKPOOL_DEBUG
 				printf("update_node_metadata(index=%d, value=%d), update_father() failed on parent index %d, trials=%d\n", index, value, parent_index, trials);
@@ -118,10 +120,10 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 		else
 		{
 #ifdef TASKPOOL_DEBUG
-			printf("update_node_metadata(index=%d, value=%d), skipping update of parent index %d because pool[%d].pending=%d, am_left_child=%d, parent_empty_left=%d, parent_empty_right=%d, has_tasks=%d\n",
+			printf("update_node_metadata(index=%d, value=%d), skipping update of parent index %d because pool[%d].pending=%d, child_index=%d, parent_empty_child=%d, has_tasks=%d\n",
 					index, value, parent_index,
 					crt_index, pool[crt_index].pending,
-					am_left_child, IS_EMPTY(pool[parent_index].tasks_left), IS_EMPTY(pool[parent_index].tasks_right),
+					child_index, IS_EMPTY(pool[parent_index].child_has_tasks[child_index]),
 					have_tasks);
 #endif
 			}
@@ -132,12 +134,12 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, unsigned c
 	}
 }
 
-int put_in_node(int index, concurrent_tree_pool_node* pool, WORD task)
+int put_in_node(int index, concurrent_tree_pool_node* pool, int degree, WORD task)
 {
 	int crt_index = index;
 
-	while(HAS_PARENT(crt_index) && pool[PARENT(crt_index)].data==NULL)
-		crt_index=PARENT(crt_index);
+	while(HAS_PARENT(crt_index) && pool[PARENT_K(crt_index, degree)].data==NULL)
+		crt_index=PARENT_K(crt_index, degree);
 
 	unsigned char old = atomic_load_explicit(&pool[crt_index].dirty, memory_order_relaxed);
 
@@ -153,7 +155,7 @@ int put_in_node(int index, concurrent_tree_pool_node* pool, WORD task)
 	}
 }
 
-int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes)
+int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
 {
 	for(int level=1;level<tree_height;level++)
 	{
@@ -161,7 +163,7 @@ int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_heigh
 
 		for(int trials=0;trials<no_trials;trials++)
 		{
-			int index=put_in_node(random_in_level(level, precomputed_level_sizes), pool, task);
+			int index=put_in_node(random_in_level(level, degree, precomputed_level_sizes), pool, degree, task);
 			if(index!=-1)
 				return index;
 		}
@@ -170,7 +172,7 @@ int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_heigh
 	return -1;
 }
 
-int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int k_no_trials, int * precomputed_level_sizes)
+int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
 {
 	// Handle root insertions separately for higher speed:
 
@@ -190,19 +192,19 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 		return -1;
 	}
 
-	int index = find_node_for_put(task, pool, tree_height, k_no_trials, precomputed_level_sizes);
+	int index = find_node_for_put(task, pool, tree_height, degree, k_no_trials, precomputed_level_sizes);
 
 	if(index==-1)
 		return -1;
 
-	update_node_metadata(index, pool, 1);
+	update_node_metadata(index, pool, degree, 1);
 
 	return index;
 }
 
 // Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
-int find_node_for_get(concurrent_tree_pool_node* pool, int * index_p)
+int find_node_for_get(concurrent_tree_pool_node* pool, int degree, int * index_p)
 {
 	int index = 0;
 
@@ -223,37 +225,39 @@ int find_node_for_get(concurrent_tree_pool_node* pool, int * index_p)
 			return 0;
 		}
 
-		int empty_left = IS_EMPTY(pool[index].tasks_left);
-		int empty_right = IS_EMPTY(pool[index].tasks_right);
+		int full_children[MAX_DEGREE], no_full_children=0;
 
-		if(empty_left && empty_right)
+		for(int i=0;i<degree;i++)
+		{
+			if(!IS_EMPTY(pool[index].child_has_tasks[i]))
+			{
+				full_children[no_full_children++] = i;
+			}
+		}
+
+		if(no_full_children==0)
 		{
 			*index_p = index;
 			return -1;
 		}
-
-		if(!empty_left && empty_right)
+		else if(no_full_children==1)
 		{
-			index = LEFT_CHILD(index);
-		}
-		else if(empty_left && !empty_right)
-		{
-			index = RIGHT_CHILD(index);
+			index = CHILD_K(index,full_children[0], degree);
 		}
 		else
 		{
-			index = (fastrand() % 2)?(LEFT_CHILD(index)):(RIGHT_CHILD(index));
+			index = CHILD_K(index,full_children[fastrand() % no_full_children], degree);
 		}
 	}
 }
 
-int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
+int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree)
 {
 	while(1)
 	{
 		// Check if tree is empty:
 
-		if(!HAS_TASKS(pool[0]))
+		if(!has_tasks_k(pool[0], degree))
 		{
 			return -1;
 		}
@@ -261,7 +265,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 		// Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
 		int index = -1;
-		int status = find_node_for_get(pool, &index);
+		int status = find_node_for_get(pool, degree, &index);
 
 		// This is the case when find_node_for_get() returned a node with empty children.
 		// Update its ancestor's metadata and keep trying to get a task from the current tree:
@@ -272,7 +276,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 			printf("find_node_for_get() found no tasks (index=%d)\n", index);
 #endif
 
-			update_node_metadata(index, pool, 0);
+			update_node_metadata(index, pool, degree, 0);
 
 			continue;
 		}
@@ -290,7 +294,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 			pool[index].data=(WORD) NULL;
 
 			if(index > 0)
-				update_node_metadata(index, pool, 0);
+				update_node_metadata(index, pool, degree, 0);
 
 			return 0;
 		}
@@ -301,24 +305,41 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool)
 	}
 }
 
-concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int * precomputed_level_sizes)
+concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int * precomputed_level_sizes)
 {
-	int total_size;
+	int total_nodes, total_size;
 
 	if(precomputed_level_sizes!=NULL)
-		total_size = precomputed_level_sizes[tree_height-1] * sizeof(struct concurrent_tree_pool_node);
+		total_nodes = precomputed_level_sizes[tree_height-1];
 	else
-		total_size = CALCULATE_TREE_SIZE(tree_height) * sizeof(struct concurrent_tree_pool_node);
+		total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
+
+	total_size = total_nodes * sizeof(struct concurrent_tree_pool_node);
 
 	concurrent_tree_pool_node * tpn = (concurrent_tree_pool_node *) malloc(total_size);
 
 	memset(tpn, 0, total_size);
+
+	tpn->_child_has_tasks = (atomic_uint *) malloc(total_nodes * degree * sizeof(atomic_uint));
+
+	if(!tpn->_child_has_tasks)
+	{
+		free_tree_pool(tpn);
+		return NULL;
+	}
+
+	memset(tpn->_child_has_tasks, 0, total_nodes * degree * sizeof(atomic_uint));
+
+	for(int i=0;i<total_nodes;i++)
+		tpn[i].child_has_tasks = tpn->_child_has_tasks + i*degree;
 
 	return tpn;
 }
 
 void free_tree_pool(concurrent_tree_pool_node * p)
 {
+	free(p->child_has_tasks);
+
 	free(p);
 }
 
