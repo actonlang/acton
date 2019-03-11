@@ -28,7 +28,7 @@ static inline int has_tasks_k(concurrent_tree_pool_node node, int degree)
 	return 0;
 }
 
-int random_in_level(int level, int degree, int * precomputed_level_sizes)
+static inline int random_in_level(int level, int degree, int * precomputed_level_sizes)
 {
 	int first_in_level, last_in_level;
 
@@ -49,7 +49,7 @@ int random_in_level(int level, int degree, int * precomputed_level_sizes)
 	return (fastrand() % (last_in_level - first_in_level + 1)) + first_in_level;
 }
 
-int update_father(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
+static inline int update_father(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
 {
 	atomic_fetch_add(&(pool[index].pending), 1);
 	int parent_index=PARENT_K(index, degree);
@@ -76,7 +76,7 @@ int update_father(int index, concurrent_tree_pool_node* pool, int degree, unsign
 	return success;
 }
 
-void update_node_metadata(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
+static inline void update_node_metadata(int index, concurrent_tree_pool_node* pool, int degree, unsigned char value)
 {
 	int trials = 0, crt_index = index;
 
@@ -134,7 +134,7 @@ void update_node_metadata(int index, concurrent_tree_pool_node* pool, int degree
 	}
 }
 
-int put_in_node(int index, concurrent_tree_pool_node* pool, int degree, WORD task)
+static inline int put_in_node(int index, concurrent_tree_pool_node* pool, int degree, WORD task)
 {
 	int crt_index = index;
 
@@ -155,7 +155,7 @@ int put_in_node(int index, concurrent_tree_pool_node* pool, int degree, WORD tas
 	}
 }
 
-int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
+static inline int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
 {
 	for(int level=1;level<tree_height;level++)
 	{
@@ -204,7 +204,7 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 
 // Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
-int find_node_for_get(concurrent_tree_pool_node* pool, int degree, int * index_p)
+static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree, int * index_p)
 {
 	int index = 0;
 
