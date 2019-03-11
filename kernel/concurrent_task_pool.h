@@ -13,7 +13,7 @@
 #define DEFAULT_TREE_HEIGHT 5
 #define DEFAULT_K_NO_TRIALS 8
 #define DEFAULT_DEGREE 2
-#define MAX_DEGREE 200
+#define MAX_DEGREE 2
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
 #define NO_PREALLOCATED_ELEMENTS 20000000
@@ -82,14 +82,15 @@ typedef struct concurrent_pool
 
 typedef struct concurrent_tree_pool_node
 {
-	atomic_uint * child_has_tasks; // any tasks in K-th child? (+ version)
-	atomic_uint tasks_left;
-	atomic_uint tasks_right;
+	atomic_uint child_has_tasks[MAX_DEGREE];
+//	atomic_uint * child_has_tasks; // any tasks in K-th child? (+ version)
+//	atomic_uint tasks_left;
+//	atomic_uint tasks_right;
 	atomic_uchar dirty;		// any task was placed in this node?
 	atomic_uchar grabbed;	// was this task grabbed?
 	atomic_uint pending;		// pending concurrent updates to parent
 
-	atomic_uint * _child_has_tasks; // pointer containing all child_has_tasks regions for all nodes in a tree (to optimize malloc overhead)
+//	atomic_uint * _child_has_tasks; // pointer containing all child_has_tasks regions for all nodes in a tree (to optimize malloc overhead)
 
 	WORD data;					// actual task
 } concurrent_tree_pool_node;
