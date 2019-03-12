@@ -31,6 +31,12 @@
 #define VERSION(n) ((n) & ~(1 << 31))
 #define NEW_VERSION(n, v) ((v) | ((n) & (1 << 31)))
 
+#define EMPTY_0_VERSION_BYTE 0
+#define FULL_0_VERSION_BYTE ((unsigned char) (1 << 7))
+#define IS_EMPTY_BYTE(n) (!((n) & (1 << 7)))
+#define VERSION_BYTE(n) ((n) & ~(1 << 7))
+#define NEW_VERSION_BYTE(n, v) ((v) | ((n) & (1 << 7)))
+
 #define BITMASK(len) ((1 << len) - 1)
 // A 'slice' of a 32 bit integer, encompassing bits [start,start+len-1]:
 #define SLICE(n,start,len) ((n >> (32 - start - len)) & ((1 << len) - 1))
@@ -114,7 +120,7 @@ typedef struct concurrent_pool
 
 typedef struct concurrent_tree_pool_node
 {
-	atomic_uint child_has_tasks[MAX_DEGREE];
+	atomic_uchar child_has_tasks[MAX_DEGREE];
 //	atomic_uint * child_has_tasks; // any tasks in K-th child? (+ version)
 //	atomic_uint tasks_left;
 //	atomic_uint tasks_right;

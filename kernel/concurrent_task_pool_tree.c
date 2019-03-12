@@ -22,7 +22,7 @@ static inline int has_tasks_k(concurrent_tree_pool_node node, int degree)
 		return 1;
 
 	for(int i=0;i< degree;i++)
-		if(!IS_EMPTY(node.child_has_tasks[i]))
+		if(!IS_EMPTY_BYTE(node.child_has_tasks[i]))
 			return 1;
 
 	return 0;
@@ -54,20 +54,20 @@ static inline int update_father(int index, concurrent_tree_pool_node* pool, int 
 	atomic_fetch_add(&(pool[index].pending), 1);
 	int parent_index=PARENT_K(index, degree);
 	int child_index = (index - 1) % degree;
-	unsigned int old = 0, new = 0;
+	unsigned char old = 0, new = 0;
 	int success = 0;
 
 	old = LOAD(pool[parent_index].child_has_tasks[child_index]);
-	new = (value)?(FULL_0_VERSION):(EMPTY_0_VERSION);
-	new = NEW_VERSION(new, VERSION(old) + 1);
+	new = (value)?(FULL_0_VERSION_BYTE):(EMPTY_0_VERSION_BYTE);
+	new = NEW_VERSION_BYTE(new, VERSION_BYTE(old) + 1);
 
 	success = CAS(&(pool[parent_index].child_has_tasks[child_index]), &old, new);
 
 #ifdef TASKPOOL_DEBUG
-	printf("update_father(): Updating parent index %d of index %d from (%d, %d, %d) to (%d, %d, %d) returned %d\n",
+	printf("update_father(): Updating parent index %d of index %d from (%u, %u, %u) to (%u, %u, %u) returned %d\n",
 			parent_index, index,
-			old, IS_EMPTY(old), VERSION(old),
-			new, IS_EMPTY(new), VERSION(new),
+			old, IS_EMPTY_BYTE(old), VERSION_BYTE(old),
+			new, IS_EMPTY_BYTE(new), VERSION_BYTE(new),
 			success);
 #endif
 
@@ -100,7 +100,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 		concurrent_tree_pool_node parent_node = pool[parent_index];
 		int child_index = (crt_index - 1) % degree;
 
-		if(IS_EMPTY(pool[parent_index].child_has_tasks[child_index]) == have_tasks || pool[crt_index].pending > 0)
+		if(IS_EMPTY_BYTE(pool[parent_index].child_has_tasks[child_index]) == have_tasks || pool[crt_index].pending > 0)
 		{
 #ifdef TASKPOOL_DEBUG
 			printf("update_node_metadata(index=%d, value=%d), updating parent index %d\n", index, value, parent_index);
@@ -229,7 +229,7 @@ static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree,
 
 		for(int i=0;i<degree;i++)
 		{
-			if(!IS_EMPTY(pool[index].child_has_tasks[i]))
+			if(!IS_EMPTY_BYTE(pool[index].child_has_tasks[i]))
 			{
 				full_children[no_full_children++] = i;
 			}
