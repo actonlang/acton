@@ -318,7 +318,8 @@ concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int 
 
 	concurrent_tree_pool_node * tpn = (concurrent_tree_pool_node *) malloc(total_size);
 
-	memset(tpn, 0, total_size);
+	if(tpn)
+		memset(tpn, 0, total_size);
 
 /*
 
