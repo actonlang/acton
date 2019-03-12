@@ -76,9 +76,9 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 
 	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height, degree));
 
-#ifdef TASKPOOL_DEBUG
+// #ifdef TASKPOOL_DEBUG
 	printf("Allocated %d / %d trees\n", allocated, NO_PREALLOCATED_TREES(tree_height, degree));
-#endif
+// #endif
 
 	if(allocated < 1)
 	{

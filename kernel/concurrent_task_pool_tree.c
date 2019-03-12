@@ -319,7 +319,17 @@ concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int 
 	concurrent_tree_pool_node * tpn = (concurrent_tree_pool_node *) malloc(total_size);
 
 	if(tpn)
+	{
 		memset(tpn, 0, total_size);
+
+// #ifdef TASKPOOL_DEBUG
+		printf("Allocated tree of size %d/%d\n", total_nodes, total_size);
+// #endif
+	}
+	else
+	{
+		printf("Failed to allocate tree of size %d/%d\n", total_nodes, total_size);
+	}
 
 /*
 

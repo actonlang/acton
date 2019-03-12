@@ -18,7 +18,7 @@
 #define PRECALCULATE_TREE_LEVEL_SIZES
 #define NO_PREALLOCATED_ELEMENTS 10000000
 
-#define CALCULATE_TREE_SIZE(h,d) (((int) pow(d, h)) - 1)
+#define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
 #define _NO_PREALLOCATED_TREES(h,d) (((int) (2 * NO_PREALLOCATED_ELEMENTS)) / (CALCULATE_TREE_SIZE(h,d)))
 #define MAX(a, b) ((a>b)?(a):(b))
 #define NO_PREALLOCATED_TREES(h,d) (MAX(_NO_PREALLOCATED_TREES(h,d),1))
