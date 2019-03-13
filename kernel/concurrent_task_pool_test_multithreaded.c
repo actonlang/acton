@@ -92,7 +92,7 @@ void *thread_main_put(void *arg)
 #ifdef KEEP_TASKS
 			status = put(tasks[thread_id*(no_tasks/no_threads)+i], pool);
 #else
-			status = put((WORD) 1, pool);
+			status = put((WORD) (thread_id * (no_tasks/no_threads)) + i, pool);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
@@ -331,6 +331,9 @@ int main(int argc, char **argv) {
     put_errs = (long *) malloc(no_threads * sizeof(long));
     get_errs = (long *) malloc(no_threads * sizeof(long));
 
+
+	int last_block_start = pool->producer_tree->node_id;
+
     	start_put = clock() ;
 
     	for(int th_id = 0; th_id < no_threads; ++th_id)
@@ -369,7 +372,9 @@ int main(int argc, char **argv) {
 		total_get_errs += get_errs[th_id];
 	}
 
-	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%f, get_tpt=%f, get_latency_ns=%f, put_errs=%ld, get_errs=%ld\n",
+	int last_block_end = pool->producer_tree->node_id;
+
+	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%f, get_tpt=%f, get_latency_ns=%f, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d\n",
 			(benchmark_target == BENCHMARK_TASKPOOL)?"taskpool":((benchmark_target == BENCHMARK_LIBLFDS_QUEUE)?"lfds_queue":"lfds_ringbuffer"),
 			no_tasks, no_threads, tree_height, k_retries, ring_buffer_size,
 			(end_put-start_put)/(double)CLOCKS_PER_SEC,
@@ -378,7 +383,8 @@ int main(int argc, char **argv) {
 			(((end_put-start_put)/((double)CLOCKS_PER_SEC / 1000000000))) / no_tasks,
 			no_tasks / ((end_get-start_get)/(double)CLOCKS_PER_SEC),
 			(((end_get-start_get)/((double)CLOCKS_PER_SEC / 1000000000))) / no_tasks,
-			total_put_errs, total_get_errs);
+			total_put_errs, total_get_errs,
+			last_block_start + 1, last_block_end - last_block_start);
 
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 		free_pool(pool);

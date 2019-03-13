@@ -210,7 +210,7 @@ static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree,
 
 	while(1)
 	{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_DEBUG2
 		printf("find_node_for_get: index=%d, data=%ld, grabbed=%d, dirty=%d, left_empty=(%d, %d, %d), right_empty=(%d, %d, %d)\n",
 				index, (long) pool[index].data, atomic_load(&pool[index].grabbed), atomic_load(&pool[index].dirty),
 				pool[index].tasks_left, IS_EMPTY(pool[index].tasks_left), VERSION(pool[index].tasks_left),
@@ -322,9 +322,9 @@ concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int 
 	{
 		memset(tpn, 0, total_size);
 
-// #ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_DEBUG
 		printf("Allocated tree of size %d/%d\n", total_nodes, total_size);
-// #endif
+#endif
 	}
 	else
 	{

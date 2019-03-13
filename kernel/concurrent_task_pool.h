@@ -12,16 +12,17 @@
 
 #define DEFAULT_TREE_HEIGHT 5
 #define DEFAULT_K_NO_TRIALS 8
-#define DEFAULT_DEGREE 2
-#define MAX_DEGREE 2
+#define DEFAULT_DEGREE 6
+#define MAX_DEGREE 6
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
 #define NO_PREALLOCATED_ELEMENTS 10000000
 
 #define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
-#define _NO_PREALLOCATED_TREES(h,d) (((int) (2 * NO_PREALLOCATED_ELEMENTS)) / (CALCULATE_TREE_SIZE(h,d)))
+#define TREE_FILL_FACTOR(h,d,k) ((int) pow(d,((k+2)*h/(k+3)))) // == degree^^((k+2)/(k+3)*height)
+#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (20 * NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
 #define MAX(a, b) ((a>b)?(a):(b))
-#define NO_PREALLOCATED_TREES(h,d) (MAX(_NO_PREALLOCATED_TREES(h,d),1))
+#define NO_PREALLOCATED_TREES(h,d,k) (MAX(_NO_PREALLOCATED_TREES(h,d,k),1))
 
 // Macros for version handling (ABA etc):
 
