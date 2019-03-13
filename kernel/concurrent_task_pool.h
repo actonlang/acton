@@ -58,8 +58,8 @@
 
 // CAS and atomic load utility macros:
 
-#define USE_ATOMIC_LOAD
-#define USE_MEMORY_ORDER_RELAXED
+// #define USE_ATOMIC_LOAD
+// #define USE_MEMORY_ORDER_RELAXED
 
 #ifdef USE_ATOMIC_LOAD
 #ifdef USE_MEMORY_ORDER_RELAXED
