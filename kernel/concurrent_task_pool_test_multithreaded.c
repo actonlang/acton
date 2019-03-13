@@ -331,8 +331,7 @@ int main(int argc, char **argv) {
     put_errs = (long *) malloc(no_threads * sizeof(long));
     get_errs = (long *) malloc(no_threads * sizeof(long));
 
-
-	int last_block_start = pool->producer_tree->node_id;
+	int last_block_start = get_last_block_id(pool);
 
     	start_put = clock() ;
 
@@ -372,11 +371,12 @@ int main(int argc, char **argv) {
 		total_get_errs += get_errs[th_id];
 	}
 
-	int last_block_end = pool->producer_tree->node_id;
+	int last_block_end = get_last_block_id(pool);
+	int last_used_block = pool->producer_tree->node_id;
 
-	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%f, get_tpt=%f, get_latency_ns=%f, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d\n",
+	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_degree=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%f, get_tpt=%f, get_latency_ns=%f, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d, unused_blocks=%d, block_size=%d, block_fill=%d\n",
 			(benchmark_target == BENCHMARK_TASKPOOL)?"taskpool":((benchmark_target == BENCHMARK_LIBLFDS_QUEUE)?"lfds_queue":"lfds_ringbuffer"),
-			no_tasks, no_threads, tree_height, k_retries, ring_buffer_size,
+			no_tasks, no_threads, pool->degree, pool->tree_height, pool->k_no_trials, ring_buffer_size,
 			(end_put-start_put)/(double)CLOCKS_PER_SEC,
 			(end_get-start_get)/(double)CLOCKS_PER_SEC,
 			no_tasks / ((end_put-start_put)/(double)CLOCKS_PER_SEC),
@@ -384,7 +384,9 @@ int main(int argc, char **argv) {
 			no_tasks / ((end_get-start_get)/(double)CLOCKS_PER_SEC),
 			(((end_get-start_get)/((double)CLOCKS_PER_SEC / 1000000000))) / no_tasks,
 			total_put_errs, total_get_errs,
-			last_block_start + 1, last_block_end - last_block_start);
+			last_block_start + 1, last_block_end - last_block_start, last_block_end - last_used_block,
+			CALCULATE_TREE_SIZE(pool->tree_height, pool->degree),
+			TREE_FILL_FACTOR(pool->tree_height, pool->degree, pool->k_no_trials));
 
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 		free_pool(pool);

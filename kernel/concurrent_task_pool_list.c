@@ -140,6 +140,19 @@ void free_pool(concurrent_pool * p)
 	free(p);
 }
 
+int get_last_block_id(concurrent_pool * p)
+{
+	concurrent_pool_node_ptr pn = p->head, next_pn = NULL;
+
+	while(pn->next != NULL)
+	{
+		next_pn = pn->next;
+		pn = next_pn;
+	}
+
+	return pn->node_id;
+}
+
 static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_node_ptr producer_tree, concurrent_pool_node_ptr_pair c_ptrs_in)
 {
 	atomic_fetch_add(&(pool->old_producers), 1);

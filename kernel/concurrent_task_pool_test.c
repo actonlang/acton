@@ -61,8 +61,6 @@ int main(int argc, char **argv) {
 	if(k_retries > 0)
 		set_no_trials(pool, k_retries);
 
-	int last_block_start = pool->producer_tree->node_id;
-
 	start_put = clock() ;
 
 	for(long i=0;i<no_tasks;i++)
@@ -91,8 +89,6 @@ int main(int argc, char **argv) {
 	}
 
 	end_get = clock();
-
-	int last_block_end = pool->producer_tree->node_id;
 
 	printf("no_tasks=%d, tree_height=%d, k_retries=%d, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%f, get_tpt=%f, get_latency_ns=%f\n",
 			no_tasks, (tree_height>0)?tree_height:DEFAULT_TREE_HEIGHT, (k_retries>0)?k_retries:DEFAULT_K_NO_TRIALS,
