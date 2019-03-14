@@ -86,6 +86,8 @@
 #define CAS atomic_compare_exchange_strong
 #endif
 
+#define FAST_PUT
+#define FAST_GET
 
 
 // #define TASKPOOL_DEBUG
@@ -158,8 +160,8 @@ int get_last_block_id(concurrent_pool * p);
 
 concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int * precomputed_level_sizes);
 void free_tree_pool(concurrent_tree_pool_node * p);
-int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes);
-int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree);
+int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int degree, int tree_height, int k_no_trials, int * precomputed_level_sizes);
+int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int tree_height, int * precomputed_level_sizes);
 int preallocate_trees(concurrent_pool* pool, int no_trees);
 
 #endif /* KERNEL_CONCURRENT_TASK_POOL_H_ */

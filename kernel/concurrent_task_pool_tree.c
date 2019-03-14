@@ -134,6 +134,24 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 	}
 }
 
+static inline int put_in_node_simple(int index, concurrent_tree_pool_node* pool, int degree, WORD task)
+{
+	int crt_index = index;
+
+	unsigned char old = LOAD(pool[crt_index].dirty);
+
+	if(old == 0 && CAS(&pool[crt_index].dirty, &old, 1))
+	{
+		pool[crt_index].data = task;
+
+		return crt_index;
+	}
+	else
+	{
+		return -1;
+	}
+}
+
 static inline int put_in_node(int index, concurrent_tree_pool_node* pool, int degree, WORD task)
 {
 	int crt_index = index;
@@ -157,13 +175,33 @@ static inline int put_in_node(int index, concurrent_tree_pool_node* pool, int de
 
 static inline int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
 {
+	int index;
+
+#ifdef FAST_PUT
+	int total_nodes = 0;
+
+	if(precomputed_level_sizes!=NULL)
+	{
+		total_nodes = precomputed_level_sizes[tree_height-1];
+	}
+	else
+	{
+		total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
+	}
+
+	index=put_in_node_simple(fastrand() % total_nodes, pool, degree, task);
+
+	if(index!=-1)
+		return index;
+#endif
+
 	for(int level=1;level<tree_height;level++)
 	{
 		int no_trials = ((level==tree_height-1)?k_no_trials:1);
 
 		for(int trials=0;trials<no_trials;trials++)
 		{
-			int index=put_in_node(random_in_level(level, degree, precomputed_level_sizes), pool, degree, task);
+			index=put_in_node(random_in_level(level, degree, precomputed_level_sizes), pool, degree, task);
 			if(index!=-1)
 				return index;
 		}
@@ -172,7 +210,7 @@ static inline int find_node_for_put(WORD task, concurrent_tree_pool_node* pool, 
 	return -1;
 }
 
-int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int degree, int k_no_trials, int * precomputed_level_sizes)
+int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int degree, int tree_height, int k_no_trials, int * precomputed_level_sizes)
 {
 	// Handle root insertions separately for higher speed:
 
@@ -204,9 +242,30 @@ int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int tree_height, int
 
 // Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
-static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree, int * index_p)
+static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree, int tree_height, int * index_p, int * precomputed_level_sizes)
 {
 	int index = 0;
+
+#ifdef FAST_GET
+	int total_nodes = 0;
+
+	if(precomputed_level_sizes!=NULL)
+	{
+		total_nodes = precomputed_level_sizes[tree_height-1];
+	}
+	else
+	{
+		total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
+	}
+
+	index=fastrand() % total_nodes;
+
+	if((pool[index].data != NULL))
+	{
+		*index_p = index;
+		return 0;
+	}
+#endif
 
 	while(1)
 	{
@@ -251,7 +310,7 @@ static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree,
 	}
 }
 
-int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree)
+int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int tree_height, int * precomputed_level_sizes)
 {
 	while(1)
 	{
@@ -265,7 +324,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree)
 		// Returns either a node with an existing, non-grabbed task, or a node with empty children:
 
 		int index = -1;
-		int status = find_node_for_get(pool, degree, &index);
+		int status = find_node_for_get(pool, degree, tree_height, &index, precomputed_level_sizes);
 
 		// This is the case when find_node_for_get() returned a node with empty children.
 		// Update its ancestor's metadata and keep trying to get a task from the current tree:

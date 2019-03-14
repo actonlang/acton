@@ -263,7 +263,7 @@ int put(WORD task, concurrent_pool* pool)
 
 	while(1)
 	{
-		int put_index = put_in_tree(task, producer_tree->tree, pool->tree_height, pool->degree, pool->k_no_trials, precalculated_level_sizes);
+		int put_index = put_in_tree(task, producer_tree->tree, pool->degree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
 
 		if(put_index >= 0)
 		{
@@ -335,7 +335,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in prev tree %d\n", consumer_ptrs.prev->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.prev->tree, pool->degree)==0)
+			if(get_from_tree(task, consumer_ptrs.prev->tree, pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 			printf("get() found task %ld in prev tree %d\n", (long) *task, consumer_ptrs.prev->node_id);
@@ -351,7 +351,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.crt->tree, pool->degree)==0)
+			if(get_from_tree(task, consumer_ptrs.crt->tree, pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 				printf("get() found task %ld in crt tree %d\n", (long) *task, consumer_ptrs.crt->node_id);
