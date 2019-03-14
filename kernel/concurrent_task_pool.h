@@ -53,7 +53,7 @@
 
 // Macros for k-ary trees:
 
-#define CHILD_K(p,k,d) (d*(p) + (k) + 1)
+#define CHILD_K(p,k,d) ((d)*(p) + (k) + 1)
 #define PARENT_K(i,d) (((i)-1)/d)
 
 // CAS and atomic load utility macros:
@@ -86,8 +86,9 @@
 #define CAS atomic_compare_exchange_strong
 #endif
 
-#define FAST_PUT
-#define FAST_GET
+// #define FAST_PUT
+// #define FAST_GET
+#define FAST_GET_PER_LEVEL
 
 
 // #define TASKPOOL_DEBUG

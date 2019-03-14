@@ -284,6 +284,15 @@ static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree,
 			return 0;
 		}
 
+#ifdef FAST_GET_PER_LEVEL
+		int rand_child = fastrand() % degree;
+		if(!IS_EMPTY_BYTE(pool[index].child_has_tasks[rand_child]))
+		{
+			index = CHILD_K(index, rand_child, degree);
+			continue;
+		}
+#endif
+
 		int full_children[MAX_DEGREE], no_full_children=0;
 
 		for(int i=0;i<degree;i++)
