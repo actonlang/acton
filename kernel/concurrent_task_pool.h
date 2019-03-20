@@ -129,8 +129,6 @@ typedef struct concurrent_tree_pool_node
 	atomic_uchar grabbed;	// was this task grabbed?
 	atomic_uint pending;		// pending concurrent updates to parent
 
-//	atomic_uint * _child_has_tasks; // pointer containing all child_has_tasks regions for all nodes in a tree (to optimize malloc overhead)
-
 	WORD data;					// actual task
 } concurrent_tree_pool_node;
 

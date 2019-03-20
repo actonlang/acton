@@ -399,29 +399,11 @@ concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int 
 		printf("Failed to allocate tree of size %d/%d\n", total_nodes, total_size);
 	}
 
-/*
-
-	tpn->_child_has_tasks = (atomic_uint *) malloc(total_nodes * degree * sizeof(atomic_uint));
-
-	if(!tpn->_child_has_tasks)
-	{
-		free_tree_pool(tpn);
-		return NULL;
-	}
-
-	memset(tpn->_child_has_tasks, 0, total_nodes * degree * sizeof(atomic_uint));
-
-	for(int i=0;i<total_nodes;i++)
-		tpn[i].child_has_tasks = tpn->_child_has_tasks + i*degree;
-*/
-
 	return tpn;
 }
 
 void free_tree_pool(concurrent_tree_pool_node * p)
 {
-//	free(p->child_has_tasks);
-
 	free(p);
 }
 
