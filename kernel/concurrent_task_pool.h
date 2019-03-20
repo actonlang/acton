@@ -16,11 +16,11 @@
 #define MAX_DEGREE 6
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
-#define NO_PREALLOCATED_ELEMENTS 10000000
+#define NO_PREALLOCATED_ELEMENTS 50000000
 
 #define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
 #define TREE_FILL_FACTOR(h,d,k) ((int)(pow((double)d,(((double)k+2)*h/(k+3))) / (d - 1))) // == (degree^^((k+2)/(k+3)*height))/(degree-1)
-#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (4*NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
+#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (8*NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
 #define MAX(a, b) ((a>b)?(a):(b))
 #define NO_PREALLOCATED_TREES(h,d,k) (MAX(_NO_PREALLOCATED_TREES(h,d,k),1))
 
@@ -125,9 +125,6 @@ typedef struct concurrent_pool
 typedef struct concurrent_tree_pool_node
 {
 	atomic_uchar child_has_tasks[MAX_DEGREE];
-//	atomic_uint * child_has_tasks; // any tasks in K-th child? (+ version)
-//	atomic_uint tasks_left;
-//	atomic_uint tasks_right;
 	atomic_uchar dirty;		// any task was placed in this node?
 	atomic_uchar grabbed;	// was this task grabbed?
 	atomic_uint pending;		// pending concurrent updates to parent

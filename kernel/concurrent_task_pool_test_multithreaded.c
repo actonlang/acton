@@ -101,33 +101,35 @@ void *thread_main_put(void *arg)
 		printf("[thread %d put] start_time=%lld, no_tasks=%d\n", thread_id, start_put, no_tasks/no_threads);
 	}
 
-	for(long i=0;i<no_tasks/no_threads;i++)
+	int first_task_index = thread_id*(no_tasks/no_threads);
+
+	for(long i=first_task_index;i<first_task_index+no_tasks/no_threads;i++)
 	{
 		if(benchmark_target == BENCHMARK_TASKPOOL)
 		{
 #ifdef KEEP_TASKS_PUT
-			status = put(tasks[thread_id*(no_tasks/no_threads)+i], pool);
+			tasks[i]= (WORD) (i+1);
+			status = put(tasks[i], pool);
 #else
-			status = put((WORD) (thread_id * (no_tasks/no_threads)) + i, pool);
+			status = put((WORD) (i + 1), pool);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 		{
 #ifdef KEEP_TASKS_PUT
-			lfds711_queue_umm_enqueue(&qs, &qes[thread_id * (no_tasks/no_threads) + i]);
+			LFDS711_QUEUE_UMM_SET_VALUE_IN_ELEMENT(qes[i],(WORD) (i + 1));
+			lfds711_queue_umm_enqueue(&qs, &qes[i]);
 #else
 			// NOTE: Due to the way LFDS implements queue elements, this will not work correctly
 			// (will corrupt next pointers and the list will end up with a single element).
 			// Therefore, we use KEEP_TASKS_PUT when benchmarking the lfds711_queue:
-			LFDS711_QUEUE_UMM_SET_VALUE_IN_ELEMENT(qe,(WORD) (thread_id * (no_tasks/no_threads)) + (i+1));
+			LFDS711_QUEUE_UMM_SET_VALUE_IN_ELEMENT(qe,(WORD) (i + 1));
 			lfds711_queue_umm_enqueue(&qs, &qe);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_RINGBUFFER)
 		{
-			// (void *) (lfds711_pal_uint_t) 1
-
-			lfds711_ringbuffer_write(&rs, NULL, NULL, &overwrite_occurred_flag, NULL, NULL);
+			lfds711_ringbuffer_write(&rs, (void *) (lfds711_pal_uint_t) (i+1), NULL, &overwrite_occurred_flag, NULL, NULL);
 
 		    if(overwrite_occurred_flag == LFDS711_MISC_FLAG_RAISED )
 		    		status=1;
@@ -175,24 +177,33 @@ void *thread_main_get(void *arg)
 		printf("[thread %d get] start_time=%lld, no_tasks=%d\n", thread_id, start_get, no_tasks/no_threads);
 	}
 
-//	for(long i=0;i<no_tasks/no_threads;i++)
 	do
 	{
 		if(benchmark_target == BENCHMARK_TASKPOOL)
 		{
-#ifdef KEEP_TASKS
-			status = get(recovered_tasks + thread_id*(no_tasks/no_threads) + i, pool);
+#ifdef KEEP_TASKS_GET
+			status = get(recovered_tasks + thread_id*(no_tasks/no_threads) + dequeued_elements, pool);
 #else
 			status = get(&recovered_task, pool);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 		{
+#ifdef KEEP_TASKS_GET
 			status = !lfds711_queue_umm_dequeue(&qs, &qep);
+			recovered_tasks[thread_id*(no_tasks/no_threads) + dequeued_elements] = (WORD) LFDS711_QUEUE_UMM_GET_VALUE_FROM_ELEMENT(*qep);
+#else
+			status = !lfds711_queue_umm_dequeue(&qs, &qep);
+			LFDS711_QUEUE_UMM_GET_VALUE_FROM_ELEMENT(*qep);
+#endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_RINGBUFFER)
 		{
+#ifdef KEEP_TASKS_GET
+			status = !lfds711_ringbuffer_read(&rs, recovered_tasks + thread_id*(no_tasks/no_threads) + dequeued_elements, NULL);
+#else
 			status = !lfds711_ringbuffer_read(&rs, &buffer_read_element, NULL);
+#endif
 		}
 
 		if(status==0)
@@ -205,9 +216,7 @@ void *thread_main_get(void *arg)
 					thread_id, (int) ((benchmark_target == BENCHMARK_TASKPOOL)?(recovered_task):(LFDS711_QUEUE_UMM_GET_VALUE_FROM_ELEMENT(*qep))));
 	} while(1);
 
-
 	dequeued_elems[thread_id]=dequeued_elements;
-
 
 	if(verbose)
 	{
@@ -313,21 +322,17 @@ int main(int argc, char **argv) {
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 	{
 		tasks = (WORD*) malloc(no_tasks * sizeof(WORD));
-		for(long i=0;i<no_tasks;i++)
-			tasks[i]= (WORD) (i+1);
 	}
 	else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 	{
 		qes = (struct lfds711_queue_umm_element *) malloc(no_tasks * sizeof(struct lfds711_queue_umm_element));
-		for(long i=0;i<no_tasks;i++)
-			LFDS711_QUEUE_UMM_SET_VALUE_IN_ELEMENT(qes[i],(WORD) (i+1));
 	}
 #endif
 
 #ifdef KEEP_TASKS_GET
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 	{
-		recovered_tasks(WORD*) malloc(no_tasks * sizeof(WORD));
+		recovered_tasks = (WORD*) malloc(no_tasks * sizeof(WORD));
 	}
 	else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 	{
