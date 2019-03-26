@@ -122,6 +122,8 @@ typedef struct concurrent_pool
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	int * level_sizes;									// precomputed array of level sizes (used to speed up pool inserts)
 #endif
+
+	concurrent_pool_node_ptr _last_prealloc_block;
 } concurrent_pool;
 
 typedef struct concurrent_tree_pool_node
@@ -134,7 +136,7 @@ typedef struct concurrent_tree_pool_node
 	WORD data;					// actual task
 } concurrent_tree_pool_node;
 
-// Note: Actual array of "struct concurrent_tree_pool_node" tree nodes (array representation of the complete tree)
+// Actual array of "struct concurrent_tree_pool_node" tree nodes (array representation of the complete tree)
 // is allocated right after the "struct concurrent_pool_node" metadata, in the same mem chunk,
 // and accessible via the TREE_PTR) macro:
 
@@ -163,6 +165,6 @@ concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int 
 void free_tree_pool(concurrent_tree_pool_node * p);
 int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int degree, int tree_height, int k_no_trials, int * precomputed_level_sizes);
 int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int tree_height, int * precomputed_level_sizes);
-int preallocate_trees(concurrent_pool* pool, int no_trees);
+int preallocate_trees(concurrent_pool* pool, int no_trees, int per_tree_data_size, char * prealloc_mem);
 
 #endif /* KERNEL_CONCURRENT_TASK_POOL_H_ */

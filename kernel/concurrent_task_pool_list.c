@@ -16,33 +16,40 @@
 
 #include "concurrent_task_pool.h"
 
-concurrent_pool_node * allocate_pool_node(int node_id, int tree_height, int degree, int * precomputed_level_sizes)
+concurrent_pool_node * allocate_pool_node(int node_id, int tree_height, int degree, int * precomputed_level_sizes, concurrent_pool_node * prealloc_mem)
 {
 	concurrent_pool_node * pn = NULL;
 	int total_nodes, total_size;
 
-	if(precomputed_level_sizes!=NULL)
-		total_nodes = precomputed_level_sizes[tree_height-1];
-	else
-		total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
-
-	total_size = total_nodes * sizeof(struct concurrent_tree_pool_node);
-
-	// Actual array of "total_nodes" tree nodes is allocated right after the "struct concurrent_pool_node" metadata:
-
-	pn = (concurrent_pool_node *) malloc(sizeof(struct concurrent_pool_node) + total_size);
-
-	if(pn == NULL)
+	if(prealloc_mem != NULL)
 	{
-		printf("Failed to allocate tree of size %d/%d\n", total_nodes, total_size);
-		return NULL;
+		pn=prealloc_mem;
 	}
+	else
+	{
+		if(precomputed_level_sizes!=NULL)
+			total_nodes = precomputed_level_sizes[tree_height-1];
+		else
+			total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
 
-	memset(pn, 0, sizeof(struct concurrent_pool_node) + total_size);
+		total_size = total_nodes * sizeof(struct concurrent_tree_pool_node);
 
-#ifdef TASKPOOL_DEBUG
-	printf("Allocated tree of size %d/%d\n", total_nodes, total_size);
-#endif
+		// Actual array of "total_nodes" tree nodes is allocated right after the "struct concurrent_pool_node" metadata:
+
+		pn = (concurrent_pool_node *) malloc(sizeof(struct concurrent_pool_node) + total_size);
+
+		if(pn == NULL)
+		{
+			printf("Failed to allocate tree of size %d/%d\n", total_nodes, total_size);
+			return NULL;
+		}
+
+		memset(pn, 0, sizeof(struct concurrent_pool_node) + total_size);
+
+	#ifdef TASKPOOL_DEBUG
+		printf("Allocated tree of size %d/%d\n", total_nodes, total_size);
+	#endif
+	}
 
 	pn->node_id = node_id;
 	atomic_init(&pn->next, NULL);
@@ -57,14 +64,27 @@ void free_pool_node(concurrent_pool_node * p)
 
 concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 {
-	concurrent_pool * p = (concurrent_pool *) malloc(sizeof(struct concurrent_pool));
+	int nodes_per_tree = CALCULATE_TREE_SIZE(tree_height, degree);
+	int per_tree_data_size = nodes_per_tree * sizeof(struct concurrent_tree_pool_node);
+	int no_prealloced_trees = NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials);
+
+	// The list of all pre-allocated tree blocks is allocated in the memchunk right after the pool's metadata.
+	// In turn, for each pre-allocated tree node block, the actual array of "nodes_per_tree" tree nodes is also
+	// allocated in the chunk right after the "struct concurrent_pool_node" metadata. So we use a single malloc for all these:
+
+	concurrent_pool * p = (concurrent_pool *) malloc(sizeof(struct concurrent_pool) + no_prealloced_trees * (sizeof(struct concurrent_pool_node) + per_tree_data_size));
 
 	if(p == NULL)
 	{
+		printf("Failed to allocate pool of %d blocks, each of size %d/%d\n", no_prealloced_trees, nodes_per_tree, per_tree_data_size);
 		return NULL;
 	}
 
-	memset(p, 0, sizeof(struct concurrent_pool));
+	memset(p, 0, sizeof(struct concurrent_pool) + no_prealloced_trees * (sizeof(struct concurrent_pool_node) + per_tree_data_size));
+
+#ifdef TASKPOOL_DEBUG
+	printf("Pre-allocated tree of %d blocks, each of size %d/%d\n", no_prealloced_trees, nodes_per_tree, per_tree_data_size);
+#endif
 
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
 	p->level_sizes = (int *) malloc(tree_height * sizeof(int));
@@ -83,17 +103,7 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 	p->degree = degree;
 	p->k_no_trials = k_no_trials;
 
-	int allocated = preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials));
-
-#ifdef TASKPOOL_DEBUG
-	printf("Allocated %d / %d trees\n", allocated, NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials));
-#endif
-
-	if(allocated < 1)
-	{
-		free_pool(p);
-		return NULL;
-	}
+	preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials), per_tree_data_size, (char *)(&p[1]));
 
 	atomic_init(&p->producer_tree, p->head);
 	concurrent_pool_node_ptr_pair cts = { .prev = NULL, .crt = p->head };
@@ -134,7 +144,7 @@ void set_no_trials(concurrent_pool * pool, int no_trials)
 
 void free_pool(concurrent_pool * p)
 {
-	concurrent_pool_node_ptr pn = p->head, next_pn = NULL;
+	concurrent_pool_node_ptr pn = p->_last_prealloc_block->next, next_pn = NULL;
 
 	while(pn != NULL)
 	{
@@ -204,29 +214,20 @@ static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_
 // Note: This function is NOT supposed to be thread safe. Only call in pool constructor.
 // Returns the number of successfully pre-allocated tree pools.
 
-int preallocate_trees(concurrent_pool* pool, int no_trees)
+int preallocate_trees(concurrent_pool* pool, int no_trees, int per_tree_data_size, char * prealloc_mem)
 {
 	concurrent_pool_node_ptr crt_tree = NULL;
-
-	// Find end of tree list:
-
-	if(pool->producer_tree != NULL)
-		for(crt_tree = pool->producer_tree; crt_tree->next != NULL; crt_tree = crt_tree->next);
 
 	for(int i=0;i<no_trees;i++)
 	{
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
-		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, pool->level_sizes);
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(i+1, pool->tree_height, pool->degree, pool->level_sizes, (concurrent_pool_node *)(prealloc_mem + i*(sizeof(struct concurrent_pool_node) + per_tree_data_size)));
 #else
-		concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, NULL);
+		concurrent_pool_node_ptr pool_node = allocate_pool_node(i+1, pool->tree_height, pool->degree, NULL, (concurrent_pool_node *)(prealloc_mem + i*(sizeof(struct concurrent_pool_node) + per_tree_data_size)));
 #endif
-
-		if(pool_node == NULL)
-			return i;
 
 		if(crt_tree != NULL)
 		{
-			pool_node->node_id = crt_tree->node_id + 1;
 			atomic_init(&crt_tree->next, pool_node);
 		}
 		else
@@ -237,6 +238,8 @@ int preallocate_trees(concurrent_pool* pool, int no_trees)
 		crt_tree = pool_node;
 	}
 
+	pool->_last_prealloc_block=crt_tree;
+
 	return no_trees;
 }
 
@@ -245,9 +248,9 @@ static inline int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_pt
 {
 	concurrent_pool_node_ptr producer_tree = producer_tree_in, next_ptr = LOAD(producer_tree_in->next);
 #ifdef PRECALCULATE_TREE_LEVEL_SIZES
-	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, pool->level_sizes);
+	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, pool->level_sizes, NULL);
 #else
-	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, NULL);
+	concurrent_pool_node_ptr pool_node = allocate_pool_node(0, pool->tree_height, pool->degree, NULL, NULL);
 #endif
 
 	if(pool_node == NULL)

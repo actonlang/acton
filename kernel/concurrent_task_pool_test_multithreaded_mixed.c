@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
 
 	int status = 0, opt, n;
 	long total_put_errs = 0, total_get_errs = 0;
-	int long long unsigned start_put, end_put, start_get, end_get;
+	int long long unsigned start_put, end_put, start_get, end_get, start_prealloc, end_prealloc;
 
 	unsigned int seed = time(NULL);
 	srand(seed);
@@ -368,6 +368,7 @@ int main(int argc, char **argv) {
 	}
 #endif
 
+	GET_HIGHRES_TIME(&start_prealloc);
 
 	// Taskpool init:
 	if(benchmark_target == BENCHMARK_TASKPOOL)
@@ -386,6 +387,8 @@ int main(int argc, char **argv) {
 
 		lfds711_ringbuffer_init_valid_on_current_logical_core(&rs, re, (ring_buffer_size) + 1, NULL);
 	}
+
+	GET_HIGHRES_TIME(&end_prealloc);
 
     pthread_t threads_put[no_threads/2];
     pthread_t threads_get[no_threads/2];
@@ -466,7 +469,7 @@ int main(int argc, char **argv) {
 	int block_size = (benchmark_target == BENCHMARK_TASKPOOL)?(CALCULATE_TREE_SIZE(pool->tree_height, pool->degree)):-1;
 	int block_fill = (benchmark_target == BENCHMARK_TASKPOOL)?(TREE_FILL_FACTOR(pool->tree_height, pool->degree, pool->k_no_trials)):-1;
 
-	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_degree=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%lld, get_tpt=%f, get_latency_ns=%lld, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d, unused_blocks=%d, block_size=%d, block_fill=%d\n",
+	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_degree=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%lld, get_tpt=%f, get_latency_ns=%lld, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d, unused_blocks=%d, block_size=%d, block_fill=%d, total_seconds_prealloc=%f\n",
 			(benchmark_target == BENCHMARK_TASKPOOL)?"taskpool":((benchmark_target == BENCHMARK_LIBLFDS_QUEUE)?"lfds_queue":"lfds_ringbuffer"),
 			no_tasks, no_threads/2, tree_degree_pool, tree_height_pool, k_retries_pool, ring_buffer_size,
 			(end_put-start_put)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND,
@@ -477,7 +480,8 @@ int main(int argc, char **argv) {
 			(end_get-start_get) / (no_tasks-total_get_errs),
 			total_put_errs, total_get_errs,
 			last_block_start + 1, last_block_end - last_block_start, last_block_end - last_used_block,
-			block_size, block_fill);
+			block_size, block_fill,
+			(end_prealloc-start_prealloc)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND);
 
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 		free_pool(pool);
