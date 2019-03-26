@@ -12,12 +12,13 @@
 
 #define DEFAULT_TREE_HEIGHT 3
 #define DEFAULT_K_NO_TRIALS 2
-#define DEFAULT_DEGREE 25
 #define MAX_DEGREE 25
+#define DEFAULT_DEGREE MAX_DEGREE
 
-#define PRECALCULATE_TREE_LEVEL_SIZES
 #define DEFAULT_PREALLOCATED_ELEMENTS 10000000
 #define SLACK_PREALLOCATED_ELEMENTS 14
+
+#define PRECALCULATE_TREE_LEVEL_SIZES
 
 #define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
 #define TREE_FILL_FACTOR(h,d,k) ((int)(pow((double)d,(((double)k+2)*h/(k+3))) / (d - 1))) // == (degree^^((k+2)/(k+3)*height))/(degree-1)
@@ -96,8 +97,8 @@
 // #define FAST_GET
 // #define FAST_GET_PER_LEVEL
 
-
 // #define TASKPOOL_DEBUG
+// #define TASKPOOL_TRACE
 
 typedef void *WORD;
 

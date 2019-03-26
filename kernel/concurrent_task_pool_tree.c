@@ -80,7 +80,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 {
 	int trials = 0, crt_index = index;
 
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 	printf("update_node_metadata(index=%d, value=%d)\n", index, value);
 #endif
 
@@ -90,7 +90,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 
 		if(value != have_tasks)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("update_node_metadata(): Skipping because my operation has been eliminated: value=%d != has_tasks(%d)=%d\n", value, crt_index, have_tasks);
 #endif
 			return;
@@ -102,7 +102,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 
 		if(IS_EMPTY_BYTE(pool[parent_index].child_has_tasks[child_index]) == have_tasks || pool[crt_index].pending > 0)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("update_node_metadata(index=%d, value=%d), updating parent index %d\n", index, value, parent_index);
 #endif
 
@@ -110,7 +110,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 
 			if(!update_father(crt_index, pool, degree, value))
 			{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 				printf("update_node_metadata(index=%d, value=%d), update_father() failed on parent index %d, trials=%d\n", index, value, parent_index, trials);
 #endif
 				if(trials < 2)
@@ -119,7 +119,7 @@ static inline void update_node_metadata(int index, concurrent_tree_pool_node* po
 		}
 		else
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("update_node_metadata(index=%d, value=%d), skipping update of parent index %d because pool[%d].pending=%d, child_index=%d, parent_empty_child=%d, has_tasks=%d\n",
 					index, value, parent_index,
 					crt_index, pool[crt_index].pending,
@@ -269,7 +269,7 @@ static inline int find_node_for_get(concurrent_tree_pool_node* pool, int degree,
 
 	while(1)
 	{
-#ifdef TASKPOOL_DEBUG2
+#ifdef TASKPOOL_TRACE
 		printf("find_node_for_get: index=%d, data=%ld, grabbed=%d, dirty=%d, left_empty=(%d, %d, %d), right_empty=(%d, %d, %d)\n",
 				index, (long) pool[index].data, atomic_load(&pool[index].grabbed), atomic_load(&pool[index].dirty),
 				pool[index].tasks_left, IS_EMPTY(pool[index].tasks_left), VERSION(pool[index].tasks_left),
@@ -340,7 +340,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int t
 
 		if(status < 0)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("find_node_for_get() found no tasks (index=%d)\n", index);
 #endif
 
@@ -353,7 +353,7 @@ int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int t
 
 		unsigned char old = LOAD(pool[index].grabbed);
 
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 		printf("find_node_for_get() found a task at index=%d, task=%ld, grabbed=%d, dirty=%d\n", index, (long) pool[index].data, old, atomic_load(&pool[index].dirty));
 #endif
 		if(old == 0 && CAS(&pool[index].grabbed, &old, 1))

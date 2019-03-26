@@ -202,7 +202,6 @@ static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_
 
 
 // Note: This function is NOT supposed to be thread safe. Only call in pool constructor.
-// Returns the number of successfully pre-allocated tree pools.
 
 int preallocate_trees(concurrent_pool* pool, int no_trees, int per_tree_data_size, char * prealloc_mem)
 {
@@ -230,7 +229,7 @@ int preallocate_trees(concurrent_pool* pool, int no_trees, int per_tree_data_siz
 
 	pool->_last_prealloc_block=crt_tree;
 
-	return no_trees;
+	return 0;
 }
 
 
@@ -302,7 +301,7 @@ int put(WORD task, concurrent_pool* pool)
 
 		if(put_index >= 0)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("Successfully put task %ld in tree %d at index %d\n", (long) task, producer_tree->node_id, put_index);
 #endif
 			// Put succeeded in current tree, but we may need to move back consumer pointer if it overshot us:
@@ -367,13 +366,13 @@ int get(WORD* task, concurrent_pool* pool)
 
 		if(consumer_ptrs.prev != NULL)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("get() attempting to find a task in prev tree %d\n", consumer_ptrs.prev->node_id);
 #endif
 
 			if(get_from_tree(task, TREE_PTR(consumer_ptrs.prev), pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("get() found task %ld in prev tree %d\n", (long) *task, consumer_ptrs.prev->node_id);
 #endif
 				return 0;
@@ -383,13 +382,13 @@ int get(WORD* task, concurrent_pool* pool)
 
 		if(consumer_ptrs.crt != NULL)
 		{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
 			if(get_from_tree(task, TREE_PTR(consumer_ptrs.crt), pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
-#ifdef TASKPOOL_DEBUG
+#ifdef TASKPOOL_TRACE
 				printf("get() found task %ld in crt tree %d\n", (long) *task, consumer_ptrs.crt->node_id);
 #endif
 				return 0;
@@ -400,8 +399,8 @@ int get(WORD* task, concurrent_pool* pool)
 
 		if(producer_tree->node_id <= consumer_ptrs.crt->node_id)
 		{
-#ifdef TASKPOOL_DEBUG
-			printf("get(): No new tasks exists (producer tree %d < consumer tree %d)\n", producer_tree->node_id, consumer_ptrs.crt->node_id);
+#ifdef TASKPOOL_TRACE
+			printf("get(): No new tasks exist (producer tree %d < consumer tree %d)\n", producer_tree->node_id, consumer_ptrs.crt->node_id);
 #endif
 			*task = NULL; // No new tasks exist
 			return 1;
