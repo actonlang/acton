@@ -373,7 +373,7 @@ int main(int argc, char **argv) {
 	// Taskpool init:
 	if(benchmark_target == BENCHMARK_TASKPOOL)
 	{
-		pool = allocate_pool_with_tree_height(tree_height);
+		pool = allocate_pool_with_tree_height(tree_height, no_tasks);
 		set_no_trials(pool, k_retries);
 	}
 	// Liblfds queue init:

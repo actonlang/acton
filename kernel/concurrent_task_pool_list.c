@@ -62,11 +62,11 @@ void free_pool_node(concurrent_pool_node * p)
 	free(p);
 }
 
-concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
+concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree, int no_prealloc)
 {
 	int nodes_per_tree = CALCULATE_TREE_SIZE(tree_height, degree);
 	int per_tree_data_size = nodes_per_tree * sizeof(struct concurrent_tree_pool_node);
-	int no_prealloced_trees = NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials);
+	int no_prealloced_trees = NO_PREALLOCATED_TREES(no_prealloc, tree_height, degree, k_no_trials);
 
 	// The list of all pre-allocated tree blocks is allocated in the memchunk right after the pool's metadata.
 	// In turn, for each pre-allocated tree node block, the actual array of "nodes_per_tree" tree nodes is also
@@ -103,7 +103,7 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 	p->degree = degree;
 	p->k_no_trials = k_no_trials;
 
-	preallocate_trees(p, NO_PREALLOCATED_TREES(tree_height, degree, k_no_trials), per_tree_data_size, (char *)(&p[1]));
+	preallocate_trees(p, no_prealloced_trees, per_tree_data_size, (char *)(&p[1]));
 
 	atomic_init(&p->producer_tree, p->head);
 	concurrent_pool_node_ptr_pair cts = { .prev = NULL, .crt = p->head };
@@ -112,29 +112,19 @@ concurrent_pool * _allocate_pool(int tree_height, int k_no_trials, int degree)
 	return p;
 }
 
-concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree)
+concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree, int no_prealloc)
 {
-	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, degree);
+	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, degree, MAX(no_prealloc, DEFAULT_PREALLOCATED_ELEMENTS));
 }
 
-concurrent_pool * allocate_pool_with_tree_height(int tree_height)
+concurrent_pool * allocate_pool_with_tree_height(int tree_height, int no_prealloc)
 {
-	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE);
+	return _allocate_pool(tree_height, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE, MAX(no_prealloc, DEFAULT_PREALLOCATED_ELEMENTS));
 }
 
-concurrent_pool * allocate_pool()
+concurrent_pool * allocate_pool(int no_prealloc)
 {
-	return _allocate_pool(DEFAULT_TREE_HEIGHT, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE);
-}
-
-void set_tree_height(concurrent_pool * pool, int tree_height)
-{
-	pool->tree_height = tree_height;
-}
-
-void set_degree(concurrent_pool * pool, int degree)
-{
-	pool->degree = degree;
+	return _allocate_pool(DEFAULT_TREE_HEIGHT, DEFAULT_K_NO_TRIALS, DEFAULT_DEGREE, MAX(no_prealloc, DEFAULT_PREALLOCATED_ELEMENTS));
 }
 
 void set_no_trials(concurrent_pool * pool, int no_trials)

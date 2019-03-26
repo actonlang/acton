@@ -16,13 +16,14 @@
 #define MAX_DEGREE 25
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
-#define NO_PREALLOCATED_ELEMENTS 10000000
+#define DEFAULT_PREALLOCATED_ELEMENTS 10000000
+#define SLACK_PREALLOCATED_ELEMENTS 14
 
 #define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
 #define TREE_FILL_FACTOR(h,d,k) ((int)(pow((double)d,(((double)k+2)*h/(k+3))) / (d - 1))) // == (degree^^((k+2)/(k+3)*height))/(degree-1)
-#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (14*NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
+#define _NO_PREALLOCATED_TREES(no_elems, h,d,k) (((int) (SLACK_PREALLOCATED_ELEMENTS*(no_elems))) / (TREE_FILL_FACTOR(h,d,k)))
 #define MAX(a, b) ((a>b)?(a):(b))
-#define NO_PREALLOCATED_TREES(h,d,k) (MAX(_NO_PREALLOCATED_TREES(h,d,k),1))
+#define NO_PREALLOCATED_TREES(no_elems, h,d,k) (MAX(_NO_PREALLOCATED_TREES(no_elems, h,d,k),1))
 
 // Macros for version handling (ABA etc):
 
@@ -56,7 +57,10 @@
 #define CHILD_K(p,k,d) ((d)*(p) + (k) + 1)
 #define PARENT_K(i,d) (((i)-1)/d)
 
-#define TREE_PTR(ptr) ((struct concurrent_tree_pool_node *) ((char *) (ptr) + sizeof(struct concurrent_pool_node)))
+// Macro points to the array of TREE_SIZE elements, holding the actual tree data (struct concurrent_tree_pool_node *),
+// allocated contiguously in the same mem chunk, right after the corresponding tree pool metadata (struct concurrent_pool_node):
+
+#define TREE_PTR(ptr) ((struct concurrent_tree_pool_node *) (&ptr[1]))
 
 // CAS and atomic load utility macros:
 
@@ -148,16 +152,24 @@ typedef struct concurrent_pool_node
 
 // "Public" API:
 
-concurrent_pool * allocate_pool();
-concurrent_pool * allocate_pool_with_tree_height(int tree_height);
-concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree);
-void set_tree_height(concurrent_pool * pool, int tree_height);
-void set_tree_degree(concurrent_pool * pool, int degree);
-void set_no_trials(concurrent_pool * pool, int no_trials);
+// Functions to allocate a taskpool:
+
+// Set 'no_prealloc' if you have an idea of the typical number of items a pool will hold, to optimize mem allocations.
+// Otherwise, set 'no_prealloc' to something < 0 and a default value will be used.
+// Set 'degree' and 'tree_height' to choose custom values for the tree degree and height, respectively.
+// Degree must be smaller than MAX_DEGREE.
+
+concurrent_pool * allocate_pool(int no_prealloc);
+concurrent_pool * allocate_pool_with_tree_height(int tree_height, int no_prealloc);
+concurrent_pool * allocate_pool_with_tree_height_and_degree(int tree_height, int degree, int no_prealloc);
 void free_pool(concurrent_pool * p);
+
+// Functions to manipulate a taskpool:
+
 int put(WORD task, concurrent_pool* pool);
 int get(WORD* task, concurrent_pool* pool);
 int get_last_block_id(concurrent_pool * p);
+void set_no_trials(concurrent_pool * pool, int no_trials);
 
 // Lower level API to access tree pools directly:
 

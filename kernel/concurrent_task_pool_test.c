@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 	}
 #endif
 
-	concurrent_pool * pool = (tree_height>0)?allocate_pool_with_tree_height(tree_height):allocate_pool();
+	concurrent_pool * pool = (tree_height>0)?allocate_pool_with_tree_height(tree_height, no_tasks):allocate_pool(no_tasks);
 
 	if(k_retries > 0)
 		set_no_trials(pool, k_retries);
