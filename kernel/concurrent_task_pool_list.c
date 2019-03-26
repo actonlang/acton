@@ -19,30 +19,39 @@
 concurrent_pool_node * allocate_pool_node(int node_id, int tree_height, int degree, int * precomputed_level_sizes)
 {
 	concurrent_pool_node * pn = NULL;
-	concurrent_tree_pool_node * tree_pool = allocate_tree_pool(tree_height, degree, precomputed_level_sizes);
+	int total_nodes, total_size;
 
-	if(tree_pool == NULL)
-		return NULL;
-
-	pn = (concurrent_pool_node *) malloc(sizeof(struct concurrent_pool_node));
-
-	if(pn != NULL)
-	{
-		pn->node_id = node_id;
-		pn->tree = tree_pool;
-		atomic_init(&pn->next, NULL);
-	}
+	if(precomputed_level_sizes!=NULL)
+		total_nodes = precomputed_level_sizes[tree_height-1];
 	else
+		total_nodes = CALCULATE_TREE_SIZE(tree_height, degree);
+
+	total_size = total_nodes * sizeof(struct concurrent_tree_pool_node);
+
+	// Actual array of "total_nodes" tree nodes is allocated right after the "struct concurrent_pool_node" metadata:
+
+	pn = (concurrent_pool_node *) malloc(sizeof(struct concurrent_pool_node) + total_size);
+
+	if(pn == NULL)
 	{
-		free_tree_pool(tree_pool);
+		printf("Failed to allocate tree of size %d/%d\n", total_nodes, total_size);
+		return NULL;
 	}
+
+	memset(pn, 0, sizeof(struct concurrent_pool_node) + total_size);
+
+#ifdef TASKPOOL_DEBUG
+	printf("Allocated tree of size %d/%d\n", total_nodes, total_size);
+#endif
+
+	pn->node_id = node_id;
+	atomic_init(&pn->next, NULL);
 
 	return pn;
 }
 
 void free_pool_node(concurrent_pool_node * p)
 {
-	free_tree_pool(p->tree);
 	free(p);
 }
 
@@ -263,7 +272,7 @@ int put(WORD task, concurrent_pool* pool)
 
 	while(1)
 	{
-		int put_index = put_in_tree(task, producer_tree->tree, pool->degree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
+		int put_index = put_in_tree(task, TREE_PTR(producer_tree), pool->degree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
 
 		if(put_index >= 0)
 		{
@@ -335,7 +344,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in prev tree %d\n", consumer_ptrs.prev->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.prev->tree, pool->degree, pool->tree_height, pool->level_sizes)==0)
+			if(get_from_tree(task, TREE_PTR(consumer_ptrs.prev), pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 			printf("get() found task %ld in prev tree %d\n", (long) *task, consumer_ptrs.prev->node_id);
@@ -351,7 +360,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
-			if(get_from_tree(task, consumer_ptrs.crt->tree, pool->degree, pool->tree_height, pool->level_sizes)==0)
+			if(get_from_tree(task, TREE_PTR(consumer_ptrs.crt), pool->degree, pool->tree_height, pool->level_sizes)==0)
 			{
 #ifdef TASKPOOL_DEBUG
 				printf("get() found task %ld in crt tree %d\n", (long) *task, consumer_ptrs.crt->node_id);

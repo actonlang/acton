@@ -12,15 +12,15 @@
 
 #define DEFAULT_TREE_HEIGHT 3
 #define DEFAULT_K_NO_TRIALS 2
-#define DEFAULT_DEGREE 14
-#define MAX_DEGREE 14
+#define DEFAULT_DEGREE 25
+#define MAX_DEGREE 25
 
 #define PRECALCULATE_TREE_LEVEL_SIZES
 #define NO_PREALLOCATED_ELEMENTS 10000000
 
 #define CALCULATE_TREE_SIZE(h,d) ((((int) pow(d, h)) - 1) / (d - 1))
 #define TREE_FILL_FACTOR(h,d,k) ((int)(pow((double)d,(((double)k+2)*h/(k+3))) / (d - 1))) // == (degree^^((k+2)/(k+3)*height))/(degree-1)
-#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (8*NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
+#define _NO_PREALLOCATED_TREES(h,d,k) (((int) (14*NO_PREALLOCATED_ELEMENTS)) / (TREE_FILL_FACTOR(h,d,k)))
 #define MAX(a, b) ((a>b)?(a):(b))
 #define NO_PREALLOCATED_TREES(h,d,k) (MAX(_NO_PREALLOCATED_TREES(h,d,k),1))
 
@@ -55,6 +55,8 @@
 
 #define CHILD_K(p,k,d) ((d)*(p) + (k) + 1)
 #define PARENT_K(i,d) (((i)-1)/d)
+
+#define TREE_PTR(ptr) ((struct concurrent_tree_pool_node *) ((ptr) + sizeof(struct concurrent_pool_node)))
 
 // CAS and atomic load utility macros:
 
@@ -132,9 +134,12 @@ typedef struct concurrent_tree_pool_node
 	WORD data;					// actual task
 } concurrent_tree_pool_node;
 
+// Note: Actual array of "struct concurrent_tree_pool_node" tree nodes (array representation of the complete tree)
+// is allocated right after the "struct concurrent_pool_node" metadata, in the same mem chunk,
+// and accessible via the TREE_PTR) macro:
+
 typedef struct concurrent_pool_node
 {
-	concurrent_tree_pool_node * tree;
 	int node_id;
 	atomic_concurrent_pool_node_ptr next;
 } concurrent_pool_node;
