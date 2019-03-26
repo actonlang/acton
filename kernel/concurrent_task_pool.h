@@ -56,7 +56,7 @@
 #define CHILD_K(p,k,d) ((d)*(p) + (k) + 1)
 #define PARENT_K(i,d) (((i)-1)/d)
 
-#define TREE_PTR(ptr) ((struct concurrent_tree_pool_node *) ((ptr) + sizeof(struct concurrent_pool_node)))
+#define TREE_PTR(ptr) ((struct concurrent_tree_pool_node *) ((char *) (ptr) + sizeof(struct concurrent_pool_node)))
 
 // CAS and atomic load utility macros:
 

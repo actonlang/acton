@@ -173,7 +173,23 @@ static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_
 		concurrent_pool_node_ptr_pair new_cts = { .prev = NULL, .crt = producer_tree };
 
 		if(LOOP_CAS(&(pool->consumer_trees), &c_ptrs, new_cts))
+		{
+#ifdef TASKPOOL_DEBUG
+			printf("Succeeded moving back consumer ptrs to (%p/%d,%p/%d)\n",
+						new_cts.prev, (new_cts.prev!=NULL)?(new_cts.prev->node_id):-1,
+						new_cts.crt, (new_cts.crt!=NULL)?(new_cts.crt->node_id):-1);
+#endif
+
 			break;
+		}
+		else
+		{
+#ifdef TASKPOOL_DEBUG
+			printf("Failed moving back consumer ptrs to (%p/%d,%p/%d)\n",
+						new_cts.prev, (new_cts.prev!=NULL)?(new_cts.prev->node_id):-1,
+						new_cts.crt, (new_cts.crt!=NULL)?(new_cts.crt->node_id):-1);
+#endif
+		}
 
 		if(c_ptrs.crt->node_id <= producer_tree->node_id)
 			break;
@@ -183,6 +199,7 @@ static inline int move_consumer_ptr_back(concurrent_pool* pool, concurrent_pool_
 
 	return 0;
 }
+
 
 // Note: This function is NOT supposed to be thread safe. Only call in pool constructor.
 // Returns the number of successfully pre-allocated tree pools.
@@ -253,7 +270,23 @@ static inline int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_pt
 	// in which case we free our newly allocated pool and return.
 
 	if(!CAS(&(producer_tree->next), &old, pool_node))
+	{
+#ifdef TASKPOOL_DEBUG
+			printf("Failed setting next ptr of %p/%d to %p/%d\n",
+						producer_tree, (producer_tree!=NULL)?(producer_tree->node_id):-1,
+						pool_node, (pool_node!=NULL)?(pool_node->node_id):-1);
+#endif
+
 		free_pool_node(pool_node);
+	}
+	else
+	{
+#ifdef TASKPOOL_DEBUG
+			printf("Succeeded setting next ptr of %p/%d to %p/%d\n",
+						producer_tree, (producer_tree!=NULL)?(producer_tree->node_id):-1,
+						pool_node, (pool_node!=NULL)?(pool_node->node_id):-1);
+#endif
+	}
 
 	return 0;
 }
@@ -333,6 +366,7 @@ int get(WORD* task, concurrent_pool* pool)
 {
 	concurrent_pool_node_ptr producer_tree = NULL;
 	concurrent_pool_node_ptr_pair consumer_ptrs = LOAD(pool->consumer_trees);
+	int status;
 
 	while(1)
 	{
@@ -387,7 +421,13 @@ int get(WORD* task, concurrent_pool* pool)
 			// Whether my CAS to update consumer pointers succeeds or not, use the most recent value
 			// of the (prev, crt) pointer pair to retry grabbing tasks from the new tree pointers:
 
-			CAS(&(pool->consumer_trees), &consumer_ptrs, new_cts);
+			status = CAS(&(pool->consumer_trees), &consumer_ptrs, new_cts);
+
+#ifdef TASKPOOL_DEBUG
+			printf("%s setting consumer ptrs to (%p/%d,%p/%d)\n", (status>0)?"Succeeded":"Failed",
+						new_cts.prev, (new_cts.prev!=NULL)?(new_cts.prev->node_id):-1,
+						new_cts.crt, (new_cts.crt!=NULL)?(new_cts.crt->node_id):-1);
+#endif
 		}
 		else
 		// If there are currently some producers attempting to move consumer pointer back, retry to read from
@@ -395,6 +435,12 @@ int get(WORD* task, concurrent_pool* pool)
 		// to avoid race condition:
 		{
 			consumer_ptrs = new_cts;
+
+#ifdef TASKPOOL_DEBUG
+			printf("Locally setting consumer ptrs to (%p/%d,%p/%d)\n",
+						new_cts.prev, (new_cts.prev!=NULL)?(new_cts.prev->node_id):-1,
+						new_cts.crt, (new_cts.crt!=NULL)?(new_cts.crt->node_id):-1);
+#endif
 		}
 	}
 }
