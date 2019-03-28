@@ -137,6 +137,9 @@ void *thread_main_put(void *arg)
 	struct lfds711_queue_umm_element qe;
 	struct lfds711_ringbuffer_element elem;
 	enum lfds711_misc_flag overwrite_occurred_flag;
+	unsigned int seed;
+
+	GET_RANDSEED(&seed, thread_id);
 
 	LFDS711_MISC_MAKE_VALID_ON_CURRENT_LOGICAL_CORE_INITS_COMPLETED_BEFORE_NOW_ON_ANY_OTHER_LOGICAL_CORE;
 
@@ -155,9 +158,9 @@ void *thread_main_put(void *arg)
 		{
 #ifdef KEEP_TASKS_PUT
 			tasks[i]= (WORD) (i+1);
-			status = put(tasks[i], pool);
+			status = put(tasks[i], pool, &seed);
 #else
-			status = put((WORD) (i + 1), pool);
+			status = put((WORD) (i + 1), pool, &seed);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
@@ -247,6 +250,9 @@ void *thread_main_get(void *arg)
 	void *buffer_read_element;
 	int dequeued_elements = 0;
 	WORD recovered_task;
+	unsigned int seed;
+
+	GET_RANDSEED(&seed, thread_id);
 
 	LFDS711_MISC_MAKE_VALID_ON_CURRENT_LOGICAL_CORE_INITS_COMPLETED_BEFORE_NOW_ON_ANY_OTHER_LOGICAL_CORE;
 
@@ -262,9 +268,9 @@ void *thread_main_get(void *arg)
 		if(benchmark_target == BENCHMARK_TASKPOOL)
 		{
 #ifdef KEEP_TASKS_GET
-			status = get(recovered_tasks + thread_id*(no_tasks/no_threads) + dequeued_elements, pool);
+			status = get(recovered_tasks + thread_id*(no_tasks/no_threads) + dequeued_elements, pool, &seed);
 #else
-			status = get(&recovered_task, pool);
+			status = get(&recovered_task, pool, &seed);
 #endif
 		}
 		else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
@@ -363,10 +369,6 @@ int main(int argc, char **argv) {
 	int status = 0, opt, n;
 	long total_put_errs = 0, total_get_errs = 0;
 	int long long unsigned start_put, end_put, start_get, end_get, start_prealloc, end_prealloc;
-
-	unsigned int seed = time(NULL);
-	srand(seed);
-	fast_srand(seed);
 
     while ((opt = getopt(argc, argv, "t:h:k:T:B:R:M:v")) != -1)
     {

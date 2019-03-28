@@ -283,7 +283,7 @@ static inline int insert_new_tree(concurrent_pool* pool, concurrent_pool_node_pt
 	return 0;
 }
 
-int put(WORD task, concurrent_pool* pool)
+int put(WORD task, concurrent_pool* pool, unsigned int * seedptr)
 {
 	concurrent_pool_node_ptr producer_tree = NULL;
 	int status = 0;
@@ -297,7 +297,7 @@ int put(WORD task, concurrent_pool* pool)
 
 	while(1)
 	{
-		int put_index = put_in_tree(task, TREE_PTR(producer_tree), pool->degree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes);
+		int put_index = put_in_tree(task, TREE_PTR(producer_tree), pool->degree, pool->tree_height, pool->k_no_trials, precalculated_level_sizes, seedptr);
 
 		if(put_index >= 0)
 		{
@@ -354,7 +354,7 @@ int put(WORD task, concurrent_pool* pool)
 	}
 }
 
-int get(WORD* task, concurrent_pool* pool)
+int get(WORD* task, concurrent_pool* pool, unsigned int * seedptr)
 {
 	concurrent_pool_node_ptr producer_tree = NULL;
 	concurrent_pool_node_ptr_pair consumer_ptrs = LOAD(pool->consumer_trees);
@@ -370,7 +370,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in prev tree %d\n", consumer_ptrs.prev->node_id);
 #endif
 
-			if(get_from_tree(task, TREE_PTR(consumer_ptrs.prev), pool->degree, pool->tree_height, pool->level_sizes)==0)
+			if(get_from_tree(task, TREE_PTR(consumer_ptrs.prev), pool->degree, pool->tree_height, pool->level_sizes, seedptr)==0)
 			{
 #ifdef TASKPOOL_TRACE
 			printf("get() found task %ld in prev tree %d\n", (long) *task, consumer_ptrs.prev->node_id);
@@ -386,7 +386,7 @@ int get(WORD* task, concurrent_pool* pool)
 			printf("get() attempting to find a task in crt tree %d\n", consumer_ptrs.crt->node_id);
 #endif
 
-			if(get_from_tree(task, TREE_PTR(consumer_ptrs.crt), pool->degree, pool->tree_height, pool->level_sizes)==0)
+			if(get_from_tree(task, TREE_PTR(consumer_ptrs.crt), pool->degree, pool->tree_height, pool->level_sizes, seedptr)==0)
 			{
 #ifdef TASKPOOL_TRACE
 				printf("get() found task %ld in crt tree %d\n", (long) *task, consumer_ptrs.crt->node_id);

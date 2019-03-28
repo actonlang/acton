@@ -9,6 +9,7 @@
 #define KERNEL_CONCURRENT_TASK_POOL_H_
 
 #include <stdatomic.h>
+#include "fastrand.h"
 
 #define DEFAULT_TREE_HEIGHT 3
 #define DEFAULT_K_NO_TRIALS 2
@@ -167,8 +168,16 @@ void free_pool(concurrent_pool * p);
 
 // Functions to manipulate a taskpool:
 
-int put(WORD task, concurrent_pool* pool);
-int get(WORD* task, concurrent_pool* pool);
+// Args:
+//	- task: void* allocated and managed by the app
+//	- pool: ptr to taskpool
+//	- fastrandstate: *Always* pass a valid pointer to the fast random generator state to each call.
+//					Before starting library use in each thread, seed this state via GET_RANDSEED(&fastrandstate, apprand),
+//					where apprand is an (optional) per-thread unique state. If not available, just call GET_RANDSEED(&fastrandstate, 0) to seed
+//					Use the same pointer on each subsequent call to all taskpool library functions
+
+int put(WORD task, concurrent_pool* pool, unsigned int * fastrandstate);
+int get(WORD* task, concurrent_pool* pool, unsigned int * fastrandstate);
 int get_last_block_id(concurrent_pool * p);
 void set_no_trials(concurrent_pool * pool, int no_trials);
 
@@ -176,8 +185,8 @@ void set_no_trials(concurrent_pool * pool, int no_trials);
 
 concurrent_tree_pool_node * allocate_tree_pool(int tree_height, int degree, int * precomputed_level_sizes);
 void free_tree_pool(concurrent_tree_pool_node * p);
-int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int degree, int tree_height, int k_no_trials, int * precomputed_level_sizes);
-int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int tree_height, int * precomputed_level_sizes);
+int put_in_tree(WORD task, concurrent_tree_pool_node* pool, int degree, int tree_height, int k_no_trials, int * precomputed_level_sizes, unsigned int * fastrandstate);
+int get_from_tree(WORD* task, concurrent_tree_pool_node* pool, int degree, int tree_height, int * precomputed_level_sizes, unsigned int * fastrandstate);
 int preallocate_trees(concurrent_pool* pool, int no_trees, int per_tree_data_size, char * prealloc_mem);
 
 #endif /* KERNEL_CONCURRENT_TASK_POOL_H_ */
