@@ -16,11 +16,13 @@ endif
 CFLAGS:=$(JEM_FLAGS)
 LIBS:=$(JEM_LIBS)
 
+LIBDIR=../lib
+
 all: libtaskpool
 
-libtaskpool: concurrent_task_pool_list.o concurrent_task_pool_tree.o
-	ar rcs ../lib/libtaskpool.a concurrent_task_pool_list.o concurrent_task_pool_tree.o
-	ranlib ../lib/libtaskpool.a
+libtaskpool: concurrent_task_pool_list.o concurrent_task_pool_tree.o $(LIBDIR)
+	ar rcs $(LIBDIR)/libtaskpool.a concurrent_task_pool_list.o concurrent_task_pool_tree.o
+	ranlib $(LIBDIR)/libtaskpool.a
 
 concurrent_task_pool_list.o:
 	cc concurrent_task_pool_list.c -c -I src -latomic -lm -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
@@ -28,5 +30,9 @@ concurrent_task_pool_list.o:
 concurrent_task_pool_tree.o:
 	cc concurrent_task_pool_tree.c -c -I src -latomic -lm -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast
 
+$(LIBDIR):
+	mkdir -p $(LIBDIR)
+
 clean:
-	rm -f *.o *.a
+	rm -rf *.o *.a $(LIBDIR)
+
