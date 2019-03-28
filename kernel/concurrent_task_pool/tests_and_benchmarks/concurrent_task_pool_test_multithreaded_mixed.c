@@ -42,6 +42,9 @@
 #define BENCHMARK_TASKPOOL 0
 #define BENCHMARK_LIBLFDS_QUEUE 1
 #define BENCHMARK_LIBLFDS_RINGBUFFER 2
+#define BENCHMARK_MUTEX 3
+#define BENCHMARK_SPINLOCK_ATOMIC_FLAG 4
+#define BENCHMARK_SPINLOCK_PTHREAD 5
 
 int no_tasks = NO_TASKS, no_threads = NO_THREADS, tree_height = DEFAULT_TREE_HEIGHT, k_retries = DEFAULT_K_NO_TRIALS;
 long num_cpu, ring_buffer_size = RING_BUFFER_SIZE;
@@ -95,6 +98,38 @@ struct lfds711_queue_umm_state qs;
 struct lfds711_ringbuffer_state rs;
 struct lfds711_ringbuffer_element * re;
 
+// Mutex-related:
+
+pthread_mutex_t queue_mutex;
+
+// Spinlock-related:
+
+volatile atomic_flag queue_spinlock_af;
+
+void inline spinlock_lock(volatile atomic_flag *f) {
+    while (atomic_flag_test_and_set(f)) {
+        // spin until we could set the flag
+    }
+}
+void inline spinlock_unlock(volatile atomic_flag *f) {
+    atomic_flag_clear(f);
+}
+
+// Libpthread spinlock-related:
+
+pthread_spinlock_t queue_spinlock_pthread;
+
+// Basic list structs for benchmarking mutexes & spinlocks:
+
+typedef struct queue_entry
+{
+	WORD data;
+	struct queue_entry * next;
+} queue_entry;
+
+queue_entry * queue_head, * queue_tail;
+queue_entry * simple_qes, * recovered_simple_qes;
+
 void *thread_main_put(void *arg)
 {
     int thread_id = (int) arg, status=0;
@@ -144,6 +179,40 @@ void *thread_main_put(void *arg)
 
 		    if(overwrite_occurred_flag == LFDS711_MISC_FLAG_RAISED )
 		    		status=1;
+		}
+		else if(benchmark_target == BENCHMARK_MUTEX ||
+				benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG ||
+				benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+		{
+			if(benchmark_target == BENCHMARK_MUTEX)
+				pthread_mutex_lock(&queue_mutex);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG)
+			    spinlock_lock(&queue_spinlock_af);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+				pthread_spin_lock(&queue_spinlock_pthread);
+
+#ifdef KEEP_TASKS_PUT
+			simple_qes[i].data = (WORD) (i + 1);
+			simple_qes[i].next = NULL;
+
+			if(queue_tail != NULL)
+			{
+				queue_tail->next = simple_qes + i;
+				queue_tail = simple_qes + i;
+			}
+			else
+			{
+				queue_tail = simple_qes + i;
+				queue_head = simple_qes + i;
+			}
+#endif
+
+			if(benchmark_target == BENCHMARK_MUTEX)
+				pthread_mutex_unlock(&queue_mutex);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG)
+			    spinlock_unlock(&queue_spinlock_af);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+				pthread_spin_unlock(&queue_spinlock_pthread);
 		}
 
 		if(status!=0)
@@ -215,6 +284,38 @@ void *thread_main_get(void *arg)
 #else
 			status = !lfds711_ringbuffer_read(&rs, &buffer_read_element, NULL);
 #endif
+		}
+		else if(benchmark_target == BENCHMARK_MUTEX ||
+				benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG ||
+				benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+		{
+			if(benchmark_target == BENCHMARK_MUTEX)
+				pthread_mutex_lock(&queue_mutex);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG)
+			    spinlock_lock(&queue_spinlock_af);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+				pthread_spin_lock(&queue_spinlock_pthread);
+
+			if(queue_head != NULL)
+			{
+#ifdef KEEP_TASKS_GET
+				*(recovered_simple_qes + thread_id*(no_tasks/no_threads) + dequeued_elements) = queue_head;
+#endif
+				queue_head = queue_head->next;
+				if(queue_head == NULL)
+					queue_tail = NULL;
+			}
+			else
+			{
+				status = 1;
+			}
+
+			if(benchmark_target == BENCHMARK_MUTEX)
+				pthread_mutex_unlock(&queue_mutex);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG)
+			    spinlock_unlock(&queue_spinlock_af);
+			else if(benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+				pthread_spin_unlock(&queue_spinlock_pthread);
 		}
 
 		if(status==0)
@@ -302,6 +403,12 @@ int main(int argc, char **argv) {
                 		benchmark_target = BENCHMARK_LIBLFDS_QUEUE;
                 else if(optarg[0] == 'R')
                 		benchmark_target = BENCHMARK_LIBLFDS_RINGBUFFER;
+                else if(optarg[0] == 'M')
+                		benchmark_target = BENCHMARK_MUTEX;
+                else if(optarg[0] == 'A')
+                		benchmark_target = BENCHMARK_SPINLOCK_ATOMIC_FLAG;
+                else if(optarg[0] == 'S')
+                		benchmark_target = BENCHMARK_SPINLOCK_PTHREAD;
 
                 break;
             }
@@ -355,6 +462,10 @@ int main(int argc, char **argv) {
 	{
 		qes = (struct lfds711_queue_umm_element *) malloc(no_tasks * sizeof(struct lfds711_queue_umm_element));
 	}
+	else if(benchmark_target == BENCHMARK_MUTEX || benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG || benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+	{
+		simple_qes = (queue_entry *) malloc(no_tasks * sizeof(struct queue_entry));
+	}
 #endif
 
 #ifdef KEEP_TASKS_GET
@@ -365,6 +476,10 @@ int main(int argc, char **argv) {
 	else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 	{
 		recovered_qes = (struct lfds711_queue_umm_element *) malloc(no_tasks * sizeof(struct lfds711_queue_umm_element));
+	}
+	else if(benchmark_target == BENCHMARK_MUTEX || benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG || benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+	{
+		recovered_simple_qes = (queue_entry *) malloc(no_tasks * sizeof(struct queue_entry));
 	}
 #endif
 
@@ -386,6 +501,17 @@ int main(int argc, char **argv) {
 		re = (struct lfds711_ringbuffer_element *) malloc(sizeof(struct lfds711_ringbuffer_element) * ((ring_buffer_size) + 1));
 
 		lfds711_ringbuffer_init_valid_on_current_logical_core(&rs, re, (ring_buffer_size) + 1, NULL);
+	}
+	else if(benchmark_target == BENCHMARK_MUTEX ||
+			benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG ||
+			benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+	{
+		queue_head=NULL;
+		queue_tail=NULL;
+		if(benchmark_target == BENCHMARK_MUTEX)
+			pthread_mutex_init(&queue_mutex, NULL);
+		else if(benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+			pthread_spin_init(&queue_spinlock_pthread, PTHREAD_PROCESS_SHARED);
 	}
 
 	GET_HIGHRES_TIME(&end_prealloc);
@@ -477,7 +603,7 @@ int main(int argc, char **argv) {
 			no_tasks / ((end_put-start_put)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND),
 			(end_put-start_put) / no_tasks,
 			(no_tasks-total_get_errs) / ((end_get-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND),
-			(end_get-start_get) / (no_tasks-total_get_errs),
+			(no_tasks>total_get_errs)?((end_get-start_get) / (no_tasks-total_get_errs)):-1,
 			total_put_errs, total_get_errs,
 			last_block_start + 1, last_block_end - last_block_start, last_block_end - last_used_block,
 			block_size, block_fill,
@@ -499,6 +625,8 @@ int main(int argc, char **argv) {
 		free(tasks);
 	else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 		free(qes);
+	else if(benchmark_target == BENCHMARK_MUTEX || benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG || benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+		free(simple_qes);
 #endif
 
 #ifdef KEEP_TASKS_GET
@@ -506,6 +634,8 @@ int main(int argc, char **argv) {
 		free(recovered_tasks);
 	else if(benchmark_target == BENCHMARK_LIBLFDS_QUEUE)
 		free(recovered_qes);
+	else if(benchmark_target == BENCHMARK_MUTEX || benchmark_target == BENCHMARK_SPINLOCK_ATOMIC_FLAG || benchmark_target == BENCHMARK_SPINLOCK_PTHREAD)
+		free(recovered_simple_qes);
 #endif
 }
 
