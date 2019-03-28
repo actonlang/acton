@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# e.g. 11 concurrent_task_pool_times_t_v11_k_ary_tree_static_vector_inline_list_fixed_degree_2.bare_iron.1.ammended.merged.txt concurrent_task_pool_times_t_v12_k_ary_tree_static_vector_inline_list_fixed_no_atomic_load_degree_2.bare_iron.1.txt
+
+field=$1
+oldfile="$2"
+newfile="$3"
+
+cat $oldfile | cut -f $field -d ' ' | cut -f 2 -d = | sed -e 's/,//g' > old_times.txt
+cat $newfile | cut -f $field -d ' ' | cut -f 2 -d = | sed -e 's/,//g' > new_times.txt
+
+no_msmts=`wc -l new_times.txt | cut -f 1 -d ' '`
+
+for msmt in `seq ${no_msmts}`
+do
+	oldtime=`cat old_times.txt | head -$msmt | tail -1`
+	newtime=`cat new_times.txt | head -$msmt | tail -1`
+
+	echo `cat $newfile | head -$msmt | tail -1 | cut -f 3,4,5 -d ' '` time_diff=`echo $oldtime - $newtime | bc -l`
+done | grep -vE "tree_height=1, k_retries=4,"\|"tree_height=1, k_retries=8,"\|"tree_height=1, k_retries=10,"\|"tree_height=2, k_retries=4,"\|"tree_height=2, k_retries=8,"\|"tree_height=2, k_retries=10,"\|"tree_height=4, k_retries=8,"\|"tree_height=4, k_retries=10,"
+

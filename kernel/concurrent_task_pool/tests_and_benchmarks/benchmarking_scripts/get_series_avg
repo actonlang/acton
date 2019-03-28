@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# e.g. 11 3 2 "11" "concurrent_task_pool_times_t_v15_fast_get_per_level_new_test_10M_no_keep_tasks_preallocated_more_threads_aligned_degree_11_h_3_k_2_t_1_32.bare_iron.*" 
+
+degree=$1
+h=$2
+k=$3
+field=$4
+files=`ls $5`
+
+nofiles=`echo $files | wc -w`
+
+i=0
+
+for file in $files
+do
+	i=`expr $i + 1`
+	./get_series ${degree} ${h} ${k} "$field" $file l | sort -n -k 1 -t ' ' | cut -f 2 -d ' ' > s${i}.txt
+done
+
+nomsmts=`cat s1.txt | wc -l`
+
+for msmt in `seq $nomsmts`
+do
+	avg=0
+
+	for fileindex in `seq $nofiles`
+	do
+		number=`cat s${fileindex}.txt | head -$msmt | tail -1`
+		avg=`echo $avg + $number | bc -l`
+	done
+	avg=`echo "scale=0; $avg / $nofiles" | bc -l`
+	echo $avg
+done
+

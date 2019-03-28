@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# e.g. "10,12" concurrent_task_pool_times_r.bare_iron.txt
+
+fields="$1"
+file=$2
+
+if [ $# -eq 2 ]
+then
+	cat $file | cut -f 3,$fields -d ' '
+else
+	cat $file | cut -f 3,$fields -d ' ' | sed -e 's/[^0-9 ]*=//g' -e 's/,//g'
+fi
+
+

@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# e.g. 11_3_1 11_3_2 11 concurrent_task_pool_times_t_v15_fast_get_per_level_new_test_10M_no_keep_tasks_preallocated_more_threads3_all_degrees.bare_iron.7.txt
+
+old=$1
+new=$2
+field=$3
+file=$4
+
+od=`echo $old | cut -f 1 -d '_'`
+oh=`echo $old | cut -f 2 -d '_'`
+ok=`echo $old | cut -f 3 -d '_'`
+
+nd=`echo $new | cut -f 1 -d '_'`
+nh=`echo $new | cut -f 2 -d '_'`
+nk=`echo $new | cut -f 3 -d '_'`
+
+./get_series $od $oh $ok "$field" $file l > series_${field}_${old}.txt
+./get_series $nd $nh $nk "$field" $file l > series_${field}_${new}.txt
+
+oldseries=`cat series_${field}_${old}.txt | cut -f 2 -d ' '`
+newseries=`cat series_${field}_${new}.txt | cut -f 2 -d ' '`
+noentries=`echo $newseries | wc -w`
+
+for entryno in `seq $noentries`
+do
+	newentry=`echo $newseries | cut -f $entryno -d ' '`
+	oldentry=`echo $oldseries | cut -f $entryno -d ' ' | bc -l`
+	x=`head -$entryno series_${field}_${old}.txt | tail -1 | cut -f 1 -d ' '` ; echo $x `echo $oldentry - $newentry | bc -l`
+done
+
+
