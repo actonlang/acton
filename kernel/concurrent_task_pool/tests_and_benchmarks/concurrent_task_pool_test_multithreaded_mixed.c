@@ -414,8 +414,9 @@ int main(int argc, char **argv) {
 	long total_put_errs = 0, total_get_errs = 0;
 	int long long unsigned start_put, end_put, start_get, end_get, start_prealloc, end_prealloc;
 	char * struct_type = "NA";
+	int alternate_prod_cons_placement = 0;
 
-    while ((opt = getopt(argc, argv, "t:h:k:T:B:R:M:v")) != -1)
+    while ((opt = getopt(argc, argv, "t:h:k:T:B:R:M:av")) != -1)
     {
         switch (opt) {
             case 't':
@@ -497,6 +498,11 @@ int main(int argc, char **argv) {
                 n = atoi(optarg);
                 benchmark_duration_seconds = (n>0)?n:DEFAULT_MAX_BENCHMARK_DURATION_SECONDS;
                 break;
+            }
+            case 'a':
+            {
+            		alternate_prod_cons_placement = 1;
+            		break;
             }
             case 'v':
             {
@@ -600,10 +606,23 @@ int main(int argc, char **argv) {
         pthread_attr_init(&attrs[th_id]);
         CPU_ZERO(&cpu_set[th_id]);
 
-        int core_id = (th_id % num_cpu) * (hyperthreading+1);
+        int core_id;
+
+        if(alternate_prod_cons_placement)
+        {
+        		if(th_id<no_threads/2)
+        			core_id = 2*th_id % num_cpu;
+        		else
+        			core_id = (2*(th_id-no_threads/2)+1) % num_cpu;
+        }
+        else
+        {
+        		core_id = (th_id % num_cpu) * (hyperthreading+1);
+        }
 
         if(verbose)
-        		printf("Setting thread affinity of thread %d to core %d\n", th_id, core_id);
+        		printf("Setting thread affinity of thread %d (%s) to core %d\n",
+        						th_id, (th_id<no_threads/2)?"put":"get", core_id);
 
         CPU_SET(core_id, &cpu_set[th_id]);
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
