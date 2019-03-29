@@ -36,7 +36,7 @@
 
 // #define VERBOSE
 
-// #define KEEP_TASKS_PUT
+#define KEEP_TASKS_PUT
 // #define KEEP_TASKS_GET
 
 #define BENCHMARK_TASKPOOL 0
@@ -244,12 +244,13 @@ void *thread_main_put(void *arg)
 void *thread_main_get(void *arg)
 {
     int thread_id = (int) arg;
-    int status=0;
-	int long long unsigned start_get, end_get, last_dequeue;
+    int status=0, prev_status=1;
+	int long long unsigned start_get, end_get, last_dequeue=0;
 	struct lfds711_queue_umm_element * qep;
 	void *buffer_read_element;
 	int dequeued_elements = 0;
 	WORD recovered_task;
+	queue_entry recovered_simple_qe;
 	unsigned int seed;
 
 	GET_RANDSEED(&seed, thread_id);
@@ -260,7 +261,7 @@ void *thread_main_get(void *arg)
 
 	if(verbose)
 	{
-		printf("[thread %d get] start_time=%lld, no_tasks=%d\n", thread_id, start_get, no_tasks/no_threads);
+		printf("[thread %d get] start_time=%lld, no_tasks=%d\n", thread_id, start_get, 2*no_tasks/no_threads);
 	}
 
 	do
@@ -305,11 +306,15 @@ void *thread_main_get(void *arg)
 			if(queue_head != NULL)
 			{
 #ifdef KEEP_TASKS_GET
-				*(recovered_simple_qes + thread_id*(no_tasks/no_threads) + dequeued_elements) = queue_head;
+				recovered_simple_qes[thread_id*(no_tasks/no_threads) + dequeued_elements].data = queue_head->data;
+#else
+				recovered_simple_qe.data=queue_head->data;
 #endif
 				queue_head = queue_head->next;
 				if(queue_head == NULL)
 					queue_tail = NULL;
+
+				status = 0;
 			}
 			else
 			{
@@ -327,23 +332,62 @@ void *thread_main_get(void *arg)
 		if(status==0)
 		{
 			dequeued_elements++;
-			last_dequeue=0;
 		}
 		else
 		{
 			GET_HIGHRES_TIME(&end_get);
 
-			if(last_dequeue==0)
+			if(prev_status==0)
 				last_dequeue=end_get;
 
 			if(((end_get - start_get) / NUMBER_OF_NANOSECONDS_IN_ONE_SECOND)  > benchmark_duration_seconds)
 				break;
 		}
 
+		prev_status = status;
+
 		if(verbose)
-			printf("[thread %d get] got task %d\n",
-					thread_id, (int) ((benchmark_target == BENCHMARK_TASKPOOL)?(recovered_task):(LFDS711_QUEUE_UMM_GET_VALUE_FROM_ELEMENT(*qep))));
+		{
+			int value=-1;
+
+			if(status==0)
+			{
+				switch(benchmark_target)
+				{
+					case BENCHMARK_TASKPOOL:
+					case BENCHMARK_LIBLFDS_QUEUE:
+					case BENCHMARK_LIBLFDS_RINGBUFFER:
+#ifdef KEEP_TASKS_GET
+						value = (int) recovered_tasks[thread_id*(no_tasks/no_threads) + dequeued_elements];
+#else
+						value = (int) recovered_task;
+#endif
+						break;
+					case BENCHMARK_MUTEX:
+					case BENCHMARK_SPINLOCK_ATOMIC_FLAG:
+					case BENCHMARK_SPINLOCK_PTHREAD:
+#ifdef KEEP_TASKS_GET
+						value = (int) recovered_simple_qes[thread_id*(no_tasks/no_threads) + dequeued_elements].data;
+#else
+						value = (int) recovered_simple_qe.data;
+#endif
+						break;
+				}
+
+				printf("[thread %d get] got task %d\n", thread_id, value);
+			}
+			else
+			{
+				printf("[thread %d get] failed to get task %f ago, last dequeue %f ago, start_get=%lld, end_get=%lld, last_dequeue=%lld, dequeued_elements=%d\n",
+						thread_id,
+						(end_get-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND,
+						(last_dequeue>0)?((last_dequeue-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND):-1,
+						start_get, end_get, last_dequeue, dequeued_elements);
+			}
+		}
 	} while(1);
+
+	GET_HIGHRES_TIME(&end_get);
 
 	dequeued_elems[thread_id]=dequeued_elements;
 	last_dequeues[thread_id]=last_dequeue;
@@ -352,9 +396,9 @@ void *thread_main_get(void *arg)
 	{
 		printf("[thread %d get] no_tasks=%d, total_seconds_get=%f, get_tpt=%f, get_latency_ns=%lld, quit_after=%f\n",
 				thread_id, dequeued_elements,
-				(last_dequeue-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND,
-				(no_tasks/no_threads) / ((last_dequeue-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND),
-				((last_dequeue-start_get)) / (no_tasks/no_threads),
+				(dequeued_elements>0)?((last_dequeue-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND):-1,
+				(dequeued_elements>0)?((no_tasks/no_threads) / ((last_dequeue-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND)):-1,
+				(dequeued_elements>0)?(((last_dequeue-start_get)) / (no_tasks/no_threads)):-1,
 				(end_get-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND);
 	}
 
@@ -369,6 +413,7 @@ int main(int argc, char **argv) {
 	int status = 0, opt, n;
 	long total_put_errs = 0, total_get_errs = 0;
 	int long long unsigned start_put, end_put, start_get, end_get, start_prealloc, end_prealloc;
+	char * struct_type = "NA";
 
     while ((opt = getopt(argc, argv, "t:h:k:T:B:R:M:v")) != -1)
     {
@@ -399,18 +444,45 @@ int main(int argc, char **argv) {
             }
             case 'B':
             {
-                if(optarg[0] == 'T')
-                		benchmark_target = BENCHMARK_TASKPOOL;
-                else if(optarg[0] == 'Q')
-                		benchmark_target = BENCHMARK_LIBLFDS_QUEUE;
-                else if(optarg[0] == 'R')
-                		benchmark_target = BENCHMARK_LIBLFDS_RINGBUFFER;
-                else if(optarg[0] == 'M')
-                		benchmark_target = BENCHMARK_MUTEX;
-                else if(optarg[0] == 'A')
-                		benchmark_target = BENCHMARK_SPINLOCK_ATOMIC_FLAG;
-                else if(optarg[0] == 'S')
-                		benchmark_target = BENCHMARK_SPINLOCK_PTHREAD;
+            		switch(optarg[0])
+            		{
+					case 'Q':
+					{
+							benchmark_target = BENCHMARK_LIBLFDS_QUEUE;
+							struct_type = "lfds_queue";
+							break;
+					}
+					case 'R':
+					{
+							benchmark_target = BENCHMARK_LIBLFDS_RINGBUFFER;
+							struct_type = "lfds_ringbuffer";
+							break;
+					}
+					case 'M':
+					{
+							benchmark_target = BENCHMARK_MUTEX;
+							struct_type = "pthread_mutex";
+							break;
+					}
+					case 'A':
+					{
+							benchmark_target = BENCHMARK_SPINLOCK_ATOMIC_FLAG;
+							struct_type = "atomic_flag_spinlock";
+							break;
+					}
+					case 'S':
+					{
+							benchmark_target = BENCHMARK_SPINLOCK_PTHREAD;
+							struct_type = "pthread_spinlock";
+							break;
+					}
+					case 'T':
+					default:
+					{
+							benchmark_target = BENCHMARK_TASKPOOL;
+							struct_type = "taskpool";
+					}
+            		}
 
                 break;
             }
@@ -585,7 +657,7 @@ int main(int argc, char **argv) {
 	{
 		total_put_errs += put_errs[th_id];
 		total_get_errs -= dequeued_elems[th_id];
-		if(last_dequeues[th_id] > end_get)
+		if(last_dequeues[th_id] > end_get && dequeued_elems[th_id] > 0)
 			end_get = last_dequeues[th_id];
 	}
 
@@ -598,8 +670,7 @@ int main(int argc, char **argv) {
 	int block_fill = (benchmark_target == BENCHMARK_TASKPOOL)?(TREE_FILL_FACTOR(pool->tree_height, pool->degree, pool->k_no_trials)):-1;
 
 	printf("data_struct=%s, no_tasks=%d, no_threads=%d, tree_degree=%d, tree_height=%d, k_retries=%d, ring_buffer_size=%ld, total_seconds_put=%f, total_seconds_get=%f, put_tpt=%f, put_latency_ns=%lld, get_tpt=%f, get_latency_ns=%lld, put_errs=%ld, get_errs=%ld, prealloc_blocks=%d, dynamicalloc_blocks=%d, unused_blocks=%d, block_size=%d, block_fill=%d, total_seconds_prealloc=%f\n",
-			(benchmark_target == BENCHMARK_TASKPOOL)?"taskpool":((benchmark_target == BENCHMARK_LIBLFDS_QUEUE)?"lfds_queue":"lfds_ringbuffer"),
-			no_tasks, no_threads/2, tree_degree_pool, tree_height_pool, k_retries_pool, ring_buffer_size,
+			struct_type, no_tasks, no_threads/2, tree_degree_pool, tree_height_pool, k_retries_pool, ring_buffer_size,
 			(end_put-start_put)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND,
 			(end_get-start_get)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND,
 			no_tasks / ((end_put-start_put)/(double)NUMBER_OF_NANOSECONDS_IN_ONE_SECOND),
