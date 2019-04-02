@@ -36,7 +36,7 @@
 
 // #define VERBOSE
 
-#define KEEP_TASKS_PUT
+// #define KEEP_TASKS_PUT
 // #define KEEP_TASKS_GET
 
 #define BENCHMARK_TASKPOOL 0
