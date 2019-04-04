@@ -340,7 +340,7 @@ void *thread_main_get(void *arg)
 			if(prev_status==0)
 				last_dequeue=end_get;
 
-			if(((end_get - start_get) / NUMBER_OF_NANOSECONDS_IN_ONE_SECOND)  > benchmark_duration_seconds)
+			if(((end_get - start_get) / NUMBER_OF_NANOSECONDS_IN_ONE_SECOND) > benchmark_duration_seconds)
 				break;
 		}
 
