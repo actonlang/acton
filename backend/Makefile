@@ -20,7 +20,7 @@ LFLAGS=#-latomic -lm
 
 LIBDIR=../lib
 
-all: libdb actor_checkpoint_example db_unit_tests
+all: libdb db_unit_tests
 
 libdb: db.o skiplist.o $(LIBDIR)
 	ar rcs $(LIBDIR)/libdb.a db.o skiplist.o
@@ -31,14 +31,6 @@ db.o:
 
 skiplist.o:
 	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
-
-actor_checkpoint_example: actor_checkpoint_example.c
-	cc -std=c11 actor_checkpoint_example.c \
-		$(CFLAGS) -I ../src -L ../lib \
-		-ldb $(LFLAGS) -pthread \
-		$(LIBS) \
-		$(CFLAGS) \
-		-o actor_checkpoint_example
 
 db_unit_tests: db_unit_tests.c
 	cc -std=c11 db_unit_tests.c \
@@ -52,5 +44,5 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o *.a actor_checkpoint_example $(LIBDIR)
+	rm -rf *.o *.a $(LIBDIR)
 
