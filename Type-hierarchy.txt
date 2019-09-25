@@ -275,6 +275,7 @@ protocol SupportsAbs:
     __abs__         : () -> Self
 
 protocol Complex (Number, SupportsAbs, SupportsComplex):
+    @staticmethod
     __fromcomplex__ : (complex) -> Self
     @staticmethod
     __div__         : (Self,Self) -> Self
@@ -286,6 +287,7 @@ protocol SupportsRound:
     __round__       : () -> int
 
 protocol Real (Complex, SupportsRound, SupportsFloat):
+    @staticmethod
     __fromfloat__   : (float) -> Self
     __trunc__       : () -> Integral
     __floor__       : () -> Integral
@@ -316,6 +318,7 @@ protocol Rational (Real):
         return numerator(a) / denominator(a)
 
 protocol Integral (Rational,SupportsInt,Logical):
+    @staticmethod
     __fromint__     : (int) -> Self
     __index__       : () -> Self
     @staticmethod
@@ -351,7 +354,7 @@ extension bool (Logical,Ord):
     def __eq__(a,b):
         return primeqbool(a,b)
     def __lt__(a,b):
-        return a == True and b == False
+        return a == False and b == True
 
 protocol IncrementalLogical[A] (Logical):
     __iand__        : !(A) -> None
@@ -388,10 +391,10 @@ protocol Indexed[A,B]:
     __getitem__     : (A) -> B
 
 protocol Collection[A] (Container[A], Sized, Iterable[A]):
-    pass
+    @staticmethod
+    __fromiter__    : (Iterable[A]) -> Self
 
 protocol Set[A] (Collection[A], Ord, Logical, Minus):
-    from_iterable   : (Iterable[A]) -> Self
     isdisjoint      : (Set[A]) -> bool
 
     def __le__(a: Self, b: Self):
@@ -401,11 +404,18 @@ protocol Set[A] (Collection[A], Ord, Logical, Minus):
             if elem not in b:
                 return False
         return True
+    def __lt__(a: Self, b: Self):
+        if len(a) >= len(b):
+            return False
+        for elem in a:
+            if elem not in b:
+                return False
+        return True
     def __eq__(a: Self, b: Self):
         return len(a) == len(b) and a <= b
     def __or__(a: Self, b: Self):
         chain = [ e for s in [a,b] for e in s ]
-        return from_iterable(chain)
+        return fromiter(chain)
     def isdisjoint(self: Self, other: Set[A]):
         for value in b:
             if value in self:
@@ -416,7 +426,7 @@ extension Set[A (Hashable)] (Hashable):
     def __hash__(self):
         n = 12345
         for k in self:
-            n += hash(i)
+            n += hash(k)
         return n
 
 struct frozenset[A (Hashable)] (Set[A], Hashable):          # HYPOTHETICAL DEFINITION!
@@ -424,22 +434,18 @@ struct frozenset[A (Hashable)] (Set[A], Hashable):          # HYPOTHETICAL DEFIN
 
     def __contains__(self, a):
         return a in self._val.keys()
-    def from_iterable(items: Iterable[A]):
+    def __fromiter__(items: Iterable[A]):
         return frozenset(_val = { i:() for i in items })
     def __len__(self):
         return len(self._val)
     def __iter__(self):
         return iter(self._val.keys())
-    def __hash__(self): ...
-        n = 12345
-        for k in self._val:
-            n += hash(i)
-        return n
 
 protocol MutableSet[A] (Set[A], IncrementalLogical[Set[A]], IncrementalMinus[Set[A]]):
     add             : !(A) -> None
     pop             : !() -> A
     clear           : !() -> None
+    update          : !(Set[A]) -> None
     
     def clear(self: Self):
         try:
@@ -495,7 +501,7 @@ protocol Sequence[A] (Collection[A], Indexed[int,A], Reversible[A], Plus):
     def __iter__(self):             ...
     def __reversed__(self):         ...
 
-extension Sequence[A (Eq)] (Eq):
+extension Sequence[A(Eq)] (Eq):
     def __eq__(a: Self, b: Self):
         if len(a) != len(b):
             return False
