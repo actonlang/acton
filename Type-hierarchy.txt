@@ -405,12 +405,9 @@ protocol Set[A] (Collection[A], Ord, Logical, Minus):
                 return False
         return True
     def __lt__(a: Self, b: Self):
-        if len(a) >= len(b):
+        if len(a) == len(b):
             return False
-        for elem in a:
-            if elem not in b:
-                return False
-        return True
+        return a <= b
     def __eq__(a: Self, b: Self):
         return len(a) == len(b) and a <= b
     def __or__(a: Self, b: Self):
