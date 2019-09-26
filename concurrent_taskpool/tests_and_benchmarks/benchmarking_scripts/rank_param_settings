@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# e.g. concurrent_task_pool_times_t_v11_k_ary_tree_static_vector_inline_list_fixed_all_degrees_1_32.txt 13 1 32 5
+
+file="$1"
+field=$2
+minthreads=$3
+maxthreads=$4
+top=$5
+
+for threads in `seq $minthreads $maxthreads`
+do
+	triples=`cat $file | grep no_threads=$threads, | cut -f 4,5,6,11 -d ' ' | sed -e 's/[ ]*[^0-9]*=/ /g' -e 's/,//g' -e 's/^ //g' | sort -g -k 4 -t ' ' | head -$top | cut -f 1-3 -d ' ' | sed -e 's/ /,/g'`
+	echo "threads=$threads, "`echo $triples | sed -e 's/ /) (/g' -e 's/^/(/g' -e 's/$/)/g'`
+done
+
+

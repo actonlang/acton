@@ -425,13 +425,11 @@ R set_pong(Actor self, WORD p, WORD then);
 
 R set_pong1(Clos this, WORD th) {
     assert(this->nvar == 2);
-    //printf("+ set_pong1 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
     return set_pong(this->var[0], this->var[1], th);
 }
 
 R set_pong2(Clos this, WORD th) {
     assert(this->nvar == 2);
-    //printf("+ set_pong2 0:%p 1:%p th:%p\n", this->var[0], this->var[1], th);
     return set_pong(this->var[0], this->var[1], th);
 }
 
@@ -439,7 +437,6 @@ R ping(Actor self, WORD count, WORD forward, WORD then);
 
 R first_ping(Clos this, WORD th) {
     assert(this->nvar == 1);
-    //printf("+ first_ping 0:%p th:%p\n", this->var[0], th);
     return ping(this->var[0], 0, (WORD)true, th);
 }
 
@@ -449,7 +446,6 @@ Actor Pingpong(WORD i);//, WORD then);
 
 R PingStarter(Clos this, WORD then) {
     assert(this->nvar == 2);
-    //printf("> PingStarter\n");
     Actor self = ACTOR(0);
     WORD first = None;
     WORD prev = None;
@@ -460,39 +456,80 @@ R PingStarter(Clos this, WORD then) {
             first = prev;
         }
         if (prev != None) {
-            ASYNC(prev, CLOS2(set_pong1, prev, p));
+            ASYNC(MSG(prev, CLOS2(set_pong1, prev, p)));
         }
         prev = p;
     }
-    ASYNC(prev, CLOS2(set_pong2, prev, first));
-    ASYNC(first, CLOS1(first_ping, first));
-    //printf("< PingStarter\n");
+    ASYNC(MSG(prev, CLOS2(set_pong2, prev, first)));
+    ASYNC(MSG(first, CLOS1(first_ping, first)));
     return _CONT(then, self);
 }
 
 ////
 
-R ping_spam(Clos this, WORD th) {
-    assert(this->nvar == 2);
-    //printf("+ ping_spam 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
-    return ping(this->var[0], this->var[1], false, th);
+R ping_spam(Clos this, WORD then) {
+    return ping(this->var[0], this->var[1], false, then);
 }
 
-R ping_fw(Clos this, WORD th) {
-    assert(this->nvar == 2);
-    //printf("+ ping_fw 0:%p 1:%d th:%p\n", this->var[0], (int)this->var[1], th);
-    return ping(this->var[0], (WORD)(((int)this->var[1]) + 1), (WORD)true, th);
+R ping_fw(Clos this, WORD then) {
+    return ping(this->var[0], (WORD)(((int)this->var[1]) + 1), (WORD)true, then);
+}
+
+
+R timed_func(Clos this, WORD then);
+
+R timed_func_msgwrap(Clos this, WORD then) {
+    // we only want to return a Msg instance, but we need to return an R.
+    // we'll use use its 'value' attribute
+    return _DONE(then, (WORD)MSG(this->var[0], CLOS1(timed_func, this->var[1])));
+}
+
+
+static const monotonic_duration postpone_delay = 3*MT_SECOND;
+static _Thread_local TimedMsg tmsg = NULL;
+
+R timed_func(Clos this, WORD then) {
+    assert(this->var[0] != NULL);
+    Msg curr_msg = ((Actor)this->var[0])->msgQ;
+
+    const monotonic_time mt_now = monotonic_now();
+    printf("\x1b[35;1mtimed_func()\x1b[m count = %d @ %lu\n", (int)this->var[1], mt_now);
+
+    // this would normally call timed_func_msgwrap()
+    //R msg_cont = timed_func_wrap(CLOS2(timed_func_wrap, this->var[0], (WORD)((int)this->var[1] + 1)), NULL);
+    //Msg async_msg = (Msg)msg_conf.value;
+    // the above, inlined:
+    Msg async_msg = MSG(this->var[0], CLOS2(timed_func, this->var[0], (WORD)((int)this->var[1] + 1)));
+    tmsg = POSTPONE(curr_msg->time_baseline + postpone_delay, async_msg);
+
+    return _CONT(then, None);
 }
 
 _Atomic int next_count_print = 0;
 
 R ping(Actor self, WORD count, WORD forward, WORD then) {
-    //printf("> ping self:%p count:%d forward:%s then:%p\n", (void *)self, (int)count, forward==0?"false":"true", then);
+    Msg curr_msg = self->msgQ;
     if ((int)count % PRINT_INTERVAL == 0 && (_Bool)forward != false) {
         int curr_count = (int)count; // need lvalue for compare
         if (atomic_compare_exchange_weak(&next_count_print, &curr_count, curr_count + PRINT_INTERVAL))
-            printf("Ping %'10d\n", (int)count);
+            printf("Ping %10d\n", (int)count);
     }
+    if ((int)count == 0 && (_Bool)forward != false) {
+        // this would normally call timed_func_msgwrap()
+        //R msg_cont = timed_func_wrap(CLOS2(timed_func_wrap, this->var[0], (WORD)((int)this->var[1] + 1)), NULL);
+        //Msg async_msg = (Msg)msg_conf.value;
+        // the above, inlined:
+        Msg async_msg = MSG(self, CLOS2(timed_func, self, 0));
+        tmsg = POSTPONE(curr_msg->time_baseline + 3*MT_SECOND, async_msg);
+    }
+    if ((int)count >= 300000 && tmsg != NULL) {
+        if (postpone_CANCEL(tmsg)) {
+            printf("postpone cancelled\n");
+        } else {
+            printf("postpone already cancelled!\n");
+        }
+		tmsg = NULL;
+	}
     if ((int)count >= PING_LIMIT) {
         printf("\x1b[31;1mping limit reached\x1b[m\n");
         return _EXIT(then, None);
@@ -500,17 +537,15 @@ R ping(Actor self, WORD count, WORD forward, WORD then) {
     if ((_Bool)forward != false) {
         if ((int)count % 10 == 0) {
             for(int idx = 0; idx < SPAM_COUNT; ++idx) {
-                ASYNC(self->state[0], CLOS2(ping_spam, self->state[0], count));
+                ASYNC(MSG(self->state[0], CLOS2(ping_spam, self->state[0], count)));
             }
         }
-        ASYNC(self->state[0], CLOS2(ping_fw, self->state[0], count));
+        ASYNC(MSG(self->state[0], CLOS2(ping_fw, self->state[0], count)));
     }
-    //printf("< ping\n");
     return _CONT(then, None);
 }
 
 R set_pong(Actor self, WORD p, WORD then) {
-    //printf("+ set_pong self:%p 0:%p then:%p\n", (void *)self, p, then);
     self->state[0] = p;
     return _CONT(then, None);
 }
@@ -518,7 +553,6 @@ R set_pong(Actor self, WORD p, WORD then) {
 // TODO: should be:
 //  R Pingpong(WORD i, WORD then);
 Actor Pingpong(WORD i) {
-    //printf("+ Pingpong\n");
     Actor self = ACTOR(1);
     self->state[0] = None;
     //return RCONT(then, self);

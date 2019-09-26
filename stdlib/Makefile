@@ -35,49 +35,17 @@ LDFLAGS += $(JEM_LIB)
 endif
 
 # for e.g. clock_gettime
-CFLAGS += -D_XOPEN_SOURCE=600
+CFLAGS += -D_GNU_SOURCE -D_XOPEN_SOURCE=600
 
-PQUEUE_LIB := deps/libpqueue/libpqueue.a
+PQUEUE_LIB := ../deps/libpqueue/libpqueue.a
 
-all: kernel test_io act_io_test
-
-kernel: Makefile deps/libpqueue/libpqueue.a kernelops.c kernelops.h kernel.c pingpong.c pingpong2.c
-	cc -std=c11 \
-		-Wall -Werror -pedantic -pedantic-errors \
-		-Wno-int-to-void-pointer-cast \
-		-Wno-int-to-pointer-cast \
-		-Wno-pointer-to-int-cast \
-		-Wno-error=int-to-pointer-cast \
-		-Wno-unknown-pragmas \
-		-I deps/libpqueue/src \
-		$(CFLAGS) \
-		kernelops.c \
-		kernel.c \
-		$(PQUEUE_LIB) \
-		$(LDFLAGS) \
-		-pthread \
-		-lpthread \
-		-lm \
-		-o kernel
-
-
-$(PQUEUE_LIB):
-	@make -C deps/libpqueue
-
-test_io_cuckoo.o: test_io_cuckoo.cc
-	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
-
-act_io_cuckoo.o: act_io_cuckoo.cc
-	$(CXX) $(CXXFLAGS) -Wno-pessimizing-move -I deps/libcuckoo -c $^
+all: bvtest
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $^
 
-test_io: test_io.o test_io_cuckoo.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
-
-act_io_test: act_io_common.o act_io_cuckoo.o act_io_epoll.o act_io_kqueue.o act_io_test.o act_io_trace.o
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -o $@ $^
+bvtest: bytesview_test.o bytesview.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 .PHONY: test
 test:
@@ -85,9 +53,7 @@ test:
 
 clean:
 	rm -f *.a *.o
-	rm -f test_io
-	rm -f kernel
-
+	rm -f bvtest
 
 .PHONY: help
 help:

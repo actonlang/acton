@@ -231,7 +231,7 @@ R ping(Actor self, WORD q, Clos then) {
     int j = (int)self->state[0]*(int)q;
     if (atomic_compare_exchange_weak(&next_count_print, &j, j + PRINT_INTERVAL))
         printf("Ping %'10d\n", j);
-    ASYNC(self, CLOS3(pong1, self, self->state[0], q));
+    ASYNC(MSG(self, CLOS3(pong1, self, self->state[0], q)));
     return _CONT(then, (WORD)j);
     //return (R){RCONT, CLOS3(lam1, self, q, then), None};
 }
@@ -250,7 +250,7 @@ R pong(Actor self, WORD n, WORD q, Clos then) {
         printf("\x1b[31;1mping limit reached\x1b[m\n");
         return _EXIT(NULL, 0);
     }
-    ASYNC(self, CLOS2(ping1, self, q));
+    ASYNC(MSG(self, CLOS2(ping1, self, q)));
     return _CONT(then, None);
 }
 
@@ -265,7 +265,7 @@ R pong1(Clos this, WORD th) {
 R Pingpong(Clos this, WORD then) {
     Actor self = ACTOR(1);
     self->state[0] = 0;
-    ASYNC(self, CLOS2(ping2,self,this->var[0]));
+    ASYNC(MSG(self, CLOS2(ping2,self,this->var[0])));
     return _CONT(then, self);
 }
 

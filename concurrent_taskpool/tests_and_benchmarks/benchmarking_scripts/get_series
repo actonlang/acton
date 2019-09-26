@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# e.g. 10 4 1 "11,13" concurrent_task_pool_times_t_v11_k_ary_tree_static_vector_inline_list_fixed_all_degrees_1_32.txt [l]
+
+d=$1
+h=$2
+k=$3
+fields="$4"
+file=$5
+
+if [ $# -eq 5 ]
+then
+	cat $file | grep "tree_degree=$d, tree_height=$h, k_retries=$k," | cut -f 3,$fields -d ' '
+else
+	cat $file | grep "tree_degree=$d, tree_height=$h, k_retries=$k," | cut -f 3,$fields -d ' ' | sed -e 's/[^0-9 ]*=//g' -e 's/,//g'
+fi
+
+

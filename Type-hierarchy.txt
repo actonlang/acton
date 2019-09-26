@@ -1,0 +1,525 @@
+Inheritance and overloading in Acton
+====================================
+
+This note aims to describe a proposal for how to integrate the notions of class/struct inheritance and function/method overloading in Acton. 
+
+By inheritance I mean the combination of the following ideas:
+- Classes (and other types) form a subtype hierarchy, and values of smaller types automatically count as values of their base types.
+- Classes defined by extension automatically include the code of their base classes, with the exception of overridden methods.
+- Methods invoked on 'self' reach code associated with the *actual* class of 'self', even when the calling method is an inherited one.
+
+By overloading I mean the feature that a certain method/function name can have many different implementations in a program, and that the selection of which implementation to invoke is directed by static type information available at the call site. Being dynamically typed, Python doesn't offer this particular feature, and instead often employs multiple inheritance (inheritance from more than one base class) as a form of compensation. However, this approach leads to its own set of problems that we want to avoid in Acton.
+
+The first problem is that generic operations get associated with individual objects, even when multiple objects are involved and the more correct view would be to associate the operation with the objects' common type. A typical example is the generic equality test ==, implemented in Python as a binary method __eq__ available on all objects. Ignoring for now the fact that higher-order types have no natural notion of equality, the primary problem of treating equality as a property of individual objects is that the relation becomes too localized. For example, x.__eq__(y) is in general a different test than y.__eq__(x), and the two forms may invoke entirely unrelated pieces of code in case x and y were instatiated from different classes. What is worse, the natural expectation that both operands of __eq__ exhibit the same set of attributes goes against well-known type-checking laws in the presence of inheritance, which renders static type safety problematic.
+
+The second problem with Python's reliance on inheritance is the fact that the ancestry of a class is fixed once the class is defined. That is, mixing in an extra base class as an afterthought is not possible. This isn't just a problem that can be avoided by careful planning, as all mix-in classes of useful functionality might not even be concieved when a datatype is defined. In a statically typed setting, the drawback is accentuated in the presence of generics (parametric polymorphism), where the appropriateness of mix-in inheritance also might depend on whether a yet unknown type parameter supports a certain operation or not. A type system where overloading is separate from the inheritance hierarchy would not suffer from this problem.
+
+Thirdly, there is no secret that multiple inheritance is tricky to implement, both in terms of the necessary static type analysis and the run-time machinery required. Many modern languages like Java, C#, Swift, Ruby and Scala abandon multiple inheritance in favor of a single inheritance hierarchy and the ability to overload classes using multiple interfaces/protocols/traits. Haskell has no notion of class inheritance, but provides an advanced system for overloading that is compatible with type inference and supports an efficient implementation. When I realized that Swift's protocol mechanism can be implemented like (and is probably based on) Haskell's overloading system, I felt the arguments tipping over in favor of abandoning multiple inheritance in Acton as well. If done right, the change would not even have to lead to much visible differences compared to existing Python programming practice.
+
+So the basic idea of the proposal is inspired by Swift, where one declares *protocols* in addition to classes. I'm not sure about the best way to syntactically introduce protocols in Acton, but let's for the moment assume something akin to (abstract) class declarations. Here's how we could write some simple protocols to express hashability and equality:
+
+    protocol Hashable (Eq):
+        __hash__        : () -> int
+
+    protocol Eq:
+        @staticmethod
+        __eq__          : (Self,Self) -> bool
+        @staticmethod
+        __ne__          : (Self,Self) -> bool
+        
+        def __ne__(a,b):
+            return not (a == b)
+
+The meaning is that a hashable type is a type with a method __hash__, and equality is supported by a type that offers the static methods __eq__ and __ne__. Hashable is furthermore defined as an extension of protocol Eq, which implies that any type wishing to implement protocol Hashable must also make sure it implements the Eq methods. Another detail is that protocols can offer default implementations of its methods, so that in this case, a type that wants to support protocol Eq doesn't have to implement method __ne__ unless it wishes to. We may say that such a type "inherits" the __ne__ method, although in this case the resolution of which method that gets called will be based on static type information rather than a dynamic class pointer.
+
+The special type Self stands for the actual type that implements a particular protocol, so declaring both method arguments to be of type Self effectively says the arguments must have the same (unknown) type. Self can also be used inside classes and structs, where it stands for the type where an attribute or method eventually ends up after being inherited. Self is thus a place-holder that implicitly moves with the class and protocol hierarchies, and its presence in contravariant argument positions should therefore trigger some concern regarding type safety. 
+
+Like in Swift, this proposal restricts the Self type by only allowing contravariant occurrences inside static methods. We will also impose the rule that (contravariant) static methods can only be selected directly from classes that implement them, they are not accessible as attributes of the instances of such classes. Combined with the ability of the Acton type-checker to automatically insert the appropriate class in front of overloaded method names, these restrictions are sufficient to guarantee type safety while retaining the original convenience of Python's binary methods. That is, an expression x==y will not translate into x.__eq__(y) in Acton but to w.__eq__(x,y), where w is a class name generated by the compiler on basis of static type information.
+
+Protocols can be listed instead of base classes when classes are defined, and the resulting behavior stays similar to that of class inheritance except for the statically resolved overloading. As an example, let's see how equality can be defined for a class of Fruit and some specialization classes Apple and Orange.
+
+    class Fruit (Eq):
+        ...
+        def __eq__(a, b):
+            return a.weight == b.weight
+
+    class Apple (Fruit):
+        ...
+        def __eq__(a, b):
+            return Fruit.__eq__(a,b) and a.appleness == b.appleness
+
+    class Orange (Fruit):
+        ...
+        def __eq__(a, b):
+            return Fruit.__eq__(a,b) and a.orangeness == b.orangeness
+
+The fact that __eq__ is a static method in all three classes is implied by the reference to protocol Eq. The specialized fruit attributes "appleness" and "orangeness" are left unspecified here, the important detail is that only apples possess appleness, and no fruit besides oranges exhibit the orangeness attribute.
+
+Assuming two variables x and y of type Apple, we can test for their apple-specific equality by writing
+
+    x == y
+    
+which gets translates to
+
+    Apple.__eq__(x, y)
+
+on basis of the statically known types for x and y.
+
+Similarly, testing u == v, where both u and v are of type Orange, results in the following translated code:
+
+    Orange.__eq__(u, v)
+
+However, should we promote any pair of these variables to type Fruit and then test for equality, we expect the comparison to only take the respective weights into account (as defined in class Fruit). That is, if we write
+
+    i : Fruit = x
+    j : Fruit = u
+    i == j
+
+the last expression gets translated to
+
+    Fruit.__eq__(i, j)
+
+by the compiler. In fact, the same effect is achieved if we compare Apple x directly to Orange u, since the closest common supertype of these types is Fruit:
+
+    x == u   ====>   Fruit.__eq__(x, u)
+
+Any attempt to force the comparison of these variables using either the Apple.__eq__ or Orange.__eq__ methods will result in a static type error. That goes for the selection of __eq__ as an attribute of either a or x as well, since __eq__ is a contravariant static method which must therefore only be looked up by class.
+
+A more elaborate example looks as follows:
+
+    class MyClass (Hashable):
+        def __eq__(a, b):
+            return hash(a) == hash(b)
+        def hash(self):
+            return cheap_hash(self)
+        def my_method(self):
+            return hash(self)
+        
+    class MySubClass (MyClass):
+        def hash(self):
+            return expensive_hash(self)
+
+Here MyClass implements the Hashable protocol, and MySubClass in turn extends MyClass in the plain old class inheritance fashion. Both __eq__ and my_method call the overloaded method __hash__ (via Python's syntactic sugar hash(v) ====> v.__hash__()), and __hash__ is redefined in MySubClass. But while __eq__ is itself a protocol method selected by type, my_method is dynamically bound. We should thus expect to see some differences in the way calls to these methods are resolved.
+
+First let's assume some objects x and y that are true MySubClass instances, and a variable z that is an alias to y but promoted to type MyClass:
+
+    x = y = MySubClass()
+    z : MyClass = y
+
+As in the Fruit example, the comparisons 
+
+    x == y
+    x == z
+
+get translates on basis of static type information as before, and hence become
+
+    MySubClass.__eq__(x,y)
+    MyClass.__eq__(x,z)
+
+However, the calls
+
+    y.my_method()
+    z.my_method()
+
+are both dispatched dynamically on basis of the run-time class of y and z, and since this class is MySubClass in both cases, both calls behave the same at run-time:
+
+    y.my_method()    ====>    MySubClass.my_method(y)
+    z.my_method()    ====>    MySubClass.my_method(z)
+
+Now, inside both __eq__ and my_method, the calls to __hash__ (via hash) are resolved statically. But the static type in question is Self at these occurrences, and Self gets re-interpreted whenever a method is inherited in a subclass. Thus, the equality comparisons evolve as follows
+
+    MySubClass.__eq__(x,y)  ====>  ... MySubClass.__hash__(b) ...  ====>  ... expensive_hash(b) ...    (where b is y)
+    MyClass.__eq__(x,z)     ====>  ... MyClass.__hash__(b) ...     ====>  ... cheap_hash(b) ...        (where b is z)
+    
+whereas the my_method calls become
+
+    MySubClass.my_method(y)  ====>  ... MySubClass.__hash__(b) ...  ====>  ... expensive_hash(b) ...   (where b is y)
+    MySubClass.my_method(z)  ====>  ... MySubClass.__hash__(b) ...  ====>  ... expensive_hash(b) ...   (where b is z)
+
+In essence, the statically known type of an object is irrelevant when one of its dynamically bound methods is called, but absolutely crucial when the called method belongs to a protocol. I expect these principles to coincide for most practical purposes, and I'll argue that the subtle cases one can construct are at least not harder to understand than the the corner cases of mutltiple inheritance in Python. The advantages of the proposal show up in the absence of a diamond problem (protocols can never be implemented twice), the ease by which contravariant binary methods can be handled (and explored at different types), and the straightforward implementation technique one gets for free when the protocol notion is understood in terms of Haskell's type classes (more on this below).
+
+Another distinct advantage of static overloading is that it also lends itself to incremental class adoptions. That is, all protocols a class can implement don't have to be listed when the class is defined; they can just as well be added later, in separate modules, and even without access to the original class implemenation. The key insight here is that type-based associations between a class and its various protocol implementations only exist within the compiler, there is no need to modify any existing class definition just because another such association is made.
+
+Again drawing inspiration from Swift (and Haskell), here's a tentative syntax illustrating what an incremental protocol adoption can look like.
+
+    class SomeElaborateClass (SomeBaseClass, Eq, SomeBasicProtocol):
+        ...
+        
+    # Much later, in a module far away:
+
+    extension SomeElaborateClass (NewlyInventedProtocol):
+        def protocol_method_A(self):
+            ...
+        def protocol_method_B(x, y, z):
+            ...
+
+To investigate the design a bit further, I've made an experimental "implementation" of parts of Python's numeric tower and abstract collection libraries (modules numbers and collections.abc). I won't comment on every detail in it, but there are a few points worth mentioning:
+
+- Struct types and immutability
+- Abstract structs, abstract classes (where *some* unimplemented signatures remain)
+- Instantiation of abstract structs: remaining bindings as keyword parameters
+- Overloaded struct constructors/converters (unresolved, but see __fromint__, etc)
+- Make (a=e,...) short syntax for struct(a=e,...), i.e., a built-in struct type that takes an arbitrary row as argument
+- Global status of protocol names
+- Type argument syntax: list[int]
+- Type parameter binding syntax, with protocol/baseclass constraints: Sequence[A] or Sequence[A(Eq)]
+- Recursion between protocol and type
+- Extension of a protocol itself
+- Uniqueness of extensions (see int(Eq) and int(Ord) alternatives)
+- Join protocols (see Collection[A])
+- Protocols as types: either universal quant as in Haskell, or existential quant as in Swift (unresolved)
+- Inferring constrained types, or heavy defaulting? (unresolved)
+- Back to a nominal subtyping core, row polymorphism to handle tuple/struct extensions only (and maybe unions)
+- The option type via subtyping
+- Associated types (future)
+- Mutability effects ignored when extending mutable to protocol (for example: iter() on a MutableSet should be monadic)
+- Notice Set, Mapping, Sequence extensions with additional constraint on type parameter
+- Appropriatness of SupportsX, Reversible, etc...?
+- Translation into plain structs...
+- Equivalent Haskell constructs...
+
+############################################################
+
+protocol Eq:
+    @staticmethod
+    __eq__          : (Self,Self) -> bool
+    @staticmethod
+    __ne__          : (Self,Self) -> bool
+    
+    def __ne__(a,b):
+        return not (a == b)
+
+protocol Ord (Eq):
+    @staticmethod
+    __lt__          : (Self,Self) -> bool
+    @staticmethod
+    __le__          : (Self,Self) -> bool
+    @staticmethod
+    __gt__          : (Self,Self) -> bool
+    @staticmethod
+    __ge__          : (Self,Self) -> bool
+
+    def __le__(a,b):
+        return a < b or a == b
+    def __gt__(a,b):
+        return b < a
+    def __ge__(a,b):
+        return b <= a
+
+extension int (Eq):                                 # ALTERNATIVE 1: SEPARATE EXTENSIONS
+    def __eq__(a:int, b:int) -> bool:               #
+        return primeqint(a,b)                       #
+extension int (Ord):                                #
+    def __lt__(a:int, b:int) -> bool:               #
+        return primltint(a,b)                       #
+
+extension int (Ord):                                # ALTERNATIVEL 2: A JOINT EXTENSION
+    def __eq__(a:int, b:int) -> bool:               #
+        return primeqint(a,b)                       #
+    def __lt__(a:int, b:int) -> bool:               #
+        return primltint(a,b)                       #
+
+protocol Hashable (Eq):
+    __hash__        : () -> int
+
+protocol SupportsInt:
+    __int__         : () -> int
+
+extension int (SupportsInt):
+    def __int__(self):
+        return self
+
+protocol SupportsFloat:
+    __float__       : () -> float
+
+protocol SupportsComplex:
+    __complex__     : () -> complex
+
+protocol Logical:
+    @staticmethod
+    __and__         : (Self,Self) -> Self
+    @staticmethod
+    __or__          : (Self,Self) -> Self
+    @staticmethod
+    __xor__         : (Self,Self) -> Self
+
+protocol Plus:
+    @staticmethod
+    __add__         : (Self,Self) -> Self
+
+protocol Minus:
+    @staticmethod
+    __sub__         : (Self,Self) -> Self
+
+protocol Number (Ord, Plus, Minus):
+    __pos__         : () -> Self
+    __neg__         : () -> Self
+    @staticmethod
+    __mul__         : (Self,Self) -> Self
+    @staticmethod
+    __pow__         : (Self,Self) -> Self
+
+extension int (Number):
+    def __pos__(self):
+        return self
+    def __neg__(self):
+        return primnegint(self)
+    def __add__(a, b) -> int:
+        return primaddint(a,b)
+    def __sub__(a, b) -> int:
+        return primaddint(a,b)
+    def __mul__(a, b) -> int:
+        return primmulint(a,b)
+
+protocol SupportsAbs:
+    __abs__         : () -> Self
+
+protocol Complex (Number, SupportsAbs, SupportsComplex):
+    @staticmethod
+    __fromcomplex__ : (complex) -> Self
+    @staticmethod
+    __div__         : (Self,Self) -> Self
+    real            : () -> Real
+    imag            : () -> Real
+    conjugate       : () -> Self
+
+protocol SupportsRound:
+    __round__       : () -> int
+
+protocol Real (Complex, SupportsRound, SupportsFloat):
+    @staticmethod
+    __fromfloat__   : (float) -> Self
+    __trunc__       : () -> Integral
+    __floor__       : () -> Integral
+    __ceil__        : () -> Integral
+    @staticmethod
+    __divmod__      : (Self,Self) -> (Self,Self) 
+    @staticmethod
+    __floordiv__    : (Self,Self) -> Integral    
+    @staticmethod
+    __mod__         : (Self,Self) -> Self        
+
+    def __complex__(a):
+        return complex(float(a))
+    def real(a):
+        return fromfloat(float(a))
+    def imag(a):
+        return fromfloat(0.0)
+    def conjugate(a):
+        return a
+    def divmod(a,b):
+        return (a//b, a%b)
+
+protocol Rational (Real):
+    numerator       : () -> Integral
+    denominator     : () -> Integral
+    
+    def __float__(a):
+        return numerator(a) / denominator(a)
+
+protocol Integral (Rational,SupportsInt,Logical):
+    @staticmethod
+    __fromint__     : (int) -> Self
+    __index__       : () -> Self
+    @staticmethod
+    __lshift__      : (Self,Self) -> Self
+    @staticmethod
+    __rshift__      : (Self,Self) -> Self
+    __invert__      : () -> Self
+    
+    def __index__(a):
+        return int(a)
+    def __lshift__(a,b):
+        return fromint(int(a) << int(b))
+    def __invert__(a):
+        return fromint(~int(a))
+    def __float__(a):
+        return float(int(a))
+    def numerator(a):
+        return a
+    def denominator(a):
+        return 1
+
+extension int (Integral):
+    def __fromint__(a):
+        return a
+    def __int__(self):
+        return self
+    def __and__(a,b):
+        return prinandint(a,b)
+
+extension bool (Logical,Ord):
+    def __and__(a,b):
+        return b if a else False
+    def __eq__(a,b):
+        return primeqbool(a,b)
+    def __lt__(a,b):
+        return a == False and b == True
+
+protocol IncrementalLogical[A] (Logical):
+    __iand__        : !(A) -> None
+    __ior__         : !(A) -> None
+    __ixor__        : !(A) -> None
+
+protocol IncrementalPlus[A] (Plus):
+    __iadd__        : !(A) -> None
+
+protocol IncrementalMinus[A] (Minus):
+    __isub__        : !(A) -> None
+
+protocol Foldable[A]:
+    __fold__        : ((A,B)->B, B) -> B
+
+protocol Iterable[A]:                               # MUTUAL RECURSION BETWEEN TYPE AND PROTOCOL
+    __iter__        : () -> Iterator[A]             #
+                                                    #
+struct Iterator[A] (Iterable[A]):                   #
+    __next__        : !() -> A                      #
+                                                    #
+    def __iter__(self): return self                 #
+
+protocol Reversible[A] (Iterable[A]):
+    __reversed__    : () -> Self
+
+protocol Container[A]:
+    __contains__    : (A) -> bool
+
+protocol Sized:
+    __len__         : () -> int
+
+protocol Indexed[A,B]:
+    __getitem__     : (A) -> B
+
+protocol Collection[A] (Container[A], Sized, Iterable[A]):
+    @staticmethod
+    __fromiter__    : (Iterable[A]) -> Self
+
+protocol Set[A] (Collection[A], Ord, Logical, Minus):
+    isdisjoint      : (Set[A]) -> bool
+
+    def __le__(a: Self, b: Self):
+        if len(a) > len(b):
+            return False
+        for elem in a:
+            if elem not in b:
+                return False
+        return True
+    def __lt__(a: Self, b: Self):
+        if len(a) == len(b):
+            return False
+        return a <= b
+    def __eq__(a: Self, b: Self):
+        return len(a) == len(b) and a <= b
+    def __or__(a: Self, b: Self):
+        chain = [ e for s in [a,b] for e in s ]
+        return fromiter(chain)
+    def isdisjoint(self: Self, other: Set[A]):
+        for value in b:
+            if value in self:
+                return False
+        return True
+
+extension Set[A (Hashable)] (Hashable):
+    def __hash__(self):
+        n = 12345
+        for k in self:
+            n += hash(k)
+        return n
+
+struct frozenset[A (Hashable)] (Set[A], Hashable):          # HYPOTHETICAL DEFINITION!
+    _val        : frozendict[A,()]
+
+    def __contains__(self, a):
+        return a in self._val.keys()
+    def __fromiter__(items: Iterable[A]):
+        return frozenset(_val = { i:() for i in items })
+    def __len__(self):
+        return len(self._val)
+    def __iter__(self):
+        return iter(self._val.keys())
+
+protocol MutableSet[A] (Set[A], IncrementalLogical[Set[A]], IncrementalMinus[Set[A]]):
+    add             : !(A) -> None
+    pop             : !() -> A
+    clear           : !() -> None
+    update          : !(Set[A]) -> None
+    
+    def clear(self: Self):
+        try:
+            while True:
+                self.pop()
+        except KeyError:
+            pass
+
+    def __ior__(self: Self, other: Set[A]):
+        for value in other:
+            self.add(value)
+
+class set[A (Hashable)] (MutableSet[A]):
+    def __len__(self): ...
+    def __contains__(self, a): ...
+    def __iter__(self): ...
+
+    def __eq__(self, other): ...
+    def __lt__(self, other): ...
+    def __or__(self, other): ...
+
+    def add(self, a): ...
+    def update(self, other): ...
+    def __ior__(self, other): ...
+    def copy(self): ...
+
+protocol MutableIndexed[A,B] (Indexed[A,B]):
+    __setitem__     : !(A,B) -> None
+    __delitem__     : !(A) -> None
+
+protocol Mapping[A,B] (Collection[A], Indexed[A,B]):
+    keys            : () -> Iterator[A]
+    values          : () -> Iterator[B]
+    items           : () -> Iterator[(A,B)]
+
+extension Mapping[A, B(Eq)] (Eq):
+    def __eq__(a: Self, b: Self):
+        if len(a) != len(b):
+            return False
+        for i in a:
+            if i not in b:
+                return False
+            if a[i] /= b[i]:
+                return False
+        return True
+
+protocol MutableMapping[A,B] (Mapping[A,B], MutableIndexed[A,B]):
+    update          : !(Mapping[A,B]) -> None
+
+protocol Sequence[A] (Collection[A], Indexed[int,A], Reversible[A], Plus):
+    def __add__(self, other):       ...
+    def __contains__(self, key):    ...
+    def __iter__(self):             ...
+    def __reversed__(self):         ...
+
+extension Sequence[A(Eq)] (Eq):
+    def __eq__(a: Self, b: Self):
+        if len(a) != len(b):
+            return False
+        for i in range(0,len(a)):
+            if a[i] != b[i]:
+                return False
+        return True
+
+extension Sequence[A (Eq)]:        
+    index           : (A) -> int?
+    count           : (A) -> int
+    
+    def index(self, val): ...
+    def count(self, val): ...
+
+protocol MutableSequence[A] (Sequence[A], MutableIndexed[int,A], IncrementalPlus[Sequence[A]]):
+    append          : !(A) -> None
+    __iadd__        : !(Sequence[A]) -> None
+    
+    def append(self, other):
+        ...
+    def __iadd__(self, other):
+        self.append(other)
+

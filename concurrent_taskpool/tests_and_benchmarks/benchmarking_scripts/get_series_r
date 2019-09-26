@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# e.g. 50000 "10,12" concurrent_task_pool_times_r.bare_iron.txt
+
+r=$1
+fields="$2"
+file=$3
+
+if [ $# -eq 3 ]
+then
+	cat $file | grep ring_buffer_size=$r, | cut -f 3,$fields -d ' '
+else
+	cat $file | grep ring_buffer_size=$r, | cut -f 3,$fields -d ' ' | sed -e 's/[^0-9 ]*=//g' -e 's/,//g'
+fi
+
+

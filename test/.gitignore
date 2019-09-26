@@ -1,0 +1,4 @@
+# no generated files
+generated_*.c
+# ignore the build test binaries
+run_test
