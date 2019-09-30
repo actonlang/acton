@@ -10,6 +10,8 @@
 #define DEFAULT_SIZE 16
 #define GROWTH_RATE 2.0
 
+#define MAX_MSG_SIZE_VC (1024 * 1024)
+
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
 #define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)					\
 	   (exact_match) = 0; 			  												\

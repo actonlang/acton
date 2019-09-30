@@ -1,18 +1,32 @@
 
-message GossipMessage {
- 	required VectorClockMessage vc=1;
- 	required GossipStateMessage gossip=1;
-}
-
-message VectorClockMessage {
- 	required repeated int32 ids=1; 
- 	required repeated int64 counters=1; 
-}
-
-message GossipStateMessage {
-	required int32 status;
+message NodeStateMessage {
+	required int32 status;	// 0 - dead, 1 - ready, 2 - alive but not ready
 	required int32 node_id;
 	required int32 rack_id;
 	required int32 dc_id;
-//	optional int32 b=2;
+}
+
+message GossipMessage {
+	required NodeStateMessage node_state;
+ 	required VectorClockMessage vc;
+
+//	optional int32 state=2;
+}
+
+message MembershipViewMessage {
+ 	required repeated NodeStateMessage membership; 
+ 	required VectorClockMessage view_id;
+}
+
+message MembershipAgreementMessage {
+	required int32 msg_type;		// 0 - PROPOSE, 1 - RESPONSE, 2 - NOTIFY, 3 - RETRY_LINK, 4 - NOTIFY_ACK
+	required int32 ack_status;		// 0 - ACK, 1 - NACK, 2 - UNINIT
+ 	required MembershipViewMessage view; 
+ 	required VectorClockMessage vc;
+}
+
+
+message VectorClockMessage {
+ 	required repeated int32 ids=0; 
+ 	required repeated int64 counters=0; 
 }

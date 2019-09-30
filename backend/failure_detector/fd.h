@@ -9,6 +9,8 @@
 
 #include <vector_clock.h>
 
+#define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
+
 typedef struct gossip_state
 {
 	int status;

@@ -9,9 +9,6 @@
 #include "db_messages.pb-c.h"
 // #include "cfuhash.h"
 
-#define DEFAULT_SIZE 16
-#define GROWTH_RATE 2.0
-
 int increment(vector_clock * vc, int node_id)
 {
 	// Binary search node_id:
@@ -149,13 +146,26 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 
 	for(int i=0;i<vc->no_nodes;i++)
 	{
-		vc->node_ids[i].node_id = node_ids[i];
+		vc->node_ids[i].node_id = (node_ids != NULL)? node_ids[i]:0;
 		vc->node_ids[i].counter = (counters != NULL)?counters[i]:0;
 	}
 
 	if(sort_node_ids) // Only call with sort_node_ids true if input node_ids not already sorted
 	{
 		qsort(vc->node_ids, vc->no_nodes, sizeof(struct versioned_id), cmpfunc);
+	}
+
+	return vc;
+}
+
+vector_clock * init_vc_from_msg(VectorClockMessage * msg)
+{
+	vector_clock * vc = init_vc(msg->n_ids, NULL, NULL, 0);
+
+	for (int i = 0; i < (*vc)->no_nodes; i++)
+	{
+		(*vc)->node_ids[i].node_id = msg->ids[i];
+		(*vc)->node_ids[i].counter = msg->counters[i];
 	}
 
 	return vc;
@@ -182,30 +192,58 @@ void free_vc(vector_clock * vc)
 	free(vc);
 }
 
-int serialize(vector_clock * vc, void ** buf, unsigned * len)
+void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc)
 {
-	VectorClockMessage msg = CMESSAGE__INIT;
-
-	 msg.n_ids = vc->no_nodes;
-	 msg.ids = malloc (msg.n_ids * sizeof (int));
-	 msg.n_counters = vc->no_nodes;
-	 msg.counters = malloc (msg.n_counters * sizeof (int));
-	 for (int i = 0; i < msg.n_ids; i++)
+	 msg_ptr->n_ids = vc->no_nodes;
+	 msg_ptr->ids = malloc (msg_ptr->n_ids * sizeof (int));
+	 msg_ptr->n_counters = vc->no_nodes;
+	 msg_ptr->counters = malloc (msg_ptr->n_counters * sizeof (int));
+	 for (int i = 0; i < msg_ptr->n_ids; i++)
 	 {
-		 msg.ids[i] = vc->node_ids[i].node_id;
-		 msg.counters[i] = vc->node_ids[i].counter;
+		 msg_ptr->ids[i] = vc->node_ids[i].node_id;
+		 msg_ptr->counters[i] = vc->node_ids[i].counter;
 	 }
-
-	 *len = cmessage__get_packed_size (&msg);
-	 *buf = malloc (*len);
-	 cmessage__pack (&msg, *buf);
-
-	 free (msg.ids);
-	 free (msg.counters);
-
-	 return 0;
 }
 
+void free_vc_msg(VectorClockMessage * msg_ptr)
+{
+	free(msg->ids);
+	free(msg->counters);
+}
+
+int serialize(vector_clock * vc, void ** buf, unsigned * len)
+{
+	VectorClockMessage msg = VECTORCLOCKMESSAGE__INIT;
+	init_vc_msg(&msg, vc);
+
+	*len = cmessage__get_packed_size (&msg);
+	*buf = malloc (*len);
+	cmessage__pack (&msg, *buf);
+
+	free_vc_msg(&msg);
+
+	return 0;
+}
+
+int deserialize(void * buf, vector_clock ** vc)
+{
+	  size_t msg_len = read_buffer (MAX_MSG_SIZE_VC, (uint8_t *) buf);
+	  VectorClockMessage * msg = cmessage__unpack (NULL, msg_len, buf);
+
+	  if (msg == NULL)
+	  { // Something failed
+	    fprintf(stderr, "error unpacking vector_clock message\n");
+	    return 1;
+	  }
+
+	  assert(msg->n_ids == msg->n_counters);
+
+	  *vc = init_vc_from_msg(msg);
+
+	  cmessage__free_unpacked(msg, NULL);
+
+	  return 0;
+}
 
 
 
