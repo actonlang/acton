@@ -24,11 +24,11 @@ void free_gossip_state(gossip_state * gs)
 	free(gs);
 }
 
-int serialize(gossip_state * gs, void ** buf, unsigned * len)
+int serialize_gs(gossip_state * gs, void ** buf, unsigned * len)
 {
 	GossipMessage msg = GOSSIPMESSAGE__INIT;
 
-	VectorClockMessage vc_msg = VECTORCLOCKMESSAGE__INIT;
+	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
 	init_vc_msg(&vc_msg, gs->vc);
 
 	msg.vc = &vc_msg;
@@ -37,9 +37,9 @@ int serialize(gossip_state * gs, void ** buf, unsigned * len)
 	msg.rack_id = gs->rack_id;
 	msg.dc_id = gs->dc_id;
 
-	*len = cmessage__get_packed_size (&msg);
+	*len = gossip_message__get_packed_size (&msg);
 	*buf = malloc (*len);
-	cmessage__pack (&msg, *buf);
+	gossip_message__pack (&msg, *buf);
 
 	free_vc_msg(&vc_msg);
 
@@ -47,10 +47,9 @@ int serialize(gossip_state * gs, void ** buf, unsigned * len)
 
 }
 
-int deserialize(void * buf, gossip_state ** gs)
+int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs)
 {
-	  size_t msg_len = read_buffer (MAX_MSG_SIZE_GS, (uint8_t *) buf);
-	  GossipMessage * msg = cmessage__unpack(NULL, msg_len, buf);
+	  GossipMessage * msg = gossip_message__unpack(NULL, msg_len, buf);
 
 	  if (msg == NULL)
 	  { // Something failed

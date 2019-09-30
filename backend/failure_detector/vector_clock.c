@@ -5,8 +5,11 @@
  */
 
 #include "vector_clock.h"
-#include <stdlib.h>
 #include "db_messages.pb-c.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 // #include "cfuhash.h"
 
 int increment(vector_clock * vc, int node_id)
@@ -162,10 +165,10 @@ vector_clock * init_vc_from_msg(VectorClockMessage * msg)
 {
 	vector_clock * vc = init_vc(msg->n_ids, NULL, NULL, 0);
 
-	for (int i = 0; i < (*vc)->no_nodes; i++)
+	for (int i = 0; i < vc->no_nodes; i++)
 	{
-		(*vc)->node_ids[i].node_id = msg->ids[i];
-		(*vc)->node_ids[i].counter = msg->counters[i];
+		vc->node_ids[i].node_id = msg->ids[i];
+		vc->node_ids[i].counter = msg->counters[i];
 	}
 
 	return vc;
@@ -205,30 +208,29 @@ void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc)
 	 }
 }
 
-void free_vc_msg(VectorClockMessage * msg_ptr)
+void free_vc_msg(VectorClockMessage * msg)
 {
 	free(msg->ids);
 	free(msg->counters);
 }
 
-int serialize(vector_clock * vc, void ** buf, unsigned * len)
+int serialize_vc(vector_clock * vc, void ** buf, unsigned * len)
 {
-	VectorClockMessage msg = VECTORCLOCKMESSAGE__INIT;
+	VectorClockMessage msg = VECTOR_CLOCK_MESSAGE__INIT;
 	init_vc_msg(&msg, vc);
 
-	*len = cmessage__get_packed_size (&msg);
+	*len = vector_clock_message__get_packed_size (&msg);
 	*buf = malloc (*len);
-	cmessage__pack (&msg, *buf);
+	vector_clock_message__pack (&msg, *buf);
 
 	free_vc_msg(&msg);
 
 	return 0;
 }
 
-int deserialize(void * buf, vector_clock ** vc)
+int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 {
-	  size_t msg_len = read_buffer (MAX_MSG_SIZE_VC, (uint8_t *) buf);
-	  VectorClockMessage * msg = cmessage__unpack (NULL, msg_len, buf);
+	  VectorClockMessage * msg = vector_clock_message__unpack (NULL, msg_len, buf);
 
 	  if (msg == NULL)
 	  { // Something failed
@@ -240,7 +242,7 @@ int deserialize(void * buf, vector_clock ** vc)
 
 	  *vc = init_vc_from_msg(msg);
 
-	  cmessage__free_unpacked(msg, NULL);
+	  vector_clock_message__free_unpacked(msg, NULL);
 
 	  return 0;
 }

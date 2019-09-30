@@ -10,8 +10,6 @@
 #define DEFAULT_SIZE 16
 #define GROWTH_RATE 2.0
 
-#define MAX_MSG_SIZE_VC (1024 * 1024)
-
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
 #define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)					\
 	   (exact_match) = 0; 			  												\
@@ -59,5 +57,10 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 
 void free_vc(vector_clock * vc);
 
+int grow_vc(vector_clock * vc);
+
+int serialize_vc(vector_clock * vc, void ** buf, unsigned * len);
+
+int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
 
 #endif /* BACKEND_FAILURE_DETECTOR_VECTOR_CLOCK_H_ */
