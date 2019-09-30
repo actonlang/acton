@@ -1,0 +1,18 @@
+
+message GossipMessage {
+ 	required VectorClockMessage vc=1;
+ 	required GossipStateMessage gossip=1;
+}
+
+message VectorClockMessage {
+ 	required repeated int32 ids=1; 
+ 	required repeated int64 counters=1; 
+}
+
+message GossipStateMessage {
+	required int32 status;
+	required int32 node_id;
+	required int32 rack_id;
+	required int32 dc_id;
+//	optional int32 b=2;
+}
