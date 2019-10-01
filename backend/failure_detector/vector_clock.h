@@ -57,6 +57,8 @@ int remove_component_vc(vector_clock * vc, int node_id);
 
 vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids);
 
+vector_clock * copy_vc(vector_clock * vc1);
+
 vector_clock * init_vc_from_msg(VectorClockMessage * msg);
 
 void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc);

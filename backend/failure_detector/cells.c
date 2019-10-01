@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <assert.h>
 
+// Cell Address:
 
 cell_address * init_cell_address(long table_key, long * keys, int no_keys)
 {
@@ -78,7 +79,7 @@ int deserialize_cell_address(void * buf, unsigned msg_len, cell_address ** ca)
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking vector_clock message\n");
+		fprintf(stderr, "error unpacking cell_address message\n");
 	    return 1;
 	}
 
@@ -110,11 +111,183 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff)
 
 	for(int i=0;i<ca->no_keys;i++)
 	{
-		sprintf(crt_ptr, "%ld, ", ca->keys);
+		sprintf(crt_ptr, "%ld, ", ca->keys[i]);
 		crt_ptr += strlen(crt_ptr);
 	}
 
 	sprintf(crt_ptr, "})");
+
+	return msg_buff;
+}
+
+// Cell:
+
+cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+{
+	cell * ca = (cell *) malloc(sizeof(cell));
+	ca->table_key = table_key;
+	ca->keys = keys;
+	ca->columns = columns;
+	ca->no_keys = no_keys;
+	ca->no_columns = no_columns;
+	ca->version = version;
+
+	return ca;
+}
+
+cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+{
+	cell * ca = (cell *) malloc(sizeof(cell));
+	ca->table_key = table_key;
+
+	ca->no_keys = no_keys;
+	ca->keys = (long *) malloc(no_keys * sizeof(long));
+	for(int i=0;i<no_keys;i++)
+		ca->keys[i] = keys[i];
+
+	ca->no_columns = no_columns;
+	ca->columns = (long *) malloc(no_columns * sizeof(long));
+	for(int i=0;i<no_columns;i++)
+		ca->columns[i] = columns[i];
+
+	if(version != NULL)
+		ca->version = copy_vc(version);
+	else
+		ca->version = NULL;
+
+	return ca;
+}
+
+void free_cell(cell * ca)
+{
+	free(ca->keys);
+	free(ca->columns);
+	free_vc(ca->version);
+	free(ca);
+}
+
+void init_cell_msg(VersionedCellMessage * msg, cell * ca)
+{
+	msg->table_key = ca->table_key;
+	msg->n_keys = ca->no_keys;
+	msg->keys = (long *) malloc(ca->no_keys * sizeof(long));
+	for(int i=0;i<ca->no_keys;i++)
+		msg->keys[i] = ca->keys[i];
+	msg->n_columns = ca->no_columns;
+	msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
+	for(int i=0;i<ca->no_columns;i++)
+		msg->columns[i] = ca->columns[i];
+}
+
+cell * init_cell_from_msg(VersionedCellMessage * msg)
+{
+	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns);
+	if(msg->has_version)
+		c->version = init_vc_from_msg(msg->version);
+	else
+		version = NULL;
+	return c;
+}
+
+void free_cell_msg(VersionedCellMessage * msg)
+{
+	free(msg->keys);
+	free(msg->columns);
+	if(msg->has_version)
+		free_vc_msg(msg->version);
+}
+
+int serialize_cell(cell * ca, void ** buf, unsigned * len)
+{
+	VersionedCellMessage msg = VERSIONED_CELL_MESSAGE__INIT;
+	init_cell_msg(&msg, ca);
+
+	if(ca->version != NULL)
+	{
+		VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+		init_vc_msg(&vc_msg, ca->version);
+		msg.has_version = 1;
+		msg.version = vc_msg;
+	}
+	else
+	{
+		msg->has_version = 0;
+	}
+
+	*len = versioned_cell_message__get_packed_size (&msg);
+	*buf = malloc (*len);
+	versioned_cell_message__pack (&msg, *buf);
+
+	free_cell_msg(&msg);
+
+	return 0;
+}
+
+int deserialize_cell(void * buf, unsigned msg_len, cell ** ca)
+{
+	VersionedCellMessage * msg = versioned_cell_message__unpack (NULL, msg_len, buf);
+
+	if (msg == NULL)
+	{
+		fprintf(stderr, "error unpacking cell message\n");
+	    return 1;
+	}
+
+	*ca = init_cell_from_msg(msg);
+
+	versioned_cell_message__free_unpacked(msg, NULL);
+
+	return 0;
+}
+
+int equals_cell(cell * ca1, cell * ca2)
+{
+	if(ca1->table_key != ca2->table_key || ca1->no_keys != ca2->no_keys)
+		return 0;
+
+	for(int i=0;i<ca1->no_keys;i++)
+		if(ca1->keys[i] != ca2->keys[i])
+			return 0;
+
+	for(int i=0;i<ca1->no_columns;i++)
+		if(ca1->columns[i] != ca2->columns[i])
+			return 0;
+
+	return 1;
+}
+
+char * to_string_cell(cell * ca, char * msg_buff)
+{
+	char * crt_ptr = msg_buff;
+
+	sprintf(crt_ptr, "CellAddress(table_key=%ld, keys={", ca->table_key);
+	crt_ptr += strlen(crt_ptr);
+
+	for(int i=0;i<ca->no_keys;i++)
+	{
+		sprintf(crt_ptr, "%ld, ", ca->keys[i]);
+		crt_ptr += strlen(crt_ptr);
+	}
+
+	sprintf(crt_ptr, "}, columns={");
+	crt_ptr += strlen(crt_ptr);
+
+	for(int i=0;i<ca->no_columns;i++)
+	{
+		sprintf(crt_ptr, "%ld, ", ca->columns[i]);
+		crt_ptr += strlen(crt_ptr);
+	}
+
+	sprintf(crt_ptr, "}, version=");
+	crt_ptr += strlen(crt_ptr);
+
+	if(ca->version != NULL)
+	{
+		to_string_vc(ca->version, crt_ptr);
+		crt_ptr += strlen(crt_ptr);
+	}
+
+	sprintf(crt_ptr, ")");
 
 	return msg_buff;
 }

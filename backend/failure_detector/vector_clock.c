@@ -167,6 +167,25 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 	return vc;
 }
 
+vector_clock * copy_vc(vector_clock * vc1)
+{
+	vector_clock * vc = (vector_clock *) malloc(sizeof(struct vector_clock));
+
+	vc->no_nodes = vc1->no_nodes;
+
+	vc->capacity = vc1->capacity;
+
+	vc->node_ids =  (versioned_id *) malloc (vc->capacity * sizeof(struct versioned_id));
+
+	for(int i=0;i<vc->no_nodes;i++)
+	{
+		vc->node_ids[i].node_id = vc1->node_ids[i].node_id;
+		vc->node_ids[i].counter = vc1->node_ids[i].counter;
+	}
+
+	return vc;
+}
+
 vector_clock * init_vc_from_msg(VectorClockMessage * msg)
 {
 	vector_clock * vc = init_vc(msg->n_ids, NULL, NULL, 0);
@@ -197,7 +216,11 @@ int grow_vc(vector_clock * vc)
 
 void free_vc(vector_clock * vc)
 {
-	free(vc->node_ids);
+	if(vc == NULL)
+		return;
+
+	if(vc->node_ids != NULL)
+		free(vc->node_ids);
 	free(vc);
 }
 
@@ -256,6 +279,12 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 char * to_string_vc(vector_clock * vc, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
+
+	if(vc == NULL)
+	{
+		sprintf(crt_ptr, "VC(NULL)");
+		return msg_buff;
+	}
 
 	sprintf(crt_ptr, "VC(");
 	crt_ptr += strlen(crt_ptr);

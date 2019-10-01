@@ -34,7 +34,7 @@ message MembershipAgreementMessage {
 
 // DB cells and Queue entries:
 
-message CellAdressMessage {
+message CellAddressMessage {
 	required int64 table_key=1;
 	repeated int64 keys=2;
 }
@@ -49,19 +49,20 @@ message VersionedCellMessage {
 	required int64 table_key=1;
 	repeated int64 keys=2;
 	repeated int64 columns=3;
-	required int64 version=4;
+	optional VectorClockMessage version=4;
+//	optional int64 version_no=5;
 }
 
 // DB queries:
 
 message WriteQueryMessage {
-	required CellMessage cell=1;
+	required VersionedCellMessage cell=1; // CellMessage
 	required int64 txnid=2;
 	required int64 nonce=3;
 }
 
 message ReadQueryMessage {
-	required CellAdressMessage cell_address=1;
+	required CellAddressMessage cell_address=1;
 	required int64 txnid=2;
 	required int64 nonce=3;
 }
@@ -73,7 +74,7 @@ message ReadResponseMessage {
 }
 
 message AckMessage {
-	required CellAdressMessage cell_address=1;
+	required CellAddressMessage cell_address=1;
 	required int32 status=2; // 0 - ACK, 1 - NACK
 	required int64 txnid=3;
 	required int64 nonce=4;
@@ -106,7 +107,7 @@ message CreateQueueMessage {
 }
 
 message EnqueueMessage {
-	repeated CellMessage cells=1;
+	repeated VersionedCellMessage cells=1; // CellMessage
 	required int64 txnid=2;
 	required int64 nonce=3;
 }
