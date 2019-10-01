@@ -67,11 +67,11 @@ message ReadQueryMessage {
 	required int64 nonce=3;
 }
 
-message ReadResponseMessage {
-	required VersionedCellMessage cell=1;
-	required int64 txnid=2;
-	required int64 nonce=3;
-}
+// message ReadResponseMessage {
+// 	required VersionedCellMessage cell=1;
+// 	required int64 txnid=2;
+// 	required int64 nonce=3;
+// }
 
 message AckMessage {
 	required CellAddressMessage cell_address=1;

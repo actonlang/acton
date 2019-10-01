@@ -158,15 +158,20 @@ cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, 
 	return ca;
 }
 
-void free_cell(cell * ca)
+void free_cell_ptrs(cell * ca)
 {
 	free(ca->keys);
 	free(ca->columns);
 	free_vc(ca->version);
+}
+
+void free_cell(cell * ca)
+{
+	free_cell_ptrs(ca);
 	free(ca);
 }
 
-void init_cell_msg(VersionedCellMessage * msg, cell * ca)
+void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * vc_msg)
 {
 	msg->table_key = ca->table_key;
 	msg->n_keys = ca->no_keys;
@@ -177,6 +182,18 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca)
 	msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
 	for(int i=0;i<ca->no_columns;i++)
 		msg->columns[i] = ca->columns[i];
+
+	if(ca->version != NULL)
+	{
+		init_vc_msg(vc_msg, ca->version);
+
+		msg.has_version = 1;
+		msg.version = *vc_msg;
+	}
+	else
+	{
+		msg->has_version = 0;
+	}
 }
 
 cell * init_cell_from_msg(VersionedCellMessage * msg)
@@ -200,19 +217,9 @@ void free_cell_msg(VersionedCellMessage * msg)
 int serialize_cell(cell * ca, void ** buf, unsigned * len)
 {
 	VersionedCellMessage msg = VERSIONED_CELL_MESSAGE__INIT;
-	init_cell_msg(&msg, ca);
+	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
 
-	if(ca->version != NULL)
-	{
-		VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
-		init_vc_msg(&vc_msg, ca->version);
-		msg.has_version = 1;
-		msg.version = vc_msg;
-	}
-	else
-	{
-		msg->has_version = 0;
-	}
+	init_cell_msg(&msg, ca, &vc_msg);
 
 	*len = versioned_cell_message__get_packed_size (&msg);
 	*buf = malloc (*len);

@@ -36,6 +36,7 @@ typedef struct cell
 
 cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version);
 void free_cell(cell * ca);
+void free_cell_ptrs(cell * ca);
 int serialize_cell(cell * ca, void ** buf, unsigned * len);
 int deserialize_cell(void * buf, unsigned msg_len, cell ** ca);
 int equals_cell(cell * ca1, cell * ca2);
