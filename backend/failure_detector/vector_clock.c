@@ -12,7 +12,7 @@
 
 // #include "cfuhash.h"
 
-int increment(vector_clock * vc, int node_id)
+int increment_vc(vector_clock * vc, int node_id)
 {
 	// Binary search node_id:
 	int found_idx = -1, exact_match = 0;
@@ -32,8 +32,14 @@ int increment(vector_clock * vc, int node_id)
 // 		0 if vc1 == vc2
 // 		1 if vc1 > vc2
 
-int compare(vector_clock * vc1, vector_clock * vc2)
+int compare_vc(vector_clock * vc1, vector_clock * vc2)
 {
+	if(vc1 == NULL && vc2 == NULL)
+		return 0;
+
+	if(vc1 == NULL || vc2 == NULL)
+		return -2;
+
 	if(vc1->no_nodes != vc2->no_nodes)
 		return -2;
 
@@ -60,7 +66,7 @@ int compare(vector_clock * vc1, vector_clock * vc2)
 		return 0;
 }
 
-int update(vector_clock * vc_dest, vector_clock * vc_src)
+int update_vc(vector_clock * vc_dest, vector_clock * vc_src)
 {
 	int dest_idx=0;
 
@@ -73,7 +79,7 @@ int update(vector_clock * vc_dest, vector_clock * vc_src)
 		{
 			// Source vector has a component that dest vector doesn't. Add that component to the dest vector:
 
-			add_component(vc_dest, vc_src->node_ids[i].node_id, vc_src->node_ids[i].counter);
+			add_component_vc(vc_dest, vc_src->node_ids[i].node_id, vc_src->node_ids[i].counter);
 		}
 		else
 		{
@@ -86,7 +92,7 @@ int update(vector_clock * vc_dest, vector_clock * vc_src)
 	return 0;
 }
 
-int add_component(vector_clock * vc, int node_id, int initial_counter)
+int add_component_vc(vector_clock * vc, int node_id, int initial_counter)
 {
 	// Binary search node_id:
 	int found_idx = 0, exact_match = 0;
@@ -114,7 +120,7 @@ int add_component(vector_clock * vc, int node_id, int initial_counter)
 
 // S'd never call this in principle:
 
-int remove_component(vector_clock * vc, int node_id)
+int remove_component_vc(vector_clock * vc, int node_id)
 {
 	// Binary search node_id:
 	int found_idx = -1, exact_match = 0;
@@ -245,6 +251,16 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 	  vector_clock_message__free_unpacked(msg, NULL);
 
 	  return 0;
+}
+
+char * to_string_vc(vector_clock * vc, char * msg_buff)
+{
+	sprintf(msg_buff, "VC(");
+	for(int i=0;i<vc->no_nodes;i++)
+		sprintf(msg_buff, "%d:%ld", vc->node_ids->node_id, vc->node_ids->counter);
+	sprintf(msg_buff, ")");
+
+	return msg_buff;
 }
 
 

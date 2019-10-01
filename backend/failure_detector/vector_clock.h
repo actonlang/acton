@@ -10,6 +10,8 @@
 #define DEFAULT_SIZE 16
 #define GROWTH_RATE 2.0
 
+#include "db_messages.pb-c.h"
+
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
 #define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)					\
 	   (exact_match) = 0; 			  												\
@@ -43,17 +45,23 @@ typedef struct vector_clock
 	versioned_id * node_ids;
 } vector_clock;
 
-int increment(vector_clock * vc, int node_id);
+int increment_vc(vector_clock * vc, int node_id);
 
-int compare(vector_clock * vc1, vector_clock * vc2);
+int compare_vc(vector_clock * vc1, vector_clock * vc2);
 
-int update(vector_clock * vc_dest, vector_clock * vc_src);
+int update_vc(vector_clock * vc_dest, vector_clock * vc_src);
 
-int add_component(vector_clock * vc, int node_id, int initial_counter);
+int add_component_vc(vector_clock * vc, int node_id, int initial_counter);
 
-int remove_component(vector_clock * vc, int node_id);
+int remove_component_vc(vector_clock * vc, int node_id);
 
 vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids);
+
+vector_clock * init_vc_from_msg(VectorClockMessage * msg);
+
+void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc);
+
+void free_vc_msg(VectorClockMessage * msg)
 
 void free_vc(vector_clock * vc);
 
@@ -62,5 +70,7 @@ int grow_vc(vector_clock * vc);
 int serialize_vc(vector_clock * vc, void ** buf, unsigned * len);
 
 int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
+
+char * to_string_vc(vector_clock * vc, char * msg_buff);
 
 #endif /* BACKEND_FAILURE_DETECTOR_VECTOR_CLOCK_H_ */
