@@ -61,7 +61,7 @@ vector_clock * init_vc_from_msg(VectorClockMessage * msg);
 
 void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc);
 
-void free_vc_msg(VectorClockMessage * msg)
+void free_vc_msg(VectorClockMessage * msg);
 
 void free_vc(vector_clock * vc);
 

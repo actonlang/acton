@@ -516,7 +516,7 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 // DB API:
 
-int db_insert(WORD * column_values, int no_cols, int no_clustering_keys, WORD table_key, db_t * db, unsigned int * fastrandstate)
+int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 	snode_t * node = skiplist_search(db->tables, (long) table_key);
 
@@ -525,7 +525,7 @@ int db_insert(WORD * column_values, int no_cols, int no_clustering_keys, WORD ta
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_insert(column_values, no_cols, no_clustering_keys, table, fastrandstate);
+	return table_insert(column_values, no_cols, table, fastrandstate);
 }
 
 int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db)

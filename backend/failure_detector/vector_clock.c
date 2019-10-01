@@ -255,10 +255,18 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 
 char * to_string_vc(vector_clock * vc, char * msg_buff)
 {
-	sprintf(msg_buff, "VC(");
+	char * crt_ptr = msg_buff;
+
+	sprintf(crt_ptr, "VC(");
+	crt_ptr += strlen(crt_ptr);
+
 	for(int i=0;i<vc->no_nodes;i++)
-		sprintf(msg_buff, "%d:%ld", vc->node_ids->node_id, vc->node_ids->counter);
-	sprintf(msg_buff, ")");
+	{
+		sprintf(crt_ptr, "%d:%ld, ", vc->node_ids->node_id, vc->node_ids->counter);
+		crt_ptr += strlen(crt_ptr);
+	}
+
+	sprintf(crt_ptr, ")");
 
 	return msg_buff;
 }

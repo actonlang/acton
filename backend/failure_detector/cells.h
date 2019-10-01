@@ -1,0 +1,26 @@
+/*
+ * cells.h
+ *
+ *      Author: aagapi
+ */
+
+#include "db_messages.pb-c.h"
+
+#ifndef BACKEND_FAILURE_DETECTOR_CELLS_H_
+#define BACKEND_FAILURE_DETECTOR_CELLS_H_
+
+typedef struct cell_address
+{
+	long table_key;
+	long * keys;
+	int no_keys;
+} cell_address;
+
+cell_address * init_cell_address(long table_key, long * keys, int no_keys);
+void free_cell_address(cell_address * ca);
+int serialize_cell_address(cell_address * ca, void ** buf, unsigned * len);
+int deserialize_cell_address(void * buf, unsigned msg_len, cell_address ** ca);
+int equals_cell_address(cell_address * ca1, cell_address * ca2);
+char * to_string_cell_address(cell_address * ca, char * msg_buff);
+
+#endif /* BACKEND_FAILURE_DETECTOR_CELLS_H_ */

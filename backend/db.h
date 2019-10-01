@@ -72,7 +72,7 @@ int db_delete_table(WORD table_key, db_t * db);
 
 // DB queries:
 
-int db_insert(WORD * column_values, int no_cols, int no_clustering_keys, WORD table_key, db_t * db, unsigned int * fastrandstate);
+int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate);
 int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db);
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db);
 int db_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db);

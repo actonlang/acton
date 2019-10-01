@@ -11,6 +11,8 @@
 
 #define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
 
+/* Gossip state: */
+
 typedef struct gossip_state
 {
 	int status;
@@ -27,5 +29,63 @@ int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs);
 int equals_gs(gossip_state * gs1, gossip_state * gs2);
 char * to_string_gs(gossip_state * gs, char * msg_buff);
 
+/* Node description: */
+
+typedef struct node_description
+{
+	int status;
+	int node_id;
+	int rack_id;
+	int dc_id;
+} node_description;
+
+node_description * alloc_node_description();
+void init_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id);
+void free_node_description(node_description * vc);
+int equals_node_description(node_description * nd1, node_description * nd2);
+char * to_string_node_description(node_description * nd, char * msg_buff);
+
+/* Membership view: */
+
+typedef struct membership_state
+{
+	int no_nodes;
+	node_description * membership;
+	vector_clock * view_id;
+} membership_state;
+
+membership_state * init_membership(int no_nodes, node_description * membership, vector_clock * view_id);
+void free_membership(membership_state * vc);
+int serialize_membership(membership_state * gs, void ** buf, unsigned * len);
+int deserialize_membership(void * buf, unsigned msg_len, membership_state ** gs);
+int equals_membership(membership_state * gs1, membership_state * gs2);
+char * to_string_membership(membership_state * gs, char * msg_buff);
+
+/* Membership agreement messages: */
+
+#define MEMBERSHIP_AGREEMENT_PROPOSE 0
+#define MEMBERSHIP_AGREEMENT_RESPONSE 1
+#define MEMBERSHIP_AGREEMENT_NOTIFY 2
+#define MEMBERSHIP_AGREEMENT_RETRY_LINK 3
+#define MEMBERSHIP_AGREEMENT_NOTIFY_ACK 4
+
+#define ACK 0
+#define NACK 1
+#define UNINIT 2
+
+typedef struct membership_agreement_msg
+{
+	int msg_type;
+	int ack_status;
+	membership_state * membership;
+	vector_clock * vc;
+} membership_agreement_msg;
+
+membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, vector_clock * vc);
+void free_membership_agreement(membership_agreement_msg * ma);
+void free_membership_agreement_msg(MembershipAgreementMessage * msg);
+int serialize_membership_agreement_msg(membership_agreement_msg * gs, void ** buf, unsigned * len);
+int deserialize_membership_agreement_msg(void * buf, unsigned msg_len, membership_agreement_msg ** ma);
+char * to_string_membership_agreement_msg(membership_agreement_msg * gs, char * msg_buff);
 
 #endif /* BACKEND_FAILURE_DETECTOR_FD_H_ */
