@@ -39,13 +39,35 @@ typedef struct db_table {
 	db_schema_t * schema;
 	skiplist_t * rows;
 	skiplist_t ** indexes;
+
+	// Queue metadata:
+
+//	long no_items;
+//	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
+
 } db_table_t;
+
+typedef struct consumer_state {
+	WORD consumer_id;
+	WORD shard_id;
+	WORD app_id;
+	long private_read_head;
+	long private_consume_head;
+	short notified;
+
+	void (*callback)(int); // Only non-NULL for local consumers
+} consumer_state;
 
 typedef struct db_cell {
 	WORD key;
 	skiplist_t * cells;
 	WORD * column_array;
 	int no_columns;
+
+	// Queue metadata:
+	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
+	long no_entries;
+
 	struct db_cell_t * _next;
 } db_cell_t;
 
@@ -54,7 +76,6 @@ typedef db_cell_t db_row_t;
 typedef struct db {
     skiplist_t * tables;
 } db_t;
-
 
 // DB high level API:
 

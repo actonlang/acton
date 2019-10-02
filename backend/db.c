@@ -272,6 +272,68 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 	return 0;
 }
 
+int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsigned int * fastrandstate)
+{
+	db_schema_t * schema = table->schema;
+
+	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
+
+	assert(no_cols == schema->no_cols && "Row insert must contain all schema columns");
+
+	db_row_t * row = NULL;
+	snode_t * row_node = skiplist_search(table->rows, (long) column_values[schema->primary_key_idxs[0]]);
+
+	if(row_node == NULL)
+	{
+		row = create_db_row(column_values, schema, fastrandstate);
+		skiplist_insert(table->rows, (long) column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
+	}
+	else
+	{
+		row = (db_row_t *) row_node->value;
+
+		db_row_t * cell = row, * new_cell = NULL;
+
+		for(int i=0;i<schema->no_clustering_keys;i++, cell = new_cell)
+		{
+			snode_t * new_cell_node = skiplist_search(cell->cells, (long) column_values[schema->clustering_key_idxs[i]]);
+
+			if(new_cell_node == NULL)
+			{
+				new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
+
+				if(i == schema->no_clustering_keys - 1)
+				{
+					new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
+					new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
+					for(int j=0;j<new_cell->no_columns;j++)
+					{
+						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+					}
+				}
+				else
+				{
+					new_cell->cells = create_skiplist();
+				}
+
+//				printf("Inserting into cell at level %d\n", i);
+
+				skiplist_insert(cell->cells, (long) column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+			}
+			else
+			{
+				new_cell = (db_row_t *) (new_cell_node->value);
+			}
+		}
+	}
+
+	for(int i=0;i<schema->no_index_keys;i++)
+		skiplist_insert(table->indexes[i], (long) column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
+
+	return 0;
+}
+
+
 int table_update(int * col_idxs, int no_cols, WORD * column_values, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
