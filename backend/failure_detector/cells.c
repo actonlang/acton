@@ -5,8 +5,10 @@
  */
 
 #include "cells.h"
+
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <limits.h>
 #include <assert.h>
 
@@ -135,9 +137,8 @@ cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int n
 	return ca;
 }
 
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
 {
-	cell * ca = (cell *) malloc(sizeof(cell));
 	ca->table_key = table_key;
 
 	ca->no_keys = no_keys;
@@ -154,8 +155,18 @@ cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, 
 		ca->version = copy_vc(version);
 	else
 		ca->version = NULL;
+}
 
+cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+{
+	cell * ca = (cell *) malloc(sizeof(cell));
+	copy_cell(ca, table_key, keys, no_keys, columns, no_columns, version);
 	return ca;
+}
+
+cell_address * get_cell_address(cell * c)
+{
+	return init_cell_address_copy(c->table_key, c->keys, c->no_keys);
 }
 
 void free_cell_ptrs(cell * ca)
@@ -187,22 +198,33 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 	{
 		init_vc_msg(vc_msg, ca->version);
 
-		msg.has_version = 1;
-		msg.version = *vc_msg;
+//		msg->has_version = 1;
+		msg->version = vc_msg;
 	}
 	else
 	{
-		msg->has_version = 0;
+//		msg->has_version = 0;
 	}
+}
+
+cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg)
+{
+
+	copy_cell(c, msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, init_vc_from_msg(msg->version));
+//	if(msg->has_version)
+//	c->version = init_vc_from_msg(msg->version);
+//	else
+//		version = NULL;
+	return c;
 }
 
 cell * init_cell_from_msg(VersionedCellMessage * msg)
 {
-	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns);
-	if(msg->has_version)
-		c->version = init_vc_from_msg(msg->version);
-	else
-		version = NULL;
+	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, init_vc_from_msg(msg->version));
+//	if(msg->has_version)
+//	c->version = init_vc_from_msg(msg->version);
+//	else
+//		version = NULL;
 	return c;
 }
 
@@ -210,8 +232,8 @@ void free_cell_msg(VersionedCellMessage * msg)
 {
 	free(msg->keys);
 	free(msg->columns);
-	if(msg->has_version)
-		free_vc_msg(msg->version);
+//	if(msg->has_version)
+	free_vc_msg(msg->version);
 }
 
 int serialize_cell(cell * ca, void ** buf, unsigned * len)

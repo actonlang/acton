@@ -6,6 +6,8 @@
 
 #include "vector_clock.h"
 #include "fd.h"
+#include "cells.h"
+#include "db_queries.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -120,6 +122,45 @@ int main (int argc, const char * argv[])
 	if(!equals_gs(gs, gs_r))
 	{
 		printf("GS mismatch: %s != %s\n", to_string_gs(gs, err_msg), to_string_gs(gs_r, err_msg));
+		assert(0);
+	}
+
+	// Generate dummy GS:
+
+	long key = 1;
+	long column = 1;
+
+	cell * cell = init_cell(0, &key, 1, &column, 1, vc);
+	write_query * wquery = init_write_query(cell, 2, 3);
+
+	// Serialize it to file:
+
+	fptr_w = fopen("/tmp/vc.test","wb");
+	serialize_write_query(wquery, &buf_w, &len_w);
+	success = write_msg_to_file(buf_w, len_w, fptr_w);
+	assert(success == 0);
+	fclose(fptr_w);
+
+	// Read it back:
+
+	fptr_r = fopen("/tmp/vc.test","rb");
+	write_query * wquery_r = NULL;
+
+	len_r = read_msg_from_file(MAX_MSG_SIZE_VC, buf_r, fptr_r);
+
+	if(len_r != len_w)
+	{
+		printf("len_r=%d != len_w=%d\n", len_r, len_w);
+		assert(0);
+	}
+
+	deserialize_write_query(buf_r, len_r, &wquery_r);
+
+	printf("Write query: %s, %s\n", to_string_write_query(wquery, err_msg), to_string_write_query(wquery_r, err_msg));
+
+	if(!equals_write_query(wquery, wquery_r))
+	{
+		printf("Write query mismatch: %s != %s\n", to_string_write_query(wquery, err_msg), to_string_write_query(wquery_r, err_msg));
 		assert(0);
 	}
 }

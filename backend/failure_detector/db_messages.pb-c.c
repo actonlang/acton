@@ -52,6 +52,51 @@ void   node_state_message__free_unpacked
   assert(message->base.descriptor == &node_state_message__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   vector_clock_message__init
+                     (VectorClockMessage         *message)
+{
+  static const VectorClockMessage init_value = VECTOR_CLOCK_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t vector_clock_message__get_packed_size
+                     (const VectorClockMessage *message)
+{
+  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t vector_clock_message__pack
+                     (const VectorClockMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t vector_clock_message__pack_to_buffer
+                     (const VectorClockMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+VectorClockMessage *
+       vector_clock_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (VectorClockMessage *)
+     protobuf_c_message_unpack (&vector_clock_message__descriptor,
+                                allocator, len, data);
+}
+void   vector_clock_message__free_unpacked
+                     (VectorClockMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   gossip_message__init
                      (GossipMessage         *message)
 {
@@ -187,49 +232,679 @@ void   membership_agreement_message__free_unpacked
   assert(message->base.descriptor == &membership_agreement_message__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   vector_clock_message__init
-                     (VectorClockMessage         *message)
+void   cell_address_message__init
+                     (CellAddressMessage         *message)
 {
-  static const VectorClockMessage init_value = VECTOR_CLOCK_MESSAGE__INIT;
+  static const CellAddressMessage init_value = CELL_ADDRESS_MESSAGE__INIT;
   *message = init_value;
 }
-size_t vector_clock_message__get_packed_size
-                     (const VectorClockMessage *message)
+size_t cell_address_message__get_packed_size
+                     (const CellAddressMessage *message)
 {
-  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  assert(message->base.descriptor == &cell_address_message__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t vector_clock_message__pack
-                     (const VectorClockMessage *message,
+size_t cell_address_message__pack
+                     (const CellAddressMessage *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  assert(message->base.descriptor == &cell_address_message__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t vector_clock_message__pack_to_buffer
-                     (const VectorClockMessage *message,
+size_t cell_address_message__pack_to_buffer
+                     (const CellAddressMessage *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  assert(message->base.descriptor == &cell_address_message__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-VectorClockMessage *
-       vector_clock_message__unpack
+CellAddressMessage *
+       cell_address_message__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (VectorClockMessage *)
-     protobuf_c_message_unpack (&vector_clock_message__descriptor,
+  return (CellAddressMessage *)
+     protobuf_c_message_unpack (&cell_address_message__descriptor,
                                 allocator, len, data);
 }
-void   vector_clock_message__free_unpacked
-                     (VectorClockMessage *message,
+void   cell_address_message__free_unpacked
+                     (CellAddressMessage *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &vector_clock_message__descriptor);
+  assert(message->base.descriptor == &cell_address_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   cell_message__init
+                     (CellMessage         *message)
+{
+  static const CellMessage init_value = CELL_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t cell_message__get_packed_size
+                     (const CellMessage *message)
+{
+  assert(message->base.descriptor == &cell_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t cell_message__pack
+                     (const CellMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &cell_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t cell_message__pack_to_buffer
+                     (const CellMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &cell_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+CellMessage *
+       cell_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (CellMessage *)
+     protobuf_c_message_unpack (&cell_message__descriptor,
+                                allocator, len, data);
+}
+void   cell_message__free_unpacked
+                     (CellMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &cell_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   versioned_cell_message__init
+                     (VersionedCellMessage         *message)
+{
+  static const VersionedCellMessage init_value = VERSIONED_CELL_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t versioned_cell_message__get_packed_size
+                     (const VersionedCellMessage *message)
+{
+  assert(message->base.descriptor == &versioned_cell_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t versioned_cell_message__pack
+                     (const VersionedCellMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &versioned_cell_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t versioned_cell_message__pack_to_buffer
+                     (const VersionedCellMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &versioned_cell_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+VersionedCellMessage *
+       versioned_cell_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (VersionedCellMessage *)
+     protobuf_c_message_unpack (&versioned_cell_message__descriptor,
+                                allocator, len, data);
+}
+void   versioned_cell_message__free_unpacked
+                     (VersionedCellMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &versioned_cell_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   write_query_message__init
+                     (WriteQueryMessage         *message)
+{
+  static const WriteQueryMessage init_value = WRITE_QUERY_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t write_query_message__get_packed_size
+                     (const WriteQueryMessage *message)
+{
+  assert(message->base.descriptor == &write_query_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t write_query_message__pack
+                     (const WriteQueryMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &write_query_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t write_query_message__pack_to_buffer
+                     (const WriteQueryMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &write_query_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+WriteQueryMessage *
+       write_query_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (WriteQueryMessage *)
+     protobuf_c_message_unpack (&write_query_message__descriptor,
+                                allocator, len, data);
+}
+void   write_query_message__free_unpacked
+                     (WriteQueryMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &write_query_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   read_query_message__init
+                     (ReadQueryMessage         *message)
+{
+  static const ReadQueryMessage init_value = READ_QUERY_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t read_query_message__get_packed_size
+                     (const ReadQueryMessage *message)
+{
+  assert(message->base.descriptor == &read_query_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t read_query_message__pack
+                     (const ReadQueryMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &read_query_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t read_query_message__pack_to_buffer
+                     (const ReadQueryMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &read_query_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ReadQueryMessage *
+       read_query_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ReadQueryMessage *)
+     protobuf_c_message_unpack (&read_query_message__descriptor,
+                                allocator, len, data);
+}
+void   read_query_message__free_unpacked
+                     (ReadQueryMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &read_query_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   ack_message__init
+                     (AckMessage         *message)
+{
+  static const AckMessage init_value = ACK_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t ack_message__get_packed_size
+                     (const AckMessage *message)
+{
+  assert(message->base.descriptor == &ack_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t ack_message__pack
+                     (const AckMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &ack_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t ack_message__pack_to_buffer
+                     (const AckMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &ack_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+AckMessage *
+       ack_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (AckMessage *)
+     protobuf_c_message_unpack (&ack_message__descriptor,
+                                allocator, len, data);
+}
+void   ack_message__free_unpacked
+                     (AckMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &ack_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   txn_message__init
+                     (TxnMessage         *message)
+{
+  static const TxnMessage init_value = TXN_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t txn_message__get_packed_size
+                     (const TxnMessage *message)
+{
+  assert(message->base.descriptor == &txn_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t txn_message__pack
+                     (const TxnMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &txn_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t txn_message__pack_to_buffer
+                     (const TxnMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &txn_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+TxnMessage *
+       txn_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (TxnMessage *)
+     protobuf_c_message_unpack (&txn_message__descriptor,
+                                allocator, len, data);
+}
+void   txn_message__free_unpacked
+                     (TxnMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &txn_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   consumer_id__init
+                     (ConsumerID         *message)
+{
+  static const ConsumerID init_value = CONSUMER_ID__INIT;
+  *message = init_value;
+}
+size_t consumer_id__get_packed_size
+                     (const ConsumerID *message)
+{
+  assert(message->base.descriptor == &consumer_id__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t consumer_id__pack
+                     (const ConsumerID *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &consumer_id__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t consumer_id__pack_to_buffer
+                     (const ConsumerID *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &consumer_id__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ConsumerID *
+       consumer_id__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ConsumerID *)
+     protobuf_c_message_unpack (&consumer_id__descriptor,
+                                allocator, len, data);
+}
+void   consumer_id__free_unpacked
+                     (ConsumerID *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &consumer_id__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   create_queue_message__init
+                     (CreateQueueMessage         *message)
+{
+  static const CreateQueueMessage init_value = CREATE_QUEUE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t create_queue_message__get_packed_size
+                     (const CreateQueueMessage *message)
+{
+  assert(message->base.descriptor == &create_queue_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t create_queue_message__pack
+                     (const CreateQueueMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &create_queue_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t create_queue_message__pack_to_buffer
+                     (const CreateQueueMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &create_queue_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+CreateQueueMessage *
+       create_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (CreateQueueMessage *)
+     protobuf_c_message_unpack (&create_queue_message__descriptor,
+                                allocator, len, data);
+}
+void   create_queue_message__free_unpacked
+                     (CreateQueueMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &create_queue_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   enqueue_message__init
+                     (EnqueueMessage         *message)
+{
+  static const EnqueueMessage init_value = ENQUEUE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t enqueue_message__get_packed_size
+                     (const EnqueueMessage *message)
+{
+  assert(message->base.descriptor == &enqueue_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t enqueue_message__pack
+                     (const EnqueueMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &enqueue_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t enqueue_message__pack_to_buffer
+                     (const EnqueueMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &enqueue_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+EnqueueMessage *
+       enqueue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (EnqueueMessage *)
+     protobuf_c_message_unpack (&enqueue_message__descriptor,
+                                allocator, len, data);
+}
+void   enqueue_message__free_unpacked
+                     (EnqueueMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &enqueue_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   enqueue_response_message__init
+                     (EnqueueResponseMessage         *message)
+{
+  static const EnqueueResponseMessage init_value = ENQUEUE_RESPONSE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t enqueue_response_message__get_packed_size
+                     (const EnqueueResponseMessage *message)
+{
+  assert(message->base.descriptor == &enqueue_response_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t enqueue_response_message__pack
+                     (const EnqueueResponseMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &enqueue_response_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t enqueue_response_message__pack_to_buffer
+                     (const EnqueueResponseMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &enqueue_response_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+EnqueueResponseMessage *
+       enqueue_response_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (EnqueueResponseMessage *)
+     protobuf_c_message_unpack (&enqueue_response_message__descriptor,
+                                allocator, len, data);
+}
+void   enqueue_response_message__free_unpacked
+                     (EnqueueResponseMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &enqueue_response_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   read_queue_message__init
+                     (ReadQueueMessage         *message)
+{
+  static const ReadQueueMessage init_value = READ_QUEUE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t read_queue_message__get_packed_size
+                     (const ReadQueueMessage *message)
+{
+  assert(message->base.descriptor == &read_queue_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t read_queue_message__pack
+                     (const ReadQueueMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &read_queue_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t read_queue_message__pack_to_buffer
+                     (const ReadQueueMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &read_queue_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ReadQueueMessage *
+       read_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ReadQueueMessage *)
+     protobuf_c_message_unpack (&read_queue_message__descriptor,
+                                allocator, len, data);
+}
+void   read_queue_message__free_unpacked
+                     (ReadQueueMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &read_queue_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   read_queue_response_message__init
+                     (ReadQueueResponseMessage         *message)
+{
+  static const ReadQueueResponseMessage init_value = READ_QUEUE_RESPONSE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t read_queue_response_message__get_packed_size
+                     (const ReadQueueResponseMessage *message)
+{
+  assert(message->base.descriptor == &read_queue_response_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t read_queue_response_message__pack
+                     (const ReadQueueResponseMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &read_queue_response_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t read_queue_response_message__pack_to_buffer
+                     (const ReadQueueResponseMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &read_queue_response_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ReadQueueResponseMessage *
+       read_queue_response_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ReadQueueResponseMessage *)
+     protobuf_c_message_unpack (&read_queue_response_message__descriptor,
+                                allocator, len, data);
+}
+void   read_queue_response_message__free_unpacked
+                     (ReadQueueResponseMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &read_queue_response_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   consume_queue_message__init
+                     (ConsumeQueueMessage         *message)
+{
+  static const ConsumeQueueMessage init_value = CONSUME_QUEUE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t consume_queue_message__get_packed_size
+                     (const ConsumeQueueMessage *message)
+{
+  assert(message->base.descriptor == &consume_queue_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t consume_queue_message__pack
+                     (const ConsumeQueueMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &consume_queue_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t consume_queue_message__pack_to_buffer
+                     (const ConsumeQueueMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &consume_queue_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ConsumeQueueMessage *
+       consume_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ConsumeQueueMessage *)
+     protobuf_c_message_unpack (&consume_queue_message__descriptor,
+                                allocator, len, data);
+}
+void   consume_queue_message__free_unpacked
+                     (ConsumeQueueMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &consume_queue_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   consume_queue_response_message__init
+                     (ConsumeQueueResponseMessage         *message)
+{
+  static const ConsumeQueueResponseMessage init_value = CONSUME_QUEUE_RESPONSE_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t consume_queue_response_message__get_packed_size
+                     (const ConsumeQueueResponseMessage *message)
+{
+  assert(message->base.descriptor == &consume_queue_response_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t consume_queue_response_message__pack
+                     (const ConsumeQueueResponseMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &consume_queue_response_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t consume_queue_response_message__pack_to_buffer
+                     (const ConsumeQueueResponseMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &consume_queue_response_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ConsumeQueueResponseMessage *
+       consume_queue_response_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ConsumeQueueResponseMessage *)
+     protobuf_c_message_unpack (&consume_queue_response_message__descriptor,
+                                allocator, len, data);
+}
+void   consume_queue_response_message__free_unpacked
+                     (ConsumeQueueResponseMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &consume_queue_response_message__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
 static const ProtobufCFieldDescriptor node_state_message__field_descriptors[4] =
@@ -307,6 +982,57 @@ const ProtobufCMessageDescriptor node_state_message__descriptor =
   node_state_message__field_indices_by_name,
   1,  node_state_message__number_ranges,
   (ProtobufCMessageInit) node_state_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor vector_clock_message__field_descriptors[2] =
+{
+  {
+    "ids",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT32,
+    offsetof(VectorClockMessage, n_ids),
+    offsetof(VectorClockMessage, ids),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "counters",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(VectorClockMessage, n_counters),
+    offsetof(VectorClockMessage, counters),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned vector_clock_message__field_indices_by_name[] = {
+  1,   /* field[1] = counters */
+  0,   /* field[0] = ids */
+};
+static const ProtobufCIntRange vector_clock_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 2 }
+};
+const ProtobufCMessageDescriptor vector_clock_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "VectorClockMessage",
+  "VectorClockMessage",
+  "VectorClockMessage",
+  "",
+  sizeof(VectorClockMessage),
+  2,
+  vector_clock_message__field_descriptors,
+  vector_clock_message__field_indices_by_name,
+  1,  vector_clock_message__number_ranges,
+  (ProtobufCMessageInit) vector_clock_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor gossip_message__field_descriptors[2] =
@@ -488,54 +1214,1145 @@ const ProtobufCMessageDescriptor membership_agreement_message__descriptor =
   (ProtobufCMessageInit) membership_agreement_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor vector_clock_message__field_descriptors[2] =
+static const ProtobufCFieldDescriptor cell_address_message__field_descriptors[2] =
 {
   {
-    "ids",
+    "table_key",
     1,
-    PROTOBUF_C_LABEL_REPEATED,
-    PROTOBUF_C_TYPE_INT32,
-    offsetof(VectorClockMessage, n_ids),
-    offsetof(VectorClockMessage, ids),
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(CellAddressMessage, table_key),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "counters",
+    "keys",
     2,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_INT64,
-    offsetof(VectorClockMessage, n_counters),
-    offsetof(VectorClockMessage, counters),
+    offsetof(CellAddressMessage, n_keys),
+    offsetof(CellAddressMessage, keys),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned vector_clock_message__field_indices_by_name[] = {
-  1,   /* field[1] = counters */
-  0,   /* field[0] = ids */
+static const unsigned cell_address_message__field_indices_by_name[] = {
+  1,   /* field[1] = keys */
+  0,   /* field[0] = table_key */
 };
-static const ProtobufCIntRange vector_clock_message__number_ranges[1 + 1] =
+static const ProtobufCIntRange cell_address_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 2 }
 };
-const ProtobufCMessageDescriptor vector_clock_message__descriptor =
+const ProtobufCMessageDescriptor cell_address_message__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "VectorClockMessage",
-  "VectorClockMessage",
-  "VectorClockMessage",
+  "CellAddressMessage",
+  "CellAddressMessage",
+  "CellAddressMessage",
   "",
-  sizeof(VectorClockMessage),
+  sizeof(CellAddressMessage),
   2,
-  vector_clock_message__field_descriptors,
-  vector_clock_message__field_indices_by_name,
-  1,  vector_clock_message__number_ranges,
-  (ProtobufCMessageInit) vector_clock_message__init,
+  cell_address_message__field_descriptors,
+  cell_address_message__field_indices_by_name,
+  1,  cell_address_message__number_ranges,
+  (ProtobufCMessageInit) cell_address_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor cell_message__field_descriptors[3] =
+{
+  {
+    "table_key",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(CellMessage, table_key),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "keys",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(CellMessage, n_keys),
+    offsetof(CellMessage, keys),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "columns",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(CellMessage, n_columns),
+    offsetof(CellMessage, columns),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned cell_message__field_indices_by_name[] = {
+  2,   /* field[2] = columns */
+  1,   /* field[1] = keys */
+  0,   /* field[0] = table_key */
+};
+static const ProtobufCIntRange cell_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor cell_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CellMessage",
+  "CellMessage",
+  "CellMessage",
+  "",
+  sizeof(CellMessage),
+  3,
+  cell_message__field_descriptors,
+  cell_message__field_indices_by_name,
+  1,  cell_message__number_ranges,
+  (ProtobufCMessageInit) cell_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor versioned_cell_message__field_descriptors[4] =
+{
+  {
+    "table_key",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(VersionedCellMessage, table_key),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "keys",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(VersionedCellMessage, n_keys),
+    offsetof(VersionedCellMessage, keys),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "columns",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_INT64,
+    offsetof(VersionedCellMessage, n_columns),
+    offsetof(VersionedCellMessage, columns),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "version",
+    4,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(VersionedCellMessage, version),
+    &vector_clock_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned versioned_cell_message__field_indices_by_name[] = {
+  2,   /* field[2] = columns */
+  1,   /* field[1] = keys */
+  0,   /* field[0] = table_key */
+  3,   /* field[3] = version */
+};
+static const ProtobufCIntRange versioned_cell_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "VersionedCellMessage",
+  "VersionedCellMessage",
+  "VersionedCellMessage",
+  "",
+  sizeof(VersionedCellMessage),
+  4,
+  versioned_cell_message__field_descriptors,
+  versioned_cell_message__field_indices_by_name,
+  1,  versioned_cell_message__number_ranges,
+  (ProtobufCMessageInit) versioned_cell_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor write_query_message__field_descriptors[3] =
+{
+  {
+    "cell",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(WriteQueryMessage, cell),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(WriteQueryMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(WriteQueryMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned write_query_message__field_indices_by_name[] = {
+  0,   /* field[0] = cell */
+  2,   /* field[2] = nonce */
+  1,   /* field[1] = txnid */
+};
+static const ProtobufCIntRange write_query_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor write_query_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "WriteQueryMessage",
+  "WriteQueryMessage",
+  "WriteQueryMessage",
+  "",
+  sizeof(WriteQueryMessage),
+  3,
+  write_query_message__field_descriptors,
+  write_query_message__field_indices_by_name,
+  1,  write_query_message__number_ranges,
+  (ProtobufCMessageInit) write_query_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor read_query_message__field_descriptors[3] =
+{
+  {
+    "cell_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueryMessage, cell_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueryMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueryMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned read_query_message__field_indices_by_name[] = {
+  0,   /* field[0] = cell_address */
+  2,   /* field[2] = nonce */
+  1,   /* field[1] = txnid */
+};
+static const ProtobufCIntRange read_query_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor read_query_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ReadQueryMessage",
+  "ReadQueryMessage",
+  "ReadQueryMessage",
+  "",
+  sizeof(ReadQueryMessage),
+  3,
+  read_query_message__field_descriptors,
+  read_query_message__field_indices_by_name,
+  1,  read_query_message__number_ranges,
+  (ProtobufCMessageInit) read_query_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor ack_message__field_descriptors[4] =
+{
+  {
+    "cell_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(AckMessage, cell_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "status",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(AckMessage, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(AckMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(AckMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned ack_message__field_indices_by_name[] = {
+  0,   /* field[0] = cell_address */
+  3,   /* field[3] = nonce */
+  1,   /* field[1] = status */
+  2,   /* field[2] = txnid */
+};
+static const ProtobufCIntRange ack_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor ack_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "AckMessage",
+  "AckMessage",
+  "AckMessage",
+  "",
+  sizeof(AckMessage),
+  4,
+  ack_message__field_descriptors,
+  ack_message__field_indices_by_name,
+  1,  ack_message__number_ranges,
+  (ProtobufCMessageInit) ack_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor txn_message__field_descriptors[7] =
+{
+  {
+    "type",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(TxnMessage, type),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "own_read_set",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(TxnMessage, n_own_read_set),
+    offsetof(TxnMessage, own_read_set),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "own_write_set",
+    3,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(TxnMessage, n_own_write_set),
+    offsetof(TxnMessage, own_write_set),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "complete_read_set",
+    4,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(TxnMessage, n_complete_read_set),
+    offsetof(TxnMessage, complete_read_set),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "complete_write_set",
+    5,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(TxnMessage, n_complete_write_set),
+    offsetof(TxnMessage, complete_write_set),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    6,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(TxnMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    7,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(TxnMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned txn_message__field_indices_by_name[] = {
+  3,   /* field[3] = complete_read_set */
+  4,   /* field[4] = complete_write_set */
+  6,   /* field[6] = nonce */
+  1,   /* field[1] = own_read_set */
+  2,   /* field[2] = own_write_set */
+  5,   /* field[5] = txnid */
+  0,   /* field[0] = type */
+};
+static const ProtobufCIntRange txn_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 7 }
+};
+const ProtobufCMessageDescriptor txn_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "TxnMessage",
+  "TxnMessage",
+  "TxnMessage",
+  "",
+  sizeof(TxnMessage),
+  7,
+  txn_message__field_descriptors,
+  txn_message__field_indices_by_name,
+  1,  txn_message__number_ranges,
+  (ProtobufCMessageInit) txn_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor consumer_id__field_descriptors[3] =
+{
+  {
+    "app_id",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ConsumerID, app_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "shard_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ConsumerID, shard_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "consumer_id",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ConsumerID, consumer_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned consumer_id__field_indices_by_name[] = {
+  0,   /* field[0] = app_id */
+  2,   /* field[2] = consumer_id */
+  1,   /* field[1] = shard_id */
+};
+static const ProtobufCIntRange consumer_id__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor consumer_id__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ConsumerID",
+  "ConsumerID",
+  "ConsumerID",
+  "",
+  sizeof(ConsumerID),
+  3,
+  consumer_id__field_descriptors,
+  consumer_id__field_indices_by_name,
+  1,  consumer_id__number_ranges,
+  (ProtobufCMessageInit) consumer_id__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor create_queue_message__field_descriptors[3] =
+{
+  {
+    "queue_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(CreateQueueMessage, queue_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(CreateQueueMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(CreateQueueMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned create_queue_message__field_indices_by_name[] = {
+  2,   /* field[2] = nonce */
+  0,   /* field[0] = queue_address */
+  1,   /* field[1] = txnid */
+};
+static const ProtobufCIntRange create_queue_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor create_queue_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "CreateQueueMessage",
+  "CreateQueueMessage",
+  "CreateQueueMessage",
+  "",
+  sizeof(CreateQueueMessage),
+  3,
+  create_queue_message__field_descriptors,
+  create_queue_message__field_indices_by_name,
+  1,  create_queue_message__number_ranges,
+  (ProtobufCMessageInit) create_queue_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor enqueue_message__field_descriptors[3] =
+{
+  {
+    "cells",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(EnqueueMessage, n_cells),
+    offsetof(EnqueueMessage, cells),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned enqueue_message__field_indices_by_name[] = {
+  0,   /* field[0] = cells */
+  2,   /* field[2] = nonce */
+  1,   /* field[1] = txnid */
+};
+static const ProtobufCIntRange enqueue_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 3 }
+};
+const ProtobufCMessageDescriptor enqueue_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "EnqueueMessage",
+  "EnqueueMessage",
+  "EnqueueMessage",
+  "",
+  sizeof(EnqueueMessage),
+  3,
+  enqueue_message__field_descriptors,
+  enqueue_message__field_indices_by_name,
+  1,  enqueue_message__number_ranges,
+  (ProtobufCMessageInit) enqueue_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor enqueue_response_message__field_descriptors[4] =
+{
+  {
+    "queue_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueResponseMessage, queue_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "last_item_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueResponseMessage, last_item_id),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueResponseMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(EnqueueResponseMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned enqueue_response_message__field_indices_by_name[] = {
+  1,   /* field[1] = last_item_id */
+  3,   /* field[3] = nonce */
+  0,   /* field[0] = queue_address */
+  2,   /* field[2] = txnid */
+};
+static const ProtobufCIntRange enqueue_response_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor enqueue_response_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "EnqueueResponseMessage",
+  "EnqueueResponseMessage",
+  "EnqueueResponseMessage",
+  "",
+  sizeof(EnqueueResponseMessage),
+  4,
+  enqueue_response_message__field_descriptors,
+  enqueue_response_message__field_indices_by_name,
+  1,  enqueue_response_message__number_ranges,
+  (ProtobufCMessageInit) enqueue_response_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor read_queue_message__field_descriptors[5] =
+{
+  {
+    "queue_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueMessage, queue_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "consumer_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueMessage, consumer_id),
+    &consumer_id__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "max_items",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueMessage, max_items),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    5,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned read_queue_message__field_indices_by_name[] = {
+  1,   /* field[1] = consumer_id */
+  2,   /* field[2] = max_items */
+  4,   /* field[4] = nonce */
+  0,   /* field[0] = queue_address */
+  3,   /* field[3] = txnid */
+};
+static const ProtobufCIntRange read_queue_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 5 }
+};
+const ProtobufCMessageDescriptor read_queue_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ReadQueueMessage",
+  "ReadQueueMessage",
+  "ReadQueueMessage",
+  "",
+  sizeof(ReadQueueMessage),
+  5,
+  read_queue_message__field_descriptors,
+  read_queue_message__field_indices_by_name,
+  1,  read_queue_message__number_ranges,
+  (ProtobufCMessageInit) read_queue_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor read_queue_response_message__field_descriptors[4] =
+{
+  {
+    "queue_entries",
+    1,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    offsetof(ReadQueueResponseMessage, n_queue_entries),
+    offsetof(ReadQueueResponseMessage, queue_entries),
+    &versioned_cell_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "consumer_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueResponseMessage, consumer_id),
+    &consumer_id__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueResponseMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueueResponseMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned read_queue_response_message__field_indices_by_name[] = {
+  1,   /* field[1] = consumer_id */
+  3,   /* field[3] = nonce */
+  0,   /* field[0] = queue_entries */
+  2,   /* field[2] = txnid */
+};
+static const ProtobufCIntRange read_queue_response_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 4 }
+};
+const ProtobufCMessageDescriptor read_queue_response_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ReadQueueResponseMessage",
+  "ReadQueueResponseMessage",
+  "ReadQueueResponseMessage",
+  "",
+  sizeof(ReadQueueResponseMessage),
+  4,
+  read_queue_response_message__field_descriptors,
+  read_queue_response_message__field_indices_by_name,
+  1,  read_queue_response_message__number_ranges,
+  (ProtobufCMessageInit) read_queue_response_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor consume_queue_message__field_descriptors[5] =
+{
+  {
+    "queue_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueMessage, queue_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "consumer_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueMessage, consumer_id),
+    &consumer_id__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "new_consume_head",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueMessage, new_consume_head),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    5,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned consume_queue_message__field_indices_by_name[] = {
+  1,   /* field[1] = consumer_id */
+  2,   /* field[2] = new_consume_head */
+  4,   /* field[4] = nonce */
+  0,   /* field[0] = queue_address */
+  3,   /* field[3] = txnid */
+};
+static const ProtobufCIntRange consume_queue_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 5 }
+};
+const ProtobufCMessageDescriptor consume_queue_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ConsumeQueueMessage",
+  "ConsumeQueueMessage",
+  "ConsumeQueueMessage",
+  "",
+  sizeof(ConsumeQueueMessage),
+  5,
+  consume_queue_message__field_descriptors,
+  consume_queue_message__field_indices_by_name,
+  1,  consume_queue_message__number_ranges,
+  (ProtobufCMessageInit) consume_queue_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor consume_queue_response_message__field_descriptors[6] =
+{
+  {
+    "queue_address",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, queue_address),
+    &cell_address_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "consumer_id",
+    2,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, consumer_id),
+    &consumer_id__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "status",
+    3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, status),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "new_consume_head",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, new_consume_head),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "txnid",
+    5,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, txnid),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "nonce",
+    6,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(ConsumeQueueResponseMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned consume_queue_response_message__field_indices_by_name[] = {
+  1,   /* field[1] = consumer_id */
+  3,   /* field[3] = new_consume_head */
+  5,   /* field[5] = nonce */
+  0,   /* field[0] = queue_address */
+  2,   /* field[2] = status */
+  4,   /* field[4] = txnid */
+};
+static const ProtobufCIntRange consume_queue_response_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 6 }
+};
+const ProtobufCMessageDescriptor consume_queue_response_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ConsumeQueueResponseMessage",
+  "ConsumeQueueResponseMessage",
+  "ConsumeQueueResponseMessage",
+  "",
+  sizeof(ConsumeQueueResponseMessage),
+  6,
+  consume_queue_response_message__field_descriptors,
+  consume_queue_response_message__field_indices_by_name,
+  1,  consume_queue_response_message__number_ranges,
+  (ProtobufCMessageInit) consume_queue_response_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
