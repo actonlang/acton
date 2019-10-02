@@ -220,20 +220,22 @@ cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg)
 
 cell * init_cell_from_msg(VersionedCellMessage * msg)
 {
-	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, init_vc_from_msg(msg->version));
-//	if(msg->has_version)
-//	c->version = init_vc_from_msg(msg->version);
-//	else
-//		version = NULL;
+	vector_clock * vc = NULL;
+	if(msg->version != NULL)
+		vc = init_vc_from_msg(msg->version);
+	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, vc);
+
 	return c;
 }
 
 void free_cell_msg(VersionedCellMessage * msg)
 {
-	free(msg->keys);
-	free(msg->columns);
-//	if(msg->has_version)
-	free_vc_msg(msg->version);
+	if(msg->keys != NULL)
+		free(msg->keys);
+	if(msg->columns != NULL)
+		free(msg->columns);
+	if(msg->version != NULL)
+		free_vc_msg(msg->version);
 }
 
 int serialize_cell(cell * ca, void ** buf, unsigned * len)

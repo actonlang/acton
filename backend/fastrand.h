@@ -1,4 +1,6 @@
 
+#include <time.h>
+
 #ifndef FASTRAND_H_
 #define FASTRAND_H_
 

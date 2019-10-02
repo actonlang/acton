@@ -642,7 +642,7 @@ int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
 
 	if(node == NULL)
 	{
-		printf("db_delete_row(): Table with pk %ld doesn't exist!\n", table_key);
+		printf("db_delete_row(): Table with pk %ld doesn't exist!\n", (long) table_key);
 		return -1;
 	}
 

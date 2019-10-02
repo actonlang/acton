@@ -290,14 +290,18 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 {
 	AckMessage * msg = ack_message__unpack (NULL, msg_len, buf);
+	char print_buff[100];
 
 	if (msg == NULL)
 	{
-		fprintf(stderr, "error unpacking read query message\n");
+		fprintf(stderr, "error unpacking ack query message\n");
 	    return 1;
 	}
 
 	*ca = init_ack_message_from_msg(msg);
+
+	to_string_ack_message(*ca, (char *) print_buff);
+	printf("Received ACK message: %s", print_buff);
 
 	ack_message__free_unpacked(msg, NULL);
 
