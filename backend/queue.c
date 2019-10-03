@@ -91,6 +91,9 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
 
+			if(cs->callback == NULL)
+				continue;
+
 			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
 			qca->table_key = table_key;
 			qca->queue_id = queue_id;
@@ -284,17 +287,17 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	cs->consumer_id = consumer_id;
 	cs->shard_id = shard_id;
 	cs->app_id = app_id;
-	cs->private_read_head = 0;
-	cs->private_consume_head = 0;
+	cs->private_read_head = -1;
+	cs->private_consume_head = -1;
 	cs->callback = callback;
 	cs->notified=0;
 
-	int ret = skiplist_insert(db_row->consumer_state, (long) consumer_id, callback, fastrandstate);
+	int ret = skiplist_insert(db_row->consumer_state, (long) consumer_id, cs, fastrandstate);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld\n",
+	printf("BACKEND: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
 					(long) cs->app_id, (long) cs->shard_id, (long) cs->consumer_id,
-					(long) table_key, (long) queue_id);
+					(long) table_key, (long) queue_id, cs->callback);
 #endif
 
 	return ret;
