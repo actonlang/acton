@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "queue.h"
 
@@ -243,12 +244,14 @@ int main(int argc, char **argv) {
 	pthread_t producer_t, consumer_t, consumer2_t;
 
 	producer_args pargs;
+	memset(&pargs, 0, sizeof(producer_args));
 	pargs.db = db;
 	pargs.table_key = table_key;
 	pargs.queue_id = queue_id;
 	pargs.no_enqueues = no_items;
 
 	consumer_args cargs;
+	memset(&cargs, 0, sizeof(consumer_args));
 	cargs.db = db;
 	cargs.table_key = table_key;
 	cargs.queue_id = queue_id;
@@ -258,6 +261,7 @@ int main(int argc, char **argv) {
 	cargs.consumer_id = (WORD) 0;
 
 	consumer_args cargs_replay;
+	memset(&cargs_replay, 0, sizeof(consumer_args));
 	cargs_replay.db = db;
 	cargs_replay.table_key = table_key;
 	cargs_replay.queue_id = queue_id;
