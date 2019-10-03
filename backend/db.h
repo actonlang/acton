@@ -8,6 +8,8 @@
 
 #include "skiplist.h"
 #include "fastrand.h"
+#include <pthread.h>
+#include <unistd.h>
 
 typedef void *WORD;
 
@@ -47,6 +49,25 @@ typedef struct db_table {
 
 } db_table_t;
 
+typedef struct queue_callback_args
+{
+	WORD table_key;
+	WORD queue_id;
+
+	WORD consumer_id;
+	WORD shard_id;
+	WORD app_id;
+
+	int status;
+} queue_callback_args;
+
+typedef struct queue_callback
+{
+	void (*callback)(queue_callback_args *);
+	pthread_mutex_t * lock;
+	pthread_cond_t * signal;
+} queue_callback;
+
 typedef struct consumer_state {
 	WORD consumer_id;
 	WORD shard_id;
@@ -55,7 +76,7 @@ typedef struct consumer_state {
 	long private_consume_head;
 	short notified;
 
-	void (*callback)(int); // Only non-NULL for local consumers
+	queue_callback* callback;;
 } consumer_state;
 
 typedef struct db_cell {

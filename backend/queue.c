@@ -4,8 +4,10 @@
  *      Author: aagapi
  */
 
-#import "queue.h"
-#import <limits.h>
+#include "queue.h"
+#include <limits.h>
+#include <assert.h>
+#include <stdlib.h>
 
 #define MIN(x, y) (((x)<(y))?(x):(y))
 #define MAX(x, y) (((x)>(y))?(x):(y))
@@ -19,7 +21,7 @@ db_table_t * get_table_by_key(WORD table_key, db_t * db)
 	return (db_table_t *) (node->value);
 }
 
-int create_queue_table(db_t * db, WORD table_id, int no_cols, int * col_types, unsigned int * fastrandstate) {
+int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, unsigned int * fastrandstate) {
 	int primary_key_idx = 0; // queue_id
 	int clustering_key_idx = 1;	// entry_id
 	int total_cols = no_cols+2;
@@ -74,7 +76,22 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 		if(cell->value != NULL)
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
-			cs->callback();
+
+			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
+			qca->table_key = table_key;
+			qca->queue_id = queue_id;
+
+			qca->app_id = cs->app_id;
+			qca->shard_id = cs->shard_id;
+			qca->consumer_id = cs->consumer_id;
+
+			qca->status = QUEUE_NOTIF_ENQUEUED;
+
+			pthread_mutex_lock(cs->callback->lock);
+			pthread_cond_signal(cs->callback->signal);
+			cs->callback->callback(qca);
+			pthread_mutex_unlock(cs->callback->lock);
+
 			cs->notified=1;
 		}
 	}
@@ -85,7 +102,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
 		snode_t* start_row, snode_t* end_row,
-		db_t * db, unsigned int * fastrandstate)
+		db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -131,7 +148,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 		long replay_offset, int max_entries,
 		int * entries_read, long * new_replay_offset,
 		snode_t* start_row, snode_t* end_row,
-		db_t * db, unsigned int * fastrandstate)
+		db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -173,7 +190,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 }
 
 int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		long new_consume_head, db_t * db, unsigned int * fastrandstate)
+		long new_consume_head, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -207,7 +224,7 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 	return (int) new_consume_head;
 }
 
-int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, void (*callback)(int), unsigned int * fastrandstate)
+int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, queue_callback * callback, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -236,7 +253,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	return skiplist_insert(db_row->consumer_state, (long) consumer_id, callback, fastrandstate);
 }
 
-int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id)
+int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -256,7 +273,7 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	return 0;
 }
 
-int create_queue(WORD table_key, WORD queue_id, db_schema_t* schema, int fastrandstate)
+int create_queue(WORD table_key, WORD queue_id, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -267,26 +284,28 @@ int create_queue(WORD table_key, WORD queue_id, db_schema_t* schema, int fastran
 	if(node != NULL)
 		return DB_ERR_DUPLICATE_QUEUE; // Queue already exists!
 
+	db_schema_t* schema = table->schema;
+
 	// Create sentinel queue entry:
 
-	WORD * queue_column_values = (WORD *) malloc((schema->no_cols + 2) * sizeof(WORD));
+	WORD * queue_column_values = (WORD *) malloc(schema->no_cols * sizeof(WORD));
 	queue_column_values[0]=queue_id;
 	queue_column_values[1]=(WORD) LONG_MAX;
-	for(long i=2;i<schema->no_cols + 2;i++)
+	for(long i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 
-	int status = table_insert(queue_column_values, schema->no_cols+2, table, fastrandstate);
+	int status = table_insert(queue_column_values, schema->no_cols, table, fastrandstate);
 
 	if(status)
 		return status;
 
 	// Get queue row:
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
-	if(node == NULL)
+	snode_t * qr_node = skiplist_search(table->rows, (long) queue_id);
+	if(qr_node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue creation error
 
-	db_row_t * db_row = (db_row_t *) (node->value);
+	db_row_t * db_row = (db_row_t *) (qr_node->value);
 
 	db_row->consumer_state = create_skiplist();
 
@@ -296,7 +315,7 @@ int create_queue(WORD table_key, WORD queue_id, db_schema_t* schema, int fastran
 	return 0;
 }
 
-int delete_queue(WORD table_key, WORD queue_id)
+int delete_queue(WORD table_key, WORD queue_id, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -316,7 +335,21 @@ int delete_queue(WORD table_key, WORD queue_id)
 		if(cell->value != NULL)
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
-			cs->callback();
+			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
+			qca->table_key = table_key;
+			qca->queue_id = queue_id;
+
+			qca->app_id = cs->app_id;
+			qca->shard_id = cs->shard_id;
+			qca->consumer_id = cs->consumer_id;
+
+			qca->status = QUEUE_NOTIF_DELETED;
+
+			pthread_mutex_lock(cs->callback->lock);
+			pthread_cond_signal(cs->callback->signal);
+			cs->callback->callback(qca);
+			pthread_mutex_unlock(cs->callback->lock);
+
 //			cs->notified=1;
 		}
 	}

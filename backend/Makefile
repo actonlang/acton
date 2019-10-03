@@ -20,14 +20,17 @@ LFLAGS=#-latomic -lm
 
 LIBDIR=../lib
 
-all: libdb db_unit_tests
+all: libdb db_unit_tests queue_unit_tests
 
-libdb: db.o skiplist.o $(LIBDIR)
+libdb: db.o queue.o skiplist.o $(LIBDIR)
 	ar rcs $(LIBDIR)/libdb.a db.o skiplist.o
 	ranlib $(LIBDIR)/libdb.a
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
+
+queue.o:
+	cc queue.c -c -I src $(LFLAGS) $(CFLAGS)
 
 skiplist.o:
 	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -39,6 +42,14 @@ db_unit_tests: db_unit_tests.c
 		$(LIBS) \
 		$(CFLAGS) \
 		-o db_unit_tests
+
+queue_unit_tests: queue_unit_tests.c
+	cc -std=c11 queue_unit_tests.c \
+		$(CFLAGS) -I ../src -L ../lib \
+		-ldb $(LFLAGS) -pthread \
+		$(LIBS) \
+		$(CFLAGS) \
+		-o queue_unit_tests
 
 $(LIBDIR):
 	mkdir -p $(LIBDIR)
