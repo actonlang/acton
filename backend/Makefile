@@ -23,7 +23,7 @@ LIBDIR=../lib
 all: libdb db_unit_tests queue_unit_tests
 
 libdb: db.o queue.o skiplist.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libdb.a db.o skiplist.o
+	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o
 	ranlib $(LIBDIR)/libdb.a
 
 db.o:
@@ -44,7 +44,7 @@ db_unit_tests: db_unit_tests.c
 		-o db_unit_tests
 
 queue_unit_tests: queue_unit_tests.c
-	cc -std=c11 queue_unit_tests.c \
+	cc queue_unit_tests.c \
 		$(CFLAGS) -I ../src -L ../lib \
 		-ldb $(LFLAGS) -pthread \
 		$(LIBS) \
@@ -55,5 +55,4 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o *.a $(LIBDIR)
-
+	rm -rf *.o $(LIBDIR)

@@ -97,8 +97,8 @@ void * producer(void * pargs)
 void consumer_callback(queue_callback_args * qca)
 {
 	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
-			qca->app_id, qca->shard_id, qca->consumer_id,
-			qca->table_key, qca->queue_id,
+			(long) qca->app_id, (long) qca->shard_id, (long) qca->consumer_id,
+			(long) qca->table_key, (long) qca->queue_id,
 			qca->status);
 }
 
@@ -120,8 +120,8 @@ void * consumer(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, qc, ca->db, &seed);
-	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED");
+	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc, ca->db, &seed);
+	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return NULL;
 
@@ -139,7 +139,7 @@ void * consumer(void * cargs)
 						&start_row, &end_row, ca->db);
 
 		if(ret < 0)
-			printf('ERROR: read_queue returned %d\n', ret);
+			printf("ERROR: read_queue returned %d\n", ret);
 		else
 			ca->successful_dequeues += entries_read;
 
@@ -150,7 +150,7 @@ void * consumer(void * cargs)
 							(long) ca->successful_dequeues-1, ca->db);
 
 		if(ret < 0)
-			printf('ERROR: consume_queue returned %d\n', ret);
+			printf("ERROR: consume_queue returned %d\n", ret);
 		else
 			ca->successful_consumes += entries_read;
 
@@ -158,7 +158,7 @@ void * consumer(void * cargs)
 	}
 
 	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, ca->db);
-	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
 
 	return (void *) ret;
 }
@@ -181,7 +181,7 @@ void * consumer_replay(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, qc, ca->db, &seed);
+	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc, ca->db, &seed);
 
 	while(ca->successful_dequeues < ca->no_enqueues)
 	{
@@ -197,7 +197,7 @@ void * consumer_replay(void * cargs)
 						&start_row, &end_row, ca->db);
 
 		if(ret < 0)
-			printf('ERROR: read_queue returned %d\n', ret);
+			printf("ERROR: read_queue returned %d\n", ret);
 		else
 			ca->successful_dequeues += entries_read;
 
@@ -231,12 +231,12 @@ int main(int argc, char **argv) {
 		col_types[i] = DB_TYPE_INT64;
 
 	ret = create_queue_table(table_key, no_cols, col_types, db,  &seed);
-	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
 
 	// Create queue:
 
 	ret = create_queue(table_key, queue_id, db, &seed);
-	printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
 
 	// Create and run producer and consumer threads (also test subscribe / unsubscribe):
 
@@ -267,65 +267,65 @@ int main(int argc, char **argv) {
 	cargs_replay.consumer_id = (WORD) 1;
 
 	ret = pthread_create(&producer_t, NULL, producer, &pargs);
-	printf("Test %s - %s (%d)\n", "create_producer_thread", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "create_producer_thread", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return -1;
 
 	ret = pthread_create(&consumer_t, NULL, consumer, &cargs);
-	printf("Test %s - %s (%d)\n", "create_consumer_thread", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "create_consumer_thread", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return -1;
 
-	ret = pthread_create(&consumer2_t, NULL, consumer_replay, &cargs_replay);
-	printf("Test %s - %s (%d)\n", "create_consumer_replay_thread", ret==0?"OK":"FAILED");
-	if(ret)
-		return -1;
+//	ret = pthread_create(&consumer2_t, NULL, consumer_replay, &cargs_replay);
+//	printf("Test %s - %s (%d)\n", "create_consumer_replay_thread", ret==0?"OK":"FAILED", ret);
+//	if(ret)
+//		return -1;
 
 	ret = pthread_join(producer_t, NULL);
-	printf("Test %s - %s (%d)\n", "join_producer_thread", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "join_producer_thread", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return -2;
 
-	ret = pthread_join(consumer_t, NULL)
-			printf("Test %s - %s (%d)\n", "join_consumer_thread", ret==0?"OK":"FAILED");
+	ret = pthread_join(consumer_t, NULL);
+	printf("Test %s - %s (%d)\n", "join_consumer_thread", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return -2;
 
-	ret = pthread_join(consumer_replay_t, NULL)
-			printf("Test %s - %s (%d)\n", "join_consumer_replay_thread", ret==0?"OK":"FAILED");
-	if(ret)
-		return -2;
+//	ret = pthread_join(consumer2_t, NULL);
+//	printf("Test %s - %s (%d)\n", "join_consumer_replay_thread", ret==0?"OK":"FAILED", ret);
+//	if(ret)
+//		return -2;
 
 	// Test enqueues:
-	printf("Test %s - %s (%d)\n", "enqueue", pargs.successful_enqueues==pargs.no_enqueues?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "enqueue", pargs.successful_enqueues==pargs.no_enqueues?"OK":"FAILED", ret);
 
 	// Test dequeues:
-	printf("Test %s - %s (%d)\n", "dequeue", cargs.successful_dequeues==cargs.no_enqueues?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "dequeue", cargs.successful_dequeues==cargs.no_enqueues?"OK":"FAILED", ret);
 
 	// Test read head sanity:
-	printf("Test %s - %s (%d)\n", "read_head", ((int) cargs.read_head)==(cargs.no_enqueues - 1)?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "read_head", ((int) cargs.read_head)==(cargs.no_enqueues - 1)?"OK":"FAILED", ret);
 
 	// Test consumes:
-	printf("Test %s - %s (%d)\n", "consume", cargs.successful_consumes==cargs.no_enqueues?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "consume", cargs.successful_consumes==cargs.no_enqueues?"OK":"FAILED", ret);
 
 
 	// Test dequeues on C2:
-	printf("Test %s - %s (%d)\n", "dequeue", cargs_replay.successful_dequeues==cargs_replay.no_enqueues?"OK":"FAILED");
+//	printf("Test %s - %s (%d)\n", "dequeue", cargs_replay.successful_dequeues==cargs_replay.no_enqueues?"OK":"FAILED", ret);
 
 	// Test read head sanity on C2:
-	printf("Test %s - %s (%d)\n", "read_head", ((int) cargs_replay.read_head)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED");
+//	printf("Test %s - %s (%d)\n", "read_head", ((int) cargs_replay.read_head)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED", ret);
 
 	// Test replays on C2:
-	printf("Test %s - %s (%d)\n", "dequeue", cargs_replay.successful_replays==cargs_replay.no_enqueues?"OK":"FAILED");
+//	printf("Test %s - %s (%d)\n", "dequeue", cargs_replay.successful_replays==cargs_replay.no_enqueues?"OK":"FAILED", ret);
 
 	// Test read head sanity after replay on C2:
-	printf("Test %s - %s (%d)\n", "read_head_replay", ((int) cargs_replay.read_head_after_replay)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED");
+//	printf("Test %s - %s (%d)\n", "read_head_replay", ((int) cargs_replay.read_head_after_replay)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED", ret);
 
 
 	// Test delete queue:
 
 	ret = delete_queue(table_key, queue_id, db);
-	printf("Test %s - %s (%d)\n", "delete_queue", ret==0?"OK":"FAILED");
+	printf("Test %s - %s (%d)\n", "delete_queue", ret==0?"OK":"FAILED", ret);
 
 	return 0;
 }

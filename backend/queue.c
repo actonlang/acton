@@ -9,8 +9,12 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include <stdio.h>
+
 #define MIN(x, y) (((x)<(y))?(x):(y))
 #define MAX(x, y) (((x)>(y))?(x):(y))
+
+#define VERBOSITY 1
 
 db_table_t * get_table_by_key(WORD table_key, db_t * db)
 {
@@ -40,7 +44,13 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 
 	// Create queue table:
 
-	return db_create_table(table_id, db_schema, db, fastrandstate);;
+	int ret = db_create_table(table_id, db_schema, db, fastrandstate);
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Queue table %ld created\n", (long) table_id);
+#endif
+
+	return ret;
 }
 
 int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db_t * db, unsigned int * fastrandstate)
@@ -69,6 +79,10 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 
 	int status = table_insert(queue_column_values, no_cols+2, table, fastrandstate);
 
+#if (VERBOSITY > 0)
+	printf("BACKEND: Inserted queue entry %ld, status=%d\n", entry_id, status);
+#endif
+
 	// Notify subscribers if they haven't been notified:
 
 	for(snode_t * cell=HEAD(db_row->consumer_state);cell!=NULL;cell=NEXT(cell))
@@ -93,6 +107,10 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 			pthread_mutex_unlock(cs->callback->lock);
 
 			cs->notified=1;
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Notified subscriber %ld\n", (long) qca->consumer_id);
+#endif
 		}
 	}
 
@@ -141,6 +159,11 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	cs->private_read_head = *new_read_head;
 
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld read %ld queue entries, new_read_head=%ld\n",
+					(long) cs->consumer_id, no_results, cs->private_read_head);
+#endif
+
 	return (int) no_results;
 }
 
@@ -186,6 +209,11 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 	assert(no_results == *new_replay_offset);
 
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld replayed %ld queue entries, new_replay_offset=%ld\n",
+					(long) cs->consumer_id, no_results, *new_replay_offset);
+#endif
+
 	return (int) no_results;
 }
 
@@ -221,6 +249,11 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 
 	cs->private_consume_head = new_consume_head;
 
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld consumed entries, new_consume_head=%ld, read_head=%ld\n",
+					(long) cs->consumer_id, cs->private_consume_head, cs->private_read_head);
+#endif
+
 	return (int) new_consume_head;
 }
 
@@ -238,8 +271,14 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	db_row_t * db_row = (db_row_t *) (node->value);
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, (long) consumer_id);
-	if(node != NULL)
+	if(consumer_node != NULL)
+	{
+		consumer_state * found_cs = (consumer_state *) (consumer_node->value);
+
+		printf("BACKEND: ERR: Found consumer state %ld when searching for consumer_id %ld!\n", (long) found_cs->consumer_id, (long) consumer_id);
+
 		return DB_ERR_DUPLICATE_CONSUMER; // Consumer already exists!
+	}
 
 	consumer_state * cs = (consumer_state *) malloc(sizeof(consumer_state));
 	cs->consumer_id = consumer_id;
@@ -250,7 +289,15 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	cs->callback = callback;
 	cs->notified=0;
 
-	return skiplist_insert(db_row->consumer_state, (long) consumer_id, callback, fastrandstate);
+	int ret = skiplist_insert(db_row->consumer_state, (long) consumer_id, callback, fastrandstate);
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld\n",
+					(long) cs->app_id, (long) cs->shard_id, (long) cs->consumer_id,
+					(long) table_key, (long) queue_id);
+#endif
+
+	return ret;
 }
 
 int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, db_t * db)
@@ -269,6 +316,12 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	snode_t * consumer_node = skiplist_delete(db_row->consumer_state, (long) consumer_id);
 	if(node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer didn't exist
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld\n",
+					(long) app_id, (long) shard_id, (long) consumer_id,
+					(long) table_key, (long) queue_id);
+#endif
 
 	return 0;
 }
@@ -311,6 +364,10 @@ int create_queue(WORD table_key, WORD queue_id, db_t * db, unsigned int * fastra
 
 	if(!db_row->consumer_state)
 		return DB_ERR_NO_QUEUE; // Queue creation error
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Queue %ld/%ld created\n", (long) table_key, (long) queue_id);
+#endif
 
 	return 0;
 }
@@ -356,7 +413,13 @@ int delete_queue(WORD table_key, WORD queue_id, db_t * db)
 
 	skiplist_free(db_row->consumer_state);
 
-	return table_delete_row((WORD*) &(queue_id), table);
+	int ret = table_delete_row((WORD*) &(queue_id), table);
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Queue %ld/%ld deleted\n", (long) table_key, (long) queue_id);
+#endif
+
+	return ret;
 }
 
 
