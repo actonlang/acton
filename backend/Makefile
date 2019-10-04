@@ -55,4 +55,4 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o $(LIBDIR)
+	rm -rf *.o $(LIBDIR) db_unit_tests queue_unit_tests

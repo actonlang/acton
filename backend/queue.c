@@ -173,6 +173,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	}
 
 	*new_read_head = MIN(cs->private_read_head + max_entries, no_entries - 1);
+	long start_index = cs->private_read_head + 1;
 
 	cs->private_read_head = *new_read_head;
 
@@ -180,8 +181,6 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	{
 		pthread_mutex_unlock(db_row->read_lock);
 	}
-
-	long start_index = cs->private_read_head + 1;
 
 	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_read_head, 1,
