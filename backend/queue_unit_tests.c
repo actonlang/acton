@@ -281,10 +281,10 @@ void * consumer_replay(void * cargs)
 			&ca->successful_replays, &ca->read_head_after_replay,
 			&start_row, &end_row, ca->db);
 
+	assert(ret == QUEUE_STATUS_READ_COMPLETE);
+
 	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, 1, ca->db);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
-
-	assert(ret == QUEUE_STATUS_READ_COMPLETE);
 
 	return (void *) ret;
 }
