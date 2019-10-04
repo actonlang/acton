@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <string.h>
+#include <time.h>
 
 #include "queue.h"
 
@@ -103,6 +104,43 @@ void consumer_callback(queue_callback_args * qca)
 			qca->status);
 }
 
+int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
+{
+	snode_t * start_row, * end_row;
+	int read_status = QUEUE_STATUS_READ_INCOMPLETE;
+
+	while(read_status != QUEUE_STATUS_READ_COMPLETE)
+	{
+		read_status = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
+						ca->table_key, ca->queue_id,
+						2, entries_read, &ca->read_head,
+						&start_row, &end_row, ca->db);
+
+		if(read_status < 0)
+		{
+			printf("ERROR: read_queue returned %d\n", read_status);
+			return read_status;
+		}
+		else
+		{
+			assert(read_status == QUEUE_STATUS_READ_COMPLETE || read_status == QUEUE_STATUS_READ_INCOMPLETE);
+
+			ca->successful_dequeues += (*entries_read);
+
+			if((*entries_read) > 0)
+			{
+				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
+						(long) ca->consumer_id, ca->successful_dequeues, end_row->key);
+
+				if(end_row->key != ca->successful_dequeues - 1)
+					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", end_row->key, ca->successful_dequeues - 1);
+			}
+		}
+	}
+
+	return read_status;
+}
+
 void * consumer(void * cargs)
 {
 	unsigned int seed;
@@ -126,30 +164,41 @@ void * consumer(void * cargs)
 	if(ret)
 		return NULL;
 
+	int entries_read = 0;
+
+	int read_status = read_queue_while_not_empty(ca, &entries_read);
+	if(read_status < 0)
+	{
+		return (void *) read_status;
+	}
+
+	// Add app-specific message processing work here
+
+	ret = consume_queue(ca->consumer_id, ca->shard_id, ca->app_id,
+						ca->table_key, ca->queue_id,
+						(long) ca->read_head, ca->db);
+
+	if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
+		printf("ERROR: consume_queue returned %d\n", ret);
+	else
+		ca->successful_consumes = ca->successful_dequeues;
+
+	printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
+			(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
+
 	while(ca->successful_consumes < ca->no_enqueues)
 	{
 		pthread_mutex_lock(&lock);
-		pthread_cond_wait(&signal, &lock);
+		struct timespec ts;
+		clock_gettime(CLOCK_REALTIME, &ts);
+		ts.tv_sec += 3;
+		pthread_cond_timedwait(&signal, &lock, &ts);
 		// Received queue notification, reading:
 
-		int entries_read = 0;
-
-		ret = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
-						ca->table_key, ca->queue_id,
-						2, &entries_read, &ca->read_head,
-						&start_row, &end_row, ca->db);
-
-		if(ret < 0)
-			printf("ERROR: read_queue returned %d\n", ret);
-		else
+		read_status = read_queue_while_not_empty(ca, &entries_read);
+		if(read_status < 0)
 		{
-			ca->successful_dequeues += entries_read;
-
-			printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
-					(long) ca->consumer_id, ca->successful_dequeues, end_row->key);
-
-			if(end_row->key != ca->successful_dequeues - 1)
-				printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", end_row->key, ca->successful_dequeues - 1);
+			return (void *) read_status;
 		}
 
 		// Add app-specific message processing work here
@@ -161,7 +210,7 @@ void * consumer(void * cargs)
 		if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 			printf("ERROR: consume_queue returned %d\n", ret);
 		else
-			ca->successful_consumes += entries_read;
+			ca->successful_consumes = ca->successful_dequeues;
 
 		printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
 				(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
@@ -195,23 +244,29 @@ void * consumer_replay(void * cargs)
 
 	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc, ca->db, &seed);
 
+	int entries_read = 0;
+
+	int read_status = read_queue_while_not_empty(ca, &entries_read);
+	if(read_status < 0)
+	{
+		return (void *) read_status;
+	}
+
 	while(ca->successful_dequeues < ca->no_enqueues)
 	{
 		pthread_mutex_lock(&lock);
-		pthread_cond_wait(&signal, &lock);
+		struct timespec ts;
+		clock_gettime(CLOCK_REALTIME, &ts);
+		ts.tv_sec += 3;
+		pthread_cond_timedwait(&signal, &lock, &ts);
+
 		// Received queue notification, reading:
 
-		int entries_read = 0;
-
-		ret = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
-						ca->table_key, ca->queue_id,
-						2, &entries_read, &ca->read_head,
-						&start_row, &end_row, ca->db);
-
-		if(ret < 0)
-			printf("ERROR: read_queue returned %d\n", ret);
-		else
-			ca->successful_dequeues += entries_read;
+		read_status = read_queue_while_not_empty(ca, &entries_read);
+		if(read_status < 0)
+		{
+			return (void *) read_status;
+		}
 
 		pthread_mutex_unlock(&lock);
 	}
@@ -221,6 +276,8 @@ void * consumer_replay(void * cargs)
 			0, ca->successful_dequeues,
 			&ca->successful_replays, &ca->read_head_after_replay,
 			&start_row, &end_row, ca->db);
+
+	assert(ret == QUEUE_STATUS_READ_COMPLETE);
 
 	return (void *) ret;
 }
@@ -335,7 +392,6 @@ int main(int argc, char **argv) {
 
 	// Test read head sanity after replay on C2:
 	printf("Test %s - %s (%d)\n", "read_head_replay", ((int) cargs_replay.read_head_after_replay)==(cargs_replay.no_enqueues - 1)?"OK":"FAILED", ret);
-
 
 	// Test delete queue:
 

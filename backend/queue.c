@@ -91,7 +91,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
 
-			if(cs->callback == NULL)
+			if(cs->callback == NULL || cs->notified > 0)
 				continue;
 
 			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
@@ -145,12 +145,10 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
-	cs->notified=0;
-
 	assert(cs->private_read_head <= no_entries - 1);
 
 	if(cs->private_read_head == no_entries - 1)
-		return 0; // DB_ERR_QUEUE_COMPLETE; // // Nothing to read
+		return QUEUE_STATUS_READ_COMPLETE; // Nothing to read
 
 	*new_read_head = MIN(cs->private_read_head + max_entries, no_entries - 1);
 	long start_index = cs->private_read_head + 1;
@@ -170,7 +168,11 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	*entries_read = (int) no_results;
 
-	return *entries_read;
+	int ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+
+	cs->notified=(ret==QUEUE_STATUS_READ_INCOMPLETE);
+
+	return ret;
 }
 
 int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -204,7 +206,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 	assert(cs->private_consume_head + replay_offset <= cs->private_read_head);
 
 	if(cs->private_consume_head + replay_offset == cs->private_read_head)
-		return 0; // DB_ERR_QUEUE_COMPLETE; // // Nothing to read
+		return QUEUE_STATUS_READ_COMPLETE; // // Nothing to replay
 
 	*new_replay_offset = MIN(cs->private_consume_head + replay_offset + max_entries, cs->private_read_head);
 	long start_index = cs->private_consume_head + replay_offset;
@@ -220,7 +222,9 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 					(long) cs->consumer_id, no_results, *new_replay_offset);
 #endif
 
-	return (int) no_results;
+	int ret = ((*new_replay_offset) == cs->private_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
+
+	return ret;
 }
 
 int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,

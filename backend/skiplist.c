@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <assert.h>
 
 #include "skiplist.h"
 #include "fastrand.h"
@@ -117,6 +118,8 @@ snode_t *skiplist_search_higher(skiplist_t *list, long key) {
 
     if(x != NULL)
     		return x->forward[0];
+    else
+    		assert(0);
 
     return NULL;
 }

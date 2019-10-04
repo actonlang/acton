@@ -477,7 +477,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 	*start_row = skiplist_search_higher(row->cells, (long) start_clustering_keys[no_clustering_keys-1]);
 
-	for(*end_row = *start_row; (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }

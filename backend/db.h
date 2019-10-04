@@ -49,6 +49,8 @@ typedef struct db_table {
 
 } db_table_t;
 
+// Queues:
+
 typedef struct queue_callback_args
 {
 	WORD table_key;
@@ -72,12 +74,16 @@ typedef struct consumer_state {
 	WORD consumer_id;
 	WORD shard_id;
 	WORD app_id;
+
 	long private_read_head;
 	long private_consume_head;
+
 	short notified;
 
 	queue_callback* callback;;
 } consumer_state;
+
+// Cells:
 
 typedef struct db_cell {
 	WORD key;
