@@ -148,7 +148,7 @@ void * consumer(void * cargs)
 
 		ret = consume_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 							ca->table_key, ca->queue_id,
-							(long) ca->successful_dequeues-1, ca->db);
+							(long) ca->read_head, ca->db);
 
 		if(ret < 0)
 			printf("ERROR: consume_queue returned %d\n", ret);

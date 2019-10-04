@@ -158,7 +158,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 										(WORD*) &start_index, (WORD*) new_read_head, 1,
 										&start_row, &end_row, table);
 
-	assert(no_results == *new_read_head);
+	assert(no_results == (*new_read_head - start_index + 1));
 
 	cs->private_read_head = *new_read_head;
 

@@ -403,7 +403,7 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 
 	for(*end_row = *start_row; (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
-	return no_results;
+	return no_results+1;
 }
 
 int table_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db_row_t** rows, db_table_t * table)
@@ -479,7 +479,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 	for(*end_row = *start_row; (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
-	return no_results;
+	return no_results+1;
 }
 
 WORD* table_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, db_table_t * table)
@@ -540,7 +540,7 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 
 	for(*end_row = *start_row; (*end_row != NULL) && ((long) (*end_row)->key < (long) end_idx_key); *end_row=NEXT(*end_row), no_results++);
 
-	return no_results;
+	return no_results+1;
 }
 
 int table_delete_row(WORD* primary_keys, db_table_t * table)
