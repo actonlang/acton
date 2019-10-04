@@ -42,11 +42,7 @@ typedef struct db_table {
 	skiplist_t * rows;
 	skiplist_t ** indexes;
 
-	// Queue metadata:
-
-//	long no_items;
-//	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
-
+	pthread_mutex_t* lock;
 } db_table_t;
 
 // Queues:
@@ -94,6 +90,9 @@ typedef struct db_cell {
 	// Queue metadata:
 	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
 	long no_entries;
+	pthread_mutex_t* enqueue_lock;
+	pthread_mutex_t* read_lock;
+	pthread_mutex_t* subscribe_lock;
 
 	struct db_cell_t * _next;
 } db_cell_t;

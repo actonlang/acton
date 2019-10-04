@@ -64,7 +64,7 @@ int do_enqueues(db_t * db, WORD table_id, WORD queue_id, int no_enqueues, int ra
 		column_values[0] = (WORD) iid;
 		column_values[1] = (WORD) iid + 1;
 
-		int ret = enqueue(column_values, no_cols, table_id, queue_id, db, fastrandstate);
+		int ret = enqueue(column_values, no_cols, table_id, queue_id, 1, db, fastrandstate);
 		if(ret != 0)
 			return ret;
 
@@ -114,7 +114,7 @@ int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
 		read_status = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 						ca->table_key, ca->queue_id,
 						2, entries_read, &ca->read_head,
-						&start_row, &end_row, ca->db);
+						&start_row, &end_row, 1, ca->db);
 
 		if(read_status < 0)
 		{
@@ -159,12 +159,14 @@ void * consumer(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc, ca->db, &seed);
+	long prev_read_head = -1, prev_consume_head = -1;
+	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc,
+							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
 	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return NULL;
 
-	int entries_read = 0;
+	int entries_read = (int) prev_read_head + 1;
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read);
 	if(read_status < 0)
@@ -218,7 +220,7 @@ void * consumer(void * cargs)
 		pthread_mutex_unlock(&lock);
 	}
 
-	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, ca->db);
+	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, 1, ca->db);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
 
 	return (void *) ret;
@@ -242,9 +244,11 @@ void * consumer_replay(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc, ca->db, &seed);
+	long prev_read_head = -1, prev_consume_head = -1;
+	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc,
+							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
 
-	int entries_read = 0;
+	int entries_read = (int) prev_read_head + 1;
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read);
 	if(read_status < 0)
@@ -277,6 +281,9 @@ void * consumer_replay(void * cargs)
 			&ca->successful_replays, &ca->read_head_after_replay,
 			&start_row, &end_row, ca->db);
 
+	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, 1, ca->db);
+	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
+
 	assert(ret == QUEUE_STATUS_READ_COMPLETE);
 
 	return (void *) ret;
@@ -304,7 +311,7 @@ int main(int argc, char **argv) {
 
 	// Create queue:
 
-	ret = create_queue(table_key, queue_id, db, &seed);
+	ret = create_queue(table_key, queue_id, 1, db, &seed);
 	printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
 
 	// Create and run producer and consumer threads (also test subscribe / unsubscribe):
@@ -395,7 +402,7 @@ int main(int argc, char **argv) {
 
 	// Test delete queue:
 
-	ret = delete_queue(table_key, queue_id, db);
+	ret = delete_queue(table_key, queue_id, 1, db);
 	printf("Test %s - %s (%d)\n", "delete_queue", ret==0?"OK":"FAILED", ret);
 
 	return 0;

@@ -180,6 +180,9 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 	for(int i=0;i<schema->no_index_keys;i++)
 		table->indexes[i] = create_skiplist();
 
+	table->lock = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(table->lock, NULL);
+
 	return skiplist_insert(db->tables, (long) table_key, (WORD) table, fastrandstate);
 }
 
