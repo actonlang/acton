@@ -122,10 +122,11 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, db
 
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
-		snode_t* start_row, snode_t* end_row,
+		snode_t** start_row, snode_t** end_row,
 		db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
+	*entries_read=0;
 
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
@@ -156,7 +157,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_read_head, 1,
-										&start_row, &end_row, table);
+										start_row, end_row, table);
 
 	assert(no_results == (*new_read_head - start_index + 1));
 
@@ -167,13 +168,15 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 					(long) cs->consumer_id, no_results, cs->private_read_head);
 #endif
 
-	return (int) no_results;
+	*entries_read = (int) no_results;
+
+	return *entries_read;
 }
 
 int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		long replay_offset, int max_entries,
 		int * entries_read, long * new_replay_offset,
-		snode_t* start_row, snode_t* end_row,
+		snode_t** start_row, snode_t** end_row,
 		db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -208,9 +211,9 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_replay_offset, 1,
-										&start_row, &end_row, table);
+										start_row, end_row, table);
 
-	assert(no_results == *new_replay_offset);
+	assert(no_results == (*new_replay_offset) - start_index);
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld replayed %ld queue entries, new_replay_offset=%ld\n",
