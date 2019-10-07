@@ -130,10 +130,10 @@ int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
 			if((*entries_read) > 0)
 			{
 				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
-						(long) ca->consumer_id, ca->successful_dequeues, end_row->key);
+						(long) ca->consumer_id, ca->successful_dequeues, (long) end_row->key);
 
-				if(end_row->key != ca->successful_dequeues - 1)
-					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", end_row->key, ca->successful_dequeues - 1);
+				if(((long) end_row->key) != ca->successful_dequeues - 1)
+					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (long) end_row->key, ca->successful_dequeues - 1);
 			}
 		}
 	}

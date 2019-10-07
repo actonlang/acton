@@ -18,7 +18,7 @@
 
 db_table_t * get_table_by_key(WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 	if(node == NULL)
 		return NULL;
 
@@ -60,7 +60,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
@@ -141,7 +141,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
@@ -149,7 +149,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	long no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, (long) consumer_id);
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
@@ -213,7 +213,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
@@ -221,7 +221,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 	long no_entries = db_row->no_entries;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, (long) consumer_id);
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
@@ -264,13 +264,13 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, (long) consumer_id);
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
 		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
 
@@ -309,7 +309,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	if(table == NULL)
 		return DB_ERR_NO_TABLE;	// Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
@@ -321,7 +321,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	*prev_read_head = -1;
 	*prev_consume_head = -1;
 
-	snode_t * consumer_node = skiplist_search(db_row->consumer_state, (long) consumer_id);
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(consumer_node != NULL)
 	{
 		consumer_state * found_cs = (consumer_state *) (consumer_node->value);
@@ -346,7 +346,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	cs->callback = callback;
 	cs->notified=0;
 
-	int ret = skiplist_insert(db_row->consumer_state, (long) consumer_id, cs, fastrandstate);
+	int ret = skiplist_insert(db_row->consumer_state, consumer_id, cs, fastrandstate);
 
 	if(use_lock)
 		pthread_mutex_unlock(db_row->subscribe_lock);
@@ -368,7 +368,7 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 
@@ -377,7 +377,7 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	if(use_lock)
 		pthread_mutex_lock(db_row->subscribe_lock);
 
-	snode_t * consumer_node = skiplist_delete(db_row->consumer_state, (long) consumer_id);
+	snode_t * consumer_node = skiplist_delete(db_row->consumer_state, consumer_id);
 
 	if(use_lock)
 		pthread_mutex_unlock(db_row->subscribe_lock);
@@ -404,7 +404,7 @@ int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsig
 	if(use_lock)
 		pthread_mutex_lock(table->lock);
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node != NULL)
 	{
 		if(use_lock)
@@ -435,7 +435,7 @@ int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsig
 
 	// Get queue row:
 
-	snode_t * qr_node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * qr_node = skiplist_search(table->rows, queue_id);
 	if(qr_node == NULL)
 	{
 		if(use_lock)
@@ -446,7 +446,7 @@ int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsig
 
 	db_row_t * db_row = (db_row_t *) (qr_node->value);
 
-	db_row->consumer_state = create_skiplist();
+	db_row->consumer_state = create_skiplist_long();
 
 	if(!db_row->consumer_state)
 	{
@@ -480,7 +480,7 @@ int delete_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db)
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
 
-	snode_t * node = skiplist_search(table->rows, (long) queue_id);
+	snode_t * node = skiplist_search(table->rows, queue_id);
 	if(node == NULL)
 		return DB_ERR_NO_QUEUE; // Queue doesn't exist
 

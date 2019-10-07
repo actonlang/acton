@@ -43,7 +43,7 @@ db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned in
 
 	for(int i=0; i<schema->no_clustering_keys; i++, crt_cell = new_cell)
 	{
-		crt_cell->cells = create_skiplist();
+		crt_cell->cells = create_skiplist_long();
 
 		new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
 
@@ -57,7 +57,7 @@ db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned in
 			}
 		}
 
-		skiplist_insert(crt_cell->cells, (long) column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+		skiplist_insert(crt_cell->cells, column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
 	}
 
 	return row;
@@ -93,7 +93,7 @@ db_t * get_db()
 {
 	db_t * db = (db_t *) malloc(sizeof(db_t));
 
-	db->tables = create_skiplist();
+	db->tables = create_skiplist_long();
 
 	return db;
 }
@@ -172,18 +172,18 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 	// Deep copy of schema (to allow caller to free his copy):
 	table->schema = db_create_schema(schema->col_types, schema->no_cols, schema->primary_key_idxs, schema->no_primary_keys, schema->clustering_key_idxs, schema->no_clustering_keys, schema->index_key_idxs, schema->no_index_keys);
 
-	table->rows = create_skiplist();
+	table->rows = create_skiplist_long();
 
 	if(schema->no_index_keys > 0)
 		table->indexes = (skiplist_t **) malloc(schema->no_index_keys * sizeof(skiplist_t *));
 
 	for(int i=0;i<schema->no_index_keys;i++)
-		table->indexes[i] = create_skiplist();
+		table->indexes[i] = create_skiplist_long();
 
 	table->lock = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(table->lock, NULL);
 
-	return skiplist_insert(db->tables, (long) table_key, (WORD) table, fastrandstate);
+	return skiplist_insert(db->tables, table_key, (WORD) table, fastrandstate);
 }
 
 int db_create_index(int new_index, WORD table_key, db_t * db, unsigned int * fastrandstate)
@@ -195,7 +195,7 @@ int db_create_index(int new_index, WORD table_key, db_t * db, unsigned int * fas
 
 int db_delete_table(WORD table_key, db_t * db)
 {
-	db_table_t * table = (db_table_t *) skiplist_delete(db->tables, (long) table_key);
+	db_table_t * table = (db_table_t *) skiplist_delete(db->tables, table_key);
 
 	if(table != NULL)
 	{
@@ -223,12 +223,12 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 	assert(no_cols == schema->no_cols && "Row insert must contain all schema columns");
 
 	db_row_t * row = NULL;
-	snode_t * row_node = skiplist_search(table->rows, (long) column_values[schema->primary_key_idxs[0]]);
+	snode_t * row_node = skiplist_search(table->rows, column_values[schema->primary_key_idxs[0]]);
 
 	if(row_node == NULL)
 	{
 		row = create_db_row(column_values, schema, fastrandstate);
-		skiplist_insert(table->rows, (long) column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
+		skiplist_insert(table->rows, column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
 	}
 	else
 	{
@@ -238,7 +238,7 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 
 		for(int i=0;i<schema->no_clustering_keys;i++, cell = new_cell)
 		{
-			snode_t * new_cell_node = skiplist_search(cell->cells, (long) column_values[schema->clustering_key_idxs[i]]);
+			snode_t * new_cell_node = skiplist_search(cell->cells, column_values[schema->clustering_key_idxs[i]]);
 
 			if(new_cell_node == NULL)
 			{
@@ -255,12 +255,12 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 				}
 				else
 				{
-					new_cell->cells = create_skiplist();
+					new_cell->cells = create_skiplist_long();
 				}
 
 //				printf("Inserting into cell at level %d\n", i);
 
-				skiplist_insert(cell->cells, (long) column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+				skiplist_insert(cell->cells, column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
 			}
 			else
 			{
@@ -270,7 +270,7 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 	}
 
 	for(int i=0;i<schema->no_index_keys;i++)
-		skiplist_insert(table->indexes[i], (long) column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
+		skiplist_insert(table->indexes[i], column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
 
 	return 0;
 }
@@ -284,12 +284,12 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 	assert(no_cols == schema->no_cols && "Row insert must contain all schema columns");
 
 	db_row_t * row = NULL;
-	snode_t * row_node = skiplist_search(table->rows, (long) column_values[schema->primary_key_idxs[0]]);
+	snode_t * row_node = skiplist_search(table->rows, column_values[schema->primary_key_idxs[0]]);
 
 	if(row_node == NULL)
 	{
 		row = create_db_row(column_values, schema, fastrandstate);
-		skiplist_insert(table->rows, (long) column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
+		skiplist_insert(table->rows, column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
 	}
 	else
 	{
@@ -299,7 +299,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 
 		for(int i=0;i<schema->no_clustering_keys;i++, cell = new_cell)
 		{
-			snode_t * new_cell_node = skiplist_search(cell->cells, (long) column_values[schema->clustering_key_idxs[i]]);
+			snode_t * new_cell_node = skiplist_search(cell->cells, column_values[schema->clustering_key_idxs[i]]);
 
 			if(new_cell_node == NULL)
 			{
@@ -316,12 +316,12 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 				}
 				else
 				{
-					new_cell->cells = create_skiplist();
+					new_cell->cells = create_skiplist_long();
 				}
 
 //				printf("Inserting into cell at level %d\n", i);
 
-				skiplist_insert(cell->cells, (long) column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+				skiplist_insert(cell->cells, column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
 			}
 			else
 			{
@@ -331,7 +331,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 	}
 
 	for(int i=0;i<schema->no_index_keys;i++)
-		skiplist_insert(table->indexes[i], (long) column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
+		skiplist_insert(table->indexes[i], column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
 
 	return 0;
 }
@@ -353,7 +353,7 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, db_table_t *
 	}
 
 	db_row_t * row = NULL;
-	snode_t * row_node = skiplist_search(table->rows, (long) column_values[schema->primary_key_idxs[0]]);
+	snode_t * row_node = skiplist_search(table->rows, column_values[schema->primary_key_idxs[0]]);
 
 	if(row_node == NULL)
 		return -1;
@@ -362,7 +362,7 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, db_table_t *
 
 	for(int i=0;i<schema->no_clustering_keys;i++)
 	{
-		row_node = skiplist_search(row->cells, (long) column_values[schema->clustering_key_idxs[i]]);
+		row_node = skiplist_search(row->cells, column_values[schema->clustering_key_idxs[i]]);
 
 		if(row_node == NULL)
 			return -1;
@@ -385,7 +385,7 @@ db_row_t* table_search(WORD* primary_keys, db_table_t * table)
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	snode_t * row_node = skiplist_search(table->rows, (long) primary_keys[0]);
+	snode_t * row_node = skiplist_search(table->rows, primary_keys[0]);
 
 	if(row_node == NULL)
 		return NULL;
@@ -402,7 +402,7 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	*start_row = skiplist_search_higher(table->rows, (long) start_primary_keys[0]);
+	*start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
 
 	for(*end_row = *start_row; (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
@@ -416,7 +416,7 @@ int table_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	return skiplist_get_range(table->rows, (long) start_primary_keys[0], (long) end_primary_keys[0], (WORD**) rows, &no_results);
+	return skiplist_get_range(table->rows, start_primary_keys[0], end_primary_keys[0], (WORD**) rows, &no_results);
 }
 
 db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, db_table_t * table)
@@ -434,7 +434,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 
 	for(int i=0;i<no_clustering_keys;i++)
 	{
-		snode_t * row_node = skiplist_search(row->cells, (long) clustering_keys[i]);
+		snode_t * row_node = skiplist_search(row->cells, clustering_keys[i]);
 
 		if(row_node != NULL)
 		{
@@ -466,7 +466,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	{
 		assert(start_clustering_keys[i] == end_clustering_keys[i] && "For first N-1 clustering keys, start key must be equal to end key");
 
-		snode_t * row_node = skiplist_search(row->cells, (long) start_clustering_keys[i]);
+		snode_t * row_node = skiplist_search(row->cells, start_clustering_keys[i]);
 
 		if(row_node != NULL)
 		{
@@ -478,7 +478,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 		}
 	}
 
-	*start_row = skiplist_search_higher(row->cells, (long) start_clustering_keys[no_clustering_keys-1]);
+	*start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
 
 	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
@@ -520,7 +520,7 @@ db_row_t* table_search_index(WORD index_key, int idx_idx, db_table_t * table)
 
 	assert(idx_idx <= schema->no_index_keys == 1 && "Index index out of range");
 
-	snode_t * row_node = skiplist_search(table->indexes[idx_idx], (long) index_key);
+	snode_t * row_node = skiplist_search(table->indexes[idx_idx], index_key);
 
 	if(row_node != NULL)
 	{
@@ -539,7 +539,7 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 
 	assert(idx_idx <= schema->no_index_keys == 1 && "Index index out of range");
 
-	*start_row = skiplist_search_higher(table->indexes[idx_idx], (long) start_idx_key);
+	*start_row = skiplist_search_higher(table->indexes[idx_idx], start_idx_key);
 
 	for(*end_row = *start_row; (*end_row != NULL) && ((long) (*end_row)->key < (long) end_idx_key); *end_row=NEXT(*end_row), no_results++);
 
@@ -548,7 +548,7 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 
 int table_delete_row(WORD* primary_keys, db_table_t * table)
 {
-	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, (long) primary_keys[0]));
+	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, primary_keys[0]));
 
 	if(row != NULL)
 	{
@@ -568,7 +568,7 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 	assert(idx_idx <= schema->no_index_keys == 1 && "Index index out of range");
 
-	db_row_t* row = (db_row_t *) (skiplist_delete(table->indexes[idx_idx], (long) index_key));
+	db_row_t* row = (db_row_t *) (skiplist_delete(table->indexes[idx_idx], index_key));
 
 	// TO DO: Re-enable this after enhancing indexes:
 
@@ -583,7 +583,7 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -595,7 +595,7 @@ int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsi
 
 int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -607,7 +607,7 @@ int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key,
 
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return NULL;
@@ -619,7 +619,7 @@ db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)
 
 int db_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -631,7 +631,7 @@ int db_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t** 
 
 int db_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db_row_t** rows, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -643,7 +643,7 @@ int db_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db_ro
 
 db_row_t* db_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return NULL;
@@ -655,7 +655,7 @@ db_row_t* db_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no
 
 int db_range_search_clustering(WORD* primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -667,7 +667,7 @@ int db_range_search_clustering(WORD* primary_keys, WORD* start_clustering_keys, 
 
 WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return NULL;
@@ -679,7 +679,7 @@ WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_i
 
 db_row_t* db_search_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return NULL;
@@ -691,7 +691,7 @@ db_row_t* db_search_index(WORD index_key, int idx_idx, WORD table_key, db_t * db
 
 int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;
@@ -703,7 +703,7 @@ int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, sno
 
 int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 	{
@@ -718,7 +718,7 @@ int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
 
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return -1;

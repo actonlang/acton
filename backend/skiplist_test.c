@@ -4,16 +4,18 @@
  */
 
 #include "skiplist.h"
+#include <stdio.h>
 
 int main() {
     int arr[] = { 3, 6, 9, 2, 11, 1, 4 }, i;
     skiplist_t * list;
-    list = (skiplist_t *)malloc(sizeof(skiplist_t));
-    skiplist_init(list);
+    unsigned int randno;
+
+    list = create_skiplist_long();
 
     printf("Insert:--------------------\n");
     for (i = 0; i < sizeof(arr) / sizeof(arr[0]); i++) {
-        skiplist_insert(list, arr[i], arr[i]);
+        skiplist_insert(list, (WORD) arr[i], (WORD) arr[i], &randno);
     }
     skiplist_dump(list);
 
@@ -21,17 +23,17 @@ int main() {
     int keys[] = { 3, 4, 7, 10, 111 };
 
     for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
-        snode_t *x = skiplist_search(list, keys[i]);
+        snode_t *x = skiplist_search(list, (WORD) keys[i]);
         if (x) {
-            printf("key = %d, value = %d\n", keys[i], x->value);
+            printf("key = %d, value = %d\n", keys[i], (int) x->value);
         } else {
-            printf("key = %d, not fuound\n", keys[i]);
+            printf("key = %d, not found\n", keys[i]);
         }
     }
 
     printf("Search:--------------------\n");
-    skiplist_delete(list, 3);
-    skiplist_delete(list, 9);
+    skiplist_delete(list, (WORD) 3);
+    skiplist_delete(list, (WORD) 9);
     skiplist_dump(list);
     skiplist_free(list);
 
