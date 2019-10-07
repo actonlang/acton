@@ -7,7 +7,7 @@
 #include <stdio.h>
 
 int main() {
-    int arr[] = { 3, 6, 9, 2, 11, 1, 4 }, i;
+    int arr[] = { 1, 3, 3, 6, 9, 9, 2, 11, 11, 1, 4, 4 }, i;
     skiplist_t * list;
     unsigned int randno;
 
@@ -16,8 +16,9 @@ int main() {
     printf("Insert:--------------------\n");
     for (i = 0; i < sizeof(arr) / sizeof(arr[0]); i++) {
         skiplist_insert(list, (WORD) arr[i], (WORD) arr[i], &randno);
+        skiplist_dump(list);
     }
-    skiplist_dump(list);
+//    skiplist_dump(list);
 
     printf("Search:--------------------\n");
     int keys[] = { 3, 4, 7, 10, 111 };
@@ -33,7 +34,12 @@ int main() {
 
     printf("Search:--------------------\n");
     skiplist_delete(list, (WORD) 3);
+    skiplist_dump(list);
     skiplist_delete(list, (WORD) 9);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 11);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 11);
     skiplist_dump(list);
     skiplist_free(list);
 

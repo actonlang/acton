@@ -64,8 +64,8 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
     }
 //    x = x->forward[0];
 
-    if (x != NULL && list->cmp(key, x->key) == 0) {
-        x->value = value;
+    if (x->forward[0] != NULL && list->cmp(key, x->forward[0]->key) == 0) {
+        x->forward[0]->value = value;
         return 0;
     } else {
         level = rand_level(seedptr);
@@ -184,7 +184,9 @@ WORD skiplist_delete(skiplist_t *list, WORD key) {
         	update[i] = x;
     }
 
-    x = x->forward[0];
+    if(x->forward[0] != NULL)
+    		x = x->forward[0];
+
     if (list->cmp(x->key, key) == 0) {
         for (i = 0; i <= list->level; i++) {
             if (update[i]->forward[i] != x)
