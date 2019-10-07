@@ -41,6 +41,16 @@ int main() {
     skiplist_dump(list);
     skiplist_delete(list, (WORD) 11);
     skiplist_dump(list);
+    skiplist_delete(list, (WORD) 11);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 1);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 6);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 2);
+    skiplist_dump(list);
+    skiplist_delete(list, (WORD) 4);
+    skiplist_dump(list);
     skiplist_free(list);
 
     return 0;
