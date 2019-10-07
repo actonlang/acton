@@ -8,6 +8,8 @@
 
 #include "skiplist.h"
 #include "fastrand.h"
+#include "failure_detector/vector_clock.h"
+
 #include <pthread.h>
 #include <unistd.h>
 
@@ -93,6 +95,8 @@ typedef struct db_cell {
 	pthread_mutex_t* enqueue_lock;
 	pthread_mutex_t* read_lock;
 	pthread_mutex_t* subscribe_lock;
+
+	vector_clock * version;
 
 	struct db_cell_t * _next;
 } db_cell_t;
