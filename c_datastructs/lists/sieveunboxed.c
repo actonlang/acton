@@ -21,11 +21,7 @@ list_t sieve(int n) {
   list_t isPrime = list_new(n);
   list_append(isPrime,false);
   list_append(isPrime,false);
-  // for (int i=2; i < n; i++) 
-  WORD i;
-  //for(iterator_t iter = range(2,n,1); !iterator_next(iter,&i); )
-  iterator_t iter = range(2,n,1);
-  while(!iterator_next(iter,&i))
+  for (int i=2; i < n; i++) 
     list_append(isPrime,true);
    
   for (int i=2; i < floor(sqrt(n)); i++)
@@ -34,7 +30,7 @@ list_t sieve(int n) {
         list_setitem(isPrime,k,false);
     }
   list_t primes = list_new(0);
-  for (int i=0; i<n; i++)
+  for (long i=0; i<n; i++)
     if (list_getitem(isPrime,i)) 
       list_append(primes,(WORD)i);
   return primes;

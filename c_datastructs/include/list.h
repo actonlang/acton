@@ -11,11 +11,6 @@ typedef struct list_struct {
   int capacity;
 } *list_t;
 
-typedef struct list_iterator_struct {
-  list_t src;
-  int nxt;
-} *list_iterator_state_t; 
-
 list_t list_new(int capacity);
 list_t list_init(WORD elems[], int length);
 
