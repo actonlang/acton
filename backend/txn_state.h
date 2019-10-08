@@ -20,6 +20,14 @@
 #define QUERY_TYPE_READ_INDEX 7
 #define QUERY_TYPE_READ_INDEX_RANGE 8
 
+#define QUERY_TYPE_ENQUEUE 9
+#define QUERY_TYPE_READ_QUEUE 10
+#define QUERY_TYPE_CONSUME_QUEUE 11
+#define QUERY_TYPE_CREATE_QUEUE 12
+#define QUERY_TYPE_DELETE_QUEUE 13
+#define QUERY_TYPE_SUBSCRIBE_QUEUE 14
+#define QUERY_TYPE_UNSUBSCRIBE_QUEUE 15
+
 
 typedef struct txn_write
 {
@@ -28,6 +36,23 @@ typedef struct txn_write
 
 	WORD * column_values;
 	int no_cols;
+
+	// For queue ops:
+
+	WORD queue_id;
+	WORD consumer_id;
+	WORD shard_id;
+	WORD app_id;
+
+	int max_entries;		// read_queue (in)
+	int entries_read;	// read_queue (out)
+	long new_read_head;	// read_queue (out)
+	long new_consume_head; // consume_queue (in)
+
+	snode_t* start_result; // read_queue (out)
+	snode_t* end_result; // read_queue (out)
+
+	long local_order;
 } txn_write;
 
 typedef struct txn_read
@@ -59,6 +84,8 @@ typedef struct txn_read
 
 	snode_t* start_row;
 	snode_t* end_row;
+
+	long local_order;
 } txn_read;
 
 typedef struct txn_state
@@ -74,7 +101,7 @@ int txn_read_cmp(WORD e1, WORD e2);
 txn_state * init_txn_state();
 void free_txn_state(txn_state * ts);
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key);
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key, long local_order);
 void free_txn_write(txn_write * tw);
 txn_read * get_txn_read(short query_type,
 						WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
@@ -82,7 +109,7 @@ txn_read * get_txn_read(short query_type,
 						WORD* col_keys, int no_col_keys,
 						int idx_idx,
 						db_row_t* result, snode_t* start_row, snode_t* end_row,
-						WORD table_key);
+						WORD table_key, long local_order);
 void free_txn_read(txn_read * tr);
 int add_write_to_txn(short query_type, WORD * column_values, int no_cols, WORD table_key, txn_state * ts, unsigned int * fastrandstate);
 int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
@@ -105,5 +132,21 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								txn_state * ts, unsigned int * fastrandstate);
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate);
 int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate);
+
+// Queue ops:
+
+int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
+int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, int entries_read, long new_read_head,
+		snode_t* start_row, snode_t* end_row,
+		txn_state * ts, unsigned int * fastrandstate);
+int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					long new_consume_head, txn_state * ts, unsigned int * fastrandstate);
+int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
+int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
+int add_subscribe_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						txn_state * ts, unsigned int * fastrandstate);
+int add_unsubscribe_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, txn_state * ts);
 
 #endif /* BACKEND_TXN_STATE_H_ */

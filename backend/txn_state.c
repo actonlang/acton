@@ -20,12 +20,43 @@ int txn_write_cmp(WORD e1, WORD e2)
 	if(tr1->table_key != tr2->table_key)
 		return (int) ((long) tr1->table_key - (long) tr2->table_key);
 
-	if(tr1->no_cols != tr2->no_cols)
-		return tr1->no_cols - tr2->no_cols;
-	for(int i=0;i<tr1->no_cols;i++)
+	if(tr1->query_type < QUERY_TYPE_ENQUEUE) // Regular ops ordering:
 	{
-		if(tr1->column_values[i] != tr2->column_values[i])
-			return (int) (long) tr1->column_values[i] - (long) tr2->column_values[i];
+		if(tr1->no_cols != tr2->no_cols)
+			return tr1->no_cols - tr2->no_cols;
+		for(int i=0;i<tr1->no_cols;i++)
+		{
+			if(tr1->column_values[i] != tr2->column_values[i])
+				return (int) (long) tr1->column_values[i] - (long) tr2->column_values[i];
+		}
+	}
+	else // Queue ops ordering:
+	{
+		// We currently allow all queue ops to be duplicated in the same txn:
+
+		if(tr1->local_order != tr2->local_order)
+			return (int) ((long) tr1->local_order - (long) tr2->local_order);
+
+/*
+		if(tr1->queue_id != tr2->queue_id)
+			return (int) ((long) tr1->queue_id - (long) tr2->queue_id);
+
+		if(tr1->query_type == QUERY_TYPE_READ_QUEUE || tr1->query_type == QUERY_TYPE_CONSUME_QUEUE)
+		{
+			if(tr1->app_id != tr2->app_id)
+				return (int) ((long) tr1->app_id - (long) tr2->app_id);
+			if(tr1->shard_id != tr2->shard_id)
+				return (int) ((long) tr1->shard_id - (long) tr2->shard_id);
+			if(tr1->consumer_id != tr2->consumer_id)
+				return (int) ((long) tr1->consumer_id - (long) tr2->consumer_id);
+		}
+
+		if(tr1->query_type == QUERY_TYPE_ENQUEUE)
+		{
+			if(tr1->local_order != tr2->local_order)
+				return (int) ((long) tr1->local_order - (long) tr2->local_order);
+		}
+*/
 	}
 
 	return 0;
@@ -116,7 +147,7 @@ void free_txn_state(txn_state * ts)
 	free(ts);
 }
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key)
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key, long local_order)
 {
 	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
 	memset(tw, 0, sizeof(txn_write) + no_cols*sizeof(WORD));
@@ -128,6 +159,55 @@ txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, W
 		tw->column_values[i] = column_values[i];
 
 	tw->query_type = query_type;
+	tw->local_order = local_order;
+
+	return tw;
+}
+
+txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols, WORD table_key,
+					WORD queue_id, WORD consumer_id, WORD shard_id, WORD app_id,
+					int max_entries, int entries_read, long new_read_head, long new_consume_head,
+					snode_t* start_result, snode_t* end_result, long local_order)
+{
+	assert(query_type >= QUERY_TYPE_ENQUEUE && query_type <= QUERY_TYPE_UNSUBSCRIBE_QUEUE);
+
+	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key, local_order);
+
+	tw->queue_id = queue_id;
+
+	if(query_type == QUERY_TYPE_READ_QUEUE || query_type == QUERY_TYPE_CONSUME_QUEUE ||
+		query_type == QUERY_TYPE_SUBSCRIBE_QUEUE || query_type == QUERY_TYPE_UNSUBSCRIBE_QUEUE)
+	{
+		tw->consumer_id = consumer_id;
+		tw->shard_id = shard_id;
+		tw->app_id = app_id;
+	}
+	else
+	{
+		assert(consumer_id == NULL && shard_id == NULL && app_id == NULL);
+	}
+
+	if(query_type == QUERY_TYPE_READ_QUEUE)
+	{
+		tw->max_entries = max_entries;
+		tw->entries_read = entries_read;
+		tw->new_read_head = new_read_head;
+		tw->start_result = start_result;
+		tw->end_result = end_result;
+	}
+	else
+	{
+		assert(max_entries == -1 && entries_read == -1 && new_read_head == -1 && start_result == NULL && end_result == NULL);
+	}
+
+	if(query_type == QUERY_TYPE_CONSUME_QUEUE)
+	{
+		tw->new_consume_head = new_consume_head;
+	}
+	else
+	{
+		assert(new_consume_head == -1);
+	}
 
 	return tw;
 }
@@ -143,7 +223,7 @@ txn_read * get_txn_read(short query_type,
 						WORD* col_keys, int no_col_keys,
 						int idx_idx,
 						db_row_t* result, snode_t* start_row, snode_t* end_row,
-						WORD table_key)
+						WORD table_key, long local_order)
 {
 	int total_col_count = no_primary_keys + no_clustering_keys;
 	if(query_type == QUERY_TYPE_READ_ROW_RANGE)
@@ -158,6 +238,7 @@ txn_read * get_txn_read(short query_type,
 
 	tr->table_key = table_key;
 	tr->query_type = query_type;
+	tr->local_order = local_order;
 
 	int offset = sizeof(txn_write);
 	tr->no_primary_keys = no_primary_keys;
@@ -217,7 +298,7 @@ void free_txn_read(txn_read * tr)
 int add_write_to_txn(short query_type, WORD * column_values, int no_cols, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
 	assert((query_type == QUERY_TYPE_UPDATE) || (query_type == QUERY_TYPE_DELETE));
-	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key);
+	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key, (long) ts->write_set->no_items);
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // Note that this will overwrite previous values written for the variable in the same txn (last write wins)
 }
 
@@ -225,7 +306,7 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
 						txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, result, NULL, NULL, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
@@ -233,7 +314,7 @@ int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, 
 								snode_t* start_row, snode_t* end_row,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, start_row, end_row, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
@@ -241,7 +322,7 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, result, NULL, NULL, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
@@ -251,7 +332,7 @@ int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* st
 								snode_t* start_row, snode_t* end_row,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, NULL, 0, -1, NULL, start_row, end_row, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
@@ -260,18 +341,82 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, result, NULL, NULL, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, result, NULL, NULL, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
 
 int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, start_row, end_row, table_key);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
 	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
 }
+
+// Queue ops:
+
+int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
+{
+	txn_write * tw = get_txn_queue_op(QUERY_TYPE_ENQUEUE, column_values, no_cols, table_key, queue_id,
+						NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
+}
+
+int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, int entries_read, long new_read_head,
+		snode_t* start_row, snode_t* end_row,
+		txn_state * ts, unsigned int * fastrandstate)
+{
+	txn_write * tw = get_txn_queue_op(QUERY_TYPE_READ_QUEUE, NULL, 0, table_key, queue_id,
+								consumer_id, shard_id, app_id, max_entries, entries_read, new_read_head, -1,
+								start_row, end_row, (long) ts->write_set->no_items);
+
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+}
+
+int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					long new_consume_head, txn_state * ts, unsigned int * fastrandstate)
+{
+	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CONSUME_QUEUE, NULL, 0, table_key, queue_id,
+								consumer_id, shard_id, app_id, -1, -1, -1, new_consume_head,
+								NULL, NULL, (long) ts->write_set->no_items);
+
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+}
+
+int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
+{
+	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CREATE_QUEUE, NULL, 0, table_key, queue_id,
+											NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
+}
+
+int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
+{
+	txn_write * tw = get_txn_queue_op(QUERY_TYPE_DELETE_QUEUE, NULL, 0, table_key, queue_id,
+											NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
+}
+
+int add_subscribe_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						txn_state * ts, unsigned int * fastrandstate)
+{
+	assert (0); // Not implemented
+	return 0;
+}
+
+int add_unsubscribe_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						txn_state * ts)
+{
+	assert (0); // Not implemented
+	return 0;
+}
+
