@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "list.h"
+#include "iterator.h"
 
 /* prints a list of ints */
 void printlist(list_t lst) {
@@ -14,11 +15,11 @@ void printlist(list_t lst) {
 }
 
 list_t list_range(int start, int stop) {
-  range_iterator_t iter = range(start,stop,1);
-  int i;
+  iterator_t iter = range(start,stop,1);
+  WORD i;
   list_t res = list_new(0);
-  while(!range_iterator_next_p(iter,&i))
-    list_append(res,(WORD)(long)i);
+  while(!iterator_next(iter,&i))
+    list_append(res,i);
   return res;
 }
   
@@ -31,8 +32,8 @@ int main() {
   list_t t1 =list_copy(t);
   list_reverse(t1);
   printlist(t1);
-  list_iterator_t it = list_reversed(t);
-  while (!list_iterator_next_p(it,&nxt)) {
+  iterator_t it = list_reversed(t);
+  while (!iterator_next(it,&nxt)) {
     sum+=(long)nxt;
     printf("%ld, ",(long)nxt);
   }
@@ -41,23 +42,21 @@ int main() {
   list_pop(t,10);
   printlist(t);
 
-  range_iterator_t iter = range(1,5,1);
+  iterator_t iter = range(1,5,1);
   list_t lst = list_new(5);
-  int n;
-  while(!range_iterator_next_p(iter,&n))
-    list_append(lst,list_range(1,n));
-
+  WORD n;
+  while(!iterator_next(iter,&n))
+    list_append(lst,list_range(1,(int)n));
   // lst2 = [[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5]]
   
   list_t flat = list_new(5);
-  list_iterator_t iter2 = list_iter(lst);
-  list_t tmp = (list_t)(list_iterator_next(iter2));
-  while (tmp) {
-    list_iterator_t iter3 = list_iter(tmp);
+  iterator_t iter2 = list_iter(lst);
+  WORD tmp;
+  while (!iterator_next(iter2,&tmp)) {
+      iterator_t iter3 = list_iter((list_t)tmp);
     WORD k;
-    while(!list_iterator_next_p(iter3,&k))
+    while(!iterator_next(iter3,&k))
       list_append(flat,k);
-    tmp = (list_t)(list_iterator_next(iter2));
   }
   printlist(flat);
 
