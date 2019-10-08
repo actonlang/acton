@@ -5,6 +5,11 @@
 #include "list.h"
 #include "iterator.h"
 
+typedef struct list_iterator_struct {
+  list_t src;
+  int nxt;
+} *list_iterator_state_t; 
+
 static inline int min(int a, int b) {
     if (a > b)
         return b;
@@ -71,7 +76,7 @@ int list_contains(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
 
 // Iterable method
 int list_iterator_next(iterator_t iter, WORD *res) {
- list_iterator_state_t state = iter->state;
+  list_iterator_state_t state = iter->state;
   if(state->nxt >=list_len(state->src)) {
     errno = EINVAL;
     return -1;
