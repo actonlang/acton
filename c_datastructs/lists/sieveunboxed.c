@@ -18,8 +18,8 @@ void printlist(list_t lst) {
 list_t sieve(int n) {
   WORD false = (WORD)0;
   WORD true = (WORD)1;
-  list_t isPrime = list_new(n);
-  list_append(isPrime,false);
+  list_t isPrime = list_new(0); // Replacing 0 with n avoids all doublings and copying, 
+  list_append(isPrime,false);   // but we wanted to see the effect of these (which is small).
   list_append(isPrime,false);
   for (int i=2; i < n; i++) 
     list_append(isPrime,true);
