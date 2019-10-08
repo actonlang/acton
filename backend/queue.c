@@ -130,6 +130,78 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 	return status;
 }
 
+int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+							long new_read_head, short use_lock, db_t * db)
+{
+	db_table_t * table = get_table_by_key(table_key, db);
+	if(table == NULL)
+		return DB_ERR_NO_TABLE; // Table doesn't exist
+	snode_t * node = skiplist_search(table->rows, queue_id);
+	if(node == NULL)
+		return DB_ERR_NO_QUEUE; // Queue doesn't exist
+
+	db_row_t * db_row = (db_row_t *) (node->value);
+
+	long no_entries = db_row->no_entries;
+
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
+	if(node == NULL)
+		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+
+	if(use_lock)
+	{
+		pthread_mutex_lock(db_row->read_lock);
+	}
+
+	consumer_state * cs = (consumer_state *) (consumer_node->value);
+
+	assert(new_read_head <= no_entries - 1);
+
+	assert(cs->private_read_head <= new_read_head);
+
+	assert(cs->private_consume_head <= new_read_head);
+
+	cs->private_read_head = new_read_head;
+
+	if(use_lock)
+	{
+		pthread_mutex_unlock(db_row->read_lock);
+	}
+
+	return 0;
+}
+
+int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+							long new_consume_head, db_t * db)
+{
+	db_table_t * table = get_table_by_key(table_key, db);
+	if(table == NULL)
+		return DB_ERR_NO_TABLE; // Table doesn't exist
+	snode_t * node = skiplist_search(table->rows, queue_id);
+	if(node == NULL)
+		return DB_ERR_NO_QUEUE; // Queue doesn't exist
+
+	db_row_t * db_row = (db_row_t *) (node->value);
+
+	long no_entries = db_row->no_entries;
+
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
+	if(node == NULL)
+		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+
+	consumer_state * cs = (consumer_state *) (consumer_node->value);
+
+	assert(new_consume_head <= no_entries - 1);
+
+	assert(cs->private_read_head >= new_consume_head);
+
+	assert(cs->private_consume_head <= new_consume_head);
+
+	cs->private_consume_head = new_consume_head;
+
+	return 0;
+}
+
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
 		snode_t** start_row, snode_t** end_row, short use_lock,
@@ -169,6 +241,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 			pthread_mutex_unlock(db_row->read_lock);
 		}
 
+		*new_read_head = cs->private_read_head;
 		return QUEUE_STATUS_READ_COMPLETE; // Nothing to read
 	}
 
@@ -198,6 +271,61 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	int ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
 	cs->notified=(ret==QUEUE_STATUS_READ_INCOMPLETE);
+
+	return ret;
+}
+
+int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, long offset, int * entries_read, long * new_read_head,
+		snode_t** start_row, snode_t** end_row, db_t * db)
+{
+	db_table_t * table = get_table_by_key(table_key, db);
+	*entries_read=0;
+
+	if(table == NULL)
+		return DB_ERR_NO_TABLE; // Table doesn't exist
+
+	snode_t * node = skiplist_search(table->rows, queue_id);
+	if(node == NULL)
+		return DB_ERR_NO_QUEUE; // Queue doesn't exist
+
+	db_row_t * db_row = (db_row_t *) (node->value);
+
+	long no_entries = db_row->no_entries;
+
+	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
+	if(node == NULL)
+		return DB_ERR_NO_CONSUMER; // Consumer doesn't exist
+
+	consumer_state * cs = (consumer_state *) (consumer_node->value);
+
+	long start_offset = (offset >= 0)?offset:cs->private_read_head;
+
+	assert(start_offset <= no_entries - 1);
+
+	if(start_offset == no_entries - 1)
+	{
+		*new_read_head = start_offset;
+		return QUEUE_STATUS_READ_COMPLETE; // Nothing to read
+	}
+
+	*new_read_head = MIN(start_offset + max_entries, no_entries - 1);
+	long start_index = start_offset + 1;
+
+	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
+										(WORD*) &start_index, (WORD*) new_read_head, 1,
+										start_row, end_row, table);
+
+	assert(no_results == (*new_read_head - start_index + 1));
+
+#if (VERBOSITY > 0)
+	printf("BACKEND: Subscriber %ld peeked %ld queue entries, new_read_head=%ld, private_read_head=%ld\n",
+					(long) cs->consumer_id, no_results, *new_read_head, cs->private_read_head);
+#endif
+
+	*entries_read = (int) no_results;
+
+	int ret = ((*new_read_head) == (no_entries - 1))? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
 
 	return ret;
 }

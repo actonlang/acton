@@ -12,11 +12,20 @@
 #include "fastrand.h"
 
 int long_cmp(WORD e1, WORD e2) {
-	return (int) (e1 - e2);
+	return (int) ((long) e1 - (long) e2);
+}
+
+int uuid_cmp(WORD e1, WORD e2)
+{
+	return uuid_compare(*((uuid_t*) e1), *((uuid_t*) e2));
 }
 
 skiplist_t *create_skiplist_long() {
 	return create_skiplist(NULL);
+}
+
+skiplist_t *create_skiplist_uuid() {
+	return create_skiplist(&uuid_cmp);
 }
 
 skiplist_t *create_skiplist(int (*cmp)(WORD, WORD)) {

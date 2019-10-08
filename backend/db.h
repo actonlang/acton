@@ -105,6 +105,7 @@ typedef db_cell_t db_row_t;
 
 typedef struct db {
     skiplist_t * tables;
+    skiplist_t * txn_state;
 } db_t;
 
 // DB high level API:
@@ -134,6 +135,7 @@ WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_i
 db_row_t* db_search_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db);
 int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db);
+// TO DO: int db_delete_cell(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, db_t * db);
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 
 // Lower level API:

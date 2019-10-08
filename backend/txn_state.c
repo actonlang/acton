@@ -22,7 +22,7 @@ int txn_write_cmp(WORD e1, WORD e2)
 
 	if(tr1->query_type < QUERY_TYPE_ENQUEUE) // Regular ops ordering:
 	{
-		// Newer writes always overwrite older writes in the same txn:
+		// Newer writes always overwrite older writes to the same objects in the same txn:
 
 		int no_key_cols1 = tr1->no_primary_keys + tr1->no_clustering_keys;
 		int no_key_cols2 = tr2->no_primary_keys + tr2->no_clustering_keys;
@@ -71,6 +71,8 @@ int txn_read_cmp(WORD e1, WORD e2)
 {
 	txn_read * tr1 = (txn_read *) e1;
 	txn_read * tr2 = (txn_read *) e2;
+
+	// Same read operations (individual or range, queried by various clustering levels) return the same object versions while the txn is open:
 
 	if(tr1->query_type != tr2->query_type)
 		return tr1->query_type - tr2->query_type;

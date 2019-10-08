@@ -46,13 +46,13 @@ typedef struct txn_write
 	WORD shard_id;
 	WORD app_id;
 
-	int max_entries;		// read_queue (in)
-	int entries_read;	// read_queue (out)
+//	int max_entries;		// read_queue (in)
+//	int entries_read;	// read_queue (out)
 	long new_read_head;	// read_queue (out)
 	long new_consume_head; // consume_queue (in)
 
-	snode_t* start_result; // read_queue (out)
-	snode_t* end_result; // read_queue (out)
+//	snode_t* start_result; // read_queue (out)
+//	snode_t* end_result; // read_queue (out)
 
 	long local_order;
 } txn_write;
@@ -113,6 +113,9 @@ txn_read * get_txn_read(short query_type,
 						db_row_t* result, snode_t* start_row, snode_t* end_row,
 						WORD table_key, long local_order);
 void free_txn_read(txn_read * tr);
+
+// Txn ops mgmt API:
+
 int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys,
 					WORD table_key, txn_state * ts, unsigned int * fastrandstate);
 int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,

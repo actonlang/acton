@@ -94,6 +94,7 @@ db_t * get_db()
 	db_t * db = (db_t *) malloc(sizeof(db_t));
 
 	db->tables = create_skiplist_long();
+	db->txn_state = create_skiplist_uuid();
 
 	return db;
 }
@@ -101,6 +102,7 @@ db_t * get_db()
 int db_delete_db(db_t * db)
 {
 	skiplist_free(db->tables);
+	skiplist_free(db->txn_state);
 
 	free(db);
 

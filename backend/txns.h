@@ -1,326 +1,402 @@
 /*
  * txns.h
+ *
+ *      Author: aagapi
  */
 
 #ifndef BACKEND_TXNS_H_
 #define BACKEND_TXNS_H_
 
-#include <stdlib.h>
-#include <uuid/uuid.h>
-#include <string.h>
-#include <assert.h>
+#include "txn_state.h"
+#include "queue.h"
 
-#include "db.h"
+#define TXN_STATUS_ACTIVE 0
+#define TXN_STATUS_VALIDATING 1
+#define TXN_STATUS_COMMITTED 2
+#define TXN_STATUS_ABORTED 3
 
-// Query types:
-
-#define QUERY_TYPE_UPDATE 0
-#define QUERY_TYPE_DELETE 1
-#define QUERY_TYPE_READ_COLS 2
-#define QUERY_TYPE_READ_CELL 3
-#define QUERY_TYPE_READ_CELL_RANGE 4
-#define QUERY_TYPE_READ_ROW 5
-#define QUERY_TYPE_READ_ROW_RANGE 6
-#define QUERY_TYPE_READ_INDEX 7
-#define QUERY_TYPE_READ_INDEX_RANGE 8
+#define VAL_STATUS_COMMIT 0
+#define VAL_STATUS_ABORT 1
 
 
-typedef struct txn_write
+// DB queries:
+
+txn_state * get_txn_state(uuid_t * txnid, db_t * db)
 {
-	short query_type;
-	WORD table_key;
+	return (txn_state *) skiplist_search(db->txn_state, (WORD) txnid);
+}
 
-	WORD * column_values;
-	int no_cols;
-} txn_write;
-
-typedef struct txn_read
+uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 {
-	WORD table_key;
+	txn_state * ts = NULL, * previous = NULL;
 
-	WORD* start_primary_keys;
-	WORD* end_primary_keys;
-	int no_primary_keys;
-
-	WORD* start_clustering_keys;
-	WORD* end_clustering_keys;
-	int no_clustering_keys;
-
-	WORD* col_keys;
-	int no_col_keys;
-
-	// For idx queries:
-
-	int idx_idx;
-
-	short query_type;
-
-	// For non-range queries:
-
-	db_row_t* result;
-
-	// For range queries:
-
-	snode_t* start_row;
-	snode_t* end_row;
-} txn_read;
-
-typedef struct txn_state
-{
-	uuid_t txnid;
-	skiplist_t * read_set;
-	skiplist_t * write_set;
-} txn_state;
-
-int txn_write_cmp(WORD e1, WORD e2)
-{
-	txn_write * tr1 = (txn_write *) e1;
-	txn_write * tr2 = (txn_write *) e2;
-
-	if(tr1->query_type != tr2->query_type)
-		return tr1->query_type - tr2->query_type;
-
-	if(tr1->table_key != tr2->table_key)
-		return (int) ((long) tr1->table_key - (long) tr2->table_key);
-
-	if(tr1->no_cols != tr2->no_cols)
-		return tr1->no_cols - tr2->no_cols;
-	for(int i=0;i<tr1->no_cols;i++)
+	while(ts == NULL)
 	{
-		if(tr1->column_values[i] != tr2->column_values[i])
-			return int((long) tr1->column_values[i] - (long) tr2->column_values[i]);
+		ts = init_txn_state();
+		previous = get_txn_state(&(ts->txnid), db);
+		if(previous != NULL)
+		{
+			free_txn_state(ts);
+			ts = NULL;
+		}
+	}
+
+	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+
+	return &(ts->txnid);
+}
+
+int close_txn(uuid_t * txnid, db_t * db)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	skiplist_delete(db->txn_state, txnid);
+	free_txn_state(ts);
+
+	return 0;
+}
+
+int validate_txn(uuid_t * txnid, db_t * db)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+
+}
+
+int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
+{
+	switch(tw->query_type)
+	{
+		case QUERY_TYPE_UPDATE:
+		{
+			return db_insert(tw->column_values, tw->no_cols, tw->table_key, db, fastrandstate);
+		}
+		case QUERY_TYPE_DELETE:
+		{
+			return db_delete_row(tw->column_values, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
+		}
+		case QUERY_TYPE_ENQUEUE:
+		{
+			return enqueue(tw->column_values, tw->no_cols, tw->table_key, tw->queue_id, 1, db, fastrandstate);
+		}
+		case QUERY_TYPE_READ_QUEUE:
+		{
+			int res = read_queue(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id,
+					tw->max_entries, &tw->entries_read, &tw->new_read_head,
+					snode_t** start_row, snode_t** end_row, 1,
+					db);
+			return set_private_read_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_read_head, 1, db);
+		}
+		case QUERY_TYPE_CONSUME_QUEUE:
+		{
+			return set_private_consume_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_consume_head, db);
+		}
+		case QUERY_TYPE_CREATE_QUEUE:
+		{
+
+			break;
+		}
+		case QUERY_TYPE_DELETE_QUEUE:
+		{
+
+			break;
+		}
+		default:
+		{
+			assert(0);
+		}
 	}
 
 	return 0;
 }
 
-int txn_read_cmp(WORD e1, WORD e2)
+int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 {
-	txn_read * tr1 = (txn_read *) e1;
-	txn_read * tr2 = (txn_read *) e2;
+	int res = 0;
 
-	if(tr1->query_type != tr2->query_type)
-		return tr1->query_type - tr2->query_type;
-
-	if(tr1->table_key != tr2->table_key)
-		return (int) ((long) tr1->table_key - (long) tr2->table_key);
-
-	if(tr1->query_type == QUERY_TYPE_READ_INDEX || tr1->query_type == QUERY_TYPE_READ_INDEX_RANGE)
+	for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
 	{
-		if(tr1->idx_idx != tr2->idx_idx)
-			return tr1->idx_idx - tr2->idx_idx;
-	}
-
-	if(tr1->no_primary_keys != tr2->no_primary_keys)
-		return tr1->no_primary_keys - tr2->no_primary_keys;
-	for(int i=0;i<tr1->no_primary_keys;i++)
-	{
-		if(tr1->start_primary_keys[i] != tr2->start_primary_keys[i])
-			return tr1->start_primary_keys[i] - tr2->start_primary_keys[i];
-	}
-
-	if(tr1->query_type == QUERY_TYPE_READ_ROW_RANGE || tr1->query_type == QUERY_TYPE_READ_INDEX_RANGE)
-	{
-		for(int i=0;i<tr1->no_primary_keys;i++)
+		if(write_op_n->value != NULL)
 		{
-			if(tr1->end_primary_keys[i] != tr2->end_primary_keys[i])
-				return tr1->end_primary_keys[i] - tr2->end_primary_keys[i];
+			txn_write * tw = (txn_write *) write_op_n->value;
+			res = persist_write(tw, db, fastrandstate);
+			if(res != 0)
+				return res;
 		}
 	}
 
-	if(tr1->query_type != QUERY_TYPE_READ_ROW && tr1->query_type != QUERY_TYPE_READ_ROW_RANGE)
-	{
-		if(tr1->no_clustering_keys != tr2->no_clustering_keys)
-			return tr1->no_clustering_keys - tr2->no_clustering_keys;
-		for(int i=0;i<tr1->no_clustering_keys;i++)
-		{
-			if(tr1->start_clustering_keys[i] != tr2->start_clustering_keys[i])
-				return tr1->start_clustering_keys[i] - tr2->start_clustering_keys[i];
-		}
+	return 0;
+}
 
-		if(tr1->query_type == QUERY_TYPE_READ_CELL_RANGE)
+int abort_txn(uuid_t * txnid, db_t * db)
+{
+	return close_txn(txnid, db);
+}
+
+int commit_txn(uuid_t * txnid, db_t * db)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	int res = validate_txn(txnid, db);
+
+	if(res == VAL_STATUS_COMMIT)
+	{
+		persist_txn(ts, db);
+	}
+	else if(res == VAL_STATUS_ABORT)
+	{
+		abort_txn(txnid, db);
+	}
+	else
+	{
+		assert(0);
+	}
+
+	return 0;
+}
+
+
+int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	return add_write_to_txn(QUERY_TYPE_UPDATE, column_values, no_cols, no_primary_keys, no_clustering_keys, table_key, ts, fastrandstate);
+}
+
+db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	db_row_t* result = db_search(primary_keys, table_key, db);
+
+	// Note that if result == NULL (no such row), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
+
+	return add_row_read_to_txn(primary_keys, no_primary_keys, table_key, result, ts, fastrandstate);
+}
+
+int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
+							snode_t** start_row, snode_t** end_row,
+							WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	int ret = db_range_search(start_primary_keys, end_primary_keys, start_row, end_row, table_key, db);
+
+	// Note that if ret == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
+
+	return add_row_range_read_to_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, *start_row, *end_row, ts, fastrandstate);
+}
+
+
+db_row_t* db_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	db_row_t* result = db_search_clustering(primary_keys, clustering_keys, no_clustering_keys, table_key, db);
+
+	// Note that if result == NULL (no such row), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
+
+	return add_cell_read_to_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, result, ts, fastrandstate);
+}
+
+int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	// Note that if ret == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
+
+	db_range_search_clustering(primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, start_row, end_row, table_key, db);
+
+	return add_cell_range_read_to_txn(primary_keys, no_primary_keys, start_clustering_keys,
+										end_clustering_keys, no_clustering_keys, table_key,
+										*start_row, *end_row, ts, fastrandstate);
+}
+
+// WORD* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD* col_keys, int no_columns, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // This won't work until db_search_columns is refactored as per below:
+	return 0;
+
+/*
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+//	db_search_columns(primary_keys, clustering_keys, int* column_idxs, no_columns, table_key, db_t * db);
+
+	db_row_t* result = db_search_columns_result(primary_keys, clustering_keys, col_keys, no_columns, table_key, db);
+
+	return add_col_read_to_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys,
+								col_keys, no_columns, table_key, result, ts, fastrandstate);
+*/
+}
+
+db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	db_row_t* result = db_search_index(index_key, idx_idx, table_key, db);
+
+	return add_index_read_to_txn(&index_key, idx_idx, table_key, result, ts, fastrandstate);
+}
+
+int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	db_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table_key, db);
+
+	return add_index_range_read_to_txn(idx_idx, &start_idx_key, &end_idx_key, *start_row, *end_row, table_key, ts, fastrandstate);
+}
+
+int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	return add_write_to_txn(QUERY_TYPE_DELETE, primary_keys, no_primary_keys, no_primary_keys, 0, table_key, ts, fastrandstate);
+}
+
+int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	return add_write_to_txn(QUERY_TYPE_DELETE, keys, no_primary_keys+no_clustering_keys, no_primary_keys, no_clustering_keys, table_key, ts, fastrandstate);
+}
+
+int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported yet
+	return 0;
+
+/*
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+*/
+}
+
+int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported in new schema-less model
+	return 0;
+}
+
+// Queue ops:
+
+int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	return add_enqueue_to_txn(column_values, no_cols, table_key, queue_id, ts, fastrandstate);
+}
+
+int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, int * entries_read, long * new_read_head,
+		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
+		db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	long prev_read_head = -1;
+
+	// Lookup previously existing read head in this txn's read set:
+
+	for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+	{
+		if(write_op_n->value != NULL)
 		{
-			for(int i=0;i<tr1->no_clustering_keys;i++)
+			txn_write * tw = (txn_write *) write_op_n->value;
+
+			if(tw->query_type == QUERY_TYPE_READ_QUEUE && tw->table_key == table_key &&
+				tw->queue_id == queue_id && tw->consumer_id == consumer_id &&
+				tw->shard_id == shard_id && tw->app_id == app_id)
 			{
-				if(tr1->end_clustering_keys[i] != tr2->end_clustering_keys[i])
-					return tr1->end_clustering_keys[i] - tr2->end_clustering_keys[i];
+				prev_read_head = tw->new_read_head;
+				break;
 			}
 		}
 	}
 
-	if(tr1->query_type == QUERY_TYPE_READ_COLS)
-	{
-		if(tr1->no_col_keys != tr2->no_col_keys)
-			return tr1->no_col_keys - tr2->no_col_keys;
-		for(int i=0;i<tr1->no_col_keys;i++)
-		{
-			if(tr1->col_keys[i] != tr2->col_keys[i])
-				return tr1->col_keys[i] - tr2->col_keys[i];
-		}
-	}
+	peek_queue(consumer_id, shard_id, app_id, table_key, queue_id,
+			max_entries, prev_read_head, entries_read, new_read_head,
+			start_row, end_row, db);
 
+	return add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
+			max_entries, *entries_read, *new_read_head,
+			*start_row, *end_row, ts, fastrandstate);
+}
+
+int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					long new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	return add_consume_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
+			new_consume_head, ts, fastrandstate);
+}
+
+int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not implemented
 	return 0;
 }
 
-txn_state * init_txn_state()
+int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+								uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
-	txn_state * ts = (txn_state *) malloc(sizeof(txn_state));
-	uuid_generate(ts->txnid);
-	ts->read_set = create_skiplist(&txn_read_cmp);
-	ts->write_set = create_skiplist(&txn_write_cmp);
-
-	return ts;
+	assert (0); // Not implemented
+	return 0;
 }
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key)
+int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
-	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
-	memset(tw, 0, sizeof(txn_write) + no_cols*sizeof(WORD));
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
 
-	tw->table_key = table_key;
-	tw->no_cols = no_cols;
-	tw->column_values = (WORD *) ((char *) tw + sizeof(txn_write));
-	for(int i=0;i<tw->no_cols;i++)
-		tw->column_values[i] = column_values[i];
-
-	tw->query_type = query_type;
-
-	return tw;
+	return add_create_queue_to_txn(table_key, queue_id, ts, fastrandstate);
 }
 
-txn_read * get_txn_read(short query_type,
-						WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-						WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-						WORD* col_keys, int no_col_keys,
-						int idx_idx,
-						db_row_t* result, snode_t* start_row, snode_t* end_row,
-						WORD table_key)
+int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
-	int total_col_count = no_primary_keys + no_clustering_keys;
-	if(query_type == QUERY_TYPE_READ_ROW_RANGE)
-		total_col_count += no_primary_keys;
-	if(query_type == QUERY_TYPE_READ_CELL_RANGE)
-		total_col_count += no_clustering_keys;
-	if(query_type == QUERY_TYPE_READ_COLS)
-		total_col_count += no_col_keys;
+	txn_state * ts = get_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
 
-	txn_read * tr = (txn_read *) malloc(sizeof(txn_read) + total_col_count * sizeof(WORD));
-	memset(tr, 0, sizeof(txn_read) + total_col_count * sizeof(WORD));
-
-	tr->table_key = table_key;
-	tr->query_type = query_type;
-
-	int offset = sizeof(txn_write);
-	tr->no_primary_keys = no_primary_keys;
-	tr->start_clustering_keys = (WORD *) ((char *) tr + offset);
-	for(int i=0;i<tr->no_primary_keys;i++)
-		tr->start_primary_keys[i] = start_primary_keys[i];
-	offset += tr->no_primary_keys * sizeof(WORD);
-
-	if(query_type == QUERY_TYPE_READ_ROW_RANGE)
-	{
-		tr->end_clustering_keys = (WORD *) ((char *) tr + offset);
-		for(int i=0;i<tr->no_primary_keys;i++)
-			tr->end_clustering_keys[i] = end_clustering_keys[i];
-		offset += tr->no_primary_keys * sizeof(WORD);
-	}
-
-	if(query_type != QUERY_TYPE_READ_ROW && query_type != QUERY_TYPE_READ_ROW_RANGE)
-	{
-		tr->start_clustering_keys = (WORD *) ((char *) tr + offset);
-		for(int i=0;i<tr->no_clustering_keys;i++)
-			tr->start_clustering_keys[i] = start_clustering_keys[i];
-		offset += tr->no_clustering_keys * sizeof(WORD);
-	}
-
-	if(query_type == QUERY_TYPE_READ_CELL_RANGE)
-	{
-		tr->end_clustering_keys = (WORD *) ((char *) tr + offset);
-		for(int i=0;i<tr->no_clustering_keys;i++)
-			tr->end_clustering_keys[i] = end_clustering_keys[i];
-		offset += tr->no_clustering_keys * sizeof(WORD);
-	}
-
-	if(query_type == QUERY_TYPE_READ_COLS)
-	{
-		tr->col_keys = (WORD *) ((char *) tr + offset);
-		for(int i=0;i<tr->no_col_keys;i++)
-			tr->col_keys[i] = col_keys[i];
-		offset += tr->no_col_keys * sizeof(WORD);
-	}
-
-	if(query_type == QUERY_TYPE_READ_INDEX || query_type == QUERY_TYPE_READ_INDEX_RANGE)
-		assert(idx_idx == -1);
-	tr->idx_idx = idx_idx;
-
-	tr->result = result;
-	tr->start_row = start_row;
-	tr->end_row = end_row;
-
-	return tr;
+	return add_delete_queue_to_txn(table_key, queue_id, ts, fastrandstate);
 }
-
-int add_write_to_txn(short query_type, WORD * column_values, int no_cols, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
-{
-	assert((query_type == QUERY_TYPE_UPDATE) || (query_type == QUERY_TYPE_DELETE));
-	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key);
-	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // Note that this will overwrite previous values written for the variable in the same txn (last write wins)
-}
-
-int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
-						WORD table_key, db_row_t* result,
-						txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, result, NULL, NULL, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-								snode_t* start_row, snode_t* end_row,
-								txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, start_row, end_row, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-								WORD table_key, db_row_t* result,
-								txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, result, NULL, NULL, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys,
-								WORD* end_clustering_keys, int no_clustering_keys,
-								WORD table_key,
-								snode_t* start_row, snode_t* end_row,
-								txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, NULL, 0, -1, NULL, start_row, end_row, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-								WORD* col_keys, int no_columns,
-								WORD table_key, db_row_t* result,
-								txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, result, NULL, NULL, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, result, NULL, NULL, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
-int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
-{
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, start_row, end_row, table_key);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
-}
-
 
 #endif /* BACKEND_TXNS_H_ */
