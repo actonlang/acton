@@ -273,3 +273,23 @@ Hashable long_Hashable = &long_h;
 static struct Hashable_struct double_h = {double_eq, double_hash};
 
 Hashable double_Hashable =  &double_h;
+
+int unboxed_eq(WORD a, WORD b) {
+  return a == b;
+}
+
+size_t unboxed_hash(WORD v) {
+  long u = (long)v, sign=1;
+  if (u<0)  {
+    sign=-1;
+    u = -u;
+  }
+  size_t h = u % _PyHASH_MODULUS * sign;
+  if (h == (size_t)-1)
+    h = (size_t)-2;
+  return h;
+}
+
+static struct Hashable_struct unboxed_h = {unboxed_eq, unboxed_hash};
+
+Hashable unboxed_Hashable = &unboxed_h;

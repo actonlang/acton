@@ -26,5 +26,7 @@ typedef struct Hashable_struct {
 
 Hashable long_Hashable;
 Hashable double_Hashable;
+Hashable unboxed_Hashable;
+Hashable unboxed_double_Hashable;
 
 #endif
