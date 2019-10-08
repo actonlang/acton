@@ -11,7 +11,7 @@ WORD mkWord(long i) {
 }
 
 int main() {
-  dict_t dict = dict_new(unboxed_double_Hashable);
+  dict_t dict = dict_new(unboxed_Hashable);
   int j;
   for (long i=1; i < 1000000; i++) {
     dict_setitem(dict,mkWord(i),mkWord(i+1));
