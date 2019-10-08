@@ -235,6 +235,12 @@ protocol SupportsFloat:
 protocol SupportsComplex:
     __complex__     : () -> complex
 
+protocol SupportsAbs:
+    __abs__         : () -> Self
+
+protocol SupportsRound:
+    __round__       : () -> int
+
 protocol Logical:
     @staticmethod
     __and__         : (Self,Self) -> Self
@@ -271,9 +277,6 @@ extension int (Number):
     def __mul__(a, b) -> int:
         return primmulint(a,b)
 
-protocol SupportsAbs:
-    __abs__         : () -> Self
-
 protocol Complex (Number, SupportsAbs, SupportsComplex):
     @staticmethod
     __fromcomplex__ : (complex) -> Self
@@ -282,9 +285,6 @@ protocol Complex (Number, SupportsAbs, SupportsComplex):
     real            : () -> Real
     imag            : () -> Real
     conjugate       : () -> Self
-
-protocol SupportsRound:
-    __round__       : () -> int
 
 protocol Real (Complex, SupportsRound, SupportsFloat):
     @staticmethod
