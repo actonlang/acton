@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "list.h"
+#include "iterator.h"
 
 static inline int min(int a, int b) {
     if (a > b)
@@ -52,6 +53,14 @@ list_t list_new(int capacity) {
   return lst;
 }
 
+list_t list_init(WORD elems[], int length) {
+  list_t res = list_new(0);
+  res->data = (WORD*)elems;
+  res->length = length;
+  res->capacity = length;
+  return res;
+}
+
 // Container method
 int list_contains(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
   for (int i=0; i < lst->length; i++)
@@ -61,11 +70,24 @@ int list_contains(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
 }
 
 // Iterable method
-list_iterator_t list_iter(list_t lst) {
-  list_iterator_t it = malloc(sizeof(struct list_iterator_struct));
-  it->src = lst;
-  it->nxt = 0;
-  return it;
+int list_iterator_next(iterator_t iter, WORD *res) {
+ list_iterator_state_t state = iter->state;
+  if(state->nxt >=list_len(state->src)) {
+    errno = EINVAL;
+    return -1;
+  }
+  *res = state->src->data[state->nxt++];
+  return 0;
+}
+
+iterator_t list_iter(list_t lst) {
+  list_iterator_state_t state = malloc(sizeof(struct list_iterator_struct));
+  state->src = lst;
+  state->nxt = 0;
+  iterator_t iter = malloc(sizeof(struct iterator_struct));
+  iter->state = state;
+  iter->next = list_iterator_next;
+  return iter;
 }
 
 // Sized method
@@ -74,12 +96,15 @@ int list_len(list_t lst) {
 }
 
 // Reversible method
-list_iterator_t list_reversed(list_t lst){
-  list_iterator_t it = malloc(sizeof(struct list_iterator_struct));
-  it->src = list_copy(lst);
-  list_reverse(it->src);
-  it->nxt = 0;
-  return it;
+iterator_t list_reversed(list_t lst){
+  list_iterator_state_t state = malloc(sizeof(struct list_iterator_struct));
+  state->src = list_copy(lst);
+  list_reverse(state->src);
+  state->nxt = 0;
+  iterator_t iter = malloc(sizeof(struct iterator_struct));
+  iter->state = state;
+  iter->next = list_iterator_next;
+  return iter;
 }
 
 // Sequence methods
@@ -204,35 +229,14 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
 }
 
 // Iterator methods
-WORD list_iterator_next(list_iterator_t iter) {
+/* WORD list_iterator_next(list_iterator_t iter) {
   if(iter->nxt >= list_len(iter->src)) {
     errno = EINVAL;
     return NULL;
   }
   return iter->src->data[iter->nxt++];
 }
-
-/*
-int range_iterator_next(range_iterator_t iter) {
-  if((iter->step>0 && iter->nxt>iter->stop) || (iter->step<0 && iter->nxt<iter->stop)) {
-    errno = EINVAL;
-    return NULL;
-  }
-  int res = iter->nxt;
-  iter->nxt += iter->step;
-  return res;
-}
 */
-
-// Creating a range iterator
-
-range_iterator_t range(int start, int stop, int step) {
-  range_iterator_t iter = malloc(sizeof(struct range_iterator_struct));
-  iter->nxt = start;
-  iter->stop = stop;
-  iter->step = step;
-  return iter;
-}
 
 // Variants for non-pointer elem type
 int list_getitem_p(list_t lst, int ix, WORD *res) {
@@ -259,22 +263,4 @@ int list_pop_p(list_t lst,int ix, WORD *res) {
   return 0;
 }
 
-int list_iterator_next_p(list_iterator_t iter, WORD *res) {
-  if(iter->nxt >=list_len(iter->src)) {
-    errno = EINVAL;
-    return -1;
-  }
-  *res = iter->src->data[iter->nxt++];
-  return 0;
-}
-
-int range_iterator_next_p(range_iterator_t iter, int *res) {
-  if((iter->step>0 && iter->nxt>iter->stop) || (iter->step<0 && iter->nxt<iter->stop)) {
-    errno = EINVAL;
-    return -1;
-  }
-  *res = iter->nxt;
-  iter->nxt += iter->step;
-  return 0;
-}
   

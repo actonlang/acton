@@ -1,6 +1,8 @@
 #ifndef LIST_H
 #define LIST_H
 
+#include "iterator.h"
+
 typedef void *WORD;
 
 typedef struct list_struct {
@@ -12,26 +14,22 @@ typedef struct list_struct {
 typedef struct list_iterator_struct {
   list_t src;
   int nxt;
-} *list_iterator_t; 
-
-typedef struct range_iterator_struct {
-  int nxt,stop,step;
-} *range_iterator_t; 
-
+} *list_iterator_state_t; 
 
 list_t list_new(int capacity);
+list_t list_init(WORD elems[], int length);
 
 // Container method
 int list_contains(list_t lst, WORD elem, int (*eq)(WORD,WORD));
 
 // Iterable method
-list_iterator_t list_iter(list_t lst);  
+iterator_t list_iter(list_t lst);  
 
 // Sized method
 int list_len(list_t lst);
 
 // Reversible method
-list_iterator_t list_reversed(list_t lst);
+iterator_t list_reversed(list_t lst);
 
 // Sequence methods 
 WORD list_getitem(list_t lst, int ix);
@@ -52,18 +50,8 @@ int list_extend(list_t lst, list_t other); // 2nd par should be an Iterable
 list_t list_copy(list_t lst);
 int list_sort(list_t lst, int (*cmp)(WORD,WORD)); // Python function has additional param bool reversed.
 
-// Iterator methods
-WORD list_iterator_next(list_iterator_t iter);
-int range_iterator_next(range_iterator_t iter);
-
-// Creating a range iterator
-
-range_iterator_t range(int start, int stop, int step);
-
 // Variants when using non-pointer elems
 int list_getitem_p(list_t lst, int ix, WORD *res);
 int list_pop_p(list_t lst,int ix, WORD *res);
-int list_iterator_next_p(list_iterator_t iter, WORD *res);
-int range_iterator_next_p(range_iterator_t iter, int *res);
 
 #endif
