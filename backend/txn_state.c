@@ -22,9 +22,14 @@ int txn_write_cmp(WORD e1, WORD e2)
 
 	if(tr1->query_type < QUERY_TYPE_ENQUEUE) // Regular ops ordering:
 	{
-		if(tr1->no_cols != tr2->no_cols)
-			return tr1->no_cols - tr2->no_cols;
-		for(int i=0;i<tr1->no_cols;i++)
+		// Newer writes always overwrite older writes in the same txn:
+
+		int no_key_cols1 = tr1->no_primary_keys + tr1->no_clustering_keys;
+		int no_key_cols2 = tr2->no_primary_keys + tr2->no_clustering_keys;
+
+		if(no_key_cols1 != no_key_cols2)
+			return no_key_cols1 - no_key_cols2;
+		for(int i=0;i<no_key_cols1;i++)
 		{
 			if(tr1->column_values[i] != tr2->column_values[i])
 				return (int) (long) tr1->column_values[i] - (long) tr2->column_values[i];
@@ -147,13 +152,15 @@ void free_txn_state(txn_state * ts)
 	free(ts);
 }
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key, long local_order)
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long local_order)
 {
 	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
 	memset(tw, 0, sizeof(txn_write) + no_cols*sizeof(WORD));
 
 	tw->table_key = table_key;
 	tw->no_cols = no_cols;
+	tw->no_primary_keys = no_primary_keys;
+	tw->no_clustering_keys = no_clustering_keys;
 	tw->column_values = (WORD *) ((char *) tw + sizeof(txn_write));
 	for(int i=0;i<tw->no_cols;i++)
 		tw->column_values[i] = column_values[i];
@@ -171,7 +178,7 @@ txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols
 {
 	assert(query_type >= QUERY_TYPE_ENQUEUE && query_type <= QUERY_TYPE_UNSUBSCRIBE_QUEUE);
 
-	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key, local_order);
+	txn_write * tw = get_txn_write(query_type, column_values, no_cols, 0, 0, table_key, local_order);
 
 	tw->queue_id = queue_id;
 
@@ -295,10 +302,10 @@ void free_txn_read(txn_read * tr)
 	free(tr);
 }
 
-int add_write_to_txn(short query_type, WORD * column_values, int no_cols, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
+int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
 	assert((query_type == QUERY_TYPE_UPDATE) || (query_type == QUERY_TYPE_DELETE));
-	txn_write * tw = get_txn_write(query_type, column_values, no_cols, table_key, (long) ts->write_set->no_items);
+	txn_write * tw = get_txn_write(query_type, column_values, no_cols, no_primary_keys, no_clustering_keys, table_key, (long) ts->write_set->no_items);
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // Note that this will overwrite previous values written for the variable in the same txn (last write wins)
 }
 

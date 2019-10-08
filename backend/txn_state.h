@@ -36,6 +36,8 @@ typedef struct txn_write
 
 	WORD * column_values;
 	int no_cols;
+	int no_primary_keys;
+	int no_clustering_keys;
 
 	// For queue ops:
 
@@ -101,7 +103,7 @@ int txn_read_cmp(WORD e1, WORD e2);
 txn_state * init_txn_state();
 void free_txn_state(txn_state * ts);
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, WORD table_key, long local_order);
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long local_order);
 void free_txn_write(txn_write * tw);
 txn_read * get_txn_read(short query_type,
 						WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
@@ -111,7 +113,8 @@ txn_read * get_txn_read(short query_type,
 						db_row_t* result, snode_t* start_row, snode_t* end_row,
 						WORD table_key, long local_order);
 void free_txn_read(txn_read * tr);
-int add_write_to_txn(short query_type, WORD * column_values, int no_cols, WORD table_key, txn_state * ts, unsigned int * fastrandstate);
+int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys,
+					WORD table_key, txn_state * ts, unsigned int * fastrandstate);
 int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
 						txn_state * ts, unsigned int * fastrandstate);
