@@ -19,6 +19,7 @@ A. Language
         fun8 : (A,B) -> bool \\ ElementOf(A,B)
     
         fun9 : (A,B) -> {A:B} \\ Hashable(A)    
+        fun9 : (A,B) -> {A:B} \ Hashable(A)    
         fun9 : (A,B) -> {A:B} / Hashable(A)    
 
         fun9 : apa(A) \\ Hashable(A)
@@ -41,26 +42,154 @@ A. Language
     
         fun15 : ((apa:[A],bepa:{int:A}), (A)->B) -> (apa:[A],bepa:{int:B})
     
+        [1,2,3]         : [int]
+        {'x':1,'y':2}   : {str:int}
+        {1,2,3}         : {int}
+        
+        [1,2,3]         : frozenlist(int)
+        {'x':1,'y':2}   : frozendict(str,int)
+        {1,2,3}         : frozenset(int)
+
+        [1,2,3]         : list(int)
+        {'x':1,'y':2}   : dict(str,int)
+        {1,2,3}         : set(int)        
+
+        [1,2,3]         : A(int) \\ IsList(A)
+        {'x':1,'y':2}   : A(str,int) \\ IsDict(A)
+        {1,2,3}         : A(int) \\ IsSet(A)
+
+        list([1,2,3])   : list(int)
+        list(x)         : list(int)
+        list            : (A(B)) -> list(B) \\ IsList(A)
+        frozenlist      : (A(B)) -> frozenlist(B) \\ IsList(A)
+        frozenlist      : A(B) -> frozenlist(B) \\ IsList(A)
+
+        [1,2,3]         : list(int)
+        {'x':1,'y':2}   : dict(str,int)
+        {1,2,3}         : set(int)
+
+        [1,2,3]         : list(int)
+        {'x':1,'y':2}   : dict(str,int)
+        {1,2,3}         : set(int)        
+
+        ![1,2,3]        : list(int)
+        !{'x':1,'y':2}  : dict(str,int)
+        !{1,2,3}        : set(int)
+
+        mut([1,2,3])        : list(int)
+        mut({'x':1,'y':2})  : dict(str,int)
+        mut({1,2,3})        : set(int)
+        
+    struct(A):    
+        f : (A,int) -> bool
+        d : (A) -> bool
+        d : sync new (int) -> bool
+        
+        e : sync () -> None
+        
+
+    f : (a,b) -> ()
+    g : (a,b) -> None
+    
+    kalle : sync () -> None
+    
+    def kalle():
+        pass
+        
+    
+    class C():
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+        def sum(self):
+            return self.x + self.y
+        
+#   instance Eq C:
+        def __eq__(self:C,other:C):
+            return self.x == other.x and self.y == other.y
+        def __ne__(self,other):
+            return self.x != None
+
+    class D(C):
+        def __init__(self, x,y,z):
+            C.__init__(self,x,y)
+            self.z = z
+            
+        def __eq__(self:D,other:D):
+            return self.z == other.z and C.__eq__(self,other)
+    
+    c : C = C(1,2)
+    d : D = D(1,2,3)
+    
+    c == c : bool           ---->       C.__eq__(c,c)
+    c == d : bool           ---->       C.__eq__(c,d)
+    d == d : bool           ---->       D.__eq__(d,d)
+    d == c : bool           ---->       C.__eq__(d,c)       --/-->      D.__eq__(d,c)
+    
+    
+    class Eq():
+        def __eq__(a,b):
+            a.x == b.x and a.y == b.y
+    
+    class Ord(Eq):
+        def __le__(a,b):
+            a.x <= b.x and a.y <= b.y
+    
+    struct Apa():
+        x: int
+        y: int
+    
+    
+    
+    kalle(*None)
+    
+    p : struct((int,str))
+    p.f((1,""),7)
+    
+        def 
+    
+        f(x)         : bool
+        f((1,"",pi)) : bool
+        
+        h           : (int,str,float) -> bool
+        h(1,"",pi)  : bool
+        
+        x   : (int,str,float)
+        
+        h(*x)
+
+        g       : (int) -> bool
+        g(7)    : bool
+        
+        
+        
+        x       : T     = (1,"",pi)
+        
+        
+        x,y = f(a,b,c)
+        
+        
     * Named interfaces / tagged unions
     
-        abstract struct Apa(A):
+        struct Apa[]:
             pass
 
-        struct Bepa(A):
-            Apa(A)
+        struct Bepa[A](Apa[A]):
             b : A
     
-        struct Cepa(A):
-            Apa(A)
-            Basetype()
-            c1 : str
-            c2 : Apa(A)
+        struct Cepa[A](Apa[A],Basetype):
+            c1 : str  = ""
+            c2 : Apa[A]
     
-        struct Depa(A):
-            Apa(A)
+        struct Depa[A]:
+            pass
+        
+#        struct Epa[A] (Bepa[A],Cepa[A]):
 
-        x : Apa(int)
-        x = f(...)
+        x : Apa[int]
+        x = f(...)  
+        x = Bepa(2)
+        x = Bepa(b=2)
     
         if isinstance(x,Bepa):
             b=x.b
@@ -76,6 +205,9 @@ A. Language
             ...
     
         return x.b if isinstance(x,Bepa) else (0 if x.c1=="" and isinstance(x.c2,Fepa) else ...) if isinstance(x,Cepa) else ...
+    
+    
+        lambda x: x.b       :  ((b:A,**R)) -> A
     
         ######### (c.f. Haskell)
 
@@ -93,7 +225,28 @@ A. Language
                     (Cepa "" 0, 6) -> ...
                     _  -> ...
 
-        max :: Ord a => [a] -> a
+        ########### Proposal:
+        
+        struct Apa[A]:
+            case Bepa:
+                b : A
+            case Cepa:
+                c1 : str
+                c2 : Apa[A]
+            case Depa:
+                pass
+
+        x : Apa[int] = Bepa(4)
+        
+        switch x:
+            case Bepa(4):
+                ...
+            case Bepa(5):
+                ...
+            case Cepa(c1,c2):
+                ...
+            case Depa():
+                ...
 
         ############## (Selection from tuples)
 
@@ -110,23 +263,56 @@ A. Language
             return t[i]
             return x[i]
 
+
+
+
+
+
+
+
         ##############  (Subtyping / type inheritance)
 
-        struct Basetype:
-            Embryo()
-            base : str = ""
+        struct Basetype (Embryo):
+            base : str
         
-        struct Apa(A):
-            case Bepa(A,int,z:A)
-            case Cepa:
-                Basetype
-                int
-                c1 : str
-                c2 : Apa(A)
+        struct Apa[A]:
+            case Bepa:
+                x: A
+                y: int
+                z: A
+            case Cepa (Basetype):
+                c0: int
+                c1: str
+                c2: Apa[A]
             case Depa:
                 b:int
-            case Epa(s:str, r:Apa(A), b:int)
-            case Fepa()
+            case Epa:
+                s: str
+                r: Apa[str]
+                b: int
+            case Fepa:
+                pass
+        
+        struct Gepa[A] (Fepa[A])
+            f1: float
+            f2: bool
+            f3: A
+
+        struct Hepa[A] (Fepa[A]):
+            case Iepa:
+                i1: int
+                i2: (int),int)->int
+            case Jepa:
+                pass
+
+
+
+
+
+
+
+
+
 
         ############ (The diamond problem)
 
@@ -258,3 +444,29 @@ A. Language
 
         return [ (x,y) for x in range(10) if x%3==0 for y in range(x) ]
 
+
+        some_struct = (a = 1, b = "world")
+        
+        fun_struct = (a = lambda x:x+1, b = lambda s:"hello "+s)
+
+        ( for (v=k) in some_struct: v = fun_struct.v(k) )    ==    (a = 2, b = "hello world")
+        ( v = fun_struct.v(k) for (v=k) in some_struct )     ==    (a = 2, b = "hello world")
+        
+        
+        some_struct = {'a' : 1, 'b' : "world")
+        
+        fun_struct = {'a' : lambda x:x+1, 'b' : lambda s:"hello "+s)
+
+        { for v,k in some_struct.items(): v: fun_struct.v(k) }    ==    {'a' : 2, 'b' : "hello world"}
+        { v: fun_struct.v(k) for v,k in some_struct.items() }     ==    {'a' : 2, 'b' : "hello world"}
+        
+####################
+
+    x : (a:int,b:bool)
+    y : (k:str,l:str)
+    
+    x = (a=1,b=True)
+    
+    def f(y):
+        return (v=4,**x, b=False, **y, k="")
+    
