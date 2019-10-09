@@ -45,7 +45,7 @@ Type constants:     c,d                                                         
 
 Type variables:     X                                                                                   includes Self
 
-Types:              t       ::=     X  |  u  |  e(p,r)->t  |  (p)  |  (r)  |  ?t  |  @u                 var, con, fun, tuple, record, opt, class type
+Types:              t       ::=     X  |  u  |  e(p,r)->t  |  (p)  |  (r)  |  ?t  |  None  |  @u        var, con, fun, tuple, record, opt, void, class type
 
 Constructor types:  u       ::=     c[o]
 
@@ -194,7 +194,7 @@ N |- p < p'                                                                     
 N |- (p) < (p')                                                                     N |- t,p < t',p'
 
 N |- r < r'                                                                         N |- . < r
---------------- (SubRec)                                                            --------------- (SubNone)
+--------------- (SubRec)                                                            --------------- (SubLacks)
 N |- (r) < (r')                                                                     N |- . < x:?t,r
 
 N |- r < r'                                                                         N |- t < t'     N |- r < r'
@@ -207,8 +207,8 @@ N |- u ~ struct(u',o):n      N |- u' ~ struct(o'):n'                            
 N |- @u < @u'                                                                       N |- @u < @u'
 
 
------------ (SubOpt)
-N |- t < ?t
+----------- (SubOpt)                                                                -------------- (SubNone)
+N |- t < ?t                                                                         N |- None < ?t
 
 
 N |- t1 < t2      N |- t2 < t3
@@ -308,6 +308,10 @@ N |- E : Msg(t) | e                                                             
 N |- await E : t | e,sync                                                           N |- do S : t | e
 
 
+-------------------- (None)
+N |- None : None | e
+
+
 ***** N |- F : p | N | e *******************************************************************************************************************************************
 
 
@@ -383,9 +387,9 @@ N |- S1; S2 ~ N1,N2 | e
 ***** N |- S : t | e ***********************************************************************************************************************************************
 
 
-N |- S ~ N' | e,ret(t)     btc(N') # ftc(t,e)     not thru(S)                       N |- S ~ N' | e,ret(t)     btc(N') # ftc(t,e)     thru(S)
-------------------------------------------------------------- (Result)              --------------------------------------------------------- (Thru)
-N |- S : t | e                                                                      N |- S : ?t | e
+N |- S ~ N' | e,ret(t)     btc(N') # ftc(t,e)     not thru(S)                       N |- S ~ N' | e,ret(t)    N |- None < t    btc(N') # ftc(t,e)    thru(S)
+------------------------------------------------------------- (Result)              ------------------------------------------------------------------------ (Thru)
+N |- S : t | e                                                                      N |- S : t | e
 
     thru(return E)                      = False
     thru(raise E)                       = False
