@@ -1185,7 +1185,6 @@ ctype    =  addLoc (
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
                        return (maybe (S.CPSet NoLoc t) (S.CPMap NoLoc t) mbt))
-        <|> try (parens tstruct)
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.CTUnion NoLoc (alts++[alt])))
@@ -1200,6 +1199,7 @@ ctype    =  addLoc (
                     arrow
                     t <- ctype
                     return (S.CTFun NoLoc es ps t))
+        <|> try (parens tstruct)
         <|> parens  ttuple
         <|> try (S.CTVar NoLoc <$> cvar)
         <|> named)
