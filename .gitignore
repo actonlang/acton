@@ -1,5 +1,11 @@
 *~
 *.o
 *.a
+**/.DS_Store
+**/.stack-work
+**/*.hi
+**/*.o
+**/a.out
+.cabal-sandbox/
 kernel
 test_io

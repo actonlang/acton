@@ -1,0 +1,18 @@
+x0 : (x : int, y : int)                                  # struct
+x1 : (x,y : A,**B)                                       # open struct; two fileds of the same type
+x2 : (int  | float)                                      # union
+x3 : ('str1' | 'str2' | A)                               # open union
+x4 : (int,bool)                                          # tuple
+x5 : ?B12                                                # option type; type var
+x6 : Set[int]                                            # Class with type argument
+x7 : (Hashable[A], Eq[A]) => set[A]                      # Qualified/constrained type
+x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
+x9 : e1 e2 (int,*A,b : bool,**B) -> SomeClass[int]       # function with effects and all kinds of parameters
+a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
+a1 : (str,*,c : bool) -> None                            # function with * separation of pos and kwd parameters
+a2 : (int) -> (int) -> int                               # higher order function
+a3 : {int}                                               # frozenset of ints
+a4 : [(float,bool)]                                      # frozenlist of tuples
+a5 : {{[int]}}                                           # more complicated frozenset
+a6 : {[int],(int) -> bool}                               # a frozendict
+a7 : (set[int],list[float],dict[{int},bool])             # tuple of mutable data structures

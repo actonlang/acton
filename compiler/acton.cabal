@@ -1,0 +1,55 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: fbbc618d10782e460925cf9ea68e806a199cb22de0334592cf01f7609d4deb4a
+
+name:           acton
+version:        0.3.0
+description:    Please see the README on Github at <https://github.com/githubuser/simple#readme>
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2018 Author name here
+license:        BSD3
+build-type:     Simple
+cabal-version:  >= 1.10
+
+executable actonc
+  main-is: ActonCompiler.hs
+  hs-source-dirs:
+      ./.
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , directory >=1.3.1
+    , filepath
+    , megaparsec >=7
+    , mtl
+    , optparse-applicative
+    , parser-combinators
+    , pretty
+    , scientific
+    , transformers
+    , utf8-string
+    , zlib
+  build-tools:
+      alex
+    , happy
+  other-modules:
+      Acton.Constraints
+      Acton.Env
+      Acton.Names
+      Acton.Parser
+      Acton.Relabel
+      Acton.Syntax
+      Acton.Types
+      InterfaceFiles
+      Pretty
+      SrcLocation
+      Utils
+      Paths_acton
+  default-language: Haskell2010
