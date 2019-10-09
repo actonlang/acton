@@ -69,6 +69,10 @@ commaCat = hcat . punctuate comma . map pretty
 commaList :: Pretty a => [a] -> Doc
 commaList = commaSep pretty 
 
+commaIf :: [a] -> Doc
+commaIf [] = empty
+commaIf _  = comma
+
 -- | A list of things separated by equals signs.
 equalsList :: Pretty a => [a] -> Doc
 equalsList = hsep . punctuate (space TextPP.<> equals) . map pretty

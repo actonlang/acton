@@ -1,7 +1,7 @@
 x0 : (x : int, y : int)                                  # struct
 x1 : (x,y : A,**B)                                       # open struct; two fileds of the same type
 x2 : (int  | float)                                      # union
-x3 : ('str1' | 'str2' | A)                               # open union
+x3 : ('str1' | 'str2' | int)                             # union with string literals
 x4 : (int,bool)                                          # tuple
 x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
@@ -11,8 +11,17 @@ x9 : e1 e2 (int,*A,b : bool,**B) -> SomeClass[int]       # function with effects
 a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
 a1 : (str,*,c : bool) -> None                            # function with * separation of pos and kwd parameters
 a2 : (int) -> (int) -> int                               # higher order function
-a3 : {int}                                               # frozenset of ints
-a4 : [(float,bool)]                                      # frozenlist of tuples
-a5 : {{[int]}}                                           # more complicated frozenset
-a6 : {[int],(int) -> bool}                               # a frozendict
+a3 : {int}                                               # set of ints (protocol)
+a4 : [(float,bool)]                                      # list of tuples (protocol)
+a5 : {{[int]}}                                           # more complicated set (protcol)
+a6 : {[int]:(int) -> bool}                               # a dict (protocol)
 a7 : (set[int],list[float],dict[{int},bool])             # tuple of mutable data structures
+
+y1 : (x,y : A,**)                                        # open struct; two fileds of the same type
+y2 : (**)                                                # open struct
+y3 : (**A)                                               # open struct
+y4 : (int, bool, *A)                                     # open tuple
+y5 : (int, bool, *)                                      # open tuple
+y6 : (*)                                                 # open tuple
+y7 : (*A)                                                # open tuple
+y8 : ()                                                  # empty tuple (should count as empty struct as well?)
