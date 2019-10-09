@@ -8,6 +8,7 @@ x6 : Set[int]                                            # Class with type argum
 x7 : (Hashable[A], Eq[A]) => set[A]                      # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
 x9 : e1 e2 (int,*A,b : bool,**B) -> SomeClass[int]       # function with effects and all kinds of parameters
+
 a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
 a1 : (str,*,c : bool) -> None                            # function with * separation of pos and kwd parameters
 a2 : (int) -> (int) -> int                               # higher order function
@@ -25,3 +26,6 @@ y5 : (int, bool, *)                                      # open tuple
 y6 : (*)                                                 # open tuple
 y7 : (*A)                                                # open tuple
 y8 : ()                                                  # empty tuple (should count as empty struct as well?)
+
+f0 : (x:int, y:int) -> int                               # function without single star
+f1 : (int, y:int) -> int                                 # function with positional and keyword parameters and no star
