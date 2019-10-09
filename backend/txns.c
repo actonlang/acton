@@ -9,6 +9,8 @@
 
 #include "txns.h"
 
+int verbose = 1;
+
 // DB queries:
 
 txn_state * get_txn_state(uuid_t * txnid, db_t * db)
@@ -48,63 +50,137 @@ int close_txn(uuid_t * txnid, db_t * db)
 	return 0;
 }
 
-int rw_conflict(txn_read * tr, txn_write * tw)
+int key_path_overlaps(txn_read * tr, txn_write * tw)
 {
-	if(tr->table_key == tw->table_key)
+	// Writes must be at least as specific as reads:
+	assert(tr->no_primary_keys + tr->no_clustering_keys <= tw->no_primary_keys + tw->no_clustering_keys);
+
+	int is_exact_read_query = (tr->query_type == QUERY_TYPE_READ_COLS || tr->query_type == QUERY_TYPE_READ_CELL || tr->query_type == QUERY_TYPE_READ_ROW);
+
+	if(tr->query_type == QUERY_TYPE_READ_INDEX)
 	{
-		// RW conflicts or regular data:
-		if(tr->query_type >= QUERY_TYPE_READ_COLS && tr->query_type <= QUERY_TYPE_READ_INDEX_RANGE &&
-			(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE) )
+		if((long) tw->column_values[tr->idx_idx] == (long) tr->start_primary_keys[0])
+			return 1;
+		return 0;
+	}
+
+	if(tr->query_type == QUERY_TYPE_READ_INDEX_RANGE)
+	{
+		if((long) tw->column_values[tr->idx_idx] <= (long) tr->start_primary_keys[0] && (long) tw->column_values[tr->idx_idx] >= (long) tr->end_primary_keys[0])
+			return 1;
+		return 0;
+	}
+
+	for(int i=0;i<tr->no_primary_keys;i++)
+	{
+		if(is_exact_read_query && tr->start_primary_keys[i] != tw->column_values[i])
+			return 0;
+		if(!is_exact_read_query &&
+			((long) tr->start_primary_keys[i] > (long) tw->column_values[i] ||
+			(long) tr->end_primary_keys[i] < (long) tw->column_values[i]))
+				return 0;
+	}
+	for(int i=0;i<tr->no_clustering_keys;i++)
+	{
+		if(is_exact_read_query && tr->start_clustering_keys[i] != tw->column_values[tw->no_primary_keys + i])
+			return 0;
+		if(!is_exact_read_query &&
+			((long) tr->start_clustering_keys[i] > (long) tw->column_values[tw->no_primary_keys + i] ||
+			(long) tr->end_clustering_keys[i] < (long) tw->column_values[tw->no_primary_keys + i]))
+				return 0;
+	}
+
+	return 1;
+}
+
+// Check if txn read op tr is invalidated by write op tw:
+int rw_conflict(txn_read * tr, txn_write * tw, int check_exact_match)
+{
+	if(check_exact_match && tr->table_key != tw->table_key)
+		return 0;
+
+	// Check for RW conflicts only on regular data (all conflicts on queues are WW):
+
+	if(tr->query_type >= QUERY_TYPE_READ_COLS && tr->query_type <= QUERY_TYPE_READ_INDEX_RANGE &&
+		(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE) )
+	{
+		switch(tr->query_type)
 		{
-			switch(tr->query_type)
+			case QUERY_TYPE_READ_COLS:
+			case QUERY_TYPE_READ_CELL:
+			case QUERY_TYPE_READ_CELL_RANGE:
+			case QUERY_TYPE_READ_ROW:
+			case QUERY_TYPE_READ_ROW_RANGE:
+			case QUERY_TYPE_READ_INDEX:
+			case QUERY_TYPE_READ_INDEX_RANGE:
 			{
-				case QUERY_TYPE_READ_COLS:
-				{
-
-
-					break;
-				}
-				case QUERY_TYPE_READ_CELL:
-				{
-					break;
-				}
-				case QUERY_TYPE_READ_CELL_RANGE:
-				{
-					break;
-				}
-				case QUERY_TYPE_READ_ROW:
-				{
-					break;
-				}
-				case QUERY_TYPE_READ_ROW_RANGE:
-				{
-					break;
-				}
-				case QUERY_TYPE_READ_INDEX:
-				{
-					break;
-				}
-				case QUERY_TYPE_READ_INDEX_RANGE:
-				{
-					break;
-				}
+				if(check_exact_match && key_path_overlaps(tr, tw)) //  && compare_vc(tr->version, vector_clock * vc2)
+					return 1;
 			}
 		}
 	}
 
-	// Note: There can be no RW conflicts on queues
+	return 0;
+}
+
+// Check if queue op tw1 is invalidated by queue op tw2:
+int queue_op_conflict(txn_write * tw1, txn_write * tw2)
+{
+	// Subscribes and unsubscribes are not currently supported in txns
+
+	assert(tw1->query_type != QUERY_TYPE_SUBSCRIBE_QUEUE && tw1->query_type != QUERY_TYPE_UNSUBSCRIBE_QUEUE);
+	assert(tw2->query_type != QUERY_TYPE_SUBSCRIBE_QUEUE && tw2->query_type != QUERY_TYPE_UNSUBSCRIBE_QUEUE);
+
+	// Queue ops only conflict if they are on the same table and queue:
+
+	if(tw1->table_key != tw2->table_key || tw1->queue_id != tw2->queue_id)
+		return 0;
+
+	// CREATE_QUEUE and DELETE_QUEUE conflict with everything:
+
+	if(tw1->query_type == QUERY_TYPE_CREATE_QUEUE || tw1->query_type == QUERY_TYPE_DELETE_QUEUE ||
+	   tw2->query_type == QUERY_TYPE_CREATE_QUEUE || tw2->query_type == QUERY_TYPE_DELETE_QUEUE)
+		return 1;
+
+	// Only ENQUEUE/ENQUEUE (by any producers), as well as READ_QUEUE / READ_QUEUE and
+	// CONSUME_QUEUE / CONSUME_QUEUE *by the same consumer* are valid conflicts:
+
+	if(tw1->query_type != tw2->query_type)
+		return 0;
+
+	if(tw1->query_type == QUERY_TYPE_ENQUEUE)
+		return 1;
+
+	if((tw1->query_type == QUERY_TYPE_READ_QUEUE || tw1->query_type == QUERY_TYPE_CONSUME_QUEUE) &&
+			tw1->consumer_id == tw2->consumer_id &&
+			tw1->shard_id == tw2->shard_id &&
+			tw1->app_id == tw2->app_id)
+		return 1;
 
 	return 0;
 }
 
+// Check if txn write op tw1 is invalidated by write op tw2:
 int ww_conflict(txn_write * tw1, txn_write * tw2)
 {
+	short is_regular_op1 = (tw1->query_type == QUERY_TYPE_UPDATE || tw1->query_type == QUERY_TYPE_DELETE);
+	short is_regular_op2 = (tw2->query_type == QUERY_TYPE_UPDATE || tw2->query_type == QUERY_TYPE_DELETE);
 
+	if((is_regular_op1 && !is_regular_op2) || (!is_regular_op1&&is_regular_op2))
+		return 0;
+
+	if(is_regular_op1)
+		return (txn_write_cmp((WORD) tw1, (WORD) tw2) == 0);
+	else
+		return queue_op_conflict(tw1, tw2);
 }
 
-int is_read_invalidated(txn_read * tr, db_t * db)
+int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 {
-	txn_write * dummy_tw_update = get_dummy_txn_write(QUERY_TYPE_UPDATE, tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->table_key, 0);
+	// If exact (non-range) read, and not a secondary index query, create dummy write op on the same key path, to look it up in other txn's write set:
+
+	int is_exact_query = (tr->query_type == QUERY_TYPE_READ_COLS || tr->query_type == QUERY_TYPE_READ_CELL || tr->query_type == QUERY_TYPE_READ_ROW);
+	txn_write * dummy_tw_update = is_exact_query? get_dummy_txn_write(QUERY_TYPE_UPDATE, tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->table_key, 0) : NULL;
 
 	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
 	{
@@ -112,15 +188,40 @@ int is_read_invalidated(txn_read * tr, db_t * db)
 
 		txn_state * ts = (txn_state *) node->value;
 
-		for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+		if(ts->state != TXN_STATUS_VALIDATED || uuid_compare(rts->txnid, ts->txnid) == 0)
+			continue;
+
+		if(is_exact_query)
 		{
-			assert(write_op_n->value != NULL);
+			snode_t * write_op_n = skiplist_search(ts->write_set, (WORD) dummy_tw_update);
 
-			txn_write * tw = (txn_write *) write_op_n->value;
-
-			if(rw_conflict(tr, tw) && ts->state == TXN_STATUS_VALIDATED)
+			if(write_op_n != NULL)
 			{
-				return 1;
+				assert(write_op_n->value != NULL);
+
+				txn_write * tw = (txn_write *) write_op_n->value;
+
+				if(rw_conflict(tr, tw, 0))
+				{
+					if(verbose)
+						printf("Invalidating txn due to rw conflict\n");
+					return 1;
+				}
+			}
+		}
+		else
+		// For range or index queries, we need to iterate the other txn write sets to see if any writes conflict with our reads:
+		{
+			for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+			{
+				assert(write_op_n->value != NULL);
+
+				txn_write * tw = (txn_write *) write_op_n->value;
+
+				if(rw_conflict(tr, tw, 1) && ts->state == TXN_STATUS_VALIDATED)
+				{
+					return 1;
+				}
 			}
 		}
 	}
@@ -128,7 +229,7 @@ int is_read_invalidated(txn_read * tr, db_t * db)
 	return 0;
 }
 
-int is_write_invalidated(txn_write * tw, db_t * db)
+int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 {
 	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
 	{
@@ -136,15 +237,44 @@ int is_write_invalidated(txn_write * tw, db_t * db)
 
 		txn_state * ts = (txn_state *) node->value;
 
-		for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+		if(ts->state != TXN_STATUS_VALIDATED || uuid_compare(rts->txnid, ts->txnid) == 0)
+			continue;
+
+		if(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE)
+		// Regular ops
 		{
-			assert(write_op_n->value != NULL);
+			snode_t * write_op_n = skiplist_search(ts->write_set, (WORD) tw);
 
-			txn_write * tw2 = (txn_write *) write_op_n->value;
-
-			if(ww_conflict(tw, tw2) && ts->state == TXN_STATUS_VALIDATED)
+			if(write_op_n != NULL)
 			{
-				return 1;
+				assert(write_op_n->value != NULL);
+
+				txn_write * tw2 = (txn_write *) write_op_n->value;
+
+//				if(ww_conflict(tw, tw2, 0))
+//				{
+					if(verbose)
+						printf("Invalidating txn due to ww conflict\n");
+					return 1;
+//				}
+			}
+		}
+		else
+		// Queue ops:
+		{
+			for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+			{
+				assert(write_op_n->value != NULL);
+
+				txn_write * tw2 = (txn_write *) write_op_n->value;
+
+				if(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE)
+					continue;
+
+				if(queue_op_conflict(tw, tw2))
+				{
+					return 1;
+				}
 			}
 		}
 	}
@@ -167,7 +297,7 @@ int validate_txn(uuid_t * txnid, db_t * db)
 		{
 			txn_read * tr = (txn_read *) read_op_n->value;
 
-			if(is_read_invalidated(tr, db))
+			if(is_read_invalidated(tr, ts, db))
 			{
 				return VAL_STATUS_ABORT;
 			}
@@ -180,7 +310,7 @@ int validate_txn(uuid_t * txnid, db_t * db)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 
-			if(is_write_invalidated(tw, db))
+			if(is_write_invalidated(tw, ts, db))
 			{
 				return VAL_STATUS_ABORT;
 			}

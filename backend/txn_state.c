@@ -14,15 +14,12 @@ int txn_write_cmp(WORD e1, WORD e2)
 	txn_write * tr1 = (txn_write *) e1;
 	txn_write * tr2 = (txn_write *) e2;
 
-	if(tr1->query_type != tr2->query_type)
-		return tr1->query_type - tr2->query_type;
-
 	if(tr1->table_key != tr2->table_key)
 		return (int) ((long) tr1->table_key - (long) tr2->table_key);
 
 	if(tr1->query_type < QUERY_TYPE_ENQUEUE) // Regular ops ordering:
 	{
-		// Newer writes always overwrite older writes to the same objects in the same txn:
+		// Newer writes always overwrite older writes to the same objects in the same txn (even between updates/deletes to same object):
 
 		int no_key_cols1 = tr1->no_primary_keys + tr1->no_clustering_keys;
 		int no_key_cols2 = tr2->no_primary_keys + tr2->no_clustering_keys;
@@ -37,6 +34,9 @@ int txn_write_cmp(WORD e1, WORD e2)
 	}
 	else // Queue ops ordering:
 	{
+		if(tr1->query_type != tr2->query_type)
+			return tr1->query_type - tr2->query_type;
+
 		// For queue reads and consumes, the last version of private read/consume head is kept in write set:
 		if(tr1->query_type == QUERY_TYPE_READ_QUEUE || tr1->query_type == QUERY_TYPE_CONSUME_QUEUE)
 		{
@@ -49,7 +49,7 @@ int txn_write_cmp(WORD e1, WORD e2)
 			if(tr1->consumer_id != tr2->consumer_id)
 				return (int) ((long) tr1->consumer_id - (long) tr2->consumer_id);
 		}
-		// All enqueues, queue creates, deletes, subscribes and unsubscribes are accumulated in the write set:
+		// All enqueues, queue creates, deletes, subscribes and unsubscribes are accumulated in the write set, in the local order they were issued in the txn:
 		else if(tr1->query_type == QUERY_TYPE_ENQUEUE ||
 				tr1->query_type == QUERY_TYPE_CREATE_QUEUE ||
 				tr1->query_type == QUERY_TYPE_SUBSCRIBE_QUEUE ||
@@ -140,8 +140,14 @@ txn_state * init_txn_state()
 	ts->read_set = create_skiplist(&txn_read_cmp);
 	ts->write_set = create_skiplist(&txn_write_cmp);
 	ts->state = TXN_STATUS_ACTIVE;
+	ts->version = NULL;
 
 	return ts;
+}
+
+void set_version(txn_state * ts, vector_clock * vc)
+{
+	ts->version = copy_vc(vc);
 }
 
 void free_txn_state(txn_state * ts)
@@ -304,7 +310,8 @@ txn_read * get_txn_read(short query_type,
 	}
 
 	if(query_type == QUERY_TYPE_READ_INDEX || query_type == QUERY_TYPE_READ_INDEX_RANGE)
-		assert(idx_idx == -1);
+		assert(idx_idx != -1);
+
 	tr->idx_idx = idx_idx;
 
 	tr->result = result;

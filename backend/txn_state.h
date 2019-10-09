@@ -101,6 +101,8 @@ typedef struct txn_state
 	skiplist_t * read_set;
 	skiplist_t * write_set;
 	short state;
+
+	vector_clock * version;
 } txn_state;
 
 int txn_write_cmp(WORD e1, WORD e2);
@@ -108,6 +110,7 @@ int txn_read_cmp(WORD e1, WORD e2);
 
 txn_state * init_txn_state();
 void free_txn_state(txn_state * ts);
+void set_version(txn_state * ts, vector_clock * vc);
 
 txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long local_order);
 txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_primary_keys, WORD * clustering_keys, int no_clustering_keys, WORD table_key, long local_order);
