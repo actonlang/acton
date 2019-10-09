@@ -299,7 +299,17 @@ int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no
 {
 	assert((query_type == QUERY_TYPE_UPDATE) || (query_type == QUERY_TYPE_DELETE));
 	txn_write * tw = get_txn_write(query_type, column_values, no_cols, no_primary_keys, no_clustering_keys, table_key, (long) ts->write_set->no_items);
-	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // Note that this will overwrite previous values written for the variable in the same txn (last write wins)
+
+	// Note that this will overwrite previous values written for the variable in the same txn (last write wins):
+
+	txn_write * prev_tw = skiplist_search(ts->write_set, (WORD) tw);
+
+	int ret = skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate);
+
+	if(prev_tw != NULL)
+		free_txn_write(prev_tw);
+
+	return ret;
 }
 
 int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
@@ -307,7 +317,17 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+
+	// Note that this will overwrite previous values read for the variable in the same txn (last read wins):
+
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate);
+
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
@@ -315,7 +335,13 @@ int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, 
 								txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
@@ -323,7 +349,13 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 								txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys,
@@ -333,7 +365,13 @@ int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* st
 								txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
@@ -342,19 +380,37 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
-	return skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
+
+	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
+	if(prev_tr != NULL)
+		free_txn_read(prev_tr);
+
+	return ret;
 }
 
 // Queue ops:
@@ -364,7 +420,8 @@ int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD q
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_ENQUEUE, column_values, no_cols, table_key, queue_id,
 						NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
-	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
+	 // Multiple enqueues in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
+	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate);
 }
 
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -374,7 +431,14 @@ int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 								consumer_id, shard_id, app_id, new_read_head, -1,
 								(long) ts->write_set->no_items);
 
-	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+	// Keep only latest private_read_head when doing multiple queue reads in the same txn:
+	txn_write * prev_tw = skiplist_search(ts->write_set, (WORD) tw);
+	int ret = skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+
+	if(prev_tw != NULL)
+		free_txn_write(prev_tw);
+
+	return ret;
 }
 
 int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -383,8 +447,14 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CONSUME_QUEUE, NULL, 0, table_key, queue_id,
 								consumer_id, shard_id, app_id, -1, new_consume_head,
 								(long) ts->write_set->no_items);
+	// Keep only latest private_consume_head when doing multiple queue consumes in the same txn:
+	txn_write * prev_tw = skiplist_search(ts->write_set, (WORD) tw);
 
-	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+	int ret = skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
+	if(prev_tw != NULL)
+		free_txn_write(prev_tw);
+
+	return ret;
 }
 
 int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
@@ -392,6 +462,7 @@ int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsig
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CREATE_QUEUE, NULL, 0, table_key, queue_id,
 											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
+	 // Multiple "create queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }
 
@@ -400,6 +471,7 @@ int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsig
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_DELETE_QUEUE, NULL, 0, table_key, queue_id,
 											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
+	 // Multiple "delete queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }
 
