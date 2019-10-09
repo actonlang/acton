@@ -1128,7 +1128,10 @@ yield_expr = addLoc $ do
 --- Types ----------------------------------------------------------------------
 
 tstruct :: Parser S.CType
-tstruct = do p <- tsig
+tstruct = do mbv <- starstar *> optional cvar
+             return (S.CTStruct NoLoc [] (Just mbv))
+         <|>
+          do p <- tsig
              ps <- many (try (comma *> tsig))
              mbv <- optional (comma *> optional (starstar *> optional cvar))
              let f (vs,t) = map (\v -> (v,t)) vs
@@ -1139,7 +1142,7 @@ tstruct = do p <- tsig
 ttuple :: Parser S.CType
 ttuple  = do mbv <- star *> optional cvar
              return (S.CTTuple NoLoc [] (Just mbv))
-          <|> 
+         <|> 
           do t <- ctype
              ts <- many (try (comma *> ctype))
              mbv <- optional (comma *> optional (star *> optional cvar))
@@ -1152,7 +1155,7 @@ named =  addLoc (
            args <- optional (brackets (do t <- ctype
                                           ts <- commaList ctype
                                           return (t:ts)))
-           return (S.CTClass NoLoc n (maybe [] id args)))
+           return (S.CTCon NoLoc n (maybe [] id args)))
 
 
 tpar :: Parser S.TPar
@@ -1178,16 +1181,14 @@ ctype    =  addLoc (
         <|> rword "str" *> return (S.CTStr NoLoc)
         <|> rword "None" *> return (S.CTNone NoLoc)
         <|> S.CTOpt NoLoc <$> (qmark *> ctype)
-        <|> brackets (S.CTFList NoLoc <$> ctype)
+        <|> brackets (S.CPSeq NoLoc <$> ctype)
         <|> braces (do t <- ctype
-                       mbt <- optional (comma *> ctype)
-                       return (maybe (S.CTFSet NoLoc t) (S.CTFDict NoLoc t) mbt))
+                       mbt <- optional (colon *> ctype)
+                       return (maybe (S.CPSet NoLoc t) (S.CPMap NoLoc t) mbt))
         <|> try (parens tstruct)
         <|> try (parens (do alts <- some (try (utype <* vbar))
-                            tail <- (Left <$> utype) <|> (Right <$> cvar)
-                            return (case tail of
-                                      Left ut -> S.CTUnion NoLoc (alts++[ut]) Nothing
-                                      Right var ->  S.CTUnion NoLoc alts (Just var))))
+                            alt <- utype
+                            return $ S.CTUnion NoLoc (alts++[alt])))
         <|> try (do cs <- parens (do n <- named
                                      ns <- commaList named
                                      return (n:ns))
@@ -1212,57 +1213,3 @@ utype    =  rword "int" *> return S.UInt
         <|> rword "str" *> return S.UStr
         <|> (\str -> S.UStrCon (init (tail str))) <$> shortString []
 
-{-
-
-Self 
-
-
-
-CTVar     A A1 A12
-CTFun     async (int,*A,x : c[int],**) -> None
-CTTuple   (int,bool,c(a,b))  (float,*A) (float,*)
-CTStruct  [x : float, y : float] [a : int, **S]
-CTListV   [int]
-CTDictV   {int,sometype}
-CTSet     {int}
-CTOpt     ?int
-CTUnion   (int | 'overflow' | A )
-CTClass   cname(c1,c2[int])
-CTStr     str
-CTInt     int
-CTFloat   float
-CTBool    bool
-CTNone    None
-CTQual    (cconstr) => t
-
-data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
-                | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, pospars :: CType, kwdpars:: CType, restype :: CType }
-                | CTTuple   { tloc :: SrcLoc, postypes :: [CType], star1types :: Maybe (Maybe CVar) }
-                | CTStruct  { tloc :: SrcLoc, kwdtypes :: [(Name,CType)], star2types :: Maybe (Maybe CVar) }
-                | CTListV   { tloc :: SrcLoc, elemtype :: CType }
-                | CTSetV    { tloc :: SrcLoc, elemtype :: CType }
-                | CTDictV   { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
-                | CTOpt     { tloc :: SrcLoc, opttype :: CType }
-                | CTUnion   { tloc :: SrcLoc, alts :: [UType], uext :: Maybe CVar }
-                | CTClass   { tloc :: SrcLoc, classname :: Name, targs :: [CType] }  -- dict,set,list here or as separate constructors?
-                | CTStr     { tloc :: SrcLoc }
-                | CTInt     { tloc :: SrcLoc }
-                | CTFloat   { tloc :: SrcLoc }
-                | CTBool    { tloc :: SrcLoc }
-                | CTNone    { tloc :: SrcLoc }
-                | CTQual    { tloc :: SrcLoc, cconstraints :: [CConstraint], qtype :: CType }
-                deriving (Eq,Show,Read,Generic)
-
-
-atom :: Parser S.Expr
-atom =  addLoc (try strings
-       <|>
-         ((try . parens) $ return (S.Tuple NoLoc []))
-       <|>
-         ((try . parens) $ S.Paren NoLoc <$> yield_expr)
-       <|>
-         (try . parens) testlist_comp
-       <|>
-         (try . parens) structmaker
-
--}

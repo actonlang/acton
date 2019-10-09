@@ -196,12 +196,12 @@ data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
                 | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, tpars :: Params TPar, restype :: CType }
                 | CTTuple   { tloc :: SrcLoc, postypes :: [CType], star1types :: Maybe (Maybe CVar) }
                 | CTStruct  { tloc :: SrcLoc, kwdtypes :: [(Name,CType)], star2types :: Maybe (Maybe CVar) }
-                | CTFList   { tloc :: SrcLoc, elemtype :: CType }
-                | CTFSet    { tloc :: SrcLoc, elemtype :: CType }
-                | CTFDict   { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
+                | CPSeq     { tloc :: SrcLoc, elemtype :: CType }
+                | CPSet     { tloc :: SrcLoc, elemtype :: CType }
+                | CPMap     { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
                 | CTOpt     { tloc :: SrcLoc, opttype :: CType }
-                | CTUnion   { tloc :: SrcLoc, alts :: [UType], uext :: Maybe CVar }
-                | CTClass   { tloc :: SrcLoc, classname :: Name, targs :: [CType] }  -- dict,set,list here or as separate constructors?
+                | CTUnion   { tloc :: SrcLoc, alts :: [UType] }
+                | CTCon     { tloc :: SrcLoc, classname :: Name, targs :: [CType] }  -- dict,set,list here or as separate constructors?
                 | CTStr     { tloc :: SrcLoc }
                 | CTInt     { tloc :: SrcLoc }
                 | CTFloat   { tloc :: SrcLoc }
@@ -867,17 +867,17 @@ instance Pretty TPar where
 instance Pretty CType where
     pretty (CTVar _ v)              = pretty v
     pretty (CTFun _ es ps t)        = spaceSep pretty es <+> parens (pretty ps) <+> text "->" <+> pretty t
-      where spaceSep f               = hsep . punctuate space . map f      
-    pretty (CTTuple _ ps mbmbv)     = parens (commaList ps <+> maybe empty (\mbv -> text "*" <+> maybe empty pretty mbv) mbmbv)
-    pretty (CTStruct _ ps mbmbv)    = parens (commaSep (\(x,t) -> pretty x <+> text ":" <+> pretty t) ps
-                                         <+> maybe empty (\mbv -> text "**" <+> maybe empty pretty mbv) mbmbv)
-    pretty (CTFList _ t)            = brackets (pretty t)
-    pretty (CTFSet _ t)             = braces (pretty t)
-    pretty (CTFDict _ kt vt)        = braces (commaList [kt,vt])
+      where spaceSep f              = hsep . punctuate space . map f      
+    pretty (CTTuple _ ps mbmbv)     = parens (commaList ps <> maybe empty (\mbv -> commaIf ps <+> text "*" <> maybe empty pretty mbv) mbmbv)
+    pretty (CTStruct _ ps mbmbv)    = parens (commaSep (\(x,t) -> pretty x <> colon <+> pretty t) ps
+                                         <> maybe empty (\mbv -> commaIf ps <+> text "**" <> maybe empty pretty mbv) mbmbv)
+    pretty (CPSeq _ t)              = brackets (pretty t)
+    pretty (CPSet _ t)              = braces (pretty t)
+    pretty (CPMap _ kt vt)          = braces (pretty kt <> colon <+> pretty vt)
     pretty (CTOpt _ t)              = text "?" <> pretty t
-    pretty (CTUnion _ as mbv)       = parens (vbarSep pretty as <+> maybe empty (\v -> text "|" <+> pretty v) mbv)
+    pretty (CTUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    pretty (CTClass  _ nm ts)       = pretty nm <> brackets (commaList ts)
+    pretty (CTCon  _ nm ts)         = pretty nm <> brackets (commaList ts)
     pretty (CTStr _)                = text "str"
     pretty (CTInt _)                = text "int"
     pretty (CTFloat _)              = text "float"
