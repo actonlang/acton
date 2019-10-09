@@ -139,6 +139,7 @@ txn_state * init_txn_state()
 	uuid_generate(ts->txnid);
 	ts->read_set = create_skiplist(&txn_read_cmp);
 	ts->write_set = create_skiplist(&txn_write_cmp);
+	ts->state = TXN_STATUS_ACTIVE;
 
 	return ts;
 }
@@ -162,6 +163,29 @@ txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, i
 	tw->column_values = (WORD *) ((char *) tw + sizeof(txn_write));
 	for(int i=0;i<tw->no_cols;i++)
 		tw->column_values[i] = column_values[i];
+
+	tw->query_type = query_type;
+	tw->local_order = local_order;
+
+	return tw;
+}
+
+txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_primary_keys, WORD * clustering_keys, int no_clustering_keys, WORD table_key, long local_order)
+{
+	int no_cols = no_primary_keys + no_clustering_keys;
+	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
+	memset(tw, 0, sizeof(txn_write) + no_cols*sizeof(WORD));
+
+	tw->table_key = table_key;
+	tw->no_cols = no_cols;
+	tw->no_primary_keys = no_primary_keys;
+	tw->no_clustering_keys = no_clustering_keys;
+	tw->column_values = (WORD *) ((char *) tw + sizeof(txn_write));
+	int i=0;
+	for(;i<tw->no_primary_keys;i++)
+		tw->column_values[i] = primary_keys[i];
+	for(;i<tw->no_cols;i++)
+		tw->column_values[i] = primary_keys[i-no_primary_keys];
 
 	tw->query_type = query_type;
 	tw->local_order = local_order;

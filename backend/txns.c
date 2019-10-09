@@ -48,13 +48,148 @@ int close_txn(uuid_t * txnid, db_t * db)
 	return 0;
 }
 
+int rw_conflict(txn_read * tr, txn_write * tw)
+{
+	if(tr->table_key == tw->table_key)
+	{
+		// RW conflicts or regular data:
+		if(tr->query_type >= QUERY_TYPE_READ_COLS && tr->query_type <= QUERY_TYPE_READ_INDEX_RANGE &&
+			(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE) )
+		{
+			switch(tr->query_type)
+			{
+				case QUERY_TYPE_READ_COLS:
+				{
+
+
+					break;
+				}
+				case QUERY_TYPE_READ_CELL:
+				{
+					break;
+				}
+				case QUERY_TYPE_READ_CELL_RANGE:
+				{
+					break;
+				}
+				case QUERY_TYPE_READ_ROW:
+				{
+					break;
+				}
+				case QUERY_TYPE_READ_ROW_RANGE:
+				{
+					break;
+				}
+				case QUERY_TYPE_READ_INDEX:
+				{
+					break;
+				}
+				case QUERY_TYPE_READ_INDEX_RANGE:
+				{
+					break;
+				}
+			}
+		}
+	}
+
+	// Note: There can be no RW conflicts on queues
+
+	return 0;
+}
+
+int ww_conflict(txn_write * tw1, txn_write * tw2)
+{
+
+}
+
+int is_read_invalidated(txn_read * tr, db_t * db)
+{
+	txn_write * dummy_tw_update = get_dummy_txn_write(QUERY_TYPE_UPDATE, tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->table_key, 0);
+
+	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
+	{
+		assert(node->value != NULL);
+
+		txn_state * ts = (txn_state *) node->value;
+
+		for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+		{
+			assert(write_op_n->value != NULL);
+
+			txn_write * tw = (txn_write *) write_op_n->value;
+
+			if(rw_conflict(tr, tw) && ts->state == TXN_STATUS_VALIDATED)
+			{
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+int is_write_invalidated(txn_write * tw, db_t * db)
+{
+	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
+	{
+		assert(node->value != NULL);
+
+		txn_state * ts = (txn_state *) node->value;
+
+		for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+		{
+			assert(write_op_n->value != NULL);
+
+			txn_write * tw2 = (txn_write *) write_op_n->value;
+
+			if(ww_conflict(tw, tw2) && ts->state == TXN_STATUS_VALIDATED)
+			{
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+
 int validate_txn(uuid_t * txnid, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
+	assert(ts->state == TXN_STATUS_ACTIVE);
 
+	for(snode_t * read_op_n=HEAD(ts->read_set); read_op_n!=NULL; read_op_n=NEXT(read_op_n))
+	{
+		if(read_op_n->value != NULL)
+		{
+			txn_read * tr = (txn_read *) read_op_n->value;
+
+			if(is_read_invalidated(tr, db))
+			{
+				return VAL_STATUS_ABORT;
+			}
+		}
+	}
+
+	for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
+	{
+		if(write_op_n->value != NULL)
+		{
+			txn_write * tw = (txn_write *) write_op_n->value;
+
+			if(is_write_invalidated(tw, db))
+			{
+				return VAL_STATUS_ABORT;
+			}
+		}
+	}
+
+	ts->state = TXN_STATUS_VALIDATED;
+
+	return VAL_STATUS_COMMIT;
 }
 
 int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
@@ -75,10 +210,6 @@ int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
 		}
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			int res = read_queue(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id,
-					tw->max_entries, &tw->entries_read, &tw->new_read_head,
-					snode_t** start_row, snode_t** end_row, 1,
-					db);
 			return set_private_read_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_read_head, 1, db);
 		}
 		case QUERY_TYPE_CONSUME_QUEUE:
@@ -87,13 +218,11 @@ int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
-
-			break;
+			return create_queue(tw->table_key, tw->queue_id, 1, db, fastrandstate);
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{
-
-			break;
+			return delete_queue(tw->table_key, tw->queue_id, 1, db);
 		}
 		default:
 		{
@@ -114,8 +243,7 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 			res = persist_write(tw, db, fastrandstate);
-			if(res != 0)
-				return res;
+			assert (res == 0);
 		}
 	}
 
@@ -138,6 +266,8 @@ int commit_txn(uuid_t * txnid, db_t * db)
 	if(res == VAL_STATUS_COMMIT)
 	{
 		persist_txn(ts, db);
+//		ts->state = TXN_STATUS_COMMITTED;
+		close_txn(txnid, db);
 	}
 	else if(res == VAL_STATUS_ABORT)
 	{

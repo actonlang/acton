@@ -10,11 +10,6 @@
 #include "txn_state.h"
 #include "queue.h"
 
-#define TXN_STATUS_ACTIVE 0
-#define TXN_STATUS_VALIDATING 1
-#define TXN_STATUS_COMMITTED 2
-#define TXN_STATUS_ABORTED 3
-
 #define VAL_STATUS_COMMIT 0
 #define VAL_STATUS_ABORT 1
 
