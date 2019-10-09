@@ -37,17 +37,11 @@ int txn_write_cmp(WORD e1, WORD e2)
 	}
 	else // Queue ops ordering:
 	{
-		// We currently allow all queue ops to be duplicated in the same txn:
-
-		if(tr1->local_order != tr2->local_order)
-			return (int) ((long) tr1->local_order - (long) tr2->local_order);
-
-/*
-		if(tr1->queue_id != tr2->queue_id)
-			return (int) ((long) tr1->queue_id - (long) tr2->queue_id);
-
+		// For queue reads and consumes, the last version of private read/consume head is kept in write set:
 		if(tr1->query_type == QUERY_TYPE_READ_QUEUE || tr1->query_type == QUERY_TYPE_CONSUME_QUEUE)
 		{
+			if(tr1->queue_id != tr2->queue_id)
+				return (int) ((long) tr1->queue_id - (long) tr2->queue_id);
 			if(tr1->app_id != tr2->app_id)
 				return (int) ((long) tr1->app_id - (long) tr2->app_id);
 			if(tr1->shard_id != tr2->shard_id)
@@ -55,13 +49,15 @@ int txn_write_cmp(WORD e1, WORD e2)
 			if(tr1->consumer_id != tr2->consumer_id)
 				return (int) ((long) tr1->consumer_id - (long) tr2->consumer_id);
 		}
-
-		if(tr1->query_type == QUERY_TYPE_ENQUEUE)
+		// All enqueues, queue creates, deletes, subscribes and unsubscribes are accumulated in the write set:
+		else if(tr1->query_type == QUERY_TYPE_ENQUEUE ||
+				tr1->query_type == QUERY_TYPE_CREATE_QUEUE ||
+				tr1->query_type == QUERY_TYPE_SUBSCRIBE_QUEUE ||
+				tr1->query_type == QUERY_TYPE_UNSUBSCRIBE_QUEUE)
 		{
 			if(tr1->local_order != tr2->local_order)
 				return (int) ((long) tr1->local_order - (long) tr2->local_order);
 		}
-*/
 	}
 
 	return 0;
@@ -175,8 +171,7 @@ txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, i
 
 txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols, WORD table_key,
 					WORD queue_id, WORD consumer_id, WORD shard_id, WORD app_id,
-					int max_entries, int entries_read, long new_read_head, long new_consume_head,
-					snode_t* start_result, snode_t* end_result, long local_order)
+					long new_read_head, long new_consume_head, long local_order)
 {
 	assert(query_type >= QUERY_TYPE_ENQUEUE && query_type <= QUERY_TYPE_UNSUBSCRIBE_QUEUE);
 
@@ -198,15 +193,11 @@ txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols
 
 	if(query_type == QUERY_TYPE_READ_QUEUE)
 	{
-		tw->max_entries = max_entries;
-		tw->entries_read = entries_read;
 		tw->new_read_head = new_read_head;
-		tw->start_result = start_result;
-		tw->end_result = end_result;
 	}
 	else
 	{
-		assert(max_entries == -1 && entries_read == -1 && new_read_head == -1 && start_result == NULL && end_result == NULL);
+		assert(new_read_head == -1);
 	}
 
 	if(query_type == QUERY_TYPE_CONSUME_QUEUE)
@@ -371,19 +362,17 @@ int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_
 int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_ENQUEUE, column_values, no_cols, table_key, queue_id,
-						NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+						NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }
 
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int entries_read, long new_read_head,
-		snode_t* start_row, snode_t* end_row,
-		txn_state * ts, unsigned int * fastrandstate)
+						long new_read_head, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_READ_QUEUE, NULL, 0, table_key, queue_id,
-								consumer_id, shard_id, app_id, max_entries, entries_read, new_read_head, -1,
-								start_row, end_row, (long) ts->write_set->no_items);
+								consumer_id, shard_id, app_id, new_read_head, -1,
+								(long) ts->write_set->no_items);
 
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
 }
@@ -392,8 +381,8 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 					long new_consume_head, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CONSUME_QUEUE, NULL, 0, table_key, queue_id,
-								consumer_id, shard_id, app_id, -1, -1, -1, new_consume_head,
-								NULL, NULL, (long) ts->write_set->no_items);
+								consumer_id, shard_id, app_id, -1, new_consume_head,
+								(long) ts->write_set->no_items);
 
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple queue reads in the same txn
 }
@@ -401,7 +390,7 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CREATE_QUEUE, NULL, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }
@@ -409,7 +398,7 @@ int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsig
 int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_DELETE_QUEUE, NULL, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, -1, -1, -1, NULL, NULL, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
 
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }

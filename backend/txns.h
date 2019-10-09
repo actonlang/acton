@@ -351,8 +351,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 			start_row, end_row, db);
 
 	return add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
-			max_entries, *entries_read, *new_read_head,
-			*start_row, *end_row, ts, fastrandstate);
+									*new_read_head, ts, fastrandstate);
 }
 
 int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
