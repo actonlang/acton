@@ -65,7 +65,7 @@ noshadow svs x
 
 -- Infer -------------------------------
 
-infTop env ss                           = do pushFX RNil
+infTop env ss                           = do pushFX ONil
                                              te <- infEnv env ss
                                              popFX
                                              cs <- constraints
@@ -73,20 +73,20 @@ infTop env ss                           = do pushFX RNil
                                              mapsubst te
 
 class Infer a where
-    infer                               :: Env -> a -> TypeM Type
+    infer                               :: Env -> a -> TypeM OType
 
 class InfEnv a where
     infEnv                              :: Env -> a -> TypeM TEnv
 
 class InfEnvT a where
-    infEnvT                             :: Env -> a -> TypeM (TEnv,Type)
+    infEnvT                             :: Env -> a -> TypeM (TEnv,OType)
 
 class InfData a where
     infData                             :: Env -> a -> TypeM TEnv
 
 
-generalize tvs cs t                     = TSchema (unTVar $ rng s) (subst s cs) (subst s t)
-  where s                               = (tyvars t \\ tvs) `zip` schemaTVars
+generalize tvs cs t                     = OSchema (unOVar $ rng s) (subst s cs) (subst s t)
+  where s                               = (tyvars t \\ tvs) `zip` schemaOVars
 
 genTEnv env te                          = do cs <- constraints
                                              --traceM ("#### Reducing " ++ prstrs (dom te))
@@ -96,7 +96,7 @@ genTEnv env te                          = do cs <- constraints
                                              --traceM (prstr cs1)
                                              te1 <- mapsubst te
                                              dump [ INS (loc v) t | (v,t) <- te1 ]
-                                             tvs <- fmap tyvars $ mapM mapsubst $ map TVar $ tyvars env
+                                             tvs <- fmap tyvars $ mapM mapsubst $ map OVar $ tyvars env
                                              let (cs2, cs3) = partition (null . (\\tvs) . tyvars) cs1
                                                  te2 = mapSnd (closeFX . generalize tvs cs3) te1
                                              --traceM ("#### Generalized " ++ prstrs (dom te))
@@ -124,7 +124,7 @@ mergeTEnv env tenvs vs                  = mapM merge (nub vs)
           | otherwise                   = err2 vs "Name both defined and assigned:"
           where ts                      = [ t | Just t <- map (lookup v) tenvs ]
                 vs                      = [ w | te <- tenvs, (w,_) <- te, w == v ]
-        unifyAll v (t:ts)               = do constrain [ CEqu (loc v) 300 t t' | t' <- ts ]     -- eq of merged
+        unifyAll v (t:ts)               = do constrain [ QEqu (loc v) 300 t t' | t' <- ts ]     -- eq of merged
                                              return t
 
 infLiveEnv env x
@@ -144,11 +144,11 @@ instance InfEnv Stmt where
     infEnv env (Assign _ pats e)
       | nodup pats                      = do (te, t1) <- infEnvT env pats
                                              t2 <- infer env e
-                                             constrain [CEqu (loc e) 1 t1 t2]       -- eq of pats and rhs
+                                             constrain [QEqu (loc e) 1 t1 t2]       -- eq of pats and rhs
                                              return te
     infEnv env (AugAssign l pat o e)    = do t1 <- infer env pat                    -- TODO: add op constraint
                                              t2 <- infer env e
-                                             constrain [CEqu l 2 t1 t2]             -- equality of target and rhs
+                                             constrain [QEqu l 2 t1 t2]             -- equality of target and rhs
                                              return []
     infEnv env (Assert _ es)            = do mapM (inferBool env) es
                                              return []
@@ -158,7 +158,7 @@ instance InfEnv Stmt where
                                              return []
     infEnv env (Return _ Nothing)       = return []
     infEnv env (Return l (Just e))      = do t <- infer env e
-                                             constrain [CEqu l 4 t t0]              -- assumption on return value
+                                             constrain [QEqu l 4 t t0]              -- assumption on return value
                                              return []
       where t0                          = getReturn env
     infEnv env (Raise _ Nothing)        = return []
@@ -178,7 +178,7 @@ instance InfEnv Stmt where
                                              t2 <- infer env e
                                              _ <- infEnv (define te env) b
                                              _ <- infEnv env els
-                                             constrain [CIn l 1 t1 t2]                              -- containment in for loop
+                                             constrain [QIn l 1 t1 t2]                              -- containment in for loop
                                              return []
     infEnv env (Try _ b hs els fin)     = do te <- infLiveEnv env (b ++ els)
                                              tes <- mapM (infLiveEnv env) hs
@@ -192,7 +192,7 @@ instance InfEnv Stmt where
 
     infEnv env (Data l Nothing b)       = do te <- infData env1 b
                                              let te1 = filter (notemp . fst) te1
-                                             constrain [CEqu l 4 (TRecord $ env2row RNil te1) t]    -- assumption on return value
+                                             constrain [QEqu l 4 (ORecord $ env2row ONil te1) t]    -- assumption on return value
                                              return []
       where t                           = getReturn env
             env1                        = reserve (filter istemp $ bound b) env
@@ -200,13 +200,13 @@ instance InfEnv Stmt where
     infEnv env (Data l (Just p) b)
       | nodup p                         = do (te0, t) <- infEnvT env p
                                              (te1,te2) <- partition (istemp . fst) <$> infData env b
-                                             constrain [CEqu l 13 (TRecord $ env2row RNil te2) t]   -- eq of target and rhs..
+                                             constrain [QEqu l 13 (ORecord $ env2row ONil te2) t]   -- eq of target and rhs..
                                              return (te0 ++ te1)
             
     infEnv env (VarAssign _ pats e)
       | nodup pats                      = do (te, t1) <- infEnvT env pats
                                              t2 <- infer env e
-                                             constrain [CEqu (loc e) 17 t1 t2]                      -- eq of pats and rhs
+                                             constrain [QEqu (loc e) 17 t1 t2]                      -- eq of pats and rhs
                                              return te
     
     infEnv env (Decl _ ds)
@@ -215,7 +215,7 @@ instance InfEnv Stmt where
                                              let env1 = define te env
                                              ts <- mapM (infer env1) ds
                                              let te1 = vs `zip` ts
-                                             constrain [ CEqu (loc v) 5 t (findVar v env1) | (v,t) <- te1 ]  -- eq of name and rhs
+                                             constrain [ QEqu (loc v) 5 t (findVar v env1) | (v,t) <- te1 ]  -- eq of name and rhs
                                              te2 <- genTEnv env te1
                                              return te2
       where vs                          = bound ds
@@ -246,94 +246,94 @@ instance InfData Branch where
 
 instance Infer Decl where
     infer env (Def l n q p ann b NoMod)
-      | nodup p                         = do fx <- newTVar
+      | nodup p                         = do fx <- newOVar
                                              pushFX fx                              -- TODO: constrain opt result if fallsthru b
-                                             t <- newTVar
+                                             t <- newOVar
                                              let env1 = reserve (bound p ++ bound b ++ svars) $ setReturn t env
                                              (te, row) <- infEnvT env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
-                                             return (TFun fx row t)
+                                             return (OFun fx row t)
       where svars                       = stvars env
 
     infer env (Def l n q p ann b Async)
-      | nodup p && noshadow svars p     = do fx0 <- newTVar
+      | nodup p && noshadow svars p     = do fx0 <- newOVar
                                              pushFX fx0                              -- TODO: constrain opt result if fallsthru b
-                                             t <- newTVar
+                                             t <- newOVar
                                              let env1 = reserve (bound p ++ bound b \\ svars) $ setReturn t env
                                              (te, row) <- infEnvT env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
-                                             fx <- asyncFX <$> newTVar
-                                             return (TFun fx row ({-TMsg-}t))
+                                             fx <- asyncFX <$> newOVar
+                                             return (OFun fx row ({-OMsg-}t))
       where svars                       = stvars env
 
     infer env (Def l n q p ann b (Sync _))
-      | nodup p && noshadow svars p     = do fx0 <- newTVar
+      | nodup p && noshadow svars p     = do fx0 <- newOVar
                                              pushFX fx0                              -- TODO: constrain opt result if fallsthru b
-                                             t <- newTVar
+                                             t <- newOVar
                                              let env1 = reserve (bound p ++ bound b \\ svars) $ setReturn t env
                                              (te, row) <- infEnvT env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
-                                             fx <- syncFX <$> newTVar
-                                             return (TFun fx row t)
+                                             fx <- syncFX <$> newOVar
+                                             return (OFun fx row t)
       where svars                       = stvars env
 
     infer env (Class l n q cs b)
-      | nodup cs && chkRedef b          = do t0 <- newTVar
-                                             inherited <- return RNil --inferSuper env cs
-                                             pushFX RNil
+      | nodup cs && chkRedef b          = do t0 <- newOVar
+                                             inherited <- return ONil --inferSuper env cs
+                                             pushFX ONil
                                              te <- infEnv env0 b                     -- visible bindings in b???
                                              (l1, t1, te1) <- getInit l <$> mapM (wrap t0) te
-                                             r0 <- newTVar
+                                             r0 <- newOVar
                                              popFX
-                                             constrain [CEqu l 6 t0 (TRecord (env2row inherited te1))]
-                                             constrain [CEqu l1 7 t1 (TFun RNil r0 TNone)]                 -- assumption on "__init__"
-                                             return (TFun RNil r0 t0)
+                                             constrain [QEqu l 6 t0 (ORecord (env2row inherited te1))]
+                                             constrain [QEqu l1 7 t1 (OFun ONil r0 ONone)]                 -- assumption on "__init__"
+                                             return (OFun ONil r0 t0)
       where env0                        = reserve (bound b) $ newstate [] env
             methnames                   = [ v | Decl _ ds <- b, Def{dname=v} <- ds ]
             wrap t0 (n,t)
-              | n `elem` methnames      = do r':t':fx':_ <- newTVars 3
-                                             let internal = TFun fx' (RPos t0 r') t'
-                                                 external = TFun fx' r' t'
-                                             constrain [CEqu (nloc n) 9 t internal]
+              | n `elem` methnames      = do r':t':fx':_ <- newOVars 3
+                                             let internal = OFun fx' (OPos t0 r') t'
+                                                 external = OFun fx' r' t'
+                                             constrain [QEqu (nloc n) 9 t internal]
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
                                         
-    infer env (Struct l n q cs b)       = newTVar       -- undefined
-    infer env (Protocol l n q cs b)     = newTVar       -- undefined
-    infer env (Extension l n q cs b)    = newTVar       -- undefined
+    infer env (Struct l n q cs b)       = newOVar       -- undefined
+    infer env (Protocol l n q cs b)     = newOVar       -- undefined
+    infer env (Extension l n q cs b)    = newOVar       -- undefined
 
     infer env (Actor l n q p ann b)
       | nodup p && noshadow svars p && 
-        chkRedef b                      = do fx <- actFX <$> newTVar
+        chkRedef b                      = do fx <- actFX <$> newOVar
                                              pushFX fx
-                                             t0 <- newTVar
+                                             t0 <- newOVar
                                              let env0 = reserve (bound p ++ bound b) $ newstate svars $ define [(self,t0)] env
                                              (te0, row) <- infEnvT env0 p
                                              let env1 = define te0 env0
                                              te1 <- infEnv env1 b
-                                             constrain [CEqu l 10 t0 (TRecord $ env2row RNil te1)]
-                                             return (TFun fx row t0)
+                                             constrain [QEqu l 10 t0 (ORecord $ env2row ONil te1)]
+                                             return (OFun fx row t0)
       where svars                       = statevars b
 
     infer env (Decorator l qn args d)
       | nodup args                      = do t1 <- inferPure env deco
                                              t2 <- infer env d
-                                             t0 <- newTVar
-                                             constrain [CEqu l 14 t1 (TFun RNil (RPos t2 RNil) t0)]    -- assumption on qn
+                                             t0 <- newOVar
+                                             constrain [QEqu l 14 t1 (OFun ONil (OPos t2 ONil) t0)]    -- assumption on qn
                                              return t0
       where deco                        = if null args then qname2expr qn else Call l (qname2expr qn) args
 
-inferPure env e                         = do pushFX RNil
+inferPure env e                         = do pushFX ONil
                                              t <- infer env e
                                              popFX
                                              return t
 
-env2row                                 = foldl (\r (n,t) -> RKwd n t r)
+env2row                                 = foldl (\r (n,t) -> OKwd n t r)
 
-env2type tenv                           = TRecord (env2row RNil tenv)
+env2type tenv                           = ORecord (env2row ONil tenv)
 
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do inferBool env e
@@ -350,7 +350,7 @@ instance InfEnv WithItem where
                                              return []
     infEnv env (WithItem e (Just p))    = do t1 <- infer env e                  -- TODO: Mgr constraint on t1
                                              (te, t2) <- infEnvT env p
-                                             constrain [CEqu (loc p) 16 t1 t2]  -- Eq of item and alias 
+                                             constrain [QEqu (loc p) 16 t1 t2]  -- Eq of item and alias 
                                              return te
 
 instance InfEnv Handler where
@@ -362,215 +362,215 @@ instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []
     infEnv env (Except l e)             = do _ <- infer env e                   -- TODO: Constraint on exception type...
                                              return []
-    infEnv env (ExceptAs l e n)         = do t:r:fx:_ <- newTVars 3
+    infEnv env (ExceptAs l e n)         = do t:r:fx:_ <- newOVars 3
                                              t1 <- infer env e                  -- TODO: Constraint on exception type...
-                                             constrain [CEqu l 15 t1 (TFun fx r t)]   -- eq of excpt-value and alias
+                                             constrain [QEqu l 15 t1 (OFun fx r t)]   -- eq of excpt-value and alias
                                              return [(n,t)]
 
 
 inferBool env e                         = do t <- infer env e
-                                             let cs0 = []                          -- Will become CBool constraint....
+                                             let cs0 = []                          -- Will become QBool constraint....
                                              return ()
 
 instance Infer Index where
     infer env (Index l e)               = infer env e
     infer env (Slice l e1 e2 e3)        = do ts <- mapM (infer env) es
-                                             constrain [ CEqu (eloc e) 30 t TInt | (t,e) <- ts `zip` es ]
-                                             return TInt                          -- TODO: think this through...
+                                             constrain [ QEqu (eloc e) 30 t OInt | (t,e) <- ts `zip` es ]
+                                             return OInt                          -- TODO: think this through...
       where es                          = concat $ map maybeToList (e1:e1:maybeToList e3)
 
 instance Infer Expr where
     infer env (Var l n)                 = do dump [GEN l t0]
                                              instantiate l $ openFX t0
       where t0                          = findVar n env
-    infer env (Int _ val s)             = return TInt
-    infer env (Float _ val s)           = return TFloat
+    infer env (Int _ val s)             = return OInt
+    infer env (Float _ val s)           = return OFloat
     infer env e@Imaginary{}             = notYetExpr e
-    infer env (Bool _ val)              = return TBool
-    infer env (None _)                  = newTVar           -- TODO: replace with open union incluing None
-    infer env (NotImplemented _)        = newTVar
-    infer env (Ellipsis _)              = newTVar
-    infer env (Strings _ ss)            = return TStr
-    infer env (BStrings _ ss)           = return TStr
-    infer env (UStrings _ ss)           = return TStr
+    infer env (Bool _ val)              = return OBool
+    infer env (None _)                  = newOVar           -- TODO: replace with open union incluing None
+    infer env (NotImplemented _)        = newOVar
+    infer env (Ellipsis _)              = newOVar
+    infer env (Strings _ ss)            = return OStr
+    infer env (BStrings _ ss)           = return OStr
+    infer env (UStrings _ ss)           = return OStr
     infer env (Call l e args)           = do t <- infer env e
                                              dump [INS (loc e) t]
                                              row <- infer env args
-                                             t0:fx:_ <- newTVars 2
+                                             t0:fx:_ <- newOVars 2
                                              effect l fx
-                                             constrain [CEqu l 18 t (TFun fx row t0)]                  -- callability of e
+                                             constrain [QEqu l 18 t (OFun fx row t0)]                  -- callability of e
                                              return t0
     infer env (Await l e)               = do t <- infer env e
-                                             t0 <- newTVar
-                                             fx <- syncFX <$> newTVar
+                                             t0 <- newOVar
+                                             fx <- syncFX <$> newOVar
                                              effect l fx
-                                             constrain [CEqu l 37 t t0]
+                                             constrain [QEqu l 37 t t0]
                                              return t0
     infer env (Ix l e [i@Index{}])      = do t <- infer env e
                                              ti <- infer env i
-                                             t0 <- newTVar
-                                             constrain [CIx l 38 t ti t0]                               -- indexability of e
+                                             t0 <- newOVar
+                                             constrain [QIx l 38 t ti t0]                               -- indexability of e
                                              return t0
     infer env (Ix l e [s@Slice{}])      = do t <- infer env e
                                              ti <- infer env s
-                                             t0 <- newTVar
-                                             constrain [CIx l 39 t ti t0]                               -- subscriptability of e
+                                             t0 <- newOVar
+                                             constrain [QIx l 39 t ti t0]                               -- subscriptability of e
                                              return t
     infer env (Cond l e1 e e2)          = do t1 <- infer env e1
                                              t2 <- infer env e2
                                              inferBool env e
-                                             t0 <- newTVar
-                                             constrain [CEqu l 19 t1 t0, CEqu l 20 t2 t0]               -- eq of l/r branch and join
+                                             t0 <- newOVar
+                                             constrain [QEqu l 19 t1 t0, QEqu l 20 t2 t0]               -- eq of l/r branch and join
                                              return t0
     infer env (BinOp l e1 (Op _ op) e2)
       | op `elem` logical               = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CBool l 1 t1, CBool l 2 t2]                     -- truth value of e1/e2
-                                             return TBool
+                                             constrain [QBool l 1 t1, QBool l 2 t2]                     -- truth value of e1/e2
+                                             return OBool
       | op `elem` bitwise               = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CEqu l 19 t1 TInt, CEqu l 1 t2 TInt]            -- applicability of op
-                                             return TInt
+                                             constrain [QEqu l 19 t1 OInt, QEqu l 1 t2 OInt]            -- applicability of op
+                                             return OInt
       | op == Div                       = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CEqu l 19 t1 t2, CNum l 1 t1]                   -- eq of args, applicability of '/'
-                                             return TFloat
+                                             constrain [QEqu l 19 t1 t2, QNum l 1 t1]                   -- eq of args, applicability of '/'
+                                             return OFloat
       | op == EuDiv                     = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CEqu l 19 t1 t2, CNum l 1 t1]                   -- eq of args, applicability of '//'
-                                             return TInt
+                                             constrain [QEqu l 19 t1 t2, QNum l 1 t1]                   -- eq of args, applicability of '//'
+                                             return OInt
       | op == Mod                       = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CMod l 1 t1 t2]                                 -- applicability of '%'
+                                             constrain [QMod l 1 t1 t2]                                 -- applicability of '%'
                                              return t1
       | op == Plus                      = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CEqu l 19 t1 t2, CPlus l 1 t1]                  -- eq of args, applicability of '+'
+                                             constrain [QEqu l 19 t1 t2, QPlus l 1 t1]                  -- eq of args, applicability of '+'
                                              return t1
       | otherwise                       = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [CEqu l 19 t1 t2, CNum l 1 t1]                   -- eq of args, applicability of op
+                                             constrain [QEqu l 19 t1 t2, QNum l 1 t1]                   -- eq of args, applicability of op
                                              return t1
       where logical                     = [Or,And]
             bitwise                     = [BOr,BXor,BAnd,ShiftL,ShiftR]
     infer env (UnOp l (Op _ Not) e)     = do t <- infer env e
-                                             constrain [CBool l 3 t]                                    -- applicability of 'not'
-                                             return TBool
+                                             constrain [QBool l 3 t]                                    -- applicability of 'not'
+                                             return OBool
     infer env (UnOp l (Op _ BNot) e)    = do t <- infer env e
-                                             constrain [CEqu l 21 t TInt]                               -- applicability of '~'
-                                             return TInt
+                                             constrain [QEqu l 21 t OInt]                               -- applicability of '~'
+                                             return OInt
     infer env (UnOp l o e)              = do t <- infer env e
-                                             constrain [CNum l 2 t]                                     -- applicability of o
+                                             constrain [QNum l 2 t]                                     -- applicability of o
                                              return t
     infer env (CompOp l e ops)          = do t1 <- infer env e
                                              scanCompOps env t1 ops
-                                             return TBool
+                                             return OBool
     infer env (Dot l e n)               = do t <- infer env e
-                                             t0 <- newTVar
-                                             constrain [CDot l 1 t n t0]                                -- n-selectability of e
+                                             t0 <- newOVar
+                                             constrain [QDot l 1 t n t0]                                -- n-selectability of e
                                              return t0
     infer env (DotI l e i)              = do t <- infer env e
-                                             t0:tvs <- newTVars (i+2)
-                                             constrain [CEqu l 22 t (TTuple (row t0 tvs i))]            -- index-selectability of e
+                                             t0:tvs <- newOVars (i+2)
+                                             constrain [QEqu l 22 t (OTuple (row t0 tvs i))]            -- index-selectability of e
                                              return t0
-      where row t0 (t1:tvs) 0           = RPos t0 t1
-            row t0 (t1:tvs) n           = RPos t1 (row t0 tvs (n-1))
+      where row t0 (t1:tvs) 0           = OPos t0 t1
+            row t0 (t1:tvs) n           = OPos t1 (row t0 tvs (n-1))
     infer env (Lambda l par e)
-      | nodup par                       = do t0:fx:_ <- newTVars 2
+      | nodup par                       = do t0:fx:_ <- newOVars 2
                                              pushFX fx
                                              (te, row) <- infEnvT env par
                                              t <- infer (define te env) e
                                              popFX
-                                             dump [INS l $ TFun fx row t]
-                                             return (TFun fx row t)
+                                             dump [INS l $ OFun fx row t]
+                                             return (OFun fx row t)
     infer env (Tuple l es)              = do r <- infer env es
-                                             return (TTuple r)
+                                             return (OTuple r)
     infer env e@Yield{}                 = notYetExpr e
     infer env e@YieldFrom{}             = notYetExpr e
     infer env (Generator l (Elem e) co)
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (define te env) e
-                                             return (TList t)                                  -- !! Should be CGenerator...
+                                             return (OList t)                                  -- !! Should be CGenerator...
     infer env (List l es)               = do r <- infer env es
-                                             t0 <- newTVar
+                                             t0 <- newOVar
                                              constrain (fold t0 (map loc es) r)
-                                             return (TList t0)
-      where fold t0 [] RNil             = []
-            fold t0 (l:ls) (RPos t r)   = CEqu l 23 t t0 : fold t0 ls r
-            fold t0 (l:ls) (RStar1 t r) = CEqu l 24 t (TList t0) : fold t0 ls r
+                                             return (OList t0)
+      where fold t0 [] ONil             = []
+            fold t0 (l:ls) (OPos t r)   = QEqu l 23 t t0 : fold t0 ls r
+            fold t0 (l:ls) (OStar1 t r) = QEqu l 24 t (OList t0) : fold t0 ls r
     infer env (ListComp l (Elem e) co)
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (define te env) e
-                                             return (TList t)
+                                             return (OList t)
     infer env (Dict l as)               = do ts <- mapM (infer env) as
-                                             t1 <- TDict <$> newTVar <*> newTVar
-                                             constrain [ CEqu (loc a) 25 t t1 | (t,a) <- ts `zip` as]   -- eq of dict elements
+                                             t1 <- ODict <$> newOVar <*> newOVar
+                                             constrain [ QEqu (loc a) 25 t t1 | (t,a) <- ts `zip` as]   -- eq of dict elements
                                              return t1
     infer env (DictComp l e co)
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (define te env) e
                                              return t
     infer env (Set l es)                = do r <- infer env es
-                                             t0 <- newTVar
+                                             t0 <- newOVar
                                              constrain (fold t0 (map loc es) r)
-                                             return (TSet t0)
-      where fold t0 [] RNil             = []
-            fold t0 (l:ls) (RPos t r)   = CEqu l 26 t t0 : fold t0 ls r
-            fold t0 (l:ls) (RStar1 t r) = CEqu l 27 t (TSet t0) : fold t0 ls r
+                                             return (OSet t0)
+      where fold t0 [] ONil             = []
+            fold t0 (l:ls) (OPos t r)   = QEqu l 26 t t0 : fold t0 ls r
+            fold t0 (l:ls) (OStar1 t r) = QEqu l 27 t (OSet t0) : fold t0 ls r
     infer env (SetComp l (Elem e) co)
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (define te env) e
-                                             return (TSet t)
+                                             return (OSet t)
     infer env (Record l fs)             = do te <- infer env fs
-                                             return (TRecord te)
+                                             return (ORecord te)
     infer env (RecordComp l n e co)     = do te <- infEnv env co
                                              let env1 = define te env
                                              _ <- infer env1 (Var (nloc n) n)
                                              _ <- infer env1 e
-                                             r <- newTVar
-                                             return (TRecord r)                 -- !! Big over-generalization, for now
+                                             r <- newOVar
+                                             return (ORecord r)                 -- !! Big over-generalization, for now
     infer env (Paren l e)               = infer env e
 
 instance InfEnvT Params where
     infEnvT env (Params pos NoStar [] kX)
       | not (null pos)                  = infEnvT env (Params [] NoStar pos kX)
-    infEnvT env (Params pos pX kwd kX)  = do (te0, r0) <- inferPar env (const RPos) pos
-                                             (te1, r1) <- starPar RStar1 TTuple pX
-                                             (te2, r2) <- inferPar (define te1 $ define te0 env) RKwd kwd
-                                             (te3, r3) <- starPar RStar2 TRecord kX
-                                             return (te0++te1++te2++te3, (r0 . r1 . r2 . r3) RNil)
+    infEnvT env (Params pos pX kwd kX)  = do (te0, r0) <- inferPar env (const OPos) pos
+                                             (te1, r1) <- starPar OStar1 OTuple pX
+                                             (te2, r2) <- inferPar (define te1 $ define te0 env) OKwd kwd
+                                             (te3, r3) <- starPar OStar2 ORecord kX
+                                             return (te0++te1++te2++te3, (r0 . r1 . r2 . r3) ONil)
                                              
 inferPar env f []                       = return ([], id)
-inferPar env f (Param n a Nothing : ps) = do t0 <- newTVar
+inferPar env f (Param n a Nothing : ps) = do t0 <- newOVar
                                              let te0 = [(n,t0)]
                                              (te1, r1) <- inferPar (define te0 env) f ps
                                              return (te0++te1, f n t0 . r1)
 inferPar env f (Param n a (Just e): ps) = do t <- infer env e
-                                             t0 <- newTVar
+                                             t0 <- newOVar
                                              let te0 = [(n,t0)]
-                                             constrain [CEqu (eloc e) 28 t t0]              -- eq of n and default value
+                                             constrain [QEqu (eloc e) 28 t t0]              -- eq of n and default value
                                              (te1, r1) <- inferPar (define te0 env) f ps
                                              return (te0++te1, f n t0 . r1)
 
 starPar rc tc NoStar                    = return ([], id)
-starPar rc tc (StarPar _ n _)           = do t1 <- newTVar
-                                             r1 <- newTVar
-                                             constrain [CEqu (nloc n) 33 t1 (tc r1)]        -- *param is a tuple/record
+starPar rc tc (StarPar _ n _)           = do t1 <- newOVar
+                                             r1 <- newOVar
+                                             constrain [QEqu (nloc n) 33 t1 (tc r1)]        -- *param is a tuple/record
                                              return ([(n,t1)], rc t1)               
 
 instance Infer Assoc where
-    infer env (Assoc k v)               = TDict <$> infer env k <*> infer env v
+    infer env (Assoc k v)               = ODict <$> infer env k <*> infer env v
     infer env (StarStarAssoc e)         = infer env e
 
 instance Infer [Elem Expr] where
-    infer env (Elem e : elems)          = RPos <$> infer env e <*> infer env elems
-    infer env (Star e : elems)          = RStar1 <$> infer env e <*> infer env elems
-    infer env []                        = return RNil
+    infer env (Elem e : elems)          = OPos <$> infer env e <*> infer env elems
+    infer env (Star e : elems)          = OStar1 <$> infer env e <*> infer env elems
+    infer env []                        = return ONil
 
 instance Infer [Field] where
-    infer env (Field n e : fs)          = (RKwd n) <$> infer env e <*> infer env fs
-    infer env (StarStarField e : fs)    = RStar2 <$> infer env e <*> infer env fs
-    infer env []                        = return RNil
+    infer env (Field n e : fs)          = (OKwd n) <$> infer env e <*> infer env fs
+    infer env (StarStarField e : fs)    = OStar2 <$> infer env e <*> infer env fs
+    infer env []                        = return ONil
 
 instance InfEnv Comp where
     infEnv env NoComp                   = return []
@@ -578,7 +578,7 @@ instance InfEnv Comp where
                                              infEnv env c
     infEnv env (CompFor l p e c)        = do (te1, t1) <- infEnvT env p
                                              t2 <- infer env e
-                                             constrain [CIn l 2 t1 t2]                        -- containment in 'for' comprehension
+                                             constrain [QIn l 2 t1 t2]                        -- containment in 'for' comprehension
                                              te2 <- infEnv (define te1 env) c
                                              return (te1++te2)
 
@@ -592,54 +592,54 @@ instance InfEnvT [Pattern] where
     infEnvT env [p]                     = infEnvT env p
     infEnvT env (p:ps)                  = do (te1, t1) <- infEnvT env p
                                              (te2, t2) <- infEnvT (define te1 env) ps
-                                             constrain [CEqu (loc p) 1 t1 t2]
+                                             constrain [QEqu (loc p) 1 t1 t2]
                                              return (te1++te2, t1)
 
 instance InfEnvT [Elem Pattern] where
     infEnvT env (Elem p : elems)        = do (te1, t) <- infEnvT env p
                                              (te2, r) <- infEnvT (define te1 env) elems
-                                             return (te1++te2, RPos t r)
+                                             return (te1++te2, OPos t r)
     infEnvT env (Star p : elems)        = do (te1, t) <- infEnvT env p
                                              (te2, r) <- infEnvT env elems
-                                             return (te1++te2, RStar1 t r)
-    infEnvT env []                      = return ([], RNil)
+                                             return (te1++te2, OStar1 t r)
+    infEnvT env []                      = return ([], ONil)
 
 
 instance InfEnvT Pattern where
     infEnvT env (PVar _ n Nothing)
-      | reserved env n                  = do t <- newTVar
+      | reserved env n                  = do t <- newOVar
                                              return ([(n,t)], t)
       | monotype t                      = return ([], t)
       | otherwise                       = err1 n "Illegal reassignment:"
       where t                           = findVar n env
     infEnvT env (PIx l e [i@Index{}])   = do t <- infer env e
                                              ti <- infer env i
-                                             t0 <- newTVar
-                                             constrain [CIx l 1 t ti t0]
+                                             t0 <- newOVar
+                                             constrain [QIx l 1 t ti t0]
                                              return ([], t0)                                    -- indexability of e
     infEnvT env (PDot l e n)            = do t <- infer env e
-                                             t0 <- newTVar
-                                             constrain [CDot l 1 t n t0]
+                                             t0 <- newOVar
+                                             constrain [QDot l 1 t n t0]
                                              return ([], t0)                                    -- n-selectability of e
     infEnvT env (PTuple _ ps)           = do (te, r) <- infEnvT env ps
-                                             return (te, TTuple r)
+                                             return (te, OTuple r)
     infEnvT env (PList _ ps)            = do (te, r) <- infEnvT env ps
-                                             t0 <- newTVar
+                                             t0 <- newOVar
                                              constrain (fold t0 (map loc ps) r)
-                                             return (te, TList t0)
-      where fold t0 [] RNil             = []
-            fold t0 (l:ls) (RPos t r)   = CEqu l 23 t t0 : fold t0 ls r
-            fold t0 (l:ls) (RStar1 t r) = CEqu l 24 t (TList t0) : fold t0 ls r
+                                             return (te, OList t0)
+      where fold t0 [] ONil             = []
+            fold t0 (l:ls) (OPos t r)   = QEqu l 23 t t0 : fold t0 ls r
+            fold t0 (l:ls) (OStar1 t r) = QEqu l 24 t (OList t0) : fold t0 ls r
     infEnvT env (PParen l p)            = infEnvT env p
-    infEnvT env (PData l n es)          = do t0 <- newTVar
+    infEnvT env (PData l n es)          = do t0 <- newOVar
                                              t <- inferIxs env t0 es
                                              return ([(n,t0)], t)
 
 inferIxs env t0 []                      = return t0
-inferIxs env t0 (i:is)                  = do t1 <- newTVar
+inferIxs env t0 (i:is)                  = do t1 <- newOVar
                                              ti <- infer env i
                                              t2 <- inferIxs env t1 is 
-                                             constrain [CIx (loc i) 1 t0 ti t1]
+                                             constrain [QIx (loc i) 1 t0 ti t1]
                                              return t2
 
 instance Infer Pattern where
@@ -649,23 +649,23 @@ instance Infer Pattern where
                                              
 
 instance Infer [Arg] where
-    infer env (Arg e : args)            = RPos <$> infer env e <*> infer env args
-    infer env (StarArg e : args)        = RStar1 <$> infer env e <*> infer env args
-    infer env (KwArg n e : args)        = (RKwd n) <$> infer env e <*> infer env args
-    infer env (StarStarArg e : args)    = RStar2 <$> infer env e <*> infer env args
-    infer env []                        = return RNil
+    infer env (Arg e : args)            = OPos <$> infer env e <*> infer env args
+    infer env (StarArg e : args)        = OStar1 <$> infer env e <*> infer env args
+    infer env (KwArg n e : args)        = (OKwd n) <$> infer env e <*> infer env args
+    infer env (StarStarArg e : args)    = OStar2 <$> infer env e <*> infer env args
+    infer env []                        = return ONil
 
 inferSuper env (Arg e : args)           = do t <- inferPure env e
                                              r <- inferSuper env args
-                                             r':t':_ <- newTVars 2
-                                             constrain [CEqu (eloc e) 32 t (TFun RNil r' t')]    -- assumpt on base class
-                                             return (RStar2 t' r)
+                                             r':t':_ <- newOVars 2
+                                             constrain [QEqu (eloc e) 32 t (OFun ONil r' t')]    -- assumpt on base class
+                                             return (OStar2 t' r)
 inferSuper env (StarArg e : args)       = do t <- infer env e
                                              r <- inferSuper env args
-                                             return (RStar1 t r)                -- Handle at all?
+                                             return (OStar1 t r)                -- Handle at all?
 inferSuper env (KwArg n e : args)       = inferSuper env (Arg e : args)
 inferSuper env (StarStarArg e:args)     = inferSuper env (StarArg e : args)
-inferSuper env []                       = return RNil
+inferSuper env []                       = return ONil
 
 scanCompOps env t0 []                   = return ()
 scanCompOps env t0 (oparg : opargs)     = do t1 <- inferCompOp env t0 oparg
@@ -674,10 +674,10 @@ scanCompOps env t0 (oparg : opargs)     = do t1 <- inferCompOp env t0 oparg
 
 inferCompOp env t0 (OpArg (Op l o) e)
   | o `elem` [In, NotIn]                = do t1 <- infer env e
-                                             constrain [CIn l 3 t0 t1]                          -- containment in test op
+                                             constrain [QIn l 3 t0 t1]                          -- containment in test op
                                              return t1
   | otherwise                           = do t1 <- infer env e
-                                             constrain [CEqu l 31 t0 t1]                        -- eq of compared values
+                                             constrain [QEqu l 31 t0 t1]                        -- eq of compared values
                                              return t1
 
 notYetExpr e                            = notYet (loc e) (pretty e)

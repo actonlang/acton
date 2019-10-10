@@ -311,66 +311,66 @@ instance Vars ModRef where
     bound (ModRef (0, n))           = free n
     bound _                         = []
 
-instance Vars TScheme where
-    free (TScheme _ q t)            = free q ++ free t
+instance Vars TSchema where
+    free (TSchema _ q t)            = free q ++ free t
 
-instance Vars CVar where
-    free (CVar v)                   = []
+instance Vars TVar where
+    free (TV v)                     = []
 
-instance Vars CCon where
-    free (CCon n ts)                = n : free ts
+instance Vars TCon where
+    free (TC n ts)                  = n : free ts
 
-instance Vars CBind where
-    free (CBind v cs)               = free cs
+instance Vars TBind where
+    free (TBind v cs)               = free cs
 
 instance Vars PosRow where
     free (PosRow t p)               = free t ++ free p
     free (PosVar v)                 = free v
     free PosNil                     = []
 
-instance Vars KwRow where
-    free (KwRow n t k)              = free t ++ free k
-    free (KwVar v)                  = free v
-    free KwNil                      = []
+instance Vars KwdRow where
+    free (KwdRow n t k)              = free t ++ free k
+    free (KwdVar v)                  = free v
+    free KwdNil                      = []
 
-instance Vars CType where
-    free (CTVar _ v)                = free v
-    free (CTFun _ es p k t)         = free es ++ free p ++ free k ++ free t
-    free (CTTuple _ p)              = free p
-    free (CTRecord _ k)             = free k
-    free (CPSeq _ t)                = free t
-    free (CPSet _ t)                = free t
-    free (CPMap _ kt vt)            = free kt ++ free vt
-    free (CTOpt _ t)                = free t
-    free (CTCon  _ c)               = free c
-    free (CTAt  _ c)                = free c
+instance Vars Type where
+    free (TVar _ v)                 = free v
+    free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
+    free (TTuple _ p)               = free p
+    free (TRecord _ k)              = free k
+    free (PSeq _ t)                 = free t
+    free (PSet _ t)                 = free t
+    free (PMap _ kt vt)             = free kt ++ free vt
+    free (TOpt _ t)                 = free t
+    free (TCon  _ c)                = free c
+    free (TAt  _ c)                 = free c
     free _                          = []
 
 
 -- Type variables and substitution ----------
 
-openFX (TSchema vs cs (TFun fx r t))
-  | Just fx1 <- open fx             = TSchema (v:vs) cs (TFun fx1 r t)
-  where open (RKwd n t fx)          = RKwd n t <$> open fx
-        open (RPos t fx)            = RPos t <$> open fx
-        open RNil                   = Just (TVar v)
+openFX (OSchema vs cs (OFun fx r t))
+  | Just fx1 <- open fx             = OSchema (v:vs) cs (OFun fx1 r t)
+  where open (OKwd n t fx)          = OKwd n t <$> open fx
+        open (OPos t fx)            = OPos t <$> open fx
+        open ONil                   = Just (OVar v)
         open _                      = Nothing
         v:_                         = schemaVars \\ vs
 openFX t                            = t
 
-closeFX (TSchema vs cs (TFun fx r t))
+closeFX (OSchema vs cs (OFun fx r t))
   | [v] <- soletail fx \\ vs1,
-    v `elem` vs                     = TSchema (vs\\[v]) cs (TFun (subst [(v,RNil)] fx) r t)
+    v `elem` vs                     = OSchema (vs\\[v]) cs (OFun (subst [(v,ONil)] fx) r t)
   where vs1                         = tyvars t ++ tyvars r ++ tyvars cs
-        soletail (RKwd _ t fx)      = soletail fx \\ tyvars t
-        soletail (RPos t fx)        = soletail fx \\ tyvars t
-        soletail (TVar v)           = [v]
+        soletail (OKwd _ t fx)      = soletail fx \\ tyvars t
+        soletail (OPos t fx)        = soletail fx \\ tyvars t
+        soletail (OVar v)           = [v]
         soletail _                  = []
 closeFX t                           = t
 
 class Subst t where
-    subst                           :: Substitution -> t -> t
-    tyvars                          :: t -> [TVar]
+    subst                           :: OSubst -> t -> t
+    tyvars                          :: t -> [OVar]
 
 instance Subst a => Subst (Name,a) where
     subst s (n, t)                  = (n, subst s t)
@@ -384,64 +384,64 @@ instance Subst a => Subst (Maybe a) where
     subst s                         = maybe Nothing (Just . subst s)
     tyvars                          = maybe [] tyvars
 
-instance Subst Type where
-    subst s (TVar l)                = case lookup l s of
+instance Subst OType where
+    subst s (OVar l)                = case lookup l s of
                                         Just t  -> t
-                                        Nothing -> TVar l
-    subst s (TFun act row t)        = TFun (subst s act) (subst s row) (subst s t)
-    subst s (TRecord row)           = TRecord (subst s row)
-    subst s (TDict t1 t2)           = TDict (subst s t1) (subst s t2)
-    subst s (TTuple pos)            = TTuple (subst s pos)
-    subst s (TList t)               = TList (subst s t)
-    subst s (TSet t)                = TSet (subst s t)
-    subst s (TMsg t)                = TMsg (subst s t)
-    subst s (RPos t r)              = RPos (subst s t) (subst s r)
-    subst s (RStar1 t r)            = RStar1 (subst s t) (subst s r)
-    subst s (RKwd n t r)            = RKwd n (subst s t) (subst s r)
-    subst s (RStar2 t r)            = RStar2 (subst s t) (subst s r)
-    subst s (TSchema vs cs t)       = TSchema vs' (subst s' cs) (subst s' t)
+                                        Nothing -> OVar l
+    subst s (OFun act row t)        = OFun (subst s act) (subst s row) (subst s t)
+    subst s (ORecord row)           = ORecord (subst s row)
+    subst s (ODict t1 t2)           = ODict (subst s t1) (subst s t2)
+    subst s (OTuple pos)            = OTuple (subst s pos)
+    subst s (OList t)               = OList (subst s t)
+    subst s (OSet t)                = OSet (subst s t)
+    subst s (OMsg t)                = OMsg (subst s t)
+    subst s (OPos t r)              = OPos (subst s t) (subst s r)
+    subst s (OStar1 t r)            = OStar1 (subst s t) (subst s r)
+    subst s (OKwd n t r)            = OKwd n (subst s t) (subst s r)
+    subst s (OStar2 t r)            = OStar2 (subst s t) (subst s r)
+    subst s (OSchema vs cs t)       = OSchema vs' (subst s' cs) (subst s' t)
       where pruned_s                = [ (v,t) | (v,t) <- s, v `notElem` vs ]
-            newvars                 = tyvars (subst pruned_s $ map TVar ((tyvars t ++ tyvars cs) \\ vs))
+            newvars                 = tyvars (subst pruned_s $ map OVar ((tyvars t ++ tyvars cs) \\ vs))
             clashvars               = vs `intersect` newvars
             freshvars               = take (length clashvars) (schemaVars \\ (newvars++vs))
-            renaming_s              = (clashvars `zip` map TVar freshvars)
+            renaming_s              = (clashvars `zip` map OVar freshvars)
             s'                      = renaming_s ++ pruned_s
             vs'                     = freshvars ++ (vs \\ clashvars)
     subst s tcon                    = tcon
     
-    tyvars (TVar v)                 = [v]
-    tyvars (TFun act row t)         = tyvars act ++ tyvars row ++ tyvars t
-    tyvars (TRecord row)            = tyvars row
-    tyvars (TDict t1 t2)            = tyvars t1 ++ tyvars t2
-    tyvars (TTuple row)             = tyvars row
-    tyvars (TList t)                = tyvars t
-    tyvars (TSet t)                 = tyvars t
-    tyvars (TMsg t)                 = tyvars t
-    tyvars (RPos t r)               = tyvars t ++ tyvars r
-    tyvars (RStar1 t r)             = tyvars t ++ tyvars r
-    tyvars (RKwd n t r)             = tyvars t ++ tyvars r
-    tyvars (RStar2 t r)             = tyvars t ++ tyvars r
-    tyvars (TSchema vs cs t)        = (tyvars t ++ tyvars cs) \\ vs
+    tyvars (OVar v)                 = [v]
+    tyvars (OFun act row t)         = tyvars act ++ tyvars row ++ tyvars t
+    tyvars (ORecord row)            = tyvars row
+    tyvars (ODict t1 t2)            = tyvars t1 ++ tyvars t2
+    tyvars (OTuple row)             = tyvars row
+    tyvars (OList t)                = tyvars t
+    tyvars (OSet t)                 = tyvars t
+    tyvars (OMsg t)                 = tyvars t
+    tyvars (OPos t r)               = tyvars t ++ tyvars r
+    tyvars (OStar1 t r)             = tyvars t ++ tyvars r
+    tyvars (OKwd n t r)             = tyvars t ++ tyvars r
+    tyvars (OStar2 t r)             = tyvars t ++ tyvars r
+    tyvars (OSchema vs cs t)        = (tyvars t ++ tyvars cs) \\ vs
     tyvars tcon                     = []
 
-instance Subst Constraint where
-    subst s (CEqu l v t1 t2)        = CEqu l v (subst s t1) (subst s t2)
-    subst s (CIn l v t1 t2)         = CIn l v (subst s t1) (subst s t2)
-    subst s (CDot l v t1 n t2)      = CDot l v (subst s t1) n (subst s t2)
-    subst s (CIx l v t1 t2 t3)      = CIx l v (subst s t1) (subst s t2) (subst s t3)
-    subst s (CMod l v t1 t2)        = CMod l v (subst s t1) (subst s t2)
-    subst s (CPlus l v t1)          = CPlus l v (subst s t1)
-    subst s (CNum l v t1)           = CNum l v (subst s t1)
-    subst s (CBool l v t1)          = CBool l v (subst s t1)
+instance Subst Qonstraint where
+    subst s (QEqu l v t1 t2)        = QEqu l v (subst s t1) (subst s t2)
+    subst s (QIn l v t1 t2)         = QIn l v (subst s t1) (subst s t2)
+    subst s (QDot l v t1 n t2)      = QDot l v (subst s t1) n (subst s t2)
+    subst s (QIx l v t1 t2 t3)      = QIx l v (subst s t1) (subst s t2) (subst s t3)
+    subst s (QMod l v t1 t2)        = QMod l v (subst s t1) (subst s t2)
+    subst s (QPlus l v t1)          = QPlus l v (subst s t1)
+    subst s (QNum l v t1)           = QNum l v (subst s t1)
+    subst s (QBool l v t1)          = QBool l v (subst s t1)
 
-    tyvars (CEqu _ _ t1 t2)         = tyvars t1 ++ tyvars t2
-    tyvars (CIn _ _ t1 t2)          = tyvars t1 ++ tyvars t2
-    tyvars (CDot _ _ t1 n t2)       = tyvars t1 ++ tyvars t2
-    tyvars (CIx _ _ t1 t2 t3)       = tyvars t1 ++ tyvars t2 ++ tyvars t3
-    tyvars (CMod _ _ t1 t2)         = tyvars t1 ++ tyvars t2
-    tyvars (CPlus _ _ t1)           = tyvars t1
-    tyvars (CNum _ _ t1)            = tyvars t1
-    tyvars (CBool _ _ t1)           = tyvars t1
+    tyvars (QEqu _ _ t1 t2)         = tyvars t1 ++ tyvars t2
+    tyvars (QIn _ _ t1 t2)          = tyvars t1 ++ tyvars t2
+    tyvars (QDot _ _ t1 n t2)       = tyvars t1 ++ tyvars t2
+    tyvars (QIx _ _ t1 t2 t3)       = tyvars t1 ++ tyvars t2 ++ tyvars t3
+    tyvars (QMod _ _ t1 t2)         = tyvars t1 ++ tyvars t2
+    tyvars (QPlus _ _ t1)           = tyvars t1
+    tyvars (QNum _ _ t1)            = tyvars t1
+    tyvars (QBool _ _ t1)           = tyvars t1
 
 instance Subst InfoTag where
     subst s (GEN l t)               = GEN l (subst s t)
@@ -450,40 +450,40 @@ instance Subst InfoTag where
     tyvars (GEN _ t)                = tyvars t
     tyvars (INS _ t)                = tyvars t
 {-}
-instance Subst CCon where
-    subst s (CCon n ts)             = CCon $ subst s n $ subst s ts
+instance Subst TCon where
+    subst s (TCon n ts)             = TCon $ subst s n $ subst s ts
 
-instance Subst CBind where
-    subst s (CBind v cs)            = CBind $ subst s v $ subst s cs
+instance Subst TBind where
+    subst s (TBind v cs)            = TBind $ subst s v $ subst s cs
 
 instance Subst PosRow where
     subst s (PosRow t p)            = PosRow $ subst s t $ subst s p
     subst s (PosVar v)              = PosVar $ subst s v
     subst s PosNil                  = PosNil
 
-instance Subst KwRow where
-    subst s (KwRow n t k)           = KwRow $ subst s n $ subst s t $ subst s k
-    subst s (KwVar v)               = KwVar $ subst s v
-    subst s KwNil                   = KwNil
+instance Subst KwdRow where
+    subst s (KwdRow n t k)           = KwdRow $ subst s n $ subst s t $ subst s k
+    subst s (KwdVar v)               = KwdVar $ subst s v
+    subst s KwdNil                   = KwdNil
 
-instance Subst CType where
-    subst s (CSelf l)               = CSelf l
-    subst s (CTVar l v)             = CTVar l $ subst s v
-    subst s (CTFun l es p k t)      = CTFun l $ subst s es $ subst s p $ subst s k $ subst s t
-    subst s (CTTuple l p)           = CTTuple l $ subst s p
-    subst s (CTRecord l k)          = CTRecord l $ subst s k
-    subst s (CPSeq l t)             = CPSeq l $ subst s t
-    subst s (CPSet l t)             = CPSet l $ subst s t
-    subst s (CPMap l kt vt)         = CPMap l $ subst s kt $ subst s vt
-    subst s (CTOpt l t)             = CTOpt l $ subst s t
-    subst s (CTUnion l as)          = CTUnion l $ return as
-    subst s (CTCon l c)             = CTCon l $ subst s c
-    subst s (CTAt l c)              = CTAt l $ subst s c
-    subst s (CTStr l)               = CTStr l
-    subst s (CTInt l)               = CTInt l
-    subst s (CTFloat l)             = CTFloat l
-    subst s (CTBool l)              = CTBool l
-    subst s (CTNone l)              = CTNone l
+instance Subst Type where
+    subst s (TSelf l)               = TSelf l
+    subst s (TVar l v)              = TVar l $ subst s v
+    subst s (TFun l es p k t)       = TFun l $ subst s es $ subst s p $ subst s k $ subst s t
+    subst s (TTuple l p)            = TTuple l $ subst s p
+    subst s (TRecord l k)           = TRecord l $ subst s k
+    subst s (PSeq l t)              = PSeq l $ subst s t
+    subst s (PSet l t)              = PSet l $ subst s t
+    subst s (PMap l kt vt)          = PMap l $ subst s kt $ subst s vt
+    subst s (TOpt l t)              = TOpt l $ subst s t
+    subst s (TUnion l as)           = TUnion l $ return as
+    subst s (TCon l c)              = TCon l $ subst s c
+    subst s (TAt l c)               = TAt l $ subst s c
+    subst s (TStr l)                = TStr l
+    subst s (TInt l)                = TInt l
+    subst s (TFloat l)              = TFloat l
+    subst s (TBool l)               = TBool l
+    subst s (TNone l)               = TNone l
 -}
 -- Names free in embedded lambda
 -- Called during translation to ensure that lambdas contain no state variables

@@ -18,7 +18,7 @@ mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
   where Module _ imps _     = modul
 
 
-type TEnv                   = [(Name,Type)]
+type TEnv                   = [(Name,OType)]
 
 instance Pretty TEnv where
     pretty tenv             = vcat (map pr tenv)
@@ -28,7 +28,7 @@ restrict vs                 = filter ((`elem` vs) . fst)
 
 prune vs                    = filter ((`notElem` vs) . fst)
 
-data Env                    = Env { venv :: [(Name, Maybe Type)], stvars :: [Name], ret :: Maybe Type } 
+data Env                    = Env { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType } 
                             deriving (Eq,Show)
 instance Subst Env where
     subst s env             = env{ venv = subst s (venv env), ret = subst s (ret env) }
@@ -46,8 +46,8 @@ newstate vs env             = env { stvars = vs }
 reserved env v              = lookup v (venv env) == Just Nothing
 
 findVar n env               = case lookup n (venv env) of
-                                Nothing          -> Control.Exception.throw $ NameNotFound n
-                                Just Nothing    -> Control.Exception.throw $ NameReserved n
+                                Nothing       -> Control.Exception.throw $ NameNotFound n
+                                Just Nothing  -> Control.Exception.throw $ NameReserved n
                                 Just (Just t) -> t
 
 setReturn t env             = env { ret = Just t }
@@ -59,96 +59,96 @@ getReturn env               = fromJust $ ret env
 
 builtins                    = [ 
                                 (nm "record", schema [a] []
-                                            (TFun RNil a (TRecord a))),
+                                            (OFun ONil a (ORecord a))),
                                 (nm "merge", schema [a,b,c] []
-                                            (TFun RNil (RPos a (RPos b RNil)) c)),     -- very liberal type, for now!
-                                (nm "sorted", schema [a,b] [CIn l0 0 a b]               -- contract requirement (containment)
-                                            (TFun RNil (RPos b RNil) b)),
-                                (nm "filter", schema [a, b] [CIn l0 0 a b]              -- contract requirement (containment)
-                                            (TFun RNil (RPos (TFun RNil (RPos a RNil) TBool) (RPos b RNil)) b)),
+                                            (OFun ONil (OPos a (OPos b ONil)) c)),     -- very liberal type, for now!
+                                (nm "sorted", schema [a,b] [QIn l0 0 a b]               -- contract requirement (containment)
+                                            (OFun ONil (OPos b ONil) b)),
+                                (nm "filter", schema [a, b] [QIn l0 0 a b]              -- contract requirement (containment)
+                                            (OFun ONil (OPos (OFun ONil (OPos a ONil) OBool) (OPos b ONil)) b)),
                                 (nm "id", schema [a] []
-                                            (TFun RNil (RPos a RNil) TInt)),
-                                (nm "len", schema [a,b] [CIn l0 0 a b]                  -- contract requirement (containment)
-                                            (TFun RNil (RPos b RNil) TInt)),
+                                            (OFun ONil (OPos a ONil) OInt)),
+                                (nm "len", schema [a,b] [QIn l0 0 a b]                  -- contract requirement (containment)
+                                            (OFun ONil (OPos b ONil) OInt)),
                                 (nm "dict", schema [a,b] []
-                                            (TFun RNil (RPos (TDict a b) RNil) (TDict a b))),
+                                            (OFun ONil (OPos (ODict a b) ONil) (ODict a b))),
                                 (nm "sorteddict", schema [a,b] []
-                                            (TFun RNil (RPos (TDict a b) RNil) (TDict a b))),
+                                            (OFun ONil (OPos (ODict a b) ONil) (ODict a b))),
                                 (nm "defaultdict", schema [a,b] []
-                                            (TFun RNil (RPos (TFun RNil RNil b) RNil) (TDict a b))),
+                                            (OFun ONil (OPos (OFun ONil ONil b) ONil) (ODict a b))),
                                 (nm "list", schema [a] []                               -- contract requirement (containment)
-                                            (TFun RNil (RPos (TList a) RNil) (TList a))),
+                                            (OFun ONil (OPos (OList a) ONil) (OList a))),
                                 (nm "set", schema [a] []                                -- contract requirement (containment)
-                                            (TFun RNil (RPos (TList a) RNil) (TSet a))),
+                                            (OFun ONil (OPos (OList a) ONil) (OSet a))),
                                 (nm "sortedset", schema [a] []                                -- contract requirement (containment)
-                                            (TFun RNil (RPos (TList a) RNil) (TSet a))),
+                                            (OFun ONil (OPos (OList a) ONil) (OSet a))),
                                 (nm "sum", schema [] []
-                                            (TFun RNil (RPos (TList TInt) RNil) TInt)),
+                                            (OFun ONil (OPos (OList OInt) ONil) OInt)),
                                 (nm "enumerate", schema [a] []
-                                            (TFun RNil (RPos (TList a) RNil) (TList (TTuple (RPos TInt (RPos a RNil)))))),
+                                            (OFun ONil (OPos (OList a) ONil) (OList (OTuple (OPos OInt (OPos a ONil)))))),
                                 (nm "reversed", schema [a] []
-                                            (TFun RNil (RPos (TList a) RNil) (TList a))),
+                                            (OFun ONil (OPos (OList a) ONil) (OList a))),
                                 (nm "min", schema [a] []
-                                            (TFun RNil (RPos (TList a) RNil) a)),
+                                            (OFun ONil (OPos (OList a) ONil) a)),
                                 (nm "max", schema [a] []
-                                            (TFun RNil (RPos (TList a) RNil) a)),
-                                (nm "iter", schema [a,b] [CIn l0 0 a b]
-                                            (TFun RNil (RPos b RNil) (TList a))),
+                                            (OFun ONil (OPos (OList a) ONil) a)),
+                                (nm "iter", schema [a,b] [QIn l0 0 a b]
+                                            (OFun ONil (OPos b ONil) (OList a))),
                                 (nm "next", schema [a] []
-                                            (TFun RNil (RPos (TList a) RNil) a)),
+                                            (OFun ONil (OPos (OList a) ONil) a)),
                                 (nm "IPv4Address", schema [] []
-                                            (TFun RNil (RPos TStr RNil) TInt)),
+                                            (OFun ONil (OPos OStr ONil) OInt)),
                                 (nm "IPv4Network", schema [] []
-                                            (TFun RNil (RPos TStr RNil) TInt)),
+                                            (OFun ONil (OPos OStr ONil) OInt)),
                                 (nm "IPv6Address", schema [] []
-                                            (TFun RNil (RPos TStr RNil) TInt)),
+                                            (OFun ONil (OPos OStr ONil) OInt)),
                                 (nm "IPv6Network", schema [] []
-                                            (TFun RNil (RPos TStr RNil) TInt)),
+                                            (OFun ONil (OPos OStr ONil) OInt)),
                                 (nm "Decimal", schema [a,b] []
-                                            (TFun RNil (RPos a RNil) b)),
+                                            (OFun ONil (OPos a ONil) b)),
                                 (nm "abs", schema [] []
-                                            (TFun RNil (RPos TInt RNil) TInt)),
+                                            (OFun ONil (OPos OInt ONil) OInt)),
                                 (nm "all",  schema [a] []
-                                            (TFun RNil a TBool)),
+                                            (OFun ONil a OBool)),
                                 (nm "any",  schema [a] []
-                                            (TFun RNil a TBool)),
+                                            (OFun ONil a OBool)),
                                 (nm "int",  schema [a] []
-                                            (TFun RNil a TInt)),
+                                            (OFun ONil a OInt)),
                                 (nm "str", schema [a] []
-                                            (TFun RNil a TStr)),
+                                            (OFun ONil a OStr)),
                                 (nm "print", schema [a] []
-                                            (TFun RNil a TNone)),
+                                            (OFun ONil a ONone)),
                                 (nm "postpone", schema [a,b] []
-                                            (TFun (syncFX RNil) (RPos TInt (RPos (TFun (asyncFX RNil) a (TMsg a)) a)) TNone)),
+                                            (OFun (syncFX ONil) (OPos OInt (OPos (OFun (asyncFX ONil) a (OMsg a)) a)) ONone)),
                                 (nm "weakref", schema [a] []
-                                            (TFun RNil (RPos a RNil) TInt)),
+                                            (OFun ONil (OPos a ONil) OInt)),
                                 (nm "weakref_subscribe", schema [a, b] []
-                                            (TFun RNil (RPos a (RPos b RNil)) TNone)),
+                                            (OFun ONil (OPos a (OPos b ONil)) ONone)),
                                 (nm "weakref_unsubscribe", schema [a] []
-                                            (TFun RNil (RPos a RNil) TNone)),
+                                            (OFun ONil (OPos a ONil) ONone)),
                                 (nm "range", schema [] []
-                                            (TFun RNil (RPos TInt (RPos TInt RNil)) (TList TInt))),
+                                            (OFun ONil (OPos OInt (OPos OInt ONil)) (OList OInt))),
                                 (nm "zip", schema [a,b] []
-                                            (TFun RNil (RPos (TList a) (RPos (TList b) RNil)) (TList (TTuple (RPos a (RPos b RNil)))))),
+                                            (OFun ONil (OPos (OList a) (OPos (OList b) ONil)) (OList (OTuple (OPos a (OPos b ONil)))))),
                                 (nm "__env__", schema [a] []
-                                            (TFun RNil (RPos (TRecord a) RNil) (TRecord (
-                                                RKwd (nm "create_external_api_process") 
-                                                        (TSchema [[1],[2]] []
-                                                            (TFun (syncFX (TVar [2])) (
-                                                                RKwd (nm "executable_name") TStr (
-                                                                RKwd (nm "args") (TList TStr) (
-                                                                RKwd (nm "timeout") TInt (
-                                                                RKwd (nm "node") TStr RNil)))) (TVar [1]))) (
-                                                RKwd (nm "connect_external_api_process") (TFun (syncFX RNil) (
-                                                                RKwd (nm "token") TStr RNil) TInt) RNil))))),
+                                            (OFun ONil (OPos (ORecord a) ONil) (ORecord (
+                                                OKwd (nm "create_external_api_process") 
+                                                        (OSchema [[1],[2]] []
+                                                            (OFun (syncFX (OVar [2])) (
+                                                                OKwd (nm "executable_name") OStr (
+                                                                OKwd (nm "args") (OList OStr) (
+                                                                OKwd (nm "timeout") OInt (
+                                                                OKwd (nm "node") OStr ONil)))) (OVar [1]))) (
+                                                OKwd (nm "connect_external_api_process") (OFun (syncFX ONil) (
+                                                                OKwd (nm "token") OStr ONil) OInt) ONil))))),
                                 (nm "__get_current_placement__", schema [a] []
-                                            (TFun (syncFX RNil) (RPos a RNil) (TSet TStr))),
+                                            (OFun (syncFX ONil) (OPos a ONil) (OSet OStr))),
                                 (nm "__get_placement_constraints__", schema [a] []
-                                            (TFun (syncFX RNil) (RPos a RNil) (TSet TStr))),
+                                            (OFun (syncFX ONil) (OPos a ONil) (OSet OStr))),
                                 (nm "__set_placement_constraints__", schema [a] []
-                                            (TFun (syncFX RNil) (RPos a (RPos (TSet TStr) RNil)) RNil)),
+                                            (OFun (syncFX ONil) (OPos a (OPos (OSet OStr) ONil)) ONil)),
                                 (nm "getattr", schema [a,b] []
-                                            (TFun RNil (RPos (TRecord a) (RPos TStr RNil)) b)),
+                                            (OFun ONil (OPos (ORecord a) (OPos OStr ONil)) b)),
                                 (nm "Exception", schema [a] []
                                             a),
                                 (nm "ArithmeticError", schema [a] []
@@ -176,10 +176,10 @@ builtins                    = [
                                 (nm "ValueError", schema [a] []
                                             a),
                                 (nm "StaleActorReferenceException", schema [a,b] []
-                                            (TFun RNil (RPos a (RPos TStr b)) (TRecord (RKwd (nm "actor_id") a RNil))))
+                                            (OFun ONil (OPos a (OPos OStr b)) (ORecord (OKwd (nm "actor_id") a ONil))))
                               ]
-  where a:b:c:_             = schemaTVars
-        schema tvs cs t     = TSchema (unTVar tvs) cs t
+  where a:b:c:_             = schemaOVars
+        schema tvs cs t     = OSchema (unOVar tvs) cs t
         nm s                = Name l0 s
 
 
@@ -203,14 +203,14 @@ blend te ((n,t):itms)
         mix t t'
           | t == t'             = t
           | otherwise           = case (t,t') of
-                                    (TRecord r1,TRecord r2) -> TRecord (cat r1 r2)
-        cat RNil r              = r
-        cat (RPos t r1) r2      = RPos t (cat r1 r2)
-        cat (RStar1 t r1) r2    = RStar1 t (cat r1 r2)
-        cat (RKwd n t r1) r2    = RKwd n t (cat r1 r2)
-        cat (RStar2 t r1) r2    = RStar2 t (cat r1 r2)
+                                    (ORecord r1,ORecord r2) -> ORecord (cat r1 r2)
+        cat ONil r              = r
+        cat (OPos t r1) r2      = OPos t (cat r1 r2)
+        cat (OStar1 t r1) r2    = OStar1 t (cat r1 r2)
+        cat (OKwd n t r1) r2    = OKwd n t (cat r1 r2)
+        cat (OStar2 t r1) r2    = OStar2 t (cat r1 r2)
 
-importModule :: (FilePath,FilePath) -> [(QName,Type)] -> TEnv -> Import -> IO ([(QName,Type)],TEnv)
+importModule :: (FilePath,FilePath) -> [(QName,OType)] -> TEnv -> Import -> IO ([(QName,OType)],TEnv)
 importModule impPaths ifaces tenv s@Import{}
                                 = modItems ifaces tenv (modules s)
   where modItems ifaces tenv []   = return (ifaces,tenv)
@@ -219,7 +219,7 @@ importModule impPaths ifaces tenv s@Import{}
                                      modItems ifaces' (blend tenv (maybe [mkenv qname t] (\as -> [(as,t)]) mbn)) ms
         mkenv (QName n vs) t    = (n, mk vs t)
         mk [] t                 = t
-        mk (n:ns) t             = TRecord (RKwd n (mk ns t) RNil)
+        mk (n:ns) t             = ORecord (OKwd n (mk ns t) ONil)
 importModule impPaths ifaces tenv s@FromImport{modul=ModRef (0,Just qname)}
                                 = do (ifaces',t) <- doImport impPaths ifaces qname
                                      let tenv' = openRecord t
@@ -232,10 +232,10 @@ importModule impPaths ifaces tenv s@FromImportAll{modul=ModRef (0,Just qname)}
                                       return (ifaces',blend tenv (openRecord t))
 importModule _ _ _      s       = illegalImport (loc s)
 
-openRecord (TRecord row)      = open row
-  where open RNil               = []
-        open (RKwd n t row)     = (n,t) : open row
-        open (RStar2 t row)     = openRecord t ++ open row
+openRecord (ORecord row)      = open row
+  where open ONil               = []
+        open (OKwd n t row)     = (n,t) : open row
+        open (OStar2 t row)     = openRecord t ++ open row
 openRecord t                    = error "Internal: openRecord"
 
 doImport (path,sysPath) ifaces qname

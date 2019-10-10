@@ -102,12 +102,12 @@ treatOneFile args
                                `catch` handle (\exc -> (l0,displayException (exc :: IOException))) "" paths
                                `catch` handle (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths
   where compTypesFile paths = do cont <- readFile (srcFile paths)
-                                 let t = read cont :: A.Type
+                                 let t = read cont :: A.OType
                                  InterfaceFiles.writeFile (joinPath (projSrcRoot paths: modpath paths)++".ty") t
 
         showTyFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
                                  putStrLn ("**** Type environment in " ++ (srcFile paths) ++ " ****")
-                                 putStrLn (Pretty.render (Pretty.pretty (Acton.Env.openRecord (t :: A.Type))))
+                                 putStrLn (Pretty.render (Pretty.pretty (Acton.Env.openRecord (t :: A.OType))))
 
 --        showYtFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
 --                                 putStrLn (Pretty.render (Pretty.pretty (t :: Y.Stmt)))
@@ -339,7 +339,7 @@ doTask args paths ifaces@(actifaces,yangifaces) (PythonTask qn)
                              if ok then return ifaces --putStrLn ("Skipping  "++ typesFile ++ " (files are up to date).")
                               else do putStr ("Compiling "++  typesFile ++ "... ")
                                       cont <- readFile typesFile
-                                      let t = read cont :: A.Type
+                                      let t = read cont :: A.OType
                                       InterfaceFiles.writeFile tyFile t
                                       putStrLn ("Done.")
                                       return ((qn,t):actifaces,yangifaces)
