@@ -691,6 +691,39 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 	return no_results+1;
 }
 
+int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
+{
+	db_schema_t * schema = table->schema;
+	int i = 0;
+
+	assert(idx_idx <= schema->no_index_keys == 1 && "Index index out of range");
+
+	snode_t * start_row = skiplist_search_higher(table->indexes[idx_idx], start_idx_key);
+
+	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_primary_keys[0]; *cell_row_node=NEXT(*cell_row_node), i++)
+	{
+		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
+
+		// Some keys were removed from the backend since the range query happened:
+		if(i>(no_range_results - 1))
+			return 1;
+
+		if((long) cell_row->key != range_result_keys[i])
+			return 1;
+
+		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
+		if(cmp != 0)
+			return cmp;
+	}
+
+	// Some extra keys were added to the backend since the range query happened:
+	if(i<no_range_results)
+		return 1;
+
+	return 0;
+}
+
 int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table)
 {
 	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, primary_keys[0]));
@@ -911,6 +944,19 @@ int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, sno
 	db_table_t * table = (db_table_t *) (node->value);
 
 	return table_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table);
+}
+
+int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db)
+{
+	snode_t * node = skiplist_search(db->tables, table_key);
+
+	if(node == NULL)
+		return -1;
+
+	db_table_t * table = (db_table_t *) (node->value);
+
+	return table_verify_index_range_version(idx_idx, start_idx_key, end_idx_key, range_result_keys, range_result_versions, no_range_results, table);
 }
 
 int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD table_key, db_t * db)

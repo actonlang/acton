@@ -204,7 +204,8 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 		}
 		case QUERY_TYPE_READ_INDEX_RANGE:
 		{
-			break;
+			return db_verify_index_range_version(tr->idx_idx, tr->start_idx_key, tr->end_idx_key,
+												tr->range_result_keys, tr->range_result_versions, tr->no_range_results, tr->table_key, db);
 		}
 	}
 

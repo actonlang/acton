@@ -151,6 +151,8 @@ int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys
 int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
 									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_index_version(WORD index_key, int idx_idx, WORD table_key, vector_clock * version, db_t * db);
+int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db);
 
 // Lower level API:
 
@@ -174,5 +176,7 @@ int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_k
 int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
+int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 
 #endif /* BACKEND_DB_H_ */
