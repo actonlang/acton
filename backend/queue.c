@@ -533,7 +533,7 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	return 0;
 }
 
-int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate)
+int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -562,7 +562,7 @@ int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsig
 	for(long i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 
-	int status = table_insert(queue_column_values, schema->no_cols, table, fastrandstate);
+	int status = table_insert(queue_column_values, schema->no_cols, NULL, table, fastrandstate); // version?
 
 	if(status)
 	{
@@ -601,6 +601,9 @@ int create_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db, unsig
 	pthread_mutex_init(db_row->read_lock, NULL);
 	db_row->subscribe_lock = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(db_row->subscribe_lock, NULL);
+
+	if(version != NULL)
+		update_or_replace_vc(&(db_row->version), version);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);

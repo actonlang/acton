@@ -343,7 +343,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		}
 		case QUERY_TYPE_DELETE:
 		{
-			// Update row tombstone version:
+			// Update row tombstone version for handling shadow range reads and reads by incomplete partition / clustering key path?
 
 			return db_delete_row(tw->column_values, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
 		}
@@ -363,7 +363,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
-			return create_queue(tw->table_key, tw->queue_id, 1, db, fastrandstate);
+			return create_queue(tw->table_key, tw->queue_id, version, 1, db, fastrandstate);
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{

@@ -311,7 +311,7 @@ int main(int argc, char **argv) {
 
 	// Create queue:
 
-	ret = create_queue(table_key, queue_id, 1, db, &seed);
+	ret = create_queue(table_key, queue_id, NULL, 1, db, &seed);
 	printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
 
 	// Create and run producer and consumer threads (also test subscribe / unsubscribe):
