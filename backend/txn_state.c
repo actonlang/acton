@@ -256,7 +256,8 @@ txn_read * get_txn_read(short query_type,
 						WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 						WORD* col_keys, int no_col_keys,
 						int idx_idx,
-						db_row_t* result, snode_t* start_row, snode_t* end_row,
+						vector_clock * result_version,
+						long * range_result_keys, vector_clock ** range_result_versions, int no_range_results,
 						WORD table_key, long local_order)
 {
 	int total_col_count = no_primary_keys + no_clustering_keys;
@@ -318,15 +319,27 @@ txn_read * get_txn_read(short query_type,
 
 	tr->idx_idx = idx_idx;
 
-	tr->result = result;
-	tr->start_row = start_row;
-	tr->end_row = end_row;
+	tr->result_version = result_version;
+	tr->range_result_keys = range_result_keys;
+	tr->range_result_versions = range_result_versions;
+	tr->no_range_results = no_range_results;
 
 	return tr;
 }
 
 void free_txn_read(txn_read * tr)
 {
+	if(tr->result_version != NULL)
+		free_vc(tr->result_version);
+
+	if(tr->range_result_keys && tr->no_range_results > 0)
+	{
+		free(tr->range_result_keys);
+		for(int i=0;i<tr->no_range_results;i++)
+			free_vc(tr->range_result_versions[i]);
+		free(tr->range_result_versions);
+	}
+
 	free(tr);
 }
 
@@ -351,7 +364,7 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
 						txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
 
 	// Note that this will overwrite previous values read for the variable in the same txn (last read wins):
 
@@ -366,10 +379,21 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 }
 
 int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-								snode_t* start_row, snode_t* end_row,
+								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
+	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
+	int i=0;
+
+	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
+	{
+		db_row_t * row = (db_row_t *) crt_row->value;
+		range_result_keys[i] = (long) row->key;
+		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
+	}
+
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, range_result_keys, range_result_versions, no_results, table_key, (long) ts->read_set->no_items);
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
@@ -383,7 +407,7 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
@@ -396,10 +420,26 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys,
 								WORD* end_clustering_keys, int no_clustering_keys,
 								WORD table_key,
-								snode_t* start_row, snode_t* end_row,
+								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, NULL, 0, -1, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
+	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
+	int i=0;
+
+	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
+	{
+		db_row_t * row = (db_row_t *) crt_row->value;
+		range_result_keys[i] = (long) row->key;
+		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
+	}
+
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL_RANGE, primary_keys, NULL, no_primary_keys,
+								start_clustering_keys, end_clustering_keys, no_clustering_keys,
+								NULL, 0, -1, NULL,
+								range_result_keys, range_result_versions, no_results,
+								table_key, (long) ts->read_set->no_items);
+
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
@@ -414,7 +454,7 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
@@ -426,7 +466,7 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, result, NULL, NULL, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)
@@ -436,9 +476,20 @@ int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t
 	return ret;
 }
 
-int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
+int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, int no_results, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, start_row, end_row, table_key, (long) ts->read_set->no_items);
+	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
+	int i=0;
+
+	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
+	{
+		db_row_t * row = (db_row_t *) crt_row->value;
+		range_result_keys[i] = (long) row->key;
+		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
+	}
+
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, range_result_keys, range_result_versions, no_results, table_key, (long) ts->read_set->no_items);
 	txn_read * prev_tr = skiplist_search(ts->read_set, (WORD) tr);
 
 	int ret = skiplist_insert(ts->read_set, (WORD) tr, (WORD) tr, fastrandstate); // Note that this will overwrite previous values read for the variable in the same txn (last read wins)

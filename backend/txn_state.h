@@ -83,9 +83,13 @@ typedef struct txn_read
 
 	// For non-range queries:
 
-	db_row_t* result;
+	vector_clock * result_version;
 
 	// For range queries:
+
+	long * range_result_keys;
+	vector_clock ** range_result_versions;
+	int no_range_results;
 
 	snode_t* start_row;
 	snode_t* end_row;
@@ -118,7 +122,8 @@ txn_read * get_txn_read(short query_type,
 						WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 						WORD* col_keys, int no_col_keys,
 						int idx_idx,
-						db_row_t* result, snode_t* start_row, snode_t* end_row,
+						vector_clock * result_version,
+						long * range_result_keys, vector_clock ** range_result_versions, int no_range_results,
 						WORD table_key, long local_order);
 void free_txn_read(txn_read * tr);
 
@@ -130,7 +135,7 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
 						txn_state * ts, unsigned int * fastrandstate);
 int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-								snode_t* start_row, snode_t* end_row,
+								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate);
 int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 								WORD table_key, db_row_t* result,
@@ -145,7 +150,7 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate);
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate);
-int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, WORD table_key, txn_state * ts, unsigned int * fastrandstate);
+int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, int no_results, WORD table_key, txn_state * ts, unsigned int * fastrandstate);
 
 // Queue ops:
 

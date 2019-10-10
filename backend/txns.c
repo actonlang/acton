@@ -179,24 +179,21 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 	switch(tr->query_type)
 	{
 		case QUERY_TYPE_READ_COLS:
-		{
-			break;
-		}
 		case QUERY_TYPE_READ_CELL:
 		{
-			break;
+			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->result_version, db);
 		}
 		case QUERY_TYPE_READ_ROW:
 		{
-			break;
+			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, NULL, 0, tr->result->version, db);
 		}
 		case QUERY_TYPE_READ_INDEX:
 		{
-			break;
+			return db_verify_index_version(tr->start_primary_keys, tr->idx_idx, tr->table_key, tr->result->version, db);
 		}
 		case QUERY_TYPE_READ_CELL_RANGE:
 		{
-			break;
+			return db_verify_cell_range_version(tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->end_clustering_keys, tr->no_clustering_keys, tr->table_key, tr->result->version, db);
 		}
 		case QUERY_TYPE_READ_ROW_RANGE:
 		{
@@ -512,11 +509,11 @@ int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int
 	if(ts == NULL)
 		return -2; // No such txn
 
-	int ret = db_range_search(start_primary_keys, end_primary_keys, start_row, end_row, table_key, db);
+	int no_rows = db_range_search(start_primary_keys, end_primary_keys, start_row, end_row, table_key, db);
 
-	// Note that if ret == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
+	// Note that if no_rows == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
 
-	return add_row_range_read_to_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, *start_row, *end_row, ts, fastrandstate);
+	return add_row_range_read_to_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, *start_row, *end_row, no_rows, ts, fastrandstate);
 }
 
 
@@ -541,11 +538,11 @@ int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, W
 
 	// Note that if ret == 0 (no rows read), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
 
-	db_range_search_clustering(primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, start_row, end_row, table_key, db);
+	int no_results = db_range_search_clustering(primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, start_row, end_row, table_key, db);
 
 	return add_cell_range_read_to_txn(primary_keys, no_primary_keys, start_clustering_keys,
 										end_clustering_keys, no_clustering_keys, table_key,
-										*start_row, *end_row, ts, fastrandstate);
+										*start_row, *end_row, no_results, ts, fastrandstate);
 }
 
 // WORD* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -585,9 +582,9 @@ int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_k
 	if(ts == NULL)
 		return -2; // No such txn
 
-	db_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table_key, db);
+	int no_results = db_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table_key, db);
 
-	return add_index_range_read_to_txn(idx_idx, &start_idx_key, &end_idx_key, *start_row, *end_row, table_key, ts, fastrandstate);
+	return add_index_range_read_to_txn(idx_idx, &start_idx_key, &end_idx_key, *start_row, *end_row, no_results, table_key, ts, fastrandstate);
 }
 
 int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
