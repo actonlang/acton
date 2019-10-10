@@ -47,6 +47,9 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
                 | Actor         { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
+                | Struct        { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 
@@ -81,8 +84,8 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | DictComp      { eloc::SrcLoc, assoc1::Assoc, comp::Comp }
                 | Set           { eloc::SrcLoc, elems::[Elem Expr] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
-                | Struct        { eloc::SrcLoc, fields::[Field] }
-                | StructComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
+                | Record        { eloc::SrcLoc, fields::[Field] }
+                | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
@@ -142,7 +145,7 @@ data Modif      = Sync Bool | Async | NoMod deriving (Show,Eq)
 data Type       = TVar      TVar
                 -- Types
                 | TFun      Effect Row Type
-                | TStruct   Row
+                | TRecord   Row
                 | TTuple    Row
                 | TDict     Type Type
                 | TList     Type
@@ -202,7 +205,7 @@ data CType      = CSelf     { tloc :: SrcLoc }
                 | CTCon     { tloc :: SrcLoc, ccon :: CCon }
                 | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
                 | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
-                | CTStruct  { tloc :: SrcLoc, kwrow :: KwRow }
+                | CTRecord  { tloc :: SrcLoc, kwrow :: KwRow }
                 | CPSeq     { tloc :: SrcLoc, elemtype :: CType }
                 | CPSet     { tloc :: SrcLoc, elemtype :: CType }
                 | CPMap     { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
@@ -340,8 +343,8 @@ instance Eq Expr where
     x@DictComp{}        ==  y@DictComp{}        = assoc1 x == assoc1 y && comp x == comp y
     x@Set{}             ==  y@Set{}             = elems x == elems y
     x@SetComp{}         ==  y@SetComp{}         = elem1 x == elem1 y && comp x == comp y
-    x@Struct{}          ==  y@Struct{}          = fields x == fields y
-    x@StructComp{}      ==  y@StructComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
+    x@Record{}          ==  y@Record{}          = fields x == fields y
+    x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@Paren{}           ==  y                   = exp1 x == y
     x                   ==  y@Paren{}           = x == exp1 y
     _                   ==  _                   = False
@@ -582,9 +585,9 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
-    pretty (Struct _ [])            = text "struct" <> parens empty
-    pretty (Struct _ fs)            = parens (commaList fs)
-    pretty (StructComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
+    pretty (Record _ [])            = text "record" <> parens empty
+    pretty (Record _ fs)            = parens (commaList fs)
+    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (Paren _ e)              = parens (pretty e)
 
 instance Pretty OpArg where
@@ -710,7 +713,7 @@ instance Pretty Type where
     
     pretty (TFun RNil row t)        = parens (prettyRow row) <> text "->" <> pretty t
     pretty (TFun fx row t)          = prettyEffect fx <> parens (prettyRow row) <> text "->" <> pretty t
-    pretty (TStruct row)            = parens (prettyRow row)
+    pretty (TRecord row)            = parens (prettyRow row)
     pretty (TDict k t)              = text "dict" <> parens (pretty k <> comma <> pretty t)
     pretty (TTuple row)             = parens $ prettyTupleRow row
     pretty (TList t)                = brackets $ pretty t
@@ -897,7 +900,7 @@ instance Pretty CType where
     pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (CTTuple _ pos)          = parens (pretty pos)
-    pretty (CTStruct _ kw)          = parens (pretty kw)
+    pretty (CTRecord _ kw)          = parens (pretty kw)
     pretty (CPSeq _ t)              = brackets (pretty t)
     pretty (CPSet _ t)              = braces (pretty t)
     pretty (CPMap _ kt vt)          = braces (pretty kt <> colon <+> pretty vt)

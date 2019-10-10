@@ -107,7 +107,7 @@ treatOneFile args
 
         showTyFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
                                  putStrLn ("**** Type environment in " ++ (srcFile paths) ++ " ****")
-                                 putStrLn (Pretty.render (Pretty.pretty (Acton.Env.openStruct (t :: A.Type))))
+                                 putStrLn (Pretty.render (Pretty.pretty (Acton.Env.openRecord (t :: A.Type))))
 
 --        showYtFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
 --                                 putStrLn (Pretty.render (Pretty.pretty (t :: Y.Stmt)))

@@ -188,7 +188,7 @@ instance InfEnv Stmt where
 
     infEnv env (Data l Nothing b)       = do te <- infData env1 b
                                              let te1 = filter (notemp . fst) te1
-                                             constrain [CEqu l 4 (TStruct $ env2row RNil te1) t]    -- assumption on return value
+                                             constrain [CEqu l 4 (TRecord $ env2row RNil te1) t]    -- assumption on return value
                                              return []
       where t                           = getReturn env
             env1                        = reserve (filter istemp $ bound b) env
@@ -196,7 +196,7 @@ instance InfEnv Stmt where
     infEnv env (Data l (Just p) b)
       | nodup p                         = do (te0, t) <- infEnvT env p
                                              (te1,te2) <- partition (istemp . fst) <$> infData env b
-                                             constrain [CEqu l 13 (TStruct $ env2row RNil te2) t]   -- eq of target and rhs..
+                                             constrain [CEqu l 13 (TRecord $ env2row RNil te2) t]   -- eq of target and rhs..
                                              return (te0 ++ te1)
             
     infEnv env (VarAssign _ pats e)
@@ -284,7 +284,7 @@ instance Infer Decl where
                                              (l1, t1, te1) <- getInit l <$> mapM (wrap t0) te
                                              r0 <- newTVar
                                              popFX
-                                             constrain [CEqu l 6 t0 (TStruct (env2row inherited te1))]
+                                             constrain [CEqu l 6 t0 (TRecord (env2row inherited te1))]
                                              constrain [CEqu l1 7 t1 (TFun RNil r0 TNone)]                 -- assumption on "__init__"
                                              return (TFun RNil r0 t0)
       where env0                        = reserve (bound b) $ newstate [] env
@@ -306,7 +306,7 @@ instance Infer Decl where
                                              (te0, row) <- infEnvT env0 p
                                              let env1 = define te0 env0
                                              te1 <- infEnv env1 b
-                                             constrain [CEqu l 10 t0 (TStruct $ env2row RNil te1)]
+                                             constrain [CEqu l 10 t0 (TRecord $ env2row RNil te1)]
                                              return (TFun fx row t0)
       where svars                       = statevars b
 
@@ -325,7 +325,7 @@ inferPure env e                         = do pushFX RNil
 
 env2row                                 = foldl (\r (n,t) -> RKwd n t r)
 
-env2type tenv                           = TStruct (env2row RNil tenv)
+env2type tenv                           = TRecord (env2row RNil tenv)
 
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do inferBool env e
@@ -513,14 +513,14 @@ instance Infer Expr where
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (define te env) e
                                              return (TSet t)
-    infer env (Struct l fs)             = do te <- infer env fs
-                                             return (TStruct te)
-    infer env (StructComp l n e co)     = do te <- infEnv env co
+    infer env (Record l fs)             = do te <- infer env fs
+                                             return (TRecord te)
+    infer env (RecordComp l n e co)     = do te <- infEnv env co
                                              let env1 = define te env
                                              _ <- infer env1 (Var (nloc n) n)
                                              _ <- infer env1 e
                                              r <- newTVar
-                                             return (TStruct r)                 -- !! Big over-generalization, for now
+                                             return (TRecord r)                 -- !! Big over-generalization, for now
     infer env (Paren l e)               = infer env e
 
 instance InfEnvT Params where
@@ -529,7 +529,7 @@ instance InfEnvT Params where
     infEnvT env (Params pos pX kwd kX)  = do (te0, r0) <- inferPar env (const RPos) pos
                                              (te1, r1) <- starPar RStar1 TTuple pX
                                              (te2, r2) <- inferPar (define te1 $ define te0 env) RKwd kwd
-                                             (te3, r3) <- starPar RStar2 TStruct kX
+                                             (te3, r3) <- starPar RStar2 TRecord kX
                                              return (te0++te1++te2++te3, (r0 . r1 . r2 . r3) RNil)
                                              
 inferPar env f []                       = return ([], id)
@@ -547,7 +547,7 @@ inferPar env f (Param n a (Just e): ps) = do t <- infer env e
 starPar rc tc NoStar                    = return ([], id)
 starPar rc tc (StarPar _ n _)           = do t1 <- newTVar
                                              r1 <- newTVar
-                                             constrain [CEqu (nloc n) 33 t1 (tc r1)]        -- *param is a tuple/struct
+                                             constrain [CEqu (nloc n) 33 t1 (tc r1)]        -- *param is a tuple/record
                                              return ([(n,t1)], rc t1)               
 
 instance Infer Assoc where
