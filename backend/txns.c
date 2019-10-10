@@ -267,11 +267,11 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 {
 	// Check for invalidated queue reads / creation / deletion ops with backend DB:
 
-	switch(tr->query_type)
+	switch(tw->query_type)
 	{
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			break;
+			return db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->prh_version, db);
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
