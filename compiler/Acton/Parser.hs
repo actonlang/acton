@@ -488,7 +488,7 @@ simple_stmt = ((small_stmt `sepBy1` semicolon) <* optional semicolon) <* newline
 
 small_stmt :: Parser S.Stmt
 small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt  <|>
-             assert_stmt <|> extends_stmt  <|> var_stmt
+             assert_stmt <|> var_stmt
 
 -- expr_stmt: testlist_star_expr (
 --                                   annassign
@@ -1052,11 +1052,7 @@ trailer = withLoc (
                      
 --- Actor and class definitions ------------------------------------------------
 
--- actordef: 'actor' name parameters optarrowannot ':' suite  
---   | 'actor' name parameters optarrowannot
---     extends_stmt ':' suite      
--- extends_stmt: 'extends' dotted_name '(' arglist ')' 
---   | 'extends' dotted_name '(' ')'
+-- actordef: 'actor' name parameters optarrowannot ':' suite
 
 actordef = addLoc $ do 
                 assertNotData
@@ -1064,21 +1060,9 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 ps <- parameters
-                mbe <- optional extends_decl
                 mba <- optional (arrow *> annot)
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ps mba (maybe ss (:ss) mbe)
-
-extends_decl = addLoc $ do
-                rword "extends"
-                dn <- dotted_name
-                S.Extends NoLoc dn . maybe [] id <$> parens (optional arglist)
-
-extends_stmt = addLoc $ do
-                assertActBody
-                rword "extends"
-                dn <- dotted_name
-                S.Extends NoLoc dn . maybe [] id <$> parens (optional arglist)
+                return $ S.Actor NoLoc nm q ps mba ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 

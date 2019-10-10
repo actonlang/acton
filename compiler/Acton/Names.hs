@@ -122,7 +122,6 @@ instance Vars Stmt where
     free (Try _ b hs els fin)       = free b ++ free hs ++ free els ++ free fin
     free (With _ items b)           = free items ++ (free b \\ bound items)
     free (Data _ p b)               = free p ++ free b
-    free (Extends _ qn es)          = free qn ++ free es
     free (VarAssign _ ps e)         = free ps ++ free e
     free (Decl _ ds)                = free ds
 
@@ -492,7 +491,6 @@ lambdafree s                        = lfreeS s
         lfreeS (For _ p e b els)    = lfreeP p ++ lfree e
         lfreeS (With _ items b)     = concat [ lfree e ++ maybe [] lfreeP p | WithItem e p <- items ]
         lfreeS (Data _ p b)         = maybe [] lfreeP p
-        lfreeS (Extends _ qn as)    = concatMap (lfree . argcore) as
         lfreeS (VarAssign _ ps e)   = concatMap lfreeP ps ++ lfree e
         lfreeS (Decl _ ds)          = concatMap lfreeD ds
         lfreeS _                    = []

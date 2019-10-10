@@ -40,7 +40,6 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Try           { sloc::SrcLoc, body::Suite, handlers::[Handler], els::Suite, finally::Suite }
                 | With          { sloc::SrcLoc, context::[WithItem], body::Suite }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
-                | Extends       { sloc::SrcLoc, qname::QName, args::[Arg] }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
@@ -299,7 +298,6 @@ instance Eq Stmt where
                                                   && finally x == finally y
     x@With{}            ==  y@With{}            = context x == context y && body x == body y
     x@Data{}            ==  y@Data{}            = mbpat x == mbpat y && dsuite x == dsuite y
-    x@Extends{}         ==  y@Extends{}         = qname x == qname y && args x == args y
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
     x@Decl{}            ==  y@Decl{}            = decls x == decls y
     _                   ==  _                   = False
@@ -459,7 +457,7 @@ isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
                                         "False","None","NotImplemented","True","actor","and","as","assert",
                                         "async","await","break","class","continue","def","del","elif","else",
-                                        "except","extends","finally","for","from","global","if","import","in",
+                                        "except","finally","for","from","global","if","import","in",
                                         "is","lambda","nonlocal","not","or","pass","raise","return","sync",
                                         "try","var","while","with","yield","Self"
                                       ]
@@ -518,7 +516,6 @@ instance Pretty Stmt where
     pretty (With _ items b)         = text "with" <+> commaSep pretty items <> colon $+$ prettySuite b
     pretty (Data _ (Just e) b)      = pretty e <> colon $+$ prettySuite b
     pretty (Data _ Nothing b)       = text "return" <> colon $+$ prettySuite b
-    pretty (Extends _ n as)         = text "extends" <+> pretty n <> nonEmpty parens commaList as
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
     pretty (Decl _ ds)              = vcat $ map pretty ds
 

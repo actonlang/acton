@@ -58,11 +58,6 @@ noshadow svs x
   | otherwise                           = True
   where vs                              = intersect (bound x) svs
 
-singleext b
-  | length xs > 1                       = err2 xs "Multiple actor extensions"
-  | otherwise                           = True
-  where xs                              = [ c | c@Extends{} <- b ]
-
 
 -- Infer -------------------------------
 
@@ -304,19 +299,16 @@ instance Infer Decl where
                                         
     infer env (Actor l n q p ann b)
       | nodup p && noshadow svars p && 
-        chkRedef b && singleext b       = do fx <- actFX <$> newTVar
+        chkRedef b                      = do fx <- actFX <$> newTVar
                                              pushFX fx
                                              t0 <- newTVar
                                              let env0 = reserve (bound p ++ bound b) $ newstate svars $ define [(self,t0)] env
                                              (te0, row) <- infEnvT env0 p
                                              let env1 = define te0 env0
-                                             sup <- mapM (infer env1) exts
                                              te1 <- infEnv env1 b
-                                             constrain [CEqu l 10 t0 (TStruct $ env2row (inherited sup) te1)]
+                                             constrain [CEqu l 10 t0 (TStruct $ env2row RNil te1)]
                                              return (TFun fx row t0)
       where svars                       = statevars b
-            exts                        = [ Call l (qname2expr n) args | Extends l n args <- b ]
-            inherited sup               = foldl (flip RStar2) RNil (sup :: [Type])
 
     infer env (Decorator l qn args d)
       | nodup args                      = do t1 <- inferPure env deco

@@ -35,5 +35,11 @@ f4 : [A] => (Self, y:Self) -> [A]                        # functiona with Self a
 def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
     pass
 
-class dict [A(Hashable),B()] (Sequence[A], Mapping[A,B]):
-    def __init__(self): pass
+actor Test [T](v0:T):
+    def m(x):
+        pass
+
+x = 1                                                    # Comment out, and f below will be parsed as a method of previous actor!!
+                                                         # (ERROR!)
+def f():
+    pass

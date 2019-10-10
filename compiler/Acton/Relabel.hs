@@ -51,7 +51,6 @@ instance Relabel Stmt where
     relabel (Try _ b hs els fin) = Try <$> newLoc <*> relabel b <*> relabel hs <*> relabel els <*> relabel fin
     relabel (With _ is b) = With <$> newLoc <*> relabel is <*> relabel b
     relabel (Data _ mbt ss) = Data <$> newLoc <*> relabel mbt <*> relabel ss
-    relabel (Extends _ qn args) = Extends <$> newLoc <*> relabel qn <*> relabel args
     relabel (VarAssign _ ps e) = VarAssign <$> newLoc <*> relabel ps <*> relabel e
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
 
