@@ -283,7 +283,7 @@ instance Infer Decl where
 
     infer env (Class l n q cs b)
       | nodup cs && chkRedef b          = do t0 <- newTVar
-                                             inherited <- inferSuper env cs
+                                             inherited <- return RNil --inferSuper env cs
                                              pushFX RNil
                                              te <- infEnv env0 b                     -- visible bindings in b???
                                              (l1, t1, te1) <- getInit l <$> mapM (wrap t0) te

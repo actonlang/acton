@@ -33,7 +33,7 @@ f3 : [A]                                                 # sequence that also co
 f4 : [A] => (Self, y:Self) -> [A]                        # functiona with Self and [A] disambiguation!
 
 def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
-    for y in xs:
-        if x == y:
-            return True
-        return False
+    pass
+
+class dict [A(Hashable),B()] (Sequence[A], Mapping[A,B]):
+    def __init__(self): pass
