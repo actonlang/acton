@@ -5,7 +5,7 @@ x3 : ('str1' | 'str2' | int)                             # union with string lit
 x4 : (int,bool)                                          # tuple
 x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
-x7 : (Hashable[A], Eq[A]) => set[A]                      # Qualified/constrained type
+x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
 x9 : e1 e2 (int,*A,b : bool,**B) -> SomeClass[int]       # function with effects and all kinds of parameters
 

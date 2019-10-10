@@ -184,9 +184,11 @@ type Scheme         = Type
 
 type Substitution   = [(TVar,Type)]
 
-data CVar       = CVar Name deriving (Eq,Show,Read) -- the Name is an uppercase letter, optionally followed by digits.
+data CVar       = CVar Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
 
-data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Show,Read)
+data CCon       = CCon Name [CType] deriving (Eq,Show)
+
+data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Show)
 
 type CEffect    = [Name]
 
@@ -194,7 +196,10 @@ data PosRow     = PosRow CType PosRow | PosVar (Maybe CVar) | PosNil deriving (E
 
 data KwRow      = KwRow Name CType KwRow | KwVar (Maybe CVar) | KwNil deriving (Eq,Show)
 
+data CBind      = CBind CVar [CCon] deriving (Eq,Show)
+
 data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
+                | CTCon     { tloc :: SrcLoc, ccon :: CCon }
                 | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
                 | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
                 | CTStruct  { tloc :: SrcLoc, kwrow :: KwRow }
@@ -203,13 +208,12 @@ data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
                 | CPMap     { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
                 | CTOpt     { tloc :: SrcLoc, opttype :: CType }
                 | CTUnion   { tloc :: SrcLoc, alts :: [UType] }
-                | CTCon     { tloc :: SrcLoc, classname :: Name, targs :: [CType] }  -- dict,set,list here or as separate constructors?
                 | CTStr     { tloc :: SrcLoc }
                 | CTInt     { tloc :: SrcLoc }
                 | CTFloat   { tloc :: SrcLoc }
                 | CTBool    { tloc :: SrcLoc }
                 | CTNone    { tloc :: SrcLoc }
-                | CTQual    { tloc :: SrcLoc, cconstraints :: [CType], qtype :: CType } -- type for cconstraints to be changed
+                | CTQual    { tloc :: SrcLoc, binds :: [CBind], qtype :: CType } -- type for cconstraints to be changed
                 deriving (Eq,Show,Generic)
 
 instance Data.Binary.Binary Type
@@ -854,6 +858,14 @@ instance Pretty Aug where
 
 instance Pretty CVar where
     pretty (CVar n)                 = pretty n
+
+instance Pretty CCon where
+    pretty (CCon n [])              = pretty n
+    pretty (CCon n ts)              = pretty n <> brackets (commaList ts)
+    
+instance Pretty CBind where
+    pretty (CBind v [])             = pretty v
+    pretty (CBind v cs)             = pretty v <> parens (commaList cs)
     
 instance Pretty UType where
     pretty UInt                     = text "int"
@@ -881,6 +893,7 @@ instance Pretty (PosRow, KwRow) where
 
 instance Pretty CType where
     pretty (CTVar _ v)              = pretty v
+    pretty (CTCon  _ c)             = pretty c
     pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (CTTuple _ pos)          = parens (pretty pos)
@@ -891,13 +904,12 @@ instance Pretty CType where
     pretty (CTOpt _ t)              = text "?" <> pretty t
     pretty (CTUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    pretty (CTCon  _ nm ts)         = pretty nm <> brackets (commaList ts)
     pretty (CTStr _)                = text "str"
     pretty (CTInt _)                = text "int"
     pretty (CTFloat _)              = text "float"
     pretty (CTBool _)               = text "bool"
     pretty (CTNone _)               = text "None"
-    pretty (CTQual _ cs t)          = parens (commaList cs) <+> text "=>" <+> pretty t
+    pretty (CTQual _ cs t)          = brackets (commaList cs) <+> text "=>" <+> pretty t
 
 
     
