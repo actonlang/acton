@@ -309,6 +309,9 @@ instance Eq Decl where
     Def _ n1 q1 p1 a1 b1 m1 ==  Def _ n2 q2 p2 a2 b2 m2 = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2 && m1 == m2
     Actor _ n1 q1 p1 a1 b1  ==  Actor _ n2 q2 p2 a2 b2  = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2
     Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Struct _ n1 q1 a1 b1    ==  Struct _ n2 q2 a2 b2    = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Protocol _ n1 q1 a1 b1  ==  Protocol _ n2 q2 a2 b2  = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Extension _ n1 q1 a1 b1 ==  Extension _ n2 q2 a2 b2 = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Decorator _ n1 a1 d1    ==  Decorator _ n2 a2 d2    = n1 == n2 && a1 == a2 && d1 == d2
 
 instance Eq Expr where
@@ -528,6 +531,12 @@ instance Pretty Decl where
     pretty (Actor _ n q ps a b)     = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Struct _ n q a b)       = text "struct" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Protocol _ n q a b)     = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
 

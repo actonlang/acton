@@ -107,6 +107,7 @@ instance Vars a => Vars (Maybe a) where
 
 instance Vars Stmt where
     free (Expr _ e)                 = free e
+    free (TypeSig _ ns t)           = free t
     free (Assign _ ps e)            = free ps ++ free e
     free (AugAssign _ p op e)       = free p ++ bound p ++ free e
     free (Assert _ es)              = free es
@@ -125,6 +126,7 @@ instance Vars Stmt where
     free (VarAssign _ ps e)         = free ps ++ free e
     free (Decl _ ds)                = free ds
 
+    bound (TypeSig _ ns t)          = ns
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
     bound (Data _ p b)              = bound p ++ (filter istemp $ bound b)
@@ -140,12 +142,18 @@ instance Vars Stmt where
 instance Vars Decl where
     free (Def _ n q ps annot b md)  = (free ps ++ free b) \\ (n : bound ps ++ bound b)
     free (Actor _ n q ps annot b)   = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
-    free (Class _ n q cs b)         = free b \\ (n : bound b)
+    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound b)
+    free (Struct _ n q cs b)        = (free cs ++ free b) \\ (n : bound b)
+    free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound b)
+    free (Extension _ n q cs b)     = (free cs ++ free b) \\ (n : bound b)
     free (Decorator _ qn es s)      = free qn ++ free es ++ free s
 
     bound (Def _ n _ _ _ _ _)       = [n]
     bound (Actor _ n _ _ _ _)       = [n]
     bound (Class _ n _ _ _)         = [n]
+    bound (Struct _ n _ _ _)        = [n]
+    bound (Protocol _ n _ _ _)      = [n]
+    bound (Extension _ n _ _ _)     = []
     bound (Decorator _ _ _ d)       = bound d
 
 instance Vars Branch where
@@ -496,6 +504,9 @@ lambdafree s                        = lfreeS s
         lfreeS _                    = []
 
         lfreeD (Class _ n q cs b)   = concatMap lfreeS b
+        lfreeD (Struct _ n q cs b)  = concatMap lfreeS b
+        lfreeD (Protocol _ n q cs b)    = concatMap lfreeS b
+        lfreeD (Extension _ n q cs b)   = concatMap lfreeS b
         lfreeD (Decorator _ n as d) = concatMap (lfree . argcore) as ++ lfreeD d
         lfreeD _                    = []
 

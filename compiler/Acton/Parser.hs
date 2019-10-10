@@ -723,7 +723,7 @@ decl_group :: Parser [S.Stmt]
 decl_group = do g <- some decl; return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> actordef <|> decorated
+decl = funcdef <|> classdef <|> structdef <|> protodef <|> extdef <|> actordef <|> decorated
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -1065,14 +1065,22 @@ actordef = addLoc $ do
                 return $ S.Actor NoLoc nm q ps mba ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- structdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 
-classdef = addLoc $ do
+classdef    = classdefGen "class" S.Class
+structdef   = classdefGen "struct" S.Struct
+protodef    = classdefGen "protocol" S.Protocol
+extdef      = classdefGen "extension" S.Extension
+
+classdefGen k con = addLoc $ do
                 assertNotData
-                (s,_) <- withPos (rword "class")
+                (s,_) <- withPos (rword k)
                 nm <- name
                 q <- optbinds
                 cs <- optbounds
-                S.Class NoLoc nm q cs <$> suite CLASS s
+                con NoLoc nm q cs <$> suite CLASS s
 
 -- arglist: argument (',' argument)*  [',']
 -- argument: ( test [comp_for] |
