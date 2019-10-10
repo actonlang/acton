@@ -45,9 +45,9 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
-                | Actor         { dloc::SrcLoc, dname:: Name, params::Params, ann::(Maybe CType), dbody::Suite }
-                | Class         { dloc::SrcLoc, dname::Name, dargs::[Arg], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[Arg], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 
@@ -305,9 +305,9 @@ instance Eq Stmt where
     _                   ==  _                   = False
 
 instance Eq Decl where
-    Def _ n1 p1 a1 b1 m1    ==  Def _ n2 p2 a2 b2 m2    = n1 == n2 && p1 == p2 && a1 == a2 && b1 == b2 && m1 == m2
-    Actor _ n1 p1 a1 b1     ==  Actor _ n2 p2 a2 b2     = n1 == n2 && p1 == p2 && a1 == a2 && b1 == b2
-    Class _ n1 a1 b1        ==  Class _ n2 a2 b2        = n1 == n2 && a1 == a2 && b1 == b2
+    Def _ n1 q1 p1 a1 b1 m1 ==  Def _ n2 q2 p2 a2 b2 m2 = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2 && m1 == m2
+    Actor _ n1 q1 p1 a1 b1  ==  Actor _ n2 q2 p2 a2 b2  = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2
+    Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Decorator _ n1 a1 d1    ==  Decorator _ n2 a2 d2    = n1 == n2 && a1 == a2 && d1 == d2
 
 instance Eq Expr where
@@ -523,11 +523,12 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n ps a b md)      = pretty md <+> text "def" <+> pretty n <> parens (pretty ps) <>
-                                      nonEmpty (text "->" <>) pretty a <> colon $+$ prettySuite b
-    pretty (Actor _ n ps a b)       = text "actor" <+> pretty n <> parens (pretty ps) <>
-                                      nonEmpty (text "->" <>) pretty a <> colon $+$ prettySuite b
-    pretty (Class _ n as b)         = text "class" <+> pretty n <> nonEmpty parens commaList as <> colon $+$ prettySuite b
+    pretty (Def _ n q ps a b md)    = pretty md <+> text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
+                                      nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
+    pretty (Actor _ n q ps a b)     = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
+                                      nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
+    pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b

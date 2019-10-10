@@ -56,10 +56,10 @@ instance Relabel Stmt where
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
 
 instance Relabel Decl where
-    relabel (Def _ nm ps mba ss md) = Def <$> newLoc <*> relabel nm <*> relabel ps <*> relabel mba <*> relabel ss <*> return md
-    relabel (Actor _ n ps ann b) = Actor <$> newLoc <*> relabel n <*> relabel ps <*> relabel ann <*> relabel b
-    relabel (Class _ nm as ss) = Class <$> newLoc <*> relabel nm <*> relabel as <*> relabel ss
-    relabel (Decorator _ qn args s) = Decorator <$> newLoc <*> relabel qn <*> relabel args <*> relabel s
+    relabel (Def _ n q ps mba ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel mba <*> relabel ss <*> return md
+    relabel (Actor _ n q ps ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ann <*> relabel b
+    relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
+    relabel (Decorator _ n args s) = Decorator <$> newLoc <*> relabel n <*> relabel args <*> relabel s
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm

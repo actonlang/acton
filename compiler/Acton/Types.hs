@@ -34,7 +34,7 @@ typeError                               = solveError
 
 chkRedef ss                             = True -- TBD
 
-chkCycles (Class _ n cs b : ds)
+chkCycles (Class _ n q cs b : ds)
                                         = noforward cs n ds && all chkClass b && chkCycles ds
   where chkClass s@Decl{}               = chkCycles (decls s ++ ds)
         chkClass s                      = noforward s n ds
@@ -246,7 +246,7 @@ instance InfData Branch where
 
 
 instance Infer Decl where
-    infer env (Def l n p ann b NoMod)
+    infer env (Def l n q p ann b NoMod)
       | nodup p                         = do fx <- newTVar
                                              pushFX fx                              -- TODO: constrain opt result if fallsthru b
                                              t <- newTVar
@@ -257,7 +257,7 @@ instance Infer Decl where
                                              return (TFun fx row t)
       where svars                       = stvars env
 
-    infer env (Def l n p ann b Async)
+    infer env (Def l n q p ann b Async)
       | nodup p && noshadow svars p     = do fx0 <- newTVar
                                              pushFX fx0                              -- TODO: constrain opt result if fallsthru b
                                              t <- newTVar
@@ -269,7 +269,7 @@ instance Infer Decl where
                                              return (TFun fx row ({-TMsg-}t))
       where svars                       = stvars env
 
-    infer env (Def l n p ann b (Sync _))
+    infer env (Def l n q p ann b (Sync _))
       | nodup p && noshadow svars p     = do fx0 <- newTVar
                                              pushFX fx0                              -- TODO: constrain opt result if fallsthru b
                                              t <- newTVar
@@ -281,7 +281,7 @@ instance Infer Decl where
                                              return (TFun fx row t)
       where svars                       = stvars env
 
-    infer env (Class l n cs b)
+    infer env (Class l n q cs b)
       | nodup cs && chkRedef b          = do t0 <- newTVar
                                              inherited <- inferSuper env cs
                                              pushFX RNil
@@ -302,7 +302,7 @@ instance Infer Decl where
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
                                         
-    infer env (Actor l n p ann b)
+    infer env (Actor l n q p ann b)
       | nodup p && noshadow svars p && 
         chkRedef b && singleext b       = do fx <- actFX <$> newTVar
                                              pushFX fx

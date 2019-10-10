@@ -139,14 +139,14 @@ instance Vars Stmt where
     bound _                         = []
 
 instance Vars Decl where
-    free (Def _ n ps annot b md)    = (free ps ++ free b) \\ (n : bound ps ++ bound b)
-    free (Actor _ n ps annot b)     = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
-    free (Class _ n cs b)           = free cs ++ (free b \\ (n : bound b))
+    free (Def _ n q ps annot b md)  = (free ps ++ free b) \\ (n : bound ps ++ bound b)
+    free (Actor _ n q ps annot b)   = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
+    free (Class _ n q cs b)         = free cs ++ (free b \\ (n : bound b))
     free (Decorator _ qn es s)      = free qn ++ free es ++ free s
 
-    bound (Def _ n _ _ _ _)         = [n]
-    bound (Actor _ n _ _ _)         = [n]
-    bound (Class _ n _ _)           = [n]
+    bound (Def _ n _ _ _ _ _)       = [n]
+    bound (Actor _ n _ _ _ _)       = [n]
+    bound (Class _ n _ _ _)         = [n]
     bound (Decorator _ _ _ d)       = bound d
     
 instance Vars Branch where
@@ -431,7 +431,7 @@ lambdafree s                        = lfreeS s
         lfreeS (Decl _ ds)          = concatMap lfreeD ds
         lfreeS _                    = []
 
-        lfreeD (Class _ n cs b)     = concatMap (lfree . argcore) cs
+        lfreeD (Class _ n q cs b)   = concatMap (lfree . argcore) cs
         lfreeD (Decorator _ n as d) = concatMap (lfree . argcore) as ++ lfreeD d
         lfreeD _                    = []
 

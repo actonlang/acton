@@ -381,7 +381,7 @@ funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
               (p,md) <- withPos (modifier <* rword "def")
-              S.Def NoLoc <$> name <*> parameters <*> optional (arrow *> annot) <*> suite DEF p <*> pure md
+              S.Def NoLoc <$> name <*> optbinds <*> parameters <*> optional (arrow *> annot) <*> suite DEF p <*> pure md
 
 
 -- modifier: ['sync' | 'async']
@@ -390,6 +390,12 @@ modifier :: Parser S.Modif
 modifier = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
            assertActScope *> rword "async" *> return S.Async <|>
            ifActScope (return (S.Sync False)) (return S.NoMod)
+
+optbinds :: Parser [S.CBind]
+optbinds = brackets (do b <- cbind; bs <- many (comma *> cbind); return (b:bs))
+            <|>
+           return []
+
 
 -- parameters: '(' [typedargslist] ')'
 -- typedargslist:
@@ -1056,11 +1062,12 @@ actordef = addLoc $ do
                 assertNotData
                 (s,_) <- withPos (rword "actor")
                 nm <- name <?> "actor name"
+                q <- optbinds
                 ps <- parameters
                 mbe <- optional extends_decl
                 mba <- optional (arrow *> annot)
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm ps mba (maybe ss (:ss) mbe)
+                return $ S.Actor NoLoc nm q ps mba (maybe ss (:ss) mbe)
 
 extends_decl = addLoc $ do
                 rword "extends"
@@ -1079,8 +1086,9 @@ classdef = addLoc $ do
                 assertNotData
                 (s,_) <- withPos (rword "class")
                 nm <- name
+                q <- optbinds
                 mbas <- optional (parens (optional arglist))
-                S.Class NoLoc nm (maybe [] (maybe [] id) mbas) <$> suite CLASS s
+                S.Class NoLoc nm q (maybe [] (maybe [] id) mbas) <$> suite CLASS s
 
 -- arglist: argument (',' argument)*  [',']
 -- argument: ( test [comp_for] |
