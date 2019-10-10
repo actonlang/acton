@@ -1165,9 +1165,6 @@ funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.
         <|>
            try (do optional comma; return (S.PosNil, S.KwNil))
 
-named :: Parser S.CType
-named =  addLoc (S.CTCon NoLoc <$> ccon) ----------------------------- <<<<
-
 ccon :: Parser S.CCon
 ccon =  do n <- name
            args <- optional (brackets (do t <- ctype
@@ -1192,17 +1189,18 @@ ctype    =  addLoc (
         <|> rword "bool" *> return (S.CTBool NoLoc)
         <|> rword "str" *> return (S.CTStr NoLoc)
         <|> rword "None" *> return (S.CTNone NoLoc)
+        <|> rword "Self" *> return (S.CSelf NoLoc)
         <|> S.CTOpt NoLoc <$> (qmark *> ctype)
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
                        return (maybe (S.CPSet NoLoc t) (S.CPMap NoLoc t) mbt))
-        <|> try (brackets (S.CPSeq NoLoc <$> ctype))
         <|> try (do bs <- brackets (do n <- cbind
                                        ns <- commaList cbind
                                        return (n:ns))
                     fatarrow
                     t <- ctype
                     return (S.CTQual NoLoc bs t))
+        <|> try (brackets (S.CPSeq NoLoc <$> ctype))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.CTUnion NoLoc (alts++[alt])))

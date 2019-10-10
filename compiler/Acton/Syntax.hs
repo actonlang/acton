@@ -198,7 +198,8 @@ data KwRow      = KwRow Name CType KwRow | KwVar (Maybe CVar) | KwNil deriving (
 
 data CBind      = CBind CVar [CCon] deriving (Eq,Show)
 
-data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
+data CType      = CSelf     { tloc :: SrcLoc }
+                | CTVar     { tloc :: SrcLoc, cvar :: CVar }
                 | CTCon     { tloc :: SrcLoc, ccon :: CCon }
                 | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
                 | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
@@ -460,7 +461,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "async","await","break","class","continue","def","del","elif","else",
                                         "except","extends","finally","for","from","global","if","import","in",
                                         "is","lambda","nonlocal","not","or","pass","raise","return","sync",
-                                        "try","var","while","with","yield"
+                                        "try","var","while","with","yield","Self"
                                       ]
 
 istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
@@ -892,6 +893,7 @@ instance Pretty (PosRow, KwRow) where
     pretty (p, k)                   = pretty p <> comma <+> pretty k
 
 instance Pretty CType where
+    pretty (CSelf _)                = text "Self"
     pretty (CTVar _ v)              = pretty v
     pretty (CTCon  _ c)             = pretty c
     pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
