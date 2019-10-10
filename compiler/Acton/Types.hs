@@ -85,20 +85,20 @@ generalize tvs cs t                     = TSchema (unTVar $ rng s) (subst s cs) 
   where s                               = (tyvars t \\ tvs) `zip` schemaTVars
 
 genTEnv env te                          = do cs <- constraints
-                                             traceM ("#### Reducing " ++ prstrs (dom te))
-                                             traceM (prstr cs)
+                                             --traceM ("#### Reducing " ++ prstrs (dom te))
+                                             --traceM (prstr cs)
                                              cs1 <- reduce cs
-                                             traceM ("#### Residue " ++ prstrs (dom te))
-                                             traceM (prstr cs1)
+                                             --traceM ("#### Residue " ++ prstrs (dom te))
+                                             --traceM (prstr cs1)
                                              te1 <- mapsubst te
                                              dump [ INS (loc v) t | (v,t) <- te1 ]
                                              tvs <- fmap tyvars $ mapM mapsubst $ map TVar $ tyvars env
                                              let (cs2, cs3) = partition (null . (\\tvs) . tyvars) cs1
                                                  te2 = mapSnd (closeFX . generalize tvs cs3) te1
-                                             traceM ("#### Generalized " ++ prstrs (dom te))
-                                             traceM (prstr te2)
-                                             traceM ("#### Retaining " ++ prstrs (dom te))
-                                             traceM (prstr cs2)
+                                             --traceM ("#### Generalized " ++ prstrs (dom te))
+                                             --traceM (prstr te2)
+                                             --traceM ("#### Retaining " ++ prstrs (dom te))
+                                             --traceM (prstr cs2)
                                              constrain cs2
                                              dump [ GEN (loc v) t | (v,t) <- te2 ]
                                              return te2
