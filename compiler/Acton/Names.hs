@@ -343,6 +343,7 @@ instance Vars CType where
     free (CPMap _ kt vt)            = free kt ++ free vt
     free (CTOpt _ t)                = free t
     free (CTCon  _ c)               = free c
+    free (CTAt  _ c)                = free c
     free _                          = []
 
 
@@ -477,6 +478,7 @@ instance Subst CType where
     subst s (CTOpt l t)             = CTOpt l $ subst s t
     subst s (CTUnion l as)          = CTUnion l $ return as
     subst s (CTCon l c)             = CTCon l $ subst s c
+    subst s (CTAt l c)              = CTAt l $ subst s c
     subst s (CTStr l)               = CTStr l
     subst s (CTInt l)               = CTInt l
     subst s (CTFloat l)             = CTFloat l

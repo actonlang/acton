@@ -1224,6 +1224,7 @@ ctype    =  addLoc (
         <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (brackets (S.CPSeq NoLoc <$> ctype))
         <|> try (S.CTVar NoLoc <$> cvar)
+        <|> S.CTAt NoLoc <$> (symbol "@" *> ccon)
         <|> S.CTCon NoLoc <$> ccon)
 
                 
