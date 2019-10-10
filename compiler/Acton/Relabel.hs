@@ -205,6 +205,7 @@ instance Relabel KwRow where
     relabel KwNil = return KwNil
 
 instance Relabel CType where
+    relabel (CSelf _) = CSelf <$> newLoc
     relabel (CTVar _ v) = CTVar <$> newLoc <*> relabel v
     relabel (CTFun _ es p k t) = CTFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (CTTuple _ p) = CTTuple <$> newLoc <*> relabel p
