@@ -177,6 +177,12 @@ int ww_conflict(txn_write * tw1, txn_write * tw2)
 
 int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 {
+	// Check for conflicts with backend DB:
+
+
+
+	// Check for conflicts with the other txn write sets:
+
 	// If exact (non-range) read, and not a secondary index query, create dummy write op on the same key path, to look it up in other txn's write set:
 
 	int is_exact_query = (tr->query_type == QUERY_TYPE_READ_COLS || tr->query_type == QUERY_TYPE_READ_CELL || tr->query_type == QUERY_TYPE_READ_ROW);
@@ -267,6 +273,8 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 				assert(write_op_n->value != NULL);
 
 				txn_write * tw2 = (txn_write *) write_op_n->value;
+
+				// No conflict between regular ops and queue ops:
 
 				if(tw->query_type == QUERY_TYPE_UPDATE || tw->query_type == QUERY_TYPE_DELETE)
 					continue;

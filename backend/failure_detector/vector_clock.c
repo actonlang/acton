@@ -92,6 +92,36 @@ int update_vc(vector_clock * vc_dest, vector_clock * vc_src)
 	return 0;
 }
 
+int update_or_replace_vc(vector_clock ** vc_dest, vector_clock * vc_src)
+{
+	int alloc_new_vc = (*vc_dest == NULL || (*vc_dest)->no_nodes != vc_src->no_nodes);
+
+	if(!alloc_new_vc)
+	{
+		for(int n=0;n<vc_src->no_nodes;n++)
+		{
+			if((*vc_dest)->node_ids[n].node_id != vc_src->node_ids[n].node_id)
+			{
+				alloc_new_vc = 1;
+				break;
+			}
+			else
+			{
+				(*vc_dest)->node_ids[n].counter = vc_src->node_ids[n].counter;
+			}
+		}
+	}
+
+	if(alloc_new_vc)
+	{
+		if(*vc_dest != NULL)
+			free_vc(*vc_dest);
+		(*vc_dest) = copy_vc(vc_src);
+	}
+
+	return 0;
+}
+
 int add_component_vc(vector_clock * vc, int node_id, int initial_counter)
 {
 	// Binary search node_id:

@@ -51,6 +51,8 @@ int compare_vc(vector_clock * vc1, vector_clock * vc2);
 
 int update_vc(vector_clock * vc_dest, vector_clock * vc_src);
 
+int update_or_replace_vc(vector_clock ** vc_dest, vector_clock * vc_src);
+
 int add_component_vc(vector_clock * vc, int node_id, int initial_counter);
 
 int remove_component_vc(vector_clock * vc, int node_id);

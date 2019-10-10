@@ -216,7 +216,7 @@ int db_delete_table(WORD table_key, db_t * db)
 
 // Table API:
 
-int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned int * fastrandstate)
+int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
 {
 	db_schema_t * schema = table->schema;
 
@@ -230,6 +230,7 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 	if(row_node == NULL)
 	{
 		row = create_db_row(column_values, schema, fastrandstate);
+		row->version = (version != NULL)? copy_vc(version) : NULL;
 		skiplist_insert(table->rows, column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
 	}
 	else
@@ -246,6 +247,7 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 			{
 				new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
 
+				// Populate columns and set version for newly created cell:
 				if(i == schema->no_clustering_keys - 1)
 				{
 					new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
@@ -254,6 +256,8 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 					{
 						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
 					}
+
+					new_cell->version = (version != NULL)? copy_vc(version) : NULL;
 				}
 				else
 				{
@@ -267,6 +271,19 @@ int table_insert(WORD * column_values, int no_cols, db_table_t * table, unsigned
 			else
 			{
 				new_cell = (db_row_t *) (new_cell_node->value);
+
+				// Update columns and version for previously existing last level cell:
+				if(i == schema->no_clustering_keys - 1)
+				{
+					assert(new_cell->no_columns == (schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys));
+					for(int j=0;j<new_cell->no_columns;j++)
+					{
+						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+					}
+
+					if(version != NULL)
+						update_or_replace_vc(&(new_cell->version), version);
+				}
 			}
 		}
 	}
@@ -339,7 +356,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 }
 
 
-int table_update(int * col_idxs, int no_cols, WORD * column_values, db_table_t * table)
+int table_update(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
 
@@ -377,6 +394,9 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, db_table_t *
 //		printf("Updating col %d / %d to value %ld\n", col_idxs[i], i, column_values[i]);
 		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
 	}
+
+	if(version != NULL)
+		update_or_replace_vc(&(row->version), version);
 
 	return 0;
 }
@@ -583,7 +603,7 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 // DB API:
 
-int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
+int db_insert_transactional(WORD * column_values, int no_cols, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -592,19 +612,29 @@ int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsi
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_insert(column_values, no_cols, table, fastrandstate);
+	return table_insert(column_values, no_cols, version, table, fastrandstate);
+}
+
+int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
+{
+	return db_insert_transactional(column_values, no_cols, NULL, db, fastrandstate);
+}
+
+int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, WORD table_key, db_t * db)
+{
+	snode_t * node = skiplist_search(db->tables, table_key);
+
+	if(node == NULL)
+		return -1;
+
+	db_table_t * table = (db_table_t *) (node->value);
+
+	return table_update(col_idxs, no_cols, column_values, version, table);
 }
 
 int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db)
 {
-	snode_t * node = skiplist_search(db->tables, table_key);
-
-	if(node == NULL)
-		return -1;
-
-	db_table_t * table = (db_table_t *) (node->value);
-
-	return table_update(col_idxs, no_cols, column_values, table);
+	return db_update_transactional(col_idxs, no_cols, column_values, table_key, db);
 }
 
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)
