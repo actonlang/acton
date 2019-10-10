@@ -29,7 +29,7 @@ parseModule qn file = do
 parseTest file = snd (unsafePerformIO (parseModule (S.mkqname "test") file))
 
 parseTestStr p str = case runParser (St.evalStateT p []) "" str of
-                       Left err -> print (errorBundlePretty err)
+                       Left err -> putStrLn (errorBundlePretty err)
                        Right t  -> print t
 
 
@@ -720,7 +720,9 @@ compound_stmt :: Parser S.Stmt
 compound_stmt =  if_stmt <|> while_stmt <|> for_stmt <|> try_stmt <|> with_stmt <|> data_stmt
 
 decl_group :: Parser [S.Stmt]
-decl_group = do g <- some decl; return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
+decl_group = do p <- L.indentLevel
+                g <- some (atPos p decl)
+                return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
 decl = funcdef <|> classdef <|> actordef <|> decorated
@@ -1124,8 +1126,8 @@ yield_expr = addLoc $ do
 
 --- Types ----------------------------------------------------------------------
 
-posrow :: Parser S.PosRow
-posrow  = do mbv <- star *> optional cvar
+posrow :: Parser S.PosRow                   --non-empty posrow without trailing comma
+posrow  = do mbv <- star *> optional cvar  
              return (S.PosVar mbv)
          <|> 
           do t <- ctype
@@ -1134,28 +1136,29 @@ posrow  = do mbv <- star *> optional cvar
              let tail = maybe S.PosNil (maybe S.PosNil S.PosVar) mbv
              return (foldr S.PosRow tail (t:ts))
 
-kwrow :: Parser S.KwRow
-kwrow   = do mbv <- starstar *> optional cvar
+kwrow :: Parser S.KwRow                    --non-empty kwrow with optional trailing comma
+kwrow   = do mbv <- starstar *> optional cvar <* optional comma
              return (S.KwVar mbv)
          <|>
           do p <- tsig1
              ps <- many (try (comma *> tsig1))
-             mbv <- optional (comma *> optional (starstar *> optional cvar))
+             mbv <- optional (comma *> optional ((starstar *> optional cvar) <* optional comma ))
              let tail = maybe S.KwNil (maybe S.KwNil S.KwVar) mbv
              return (foldr (uncurry S.KwRow) tail (p:ps))
 
+
 funrows :: Parser (S.PosRow, S.KwRow)
-funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.PosVar mbv, k))
+funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.PosVar mbv, k))       -- only * as posrow; nonempty kw
         <|>
-           try (do mbv <- (star *> optional cvar); optional comma; return (S.PosVar mbv, S.KwNil))
+           try (do mbv <- (star *> optional cvar); optional comma; return (S.PosVar mbv, S.KwNil))    -- only * as posrow; empty kw
         <|>
-           try (do k <- kwrow; return (S.PosNil, k))
+           try (do k <- kwrow; return (S.PosNil, k))                                                  -- empty posrow
         <|>
-           try (do t <- ctype; comma; (p,k) <- funrows; return (S.PosRow t p, k))
+           try (do t <- ctype; comma; (p,k) <- funrows; return (S.PosRow t p, k))                     -- at least one pospar followed by commma
         <|>
-           try (do t <- ctype; optional comma; return (S.PosRow t S.PosNil, S.KwNil))
+           try (do t <- ctype; optional comma; return (S.PosRow t S.PosNil, S.KwNil))                 -- exactly one pospar and possibly comma
         <|>
-           try (do optional comma; return (S.PosNil, S.KwNil))
+           try (do optional comma; return (S.PosNil, S.KwNil))                                        -- just an optional comma
 
 ccon :: Parser S.CCon
 ccon =  do n <- name
@@ -1202,7 +1205,7 @@ ctype    =  addLoc (
                     t <- ctype
                     return (S.CTFun NoLoc es p k t))
         <|> try (parens (S.CTStruct NoLoc <$> kwrow))
-        <|> try (parens (S.CTTuple NoLoc <$> posrow))
+        <|> try (parens (S.CTTuple NoLoc <$> posrow <* optional comma))
         <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (S.CTVar NoLoc <$> cvar)
         <|> S.CTCon NoLoc <$> ccon)
