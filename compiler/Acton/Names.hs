@@ -139,7 +139,7 @@ instance Vars Stmt where
     bound _                         = []
 
 instance Vars Decl where
-    free (Def _ n ps annot b md)    = (free b ++ free ps) \\ (n : bound ps ++ bound b)
+    free (Def _ n ps annot b md)    = (free ps ++ free b) \\ (n : bound ps ++ bound b)
     free (Actor _ n ps annot b)     = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
     free (Class _ n cs b)           = free cs ++ (free b \\ (n : bound b))
     free (Decorator _ qn es s)      = free qn ++ free es ++ free s
@@ -178,7 +178,7 @@ instance Vars Expr where
     free (UnOp _ o e)               = free e
     free (Dot _ e n)                = free e
     free (DotI _ e i)               = free e
-    free (Lambda _ p e)             = free p ++ (free e \\ bound p)
+    free (Lambda _ ps e)            = free ps ++ (free e \\ bound ps)
     free (Tuple _ es)               = free es
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
@@ -211,10 +211,10 @@ instance Vars Except where
     bound (Except _ e)              = []
     bound (ExceptAs _ e n)          = [n]
 
-instance Vars a => Vars (Params a) where
-    free (Params p pS k kS)         = free p ++ free pS ++ free k ++ free kS
+instance Vars Params where
+    free (Params p s1 k s2)         = free p ++ free s1 ++ free k ++ free s2
 
-    bound (Params p pS k kS)        = bound p ++ bound pS ++ bound k ++ bound kS
+    bound (Params p s1 k s2)        = bound p ++ bound s1 ++ bound k ++ bound s2
 
 instance Vars Param where
     free (Param n annot v)          = free v
@@ -444,7 +444,7 @@ lambdafree s                        = lfreeS s
         lfree (UnOp _ o e)          = lfree e
         lfree (Dot _ e n)           = lfree e
         lfree (DotI _ e i)          = lfree e
-        lfree (Lambda _ p e)        = concatMap lfree (paramcores p) ++ (free e \\ bound p)       -- NOTE: free e, not lambdafree e!
+        lfree (Lambda _ ps e)       = concatMap lfree (paramcores ps) ++ (free e \\ bound ps)  -- NOTE: free e, not lambdafree e!
         lfree (Tuple _ es)          = concatMap (lfree . elemcore) es
         lfree (Yield _ e)           = maybe [] lfree e
         lfree (YieldFrom _ e)       = lfree e

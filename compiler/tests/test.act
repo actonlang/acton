@@ -1,5 +1,5 @@
-x0 : (x : int, y : int)                                  # struct
-x1 : (x,y : A,**B)                                       # open struct; two fileds of the same type
+x0 : (x: int, y: int)                                    # struct
+x1 : (x: int, y: A, **B)                                 # open struct; two fileds of the same type
 x2 : (int  | float)                                      # union
 x3 : ('str1' | 'str2' | int)                             # union with string literals
 x4 : (int,bool)                                          # tuple
@@ -18,7 +18,7 @@ a5 : {{[int]}}                                           # more complicated set 
 a6 : {[int]:(int) -> bool}                               # a dict (protocol)
 a7 : (set[int],list[float],dict[{int},bool])             # tuple of mutable data structures
 
-y1 : (x,y : A,**)                                        # open struct; two fileds of the same type
+y1 : (x: float, y: A, **)                                # open struct
 y2 : (**)                                                # open struct
 y3 : (**A)                                               # open struct
 y4 : (int, bool, *A)                                     # open tuple
