@@ -1166,16 +1166,24 @@ funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.
            try (do optional comma; return (S.PosNil, S.KwNil))
 
 named :: Parser S.CType
-named =  addLoc (
-        do n <- name
+named =  addLoc (S.CTCon NoLoc <$> ccon) ----------------------------- <<<<
+
+ccon :: Parser S.CCon
+ccon =  do n <- name
            args <- optional (brackets (do t <- ctype
                                           ts <- commaList ctype
                                           return (t:ts)))
-           return (S.CTCon NoLoc n (maybe [] id args)))
-
+           return $ S.CCon n (maybe [] id args)
 
 cvar :: Parser S.CVar
 cvar = S.CVar <$> tvarname
+
+cbind :: Parser S.CBind
+cbind = do v <- cvar
+           bounds <- optional (parens (do c <- ccon
+                                          cs <- commaList ccon
+                                          return (c:cs)))
+           return $ S.CBind v (maybe [] id bounds)
 
 ctype :: Parser S.CType
 ctype    =  addLoc (
@@ -1185,19 +1193,19 @@ ctype    =  addLoc (
         <|> rword "str" *> return (S.CTStr NoLoc)
         <|> rword "None" *> return (S.CTNone NoLoc)
         <|> S.CTOpt NoLoc <$> (qmark *> ctype)
-        <|> brackets (S.CPSeq NoLoc <$> ctype)
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
                        return (maybe (S.CPSet NoLoc t) (S.CPMap NoLoc t) mbt))
+        <|> try (brackets (S.CPSeq NoLoc <$> ctype))
+        <|> try (do bs <- brackets (do n <- cbind
+                                       ns <- commaList cbind
+                                       return (n:ns))
+                    fatarrow
+                    t <- ctype
+                    return (S.CTQual NoLoc bs t))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.CTUnion NoLoc (alts++[alt])))
-        <|> try (do cs <- parens (do n <- named
-                                     ns <- commaList named
-                                     return (n:ns))
-                    fatarrow
-                    t <- ctype
-                    return (S.CTQual NoLoc cs t))
         <|> try (do es <- many name
                     (p,k) <- parens funrows
                     arrow
@@ -1207,7 +1215,7 @@ ctype    =  addLoc (
         <|> try (parens (S.CTTuple NoLoc <$> posrow))
         <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (S.CTVar NoLoc <$> cvar)
-        <|> named)
+        <|> S.CTCon NoLoc <$> ccon)
 
                 
 

@@ -188,6 +188,12 @@ instance Relabel Type where
 instance Relabel CVar where
     relabel (CVar n) = CVar <$> relabel n
 
+instance Relabel CCon where
+    relabel (CCon n ts) = CCon <$> relabel n <*> relabel ts
+
+instance Relabel CBind where
+    relabel (CBind v cs) = CBind <$> relabel v <*> relabel cs
+
 instance Relabel PosRow where
     relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
     relabel (PosVar v) = PosVar <$> relabel v
@@ -208,7 +214,7 @@ instance Relabel CType where
     relabel (CPMap _ kt vt) = CPMap <$> newLoc <*> relabel kt <*> relabel vt
     relabel (CTOpt _ t) = CTOpt <$> newLoc <*> relabel t
     relabel (CTUnion _ as) = CTUnion <$> newLoc <*> return as
-    relabel (CTCon  _ nm ts) = CTCon <$> newLoc <*> relabel nm <*> relabel ts
+    relabel (CTCon  _ c) = CTCon <$> newLoc <*> relabel c
     relabel (CTStr _) = CTStr <$> newLoc
     relabel (CTInt _) = CTInt <$> newLoc
     relabel (CTFloat _) = CTFloat <$> newLoc
