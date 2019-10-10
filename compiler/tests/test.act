@@ -42,7 +42,6 @@ actor Test [T](v0:T):
 x = 1                                                    # Comment out, and f below will be parsed as a method of previous actor!!
                                                          # (ERROR!)
 def f(z):
-    v = z
-    return v
+    pass
 
-
+w = KeyError

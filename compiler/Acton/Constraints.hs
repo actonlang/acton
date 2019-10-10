@@ -307,10 +307,10 @@ newTVars n                              = mapM (const newTVar) [1..n]
 newTEnv vs                              = (vs `zip`) <$> mapM (const newTVar) (nub vs)
 
 instantiate l t0@(TSchema vs cs t)      = do tvs <- newTVars (length vs)
-                                             let s  = vs `zip` tvs
-                                                 cs = [ subst s c{cloc=l} | c <- cs ]
-                                                 t1 = subst s t
-                                             constrain cs
+                                             let s   = vs `zip` tvs
+                                                 cs1 = [ subst s c{cloc=l} | c <- cs ]
+                                                 t1  = subst s t
+                                             constrain cs1
                                              dump [INS l t1]
                                              return t1
 instantiate l t                         = do dump [INS l t]
