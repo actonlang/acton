@@ -187,6 +187,9 @@ instance Relabel Field where
 instance Relabel Type where
   relabel = undefined
 
+instance Relabel TScheme where
+    relabel (TScheme _ q t) = TScheme <$> newLoc <*> relabel q <*> relabel t
+
 instance Relabel CVar where
     relabel (CVar n) = CVar <$> relabel n
 
@@ -223,4 +226,3 @@ instance Relabel CType where
     relabel (CTFloat _) = CTFloat <$> newLoc
     relabel (CTBool _) = CTBool <$> newLoc
     relabel (CTNone _) = CTNone <$> newLoc
-    relabel (CTQual _ cs t) = CTQual <$> newLoc <*> relabel cs <*> relabel t

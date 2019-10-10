@@ -44,7 +44,9 @@ x = 1                                                    # Comment out, and f be
 def f(z):
     pass
 
-w = KeyError
-
-protocol Indexed[A,B]:
+protocol Indexed[A,B]:                                   # just a protocol
     __getitem__ : (Self, A) -> B
+
+g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
+
+h : (f:[A]=>(A)->A, x:int, y:str) -> (int,str)           # a rank-2 scheme with keyword arguments

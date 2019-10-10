@@ -27,7 +27,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, exprs::[Expr] }
-                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: CType}
+                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: TScheme}
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, pattern::Pattern }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
@@ -118,7 +118,7 @@ data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc Expr | ExceptAs SrcLoc Expr Name deriving (Show)
 data Params     = Params [Param] StarPar [Param] StarPar deriving (Show,Eq)
-data Param      = Param Name (Maybe CType) (Maybe Expr) deriving (Show,Eq)
+data Param      = Param Name (Maybe TScheme) (Maybe Expr) deriving (Show,Eq)
 data StarPar    = StarPar SrcLoc Name (Maybe CType) | NoStar deriving (Show)
 
 data Elem e     = Elem e | Star e deriving (Show,Eq)
@@ -182,9 +182,9 @@ type Row            = Type
 
 type Effect         = Row
 
-type Scheme         = Type
-
 type Substitution   = [(TVar,Type)]
+
+data TScheme    = TScheme SrcLoc [CBind] CType deriving (Show)
 
 data CVar       = CVar Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -194,9 +194,9 @@ data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Sho
 
 type CEffect    = [Name]
 
-data PosRow     = PosRow CType PosRow | PosVar (Maybe CVar) | PosNil deriving (Eq,Show)
+data PosRow     = PosRow TScheme PosRow | PosVar (Maybe CVar) | PosNil deriving (Eq,Show)
 
-data KwRow      = KwRow Name CType KwRow | KwVar (Maybe CVar) | KwNil deriving (Eq,Show)
+data KwRow      = KwRow Name TScheme KwRow | KwVar (Maybe CVar) | KwNil deriving (Show)
 
 data CBind      = CBind CVar [CCon] deriving (Eq,Show)
 
@@ -216,8 +216,7 @@ data CType      = CSelf     { tloc :: SrcLoc }
                 | CTFloat   { tloc :: SrcLoc }
                 | CTBool    { tloc :: SrcLoc }
                 | CTNone    { tloc :: SrcLoc }
-                | CTQual    { tloc :: SrcLoc, binds :: [CBind], qtype :: CType } -- type for cconstraints to be changed
-                deriving (Eq,Show,Generic)
+                deriving (Show,Generic)
 
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Name
@@ -273,6 +272,8 @@ instance HasLoc Assoc where
 instance HasLoc Pattern where
     loc                 = ploc
 
+instance HasLoc TScheme where
+    loc (TScheme l _ _) = l
 
 -- Eq -------------------------
 
@@ -391,6 +392,39 @@ instance Eq Pattern where
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
     PParen _ p1         == p2                   = p1 == p2
     p1                  == PParen _ p2          = p1 == p2
+    _                   == _                    = False
+
+instance Eq TScheme where
+    TScheme _ q1 t1     == TScheme _ q2 t2      = q1 == q2 && t1 == t2
+
+instance Eq KwRow where
+    r1                  == r2                   = walk r2 r1 && walk r1 r2
+      where walk (KwRow n t r) r0               = has n t r0 && walk r r0
+            walk r r0                           = ends r r
+            has n t (KwRow n' t' r')            = n == n' && t == t' || has n t r'
+            has n t _                           = False
+            ends r (KwRow _ _ r')               = ends r r'
+            ends (KwVar v) (KwVar v')           = v == v'
+            ends KwNil KwNil                    = True
+            ends _ _                            = False
+
+instance Eq CType where
+    CSelf _             == CSelf _              = True
+    CTVar _ v1          == CTVar _ v2           = v1 == v2
+    CTCon _ c1          == CTCon _ c2           = c1 == c2
+    CTFun _ e1 p1 r1 t1 == CTFun _ e2 p2 r2 t2  = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
+    CTTuple _ p1        == CTTuple _ p2         = p1 == p2
+    CTRecord _ r1       == CTRecord _ r2        = r1 == r2
+    CPSeq _ t1          == CPSeq _ t2           = t1 == t2
+    CPSet _ t1          == CPSet _ t2           = t1 == t2
+    CPMap _ k1 t1       == CPMap _ k2 t2        = k1 == k2 && t1 == t2
+    CTOpt _ t1          == CTOpt _ t2           = t1 == t2
+    CTUnion _ u1        == CTUnion _ u2         = all (`elem` u2) u1 && all (`elem` u1) u2
+    CTStr _             == CTStr _              = True
+    CTInt _             == CTInt _              = True
+    CTFloat _           == CTFloat _            = True
+    CTBool _            == CTBool _             = True
+    CTNone _            == CTNone _             = True
     _                   == _                    = False
 
 
@@ -867,6 +901,10 @@ instance Pretty Aug where
     pretty ShiftRA                  = text ">>="
     pretty EuDivA                   = text "//="
 
+instance Pretty TScheme where
+    pretty (TScheme _ [] t)         = pretty t
+    pretty (TScheme _ q t)          = brackets (commaList q) <+> text "=>" <+> pretty t
+
 instance Pretty CVar where
     pretty (CVar n)                 = pretty n
 
@@ -921,7 +959,6 @@ instance Pretty CType where
     pretty (CTFloat _)              = text "float"
     pretty (CTBool _)               = text "bool"
     pretty (CTNone _)               = text "None"
-    pretty (CTQual _ cs t)          = brackets (commaList cs) <+> text "=>" <+> pretty t
 
 
     

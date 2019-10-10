@@ -311,6 +311,9 @@ instance Vars ModRef where
     bound (ModRef (0, n))           = free n
     bound _                         = []
 
+instance Vars TScheme where
+    free (TScheme _ q t)            = free q ++ free t
+
 instance Vars CVar where
     free (CVar v)                   = []
 
@@ -340,7 +343,6 @@ instance Vars CType where
     free (CPMap _ kt vt)            = free kt ++ free vt
     free (CTOpt _ t)                = free t
     free (CTCon  _ c)               = free c
-    free (CTQual _ cs t)            = free cs ++ free t
     free _                          = []
 
 
@@ -480,7 +482,6 @@ instance Subst CType where
     subst s (CTFloat l)             = CTFloat l
     subst s (CTBool l)              = CTBool l
     subst s (CTNone l)              = CTNone l
-    subst s (CTQual l cs t)         = CTQual l $ subst s cs $ subst s t
 -}
 -- Names free in embedded lambda
 -- Called during translation to ensure that lambdas contain no state variables
