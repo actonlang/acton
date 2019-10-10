@@ -146,7 +146,10 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 // TO DO: int db_delete_cell(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, db_t * db);
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 int db_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, vector_clock * version, db_t * db);
-int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key, vector_clock * version, db_t * db);
+int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
+int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_index_version(WORD index_key, int idx_idx, WORD table_key, vector_clock * version, db_t * db);
 
 // Lower level API:
@@ -166,7 +169,10 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table);
 int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table);
-int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table);
+int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
 
 #endif /* BACKEND_DB_H_ */

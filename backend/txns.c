@@ -185,19 +185,22 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 		}
 		case QUERY_TYPE_READ_ROW:
 		{
-			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, NULL, 0, tr->result->version, db);
+			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, NULL, 0, tr->result_version, db);
 		}
 		case QUERY_TYPE_READ_INDEX:
 		{
-			return db_verify_index_version(tr->start_primary_keys, tr->idx_idx, tr->table_key, tr->result->version, db);
+			return db_verify_index_version(tr->start_primary_keys, tr->idx_idx, tr->table_key, tr->result_version, db);
 		}
 		case QUERY_TYPE_READ_CELL_RANGE:
 		{
-			return db_verify_cell_range_version(tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->end_clustering_keys, tr->no_clustering_keys, tr->table_key, tr->result->version, db);
+			return db_verify_cell_range_version(tr->start_primary_keys, tr->no_primary_keys,
+												tr->start_clustering_keys, tr->end_clustering_keys, tr->no_clustering_keys, tr->table_key,
+												tr->range_result_keys, tr->range_result_versions, tr->no_range_results, db);
 		}
 		case QUERY_TYPE_READ_ROW_RANGE:
 		{
-			break;
+			return db_verify_row_range_version(tr->start_primary_keys, tr->end_primary_keys, tr->no_primary_keys, tr->table_key,
+												tr->range_result_keys, tr->range_result_versions, tr->no_range_results, db);
 		}
 		case QUERY_TYPE_READ_INDEX_RANGE:
 		{

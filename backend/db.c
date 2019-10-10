@@ -428,9 +428,41 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 
 	*start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
 
-	for(*end_row = *start_row; (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
+}
+
+int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
+{
+	int i = 0;
+
+	assert(no_primary_keys == 1 && "Compound primary keys unsupported for now");
+
+	snode_t * start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
+
+	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_primary_keys[0]; *cell_row_node=NEXT(*cell_row_node), i++)
+	{
+		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
+
+		// Some keys were removed from the backend since the range query happened:
+		if(i>(no_range_results - 1))
+			return 1;
+
+		if((long) cell_row->key != range_result_keys[i])
+			return 1;
+
+		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
+		if(cmp != 0)
+			return cmp;
+	}
+
+	// Some extra keys were added to the backend since the range query happened:
+	if(i<no_range_results)
+		return 1;
+
+	return 0;
 }
 
 int table_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db_row_t** rows, db_table_t * table)
@@ -533,7 +565,8 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	return no_results+1;
 }
 
-int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table)
+int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
 {
 	assert(no_primary_keys == 1);
 
@@ -557,13 +590,27 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 	}
 
 	snode_t * start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
+	int i = 0;
 
-	for(snode_t * end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row))
+	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_clustering_keys[no_clustering_keys-1]; *cell_row_node=NEXT(*cell_row_node), i++)
 	{
-		int cmp = compare_vc(version, row->version);
+		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
+
+		// Some keys were removed from the backend since the range query happened:
+		if(i>(no_range_results - 1))
+			return 1;
+
+		if((long) cell_row->key != range_result_keys[i])
+			return 1;
+
+		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
 		if(cmp != 0)
 			return cmp;
 	}
+
+	// Some extra keys were added to the backend since the range query happened:
+	if(i<no_range_results)
+		return 1;
 
 	return 0;
 }
@@ -742,6 +789,20 @@ int db_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t** 
 	return table_range_search(start_primary_keys, end_primary_keys, start_row, end_row, table);
 }
 
+int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
+{
+	snode_t * node = skiplist_search(db->tables, table_key);
+
+	if(node == NULL)
+		return -1;
+
+	db_table_t * table = (db_table_t *) (node->value);
+
+	return table_verify_row_range_version(start_primary_keys, end_primary_keys, no_primary_keys,
+			range_result_keys, range_result_versions, no_range_results, table);
+}
+
 int db_range_search_copy(WORD* start_primary_keys, WORD* end_primary_keys, db_row_t** rows, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
@@ -790,7 +851,8 @@ int db_range_search_clustering(WORD* primary_keys, WORD* start_clustering_keys, 
 	return table_range_search_clustering(primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, start_row, end_row, table);
 }
 
-int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key, vector_clock * version, db_t * db)
+int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
+									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -799,7 +861,7 @@ int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* 
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_verify_cell_range_version(primary_keys, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, version, table);
+	return table_verify_cell_range_version(primary_keys, no_primary_keys, start_clustering_keys, end_clustering_keys, no_clustering_keys, range_result_keys, range_result_versions, no_range_results, table);
 }
 
 
