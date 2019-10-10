@@ -31,3 +31,9 @@ f0 : (x:int, y:int) -> int                               # function without sing
 f1 : (int, y:int) -> int                                 # function with positional and keyword parameters and no star
 f3 : [A]                                                 # sequence that also could be the start of a qualified type
 f4 : [A] => (Self, y:Self) -> [A]                        # functiona with Self and [A] disambiguation!
+
+def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
+    for y in xs:
+        if x == y:
+            return True
+        return False
