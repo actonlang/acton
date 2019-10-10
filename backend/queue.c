@@ -131,7 +131,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 }
 
 int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							long new_read_head, short use_lock, db_t * db)
+							long new_read_head, vector_clock * version, short use_lock, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 	if(table == NULL)
@@ -162,6 +162,10 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 	assert(cs->private_consume_head <= new_read_head);
 
 	cs->private_read_head = new_read_head;
+
+	assert(version != NULL);
+
+	update_or_replace_vc(&(cs->prh_version), version);
 
 	if(use_lock)
 	{
@@ -199,11 +203,15 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	cs->private_consume_head = new_consume_head;
 
+	assert(version != NULL);
+
+	update_or_replace_vc(&(cs->pch_version), version);
+
 	return 0;
 }
 
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
+		int max_entries, int * entries_read, long * new_read_head, vector_clock ** prh_version,
 		snode_t** start_row, snode_t** end_row, short use_lock,
 		db_t * db)
 {
@@ -233,6 +241,8 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
 	assert(cs->private_read_head <= no_entries - 1);
+
+	*prh_version = (cs->prh_version != NULL)? copy_vc(cs->prh_version) : NULL;
 
 	if(cs->private_read_head == no_entries - 1)
 	{
@@ -276,7 +286,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 }
 
 int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, long offset, int * entries_read, long * new_read_head,
+		int max_entries, long offset, int * entries_read, long * new_read_head, vector_clock ** prh_version,
 		snode_t** start_row, snode_t** end_row, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -300,8 +310,9 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
 	long start_offset = (offset >= 0)?offset:cs->private_read_head;
-
 	assert(start_offset <= no_entries - 1);
+
+	*prh_version = (cs->prh_version != NULL)? copy_vc(cs->prh_version) : NULL;
 
 	if(start_offset == no_entries - 1)
 	{

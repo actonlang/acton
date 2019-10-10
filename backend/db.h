@@ -76,6 +76,9 @@ typedef struct consumer_state {
 	long private_read_head;
 	long private_consume_head;
 
+	vector_clock * prh_version;
+	vector_clock * pch_version;
+
 	short notified;
 
 	queue_callback* callback;;

@@ -147,7 +147,10 @@ txn_state * init_txn_state()
 
 void set_version(txn_state * ts, vector_clock * vc)
 {
-	ts->version = copy_vc(vc);
+	if(ts->version == NULL)
+		ts->version = copy_vc(vc);
+	else
+		update_or_replace_vc(&(ts->version), vc);
 }
 
 void free_txn_state(txn_state * ts)
@@ -201,7 +204,7 @@ txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_pr
 
 txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols, WORD table_key,
 					WORD queue_id, WORD consumer_id, WORD shard_id, WORD app_id,
-					long new_read_head, long new_consume_head, long local_order)
+					long new_read_head, vector_clock * prh_version, long new_consume_head, long local_order)
 {
 	assert(query_type >= QUERY_TYPE_ENQUEUE && query_type <= QUERY_TYPE_UNSUBSCRIBE_QUEUE);
 
@@ -224,6 +227,7 @@ txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols
 	if(query_type == QUERY_TYPE_READ_QUEUE)
 	{
 		tw->new_read_head = new_read_head;
+		tw->prh_version = prh_version;
 	}
 	else
 	{
@@ -449,17 +453,17 @@ int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_
 int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_ENQUEUE, column_values, no_cols, table_key, queue_id,
-						NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
+						NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
 
 	 // Multiple enqueues in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate);
 }
 
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						long new_read_head, txn_state * ts, unsigned int * fastrandstate)
+						long new_read_head, vector_clock * prh_version, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_READ_QUEUE, NULL, 0, table_key, queue_id,
-								consumer_id, shard_id, app_id, new_read_head, -1,
+								consumer_id, shard_id, app_id, new_read_head, prh_version, -1,
 								(long) ts->write_set->no_items);
 
 	// Keep only latest private_read_head when doing multiple queue reads in the same txn:
@@ -476,7 +480,7 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 					long new_consume_head, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CONSUME_QUEUE, NULL, 0, table_key, queue_id,
-								consumer_id, shard_id, app_id, -1, new_consume_head,
+								consumer_id, shard_id, app_id, -1, NULL, new_consume_head,
 								(long) ts->write_set->no_items);
 	// Keep only latest private_consume_head when doing multiple queue consumes in the same txn:
 	txn_write * prev_tw = skiplist_search(ts->write_set, (WORD) tw);
@@ -491,7 +495,7 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CREATE_QUEUE, NULL, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
 
 	 // Multiple "create queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
@@ -500,7 +504,7 @@ int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsig
 int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_DELETE_QUEUE, NULL, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, -1, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
 
 	 // Multiple "delete queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn

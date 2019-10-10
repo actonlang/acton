@@ -51,13 +51,11 @@ typedef struct txn_write
 	WORD shard_id;
 	WORD app_id;
 
-//	int max_entries;		// read_queue (in)
-//	int entries_read;	// read_queue (out)
 	long new_read_head;	// read_queue (out)
 	long new_consume_head; // consume_queue (in)
 
-//	snode_t* start_result; // read_queue (out)
-//	snode_t* end_result; // read_queue (out)
+	vector_clock * prh_version;
+//	vector_clock * pch_version;
 
 	long local_order;
 } txn_write;
@@ -153,7 +151,7 @@ int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_
 
 int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							long new_read_head, txn_state * ts, unsigned int * fastrandstate);
+							long new_read_head, vector_clock * prh_version, txn_state * ts, unsigned int * fastrandstate);
 int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					long new_consume_head, txn_state * ts, unsigned int * fastrandstate);
 int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);

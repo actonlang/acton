@@ -19,11 +19,11 @@
 txn_state * get_txn_state(uuid_t * txnid, db_t * db);
 uuid_t * new_txn(db_t * db, unsigned int * seedptr);
 int close_txn(uuid_t * txnid, db_t * db);
-int validate_txn(uuid_t * txnid, db_t * db);
-int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate);
+int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db);
+int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned int * fastrandstate);
 int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate);
 int abort_txn(uuid_t * txnid, db_t * db);
-int commit_txn(uuid_t * txnid, db_t * db);
+int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db);
 
 int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);

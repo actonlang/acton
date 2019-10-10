@@ -4,9 +4,6 @@
  *      Author: aagapi
  */
 
-#ifndef BACKEND_TXNS_H_
-#define BACKEND_TXNS_H_
-
 #include "txns.h"
 
 int verbose = 1;
@@ -291,13 +288,17 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 }
 
 
-int validate_txn(uuid_t * txnid, db_t * db)
+int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
 	assert(ts->state == TXN_STATUS_ACTIVE);
+
+	// Txn now gets a new version stamp:
+
+	set_version(ts, version);
 
 	for(snode_t * read_op_n=HEAD(ts->read_set); read_op_n!=NULL; read_op_n=NEXT(read_op_n))
 	{
@@ -330,16 +331,20 @@ int validate_txn(uuid_t * txnid, db_t * db)
 	return VAL_STATUS_COMMIT;
 }
 
-int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
+int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned int * fastrandstate)
 {
 	switch(tw->query_type)
 	{
 		case QUERY_TYPE_UPDATE:
 		{
-			return db_insert(tw->column_values, tw->no_cols, tw->table_key, db, fastrandstate);
+			// Note: This also updates or creates the version of the updated / created cell:
+
+			return db_insert_transactional(tw->column_values, tw->no_cols, tw->table_key, version, db, fastrandstate);
 		}
 		case QUERY_TYPE_DELETE:
 		{
+			// Update row tombstone version:
+
 			return db_delete_row(tw->column_values, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
 		}
 		case QUERY_TYPE_ENQUEUE:
@@ -348,11 +353,13 @@ int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
 		}
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			return set_private_read_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_read_head, 1, db);
+			// Note: This also updates queue private read head version:
+
+			return set_private_read_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_read_head, version, 1, db);
 		}
 		case QUERY_TYPE_CONSUME_QUEUE:
 		{
-			return set_private_consume_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_consume_head, db);
+			return set_private_consume_head(tw->consumer_id, tw->shard_id, tw->app_id, tw->table_key, tw->queue_id, tw->new_consume_head, version, db);
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
@@ -360,6 +367,8 @@ int persist_write(txn_write * tw, db_t * db, unsigned int * fastrandstate)
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{
+			// Update queue tombstone version:
+
 			return delete_queue(tw->table_key, tw->queue_id, 1, db);
 		}
 		default:
@@ -375,12 +384,15 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 {
 	int res = 0;
 
+	// Txn needs to have received a commit version by this point:
+	assert(ts->version != NULL);
+
 	for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
 	{
 		if(write_op_n->value != NULL)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
-			res = persist_write(tw, db, fastrandstate);
+			res = persist_write(tw, ts->version, db, fastrandstate);
 			assert (res == 0);
 		}
 	}
@@ -393,13 +405,13 @@ int abort_txn(uuid_t * txnid, db_t * db)
 	return close_txn(txnid, db);
 }
 
-int commit_txn(uuid_t * txnid, db_t * db)
+int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
-	int res = validate_txn(txnid, db);
+	int res = validate_txn(txnid, version, db);
 
 	if(res == VAL_STATUS_COMMIT)
 	{
@@ -604,12 +616,14 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 		}
 	}
 
+	vector_clock * prh_version = NULL;
+
 	peek_queue(consumer_id, shard_id, app_id, table_key, queue_id,
-			max_entries, prev_read_head, entries_read, new_read_head,
+			max_entries, prev_read_head, *prh_version, entries_read, new_read_head,
 			start_row, end_row, db);
 
 	return add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
-									*new_read_head, ts, fastrandstate);
+									*new_read_head, prh_version, ts, fastrandstate);
 }
 
 int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -655,5 +669,3 @@ int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db
 
 	return add_delete_queue_to_txn(table_key, queue_id, ts, fastrandstate);
 }
-
-#endif /* BACKEND_TXNS_H_ */
