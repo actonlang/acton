@@ -73,16 +73,16 @@ infTop env ss                           = do pushFX RNil
                                              mapsubst te
 
 class Infer a where
-    infer                               :: Env Type -> a -> TypeM Type
+    infer                               :: Env -> a -> TypeM Type
 
 class InfEnv a where
-    infEnv                              :: Env Type -> a -> TypeM TEnv
+    infEnv                              :: Env -> a -> TypeM TEnv
 
 class InfEnvT a where
-    infEnvT                             :: Env Type -> a -> TypeM (TEnv,Type)
+    infEnvT                             :: Env -> a -> TypeM (TEnv,Type)
 
 class InfData a where
-    infData                             :: Env Type -> a -> TypeM TEnv
+    infData                             :: Env -> a -> TypeM TEnv
 
 
 generalize tvs cs t                     = TSchema (unTVar $ rng s) (subst s cs) (subst s t)
