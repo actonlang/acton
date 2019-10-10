@@ -221,6 +221,7 @@ instance Relabel CType where
     relabel (CTOpt _ t) = CTOpt <$> newLoc <*> relabel t
     relabel (CTUnion _ as) = CTUnion <$> newLoc <*> return as
     relabel (CTCon  _ c) = CTCon <$> newLoc <*> relabel c
+    relabel (CTAt  _ c) = CTAt <$> newLoc <*> relabel c
     relabel (CTStr _) = CTStr <$> newLoc
     relabel (CTInt _) = CTInt <$> newLoc
     relabel (CTFloat _) = CTFloat <$> newLoc

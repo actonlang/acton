@@ -203,6 +203,7 @@ data CBind      = CBind CVar [CCon] deriving (Eq,Show)
 data CType      = CSelf     { tloc :: SrcLoc }
                 | CTVar     { tloc :: SrcLoc, cvar :: CVar }
                 | CTCon     { tloc :: SrcLoc, ccon :: CCon }
+                | CTAt      { tloc :: SrcLoc, ccon :: CCon }
                 | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
                 | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
                 | CTRecord  { tloc :: SrcLoc, kwrow :: KwRow }
@@ -412,6 +413,7 @@ instance Eq CType where
     CSelf _             == CSelf _              = True
     CTVar _ v1          == CTVar _ v2           = v1 == v2
     CTCon _ c1          == CTCon _ c2           = c1 == c2
+    CTAt _ c1           == CTAt _ c2            = c1 == c2
     CTFun _ e1 p1 r1 t1 == CTFun _ e2 p2 r2 t2  = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     CTTuple _ p1        == CTTuple _ p2         = p1 == p2
     CTRecord _ r1       == CTRecord _ r2        = r1 == r2
@@ -944,6 +946,7 @@ instance Pretty CType where
     pretty (CSelf _)                = text "Self"
     pretty (CTVar _ v)              = pretty v
     pretty (CTCon  _ c)             = pretty c
+    pretty (CTAt  _ c)              = text "@" <> pretty c
     pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (CTTuple _ pos)          = parens (pretty pos)
