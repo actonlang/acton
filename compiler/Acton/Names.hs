@@ -141,14 +141,14 @@ instance Vars Stmt where
 instance Vars Decl where
     free (Def _ n q ps annot b md)  = (free ps ++ free b) \\ (n : bound ps ++ bound b)
     free (Actor _ n q ps annot b)   = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
-    free (Class _ n q cs b)         = free cs ++ (free b \\ (n : bound b))
+    free (Class _ n q cs b)         = free b \\ (n : bound b)
     free (Decorator _ qn es s)      = free qn ++ free es ++ free s
 
     bound (Def _ n _ _ _ _ _)       = [n]
     bound (Actor _ n _ _ _ _)       = [n]
     bound (Class _ n _ _ _)         = [n]
     bound (Decorator _ _ _ d)       = bound d
-    
+
 instance Vars Branch where
     free (Branch e ss)              = free e ++ free ss
     bound (Branch e ss)             = bound ss
@@ -304,6 +304,38 @@ instance Vars ModRef where
     bound (ModRef (0, n))           = free n
     bound _                         = []
 
+instance Vars CVar where
+    free (CVar v)                   = []
+
+instance Vars CCon where
+    free (CCon n ts)                = n : free ts
+
+instance Vars CBind where
+    free (CBind v cs)               = free cs
+
+instance Vars PosRow where
+    free (PosRow t p)               = free t ++ free p
+    free (PosVar v)                 = free v
+    free PosNil                     = []
+
+instance Vars KwRow where
+    free (KwRow n t k)              = free t ++ free k
+    free (KwVar v)                  = free v
+    free KwNil                      = []
+
+instance Vars CType where
+    free (CTVar _ v)                = free v
+    free (CTFun _ es p k t)         = free es ++ free p ++ free k ++ free t
+    free (CTTuple _ p)              = free p
+    free (CTStruct _ k)             = free k
+    free (CPSeq _ t)                = free t
+    free (CPSet _ t)                = free t
+    free (CPMap _ kt vt)            = free kt ++ free vt
+    free (CTOpt _ t)                = free t
+    free (CTCon  _ c)               = free c
+    free (CTQual _ cs t)            = free cs ++ free t
+    free _                          = []
+
 
 -- Type variables and substitution ----------
 
@@ -407,8 +439,42 @@ instance Subst InfoTag where
 
     tyvars (GEN _ t)                = tyvars t
     tyvars (INS _ t)                = tyvars t
+{-}
+instance Subst CCon where
+    subst s (CCon n ts)             = CCon $ subst s n $ subst s ts
 
+instance Subst CBind where
+    subst s (CBind v cs)            = CBind $ subst s v $ subst s cs
 
+instance Subst PosRow where
+    subst s (PosRow t p)            = PosRow $ subst s t $ subst s p
+    subst s (PosVar v)              = PosVar $ subst s v
+    subst s PosNil                  = PosNil
+
+instance Subst KwRow where
+    subst s (KwRow n t k)           = KwRow $ subst s n $ subst s t $ subst s k
+    subst s (KwVar v)               = KwVar $ subst s v
+    subst s KwNil                   = KwNil
+
+instance Subst CType where
+    subst s (CSelf l)               = CSelf l
+    subst s (CTVar l v)             = CTVar l $ subst s v
+    subst s (CTFun l es p k t)      = CTFun l $ subst s es $ subst s p $ subst s k $ subst s t
+    subst s (CTTuple l p)           = CTTuple l $ subst s p
+    subst s (CTStruct l k)          = CTStruct l $ subst s k
+    subst s (CPSeq l t)             = CPSeq l $ subst s t
+    subst s (CPSet l t)             = CPSet l $ subst s t
+    subst s (CPMap l kt vt)         = CPMap l $ subst s kt $ subst s vt
+    subst s (CTOpt l t)             = CTOpt l $ subst s t
+    subst s (CTUnion l as)          = CTUnion l $ return as
+    subst s (CTCon l c)             = CTCon l $ subst s c
+    subst s (CTStr l)               = CTStr l
+    subst s (CTInt l)               = CTInt l
+    subst s (CTFloat l)             = CTFloat l
+    subst s (CTBool l)              = CTBool l
+    subst s (CTNone l)              = CTNone l
+    subst s (CTQual l cs t)         = CTQual l $ subst s cs $ subst s t
+-}
 -- Names free in embedded lambda
 -- Called during translation to ensure that lambdas contain no state variables
 -- Will become defunct once lambda-lifting works directly on Acton code
@@ -431,7 +497,7 @@ lambdafree s                        = lfreeS s
         lfreeS (Decl _ ds)          = concatMap lfreeD ds
         lfreeS _                    = []
 
-        lfreeD (Class _ n q cs b)   = concatMap (lfree . argcore) cs
+        lfreeD (Class _ n q cs b)   = concatMap lfreeS b
         lfreeD (Decorator _ n as d) = concatMap (lfree . argcore) as ++ lfreeD d
         lfreeD _                    = []
 

@@ -47,7 +47,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
 
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
                 | Actor         { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[Arg], dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 

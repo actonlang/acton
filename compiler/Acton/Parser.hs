@@ -1087,8 +1087,8 @@ classdef = addLoc $ do
                 (s,_) <- withPos (rword "class")
                 nm <- name
                 q <- optbinds
-                mbas <- optional (parens (optional arglist))
-                S.Class NoLoc nm q (maybe [] (maybe [] id) mbas) <$> suite CLASS s
+                cs <- optbounds
+                S.Class NoLoc nm q cs <$> suite CLASS s
 
 -- arglist: argument (',' argument)*  [',']
 -- argument: ( test [comp_for] |
@@ -1184,11 +1184,11 @@ cvar :: Parser S.CVar
 cvar = S.CVar <$> tvarname
 
 cbind :: Parser S.CBind
-cbind = do v <- cvar
-           bounds <- optional (parens (do c <- ccon
-                                          cs <- commaList ccon
-                                          return (c:cs)))
-           return $ S.CBind v (maybe [] id bounds)
+cbind = S.CBind <$> cvar <*> optbounds
+
+optbounds :: Parser [S.CCon]
+optbounds = do bounds <- optional (parens (optional ((:) <$> ccon <*> commaList ccon)))
+               return $ maybe [] (maybe [] id) bounds
 
 ctype :: Parser S.CType
 ctype    =  addLoc (
