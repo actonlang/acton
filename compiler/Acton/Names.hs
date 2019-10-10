@@ -188,8 +188,8 @@ instance Vars Expr where
     free (DictComp _ e co)          = (free e \\ bound co) ++ free co
     free (Set _ es)                 = free es
     free (SetComp _ e co)           = (free e \\ bound co) ++ free co
-    free (Struct _ fs)              = free fs
-    free (StructComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
+    free (Record _ fs)              = free fs
+    free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
     free (Paren _ e)                = free e
 
 instance Vars Name where
@@ -326,7 +326,7 @@ instance Vars CType where
     free (CTVar _ v)                = free v
     free (CTFun _ es p k t)         = free es ++ free p ++ free k ++ free t
     free (CTTuple _ p)              = free p
-    free (CTStruct _ k)             = free k
+    free (CTRecord _ k)             = free k
     free (CPSeq _ t)                = free t
     free (CPSet _ t)                = free t
     free (CPMap _ kt vt)            = free kt ++ free vt
@@ -378,7 +378,7 @@ instance Subst Type where
                                         Just t  -> t
                                         Nothing -> TVar l
     subst s (TFun act row t)        = TFun (subst s act) (subst s row) (subst s t)
-    subst s (TStruct row)           = TStruct (subst s row)
+    subst s (TRecord row)           = TRecord (subst s row)
     subst s (TDict t1 t2)           = TDict (subst s t1) (subst s t2)
     subst s (TTuple pos)            = TTuple (subst s pos)
     subst s (TList t)               = TList (subst s t)
@@ -400,7 +400,7 @@ instance Subst Type where
     
     tyvars (TVar v)                 = [v]
     tyvars (TFun act row t)         = tyvars act ++ tyvars row ++ tyvars t
-    tyvars (TStruct row)            = tyvars row
+    tyvars (TRecord row)            = tyvars row
     tyvars (TDict t1 t2)            = tyvars t1 ++ tyvars t2
     tyvars (TTuple row)             = tyvars row
     tyvars (TList t)                = tyvars t
@@ -460,7 +460,7 @@ instance Subst CType where
     subst s (CTVar l v)             = CTVar l $ subst s v
     subst s (CTFun l es p k t)      = CTFun l $ subst s es $ subst s p $ subst s k $ subst s t
     subst s (CTTuple l p)           = CTTuple l $ subst s p
-    subst s (CTStruct l k)          = CTStruct l $ subst s k
+    subst s (CTRecord l k)          = CTRecord l $ subst s k
     subst s (CPSeq l t)             = CPSeq l $ subst s t
     subst s (CPSet l t)             = CPSet l $ subst s t
     subst s (CPMap l kt vt)         = CPMap l $ subst s kt $ subst s vt
@@ -519,8 +519,8 @@ lambdafree s                        = lfreeS s
         lfree (DictComp _ e c)      = (lfreeA e \\ bound c) ++ lfreeC c
         lfree (Set _ es)            = concatMap (lfree . elemcore) es
         lfree (SetComp _ e c)       = (lfree (elemcore e) \\ bound c) ++ lfreeC c
-        lfree (Struct _ fs)         = concatMap (lfree . fieldcore) fs
-        lfree (StructComp _ n e c)  = ((n : lfree e) \\ bound c) ++ lfreeC c
+        lfree (Record _ fs)         = concatMap (lfree . fieldcore) fs
+        lfree (RecordComp _ n e c)  = ((n : lfree e) \\ bound c) ++ lfreeC c
         lfree (Paren _ e)           = lfree e
         lfree _                     = []
         

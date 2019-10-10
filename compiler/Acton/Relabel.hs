@@ -91,8 +91,8 @@ instance Relabel Expr where
     relabel (DictComp _ a c) = DictComp <$> newLoc <*> relabel a <*> relabel c
     relabel (Set _ es) = Set <$> newLoc <*> relabel es
     relabel (SetComp _ e c) = SetComp <$> newLoc <*> relabel e <*> relabel c
-    relabel (Struct _ fs) = Struct <$> newLoc <*> relabel fs
-    relabel (StructComp _ n e c) = StructComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
+    relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
+    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (Paren _ e) = Paren <$> newLoc <*> relabel e
 
 instance Relabel Pattern where
@@ -208,7 +208,7 @@ instance Relabel CType where
     relabel (CTVar _ v) = CTVar <$> newLoc <*> relabel v
     relabel (CTFun _ es p k t) = CTFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (CTTuple _ p) = CTTuple <$> newLoc <*> relabel p
-    relabel (CTStruct _ k) = CTStruct <$> newLoc <*> relabel k
+    relabel (CTRecord _ k) = CTRecord <$> newLoc <*> relabel k
     relabel (CPSeq _ t) = CPSeq <$> newLoc <*> relabel t
     relabel (CPSet _ t) = CPSet <$> newLoc <*> relabel t
     relabel (CPMap _ kt vt) = CPMap <$> newLoc <*> relabel kt <*> relabel vt

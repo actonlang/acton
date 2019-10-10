@@ -73,8 +73,8 @@ getReturn env               = fromJust $ ret env
 ----------------------------
 
 builtins                    = [ 
-                                (nm "struct", schema [a] []
-                                            (TFun RNil a (TStruct a))),
+                                (nm "record", schema [a] []
+                                            (TFun RNil a (TRecord a))),
                                 (nm "merge", schema [a,b,c] []
                                             (TFun RNil (RPos a (RPos b RNil)) c)),     -- very liberal type, for now!
                                 (nm "sorted", schema [a,b] [CIn l0 0 a b]               -- contract requirement (containment)
@@ -146,7 +146,7 @@ builtins                    = [
                                 (nm "zip", schema [a,b] []
                                             (TFun RNil (RPos (TList a) (RPos (TList b) RNil)) (TList (TTuple (RPos a (RPos b RNil)))))),
                                 (nm "__env__", schema [a] []
-                                            (TFun RNil (RPos (TStruct a) RNil) (TStruct (
+                                            (TFun RNil (RPos (TRecord a) RNil) (TRecord (
                                                 RKwd (nm "create_external_api_process") 
                                                         (TSchema [[1],[2]] []
                                                             (TFun (syncFX (TVar [2])) (
@@ -163,7 +163,7 @@ builtins                    = [
                                 (nm "__set_placement_constraints__", schema [a] []
                                             (TFun (syncFX RNil) (RPos a (RPos (TSet TStr) RNil)) RNil)),
                                 (nm "getattr", schema [a,b] []
-                                            (TFun RNil (RPos (TStruct a) (RPos TStr RNil)) b)),
+                                            (TFun RNil (RPos (TRecord a) (RPos TStr RNil)) b)),
                                 (nm "Exception", schema [a] []
                                             a),
                                 (nm "ArithmeticError", schema [a] []
@@ -191,7 +191,7 @@ builtins                    = [
                                 (nm "ValueError", schema [a] []
                                             a),
                                 (nm "StaleActorReferenceException", schema [a,b] []
-                                            (TFun RNil (RPos a (RPos TStr b)) (TStruct (RKwd (nm "actor_id") a RNil))))
+                                            (TFun RNil (RPos a (RPos TStr b)) (TRecord (RKwd (nm "actor_id") a RNil))))
                               ]
   where a:b:c:_             = schemaTVars
         schema tvs cs t     = TSchema (unTVar tvs) cs t
@@ -218,7 +218,7 @@ blend te ((n,t):itms)
         mix t t'
           | t == t'             = t
           | otherwise           = case (t,t') of
-                                    (TStruct r1,TStruct r2) -> TStruct (cat r1 r2)
+                                    (TRecord r1,TRecord r2) -> TRecord (cat r1 r2)
         cat RNil r              = r
         cat (RPos t r1) r2      = RPos t (cat r1 r2)
         cat (RStar1 t r1) r2    = RStar1 t (cat r1 r2)
@@ -234,24 +234,24 @@ importModule impPaths ifaces tenv s@Import{}
                                      modItems ifaces' (blend tenv (maybe [mkenv qname t] (\as -> [(as,t)]) mbn)) ms
         mkenv (QName n vs) t    = (n, mk vs t)
         mk [] t                 = t
-        mk (n:ns) t             = TStruct (RKwd n (mk ns t) RNil)
+        mk (n:ns) t             = TRecord (RKwd n (mk ns t) RNil)
 importModule impPaths ifaces tenv s@FromImport{modul=ModRef (0,Just qname)}
                                 = do (ifaces',t) <- doImport impPaths ifaces qname
-                                     let tenv' = openStruct t
+                                     let tenv' = openRecord t
                                      return (ifaces',blend tenv [ pickItem tenv' item | item <- items s ])
   where pickItem tenv i@(ImportItem n as) = case lookup n tenv of
                                              Nothing -> err (loc n) ("Module " ++ render (pretty qname) ++ " does not export " ++ nstr n)
                                              Just t -> (maybe n id as,t)
 importModule impPaths ifaces tenv s@FromImportAll{modul=ModRef (0,Just qname)}
                                 = do  (ifaces',t) <- doImport impPaths ifaces qname
-                                      return (ifaces',blend tenv (openStruct t))
+                                      return (ifaces',blend tenv (openRecord t))
 importModule _ _ _      s       = illegalImport (loc s)
 
-openStruct (TStruct row)      = open row
+openRecord (TRecord row)      = open row
   where open RNil               = []
         open (RKwd n t row)     = (n,t) : open row
-        open (RStar2 t row)     = openStruct t ++ open row
-openStruct t                    = error "Internal: openStruct"
+        open (RStar2 t row)     = openRecord t ++ open row
+openRecord t                    = error "Internal: openRecord"
 
 doImport (path,sysPath) ifaces qname
                                 = case lookup qname ifaces of

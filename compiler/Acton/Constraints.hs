@@ -41,7 +41,7 @@ unify' t1 (TVar tv)                         = do s <- substitution
 unify' (TFun a1 r1 t1) (TFun a2 r2 t2)      = do unify a1 a2
                                                  unify r2 r1            -- contra-variant
                                                  unify t1 t2
-unify' (TStruct r1) (TStruct r2)            = unify r1 r2
+unify' (TRecord r1) (TRecord r2)            = unify r1 r2
 unify' (TDict k1 v1) (TDict k2 v2)          = do unify k1 k2
                                                  unify v1 v2
 unify' (TTuple r1) (TTuple r2)              = unify r1 r2
@@ -72,7 +72,7 @@ unify' (RPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (rowTail
         findFst' (RKwd n t r2) tl           = return (t, r2)
         findFst' (RStar2 t RNil) tl         = do r3 <- newTVar
                                                  a2 <- newTVar
-                                                 unify t (TStruct r3)
+                                                 unify t (TRecord r3)
                                                  (t',r3') <- findFst r3 tl
                                                  return (t', r3')
         findFst' r2@RStar2{} tl             = internal r1 r2
@@ -113,7 +113,7 @@ unify' (RKwd n t1 r1) r2                    = do (t2,r2') <- findKwd RNil n r2 (
           | otherwise                       = findKwd' (RKwd n1 t r0) n r2 tl
         findKwd' r0 n (RStar2 t RNil) tl    = do r3 <- newTVar
                                                  a2 <- newTVar
-                                                 unify t (TStruct r3)
+                                                 unify t (TRecord r3)
                                                  (t',r3') <- findKwd RNil n r3 tl
                                                  return (t', revApp r0 r3')
         findKwd' r0 n r2@RStar2{} tl        = internal r1 r2
@@ -131,13 +131,13 @@ unify' (RKwd n t1 r1) r2                    = do (t2,r2') <- findKwd RNil n r2 (
                                                  return (t, revApp r0 r)
 
 unify' (RStar2 t r1) r2                     = do r <- newTVar
-                                                 unify t (TStruct r)
+                                                 unify t (TRecord r)
                                                  r' <- mapsubst r
                                                  r1' <- mapsubst r1
                                                  unify (catRow r' r1') r2
 
 unify' r1 (RStar2 t r2)                     = do r <- newTVar
-                                                 unify (TStruct r) t
+                                                 unify (TRecord r) t
                                                  r' <- mapsubst r
                                                  r2' <- mapsubst r2
                                                  unify r1 (catRow r' r2')
@@ -147,7 +147,7 @@ unify' RNil RNil                            = return ()
 unify' (TSchema vs1 cs1 t1) (TSchema vs2 cs2 t2)
   | vs1==vs1 && cs1==cs2 && t1==t2          = return ()
 
--- Will go away when Rank-N structs become nominal
+-- Will go away when Rank-N records become nominal
 unify' (TSchema vs1 [] t1) t2               = do ts <- mapM (const newTVar) vs1
                                                  let s = vs1 `zip` ts
                                                  unify' (subst s t1) t2
@@ -183,7 +183,7 @@ revApp RNil r2                          = r2
 del n (RKwd m t r)
   | n == m                              = del n r
   | otherwise                           = RKwd m t (del n r)
-del n (RStar2 (TStruct r1) r)           = RStar2 (TStruct (del n r1)) (del n r)
+del n (RStar2 (TRecord r1) r)           = RStar2 (TRecord (del n r1)) (del n r)
 del n (RStar2 t r)                      = RStar2 t (del n r)
 del n (RPos t r)                        = RPos t (del n r)
 del n (RStar1 t r)                      = RStar1 t (del n r)
@@ -277,7 +277,7 @@ instance MapSubst Type where
                                                  Just t  -> mapsubst t
                                                  Nothing -> return (TVar l)
     mapsubst (TFun act row t)           = TFun <$> mapsubst act <*> mapsubst row <*> mapsubst t
-    mapsubst (TStruct row)              = TStruct <$> mapsubst row
+    mapsubst (TRecord row)              = TRecord <$> mapsubst row
     mapsubst (TDict t1 t2)              = TDict <$> mapsubst t1 <*> mapsubst t2
     mapsubst (TTuple pos)               = TTuple <$> mapsubst pos
     mapsubst (TList t)                  = TList <$> mapsubst t
@@ -456,7 +456,7 @@ equTxt 104  = ("Union effect", "does not match", "(impossible)")                
 equTxt 105  = ("Union effect", "does not match", "(impossible)")                                            -- Lambda union fx
 
 equTxt 201  = ("Generic type", "does not match", "(impossible)")                                            -- Var gen dump
-equTxt 202  = ("Generic struct type", "does not match", "(impossible)")                                     -- CDot Struct gen dump
+equTxt 202  = ("Generic record type", "does not match", "(impossible)")                                     -- CDot Record gen dump
 
 equTxt n    = ("Types", "and", "do not unify (unknown tag version " ++ show n ++ ")")
 
@@ -508,9 +508,9 @@ red1 f (CEqu _ _ t1 t2)                     = unify' t1 t2
 red1 f (CIn _ _ t (TList u))                = unify' t u
 red1 f (CIn _ _ t (TDict k v))              = unify' t k
 red1 f (CIn _ _ t TStr)                     = unify' t TStr
-red1 f (CIn _ _ t (TStruct r))              = do t1 <- newTVar; unify' t (TTuple (RPos TStr (RPos t1 RNil)))    -- ...hack...
+red1 f (CIn _ _ t (TRecord r))              = do t1 <- newTVar; unify' t (TTuple (RPos TStr (RPos t1 RNil)))    -- ...hack...
 
-red1 f (CDot l _ (TStruct r) n t)           = case lookupRow n r of
+red1 f (CDot l _ (TRecord r) n t)           = case lookupRow n r of
                                                 Right t0 -> do
                                                     dump [GEN l t0]
                                                     t1 <- instantiate l $ openFX t0
@@ -601,7 +601,7 @@ red1 f (CIx _ _ (TList t) i u)              = do unify' TInt i; unify t u
 red1 f (CIx _ _ (TDict k v) i u)            = do unify' k i; unify v u
 red1 f (CIx _ _ TStr i u)                   = do unify' TInt i; unify TStr u
 
-red1 f (CMod _ _ TStr TStruct{})            = return ()
+red1 f (CMod _ _ TStr TRecord{})            = return ()
 red1 f (CMod _ _ TStr TTuple{})             = return ()
 red1 f (CMod _ _ TStr TList{})              = return ()
 red1 f (CMod _ _ TStr TSet{})               = return ()
@@ -621,7 +621,7 @@ red1 f (CPlus _ _ TFloat)                   = return ()
 red1 f (CNum _ _ TInt)                      = return ()
 red1 f (CNum _ _ TFloat)                    = return ()
 
-red1 f (CBool _ _ TStruct{})                = return ()
+red1 f (CBool _ _ TRecord{})                = return ()
 red1 f (CBool _ _ TDict{})                  = return ()
 red1 f (CBool _ _ TTuple{})                 = return ()
 red1 f (CBool _ _ TList{})                  = return ()
@@ -649,7 +649,7 @@ red1 True c@(CDot _ _ t n u)
   | nstr n `elem` dictmeths                 = do k <- newTVar; v <- newTVar; unify' t (TDict k v);          -- temp. fix until backtracking
                                                  c' <- mapsubst c; red1 True c'
   | nstr n `elem` strmeths                  = do unify' t TStr; c' <- mapsubst c; red1 True c'              -- temp. fix until backtracking
-  | otherwise                               = do r <- newTVar; unify' t (TStruct (RKwd n u r))
+  | otherwise                               = do r <- newTVar; unify' t (TRecord (RKwd n u r))
   where listmeths                           = ["append","clear","copy","extend","insert","pop","remove","reverse","sort"]
         dictmeths                           = ["keys","values","items"]
         strmeths                            = ["capitalize","casefold","center",{-"count",-}"encode","endswith","expandtabs","format",

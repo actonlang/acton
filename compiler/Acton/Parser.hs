@@ -951,7 +951,7 @@ atom =  addLoc (try strings
        <|>
          (try . parens) testlist_comp
        <|>
-         (try . parens) structmaker
+         (try . parens) recordmaker
        <|>
         (brackets $ do
                      mbe <- optional testlist_comp2
@@ -997,9 +997,9 @@ maker constr constrComp p = do
 testlist_comp2 = maker S.List S.ListComp elem 
    where elem = (S.Elem <$> test) <|> star_expr
 
-structmaker = addLoc $ do
+recordmaker = addLoc $ do
          f@(S.Field n e) <- eqn         
-         (S.StructComp NoLoc n e <$> comp_for) <|> ((\fs -> (S.Struct NoLoc (f:fs))) <$> commaList field)
+         (S.RecordComp NoLoc n e <$> comp_for) <|> ((\fs -> (S.Record NoLoc (f:fs))) <$> commaList field)
    where eqn = S.Field <$> escname <*> (equals *> test)
          field = eqn <|> (S.StarStarField <$> (starstar *> expr))                   
 
@@ -1201,7 +1201,7 @@ ctype    =  addLoc (
                     arrow
                     t <- ctype
                     return (S.CTFun NoLoc es p k t))
-        <|> try (parens (S.CTStruct NoLoc <$> kwrow))
+        <|> try (parens (S.CTRecord NoLoc <$> kwrow))
         <|> try (parens (S.CTTuple NoLoc <$> posrow))
         <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (S.CTVar NoLoc <$> cvar)
