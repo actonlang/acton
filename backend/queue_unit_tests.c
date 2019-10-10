@@ -402,7 +402,7 @@ int main(int argc, char **argv) {
 
 	// Test delete queue:
 
-	ret = delete_queue(table_key, queue_id, 1, db);
+	ret = delete_queue(table_key, queue_id, NULL, 1, db);
 	printf("Test %s - %s (%d)\n", "delete_queue", ret==0?"OK":"FAILED", ret);
 
 	return 0;

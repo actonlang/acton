@@ -615,7 +615,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	return 0;
 }
 
-int delete_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db)
+int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -659,7 +659,7 @@ int delete_queue(WORD table_key, WORD queue_id, short use_lock, db_t * db)
 
 	skiplist_free(db_row->consumer_state);
 
-	int ret = table_delete_row((WORD*) &(queue_id), table);
+	int ret = table_delete_row((WORD*) &(queue_id), version, table);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);

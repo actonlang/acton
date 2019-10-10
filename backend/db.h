@@ -44,6 +44,8 @@ typedef struct db_table {
 	skiplist_t * rows;
 	skiplist_t ** indexes;
 
+	skiplist_t * row_tombstones;
+
 	pthread_mutex_t* lock;
 } db_table_t;
 
@@ -140,6 +142,7 @@ WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_i
 db_row_t* db_search_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, db_t * db);
 int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db);
+int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD table_key, db_t * db);
 // TO DO: int db_delete_cell(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, db_t * db);
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 
@@ -157,7 +160,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 WORD* table_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, db_table_t * table);
 db_row_t* table_search_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, db_table_t * table);
-int table_delete_row(WORD* primary_keys, db_table_t * table);
+int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table);
 int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table);
 
 #endif /* BACKEND_DB_H_ */

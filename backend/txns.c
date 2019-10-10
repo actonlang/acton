@@ -176,7 +176,37 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 {
 	// Check for conflicts with backend DB:
 
-
+	switch(tr->query_type)
+	{
+		case QUERY_TYPE_READ_COLS:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_CELL:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_ROW:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_INDEX:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_CELL_RANGE:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_ROW_RANGE:
+		{
+			break;
+		}
+		case QUERY_TYPE_READ_INDEX_RANGE:
+		{
+			break;
+		}
+	}
 
 	// Check for conflicts with the other txn write sets:
 
@@ -234,6 +264,26 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 
 int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 {
+	// Check for invalidated queue reads / creation / deletion ops with backend DB:
+
+	switch(tr->query_type)
+	{
+		case QUERY_TYPE_READ_QUEUE:
+		{
+			break;
+		}
+		case QUERY_TYPE_CREATE_QUEUE:
+		{
+			break;
+		}
+		case QUERY_TYPE_DELETE_QUEUE:
+		{
+			break;
+		}
+	}
+
+	// Check for WW conflicts with other txns' write sets:
+
 	for(snode_t * node=HEAD(db->txn_state); node!=NULL; node=NEXT(node))
 	{
 		assert(node->value != NULL);
@@ -345,7 +395,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		{
 			// Update row tombstone version for handling shadow range reads and reads by incomplete partition / clustering key path?
 
-			return db_delete_row(tw->column_values, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
+			return db_delete_row_transactional(tw->column_values, version, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
 		}
 		case QUERY_TYPE_ENQUEUE:
 		{
@@ -367,9 +417,9 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{
-			// Update queue tombstone version:
+			// Note: This also updates queue tombstone version (if queue was not already deleted by a different txn, in which case earliest deletion timestamp is kept):
 
-			return delete_queue(tw->table_key, tw->queue_id, 1, db);
+			return delete_queue(tw->table_key, tw->queue_id, version, 1, db);
 		}
 		default:
 		{

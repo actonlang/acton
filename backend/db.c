@@ -176,6 +176,8 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 
 	table->rows = create_skiplist_long();
 
+	table->row_tombstones = create_skiplist_long();
+
 	if(schema->no_index_keys > 0)
 		table->indexes = (skiplist_t **) malloc(schema->no_index_keys * sizeof(skiplist_t *));
 
@@ -568,9 +570,14 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 	return no_results+1;
 }
 
-int table_delete_row(WORD* primary_keys, db_table_t * table)
+int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table)
 {
 	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, primary_keys[0]));
+
+	snode_t * exists = skiplist_search(table->row_tombstones, primary_keys[0]);
+
+	if(exists != NULL)
+		skiplist_insert(table->row_tombstones, primary_keys[0], (version != NULL)? copy_vc(version) : NULL);
 
 	if(row != NULL)
 	{
@@ -733,7 +740,7 @@ int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, sno
 	return table_range_search_index(idx_idx, start_idx_key, end_idx_key, start_row, end_row, table);
 }
 
-int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
+int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -745,7 +752,12 @@ int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_delete_row(primary_keys, table);
+	return table_delete_row(primary_keys, version, table);
+}
+
+int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
+{
+	return db_delete_row_transactional(primary_keys, NULL, table_key, db);
 }
 
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
