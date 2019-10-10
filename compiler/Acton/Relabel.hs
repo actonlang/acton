@@ -141,16 +141,20 @@ instance Relabel Except where
     relabel (ExceptAs _ e n) = ExceptAs <$> newLoc <*> relabel e <*> relabel n
 
 instance Relabel Param where
-  relabel (Param nm mba mbe) = Param <$> relabel nm <*> relabel mba <*> relabel mbe
+    relabel (Param nm mba mbe) = Param <$> relabel nm <*> relabel mba <*> relabel mbe
 
-instance Relabel a => Relabel (Params a) where
-  relabel (Params ps _ _ _) = Params <$> relabel ps <*> return NoStar <*> return [] <*> return NoStar
+instance Relabel Params where
+    relabel (Params p s1 k s2) = Params <$> relabel p <*> relabel s1 <*> relabel k <*> relabel s2
 
+instance Relabel StarPar where
+    relabel (StarPar _ n mbt) = StarPar <$> newLoc <*> relabel n <*> relabel mbt
+    relabel NoStar = return NoStar
+    
 instance Relabel Arg where
-  relabel (Arg e) = Arg <$> relabel e
-  relabel (KwArg nm e) = KwArg <$> relabel nm <*> relabel e
-  relabel (StarArg e) = StarArg <$> relabel e
-  relabel (StarStarArg e) = StarStarArg <$> relabel e
+    relabel (Arg e) = Arg <$> relabel e
+    relabel (KwArg nm e) = KwArg <$> relabel nm <*> relabel e
+    relabel (StarArg e) = StarArg <$> relabel e
+    relabel (StarStarArg e) = StarStarArg <$> relabel e
 
 instance Relabel OpArg where
     relabel (OpArg op e) = OpArg <$> relabel op <*> relabel e
@@ -181,5 +185,33 @@ instance Relabel Field where
 instance Relabel Type where
   relabel = undefined
 
+instance Relabel CVar where
+    relabel (CVar n) = CVar <$> relabel n
+
+instance Relabel PosRow where
+    relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
+    relabel (PosVar v) = PosVar <$> relabel v
+    relabel PosNil = return PosNil
+
+instance Relabel KwRow where
+    relabel (KwRow n t k) = KwRow <$> relabel n <*> relabel t <*> relabel k
+    relabel (KwVar v) = KwVar <$> relabel v
+    relabel KwNil = return KwNil
+
 instance Relabel CType where
-    relabel (CTInt _) = CTInt <$> newLoc 
+    relabel (CTVar _ v) = CTVar <$> newLoc <*> relabel v
+    relabel (CTFun _ es p k t) = CTFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
+    relabel (CTTuple _ p) = CTTuple <$> newLoc <*> relabel p
+    relabel (CTStruct _ k) = CTStruct <$> newLoc <*> relabel k
+    relabel (CPSeq _ t) = CPSeq <$> newLoc <*> relabel t
+    relabel (CPSet _ t) = CPSet <$> newLoc <*> relabel t
+    relabel (CPMap _ kt vt) = CPMap <$> newLoc <*> relabel kt <*> relabel vt
+    relabel (CTOpt _ t) = CTOpt <$> newLoc <*> relabel t
+    relabel (CTUnion _ as) = CTUnion <$> newLoc <*> return as
+    relabel (CTCon  _ nm ts) = CTCon <$> newLoc <*> relabel nm <*> relabel ts
+    relabel (CTStr _) = CTStr <$> newLoc
+    relabel (CTInt _) = CTInt <$> newLoc
+    relabel (CTFloat _) = CTFloat <$> newLoc
+    relabel (CTBool _) = CTBool <$> newLoc
+    relabel (CTNone _) = CTNone <$> newLoc
+    relabel (CTQual _ cs t) = CTQual <$> newLoc <*> relabel cs <*> relabel t

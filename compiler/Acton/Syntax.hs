@@ -45,8 +45,8 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, pars::Params Param, ann::(Maybe CType), dbody::Suite, modif::Modif }
-                | Actor         { dloc::SrcLoc, dname:: Name, pars::Params Param, ann::(Maybe CType), dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
+                | Actor         { dloc::SrcLoc, dname:: Name, params::Params, ann::(Maybe CType), dbody::Suite }
                 | Class         { dloc::SrcLoc, dname::Name, dargs::[Arg], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
@@ -71,7 +71,7 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | UnOp          { eloc::SrcLoc, uop::Op Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | Lambda        { eloc::SrcLoc, params::Params Param, exp1::Expr }
+                | Lambda        { eloc::SrcLoc, pars::Params, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, elems::[Elem Expr] }
@@ -115,7 +115,7 @@ data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
 data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc Expr | ExceptAs SrcLoc Expr Name deriving (Show)
-data Params a   = Params { positional::[a], posExt::StarPar, kwOnly::[a], kwExt::StarPar} deriving (Show,Eq)
+data Params     = Params [Param] StarPar [Param] StarPar deriving (Show,Eq)
 data Param      = Param Name (Maybe CType) (Maybe Expr) deriving (Show,Eq)
 data StarPar    = StarPar SrcLoc Name (Maybe CType) | NoStar deriving (Show)
 
@@ -190,12 +190,14 @@ data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Sho
 
 type CEffect    = [Name]
 
-data TPar       = PosPar CType | KwPar Name CType deriving  (Eq,Show)
+data PosRow     = PosRow CType PosRow | PosVar (Maybe CVar) | PosNil deriving (Eq,Show)
+
+data KwRow      = KwRow Name CType KwRow | KwVar (Maybe CVar) | KwNil deriving (Eq,Show)
 
 data CType      = CTVar     { tloc :: SrcLoc, cvar :: CVar }
-                | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, tpars :: Params TPar, restype :: CType }
-                | CTTuple   { tloc :: SrcLoc, postypes :: [CType], star1types :: Maybe (Maybe CVar) }
-                | CTStruct  { tloc :: SrcLoc, kwdtypes :: [(Name,CType)], star2types :: Maybe (Maybe CVar) }
+                | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
+                | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
+                | CTStruct  { tloc :: SrcLoc, kwrow :: KwRow }
                 | CPSeq     { tloc :: SrcLoc, elemtype :: CType }
                 | CPSet     { tloc :: SrcLoc, elemtype :: CType }
                 | CPMap     { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
@@ -324,7 +326,7 @@ instance Eq Expr where
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
-    x@Lambda{}          ==  y@Lambda{}          = params x == params y && exp1 x == exp1 y
+    x@Lambda{}          ==  y@Lambda{}          = pars x == pars y && exp1 x == exp1 y
     x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
@@ -431,7 +433,7 @@ elemcore (Star e)                   = e
 fieldcore (Field _ e)               = e
 fieldcore (StarStarField e)         = e
 
-paramcores (Params ps _ kw _)       = [ e | Param _ _ (Just e) <- ps ++ kw ]
+paramcores (Params ps _ ks _)       = [ e | Param _ _ (Just e) <- ps ++ ks ]
 
 argcore (Arg e)                     = e
 argcore (StarArg e)                 = e
@@ -516,9 +518,9 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n p a b md)       = pretty md <+> text "def" <+> pretty n <> parens (pretty p) <>
+    pretty (Def _ n ps a b md)      = pretty md <+> text "def" <+> pretty n <> parens (pretty ps) <>
                                       nonEmpty (text "->" <>) pretty a <> colon $+$ prettySuite b
-    pretty (Actor _ n p a b)        = text "actor" <+> pretty n <> parens (pretty p) <>
+    pretty (Actor _ n ps a b)       = text "actor" <+> pretty n <> parens (pretty ps) <>
                                       nonEmpty (text "->" <>) pretty a <> colon $+$ prettySuite b
     pretty (Class _ n as b)         = text "class" <+> pretty n <> nonEmpty parens commaList as <> colon $+$ prettySuite b
     pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
@@ -565,7 +567,7 @@ instance Pretty Expr where
     pretty (UnOp _ o e)             = pretty o <> pretty e
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
-    pretty (Lambda _ p e)           = text "lambda" <+> pretty p <> colon <+> pretty e
+    pretty (Lambda _ ps e)          = text "lambda" <+> pretty ps <> colon <+> pretty e
     pretty (Tuple _ es)             = prettyTuple es
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
@@ -616,13 +618,13 @@ instance Pretty Except where
     pretty (Except _ e)             = text "except" <+> pretty e
     pretty (ExceptAs _ e n)         = text "except" <+> pretty e <+> text "as" <+> pretty n
 
-instance Pretty a => Pretty (Params a) where
-    pretty p@Params {}              = hsep $ punctuate comma params
-      where ps                      = map pretty (positional p)
-            kw                      = map pretty (kwOnly p)
-            psE0                    = nonEmpty (text "*" <>) pretty (posExt p)
+instance Pretty Params where
+    pretty (Params a b c d)         = hsep $ punctuate comma params
+      where ps                      = map pretty a
+            kw                      = map pretty c
+            psE0                    = nonEmpty (text "*" <>) pretty b
             psE                     = if isEmpty psE0 && kw /= [] then text "*" else psE0
-            kwE                     = nonEmpty (text "**" <>) pretty (kwExt p)
+            kwE                     = nonEmpty (text "**" <>) pretty d
             params                  = filter (not . isEmpty) (ps ++ [psE] ++ kw ++ [kwE])
 
 instance Pretty Param where
@@ -860,17 +862,29 @@ instance Pretty UType where
     pretty UStr                     = text "str"
     pretty (UStrCon str)            = text ('\'' : str ++"'")
 
-instance Pretty TPar where
-    pretty (PosPar t)               = pretty t
-    pretty (KwPar n t)              = pretty n <+> text ":" <+> pretty t
+instance Pretty PosRow where
+    pretty (PosRow t PosNil)        = pretty t
+    pretty (PosRow t p)             = pretty t <> comma <+> pretty p
+    pretty (PosVar mbn)             = text "*" <> maybe empty pretty mbn
+    pretty PosNil                   = empty
+    
+instance Pretty KwRow where
+    pretty (KwRow n t KwNil)        = pretty n <> colon <+> pretty t
+    pretty (KwRow n t k)            = pretty n <> colon <+> pretty t <> comma <+> pretty k
+    pretty (KwVar mbn)              = text "**" <> maybe empty pretty mbn
+    pretty KwNil                    = empty
+    
+instance Pretty (PosRow, KwRow) where
+    pretty (PosNil, k)              = pretty k
+    pretty (p, KwNil)               = pretty p
+    pretty (p, k)                   = pretty p <> comma <+> pretty k
 
 instance Pretty CType where
     pretty (CTVar _ v)              = pretty v
-    pretty (CTFun _ es ps t)        = spaceSep pretty es <+> parens (pretty ps) <+> text "->" <+> pretty t
+    pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    pretty (CTTuple _ ps mbmbv)     = parens (commaList ps <> maybe empty (\mbv -> commaIf ps <+> text "*" <> maybe empty pretty mbv) mbmbv)
-    pretty (CTStruct _ ps mbmbv)    = parens (commaSep (\(x,t) -> pretty x <> colon <+> pretty t) ps
-                                         <> maybe empty (\mbv -> commaIf ps <+> text "**" <> maybe empty pretty mbv) mbmbv)
+    pretty (CTTuple _ pos)          = parens (pretty pos)
+    pretty (CTStruct _ kw)          = parens (pretty kw)
     pretty (CPSeq _ t)              = brackets (pretty t)
     pretty (CPSet _ t)              = braces (pretty t)
     pretty (CPMap _ kt vt)          = braces (pretty kt <> colon <+> pretty vt)

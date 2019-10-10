@@ -531,7 +531,7 @@ instance Infer Expr where
                                              return (TStruct r)                 -- !! Big over-generalization, for now
     infer env (Paren l e)               = infer env e
 
-instance InfEnvT (Params Param) where
+instance InfEnvT Params where
     infEnvT env (Params pos NoStar [] kX)
       | not (null pos)                  = infEnvT env (Params [] NoStar pos kX)
     infEnvT env (Params pos pX kwd kX)  = do (te0, r0) <- inferPar env (const RPos) pos

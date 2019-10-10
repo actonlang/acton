@@ -444,7 +444,7 @@ starpar2 = addLoc (S.StarPar NoLoc <$> name <*> return Nothing)
 --typedargslist = argslist params1
 --varargslist = argslist params2
 
-argslist :: Parser a -> Parser S.StarPar -> Parser (S.Params a) 
+argslist :: Parser S.Param -> Parser S.StarPar -> Parser S.Params
 argslist param starpar = 
                (do p1 <- param
                    ps <- many (try (comma *> param))
@@ -560,6 +560,11 @@ tsig = do v <- name
           colon
           t <- ctype
           return (v:vs,t)
+ 
+tsig1 = do v <- name
+           colon
+           t <- ctype
+           return (v,t)
  
 target = pattern False
 
@@ -822,7 +827,7 @@ test_nocond = or_test <|> lambdef_nocond
 
 lambdefGen t = addLoc $ do
             rword "lambda"
-            mbvs <- optional (argslist param1 starpar1)
+            mbvs <- optional (argslist param2 starpar2)
             colon
             S.Lambda NoLoc (maybe (S.Params [] S.NoStar [] S.NoStar) id mbvs) <$> t
 
@@ -1127,27 +1132,38 @@ yield_expr = addLoc $ do
 
 --- Types ----------------------------------------------------------------------
 
-tstruct :: Parser S.CType
-tstruct = do mbv <- starstar *> optional cvar
-             return (S.CTStruct NoLoc [] (Just mbv))
-         <|>
-          do p <- tsig
-             ps <- many (try (comma *> tsig))
-             mbv <- optional (comma *> optional (starstar *> optional cvar))
-             let f (vs,t) = map (\v -> (v,t)) vs
-                 qs = f p ++ concatMap f ps
-                 tail = maybe Nothing id mbv
-             return (S.CTStruct NoLoc qs tail)
-
-ttuple :: Parser S.CType
-ttuple  = do mbv <- star *> optional cvar
-             return (S.CTTuple NoLoc [] (Just mbv))
+posrow :: Parser S.PosRow
+posrow  = do mbv <- star *> optional cvar
+             return (S.PosVar mbv)
          <|> 
           do t <- ctype
              ts <- many (try (comma *> ctype))
              mbv <- optional (comma *> optional (star *> optional cvar))
-             return (S.CTTuple NoLoc (t:ts) (maybe Nothing id mbv))
-         <|> return (S.CTTuple NoLoc [] Nothing)
+             let tail = maybe S.PosNil (maybe S.PosNil S.PosVar) mbv
+             return (foldr S.PosRow tail (t:ts))
+
+kwrow :: Parser S.KwRow
+kwrow   = do mbv <- starstar *> optional cvar
+             return (S.KwVar mbv)
+         <|>
+          do p <- tsig1
+             ps <- many (try (comma *> tsig1))
+             mbv <- optional (comma *> optional (starstar *> optional cvar))
+             let tail = maybe S.KwNil (maybe S.KwNil S.KwVar) mbv
+             return (foldr (uncurry S.KwRow) tail (p:ps))
+
+funrows :: Parser (S.PosRow, S.KwRow)
+funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.PosVar mbv, k))
+        <|>
+           try (do mbv <- (star *> optional cvar); optional comma; return (S.PosVar mbv, S.KwNil))
+        <|>
+           try (do k <- kwrow; return (S.PosNil, k))
+        <|>
+           try (do t <- ctype; comma; (p,k) <- funrows; return (S.PosRow t p, k))
+        <|>
+           try (do t <- ctype; optional comma; return (S.PosRow t S.PosNil, S.KwNil))
+        <|>
+           try (do optional comma; return (S.PosNil, S.KwNil))
 
 named :: Parser S.CType
 named =  addLoc (
@@ -1157,18 +1173,6 @@ named =  addLoc (
                                           return (t:ts)))
            return (S.CTCon NoLoc n (maybe [] id args)))
 
-
-tpar :: Parser S.TPar
-tpar = try (S.KwPar <$> name <*> (colon *> ctype))
-        <|> S.PosPar <$> ctype
-
-
-starpar3 :: Parser S.StarPar
-starpar3 = do S.CVar nm <- cvar
-              return $ S.StarPar NoLoc nm Nothing
-              
-tparlist :: Parser (S.Params S.TPar)
-tparlist = argslist tpar starpar3
 
 cvar :: Parser S.CVar
 cvar = S.CVar <$> tvarname
@@ -1195,12 +1199,13 @@ ctype    =  addLoc (
                     t <- ctype
                     return (S.CTQual NoLoc cs t))
         <|> try (do es <- many name
-                    ps <- parens tparlist
+                    (p,k) <- parens funrows
                     arrow
                     t <- ctype
-                    return (S.CTFun NoLoc es ps t))
-        <|> try (parens tstruct)
-        <|> parens  ttuple
+                    return (S.CTFun NoLoc es p k t))
+        <|> try (parens (S.CTStruct NoLoc <$> kwrow))
+        <|> try (parens (S.CTTuple NoLoc <$> posrow))
+        <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (S.CTVar NoLoc <$> cvar)
         <|> named)
 
