@@ -45,3 +45,6 @@ def f(z):
     pass
 
 w = KeyError
+
+protocol Indexed[A,B]:
+    __getitem__ : (Self, A) -> B

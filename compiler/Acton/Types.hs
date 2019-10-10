@@ -34,14 +34,18 @@ typeError                               = solveError
 
 chkRedef ss                             = True -- TBD
 
-chkCycles (Class _ n q cs b : ds)
-                                        = noforward cs n ds && all chkClass b && chkCycles ds
-  where chkClass s@Decl{}               = chkCycles (decls s ++ ds)
-        chkClass s                      = noforward s n ds
+chkCycles (Class _ n q cs b : ds)       = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
+chkCycles (Struct _ n q cs b : ds)      = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
+chkCycles (Protocol _ n q cs b : ds)    = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
+chkCycles (Extension _ n q cs b : ds)   = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Decorator _ qn args d : ds)  = noforward qn n ds && noforward args n ds && chkCycles (d:ds)
   where n                               = declname d
 chkCycles (d : ds)                      = chkCycles ds
 chkCycles []                            = True
+
+chkDecl n ds s@Decl{}                   = chkCycles (decls s ++ ds)
+chkDecl n ds s                          = noforward s n ds
+
 
 noforward x n y
   | not $ null vs                       = err2 vs "Illegal forward reference:"
@@ -297,6 +301,10 @@ instance Infer Decl where
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
                                         
+    infer env (Struct l n q cs b)       = newTVar       -- undefined
+    infer env (Protocol l n q cs b)     = newTVar       -- undefined
+    infer env (Extension l n q cs b)    = newTVar       -- undefined
+
     infer env (Actor l n q p ann b)
       | nodup p && noshadow svars p && 
         chkRedef b                      = do fx <- actFX <$> newTVar
