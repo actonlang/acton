@@ -28,24 +28,9 @@ restrict vs                 = filter ((`elem` vs) . fst)
 
 prune vs                    = filter ((`notElem` vs) . fst)
 
-data Env a                  = Env { venv :: [(Name, Maybe a)], stvars :: [Name], ret :: Maybe a } 
+data Env                    = Env { venv :: [(Name, Maybe Type)], stvars :: [Name], ret :: Maybe Type } 
                             deriving (Eq,Show)
-
-instance Functor Env where
-    fmap f env              = Env (fmap (fmap (fmap f)) (venv env))
-                                  (stvars env) 
-                                  (fmap f (ret env))
-
-instance Foldable Env where
-    foldr f z0 env          = foldr f z1 (catMaybes $ rng $ venv env)
-      where z1              = foldr f z0 (ret env)
-
-instance Traversable Env where
-    traverse f env          = Env <$> traverse (traverse (traverse f)) (venv env) 
-                                  <*> pure (stvars env) 
-                                  <*> traverse f (ret env)
-
-instance Subst (Env Type) where
+instance Subst Env where
     subst s env             = env{ venv = subst s (venv env), ret = subst s (ret env) }
     tyvars env              = tyvars (venv env)++ tyvars (ret env)
     
