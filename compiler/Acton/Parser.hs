@@ -193,16 +193,12 @@ instance AddLoc S.Comp where
              S.CompIf _ e c -> return (S.CompIf l e c)
              S.NoComp -> return S.NoComp
 
-{-
-instance AddLoc S.Annot where
+instance AddLoc S.TSchema where
   addLoc p = do
-          (l,ann) <- withLoc p
-          case ann of
-             S.Annot e -> return (S.Annot e)
-             S.Type _ t -> return (S.Type l t)
--}
+          (l, S.TSchema _ q t) <- withLoc p
+          return $ S.TSchema l q t
 
-instance AddLoc S.CType where
+instance AddLoc S.Type where
   addLoc p = do
           (l,ct) <- withLoc p
           return ct{S.tloc = l}
@@ -381,7 +377,7 @@ funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
               (p,md) <- withPos (modifier <* rword "def")
-              S.Def NoLoc <$> name <*> optbinds <*> parameters <*> optional (arrow *> annot) <*> suite DEF p <*> pure md
+              S.Def NoLoc <$> name <*> optbinds <*> parameters <*> optional (arrow *> ctype) <*> suite DEF p <*> pure md
 
 
 -- modifier: ['sync' | 'async']
@@ -391,7 +387,7 @@ modifier = assertActScope *> rword "sync" *> return (S.Sync True) <|>
            assertActScope *> rword "async" *> return S.Async <|>
            ifActScope (return (S.Sync False)) (return S.NoMod)
 
-optbinds :: Parser [S.CBind]
+optbinds :: Parser [S.TBind]
 optbinds = brackets (do b <- cbind; bs <- many (comma *> cbind); return (b:bs))
             <|>
            return []
@@ -423,9 +419,6 @@ optbinds = brackets (do b <- cbind; bs <- many (comma *> cbind); return (b:bs))
 --    | parlist_starargs
 --    | '**' tfpdef [','])
 
---annot :: Parser S.Annot
-annot = ctype -- S.Annot <$> test
-
 --param :: Parser S.StarPar -> Parser S.Param
 --param par = do S.StarPar _ nm mba <- par
 --               S.Param nm mba <$> optional (equals *> test)
@@ -434,7 +427,7 @@ annot = ctype -- S.Annot <$> test
 
 -- Parameter lists in lambdas may not have type annotations, while those in def and actor declarations do
 param1, param2 :: Parser S.Param
-param1 = S.Param <$> name <*> optional (colon *> ctype) <*> optional (equals *> test)
+param1 = S.Param <$> name <*> optional (colon *> tscheme) <*> optional (equals *> test)
 
 -- parameter lists in lambdas may not have type annotations
 param2 = S.Param <$>  name <*> return Nothing <*> optional (equals *> test)
@@ -443,7 +436,7 @@ param2 = S.Param <$>  name <*> return Nothing <*> optional (equals *> test)
 parameters = maybe (S.Params [] S.NoStar [] S.NoStar) id <$> (parens (optional (argslist param1 starpar1)))
 
 starpar1, starpar2 :: Parser S.StarPar
-starpar1 = addLoc (S.StarPar NoLoc <$> name <*> optional (colon *> annot)) 
+starpar1 = addLoc (S.StarPar NoLoc <$> name <*> optional (colon *> ctype)) 
 starpar2 = addLoc (S.StarPar NoLoc <$> name <*> return Nothing) 
 
 --typedargslist and varargslist have the same structure and we define a function argslist for the common pattern
@@ -564,12 +557,12 @@ var_stmt = addLoc $
 tsig = do v <- name
           vs <- commaList name
           colon
-          t <- ctype
+          t <- tscheme
           return (v:vs,t)
  
 tsig1 = do v <- name
            colon
-           t <- ctype
+           t <- tscheme
            return (v,t)
  
 target = pattern False
@@ -614,7 +607,7 @@ apat lh = addLoc (
                 S.Ix _ e ix  -> return $ S.PIx NoLoc e ix
                 _            -> locate (loc tmp) >> fail ("illegal assignment target: " ++ show tmp)
         datapat = S.PData NoLoc <$> escname <*> many (brackets testlist)
-        optannot = try (Just <$> (colon *> annot)) <|> return Nothing
+        optannot = try (Just <$> (colon *> ctype)) <|> return Nothing
 
 -- del_stmt: 'del' exprlist
 -- pass_stmt: 'pass'
@@ -725,7 +718,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> actordef <|> decorated
+decl = funcdef <|> classdef <|> structdef <|> protodef <|> extdef <|> actordef <|> decorated
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -953,7 +946,7 @@ atom =  addLoc (try strings
        <|>
          (try . parens) testlist_comp
        <|>
-         (try . parens) structmaker
+         (try . parens) recordmaker
        <|>
         (brackets $ do
                      mbe <- optional testlist_comp2
@@ -999,9 +992,9 @@ maker constr constrComp p = do
 testlist_comp2 = maker S.List S.ListComp elem 
    where elem = (S.Elem <$> test) <|> star_expr
 
-structmaker = addLoc $ do
+recordmaker = addLoc $ do
          f@(S.Field n e) <- eqn         
-         (S.StructComp NoLoc n e <$> comp_for) <|> ((\fs -> (S.Struct NoLoc (f:fs))) <$> commaList field)
+         (S.RecordComp NoLoc n e <$> comp_for) <|> ((\fs -> (S.Record NoLoc (f:fs))) <$> commaList field)
    where eqn = S.Field <$> escname <*> (equals *> test)
          field = eqn <|> (S.StarStarField <$> (starstar *> expr))                   
 
@@ -1062,19 +1055,27 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 ps <- parameters
-                mba <- optional (arrow *> annot)
+                mba <- optional (arrow *> ctype)
                 ss <- suite ACTOR s
                 return $ S.Actor NoLoc nm q ps mba ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- structdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 
-classdef = addLoc $ do
+classdef    = classdefGen "class" S.Class
+structdef   = classdefGen "struct" S.Struct
+protodef    = classdefGen "protocol" S.Protocol
+extdef      = classdefGen "extension" S.Extension
+
+classdefGen k con = addLoc $ do
                 assertNotData
-                (s,_) <- withPos (rword "class")
+                (s,_) <- withPos (rword k)
                 nm <- name
                 q <- optbinds
                 cs <- optbounds
-                S.Class NoLoc nm q cs <$> suite CLASS s
+                con NoLoc nm q cs <$> suite CLASS s
 
 -- arglist: argument (',' argument)*  [',']
 -- argument: ( test [comp_for] |
@@ -1130,86 +1131,91 @@ posrow :: Parser S.PosRow                   --non-empty posrow without trailing 
 posrow  = do mbv <- star *> optional cvar  
              return (S.PosVar mbv)
          <|> 
-          do t <- ctype
-             ts <- many (try (comma *> ctype))
+          do t <- tscheme
+             ts <- many (try (comma *> tscheme))
              mbv <- optional (comma *> optional (star *> optional cvar))
              let tail = maybe S.PosNil (maybe S.PosNil S.PosVar) mbv
              return (foldr S.PosRow tail (t:ts))
 
-kwrow :: Parser S.KwRow                    --non-empty kwrow with optional trailing comma
-kwrow   = do mbv <- starstar *> optional cvar <* optional comma
-             return (S.KwVar mbv)
+kwdrow :: Parser S.KwdRow                    --non-empty kwrow with optional trailing comma
+kwdrow  = do mbv <- starstar *> optional cvar
+             return (S.KwdVar mbv)
          <|>
           do p <- tsig1
              ps <- many (try (comma *> tsig1))
              mbv <- optional (comma *> optional ((starstar *> optional cvar) <* optional comma ))
-             let tail = maybe S.KwNil (maybe S.KwNil S.KwVar) mbv
-             return (foldr (uncurry S.KwRow) tail (p:ps))
+             let tail = maybe S.KwdNil (maybe S.KwdNil S.KwdVar) mbv
+             return (foldr (uncurry S.KwdRow) tail (p:ps))
 
+funrows :: Parser (S.PosRow, S.KwdRow)
+funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwdrow; return (S.PosVar mbv, k))
+        <|>
+           try (do mbv <- (star *> optional cvar); optional comma; return (S.PosVar mbv, S.KwdNil))
+        <|>
+           try (do k <- kwdrow; return (S.PosNil, k))
+        <|>
+           try (do t <- tscheme; comma; (p,k) <- funrows; return (S.PosRow t p, k))
+        <|>
+           try (do t <- tscheme; optional comma; return (S.PosRow t S.PosNil, S.KwdNil))
+        <|>
+           try (do optional comma; return (S.PosNil, S.KwdNil))
 
-funrows :: Parser (S.PosRow, S.KwRow)
-funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.PosVar mbv, k))       -- only * as posrow; nonempty kw
-        <|>
-           try (do mbv <- (star *> optional cvar); optional comma; return (S.PosVar mbv, S.KwNil))    -- only * as posrow; empty kw
-        <|>
-           try (do k <- kwrow; return (S.PosNil, k))                                                  -- empty posrow
-        <|>
-           try (do t <- ctype; comma; (p,k) <- funrows; return (S.PosRow t p, k))                     -- at least one pospar followed by commma
-        <|>
-           try (do t <- ctype; optional comma; return (S.PosRow t S.PosNil, S.KwNil))                 -- exactly one pospar and possibly comma
-        <|>
-           try (do optional comma; return (S.PosNil, S.KwNil))                                        -- just an optional comma
-
-ccon :: Parser S.CCon
+ccon :: Parser S.TCon
 ccon =  do n <- name
            args <- optional (brackets (do t <- ctype
                                           ts <- commaList ctype
                                           return (t:ts)))
-           return $ S.CCon n (maybe [] id args)
+           return $ S.TC n (maybe [] id args)
 
-cvar :: Parser S.CVar
-cvar = S.CVar <$> tvarname
+cvar :: Parser S.TVar
+cvar = S.TV <$> tvarname
 
-cbind :: Parser S.CBind
-cbind = S.CBind <$> cvar <*> optbounds
+cbind :: Parser S.TBind
+cbind = S.TBind <$> cvar <*> optbounds
 
-optbounds :: Parser [S.CCon]
+optbounds :: Parser [S.TCon]
 optbounds = do bounds <- optional (parens (optional ((:) <$> ccon <*> commaList ccon)))
                return $ maybe [] (maybe [] id) bounds
 
-ctype :: Parser S.CType
+tscheme :: Parser S.TSchema
+tscheme = addLoc $
+            try (do 
+                bs <- brackets (do n <- cbind
+                                   ns <- commaList cbind
+                                   return (n:ns))
+                fatarrow
+                t <- ctype
+                return (S.TSchema NoLoc bs t))
+            <|>
+            (S.TSchema NoLoc [] <$> ctype)
+
+ctype :: Parser S.Type
 ctype    =  addLoc (
-            rword "int" *> return (S.CTInt NoLoc)
-        <|> rword "float" *> return (S.CTFloat NoLoc)
-        <|> rword "bool" *> return (S.CTBool NoLoc)
-        <|> rword "str" *> return (S.CTStr NoLoc)
-        <|> rword "None" *> return (S.CTNone NoLoc)
-        <|> rword "Self" *> return (S.CSelf NoLoc)
-        <|> S.CTOpt NoLoc <$> (qmark *> ctype)
+            rword "int" *> return (S.TInt NoLoc)
+        <|> rword "float" *> return (S.TFloat NoLoc)
+        <|> rword "bool" *> return (S.TBool NoLoc)
+        <|> rword "str" *> return (S.TStr NoLoc)
+        <|> rword "None" *> return (S.TNone NoLoc)
+        <|> rword "Self" *> return (S.TSelf NoLoc)
+        <|> S.TOpt NoLoc <$> (qmark *> ctype)
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
-                       return (maybe (S.CPSet NoLoc t) (S.CPMap NoLoc t) mbt))
-        <|> try (do bs <- brackets (do n <- cbind
-                                       ns <- commaList cbind
-                                       return (n:ns))
-                    fatarrow
-                    t <- ctype
-                    return (S.CTQual NoLoc bs t))
-        <|> try (brackets (S.CPSeq NoLoc <$> ctype))
+                       return (maybe (S.PSet NoLoc t) (S.PMap NoLoc t) mbt))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
-                            return $ S.CTUnion NoLoc (alts++[alt])))
+                            return $ S.TUnion NoLoc (alts++[alt])))
         <|> try (do es <- many name
                     (p,k) <- parens funrows
                     arrow
                     t <- ctype
-                    return (S.CTFun NoLoc es p k t))
-        <|> try (parens (S.CTStruct NoLoc <$> kwrow))
-        <|> try (parens (S.CTTuple NoLoc <$> posrow <* optional comma))
-        <|> parens (return (S.CTTuple NoLoc S.PosNil))
-        <|> try (S.CTVar NoLoc <$> cvar)
-        <|> S.CTCon NoLoc <$> ccon)
-
+                    return (S.TFun NoLoc es p k t))
+        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
+        <|> try (parens (S.TTuple NoLoc <$> posrow <* optional comma))
+        <|> parens (return (S.TTuple NoLoc S.PosNil))
+        <|> try (brackets (S.PSeq NoLoc <$> ctype))
+        <|> try (S.TVar NoLoc <$> cvar)
+        <|> S.TAt NoLoc <$> (symbol "@" *> ccon)
+        <|> S.TCon NoLoc <$> ccon)
                 
 
 utype :: Parser S.UType

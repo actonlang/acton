@@ -58,6 +58,9 @@ instance Relabel Decl where
     relabel (Def _ n q ps mba ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel mba <*> relabel ss <*> return md
     relabel (Actor _ n q ps ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ann <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
+    relabel (Struct _ n q as ss) = Struct <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
+    relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
+    relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Decorator _ n args s) = Decorator <$> newLoc <*> relabel n <*> relabel args <*> relabel s
 
 instance Relabel Expr where
@@ -91,8 +94,8 @@ instance Relabel Expr where
     relabel (DictComp _ a c) = DictComp <$> newLoc <*> relabel a <*> relabel c
     relabel (Set _ es) = Set <$> newLoc <*> relabel es
     relabel (SetComp _ e c) = SetComp <$> newLoc <*> relabel e <*> relabel c
-    relabel (Struct _ fs) = Struct <$> newLoc <*> relabel fs
-    relabel (StructComp _ n e c) = StructComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
+    relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
+    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (Paren _ e) = Paren <$> newLoc <*> relabel e
 
 instance Relabel Pattern where
@@ -111,10 +114,6 @@ instance Relabel Name where
 
 instance Relabel QName where
   relabel (QName nm nms) = QName <$> relabel nm <*> relabel nms
-
-instance Relabel Annot where
-  relabel (Annot e) = Annot <$> relabel e
-  relabel (Type _ t) = Type <$> newLoc <*> relabel t
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn
@@ -181,43 +180,46 @@ instance Relabel Field where
   relabel (Field nm e) = Field <$> relabel nm <*> relabel e
   relabel (StarStarField e) = StarStarField <$> relabel e
 
-instance Relabel Type where
+instance Relabel OType where
   relabel = undefined
 
-instance Relabel CVar where
-    relabel (CVar n) = CVar <$> relabel n
+instance Relabel TSchema where
+    relabel (TSchema _ q t) = TSchema <$> newLoc <*> relabel q <*> relabel t
 
-instance Relabel CCon where
-    relabel (CCon n ts) = CCon <$> relabel n <*> relabel ts
+instance Relabel TVar where
+    relabel (TV n) = TV <$> relabel n
 
-instance Relabel CBind where
-    relabel (CBind v cs) = CBind <$> relabel v <*> relabel cs
+instance Relabel TCon where
+    relabel (TC n ts) = TC <$> relabel n <*> relabel ts
+
+instance Relabel TBind where
+    relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
 
 instance Relabel PosRow where
     relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
     relabel (PosVar v) = PosVar <$> relabel v
     relabel PosNil = return PosNil
 
-instance Relabel KwRow where
-    relabel (KwRow n t k) = KwRow <$> relabel n <*> relabel t <*> relabel k
-    relabel (KwVar v) = KwVar <$> relabel v
-    relabel KwNil = return KwNil
+instance Relabel KwdRow where
+    relabel (KwdRow n t k) = KwdRow <$> relabel n <*> relabel t <*> relabel k
+    relabel (KwdVar v) = KwdVar <$> relabel v
+    relabel KwdNil = return KwdNil
 
-instance Relabel CType where
-    relabel (CSelf _) = CSelf <$> newLoc
-    relabel (CTVar _ v) = CTVar <$> newLoc <*> relabel v
-    relabel (CTFun _ es p k t) = CTFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
-    relabel (CTTuple _ p) = CTTuple <$> newLoc <*> relabel p
-    relabel (CTStruct _ k) = CTStruct <$> newLoc <*> relabel k
-    relabel (CPSeq _ t) = CPSeq <$> newLoc <*> relabel t
-    relabel (CPSet _ t) = CPSet <$> newLoc <*> relabel t
-    relabel (CPMap _ kt vt) = CPMap <$> newLoc <*> relabel kt <*> relabel vt
-    relabel (CTOpt _ t) = CTOpt <$> newLoc <*> relabel t
-    relabel (CTUnion _ as) = CTUnion <$> newLoc <*> return as
-    relabel (CTCon  _ c) = CTCon <$> newLoc <*> relabel c
-    relabel (CTStr _) = CTStr <$> newLoc
-    relabel (CTInt _) = CTInt <$> newLoc
-    relabel (CTFloat _) = CTFloat <$> newLoc
-    relabel (CTBool _) = CTBool <$> newLoc
-    relabel (CTNone _) = CTNone <$> newLoc
-    relabel (CTQual _ cs t) = CTQual <$> newLoc <*> relabel cs <*> relabel t
+instance Relabel Type where
+    relabel (TSelf _) = TSelf <$> newLoc
+    relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
+    relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
+    relabel (TTuple _ p) = TTuple <$> newLoc <*> relabel p
+    relabel (TRecord _ k) = TRecord <$> newLoc <*> relabel k
+    relabel (PSeq _ t) = PSeq <$> newLoc <*> relabel t
+    relabel (PSet _ t) = PSet <$> newLoc <*> relabel t
+    relabel (PMap _ kt vt) = PMap <$> newLoc <*> relabel kt <*> relabel vt
+    relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
+    relabel (TUnion _ as) = TUnion <$> newLoc <*> return as
+    relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c
+    relabel (TAt  _ c) = TAt <$> newLoc <*> relabel c
+    relabel (TStr _) = TStr <$> newLoc
+    relabel (TInt _) = TInt <$> newLoc
+    relabel (TFloat _) = TFloat <$> newLoc
+    relabel (TBool _) = TBool <$> newLoc
+    relabel (TNone _) = TNone <$> newLoc

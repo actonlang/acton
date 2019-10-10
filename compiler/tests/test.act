@@ -41,5 +41,12 @@ actor Test [T](v0:T):
 
 x = 1                                                    # Comment out, and f below will be parsed as a method of previous actor!!
                                                          # (ERROR!)
-def f():
+def f(z):
     pass
+
+protocol Indexed[A,B]:                                   # just a protocol
+    __getitem__ : (Self, A) -> B
+
+g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
+
+h : (f:[A]=>(A)->A, x:int, y:@dict[int,str]) -> str      # a rank-2 scheme with keyword arguments and an @ type

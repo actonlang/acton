@@ -27,7 +27,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, exprs::[Expr] }
-                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: CType}
+                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: TSchema}
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, pattern::Pattern }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
@@ -44,9 +44,12 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite, modif::Modif }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::[CBind], params::Params, ann::(Maybe CType), dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qual::[CBind], bounds::[CCon], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], params::Params, ann::(Maybe Type), dbody::Suite, modif::Modif }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::[TBind], params::Params, ann::(Maybe Type), dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
+                | Struct        { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 
@@ -81,12 +84,12 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | DictComp      { eloc::SrcLoc, assoc1::Assoc, comp::Comp }
                 | Set           { eloc::SrcLoc, elems::[Elem Expr] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
-                | Struct        { eloc::SrcLoc, fields::[Field] }
-                | StructComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
+                | Record        { eloc::SrcLoc, fields::[Field] }
+                | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
-data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe CType }
+data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PIx           { ploc::SrcLoc, pexp::Expr, pix::[Index] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
@@ -115,8 +118,8 @@ data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc Expr | ExceptAs SrcLoc Expr Name deriving (Show)
 data Params     = Params [Param] StarPar [Param] StarPar deriving (Show,Eq)
-data Param      = Param Name (Maybe CType) (Maybe Expr) deriving (Show,Eq)
-data StarPar    = StarPar SrcLoc Name (Maybe CType) | NoStar deriving (Show)
+data Param      = Param Name (Maybe TSchema) (Maybe Expr) deriving (Show,Eq)
+data StarPar    = StarPar SrcLoc Name (Maybe Type) | NoStar deriving (Show)
 
 data Elem e     = Elem e | Star e deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStarAssoc Expr deriving (Show,Eq)
@@ -133,92 +136,90 @@ data Binary     = Or|And|BOr|BXor|BAnd|ShiftL|ShiftR|Plus|Minus|Mult|MMult|Div|M
 data Comparison = Lt|Gt|Eq|GE|LE|LtGt|NEq|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Aug        = PlusA|MinusA|MultA|MMultA|DivA|ModA|PowA|BAndA|BOrA|BXorA|ShiftLA|ShiftRA|EuDivA deriving (Show,Eq)
 
-data Annot      = Annot Expr
-                | Type SrcLoc Type
-                 deriving (Show,Eq)
-
 data Modif      = Sync Bool | Async | NoMod deriving (Show,Eq)
 
-data Type       = TVar      TVar
+data OType      = OVar      OVar
                 -- Types
-                | TFun      Effect Row Type
-                | TStruct   Row
-                | TTuple    Row
-                | TDict     Type Type
-                | TList     Type
-                | TSet      Type
-                | TMsg      Type
-                | TStr
-                | TInt
-                | TFloat
-                | TBool
-                | TNone
+                | OFun      OEffect ORow OType
+                | ORecord   ORow
+                | OTuple    ORow
+                | ODict     OType OType
+                | OList     OType
+                | OSet      OType
+                | OMsg      OType
+                | OStr
+                | OInt
+                | OFloat
+                | OBool
+                | ONone
                 -- Rows
-                | RPos      Type Row
-                | RStar1    Type Row
-                | RKwd      Name Type Row
-                | RStar2    Type Row
-                | RNil
+                | OPos      OType ORow
+                | OStar1    OType ORow
+                | OKwd      Name OType ORow
+                | OStar2    OType ORow
+                | ONil
                 -- Polymorphism
-                | TSchema   [TVar] [Constraint] Type
+                | OSchema   [OVar] [Qonstraint] OType
                 deriving (Eq,Show,Read,Generic)
 
-data Constraint = CEqu      { cloc::SrcLoc, vn::Int, t1::Type, t2::Type }
-                | CIn       { cloc::SrcLoc, vn::Int, t1::Type, t2::Type }
-                | CDot      { cloc::SrcLoc, vn::Int, t1::Type, cname::Name, t2::Type }
-                | CIx       { cloc::SrcLoc, vn::Int, t1::Type, t2::Type, t3::Type }
-                | CMod      { cloc::SrcLoc, vn::Int, t1::Type, t2::Type }
-                | CPlus     { cloc::SrcLoc, vn::Int, t1::Type }
-                | CNum      { cloc::SrcLoc, vn::Int, t1::Type }
-                | CBool     { cloc::SrcLoc, vn::Int, t1::Type }
+data Qonstraint = QEqu      { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
+                | QIn       { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
+                | QDot      { cloc::SrcLoc, vn::Int, t1::OType, cname::Name, t2::OType }
+                | QIx       { cloc::SrcLoc, vn::Int, t1::OType, t2::OType, t3::OType }
+                | QMod      { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
+                | QPlus     { cloc::SrcLoc, vn::Int, t1::OType }
+                | QNum      { cloc::SrcLoc, vn::Int, t1::OType }
+                | QBool     { cloc::SrcLoc, vn::Int, t1::OType }
                 deriving (Eq,Show,Read,Generic)
 
-type TVar           = [Int]
+type OVar       = [Int]
 
-type Row            = Type
+type ORow       = OType
 
-type Effect         = Row
+type OEffect    = ORow
 
-type Scheme         = Type
+type OSubst     = [(OVar,OType)]
 
-type Substitution   = [(TVar,Type)]
+----
 
-data CVar       = CVar Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
+data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show)
 
-data CCon       = CCon Name [CType] deriving (Eq,Show)
+data TVar       = TV Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
+
+data TCon       = TC Name [Type] deriving (Eq,Show)
 
 data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Show)
 
-type CEffect    = [Name]
+type EfxRow     = [Name] -- for now
 
-data PosRow     = PosRow CType PosRow | PosVar (Maybe CVar) | PosNil deriving (Eq,Show)
+data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show)
 
-data KwRow      = KwRow Name CType KwRow | KwVar (Maybe CVar) | KwNil deriving (Eq,Show)
+data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show)
 
-data CBind      = CBind CVar [CCon] deriving (Eq,Show)
+data TBind      = TBind TVar [TCon] deriving (Eq,Show)
 
-data CType      = CSelf     { tloc :: SrcLoc }
-                | CTVar     { tloc :: SrcLoc, cvar :: CVar }
-                | CTCon     { tloc :: SrcLoc, ccon :: CCon }
-                | CTFun     { tloc :: SrcLoc, ceffect :: CEffect, posrow :: PosRow, kwrow :: KwRow, restype :: CType }
-                | CTTuple   { tloc :: SrcLoc, posrow :: PosRow }
-                | CTStruct  { tloc :: SrcLoc, kwrow :: KwRow }
-                | CPSeq     { tloc :: SrcLoc, elemtype :: CType }
-                | CPSet     { tloc :: SrcLoc, elemtype :: CType }
-                | CPMap     { tloc :: SrcLoc, keytype :: CType, valtype :: CType }
-                | CTOpt     { tloc :: SrcLoc, opttype :: CType }
-                | CTUnion   { tloc :: SrcLoc, alts :: [UType] }
-                | CTStr     { tloc :: SrcLoc }
-                | CTInt     { tloc :: SrcLoc }
-                | CTFloat   { tloc :: SrcLoc }
-                | CTBool    { tloc :: SrcLoc }
-                | CTNone    { tloc :: SrcLoc }
-                | CTQual    { tloc :: SrcLoc, binds :: [CBind], qtype :: CType } -- type for cconstraints to be changed
-                deriving (Eq,Show,Generic)
+data Type       = TSelf     { tloc :: SrcLoc }
+                | TVar      { tloc :: SrcLoc, cvar :: TVar }
+                | TCon      { tloc :: SrcLoc, ccon :: TCon }
+                | TAt       { tloc :: SrcLoc, ccon :: TCon }
+                | TFun      { tloc :: SrcLoc, ceffect :: EfxRow, posrow :: PosRow, kwdrow :: KwdRow, restype :: Type }
+                | TTuple    { tloc :: SrcLoc, posrow :: PosRow }
+                | TRecord   { tloc :: SrcLoc, kwdrow :: KwdRow }
+                | PSeq      { tloc :: SrcLoc, elemtype :: Type }
+                | PSet      { tloc :: SrcLoc, elemtype :: Type }
+                | PMap      { tloc :: SrcLoc, keytype :: Type, valtype :: Type }
+                | TOpt      { tloc :: SrcLoc, opttype :: Type }
+                | TUnion    { tloc :: SrcLoc, alts :: [UType] }
+                | TStr      { tloc :: SrcLoc }
+                | TInt      { tloc :: SrcLoc }
+                | TFloat    { tloc :: SrcLoc }
+                | TBool     { tloc :: SrcLoc }
+                | TNone     { tloc :: SrcLoc }
+                deriving (Show,Generic)
 
-instance Data.Binary.Binary Type
+instance Data.Binary.Binary OType
 instance Data.Binary.Binary Name
-instance Data.Binary.Binary Constraint
+instance Data.Binary.Binary Qonstraint
 instance Data.Binary.Binary Binary
 
 
@@ -226,8 +227,8 @@ instance Data.Binary.Binary Binary
 
 type SrcInfo        = [InfoTag]
 
-data InfoTag        = GEN   SrcLoc Type
-                    | INS   SrcLoc Type
+data InfoTag        = GEN   SrcLoc OType
+                    | INS   SrcLoc OType
                     deriving (Eq,Show)
 
 lookupGEN l info    = listToMaybe [ t | GEN l' t <- info, l' == l ]
@@ -270,6 +271,8 @@ instance HasLoc Assoc where
 instance HasLoc Pattern where
     loc                 = ploc
 
+instance HasLoc TSchema where
+    loc (TSchema l _ _) = l
 
 -- Eq -------------------------
 
@@ -306,6 +309,9 @@ instance Eq Decl where
     Def _ n1 q1 p1 a1 b1 m1 ==  Def _ n2 q2 p2 a2 b2 m2 = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2 && m1 == m2
     Actor _ n1 q1 p1 a1 b1  ==  Actor _ n2 q2 p2 a2 b2  = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2
     Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Struct _ n1 q1 a1 b1    ==  Struct _ n2 q2 a2 b2    = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Protocol _ n1 q1 a1 b1  ==  Protocol _ n2 q2 a2 b2  = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Extension _ n1 q1 a1 b1 ==  Extension _ n2 q2 a2 b2 = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Decorator _ n1 a1 d1    ==  Decorator _ n2 a2 d2    = n1 == n2 && a1 == a2 && d1 == d2
 
 instance Eq Expr where
@@ -340,8 +346,8 @@ instance Eq Expr where
     x@DictComp{}        ==  y@DictComp{}        = assoc1 x == assoc1 y && comp x == comp y
     x@Set{}             ==  y@Set{}             = elems x == elems y
     x@SetComp{}         ==  y@SetComp{}         = elem1 x == elem1 y && comp x == comp y
-    x@Struct{}          ==  y@Struct{}          = fields x == fields y
-    x@StructComp{}      ==  y@StructComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
+    x@Record{}          ==  y@Record{}          = fields x == fields y
+    x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@Paren{}           ==  y                   = exp1 x == y
     x                   ==  y@Paren{}           = x == exp1 y
     _                   ==  _                   = False
@@ -387,6 +393,40 @@ instance Eq Pattern where
     p1                  == PParen _ p2          = p1 == p2
     _                   == _                    = False
 
+instance Eq TSchema where
+    TSchema _ q1 t1     == TSchema _ q2 t2      = q1 == q2 && t1 == t2
+
+instance Eq KwdRow where
+    r1                  == r2                   = walk r2 r1 && walk r1 r2
+      where walk (KwdRow n t r) r0              = has n t r0 && walk r r0
+            walk r r0                           = ends r r
+            has n t (KwdRow n' t' r')           = n == n' && t == t' || has n t r'
+            has n t _                           = False
+            ends r (KwdRow _ _ r')              = ends r r'
+            ends (KwdVar v) (KwdVar v')         = v == v'
+            ends KwdNil KwdNil                  = True
+            ends _ _                            = False
+
+instance Eq Type where
+    TSelf _             == TSelf _              = True
+    TVar _ v1           == TVar _ v2            = v1 == v2
+    TCon _ c1           == TCon _ c2            = c1 == c2
+    TAt _ c1            == TAt _ c2             = c1 == c2
+    TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
+    TTuple _ p1         == TTuple _ p2          = p1 == p2
+    TRecord _ r1        == TRecord _ r2         = r1 == r2
+    PSeq _ t1           == PSeq _ t2            = t1 == t2
+    PSet _ t1           == PSet _ t2            = t1 == t2
+    PMap _ k1 t1        == PMap _ k2 t2         = k1 == k2 && t1 == t2
+    TOpt _ t1           == TOpt _ t2            = t1 == t2
+    TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
+    TStr _              == TStr _               = True
+    TInt _              == TInt _               = True
+    TFloat _            == TFloat _             = True
+    TBool _             == TBool _              = True
+    TNone _             == TNone _              = True
+    _                   == _                    = False
+
 
 -- Show & Read ----------------
 
@@ -420,10 +460,10 @@ mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
 qname2expr (QName n ns)             = foldl (\e m -> Dot (nloc n `upto` nloc m) e m) (Var (nloc n) n) ns
 
-asyncFX                             = RKwd asyncKW TNone
-syncFX                              = RKwd syncKW TNone
-actFX                               = RKwd actKW TNone
-mutFX                               = RKwd mutKW TNone
+asyncFX                             = OKwd asyncKW ONone
+syncFX                              = OKwd syncKW ONone
+actFX                               = OKwd actKW ONone
+mutFX                               = OKwd mutKW ONone
 
 asyncKW                             = Name NoLoc "async"
 syncKW                              = Name NoLoc "sync"
@@ -466,7 +506,7 @@ istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
 
 notemp                              = not . istemp
 
-primitive t                         = t `elem` [TStr, TInt, TFloat, TBool, TNone]
+primitive t                         = t `elem` [OStr, OInt, OFloat, OBool, ONone]
 
 pat2exp (PVar l n _)                = Var l n
 pat2exp (PTuple l ps)               = Tuple l (map pat2elem ps)
@@ -526,6 +566,12 @@ instance Pretty Decl where
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Struct _ n q a b)       = text "struct" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Protocol _ n q a b)     = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
+    pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                      nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
@@ -582,9 +628,9 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
-    pretty (Struct _ [])            = text "struct" <> parens empty
-    pretty (Struct _ fs)            = parens (commaList fs)
-    pretty (StructComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
+    pretty (Record _ [])            = text "record" <> parens empty
+    pretty (Record _ fs)            = parens (commaList fs)
+    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (Paren _ e)              = parens (pretty e)
 
 instance Pretty OpArg where
@@ -682,10 +728,6 @@ instance Pretty Comp where
     pretty NoComp                   = empty
 
 
-instance Pretty Annot where
-    pretty (Annot e)                = pretty e
-    pretty (Type _ t)               = pretty t
-
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps)            = prettyPEs ps
@@ -705,101 +747,101 @@ instance Pretty Modif where
     pretty Async                    = text "async"
     pretty NoMod                    = empty
 
-instance Pretty Type where
-    pretty (TVar tv)                = pretty tv
+instance Pretty OType where
+    pretty (OVar tv)                = pretty tv
     
-    pretty (TFun RNil row t)        = parens (prettyRow row) <> text "->" <> pretty t
-    pretty (TFun fx row t)          = prettyEffect fx <> parens (prettyRow row) <> text "->" <> pretty t
-    pretty (TStruct row)            = parens (prettyRow row)
-    pretty (TDict k t)              = text "dict" <> parens (pretty k <> comma <> pretty t)
-    pretty (TTuple row)             = parens $ prettyTupleRow row
-    pretty (TList t)                = brackets $ pretty t
-    pretty (TSet t)                 = braces $ pretty t
-    pretty (TMsg t)                 = text "msg" <> parens (pretty t)
-    pretty TStr                     = text "str"
-    pretty TInt                     = text "int"
-    pretty TFloat                   = text "float"
-    pretty TBool                    = text "bool"
-    pretty TNone                    = text "None"
+    pretty (OFun ONil row t)        = parens (prettyRow row) <> text "->" <> pretty t
+    pretty (OFun fx row t)          = prettyEffect fx <> parens (prettyRow row) <> text "->" <> pretty t
+    pretty (ORecord row)            = parens (prettyRow row)
+    pretty (ODict k t)              = text "dict" <> parens (pretty k <> comma <> pretty t)
+    pretty (OTuple row)             = parens $ prettyTupleRow row
+    pretty (OList t)                = brackets $ pretty t
+    pretty (OSet t)                 = braces $ pretty t
+    pretty (OMsg t)                 = text "msg" <> parens (pretty t)
+    pretty OStr                     = text "str"
+    pretty OInt                     = text "int"
+    pretty OFloat                   = text "float"
+    pretty OBool                    = text "bool"
+    pretty ONone                    = text "None"
 
-    pretty (TSchema tvs [] t)       = pretty t
-    pretty (TSchema tvs cs t)       = pretty t <+> text "\\\\" <+> commaCat cs
+    pretty (OSchema tvs [] t)       = pretty t
+    pretty (OSchema tvs cs t)       = pretty t <+> text "\\\\" <+> commaCat cs
 
     pretty r | isRow r              = text "<" <> prettyRow r <> text ">"
 
-monotype (TSchema _ _ _)            = False
+monotype (OSchema _ _ _)            = False
 monotype _                          = True
 
 polytype                            = not . monotype
 
-isRow RPos{}                        = True
-isRow RStar1{}                      = True
-isRow RKwd{}                        = True
-isRow RStar2{}                      = True
-isRow RNil                          = True
+isRow OPos{}                        = True
+isRow OStar1{}                      = True
+isRow OKwd{}                        = True
+isRow OStar2{}                      = True
+isRow ONil                          = True
 isRow _                             = False
 
-prettyEffect (RKwd n _ fx)          = text (nstr n) <+> prettyEffect fx
-prettyEffect RNil                   = empty
+prettyEffect (OKwd n _ fx)          = text (nstr n) <+> prettyEffect fx
+prettyEffect ONil                   = empty
 prettyEffect t                      = pretty t
 
-prettyTupleRow r@(RPos t RNil)      = prettyRow r <> comma
+prettyTupleRow r@(OPos t ONil)      = prettyRow r <> comma
 prettyTupleRow r                    = prettyRow r
 
-prettyRow (RPos t r)                = pretty t <> prettyTail r
-prettyRow (RStar1 t r)              = text "*" <> pretty t <> prettyTail r
-prettyRow (RKwd n t r)              = pretty n <> colon <+> pretty t <> prettyTail r
-prettyRow (RStar2 t r)              = text "**" <> pretty t <> prettyTail r
-prettyRow RNil                      = empty
-prettyRow (TVar tv)                 = pretty tv
+prettyRow (OPos t r)                = pretty t <> prettyTail r
+prettyRow (OStar1 t r)              = text "*" <> pretty t <> prettyTail r
+prettyRow (OKwd n t r)              = pretty n <> colon <+> pretty t <> prettyTail r
+prettyRow (OStar2 t r)              = text "**" <> pretty t <> prettyTail r
+prettyRow ONil                      = empty
+prettyRow (OVar tv)                 = pretty tv
 prettyRow t                         = text "?" <> pretty t
 
-prettyTail RNil                     = empty
-prettyTail (TVar tv)                = comma <> pretty tv
+prettyTail ONil                     = empty
+prettyTail (OVar tv)                = comma <> pretty tv
 prettyTail row                      = comma <> prettyRow row
 
 
-instance Pretty [Constraint] where
+instance Pretty [Qonstraint] where
     pretty cs                       = vcat (map pretty cs)
 
-instance Pretty Constraint where
-    pretty (CEqu _ _ t1 t2)         = pretty t1 <+> equals <+> pretty t2
-    pretty (CIn _ _ t1 t2)          = pretty t1 <+> text "in" <+> pretty t2
-    pretty (CDot _ _ t1 n t2)       = pretty t1 <> dot <> pretty n <+> equals <+> pretty t2
-    pretty (CIx _ _ t1 t2 t3)       = pretty t1 <> brackets (pretty t2) <+> equals <+> pretty t3
-    pretty (CMod _ _ t1 t2)         = text "Mod" <> parens (pretty t1 <> comma <> pretty t2)
-    pretty (CPlus _ _ t1)           = text "Plus" <> parens (pretty t1)
-    pretty (CNum _ _ t1)            = text "Num" <> parens (pretty t1)
-    pretty (CBool _ _ t1)           = text "Bool" <> parens (pretty t1)
+instance Pretty Qonstraint where
+    pretty (QEqu _ _ t1 t2)         = pretty t1 <+> equals <+> pretty t2
+    pretty (QIn _ _ t1 t2)          = pretty t1 <+> text "in" <+> pretty t2
+    pretty (QDot _ _ t1 n t2)       = pretty t1 <> dot <> pretty n <+> equals <+> pretty t2
+    pretty (QIx _ _ t1 t2 t3)       = pretty t1 <> brackets (pretty t2) <+> equals <+> pretty t3
+    pretty (QMod _ _ t1 t2)         = text "Mod" <> parens (pretty t1 <> comma <> pretty t2)
+    pretty (QPlus _ _ t1)           = text "Plus" <> parens (pretty t1)
+    pretty (QNum _ _ t1)            = text "Num" <> parens (pretty t1)
+    pretty (QBool _ _ t1)           = text "Bool" <> parens (pretty t1)
 
 
-instance Pretty (Name, Type) where
+instance Pretty (Name, OType) where
     pretty (n, t)                   = pretty n <> colon <+> pretty t
 
-instance Pretty (TVar, Type) where
+instance Pretty (OVar, OType) where
     pretty (tv, t)                  = pretty tv <+> equals <+> pretty t
 
-instance Pretty TVar where
+instance Pretty OVar where
     pretty []                       = text "_"
     pretty [i]                      = text (stringSupply !! i)
       where stringSupply            = [ c:tl | tl <- "" : map show [1..], c <- "ZABCDEFGHIJKLMNOPQRSTUWXY"  ]
     pretty (1:nums)                 = text "V" <> hcat (punctuate (text "_") (map pretty nums))
 
 
-wildTVar                            = TVar []
+wildOVar                            = OVar []
 
-schemaTVars                         = map schemaTVar [1..]
+schemaOVars                         = map schemaOVar [1..]
 
-schemaTVar i                        = TVar [i]
+schemaOVar i                        = OVar [i]
 
-intTVar i                           = TVar [1, i]
+intOVar i                           = OVar [1, i]
     
-unTVar tvs                          = [ v | TVar v <- tvs ]
+unOVar tvs                          = [ v | OVar v <- tvs ]
 
-schemaVars                          = unTVar schemaTVars
+schemaVars                          = unOVar schemaOVars
 
 
-instance Pretty Substitution where
+instance Pretty OSubst where
     pretty s                        = vcat (map pr s)
       where pr (tv,t)               = pretty tv <+> equals <+> pretty t
 
@@ -855,16 +897,20 @@ instance Pretty Aug where
     pretty ShiftRA                  = text ">>="
     pretty EuDivA                   = text "//="
 
-instance Pretty CVar where
-    pretty (CVar n)                 = pretty n
+instance Pretty TSchema where
+    pretty (TSchema _ [] t)         = pretty t
+    pretty (TSchema _ q t)          = brackets (commaList q) <+> text "=>" <+> pretty t
 
-instance Pretty CCon where
-    pretty (CCon n [])              = pretty n
-    pretty (CCon n ts)              = pretty n <> brackets (commaList ts)
+instance Pretty TVar where
+    pretty (TV n)                   = pretty n
+
+instance Pretty TCon where
+    pretty (TC n [])                = pretty n
+    pretty (TC n ts)                = pretty n <> brackets (commaList ts)
     
-instance Pretty CBind where
-    pretty (CBind v [])             = pretty v
-    pretty (CBind v cs)             = pretty v <> parens (commaList cs)
+instance Pretty TBind where
+    pretty (TBind v [])             = pretty v
+    pretty (TBind v cs)             = pretty v <> parens (commaList cs)
     
 instance Pretty UType where
     pretty UInt                     = text "int"
@@ -879,37 +925,37 @@ instance Pretty PosRow where
     pretty (PosVar mbn)             = text "*" <> maybe empty pretty mbn
     pretty PosNil                   = empty
     
-instance Pretty KwRow where
-    pretty (KwRow n t KwNil)        = pretty n <> colon <+> pretty t
-    pretty (KwRow n t k)            = pretty n <> colon <+> pretty t <> comma <+> pretty k
-    pretty (KwVar mbn)              = text "**" <> maybe empty pretty mbn
-    pretty KwNil                    = empty
+instance Pretty KwdRow where
+    pretty (KwdRow n t KwdNil)      = pretty n <> colon <+> pretty t
+    pretty (KwdRow n t k)           = pretty n <> colon <+> pretty t <> comma <+> pretty k
+    pretty (KwdVar mbn)             = text "**" <> maybe empty pretty mbn
+    pretty KwdNil                   = empty
     
-instance Pretty (PosRow, KwRow) where
+instance Pretty (PosRow, KwdRow) where
     pretty (PosNil, k)              = pretty k
-    pretty (p, KwNil)               = pretty p
+    pretty (p, KwdNil)              = pretty p
     pretty (p, k)                   = pretty p <> comma <+> pretty k
 
-instance Pretty CType where
-    pretty (CSelf _)                = text "Self"
-    pretty (CTVar _ v)              = pretty v
-    pretty (CTCon  _ c)             = pretty c
-    pretty (CTFun _ es p k t)       = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
+instance Pretty Type where
+    pretty (TSelf _)                = text "Self"
+    pretty (TVar _ v)               = pretty v
+    pretty (TCon  _ c)              = pretty c
+    pretty (TAt  _ c)               = text "@" <> pretty c
+    pretty (TFun _ es p k t)        = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    pretty (CTTuple _ pos)          = parens (pretty pos)
-    pretty (CTStruct _ kw)          = parens (pretty kw)
-    pretty (CPSeq _ t)              = brackets (pretty t)
-    pretty (CPSet _ t)              = braces (pretty t)
-    pretty (CPMap _ kt vt)          = braces (pretty kt <> colon <+> pretty vt)
-    pretty (CTOpt _ t)              = text "?" <> pretty t
-    pretty (CTUnion _ as)           = parens (vbarSep pretty as)
+    pretty (TTuple _ pos)           = parens (pretty pos)
+    pretty (TRecord _ kw)           = parens (pretty kw)
+    pretty (PSeq _ t)               = brackets (pretty t)
+    pretty (PSet _ t)               = braces (pretty t)
+    pretty (PMap _ kt vt)           = braces (pretty kt <> colon <+> pretty vt)
+    pretty (TOpt _ t)               = text "?" <> pretty t
+    pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    pretty (CTStr _)                = text "str"
-    pretty (CTInt _)                = text "int"
-    pretty (CTFloat _)              = text "float"
-    pretty (CTBool _)               = text "bool"
-    pretty (CTNone _)               = text "None"
-    pretty (CTQual _ cs t)          = brackets (commaList cs) <+> text "=>" <+> pretty t
+    pretty (TStr _)                 = text "str"
+    pretty (TInt _)                 = text "int"
+    pretty (TFloat _)               = text "float"
+    pretty (TBool _)                = text "bool"
+    pretty (TNone _)                = text "None"
 
 
     
