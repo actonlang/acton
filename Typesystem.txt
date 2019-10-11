@@ -12,14 +12,12 @@ TODO:
     - Type macros / abstract types / associated types
     - Kind correctness
     - Read state effect (distinguish state effects per data structure?)
-    - Merge struct and protocol? Merge struct and records?
+    - Merge struct and protocol? Merge struct and records? Or struct and class? Some reduction of concepts is needed...
     - Clean up row order (l-to-r or r-to-l)
     - Read MPJ's Parametric Type Classes
 
 
 NOTES:
-    - Struct instances are represented as expanded records (including all supertype fields), just like struct & class decls
-    - That way abstract attributes can be concretized in subtypes as well as in instances, and found at the same record offset
     - Static methods in protocols must mention Self, or else they would be ambiguous (see translation into structs)
     - The [q] part in struct, class, protocol and extension is required, but can be left out (and inferred) in actor and def(s).
     - Unambiguity in type schemes: for each [q]=>t it must hold that ftv(q) <= ftv(t)  (not checked here)
