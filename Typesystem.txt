@@ -1,6 +1,6 @@
 TODO:
-    - Distinguishing required and available (defaulted) struct/class/protocol attributes
-    - Check subtyping (not equality) among overridden methods in classes/structs
+    - Distinguishing required and available (defaulted) class/protocol attributes
+    - Check subtyping (not equality) among overridden methods in classes
     - Witness translation
     - Automatic lifting of 's' to str (subtyping?)
     - Automatic lifting of int,... etc to (int|u) (subtyping?)
@@ -12,14 +12,14 @@ TODO:
     - Type macros / abstract types / associated types
     - Kind correctness
     - Read state effect (distinguish state effects per data structure?)
-    - Merge struct and protocol? Merge struct and records? Or struct and class? Some reduction of concepts is needed...
     - Clean up row order (l-to-r or r-to-l)
     - Read MPJ's Parametric Type Classes
 
 
 NOTES:
-    - Static methods in protocols must mention Self, or else they would be ambiguous (see translation into structs)
-    - The [q] part in struct, class, protocol and extension is required, but can be left out (and inferred) in actor and def(s).
+    - Named structs are gone! Their equivalents are obtained by classes, either lacking __init__ or more explicitly decorated @immutable.
+    - Static methods in protocols must mention Self, or else they would be ambiguous (see translation into classes)
+    - The [q] part in class, protocol and extension is required, but can be left out (and inferred) in actor and def(s).
     - Unambiguity in type schemes: for each [q]=>t it must hold that ftv(q) <= ftv(t)  (not checked here)
     - Structs, classes and protocols have no ambiguity problems since q is always explicit there and the dom(q) are all in the resulting type.
     - Consistency requirement on extensions not checked here (from Haskell): if  N |- t impl u  and  N |- u < u'  then  N |- t impl u'
@@ -33,7 +33,7 @@ NOTES:
     - Termination requirements on q in extension c[q](o) not checked here (allow growing terms except in protocol cycles)
     - Self in the range of a substitution is forbidden but not checked here (maybe allow in covariant positions in the future)
     - The notation c[q] as a *type* is a bit sloppy and should be improved
-    - On class/struct/protocol signatures:
+    - On class/protocol signatures:
 
         Every object attribute falls into one of two categories, depending on where it is stored (in the object instance itself or in its 
         class). For function-valued class attributes (i.e., methods) there are furthermore three sub-cases: (1) the method expects the 
@@ -115,7 +115,7 @@ Schemas:            T       ::=     [q] => t  |  t
 
 Constraints:        C       ::=     t(o)  |  C,C  |  .                                                  associative, commutative
 
-Type info:          I       ::=     class(o):n  |  struct(o):n  |  protocol(o):n  |  extension(o)
+Type info:          I       ::=     class(o):n  |  protocol(o):n  |  extension(o)
 
 eNvironments:       N       ::=     x:T  |  z:t  |  x:#  |  z:#  |  c:[q]=>I  |  X(o)  |  N,N  |  .     associative, commutative\duplicates
 
@@ -149,10 +149,6 @@ N |- S : t | e              Statement S returns values of type t in environment 
 ***** N |- D : N' **************************************************************************************************************************************************
 
 
-N' = N,q,Self(c[q])     N' |- u ~ struct(o):n'      N' |- ui ~ protocol(oi):ni     N' |- M : n2 | e      n2 in n',U(ni),n
-------------------------------------------------------------------------------------------------------------------------- (DefStruct)
-N |- struct c[q](u,ui):n,M  :  c:[q]=>struct(u,ui):(n',U(ni),n)
-
 N' = N,q,Self(c[q])     N' |- u ~ class(o):n'      N' |- ui ~ protocol(oi):ni     N' |- M : n2 | e      n2 in n',U(ni),n
 ------------------------------------------------------------------------------------------------------------------------ (DefClass)
 N |- class c[q](u,ui):n,M  :  c:[q]=>class(u,ui):(n',U(ni),n)
@@ -164,10 +160,6 @@ N |- protocol c[q](ui):n,M  :  c:[q]=>protocol(ui):(U(ni),n)
 
 N' = N,q,Self(c[q])     N' |- c[q] ~ protocol(o):n     N' |- ui ~ protocol(oi):ni      N' |- M : n2 | e     n2 in U(ni)
 ----------------------------------------------------------------------------------------------------------------------- (DefExtP)
-N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
-
-N' = N,q,Self(c[q])     N' |- c[q] ~ struct(o):n     N' |- ui ~ protocol(oi):ni      N' |- M : n2 | e     n2 in U(ni)
---------------------------------------------------------------------------------------------------------------------- (DefExtS)
 N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
 
 N' = N,q,Self(c[q])     N' |- c[q] ~ class(o):n     N' |- ui ~ protocol(oi):ni      N' |- M : n2 | e     n2 in U(ni)
@@ -226,14 +218,9 @@ phi = [o/dom(q)]     N,q' |- phi(q)     N,q' |- phi(t) < t'                     
 N |- [q]=>t < [q']=>t'                                                              N |- u < u'
 
 
-N |- u ~ struct(u',o):n     N |- u' ~ struct(o'):n'                                 N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'
---------------------------------------------------- (SubStruct)                     -------------------------------------------------- (SubClass)
-N |- u < u'                                                                         N |- u < u'
-
-
-N,X(u,o) |- u ~ struct(o'):n                                                        N,X(u,o) |- u ~ class(o'):n
----------------------------- (SubVarS)                                              --------------------------- (SubVarC)
-N,X(u,o) |- X < u                                                                   N,X(u,o) |- X < u
+N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'                                  N,X(u,o) |- u ~ class(o'):n
+-------------------------------------------------- (SubClass)                       --------------------------- (SubVarC)
+N |- u < u'                                                                         N,X(u,o) |- X < u
 
 
 N |- p' < p     N |- r' < r     N |- t < t'                                         x:t,r "canonically ordered"
@@ -254,13 +241,9 @@ N |- . < p                                                                      
 N |- . < ?t,p                                                                       N |- . < x:?t,r
 
 
-N |- u ~ struct(u',o):n      N |- u' ~ struct(o'):n'                                N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'
----------------------------------------------------- (SubAt1)                       -------------------------------------------------- (SubAt2)
-N |- @u < @u'                                                                       N |- @u < @u'
-
-
------------ (SubOpt)                                                                -------------- (SubNone)
-N |- t < ?t                                                                         N |- None < ?t
+N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'
+-------------------------------------------------- (SubAt)                          ----------- (SubOpt)                -------------- (SubNone)
+N |- @u < @u'                                                                       N |- t < ?t                         N |- None < ?t
 
 
 N |- t1 < t2      N |- t2 < t3
@@ -301,26 +284,18 @@ N |- u' ~ protocol(o):(x:T,n)     N |- w : u impl u'     N |- E : u      x not s
 -------------------------------------------------------------------------------------- (SelP)
 N |- E.x : [u/Self]T  ~>  w.x(E)
 
-N |- E : u | e     N |- u ~ struct(o):(x:T,n)    x not staticm                      N |- E : u | e     N |- u ~ class(o):(x:T,n)    x not staticm
--------------------------------------------------------------- (SelS1)              ------------------------------------------------------------- (SelC1)
-N |- E.x : [u/Self]T | e                                                            N |- E.x : [u/Self]T | e
-
-N |- E : @u     N |- u ~ struct(o):(x:e(p,r)->t,n)     x instm                      N |- E : @u     N |- u ~ class(o):(x:e(p,r)->t,n)     x instm
--------------------------------------------------------------- (SelS2)              -------------------------------------------------------------- (SelC2)
-N |- E.x : [u/Self]e(Self,p,r)->t | e'                                              N |- E.x : [u/Self]e(Self,p,r)->t | e'
-
-N |- E : @u     N |- u ~ struct(o):(x:T,n)     x not instm                          N |- E : @u     N |- u ~ class(o):(x:T,n)     x not instm
----------------------------------------------------------- (SelS3)                  --------------------------------------------------------- (SelC3)
-N |- E.x : [u/Self]T | e                                                            N |- E.x : [u/Self]T | e
-
-N |- E : (x:T,r) | e
--------------------- (Sel)
-N |- E.x : T | e
+N |- E : u | e     N |- u ~ class(o):(x:T,n)    x not staticm                       N |- E : @u     N |- u ~ class(o):(x:e(p,r)->t,n)     x instm
+------------------------------------------------------------- (SelC1)               -------------------------------------------------------------- (SelC2)
+N |- E.x : [u/Self]T | e                                                            N |- E.x : [u/Self]e(Self,p,r)->t | e'
 
 
-N |- c[o] ~ struct(o'):n                                                            N |- c[o] ~ struct(o'):n
------------------------- (AtClass)                                                  ------------------------ (AtStruct)
-N |- c : @c[o]                                                                      N |- c : @c[o]
+N |- E : @u     N |- u ~ class(o):(x:T,n)     x not instm
+--------------------------------------------------------- (SelC3)
+N |- E.x : [u/Self]T | e
+
+N |- E : (x:T,r) | e                                                                N |- c[o] ~ class(o'):n
+-------------------- (Sel)                                                          ------------------------ (At)
+N |- E.x : T | e                                                                    N |- c : @c[o]
 
                                         
 N |- F : p ~ N1 | e'     N,N1 |- K : r ~ N2 | e'     N,N1,N2 |- E : t | e'
@@ -332,8 +307,8 @@ N |- E : e(p,r)->t | e     N |-> (A) : (p) | e     N |- (M) : (r) | e
 --------------------------------------------------------------------- (App)
 N |- E(A,M) : t | e
 
-N |- c[o] ~ struct(o'):n      N |- (M) : (n) | e
------------------------------------------------- (ConS)
+N |- c[o] ~ class(o'):n      N |- (M) : (n) | e       @immutable c
+------------------------------------------------------------------ (ConS)
 N |- c(.,M) : c[o] | e
 
 N |- c[o] ~ class(o'):(_init_(p,r):n)      N |- (A) : p | e     N |- (M) : (r) | e

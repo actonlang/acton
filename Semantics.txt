@@ -26,7 +26,7 @@ Values:             V,W     ::=     True  |  False  |  None  |  (O)  |  (B)  |  
                                     ---- Only intangible constructs below
                                     CLOS(B;F,K):S  |  l  |  a  |  a.m  |
                                     ACTOR V  |  ASYNC(a) V  |  SYNC(a) V  |  
-                                    CLASS(c):B  |  STRUCT(c):B  |  (c):B
+                                    CLASS(c):B  |  (c):B
 
 Orderings:          O       ::=     O,V    |  .                                     associative
 Bindings:           B       ::=     B,x=V  |  B,c=V  |  .                           associative & commutative\duplicates, disjoint c
@@ -42,7 +42,6 @@ Definitions:        D       ::=     def x(F,K): S  |
                                     sync def x(F,K): S  |
                                     actor x(F,K): S  |  
                                     class c(d): M  |
-                                    struct c(d): M  |
                                     D; D                                            associative & commutative & disjoint
 
 Patterns:           P       ::=     x  |  (F)  |  (K)
@@ -75,7 +74,6 @@ E-in-Q contexts:    QE      ::=     H, m=_, Q
 B  |-  c(c)
 
 B,c=CLASS(c'):B'   |-  c(d)                                                     if  B |- c'(d)
-B,c=STRUCT(c'):B'  |-  c(d)                                                     if  B |- c'(d)
 
 
 ***** B |- L | E --> L' | E' *******
@@ -92,7 +90,7 @@ B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            
 B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  CLOS(B2,y=l;F,K):S           if  x # B' and B |- c.x ==> CLOS(B2;y,F,K):S and @instm(x,c)
 B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            if  x # B' and B |- c.x ==> V otherwise
 
-B  |-  L  |  c(O,B')        -->     L,l=(c):.  |  do l._init_(O,B'); return l   if  B = B1,c=CLASS(d):B2
+B  |-  L  |  c(O,B')        -->     L,l=(c):.  |  do l._init_(O,B'); return l   if  B = B1,c=CLASS(d):B2  and  not @immutable c
 
 B  |-  L,l=(c):B'  |  isinstance(l,d)    
                             -->     L,l=(c):B'  |  True                         if  B |- c(d)
@@ -114,7 +112,7 @@ B  |-  ((c):B').x           -->     V                                           
 B  |-  c.x                  -->     CLOS(B',y=c;F,K):S                          if  B |- c.x ==> CLOS(B';y,F,K):S and @classm(x,c)
 B  |-  c.x                  -->     W                                           if  B |- c.x ==> W otherwise
 
-B  |-  c(.,B')              -->     (c):B'                                      if  B = B1,c=STRUCT(d):B2
+B  |-  c(.,B')              -->     (c):B'                                      if  B = B1,c=CLASS(d):B2  and  @immutable c
 
 B  |-  isinstance((c):B',d) -->     True                                        if  B |- c(d)
                             -->     False                                       if  not B |- c(d)
@@ -124,9 +122,6 @@ B  |-  isinstance((c):B',d) -->     True                                        
 
 B,c=CLASS(d):B'  |-  c.x    ==>     V                                           if  (B').x --> V
 B,c=CLASS(d):B'  |-  c.x    ==>     V                                           if  x # B' and B |- d.x ==> V
-
-B,c=STRUCT(d):B'  |-  c.x   ==>     V                                           if  (B').x --> V
-B,c=STRUCT(d):B'  |-  c.x   ==>     V                                           if  x # B' and B |- d.x ==> V
 
 
 ***** E --> E' *********************
@@ -184,7 +179,6 @@ B  |-  async def x(F,K): S  ==>     x = ASYNC(a) (CLOS(B;F,K):S)                
 B  |-  sync def x(F,K): S   ==>     x = SYNC(a) (CLOS(B;F,K):S)                 if  (B)._self_ --> a
 B  |-  actor x(F,K): S      ==>     x = ACTOR (CLOS(B;_self_,F,K):S)
 B  |-  class c(d): M        ==>     c = CLASS(d): B'                            if  B |- M ==> B'
-B  |-  struct c(d): M       ==>     c = STRUCT(d): B '                          if  B |- M ==> B'
 B  |-  D1; D2               ==>     B1; B2                                      if  B |- D1 ==> B1 and B |- D2 ==> B2
 
 
@@ -266,25 +260,23 @@ a:<L | QE[ await b.m ]>,   b:<L' | H,m=do raise V,Q>    -->     a:<L | QE[ do ra
 
 
 Recent decisions:
-- Classes of immutable instances are called structs and are supported by a special 'struct' declaration syntax
-- Only class instances can be mutated, and their states are struct values (MUT is gone)
 - Mutable lists, dicts and sets are true class instances (although built-in)
-- Frozen lists, dicts and sets are true struct instances (although built-in)
+- Frozen lists, dicts and sets are true immutable class instances (although built-in)
 - Automatic coercion of mutable objects into immutable ones is abandoned for now (replaced by explicit conversion calls)
-- The 'protocol' and 'extension' declarations introduce static overloading, which gets translated into struct declaration and explicit witness terms
+- The 'protocol' and 'extension' declarations introduce static overloading, which gets translated into class declaration and explicit witness terms
 - Attribute selection can thus be overloaded, and supported on any type
 - Indexed selection and indexed update get translated to overloaded _getitem_ and _setitem_ calls, respectively
 - Built-in names int, float, str and bool are constructor/conversion functions, supporting multiple argument types via overloading
-- Class and struct inheritance is single ancestor only (all other types of mix-ins are expressed as protocol adoption)
-- Classes and structs are the only nominal types, and only these support the 'isinstance' primitive
+- Class inheritance is single ancestor only (all other types of mix-ins are expressed as protocol adoption)
+- Classes are the only nominal types, and only these support the 'isinstance' primitive
 - Narrowing of the option type is done through ==None and !=None comparisons
 - Narrowing of the primitive union type is done through built-ins 'isint', 'isfloat', 'isbool' and 'isstr'
-- Subtyping, as defined by class and struct inheritance + structural rules, is ubiquitous
-- Class and struct terms are subtypes of the function type (to allow for instantiation)
+- Subtyping, as defined by class inheritance + structural rules, is ubiquitous
+- Class terms are subtypes of the function type (to allow for instantiation)
 - Type parameters to named types are written within brackets, as in List[int], dict[str,A]
-- Brackets also introduce type parameters in class/struct declarations, as in class Bepa[T] (Apa[T]): ... 
+- Brackets also introduce type parameters in class declarations, as in class Bepa[T] (Apa[T]): ... 
 - And brackets introduce type parameters in explicitly polymorphic function/method declarations, as in def swap[A,B]((A,B)) -> (B,A): ...
-- Class and struct names are also type names
-- Base class/struct expressions are *type* expressions
-- Local classes/structs are supported but all references to their names must be absent from the return type or env when their scope ends
+- Class names are also type names
+- Base class expressions are *type* expressions
+- Local classes are supported but all references to their names must be absent from the return type or env when their scope ends
 
