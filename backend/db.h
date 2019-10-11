@@ -158,6 +158,9 @@ int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_
 
 db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned int * fastrandstate);
 void free_db_row(db_row_t * row, db_schema_t * schema);
+void long_row_to_string(db_row_t* row, char * to_string, int * len);
+void print_long_row(db_row_t* row);
+
 int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_table_t * table, unsigned int * fastrandstate);
 int table_update(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, db_table_t * table);
 db_row_t* table_search(WORD* primary_keys, db_table_t * table);

@@ -20,8 +20,6 @@ txn_state * get_txn_state(uuid_t * txnid, db_t * db);
 uuid_t * new_txn(db_t * db, unsigned int * seedptr);
 int close_txn(uuid_t * txnid, db_t * db);
 int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db);
-int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned int * fastrandstate);
-int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate);
 int abort_txn(uuid_t * txnid, db_t * db);
 int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db);
 
@@ -57,5 +55,10 @@ int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 								uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+
+// Lower level API:
+
+int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned int * fastrandstate);
+int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate);
 
 #endif /* BACKEND_TXNS_H_ */

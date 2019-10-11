@@ -275,11 +275,11 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
-			break;
+			return (db_search(&tw->queue_id, tw->table_key, db) != NULL);
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{
-			break;
+			return (db_search(&tw->queue_id, tw->table_key, db) == NULL);
 		}
 	}
 
@@ -479,7 +479,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 		assert(0);
 	}
 
-	return 0;
+	return res;
 }
 
 

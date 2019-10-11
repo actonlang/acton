@@ -565,6 +565,39 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	return no_results+1;
 }
 
+void print_long_row(db_row_t* row)
+{
+	char to_string[512];
+	int len = 0;
+
+	long_row_to_string(row, (char *) to_string, &len);
+
+	printf("DB_ROW: %s\n", to_string);
+}
+
+void long_row_to_string(db_row_t* row, char * to_string, int * len)
+{
+	sprintf(to_string, "%ld, {", (long) row->key);
+
+	if(row->cells != NULL)
+	{
+		assert(row->no_columns == 0);
+
+		for(snode_t* node = HEAD(row->cells); node != NULL; node = NEXT(node))
+		{
+			db_row_t * subrow = (db_row_t *) node->value;
+			long_row_to_string(subrow, to_string + strlen(to_string), len);
+		}
+	}
+
+	for(int i=0; i<row->no_columns; i++)
+		sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+
+	sprintf(to_string + strlen(to_string), "}");
+
+	*len = strlen(to_string);
+}
+
 int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
 {
