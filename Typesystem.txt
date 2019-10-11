@@ -1,5 +1,6 @@
 TODO:
     - Distinguishing required and available (defaulted) struct/class/protocol attributes
+    - Check subtyping (not equality) among overridden methods in classes/structs
     - Witness translation
     - Automatic lifting of 's' to str (subtyping?)
     - Automatic lifting of int,... etc to (int|u) (subtyping?)
@@ -34,6 +35,57 @@ NOTES:
     - Termination requirements on q in extension c[q](o) not checked here (allow growing terms except in protocol cycles)
     - Self in the range of a substitution is forbidden but not checked here (maybe allow in covariant positions in the future)
     - The notation c[q] as a *type* is a bit sloppy and should be improved
+    - On class/struct/protocol signatures:
+
+        Every object attribute falls into one of two categories, depending on where it is stored (in the object instance itself or in its 
+        class). For function-valued class attributes (i.e., methods) there are furthermore three sub-cases: (1) the method expects the 
+        effective object instance to be passed as an additional first parameter, (2) the method expects the effective class as an extra 
+        first parameter, and (3) the method expects no extra parameters at all. Case (1) is the default, whereas cases (2) and (3) must 
+        be marked with the special decorators @classmethod and @staticmethod respectively.
+        
+        When invoked on an object instance, the three method cases imply three distinct invocation (or rather attribute selection) 
+        mechanisms: the object itself is automatically supplied as the first argument in case (1), in case (2) it is the class of the 
+        instance that is automnatically supplied, and no extra arguments are passed in case (3). When selected directly from a class, 
+        the extra parameter gets exposed in the returned method if it is of type (1), but not in the other cases (the class being selected
+        from is automatically supplied as the first argument in case (2)).
+        
+        In the type signature of a class, the storage category of each attribute must be revealed, together with the chosen selection 
+        mechanism in case of class-based attributes of function type. Not only is this important for class documentation purposes, the
+        revealed info also determines if an attribute can be inherited, and if so what its actual parameter list should be. If the 
+        decorators @classmethod and @staticmethod are retained on the level of types, we can indicate class-based methods of type (2) and
+        (3), but not any of the other categories. While it is true that most class attributes have function type and most instance attributes
+        are ground, the other two combinations are not uncommon. We will therefore need a way to complement the type signatures of a class 
+        with the missing storage information.
+        
+        Proposal: introduce new mutually exclusive decorators @classattr and @instattr to capture the missing storage dimension. For a 
+        ground attribute this would simply indicate where the values are found. Likewise, writing @instattr on an attribute of method type
+        would tell that it is stored with every instance and not with the common class. But even decorating a method with @classattr might
+        be meaningful, as we could make this imply a method of type (1) above (@classattr would thus outrule @classmethod and @staticmethod).
+        
+        Defaults could moreover be assigned on basis of type, so that @instattr would be assumed if a ground attribute lacks decoration, but
+        @classattr would be implied if the attribute is a function. This way we could write class signature without any decorators for the
+        typical cases, and only be required to be explicit about storage if a class has a ground class attribute (write @classattr) or a 
+        function in its instance data (decorate the attribute signature with @instattr). Or, as before, if we want a class method to be
+        invoked using any of the special mechanisms (2) or (3) above, in which case we must provide the @classmethod or @staticmethod 
+        decorators instead of the default @classattr.
+        
+        Furthermore, in a concrete class declaration, the compiler is of course able to infer the storage decorators of attributes depending 
+        on how they are defined. So an assignment in a class body leads to a @classattr attribute even if its type is ground, and assignment
+        attributes of self forces @instattr to be inserted on the attribute signatures, irrespective of their type. The distinction between 
+        @classattr and @instattr is thus must important when a class signature is used in isolation, i.e., when the *interface* of a class
+        is considered. There, on the other hand, the @classattr/@instattr distinction is crucial.
+        
+        In summary:
+        
+                              Attribute         |     stored in class:      |    stored in instance:    |
+                            -----------------------------------------------------------------------------
+                                                |   @classattr (default)    |   @instattr               |
+                              of function type: |   @classmethod            |                           |
+                                                |   @staticmethod           |                           |
+                            -----------------------------------------------------------------------------
+                               of ground type:  |   @classattr              |   @instattr (default)     |
+                            -----------------------------------------------------------------------------
+    
     
     - Unused meta variables: g,h,k,v,w,J,R,U,Y
 
@@ -125,7 +177,7 @@ N' = N,q,Self(c[q])     N' |- c[q] ~ class(o):n     N' |- ui ~ protocol(oi):ni  
 N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
 
 
-N' = N,q,bv(F,P,S):#,bzv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
+N' = N,q,bv(F,P,S):#,dzv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
 ---------------------------------------------------------------------------------------------------------------------- (DefAct)
 N |- actor x[q](F,K):S  :  x: [q] => e,act(p,r)->t
 
@@ -234,7 +286,7 @@ N |- E : t | e     N |- t < u
 N |- E : u | e
 
 
-N,q |- E : t | e      btv(q) not in ftv(N)                                          N |- E : [q] => t     phi = [o/dom(q)]     N |- phi(q)
+N,q |- E : t | e      dtv(q) not in ftv(N)                                          N |- E : [q] => t     phi = [o/dom(q)]     N |- phi(q)
 ------------------------------------------ (Gen)                                    ------------------------------------------------------ (Inst)
 N |- E : [q] => t | e                                                               N |- E : phi(t)
 
@@ -401,6 +453,7 @@ N |- S : t | e                                                                  
     thru(try S X else S1 finally S2)    = (thru(S;S1) or thru(X)) and thru(S2)
     thru(_)                             = True
 
-    thru(except E as x: S X)            = thru(S) or thru(X)
+    thru(except c as x: S X)            = thru(S) or thru(X)
     thru(.)                             = False
+
 
