@@ -58,7 +58,6 @@ instance Relabel Decl where
     relabel (Def _ n q ps mba ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel mba <*> relabel ss <*> return md
     relabel (Actor _ n q ps ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ann <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Struct _ n q as ss) = Struct <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Decorator _ n args s) = Decorator <$> newLoc <*> relabel n <*> relabel args <*> relabel s
