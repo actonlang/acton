@@ -399,7 +399,7 @@ protocol Number (Ord, Plus, Minus):
     def __sub__(a,b):
         return a + (-b)
 ====>
-"typeclass" (Ord[S],Plus[S],Minus[S]) => Number[S]:
+"typeclass" (Ord[S], Plus[S], Minus[S]) => Number[S]:
     __pos__         : (S) -> S
     __neg__         : (S) -> S
     __mul__         : (S,S) -> S
@@ -407,17 +407,9 @@ protocol Number (Ord, Plus, Minus):
     def __sub__(a:S, b:S):
         return __add__(a, __neg__(b))
 ====>
-struct Plus_Number[S] (Plus[S]):
-    _Number         : @Number[S]
-struct Minus_Number[S] (Minus[S]):
-    _Number         : @Number[S]
-    def __sub__(cls, a:S, b:S):
-        return cls._Number._Plus.__add__(a, cls._Number.__neg__(b))
-
 struct Number[S] (Ord[S]):
-    _Plus           : @Plus_Number[S]
-    _Minus          : @Minus_Number[S]
-
+    _Plus           : @Plus[S]  = Plus_Number
+    _Minus          : @Minus[S] = Minus_Number
     @classmethod
     __pos__         : (S) -> S
     @classmethod
@@ -426,59 +418,16 @@ struct Number[S] (Ord[S]):
     __mul__         : (S,S) -> S
     @classmethod
     __pow__         : (S,S) -> S
-
------------------------------------------------------------------
-
-protocol Number (Ord, Plus, Minus):                                  # ALTERNATIVELY
-    __pos__         : () -> Self
-    __neg__         : () -> Self
-    @staticmethod
-    __mul__         : (Self,Self) -> Self
-    @staticmethod
-    __pow__         : (Self,Self) -> Self
-    def __sub__(a,b):
-        return a + (-b)
-====>
-"typeclass" (Ord_Number[S], Plus_Number[S], Minus_Number[S]) => Number[S]:
-    __pos__         : (S) -> S
-    __neg__         : (S) -> S
-    __mul__         : (S,S) -> S
-    __pow__         : (S,S) -> S
-"typeclass" (Ord[S], Number[S]) => Ord_Number[S]:
-    pass
-"typeclass" (Plus[S], Number[S]) => Plus_Number[S]:
-    pass
-"typeclass" (Minus[S], Number[S]) => Minus_Number[S]:
-    def __sub__(a,b):
-        return a + (-b)
-====>
-struct Number[S]:
-    _Ord            : @Ord_Number[S]
-    _Plus           : @Plus_Number[S]
-    _Minus          : @Minus_Number[S]
-    @classmethod
-    __pos__         : (S) -> S
-    @classmethod
-    __neg__         : (S) -> S
-    @classmethod
-    __mul__         : (S,S) -> S
-    @classmethod
-    __pow__         : (S,S) -> S
-struct Ord_Number[S]:
-    _Ord            : @Ord[S]
-    _Number         : @Number[S]
-struct Plus_Number[S]:
-    _Plus           : @Plus[S]
-    _Number         : @Number[S]
-struct Minus_Number[S]:
-    _Minus          : @Minus[S]
-    _Number         : @Number[S]
+struct Plus_Number[S] (Plus[S]):
+    _Number         = Number
+struct Minus_Number[S] (Minus[S]):
+    _Number         = Number[S]
     def __sub__(cls, a:S, b:S):
         return cls._Number._Plus.__add__(a, cls._Number.__neg__(b))
 
 -----------------------------------------------------------------
 
-protocol Number (Ord, Plus, Minus):                                  # OR......................
+protocol Number (Ord, Plus, Minus):                                 # ALTERNATIVE TRANSLATION WITHOUT TYPE EXTENSION
     __pos__         : () -> Self
     __neg__         : () -> Self
     @staticmethod
@@ -488,18 +437,18 @@ protocol Number (Ord, Plus, Minus):                                  # OR.......
     def __sub__(a,b):
         return a + (-b)
 ====>
-"typeclass" (Ord[S], Plus[S], Minus[S]) => Number[S]:               # TYPE-CHECKED AS IN PLAIN HASKELL
+"typeclass" (Ord[S], Plus[S], Minus[S]) => Number[S]:
     __pos__         : (S) -> S
     __neg__         : (S) -> S
     __mul__         : (S,S) -> S
     __pow__         : (S,S) -> S
-    def __sub__(a,b):                                               # ALLOWED, BUT TRANSLATED INTO...
-        return a + (-b)
+    def __sub__(a:S, b:S):
+        return __add__(a, __neg__(b))
 ====>
 struct Number[S]:
-    _Ord            : @Ord_Number[S]                                # OR USE SUB-CLASSING...
-    _Plus           : @Plus_Number[S]
-    _Minus          : @Minus_Number[S]
+    _Ord            : @Ord[S]   = Ord_Number
+    _Plus           : @Plus[S]  = Plus_Number
+    _Minus          : @Minus[S] = Minus_Number
     @classmethod
     __pos__         : (S) -> S
     @classmethod
@@ -509,31 +458,13 @@ struct Number[S]:
     @classmethod
     __pow__         : (S,S) -> S
 struct Ord_Number[S] (Ord[S]):
-    _Number         : @Number[S]
+    _Number         = Number
 struct Plus_Number[S] (Plus[S]):
-    _Number         : @Number[S]
+    _Number         = Number
 struct Minus_Number[S] (Minus[S]):
-    _Number         : @Number[S]
+    _Number         = Number
     def __sub__(cls, a:S, b:S):
         return cls._Number._Plus.__add__(a, cls._Number.__neg__(b))
-
------------------------------------------------------------------
-
-protocol Plus:
-    @staticmethod
-    add         : (Self,Self) -> Self
-protocol Minus:
-    @staticmethod
-    sub         : (Self,Self) -> Self
-protocol Number (Plus, Minus):
-    neg         : () -> Self
-====>
-"typeclass" Plus[S]:
-    add         : (S,S) -> S
-"typeclass" Minus[S]:
-    sub         : (S,S) -> S
-"typeclass" (Plus[S], Minus[S]) => Number[S]:
-    neg         : (S) -> S
 
 -----------------------------------------------------------------
 
@@ -614,18 +545,18 @@ protocol Complex (Number, SupportsAbs, SupportsComplex):
     conjugate       : (S) -> S
 ====>
 struct Plus_Complex[S] (Plus_Number[S]):
-    _Number         : @Complex[S]
+    _Number         = Complex
 struct Minus_Complex[S] (Minus_Number[S]):
-    _Number         : @Complex[S]
+    _Number         = Complex
 struct SupportsAbs_Complex[S] (SupportsAbs[S]):
-    _Complex        : @Complex[S]
+    _Complex        : @Complex[S]           = Complex
 struct SupportsComplex_Complex[S] (SupportsComplex[S]):
-    _Complex        : @Complex[S]
+    _Complex        : @Complex[S]           = Complex
 struct Complex[S] (Number[S]):
-    _Plus           : @Plus_Complex[S]
-    _Minus          : @Minus_Complex[S]
-    _SuppAbs        : @SupportsAbs_Complex[S]
-    _SuppComplex    : @SupportsComplex_Complex[S]
+    _Plus           = Plus_Complex
+    _Minus          = Minus_Complex
+    _SuppAbs        : @SupportsAbs[S]       = SupportsAbs_Complex
+    _SuppComplex    : @SupportsComplex[S]   = SupportsComplex_Complex
 
     @classmethod
     __fromcomplex__ : (complex) -> S
@@ -697,24 +628,24 @@ protocol Real (Complex, SupportsRound, SupportsFloat):
         return (a//b, a%b)
 ====>
 struct Plus_Real[S] (Plus_Complex[S]):
-    _Number         : @Real[S]
+    _Number         = Real
 struct Minus_Real[S] (Minus_Complex[S]):
-    _Number         : @Real[S]
+    _Number         = Real
 struct SupportsAbs_Real[S] (SupportsAbs_Complex[S]):
-    _Complex        : @Real[S]
+    _Complex        = Real
 struct SupportsComplex_Real[S] (SupportsComplex_Complex[S]):
-    _Complex        : @Real[S]
+    _Complex        = Real
 struct SupportsRound_Real[S] (SupportsRound[S]):
-    _Real           : @Real[S]
+    _Real           = Real
 struct SupportsFloat_Real[S] (SupportsFloat[S]):
-    _Real           : @Real[S]
+    _Real           = Real
 struct Real[S] (Complex[S]):
-    _Plus           : @Plus_Real[S]
-    _Minus          : @Minus_Real[S]
-    _SuppAbs        : @SupportsAbs_Real[S]
-    _SuppComplex    : @SupportsComplex_Real[S]
-    _SuppRound      : @SupportsRound_Real[S]
-    _SuppFloat      : @SupportsFloat_Real[S]
+    _Plus           = Plus_Real
+    _Minus          = Minus_Real
+    _SuppAbs        = SupportsAbs_Real
+    _SuppComplex    = SupportsComplex_Real
+    _SuppRound      = SupportsRound_Real
+    _SuppFloat      = SupportsFloat_Real
     
     @classmethod
     __fromfloat__   : (float) -> S
@@ -759,17 +690,17 @@ protocol Rational (Real):
         return numerator(a) / denominator(a)
 ====>
 struct Plus_Rational[S] (Plus_Real[S]):
-    _Number         : @Rational[S]
+    _Number         = Rational
 struct Minus_Rational[S] (Minus_Real[S]):
-    _Number         : @Rational[S]
+    _Number         = Rational
 struct SupportsAbs_Rational[S] (SupportsAbs_Real[S]):
-    _Complex        : @Rational[S]
+    _Complex        = Rational
 struct SupportsComplex_Rational[S] (SupportsComplex_Real[S]):
-    _Complex        : @Rational[S]
+    _Complex        = Rational
 struct SupportsRound_Rational[S] (SupportsRound_Real[S]):
-    _Real           : @Rational[S]
+    _Real           = Rational
 struct SupportsFLoat_Rational[S] (SupportsFLoat_Real[S])
-    _Real           : @Rational[S]
+    _Real           = Rational
 
     def __float__(cls,a):
         Int = Integral_int
@@ -777,12 +708,12 @@ struct SupportsFLoat_Rational[S] (SupportsFLoat_Real[S])
                                   Int._SuppFloat.__float__(cls._Rational.denominator(Int,a)))
 
 struct Rational[S] (Real[S]):
-    _Plus           : @Plus_Rational[S]
-    _Minus          : @Minus_Rational[S]
-    _SuppAbs        : @SupportsAbs_Rational[S]
-    _SuppComplex    : @SupportsComplex_Rational[S]
-    _SuppRound      : @SupportsRound_Rational[S]
-    _SuppFloat      : @SupportsFloat_Rational[S]
+    _Plus           = Plus_Rational
+    _Minus          = Minus_Rational
+    _SuppAbs        = SupportsAbs_Rational
+    _SuppComplex    = SupportsComplex_Rational
+    _SuppRound      = SupportsRound_Rational
+    _SuppFloat      = SupportsFloat_Rational
     
     @classmethod
     numerator       : (@Integral[T], S) -> T
@@ -833,30 +764,30 @@ protocol Integral (Rational,SupportsInt,Logical):
         return 1
 ====>
 struct Plus_Integral[S] (Plus_Rational[S]):
-    _Number         : @Integral[S]
+    _Number         = Integral
 struct Minus_Integral[S] (Minus_Rational[S]):
-    _Number         : @Integral[S]
+    _Number         = Integral
 struct SupportsAbs_Integral[S] (SupportsAbs_Rational[S]):
-    _Complex        : @Integral[S]
+    _Complex        = Integral
 struct SupportsComplex_Integral[S] (SupportsComplex_Rational[S]):
-    _Complex        : @Integral[S]
+    _Complex        = Integral
 struct SupportsRound_Integral[S] (SupportsRound_Rational[S]):
-    _Real           : @Integral[S]
+    _Real           = Integral
 struct SupportsFLoat_Integral[S] (SupportsFLoat_Rational[S])
-    _Real           : @Integral[S]
+    _Real           = Integral
 struct SupportsInt_Integral[S] (SupportsInt[S])
-    _Integral       : @Integral[S]
+    _Integral       = Integral
 struct Logical_Integral[S] (Logical[S])
-    _Integral       : @Integral[S]
+    _Integral       = Integral
 struct Integral[S] (Rational[S]):
-    _Plus           : @Plus_Integral[S]
-    _Minus          : @Minus_Integral[S]
-    _SuppAbs        : @SupportsAbs_Integral[S]
-    _SuppComplex    : @SupportsComplex_Integral[S]
-    _SuppRound      : @SupportsRound_Integral[S]
-    _SuppFloat      : @SupportsFloat_Integral[S]
-    _SuppInt        : @SupportsInt_Integral[S]
-    _Logical        : @Logical_Integral[S]
+    _Plus           = Plus_Integral
+    _Minus          = Minus_Integral
+    _SuppAbs        = SupportsAbs_Integral
+    _SuppComplex    = SupportsComplex_Integral
+    _SuppRound      = SupportsRound_Integral
+    _SuppFloat      = SupportsFloat_Integral
+    _SuppInt        = SupportsInt_Integral
+    _Logical        = Logical_Integral
     
     @staticmethod
     __fromint__     : (int) -> S
@@ -1694,18 +1625,18 @@ protocol MutableMapping[A,B] (Mapping[A,B], MutableIndexed[A,B]):
     update          : (Mapping[T,A,B]) => !(S,T) -> None
 ====>
 struct Sized_MutableMapping[S,A,B] (Sized_Mapping[S]):
-    _MutableMapping : @MutableMapping[S,A,B]
+    _MutableMapping = MutableMapping
 struct Iterable_MutableMapping[S,A,B] (Iterable_Mapping[S,A]):
-    _MutableMapping : @MutableMapping[S,A,B]
+    _MutableMapping = MutableMapping
 struct Indexed_MutableMapping[S,A,B] (Indexed_Mapping[S,A,B]):
-    _MutableMapping : @MutableMapping[S,A,B]
+    _MutableMapping = MutableMapping
 struct MutableIndexed_MutableMapping[S,A,B] (MutableIndexed[S,A,B]):
-    _MutableMapping : @MutableMapping[S,A,B]
+    _MutableMapping = MutableMapping
 struct MutableMapping[S,A,B] (Mapping[S,A,B]):
-    _Sized          : @Sized_MutableMapping[S,A,B]
-    _Iterable       : @Iterable_MutableMapping[S,A,B]
-    _Indexed        : @Indexed_MutableMapping[S,A,B]
-    _MutableIndexed : @MutableIndexed_MutableMapping[S,A,B]
+    _Sized          = Sized_MutableMapping
+    _Iterable       = Iterable_MutableMapping
+    _Indexed        = Indexed_MutableMapping
+    _MutableIndexed = MutableIndexed_MutableMapping
     
     @classmethod
     update          : !(@Mapping[T,A,B],S,T) -> None
@@ -1825,7 +1756,9 @@ def f(s,a):
     return s.count(a)
 ====>
 struct Sequence_EXT[S,A]:
+    @classattr
     _Eq             : @Eq[A]
+    @classattr
     _Sequence       : @Sequence[S,A]
     @classmethod
     index           : (S,A) -> int?
@@ -1875,6 +1808,33 @@ struct Sequence_EXT[S,A]:
 
 def f(_Eq:@Eq[A], _Sequence:@Sequence[S,A], s:S, a:A):
     return Sequence_EXT.count(_Eq,_Sequence,s,a)
+
+### OR ####
+
+struct Sequence_EXT[S,A]:
+    @classmethod
+    index           : (@Eq[A], @Sequence[S,A], S, A) -> int?
+    @classmethod
+    count           : (@Eq[A], @Sequence[S,A], S, A) -> int
+
+def Sequence_EXT_Eq_Sequence(_Eq: @Eq[A], _Sequence:@Sequence[S,A]):
+    struct Sequence_EXT[S,A]:
+        def index(cls, self:S, val:A) -> int?:
+            for i,x in enumerate(_Sequence._Iterable.__iter__(self)):
+                if _Eq.__eq__(x,val):
+                    return i
+            return None
+        def count(cls, self:S, val:A) -> int:
+            c = 0
+            for x in _Sequence._Iterable.__iter__(self):
+                if _Eq.__eq__(x,val):
+                    c += 1
+            return c
+    return Sequence_EXT_Eq_Sequence
+
+def f(_Eq:@Eq[A], _Sequence:@Sequence[S,A], s:S, a:A):
+    Sequence_EXT = Sequence_EXT_Eq_Sequence(_Eq,_Sequence)
+    return Sequence_EXT.count(s,a)
 
 -----------------------------------------------------------------
 
@@ -2055,3 +2015,4 @@ Depa.depa(7) ====>
 (20+Apa_Cepa.apa(), 3, 30+Apa_Cepa.apa(), 1) ====>
 (20+3, 3, 30+3, 1) ====>
 (23, 3, 33, 1)
+

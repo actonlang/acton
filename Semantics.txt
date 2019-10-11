@@ -135,8 +135,8 @@ E1 if True else E2          -->     E1
 E1 if False else E2         -->     E2
 
 do B; pass                  -->     None
-do B; return V              -->     V                                           if  fc(V) # bc(B)
-do B; raise V               -->     do raise V                                  if  fc(V) # bc(B)
+do B; return V              -->     V                                           if  fc(V) # dc(B)
+do B; raise V               -->     do raise V                                  if  fc(V) # dc(B)
 
 EE[do raise V]              -->     do raise V
 
