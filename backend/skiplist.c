@@ -30,7 +30,7 @@ skiplist_t *create_skiplist_uuid() {
 }
 
 skiplist_t *create_skiplist(int (*cmp)(WORD, WORD)) {
-	skiplist_t * list = (skiplist_t *)malloc(sizeof(skiplist_t));
+	skiplist_t * list = (skiplist_t *) malloc(sizeof(skiplist_t));
 
 	return skiplist_init(list, cmp);
 }
@@ -110,7 +110,7 @@ snode_t *skiplist_search(skiplist_t *list, WORD key) {
             x = x->forward[i];
     }
 
-    if (x != NULL && list->cmp(key, x->key) == 0) {
+    if (x != NULL && x->key != LONG_MAX && list->cmp(key, x->key) == 0) {
         return x;
     } else {
         return NULL;

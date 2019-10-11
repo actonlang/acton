@@ -267,11 +267,18 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, int * msgs_sent, uuid_t * txnid, actor_args * ca, unsigned int * fastrandstate)
 {
 	int ret = 0;
-	int processed = 0;
+	int processed = 1;
 	int outgoing_counters[100];
 	int no_outgoing_counters = 0;
+	snode_t * crt_row = NULL;
 
-	for(snode_t * crt_row = start_row; crt_row != end_row; crt_row = NEXT(crt_row), processed++)
+	if(entries_read == 0 || start_row == NULL)
+	{
+		printf("ACTOR %ld: No msgs to process!\n", (long) ca->consumer_id);
+		return 0;
+	}
+
+	for(crt_row = start_row; processed<entries_read; crt_row = NEXT(crt_row), processed++)
 	{
 		db_row_t * db_row = (db_row_t *) crt_row->value;
 		print_long_row(db_row);
@@ -298,6 +305,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 	}
 
 	assert(processed == entries_read);
+	assert(crt_row == end_row);
 
 	if(processed > 0)
 	{
