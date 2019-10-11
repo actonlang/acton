@@ -35,7 +35,6 @@ typeError                               = solveError
 chkRedef ss                             = True -- TBD
 
 chkCycles (Class _ n q cs b : ds)       = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
-chkCycles (Struct _ n q cs b : ds)      = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Protocol _ n q cs b : ds)    = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Extension _ n q cs b : ds)   = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Decorator _ qn args d : ds)  = noforward qn n ds && noforward args n ds && chkCycles (d:ds)
@@ -301,7 +300,6 @@ instance Infer Decl where
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
                                         
-    infer env (Struct l n q cs b)       = newOVar       -- undefined
     infer env (Protocol l n q cs b)     = newOVar       -- undefined
     infer env (Extension l n q cs b)    = newOVar       -- undefined
 

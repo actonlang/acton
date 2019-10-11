@@ -718,7 +718,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> structdef <|> protodef <|> extdef <|> actordef <|> decorated
+decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> decorated
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -1060,12 +1060,10 @@ actordef = addLoc $ do
                 return $ S.Actor NoLoc nm q ps mba ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
--- structdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 
 classdef    = classdefGen "class" S.Class
-structdef   = classdefGen "struct" S.Struct
 protodef    = classdefGen "protocol" S.Protocol
 extdef      = classdefGen "extension" S.Extension
 
