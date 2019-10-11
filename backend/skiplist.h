@@ -10,7 +10,7 @@ typedef void *WORD;
 
 #define SKIPLIST_MAX_LEVEL 6
 
-#define HEAD(skiplist) ((skiplist)->header)
+#define HEAD(skiplist) ((skiplist)->header->forward[0])
 #define NEXT(snode) ((snode)->forward[0])
 
 typedef struct snode {

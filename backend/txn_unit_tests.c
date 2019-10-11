@@ -28,6 +28,8 @@ WORD queue_table_key = (WORD) 1;
 
 int rand_sleep = 1;
 
+int debug = 1;
+
 
 typedef struct actor_collection_item {
 	int actor_id;
@@ -267,7 +269,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, int * msgs_sent, uuid_t * txnid, actor_args * ca, unsigned int * fastrandstate)
 {
 	int ret = 0;
-	int processed = 1;
+	int processed = 0;
 	int outgoing_counters[100];
 	int no_outgoing_counters = 0;
 	snode_t * crt_row = NULL;
@@ -277,6 +279,9 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		printf("ACTOR %ld: No msgs to process!\n", (long) ca->consumer_id);
 		return 0;
 	}
+
+	if(debug)
+		printf("ACTOR %ld: %d msgs to process.\n", (long) ca->consumer_id, entries_read);
 
 	for(crt_row = start_row; processed<entries_read; crt_row = NEXT(crt_row), processed++)
 	{
@@ -302,27 +307,24 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 		skiplist_insert(ca->snd_counters, (WORD) dest_id, (WORD) counter_val, fastrandstate);
 		ca->total_snd++;
+
+		assert(processed < entries_read-1 || crt_row == end_row);
 	}
 
 	assert(processed == entries_read);
-	assert(crt_row == end_row);
 
 	if(processed > 0)
 	{
-		int checkpoint_success = 0;
-		while(!checkpoint_success)
-		{
-			// Checkpoint local state in txn:
+		// Checkpoint local state in txn:
 
-			ret = checkpoint_local_state(ca, txnid, fastrandstate);
+		ret = checkpoint_local_state(ca, txnid, fastrandstate);
 
-			assert(ret == 0);
+		assert(ret == 0);
 
-			// Send outgoing msgs in txn:
-			ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
+		// Send outgoing msgs in txn:
+		ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
 
-			assert(ret == 0);
-		}
+		assert(ret == 0);
 	}
 
 	return ret;

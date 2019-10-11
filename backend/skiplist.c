@@ -225,6 +225,10 @@ void skiplist_free(skiplist_t *list)
         free(current_node);
         current_node = next_node;
     }
+
+    free(list->header->forward);
+    free(list->header);
+
 //    free(current_node->forward);
 //    free(current_node);
     free(list);
