@@ -110,7 +110,7 @@ snode_t *skiplist_search(skiplist_t *list, WORD key) {
             x = x->forward[i];
     }
 
-    if (x != NULL && x->key != LONG_MAX && list->cmp(key, x->key) == 0) {
+    if (x != NULL && ((long) x->key) != LONG_MAX && list->cmp(key, x->key) == 0) {
         return x;
     } else {
         return NULL;
