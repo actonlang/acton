@@ -28,6 +28,7 @@ typedef struct skiplist {
 } skiplist_t;
 
 skiplist_t * create_skiplist_long();
+skiplist_t *create_skiplist_uuid();
 skiplist_t * create_skiplist(int (*cmp)(WORD, WORD));
 skiplist_t * skiplist_init(skiplist_t *list, int (*cmp)(WORD, WORD));
 int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedptr);

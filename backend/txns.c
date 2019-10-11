@@ -6,6 +6,8 @@
 
 #include "txns.h"
 
+#include <stdio.h>
+
 int verbose = 1;
 
 // DB queries:
@@ -181,11 +183,11 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 		case QUERY_TYPE_READ_COLS:
 		case QUERY_TYPE_READ_CELL:
 		{
-			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->result_version, db);
+			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, tr->start_clustering_keys, tr->no_clustering_keys, tr->table_key, tr->result_version, db);
 		}
 		case QUERY_TYPE_READ_ROW:
 		{
-			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, NULL, 0, tr->result_version, db);
+			return db_verify_cell_version(tr->start_primary_keys, tr->no_primary_keys, NULL, 0, tr->table_key, tr->result_version, db);
 		}
 		case QUERY_TYPE_READ_INDEX:
 		{
@@ -204,7 +206,7 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 		}
 		case QUERY_TYPE_READ_INDEX_RANGE:
 		{
-			return db_verify_index_range_version(tr->idx_idx, tr->start_idx_key, tr->end_idx_key,
+			return db_verify_index_range_version(tr->idx_idx, tr->start_primary_keys, tr->end_primary_keys,
 												tr->range_result_keys, tr->range_result_versions, tr->no_range_results, tr->table_key, db);
 		}
 	}
@@ -271,7 +273,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 	{
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			return db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->prh_version, db);
+			return db_verify_cell_version(&tw->queue_id, 1, NULL, 0, tw->table_key, tw->prh_version, db);
 		}
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
@@ -396,7 +398,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		{
 			// Update row tombstone version for handling shadow range reads and reads by incomplete partition / clustering key path?
 
-			return db_delete_row_transactional(tw->column_values, version, tw->table_key, db); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
+			return db_delete_row_transactional(tw->column_values, version, tw->table_key, db, fastrandstate); // TO DO: use tw->no_primary_keys and tw->no_clustering_keys
 		}
 		case QUERY_TYPE_ENQUEUE:
 		{
@@ -420,7 +422,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		{
 			// Note: This also updates queue tombstone version (if queue was not already deleted by a different txn, in which case earliest deletion timestamp is kept):
 
-			return delete_queue(tw->table_key, tw->queue_id, version, 1, db);
+			return delete_queue(tw->table_key, tw->queue_id, version, 1, db, fastrandstate);
 		}
 		default:
 		{
@@ -456,7 +458,7 @@ int abort_txn(uuid_t * txnid, db_t * db)
 	return close_txn(txnid, db);
 }
 
-int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db)
+int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int * fastrandstate)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
@@ -466,7 +468,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db)
 
 	if(res == VAL_STATUS_COMMIT)
 	{
-		persist_txn(ts, db);
+		persist_txn(ts, db, fastrandstate);
 //		ts->state = TXN_STATUS_COMMITTED;
 		close_txn(txnid, db);
 	}
@@ -496,13 +498,17 @@ db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_k
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NULL; // No such txn
 
 	db_row_t* result = db_search(primary_keys, table_key, db);
 
 	// Note that if result == NULL (no such row), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
 
-	return add_row_read_to_txn(primary_keys, no_primary_keys, table_key, result, ts, fastrandstate);
+	int ret = add_row_read_to_txn(primary_keys, no_primary_keys, table_key, result, ts, fastrandstate);
+
+	assert(ret == 0);
+
+	return result;
 }
 
 int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
@@ -525,13 +531,17 @@ db_row_t* db_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, W
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NULL; // No such txn
 
 	db_row_t* result = db_search_clustering(primary_keys, clustering_keys, no_clustering_keys, table_key, db);
 
 	// Note that if result == NULL (no such row), we still add that query to the txn read set (to allow txn to be invalidated by "shadow writes")
 
-	return add_cell_read_to_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, result, ts, fastrandstate);
+	int ret = add_cell_read_to_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, result, ts, fastrandstate);
+
+	assert(ret == 0);
+
+	return result;
 }
 
 int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -573,11 +583,15 @@ db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uu
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
-		return -2; // No such txn
+		return NULL; // No such txn
 
 	db_row_t* result = db_search_index(index_key, idx_idx, table_key, db);
 
-	return add_index_read_to_txn(&index_key, idx_idx, table_key, result, ts, fastrandstate);
+	int ret = add_index_read_to_txn(&index_key, idx_idx, table_key, result, ts, fastrandstate);
+
+	assert(ret == 0);
+
+	return result;
 }
 
 int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -670,7 +684,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	vector_clock * prh_version = NULL;
 
 	peek_queue(consumer_id, shard_id, app_id, table_key, queue_id,
-			max_entries, prev_read_head, *prh_version, entries_read, new_read_head,
+			max_entries, prev_read_head, entries_read, new_read_head, &prh_version,
 			start_row, end_row, db);
 
 	return add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,

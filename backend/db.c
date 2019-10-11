@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
+#include <string.h>
 #include <assert.h>
 
 #include "db.h"
@@ -442,7 +443,7 @@ int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_k
 
 	snode_t * start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
 
-	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_primary_keys[0]; *cell_row_node=NEXT(*cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_primary_keys[0]; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -625,7 +626,7 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 	snode_t * start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
 	int i = 0;
 
-	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_clustering_keys[no_clustering_keys-1]; *cell_row_node=NEXT(*cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_clustering_keys[no_clustering_keys-1]; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -734,7 +735,7 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 
 	snode_t * start_row = skiplist_search_higher(table->indexes[idx_idx], start_idx_key);
 
-	for(snode_t * cell_row_node = *start_row; (*cell_row_node) != NULL && (long) (*cell_row_node)->key < (long) end_primary_keys[0]; *cell_row_node=NEXT(*cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_idx_key; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -757,14 +758,14 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 	return 0;
 }
 
-int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table)
+int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
 {
 	db_row_t* row = (db_row_t *) (skiplist_delete(table->rows, primary_keys[0]));
 
 	snode_t * exists = skiplist_search(table->row_tombstones, primary_keys[0]);
 
 	if(exists != NULL)
-		skiplist_insert(table->row_tombstones, primary_keys[0], (version != NULL)? copy_vc(version) : NULL);
+		skiplist_insert(table->row_tombstones, primary_keys[0], (version != NULL)? copy_vc(version) : NULL, fastrandstate);
 
 	if(row != NULL)
 	{
@@ -811,7 +812,7 @@ int db_insert_transactional(WORD * column_values, int no_cols, vector_clock * ve
 
 int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
-	return db_insert_transactional(column_values, no_cols, NULL, db, fastrandstate);
+	return db_insert_transactional(column_values, no_cols, NULL, table_key, db, fastrandstate);
 }
 
 int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, WORD table_key, db_t * db)
@@ -828,7 +829,7 @@ int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, v
 
 int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db)
 {
-	return db_update_transactional(col_idxs, no_cols, column_values, table_key, db);
+	return db_update_transactional(col_idxs, no_cols, column_values, NULL, table_key, db);
 }
 
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)
@@ -960,7 +961,7 @@ int db_verify_index_version(WORD index_key, int idx_idx, WORD table_key, vector_
 	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
-		return NULL;
+		return -2;
 
 	db_table_t * table = (db_table_t *) (node->value);
 
@@ -992,7 +993,7 @@ int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_
 	return table_verify_index_range_version(idx_idx, start_idx_key, end_idx_key, range_result_keys, range_result_versions, no_range_results, table);
 }
 
-int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD table_key, db_t * db)
+int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -1004,12 +1005,12 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_delete_row(primary_keys, version, table);
+	return table_delete_row(primary_keys, version, table, fastrandstate);
 }
 
-int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db)
+int db_delete_row(WORD* primary_keys, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
-	return db_delete_row_transactional(primary_keys, NULL, table_key, db);
+	return db_delete_row_transactional(primary_keys, NULL, table_key, db, fastrandstate);
 }
 
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <assert.h>
+#include <uuid/uuid.h>
 
 #include "skiplist.h"
 #include "fastrand.h"

@@ -87,7 +87,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 	for(long i=2;i<no_cols + 2;i++)
 		queue_column_values[i]=column_values[i-2];
 
-	int status = table_insert(queue_column_values, no_cols+2, table, fastrandstate);
+	int status = table_insert(queue_column_values, no_cols+2, NULL, table, fastrandstate);
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Inserted queue entry %ld, status=%d\n", entry_id, status);
@@ -176,7 +176,7 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 }
 
 int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							long new_consume_head, db_t * db)
+							long new_consume_head, vector_clock * version, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 	if(table == NULL)
@@ -615,7 +615,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	return 0;
 }
 
-int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db)
+int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -659,7 +659,7 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 
 	skiplist_free(db_row->consumer_state);
 
-	int ret = table_delete_row((WORD*) &(queue_id), version, table);
+	int ret = table_delete_row((WORD*) &(queue_id), version, table, fastrandstate);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);

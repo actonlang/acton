@@ -243,11 +243,11 @@ int test_update(db_t * db)
 
 // Delete by (PK):
 
-int test_delete_pk(db_t * db)
+int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 {
 	for(long aid=0;aid<no_actors;aid++)
 	{
-		if(db_delete_row((WORD *) &aid, (WORD) 0, db) != 0)
+		if(db_delete_row((WORD *) &aid, (WORD) 0, db, fastrandstate) != 0)
 		{
 			printf("Delete failed for pk %ld!\n", aid);
 			return -1;
@@ -454,7 +454,7 @@ int main(int argc, char **argv) {
 
 	// Delete by (PK):
 
-	ret = test_delete_pk(db);
+	ret = test_delete_pk(db, &seed);
 	printf("Test %s - %s\n", "test_delete_pk", ret==0?"OK":"FAILED");
 
 	ret = populate_db(db, &seed);

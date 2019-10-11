@@ -143,7 +143,7 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys,
 								WORD* end_clustering_keys, int no_clustering_keys,
 								WORD table_key,
-								snode_t* start_row, snode_t* end_row,
+								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate);
 int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 								WORD* col_keys, int no_columns,
