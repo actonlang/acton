@@ -18,66 +18,37 @@ LIBS:=$(JEM_LIBS)
 
 LFLAGS=-luuid#-latomic -lm
 
-LIBDIR=../lib
+LIBDIR=../../lib
 
 all: skiplist_test libdb db_unit_tests queue_unit_tests txn_unit_tests
 
-libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o vector_clock.o txn_state.o txns.o
-	ranlib $(LIBDIR)/libdb.a
 
-db.o:
-	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
 
-queue.o:
-	cc queue.c -c -I src $(LFLAGS) $(CFLAGS)
-
-skiplist.o:
-	cc skiplist.c -c -I src $(LFLAGS) $(CFLAGS)
-	
 vector_clock.o:
-	cc failure_detector/vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
+	cc vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
 
-txn_state.o:
-	cc txn_state.c -c -I src $(LFLAGS) $(CFLAGS)
+db_messages.pb-c.c: db_messages.proto
+	protoc-c --c_out=. db_messages.proto
 
-txns.o:
-	cc txns.c -c -I src $(LFLAGS) $(CFLAGS)
+db_messages.pb-c.o: db_messages.pb-c.c
+	cc $(LFLAGS) $(CFLAGS) -I/usr/local/include -Wno-unused-value db_messages.pb-c.cå
 
+libvc: vector_clock.o db_messages.pb-c.o
+	ar rcs $(LIBDIR)/libvc.a vector_clock.o db_messages.pb-c.o
+	ranlib $(LIBDIR)/libvc.a
 
-db_unit_tests: db_unit_tests.c
-	cc -std=c11 db_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
-		-ldb $(LFLAGS) -pthread \
-		$(LIBS) \
-		$(CFLAGS) \
-		-o db_unit_tests
-
-queue_unit_tests: queue_unit_tests.c
-	cc queue_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
-		-ldb $(LFLAGS) -pthread \
+db_messages_test: db_messages_test.c
+	cc db_messages_test.c \
+		$(CFLAGS) -I ../src -I/usr/local/include -L ../lib \
+		-lvc $(LFLAGS) -L/usr/local/lib -pthread -lprotobuf-c \
 		$(LIBS) \
 		$(CFLAGS) \
 		-o queue_unit_tests
 
-txn_unit_tests: txn_unit_tests.c
-	cc txn_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
-		-ldb $(LFLAGS) -pthread \
-		$(LIBS) \
-		$(CFLAGS) \
-		-o txn_unit_tests
-		
-skiplist_test: skiplist_test.c skiplist.c
-	cc skiplist_test.c skiplist.c \
-		$(CFLAGS) -I ../src \
-		$(LFLAGS) \
-		$(CFLAGS) \
-		-o skiplist_test
+	cc -pthread $(LFLAGS) $(CFLAGS) -I/usr/local/include -Wno-unused-value vector_clock. fd.c cells.c db_queries.c db_messages_test.c db_messages.pb-c.c -L/usr/local/lib -lprotobuf-c -o db_messages_test
 
 $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests
+	rm -rf *.o $(LIBDIR)/libvc.a db_messages_test

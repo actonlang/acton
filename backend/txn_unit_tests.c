@@ -86,13 +86,17 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 	for(int i=0;i<no_state_cols;i++)
 		col_types[i] = DB_TYPE_INT32;
 
-	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols, &primary_key_idx, no_primary_keys, clustering_key_idxs, no_clustering_keys, &index_key_idx, no_index_keys);
+	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
 
 	// Create table:
 
-	return db_create_table((WORD) 0, db_schema, db, fastrandstate);;
+	int ret = db_create_table((WORD) 0, db_schema, db, fastrandstate);
+
+	printf("Test %s - %s (%d)\n", "create_state_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
 }
 
 int create_queue_schema(db_t * db, unsigned int * fastrandstate)
@@ -103,7 +107,7 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 	col_types[0] = DB_TYPE_INT64;
 	col_types[1] = DB_TYPE_INT32;
 
-	int ret = create_queue_table(queue_table_key, no_cols, col_types, db,  fastrandstate);
+	int ret = create_queue_table(queue_table_key, no_queue_cols, col_types, db,  fastrandstate);
 	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
 
 	// Create input queues for all actors:
@@ -129,13 +133,16 @@ void consumer_callback(queue_callback_args * qca)
 int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** start_row, snode_t ** end_row)
 {
 	int read_status = QUEUE_STATUS_READ_INCOMPLETE;
+	vector_clock * prh_version;
 
 	while(read_status != QUEUE_STATUS_READ_COMPLETE)
 	{
 		read_status = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 						ca->queue_table_key, ca->queue_id,
-						2, entries_read, &ca->read_head,
+						2, entries_read, &ca->read_head, &prh_version,
 						start_row, end_row, 1, ca->db);
+
+		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		if(read_status < 0)
 		{
@@ -151,10 +158,10 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 			if((*entries_read) > 0)
 			{
 				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
-						(long) ca->consumer_id, ca->successful_dequeues, (long) end_row->key);
+						(long) ca->consumer_id, ca->successful_dequeues, (long) (*end_row)->key);
 
-				if(((long) end_row->key) != ca->successful_dequeues - 1)
-					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (long) end_row->key, ca->successful_dequeues - 1);
+				if(((long) (*end_row)->key) != ca->successful_dequeues - 1)
+					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (long) (*end_row)->key, ca->successful_dequeues - 1);
 			}
 		}
 	}
@@ -197,6 +204,40 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 	return 0;
 }
 
+
+int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstate)
+{
+	int ret = 0;
+	long dest_id = (long) ca->consumer_id + 1;
+
+	int no_outgoing_counters = 2;
+
+	*msgs_sent=0;
+
+	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
+
+	for(int i=0;i<no_outgoing_counters;i++)
+	{
+		column_values[0] = (WORD) dest_id;
+		column_values[1] = (WORD) i;
+
+		ret = enqueue(column_values, no_queue_cols, ca->queue_table_key, ca->queue_id, 1, ca->db, fastrandstate);
+
+		assert(ret == 0);
+
+		(*msgs_sent)++;
+
+		skiplist_insert(ca->snd_counters, (WORD) dest_id, (WORD) i, fastrandstate);
+
+		ca->total_snd++;
+	}
+
+	free(column_values);
+
+	return 0;
+}
+
+
 int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing_counters, int * msgs_sent, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	int ret = 0;
@@ -237,14 +278,14 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 		long queue_entry_id = (long) db_row->key;
 		assert(db_row->no_columns == 2);
-		long sender_id = db_row->column_array[0];
-		int counter_val = db_row->column_array[1];
+		long sender_id = (long) db_row->column_array[0];
+		int counter_val = (int) db_row->column_array[1];
 
 		printf("Read queue entry: (id=%ld, snd=%ld, val=%d)\n", queue_entry_id, sender_id, counter_val);
 
 //					skiplist_search(ca->rcv_counters, COLLECTION_ID_0, (WORD) entries_read);
 
-		skiplist_insert(ca->rcv_counters, sender_id, (WORD) counter_val, fastrandstate);
+		skiplist_insert(ca->rcv_counters, (WORD) sender_id, (WORD) counter_val, fastrandstate);
 		ca->total_rcv++;
 
 		counter_val++;
@@ -252,7 +293,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 		long dest_id = (long) ca->consumer_id + 1;
 
-		skiplist_insert(ca->snd_counters, dest_id, (WORD) counter_val, fastrandstate);
+		skiplist_insert(ca->snd_counters, (WORD) dest_id, (WORD) counter_val, fastrandstate);
 		ca->total_snd++;
 	}
 
@@ -299,6 +340,8 @@ void * actor(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
+	increment_vc(ca->vc, (int) ca->consumer_id);
+
 	long prev_read_head = -1, prev_consume_head = -1;
 	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, &qc,
 							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
@@ -306,10 +349,18 @@ void * actor(void * cargs)
 	if(ret)
 		return NULL;
 
+	increment_vc(ca->vc, (int) ca->consumer_id);
+
 	ca->rcv_counters = create_skiplist_long();
 	ca->snd_counters = create_skiplist_long();
 
 	int entries_read = (int) prev_read_head + 1;
+
+	if((long) ca->consumer_id == 0)
+	{
+		send_seed_msgs(ca, &msgs_sent, &seed);
+		ca->successful_enqueues += msgs_sent;
+	}
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
 	if(read_status < 0)
@@ -324,7 +375,7 @@ void * actor(void * cargs)
 		int checkpoint_success = 0;
 		while(!checkpoint_success)
 		{
-			uuid_t * txnid = new_txn(db, seedptr);
+			uuid_t * txnid = new_txn(ca->db, &seed);
 
 			ret = process_messages(start_row, end_row, entries_read, &msgs_sent, txnid, ca, &seed);
 
@@ -338,8 +389,10 @@ void * actor(void * cargs)
 			if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 				printf("ERROR: consume_queue returned %d\n", ret);
 
-			checkpoint_success = (commit_txn(txnid, vector_clock * version, ca->db) == VAL_STATUS_COMMIT);
+			checkpoint_success = (commit_txn(txnid, ca->vc, ca->db, &seed) == VAL_STATUS_COMMIT);
 		}
+
+		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		ca->successful_consumes = ca->successful_dequeues;
 		ca->successful_enqueues += msgs_sent;
@@ -370,7 +423,7 @@ void * actor(void * cargs)
 			int checkpoint_success = 0;
 			while(!checkpoint_success)
 			{
-				uuid_t * txnid = new_txn(db, seedptr);
+				uuid_t * txnid = new_txn(ca->db, &seed);
 
 				process_messages(start_row, end_row, entries_read, &msgs_sent, txnid, ca, &seed);
 
@@ -382,8 +435,10 @@ void * actor(void * cargs)
 				if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 					printf("ERROR: consume_queue returned %d\n", ret);
 
-				checkpoint_success = (commit_txn(txnid, vector_clock * version, ca->db) == VAL_STATUS_COMMIT);
+				checkpoint_success = (commit_txn(txnid, ca->vc, ca->db, &seed) == VAL_STATUS_COMMIT);
 			}
+
+			increment_vc(ca->vc, (int) ca->consumer_id);
 
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
@@ -419,22 +474,11 @@ int main(int argc, char **argv) {
 
 	// Create state table:
 
-	ret = create_schema(db, &seed);
-	printf("Test %s - %s (%d)\n", "create_state_table", ret==0?"OK":"FAILED", ret);
+	ret = create_state_schema(db, &seed);
 
 	// Create queue table:
 
-	int * col_types = (int *) malloc(no_cols * sizeof(int));
-	for(int i=0;i<no_cols;i++)
-		col_types[i] = DB_TYPE_INT64;
-
-	ret = create_queue_table(queue_table_key, no_cols, col_types, db,  &seed);
-	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
-
-	// Create queue:
-
-	ret = create_queue(queue_table_key, queue_id, NULL, 1, db, &seed);
-	printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
+	ret = create_queue_schema(db, &seed);
 
 	// Create and run producer and consumer threads (also test subscribe / unsubscribe):
 
@@ -476,22 +520,17 @@ int main(int argc, char **argv) {
 	for(int i=0;i<no_actors;i++)
 	{
 		// Test enqueues:
-		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs.successful_enqueues==cargs.no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues?"OK":"FAILED", ret);
 
 		// Test dequeues:
-		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs.successful_dequeues==cargs.no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs[i].successful_dequeues==cargs[i].no_enqueues?"OK":"FAILED", ret);
 
 		// Test read head sanity:
-		printf("Test %s (%d) - %s (%d)\n", "read_head", i, ((int) cargs.read_head)==(cargs.no_enqueues - 1)?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "read_head", i, ((int) cargs[i].read_head)==(cargs[i].no_enqueues - 1)?"OK":"FAILED", ret);
 
 		// Test consumes:
-		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs.successful_consumes==cargs.no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs[i].successful_consumes==cargs[i].no_enqueues?"OK":"FAILED", ret);
 	}
-
-	// Test delete queue:
-
-	ret = delete_queue(queue_table_key, queue_id, NULL, 1, db, &seed);
-	printf("Test %s - %s (%d)\n", "delete_queue", ret==0?"OK":"FAILED", ret);
 
 	return 0;
 }

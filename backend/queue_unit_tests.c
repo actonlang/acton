@@ -108,12 +108,13 @@ int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
 {
 	snode_t * start_row, * end_row;
 	int read_status = QUEUE_STATUS_READ_INCOMPLETE;
+	vector_clock * prh_version;
 
 	while(read_status != QUEUE_STATUS_READ_COMPLETE)
 	{
 		read_status = read_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 						ca->table_key, ca->queue_id,
-						2, entries_read, &ca->read_head,
+						2, entries_read, &ca->read_head, &prh_version,
 						&start_row, &end_row, 1, ca->db);
 
 		if(read_status < 0)

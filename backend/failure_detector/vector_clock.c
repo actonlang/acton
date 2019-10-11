@@ -273,6 +273,7 @@ void free_vc_msg(VectorClockMessage * msg)
 	free(msg->counters);
 }
 
+/*
 int serialize_vc(vector_clock * vc, void ** buf, unsigned * len)
 {
 	VectorClockMessage msg = VECTOR_CLOCK_MESSAGE__INIT;
@@ -305,6 +306,7 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 
 	  return 0;
 }
+*/
 
 char * to_string_vc(vector_clock * vc, char * msg_buff)
 {

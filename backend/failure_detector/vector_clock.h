@@ -71,9 +71,9 @@ void free_vc(vector_clock * vc);
 
 int grow_vc(vector_clock * vc);
 
-int serialize_vc(vector_clock * vc, void ** buf, unsigned * len);
+// int serialize_vc(vector_clock * vc, void ** buf, unsigned * len);
 
-int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
+// int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
 
 char * to_string_vc(vector_clock * vc, char * msg_buff);
 
