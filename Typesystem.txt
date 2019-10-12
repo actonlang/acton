@@ -117,7 +117,7 @@ Constraints:        C       ::=     t(o)  |  C,C  |  .                          
 
 Type info:          I       ::=     class(o):n  |  protocol(o):n  |  extension(o)
 
-eNvironments:       N       ::=     x:T  |  z:t  |  x:#  |  z:#  |  c:[q]=>I  |  X(o)  |  N,N  |  .     associative, commutative\duplicates
+eNvironments:       N       ::=     x:T  |  z:t  |  x:#  |  z:#  |  c:[q]=>I  |  t(o)  |  N,N  |  .     associative, commutative\duplicates
 
 
 ***** Judgments ****************************************************************************************************************************************************
@@ -200,9 +200,9 @@ N,c:[q]=>I |- c[ti] ~ phi(I)
 ***** N |- t impl u ************************************************************************************************************************************************
 
 
-N |- t ~ extension(u,o)      N |- u ~ protocol(o'):n                                N,X(u,o) |- u ~ protocol(o):n
----------------------------------------------------- (ImplExt)                      ----------------------------- (ImplVar)
-N |- t impl u                                                                       N,X(u,o) |- X impl u
+N |- t ~ extension(u,o)      N |- u ~ protocol(o'):n                                N,t(u,o) |- u ~ protocol(o):n
+---------------------------------------------------- (ImplExt)                      ----------------------------- (ImplHyp)
+N |- t impl u                                                                       N,t(u,o) |- t impl u
 
 
 N |- t impl u       N |- u < u'
@@ -218,9 +218,9 @@ phi = [o/dom(q)]     N,q' |- phi(q)     N,q' |- phi(t) < t'                     
 N |- [q]=>t < [q']=>t'                                                              N |- u < u'
 
 
-N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'                                  N,X(u,o) |- u ~ class(o'):n
--------------------------------------------------- (SubClass)                       --------------------------- (SubVarC)
-N |- u < u'                                                                         N,X(u,o) |- X < u
+N |- u ~ class(u',o):n      N |- u' ~ class(o'):n'                                  N,t(u,o) |- u ~ class(o'):n
+-------------------------------------------------- (SubClass)                       --------------------------- (SubHyp)
+N |- u < u'                                                                         N,t(u,o) |- t < u
 
 
 N |- p' < p     N |- r' < r     N |- t < t'                                         x:t,r "canonically ordered"
