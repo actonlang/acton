@@ -71,21 +71,18 @@ getReturn env               = fromJust $ ret env
 
 ----------------------------
 
-builtins                    :: Env
-builtins                    = [ 
-                                (builtinName "Sequence", NProto [a] [] []),
-                                (builtinName "Mapping",  NProto [a,b] [] []),
-                                (builtinName "Set",      NProto [a] [] [])
+autoImport                  :: Env
+autoImport                  = [ (QName n [], info) | (QName _ [n], info) <- builtin ]
+
+builtin                     :: Env
+builtin                     = [ 
+                                (nSequence, NProto [a] [] []),
+                                (nMapping,  NProto [a,b] [] []),
+                                (nSet,      NProto [a] [] [])
                               ]
   where a:b:c:_             = [ TBind (TV n) [] | n <- tvarSupply ]
         ta:tb:tc:_          = [ TVar NoLoc (TV n) | n <- tvarSupply ]
 
-builtinName n               = qName ["__builtin__",n]
-
-
-pSequence a                 = TCon NoLoc (TC (builtinName "Sequence") [a])
-pMapping a b                = TCon NoLoc (TC (builtinName "Mapping") [a,b])
-pSet a                      = TCon NoLoc (TC (builtinName "Set") [a])
 
 old_builtins                = [
                                 (nm "record", schema [a] []

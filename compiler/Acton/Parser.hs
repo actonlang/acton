@@ -1189,16 +1189,12 @@ tscheme = addLoc $
 
 ctype :: Parser S.Type
 ctype    =  addLoc (
-            rword "int" *> return (S.TInt NoLoc)
-        <|> rword "float" *> return (S.TFloat NoLoc)
-        <|> rword "bool" *> return (S.TBool NoLoc)
-        <|> rword "str" *> return (S.TStr NoLoc)
-        <|> rword "None" *> return (S.TNone NoLoc)
+            rword "None" *> return (S.TNone NoLoc)
         <|> rword "Self" *> return (S.TSelf NoLoc)
         <|> S.TOpt NoLoc <$> (qmark *> ctype)
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
-                       return (maybe (S.PSet NoLoc t) (S.PMap NoLoc t) mbt))
+                       return (maybe (S.pSet t) (S.pMapping t) mbt))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
@@ -1210,16 +1206,13 @@ ctype    =  addLoc (
         <|> try (parens (S.TRecord NoLoc <$> kwdrow))
         <|> try (parens (S.TTuple NoLoc <$> posrow <* optional comma))
         <|> parens (return (S.TTuple NoLoc S.PosNil))
-        <|> try (brackets (S.PSeq NoLoc <$> ctype))
+        <|> try (brackets (S.pSequence <$> ctype))
         <|> try (S.TVar NoLoc <$> cvar)
         <|> S.TAt NoLoc <$> (symbol "@" *> ccon)
         <|> S.TCon NoLoc <$> ccon)
                 
 
 utype :: Parser S.UType
-utype    =  rword "int" *> return S.UInt
-        <|> rword "float" *> return S.UFloat
-        <|> rword "bool" *> return S.UBool
-        <|> rword "str" *> return S.UStr
-        <|> (\str -> S.UStrCon (init (tail str))) <$> shortString []
+utype    =  S.UCon <$> dotted_name
+        <|> (\str -> S.ULit (init (tail str))) <$> shortString []
 

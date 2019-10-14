@@ -185,7 +185,7 @@ data TVar       = TV Name deriving (Eq,Show) -- the Name is an uppercase letter,
 
 data TCon       = TC QName [Type] deriving (Eq,Show)
 
-data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Show)
+data UType      = UCon QName | ULit String deriving (Eq,Show)
 
 type EfxRow     = [Name] -- for now
 
@@ -202,15 +202,8 @@ data Type       = TSelf     { tloc :: SrcLoc }
                 | TFun      { tloc :: SrcLoc, ceffect :: EfxRow, posrow :: PosRow, kwdrow :: KwdRow, restype :: Type }
                 | TTuple    { tloc :: SrcLoc, posrow :: PosRow }
                 | TRecord   { tloc :: SrcLoc, kwdrow :: KwdRow }
-                | PSeq      { tloc :: SrcLoc, elemtype :: Type }
-                | PSet      { tloc :: SrcLoc, elemtype :: Type }
-                | PMap      { tloc :: SrcLoc, keytype :: Type, valtype :: Type }
                 | TOpt      { tloc :: SrcLoc, opttype :: Type }
                 | TUnion    { tloc :: SrcLoc, alts :: [UType] }
-                | TStr      { tloc :: SrcLoc }
-                | TInt      { tloc :: SrcLoc }
-                | TFloat    { tloc :: SrcLoc }
-                | TBool     { tloc :: SrcLoc }
                 | TNone     { tloc :: SrcLoc }
                 deriving (Show,Generic)
 
@@ -413,15 +406,8 @@ instance Eq Type where
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1         == TTuple _ p2          = p1 == p2
     TRecord _ r1        == TRecord _ r2         = r1 == r2
-    PSeq _ t1           == PSeq _ t2            = t1 == t2
-    PSet _ t1           == PSet _ t2            = t1 == t2
-    PMap _ k1 t1        == PMap _ k2 t2         = k1 == k2 && t1 == t2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
-    TStr _              == TStr _               = True
-    TInt _              == TInt _               = True
-    TFloat _            == TFloat _             = True
-    TBool _             == TBool _              = True
     TNone _             == TNone _              = True
     _                   == _                    = False
 
@@ -435,6 +421,28 @@ instance Read Name where
     readsPrec p str     = [ (Name NoLoc s, str') | (s,str') <- readsPrec p str ]
 
 
+-- Builtins -----------------
+
+builtinName n                       = qName ["__builtin__",n]
+
+nSequence                           = builtinName "Sequence"
+nMapping                            = builtinName "Mapping"
+nSet                                = builtinName "Set"
+
+nInt                                = builtinName "int"
+nFloat                              = builtinName "float"
+nBool                               = builtinName "bool"
+nStr                                = builtinName "str"
+
+pSequence a                         = TCon NoLoc (TC nSequence [a])
+pMapping a b                        = TCon NoLoc (TC nMapping [a,b])
+pSet a                              = TCon NoLoc (TC nSet [a])
+
+tInt                                = TCon NoLoc (TC nInt [])
+tFloat                              = TCon NoLoc (TC nFloat [])
+tBool                               = TCon NoLoc (TC nBool [])
+tStr                                = TCon NoLoc (TC nStr [])
+
 -- Helpers ------------------
 
 name                                = Name NoLoc
@@ -442,6 +450,7 @@ name                                = Name NoLoc
 qName (str:strs)                    = QName (name str) (map name strs)
 
 noQual n                            = QName n []
+
 
 importsOf (Module _ imps _)         = impsOf imps
   where 
@@ -499,11 +508,11 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","True","actor","and","as","assert",
+                                        "False","None","NotImplemented","Self","True","actor","and","as","assert",
                                         "async","await","break","class","continue","def","del","elif","else",
                                         "except","finally","for","from","global","if","import","in",
                                         "is","lambda","nonlocal","not","or","pass","raise","return","sync",
-                                        "try","var","while","with","yield","Self"
+                                        "try","var","while","with","yield"
                                       ]
 
 istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
@@ -908,6 +917,11 @@ instance Pretty TVar where
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
+    pretty (TC n [t])
+      | n == nSequence              = brackets (pretty t)
+      | n == nSet                   = braces (pretty t)
+    pretty (TC n [kt,vt])
+      | n == nMapping               = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
     
 instance Pretty TBind where
@@ -915,11 +929,8 @@ instance Pretty TBind where
     pretty (TBind v cs)             = pretty v <> parens (commaList cs)
     
 instance Pretty UType where
-    pretty UInt                     = text "int"
-    pretty UFloat                   = text "float"
-    pretty UBool                    = text "bool"
-    pretty UStr                     = text "str"
-    pretty (UStrCon str)            = text ('\'' : str ++"'")
+    pretty (UCon n)                 = pretty n
+    pretty (ULit str)               = text ('\'' : str ++"'")
 
 instance Pretty PosRow where
     pretty (PosRow t PosNil)        = pretty t
@@ -947,16 +958,9 @@ instance Pretty Type where
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (TTuple _ pos)           = parens (pretty pos)
     pretty (TRecord _ kw)           = parens (pretty kw)
-    pretty (PSeq _ t)               = brackets (pretty t)
-    pretty (PSet _ t)               = braces (pretty t)
-    pretty (PMap _ kt vt)           = braces (pretty kt <> colon <+> pretty vt)
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    pretty (TStr _)                 = text "str"
-    pretty (TInt _)                 = text "int"
-    pretty (TFloat _)               = text "float"
-    pretty (TBool _)                = text "bool"
     pretty (TNone _)                = text "None"
 
 
