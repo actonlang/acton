@@ -37,7 +37,7 @@ Statements:         S       ::=     E  |  P = E  |  D  |  return E  |  pass  |
                                     raise E  |  try S Z else S finally S  |
                                     S; S                                            associative, with unit 'pass'
 
-Definitions:        D       ::=     def x(F,K): S  |
+Declarations:       D       ::=     def x(F,K): S  |
                                     async def x(F,K): S  |  
                                     sync def x(F,K): S  |
                                     actor x(F,K): S  |  
