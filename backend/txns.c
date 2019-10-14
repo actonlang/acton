@@ -9,6 +9,7 @@
 #include <stdio.h>
 
 #define VERBOSE_TXNS 1
+#define VERBOSE_TXNS_PERSIST 0
 
 // DB queries:
 
@@ -444,7 +445,7 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 	// Txn needs to have received a commit version by this point:
 	assert(ts->version != NULL);
 
-#if (VERBOSE_TXNS > 0)
+#if (VERBOSE_TXNS_PERSIST > 0)
 		char uuid_str[37];
         uuid_unparse_lower(ts->txnid, uuid_str);
 		printf("BACKEND: Txn %s has %d writes\n", uuid_str, ts->write_set->no_items);
@@ -456,13 +457,13 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 
-#if (VERBOSE_TXNS > 0)
+#if (VERBOSE_TXNS_PERSIST > 0)
 				printf("BACKEND: Txn %s attempting to persist write of type %d\n", uuid_str, tw->query_type);
 #endif
 
 			res = persist_write(tw, ts->version, db, fastrandstate);
 
-#if (VERBOSE_TXNS > 0)
+#if (VERBOSE_TXNS_PERSIST > 0)
 				printf("BACKEND: Txn %s successfully persisted write of type %d\n", uuid_str, tw->query_type);
 #endif
 
@@ -485,15 +486,17 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 		return -2; // No such txn
 
 #if (VERBOSE_TXNS > 0)
-		char uuid_str[37];
-        uuid_unparse_lower(*txnid, uuid_str);
-		printf("BACKEND: Attempting to validate txn %s\n", uuid_str);
+	char uuid_str[37];
+	uuid_unparse_lower(*txnid, uuid_str);
+#endif
+#if (VERBOSE_TXNS > 1)
+	printf("BACKEND: Attempting to validate txn %s\n", uuid_str);
 #endif
 
 	int res = validate_txn(txnid, version, db);
 
-#if (VERBOSE_TXNS > 0)
-		printf("BACKEND: validate txn %s returned %d\n", uuid_str, res);
+#if (VERBOSE_TXNS > 1)
+	printf("BACKEND: validate txn %s returned %d\n", uuid_str, res);
 #endif
 
 	if(res == VAL_STATUS_COMMIT)
@@ -501,13 +504,13 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 		res = persist_txn(ts, db, fastrandstate);
 
 #if (VERBOSE_TXNS > 0)
-			printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
+		printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
 #endif
 
 		res = close_txn(txnid, db);
 
-#if (VERBOSE_TXNS > 0)
-			printf("BACKEND: close txn %s returned %d\n", uuid_str, res);
+#if (VERBOSE_TXNS > 1)
+		printf("BACKEND: close txn %s returned %d\n", uuid_str, res);
 #endif
 	}
 	else if(res == VAL_STATUS_ABORT)
@@ -515,7 +518,7 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 		res = abort_txn(txnid, db);
 
 #if (VERBOSE_TXNS > 0)
-			printf("BACKEND: abort txn %s returned %d\n", uuid_str, res);
+		printf("BACKEND: abort txn %s returned %d\n", uuid_str, res);
 #endif
 	}
 	else

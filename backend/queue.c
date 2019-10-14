@@ -15,6 +15,7 @@
 #define MAX(x, y) (((x)>(y))?(x):(y))
 
 #define VERBOSITY 1
+#define LOCK_VERBOSITY 0
 
 db_table_t * get_table_by_key(WORD table_key, db_t * db)
 {
@@ -121,7 +122,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 
 			ret = pthread_mutex_lock(cs->callback->lock);
 
-#if (VERBOSITY > 0)
+#if (LOCK_VERBOSITY > 0)
 			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
@@ -129,7 +130,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 			cs->callback->callback(qca);
 			ret = pthread_mutex_unlock(cs->callback->lock);
 
-#if (VERBOSITY > 0)
+#if (LOCK_VERBOSITY > 0)
 			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 

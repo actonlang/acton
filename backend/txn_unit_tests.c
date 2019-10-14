@@ -29,6 +29,7 @@ WORD queue_table_key = (WORD) 1;
 int rand_sleep = 1;
 
 int debug = 1;
+int debug_lock = 0;
 
 
 typedef struct actor_collection_item {
@@ -293,14 +294,14 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 	for(crt_row = start_row; processed<entries_read; crt_row = NEXT(crt_row), processed++)
 	{
 		db_row_t * db_row = (db_row_t *) crt_row->value;
-		print_long_row(db_row);
+//		print_long_row(db_row);
 
 		long queue_entry_id = (long) db_row->key;
 		assert(db_row->no_columns == 2);
 		long sender_id = (long) db_row->column_array[0];
 		int counter_val = (int) db_row->column_array[1];
 
-		printf("Read queue entry: (id=%ld, snd=%ld, val=%d)\n", queue_entry_id, sender_id, counter_val);
+		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d)\n", (long) ca->consumer_id, queue_entry_id, sender_id, counter_val);
 
 //					skiplist_search(ca->rcv_counters, COLLECTION_ID_0, (WORD) entries_read);
 
@@ -329,7 +330,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		assert(ret == 0);
 
 		if(debug)
-			printf("ACTOR %ld: chekpointed local state in txn.\n", (long) ca->consumer_id);
+			printf("ACTOR %ld: Chekpointed local state in txn.\n", (long) ca->consumer_id);
 
 		// Send outgoing msgs in txn:
 		ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
@@ -337,7 +338,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		assert(ret == 0);
 
 		if(debug)
-			printf("ACTOR %ld: sent %d outgoing msgs in txn.\n", (long) ca->consumer_id, *msgs_sent);
+			printf("ACTOR %ld: Sent %d outgoing msgs in txn.\n", (long) ca->consumer_id, *msgs_sent);
 	}
 
 	return ret;
@@ -437,7 +438,7 @@ void * actor(void * cargs)
 
 		ret = pthread_mutex_lock(qc->lock);
 
-		if(debug)
+		if(debug_lock)
 			printf("ACTOR %ld: Locked consumer lock %p/%p, status=%d\n", (long) ca->consumer_id, qc, qc->lock, ret);
 
 		struct timespec ts;
@@ -447,7 +448,7 @@ void * actor(void * cargs)
 
 		ret = pthread_mutex_unlock(qc->lock);
 
-		if(debug)
+		if(debug_lock)
 			printf("ACTOR %ld: Unlocked consumer lock %p/%p, status=%d\n", (long) ca->consumer_id, qc, qc->lock, ret);
 
 		if(ret == 0)
