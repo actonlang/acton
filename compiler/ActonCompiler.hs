@@ -76,7 +76,7 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
 
 treatOneFile args
                 = do paths <- findPaths args
-                     let qn = qName (modpath paths)
+                     let qn = A.qName (modpath paths)
                      (case ext paths of
                         ".act"   -> (do (src,tree) <- Acton.Parser.parseModule qn (srcFile paths)
                                         iff (parse args) $ dump "parse" (Pretty.print tree)
@@ -91,7 +91,7 @@ treatOneFile args
                                      then do let yangFile = srcFile paths
                                                  yangbody = last (modpath paths)
                                              m <- Yang.Parser.parseFile yangFile
-                                             let task = YangTask (qName ["yang",yangbody]) m
+                                             let task = YangTask (A.qName ["yang",yangbody]) m
                                              chaseImportsAndCompile args paths task
                                      else YangCompiler.compileYangFile qn (mkYangArgs args)
 -}
@@ -132,10 +132,6 @@ data Paths      = Paths {projSrcRoot :: FilePath,
 -- Thus, source filename is joinPath (projSrcRoot:modpath) ++ ext and outfiles will be in joinPath (projSysRoot:modpath)
 srcFile paths           = joinPath (projSrcRoot paths:modpath paths) ++ ext paths
 outBase paths           = joinPath (projSysRoot paths:modpath paths)
-
-qName :: [String] ->  A.QName 
-qName (str:strs)        = A.QName (mkN str) (map mkN strs)
-   where mkN str        = A.Name undefined str
 
 mPath ::   A.QName -> [String]
 mPath (A.QName n ns)
@@ -230,7 +226,7 @@ data CompileTask        = ActonTask  {name :: A.QName, src :: String, atree:: A.
 
 importsOf :: CompileTask -> [A.QName]
 importsOf t@ActonTask{} = A.importsOf (atree t)
---importsOf t@YangTask{}  = map ((\str -> qName ["yang",str]) . Y.istr . Y.ident) is
+--importsOf t@YangTask{}  = map ((\str -> A.qName ["yang",str]) . Y.istr . Y.ident) is
 --   where m              = ytree t
 --         is             = Y.importsOf m ++ Y.includesOf m 
 importsOf PythonTask{}  = []
@@ -242,7 +238,7 @@ chaseImportsAndCompile args paths task
                                 (as,cs)        = Data.List.partition isAcyclic sccs
                             if null cs
                              then do foldM (doTask args paths) ([],[])
-                                           ([PythonTask (qName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
+                                           ([PythonTask (A.qName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure

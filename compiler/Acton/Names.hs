@@ -144,7 +144,7 @@ instance Vars Decl where
     free (Actor _ n q ps annot b)   = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
     free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound b)
     free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound b)
-    free (Extension _ n q cs b)     = (free cs ++ free b) \\ (n : bound b)
+    free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ bound b
     free (Decorator _ qn es s)      = free qn ++ free es ++ free s
 
     bound (Def _ n _ _ _ _ _)       = [n]
@@ -316,7 +316,7 @@ instance Vars TVar where
     free (TV v)                     = []
 
 instance Vars TCon where
-    free (TC n ts)                  = n : free ts
+    free (TC n ts)                  = free n ++ free ts
 
 instance Vars TBind where
     free (TBind v cs)               = free cs
@@ -449,7 +449,7 @@ instance Subst InfoTag where
     tyvars (INS _ t)                = tyvars t
 {-}
 instance Subst TCon where
-    subst s (TCon n ts)             = TCon $ subst s n $ subst s ts
+    subst s (TC n ts)               = TC n $ subst s ts
 
 instance Subst TBind where
     subst s (TBind v cs)            = TBind $ subst s v $ subst s cs

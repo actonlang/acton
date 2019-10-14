@@ -26,7 +26,7 @@ parseModule qn file = do
         Left err -> Control.Exception.throw err
         Right (i,s) -> return (contents, S.Module qn i s)
 
-parseTest file = snd (unsafePerformIO (parseModule (S.mkqname "test") file))
+parseTest file = snd (unsafePerformIO (parseModule (S.qName ["test"]) file))
 
 parseTestStr p str = case runParser (St.evalStateT p []) "" str of
                        Left err -> putStrLn (errorBundlePretty err)
@@ -1063,14 +1063,14 @@ actordef = addLoc $ do
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 
-classdef    = classdefGen "class" S.Class
-protodef    = classdefGen "protocol" S.Protocol
-extdef      = classdefGen "extension" S.Extension
+classdef    = classdefGen "class" name S.Class
+protodef    = classdefGen "protocol" name S.Protocol
+extdef      = classdefGen "extension" dotted_name S.Extension
 
-classdefGen k con = addLoc $ do
+classdefGen k pname con = addLoc $ do
                 assertNotData
                 (s,_) <- withPos (rword k)
-                nm <- name
+                nm <- pname
                 q <- optbinds
                 cs <- optbounds
                 con NoLoc nm q cs <$> suite CLASS s
@@ -1160,7 +1160,7 @@ funrows  = try (do mbv <- (star *> optional cvar); comma; k <- kwrow; return (S.
            try (do optional comma; return (S.PosNil, S.KwNil))                                        -- just an optional comma
 
 ccon :: Parser S.TCon
-ccon =  do n <- name
+ccon =  do n <- dotted_name
            args <- optional (brackets (do t <- ctype
                                           ts <- commaList ctype
                                           return (t:ts)))

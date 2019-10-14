@@ -48,7 +48,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], par
                 | Actor         { dloc::SrcLoc, dname:: Name, qual::[TBind], params::Params, ann::(Maybe Type), dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 
@@ -104,8 +104,6 @@ nloc Internal{} = NoLoc
 
 nstr (Name _ s) = s
 nstr (Internal i s) = show i ++ "____" ++ s
-
-mkqname str     = QName (Name NoLoc str) []
 
 data QName      = QName Name [Name] deriving (Show,Eq)
 data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
@@ -185,7 +183,7 @@ data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show)
 
 data TVar       = TV Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC Name [Type] deriving (Eq,Show)
+data TCon       = TC QName [Type] deriving (Eq,Show)
 
 data UType      = UInt | UFloat | UBool | UStr | UStrCon String deriving (Eq,Show)
 
@@ -220,6 +218,8 @@ instance Data.Binary.Binary OType
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary Qonstraint
 instance Data.Binary.Binary Binary
+
+tvarSupply      = [ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
 
 
 -- SrcInfo ------------------
@@ -436,6 +436,12 @@ instance Read Name where
 
 
 -- Helpers ------------------
+
+name                                = Name NoLoc
+
+qName (str:strs)                    = QName (name str) (map name strs)
+
+noQual n                            = QName n []
 
 importsOf (Module _ imps _)         = impsOf imps
   where 
