@@ -350,25 +350,28 @@ top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
 -- decorators: decorator+
 -- decorated: decorators (classdef | funcdef)
 
-decorator, decorators :: Parser (S.Decl -> S.Decl)
-decorator = (do
+decoration :: Parser S.Decoration
+decoration = return S.ClassAttr <* rword "classattr"    
+         <|> return S.InstAttr <* rword "instattr" 
+         <|> return S.StaticMethod <* rword "staticmethod" 
+         <|> return S.ClassMethod <* rword "classmethod" 
+         <|> return S.InstMethod <* rword "instmethod"
+         <?> "decorator"
+
+decorator, decorators :: (S.Decoration -> SrcLoc -> a -> a) -> Parser (a -> a)
+decorator dec = (do
        (l,f) <- withLoc $ do 
             assertNotData
             symbol "@"
-            nm    <- dotted_name
-            mas   <- optional (parens (optional arglist))
+            nm <- decoration
             newline1
-            return $ S.Decorator NoLoc nm (maybe [] (maybe [] id) mas)
-       return (\d -> (f d){S.dloc = l}))
+            return $ dec nm
+       return (\d -> f l d))
    <?> "decorator"
- 
-decorators = do
-       ds <- some decorator
-       return (\st -> foldr ($) st ds)
 
-decorated :: Parser S.Decl
-decorated = decorators <*> (classdef <|> funcdef)
-         <?> "classdef or funcdef (only function and class definitions can be decorated)"
+decorators dec = do
+       ds <- many (decorator dec)
+       return (\st -> foldr ($) st ds)
 
 -- async_funcdef: ASYNC funcdef
 -- funcdef: modifier 'def' NAME parameters ['->' test] ':' suite
@@ -547,7 +550,7 @@ expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
             try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
-        <|> try (uncurry (S.TypeSig NoLoc) <$> tsig)
+        <|> try (decorators S.decorateSigs <*> (uncurry (S.TypeSig NoLoc) <$> tsig))
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
 
 var_stmt :: Parser S.Stmt
@@ -718,7 +721,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> decorated
+decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef)
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 

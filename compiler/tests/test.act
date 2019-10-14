@@ -61,7 +61,10 @@ x2 : (x : (y : float,z : bool),**A,)
 x3 : [A]                                                # sequence that also could be the start of a qualified type
 
 
+@classattr
+x : int
 
+@staticmethod
 def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
     pass
 

@@ -52,6 +52,13 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], par
                 | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
                 deriving (Show)
 
+data Decoration = ClassAttr
+                | InstAttr
+                | StaticMethod
+                | ClassMethod
+                | InstMethod
+                deriving (Eq,Show)
+    
 data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Int           { eloc::SrcLoc, ival::Integer, lexeme::String }
                 | Float         { eloc::SrcLoc, dval::Double, lexeme::String }
@@ -451,7 +458,6 @@ qName (str:strs)                    = QName (name str) (map name strs)
 
 noQual n                            = QName n []
 
-
 importsOf (Module _ imps _)         = impsOf imps
   where 
     impsOf []                       = []
@@ -463,6 +469,12 @@ importsOf (Module _ imps _)         = impsOf imps
 
     mRef (ModRef (0,Just qn))       = qn
     mRef _                          = error "dot prefix in name of import modules not supported"
+
+decorateDecl                        :: Decoration -> SrcLoc -> Decl -> Decl
+decorateDecl ds l d                 = d
+
+decorateSigs                        :: Decoration -> SrcLoc -> Stmt -> Stmt
+decorateSigs ds l s                 = s
 
 unop op e                           = UnOp l0 (Op l0 op) e
 binop e1 op e2                      = BinOp l0 e1 (Op l0 op) e2
@@ -584,6 +596,13 @@ instance Pretty Decl where
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
+
+instance Pretty Decoration where
+    pretty ClassAttr                = text "@classattr"
+    pretty InstAttr                 = text "@instattr"
+    pretty StaticMethod             = text "@staticmethod"
+    pretty ClassMethod              = text "@classmethod"
+    pretty InstMethod               = text "@instmethod"
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
