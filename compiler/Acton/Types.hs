@@ -18,7 +18,7 @@ import Acton.Env
 import Acton.Constraints
 import qualified InterfaceFiles
         
-reconstruct                             :: String -> TEnv -> Module -> IO (TEnv, SrcInfo)
+reconstruct                             :: String -> OTEnv -> Module -> IO (OTEnv, SrcInfo)
 reconstruct outname ienv modul
   | chkRedef suite                      = let (te,inf) = runTypeM $ (,) <$> infTop env1 suite <*> dumped
                                               tenv     = [ (n,t) | (n,t) <- te, notemp n ]
@@ -27,7 +27,7 @@ reconstruct outname ienv modul
                                               InterfaceFiles.writeFile (outname ++ ".ty") t
                                               return (tenv, inf)
   where Module _ _ suite                = modul
-        env1                            = reserve (bound suite) $ define ienv $ define builtins emptyEnv        
+        env1                            = reserve (bound suite) $ define ienv $ define old_builtins emptyEnv
 
 typeError                               = solveError
 
@@ -36,7 +36,6 @@ chkRedef ss                             = True -- TBD
 
 chkCycles (Class _ n q cs b : ds)       = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Protocol _ n q cs b : ds)    = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
-chkCycles (Extension _ n q cs b : ds)   = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
 chkCycles (Decorator _ qn args d : ds)  = noforward qn n ds && noforward args n ds && chkCycles (d:ds)
   where n                               = declname d
 chkCycles (d : ds)                      = chkCycles ds
@@ -72,16 +71,16 @@ infTop env ss                           = do pushFX ONil
                                              mapsubst te
 
 class Infer a where
-    infer                               :: Env -> a -> TypeM OType
+    infer                               :: OEnv -> a -> TypeM OType
 
 class InfEnv a where
-    infEnv                              :: Env -> a -> TypeM TEnv
+    infEnv                              :: OEnv -> a -> TypeM OTEnv
 
 class InfEnvT a where
-    infEnvT                             :: Env -> a -> TypeM (TEnv,OType)
+    infEnvT                             :: OEnv -> a -> TypeM (OTEnv,OType)
 
 class InfData a where
-    infData                             :: Env -> a -> TypeM TEnv
+    infData                             :: OEnv -> a -> TypeM OTEnv
 
 
 generalize tvs cs t                     = OSchema (unOVar $ rng s) (subst s cs) (subst s t)

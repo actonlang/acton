@@ -27,10 +27,40 @@ y6 : (*)                                                 # open tuple
 y7 : (*A)                                                # open tuple
 y8 : ()                                                  # empty tuple (should count as empty struct as well?)
 
-f0 : (x:int, y:int) -> int                               # function without single star
-f1 : (int, y:int) -> int                                 # function with positional and keyword parameters and no star
-f3 : [A]                                                 # sequence that also could be the start of a qualified type
-f4 : [A] => (Self, y:Self) -> [A]                        # functiona with Self and [A] disambiguation!
+f0 : () -> int
+f1 : (int) -> bool
+f2 : (int,) -> int
+f3 : (int,bool) -> int
+f4 : (int,bool,) -> int
+f5 : (int,bool,*) -> int
+f6 : (int,bool,*,) -> int
+f7 : (int,bool,*A) -> int
+f8 : (int,bool,*A,) -> int
+f9 : (*) -> int
+f10 : (*,) -> int
+f11 : (*A) -> int
+f12 : (*A,) -> int
+
+f13 : (x : float) -> int
+f14 : (x : float,) -> int
+f15 : (x : float, y : str) -> int
+f16 : (x : float, y : str, **) -> int
+f17 : (x : float, y : str, **A) -> int
+f18 : (x : float, y : str,**,) -> int
+f19 : (x : float, y : str,**A,) -> int
+
+f20 : (int, x : float) -> int
+f21 : (int, *A,x:float, **B,) -> int
+f22 : (,) -> int                                        # Should this really be allowed??
+
+f23 : [A] => (Self, y:Self) -> [A]                      # functiona with Self and [A] disambiguation!
+
+x0 : (int,bool,*A,)
+x1 : (x : float)
+x2 : (x : (y : float,z : bool),**A,)
+x3 : [A]                                                # sequence that also could be the start of a qualified type
+
+
 
 def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
     pass
@@ -39,8 +69,6 @@ actor Test [T](v0:T):
     def m(x):
         pass
 
-x = 1                                                    # Comment out, and f below will be parsed as a method of previous actor!!
-                                                         # (ERROR!)
 def f(z):
     pass
 

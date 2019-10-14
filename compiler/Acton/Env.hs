@@ -18,9 +18,23 @@ mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
   where Module _ imps _     = modul
 
 
-type TEnv                   = [(Name,OType)]
+type OTEnv                  = [(Name,OType)]
 
-instance Pretty TEnv where
+type TEnv                   = [(Name,TSchema)]
+
+type Env                    = [(QName,NameInfo)]
+
+data NameInfo               = NVar    (Maybe TSchema)
+                            | NState  (Maybe Type)
+                            | NClass  [TBind] [TCon] TEnv
+                            | NProto  [TBind] [TCon] TEnv
+                            | NExt    [TBind] [TCon] TEnv
+                            | NTVar   [TCon]
+                            | NModule Env
+                            deriving (Show)
+
+
+instance Pretty OTEnv where
     pretty tenv             = vcat (map pr tenv)
       where pr (n,t)        = pretty n <+> colon <+> pretty t
 
@@ -28,14 +42,14 @@ restrict vs                 = filter ((`elem` vs) . fst)
 
 prune vs                    = filter ((`notElem` vs) . fst)
 
-data Env                    = Env { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType } 
+data OEnv                   = OEnv { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType }
                             deriving (Eq,Show)
-instance Subst Env where
+instance Subst OEnv where
     subst s env             = env{ venv = subst s (venv env), ret = subst s (ret env) }
     tyvars env              = tyvars (venv env)++ tyvars (ret env)
     
 
-emptyEnv                    = Env { venv = [], stvars = [], ret = Nothing }
+emptyEnv                    = OEnv { venv = [], stvars = [], ret = Nothing }
 
 reserve vs env              = env { venv = [ (v, Nothing) | v <- vs ] ++ venv env }
 
@@ -57,7 +71,23 @@ getReturn env               = fromJust $ ret env
 
 ----------------------------
 
+builtins                    :: Env
 builtins                    = [ 
+                                (builtinName "Sequence", NProto [a] [] []),
+                                (builtinName "Mapping",  NProto [a,b] [] []),
+                                (builtinName "Set",      NProto [a] [] [])
+                              ]
+  where a:b:c:_             = [ TBind (TV n) [] | n <- tvarSupply ]
+        ta:tb:tc:_          = [ TVar NoLoc (TV n) | n <- tvarSupply ]
+
+builtinName n               = qName ["__builtin__",n]
+
+
+pSequence a                 = TCon NoLoc (TC (builtinName "Sequence") [a])
+pMapping a b                = TCon NoLoc (TC (builtinName "Mapping") [a,b])
+pSet a                      = TCon NoLoc (TC (builtinName "Set") [a])
+
+old_builtins                = [
                                 (nm "record", schema [a] []
                                             (OFun ONil a (ORecord a))),
                                 (nm "merge", schema [a,b,c] []
@@ -210,7 +240,7 @@ blend te ((n,t):itms)
         cat (OKwd n t r1) r2    = OKwd n t (cat r1 r2)
         cat (OStar2 t r1) r2    = OStar2 t (cat r1 r2)
 
-importModule :: (FilePath,FilePath) -> [(QName,OType)] -> TEnv -> Import -> IO ([(QName,OType)],TEnv)
+importModule :: (FilePath,FilePath) -> [(QName,OType)] -> OTEnv -> Import -> IO ([(QName,OType)],OTEnv)
 importModule impPaths ifaces tenv s@Import{}
                                 = modItems ifaces tenv (modules s)
   where modItems ifaces tenv []   = return (ifaces,tenv)
