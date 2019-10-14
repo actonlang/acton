@@ -1567,6 +1567,40 @@ Mapping_frozendict_str = Mapping_frozendict(Hashable_str)
 
 -----------------------------------------------------------------
 
+extension IO (VarMonad[MutableVar])
+extension ST[S] (VarMonad[MutableVar])
+extension State[S] (StateMonad[S])
+extension Env[E] (ReaderMonad[E])
+extension NetCircuit (Hard[NetSignal])
+extension SimCircuit (Hard[SimSignal])
+extension ListSet[A(Eq)] (Collection[A])
+extension TreeSet[A(Ord)] (Collection[A])
+extension A (Iso[A])            .........
+extension Foo (HasFoo[int])
+extension Sequence[A(Eq)] (Eq)
+extension tuple[A(Eq),B] (Foo)
+extension Sequence[A(MyShow)] (MyShow)
+extension Sequence[Char] (MyShow)
+extension A(Monad) (Functor)   .........
+extension StateT[S] (Monad)
+extension T(MonadT)[M(StateMonad[S])] (StateMonad[S])
+extension tuple[A(Eq),B(Eq)] (Eq)
+extension [A(Eq),B(Eq)] => tuple[A,B] (Eq)
+extension Tree[int] (Foo)
+extension Tree[bool] (Foo)
+extension F(Liftable)[A(Num)] (Num)
+extension Ratio[A(Num)] (Num)
+extension tuple[float,float] (Movable)
+extension T[int,A] (D)
+extension T[bool,A] (D)
+extension tuple[A,A] (Foo)
+extension [Sequence[Sequence[A]](C)] => Sequence[A] (C)  .........
+extension T[M](Monad) (Foo) .........
+extension [Sequence[Tree[A]](Eq)] => Tree[A(Eq)] (Eq) .........
+
+
+-----------------------------------------------------------------
+
 extension Mapping[A, B(Eq)] (Eq):
     def __eq__(a: Self, b: Self):
         if len(a) != len(b):
