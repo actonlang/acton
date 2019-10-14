@@ -341,6 +341,23 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 	return ret;
 }
 
+/*
+queue_callback * get_queue_callback(void (*callback)(queue_callback_args *))
+{
+	queue_callback * qc = (queue_callback *) malloc(sizeof(queue_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(queue_callback));
+	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(queue_callback) + sizeof(pthread_mutex_t));
+	pthread_mutex_init(&(qc->lock), NULL);
+	pthread_cond_init(&(qc->signal), NULL);
+	qc->callback = callback;
+	return qc;
+}
+
+void free_queue_callback(queue_callback * qc)
+{
+	free(qc);
+}
+*/
 
 void * actor(void * cargs)
 {
@@ -351,20 +368,22 @@ void * actor(void * cargs)
 
 	actor_args * ca = (actor_args *) cargs;
 
+	queue_callback * qc = get_queue_callback(consumer_callback);
+
+/*
 	pthread_cond_t signal = PTHREAD_COND_INITIALIZER;
 	pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-
-	GET_RANDSEED(&seed, 0); // thread_id
-
-	queue_callback qc;
 	qc.lock = &lock;
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
+*/
+
+	GET_RANDSEED(&seed, 0); // thread_id
 
 	increment_vc(ca->vc, (int) ca->consumer_id);
 
 	long prev_read_head = -1, prev_consume_head = -1;
-	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, &qc,
+	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, qc,
 							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
 	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
 	if(ret)
@@ -437,11 +456,11 @@ void * actor(void * cargs)
 		if(debug)
 			printf("ACTOR %ld: Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (long) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
 
-		pthread_mutex_lock(&lock);
+		pthread_mutex_lock(qc->lock);
 		struct timespec ts;
 		clock_gettime(CLOCK_REALTIME, &ts);
 		ts.tv_sec += 3;
-		pthread_cond_timedwait(&signal, &lock, &ts);
+		pthread_cond_timedwait(qc->signal, qc->lock, &ts);
 		// Received queue notification, reading:
 
 		read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -489,7 +508,7 @@ void * actor(void * cargs)
 					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->no_enqueues);
 		}
 
-		pthread_mutex_unlock(&lock);
+		pthread_mutex_unlock(qc->lock);
 
 		if(rand_sleep)
 		{
@@ -500,6 +519,8 @@ void * actor(void * cargs)
 
 	ret = unsubscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, 1, ca->db);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", ret==0?"OK":"FAILED", ret);
+
+	free_queue_callback(qc);
 
 	return (void *) ret;
 }

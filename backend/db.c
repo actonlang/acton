@@ -1025,6 +1025,23 @@ int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
 	return table_delete_by_index(index_key, idx_idx, table);
 }
 
+queue_callback * get_queue_callback(void (*callback)(queue_callback_args *))
+{
+	queue_callback * qc = (queue_callback *) malloc(sizeof(queue_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(queue_callback));
+	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(queue_callback) + sizeof(pthread_mutex_t));
+	pthread_mutex_init(qc->lock, NULL);
+	pthread_cond_init(qc->signal, NULL);
+	qc->callback = callback;
+	return qc;
+}
+
+void free_queue_callback(queue_callback * qc)
+{
+	free(qc);
+}
+
+
 
 
 

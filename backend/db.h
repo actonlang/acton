@@ -182,4 +182,7 @@ int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * versi
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
 										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 
+queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
+void free_queue_callback(queue_callback * qc);
+
 #endif /* BACKEND_DB_H_ */
