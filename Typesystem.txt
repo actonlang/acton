@@ -123,7 +123,7 @@ eNvironments:       N       ::=     x:T  |  z:t  |  x:#  |  z:#  |  c:[q]=>I  | 
 ***** Judgments ****************************************************************************************************************************************************
 
 
-N |- D : N'                 Definition D generates bindings N' in environment N
+N |- D : N'                 Declaration D generates bindings N' in environment N
 
 N |- t ~ I                  Type t is defined as I in environment N
 
