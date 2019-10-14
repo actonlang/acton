@@ -8,7 +8,7 @@
 
 #include <stdio.h>
 
-int verbose = 1;
+#define VERBOSE_TXNS 1
 
 // DB queries:
 
@@ -241,9 +241,10 @@ int is_read_invalidated(txn_read * tr, txn_state * rts, db_t * db)
 
 				if(rw_conflict(tr, tw, 0))
 				{
-					if(verbose)
+#if (VERBOSE_TXNS > 0)
 						printf("Invalidating txn due to rw conflict\n");
-					return 1;
+#endif
+						return 1;
 				}
 			}
 		}
@@ -311,8 +312,9 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 
 //				if(ww_conflict(tw, tw2, 0))
 //				{
-					if(verbose)
+#if (VERBOSE_TXNS > 0)
 						printf("Invalidating txn due to ww conflict\n");
+#endif
 					return 1;
 //				}
 			}
@@ -437,17 +439,16 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 
 int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 {
-    char uuid_str[37];
 	int res = 0;
 
 	// Txn needs to have received a commit version by this point:
 	assert(ts->version != NULL);
 
-	if(verbose)
-	{
+#if (VERBOSE_TXNS > 0)
+		char uuid_str[37];
         uuid_unparse_lower(ts->txnid, uuid_str);
 		printf("BACKEND: Txn %s has %d writes\n", uuid_str, ts->write_set->no_items);
-	}
+#endif
 
 	for(snode_t * write_op_n=HEAD(ts->write_set); write_op_n!=NULL; write_op_n=NEXT(write_op_n))
 	{
@@ -455,17 +456,15 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 		{
 			txn_write * tw = (txn_write *) write_op_n->value;
 
-			if(verbose)
-			{
+#if (VERBOSE_TXNS > 0)
 				printf("BACKEND: Txn %s attempting to persist write of type %d\n", uuid_str, tw->query_type);
-			}
+#endif
 
 			res = persist_write(tw, ts->version, db, fastrandstate);
 
-			if(verbose)
-			{
+#if (VERBOSE_TXNS > 0)
 				printf("BACKEND: Txn %s successfully persisted write of type %d\n", uuid_str, tw->query_type);
-			}
+#endif
 
 			assert (res == 0);
 		}
@@ -481,49 +480,43 @@ int abort_txn(uuid_t * txnid, db_t * db)
 
 int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int * fastrandstate)
 {
-    char uuid_str[37];
-
     txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
-	if(verbose)
-	{
+#if (VERBOSE_TXNS > 0)
+		char uuid_str[37];
         uuid_unparse_lower(*txnid, uuid_str);
 		printf("BACKEND: Attempting to validate txn %s\n", uuid_str);
-	}
+#endif
 
 	int res = validate_txn(txnid, version, db);
 
-	if(verbose)
-	{
+#if (VERBOSE_TXNS > 0)
 		printf("BACKEND: validate txn %s returned %d\n", uuid_str, res);
-	}
+#endif
 
 	if(res == VAL_STATUS_COMMIT)
 	{
 		res = persist_txn(ts, db, fastrandstate);
 
-		if(verbose)
-		{
+#if (VERBOSE_TXNS > 0)
 			printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
-		}
+#endif
 
 		res = close_txn(txnid, db);
 
-		if(verbose)
-		{
+#if (VERBOSE_TXNS > 0)
 			printf("BACKEND: close txn %s returned %d\n", uuid_str, res);
-		}
+#endif
 	}
 	else if(res == VAL_STATUS_ABORT)
 	{
 		res = abort_txn(txnid, db);
 
-		if(verbose)
-		{
+#if (VERBOSE_TXNS > 0)
 			printf("BACKEND: abort txn %s returned %d\n", uuid_str, res);
-		}
+#endif
 	}
 	else
 	{

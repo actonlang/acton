@@ -115,7 +115,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 			qca->status = QUEUE_NOTIF_ENQUEUED;
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Attempting to notify subscriber %ld\n", (long) qca->consumer_id);
+			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal);
 #endif
 
 			pthread_mutex_lock(cs->callback->lock);

@@ -504,8 +504,8 @@ void * actor(void * cargs)
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
 
-			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, no_enqueues=%d\n",
-					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->no_enqueues);
+			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, successful_enqueues=%d, private_read_head=%ld, no_enqueues=%d\n",
+					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->successful_enqueues, ca->read_head, ca->no_enqueues);
 		}
 
 		pthread_mutex_unlock(qc->lock);
@@ -583,13 +583,13 @@ int main(int argc, char **argv) {
 	for(int i=0;i<no_actors;i++)
 	{
 		// Test enqueues:
-		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues+2?"OK":"FAILED", ret);
 
 		// Test dequeues:
 		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs[i].successful_dequeues==cargs[i].no_enqueues?"OK":"FAILED", ret);
 
 		// Test read head sanity:
-		printf("Test %s (%d) - %s (%d)\n", "read_head", i, ((int) cargs[i].read_head)==(cargs[i].no_enqueues - 1)?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "read_head", i, ((int) cargs[i].read_head)==(cargs[i].successful_dequeues - 1)?"OK":"FAILED", ret);
 
 		// Test consumes:
 		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs[i].successful_consumes==cargs[i].no_enqueues?"OK":"FAILED", ret);
