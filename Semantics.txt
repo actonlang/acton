@@ -87,14 +87,14 @@ B  |-  L  |  E              -->     L  |  E'                                    
 B  |-  L,z=V  |  z          -->     L,z=V  |  V
 
 B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            if  (B').x --> V
-B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  CLOS(B2,y=l;F,K):S           if  x # B' and B |- c.x ==> CLOS(B2;y,F,K):S and @instm(x,c)
+B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  CLOS(B2,y=l;F,K):S           if  x # B' and B |- c.x ==> @instmethod CLOS(B2;y,F,K):S
 B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            if  x # B' and B |- c.x ==> V otherwise
 
-B  |-  L  |  c(O,B')        -->     L,l=(c):.  |  do l._init_(O,B'); return l   if  B = B1,c=CLASS(d):B2  and  not @immutable c
+B  |-  L  |  c(O,B')        -->     L,l=(c):.  |  do l._init_(O,B'); return l   if  B = B1,c=CLASS(d):B2  and  N |- c(object)
 
 B  |-  L,l=(c):B'  |  isinstance(l,d)    
                             -->     L,l=(c):B'  |  True                         if  B |- c(d)
-                            -->     L,l=(c):B'  |  False                        if  B |- not c(d)
+                            -->     L,l=(c):B'  |  False                        if  not B |- c(d)
 
 
 ***** B |- E --> E' ****************
@@ -106,13 +106,13 @@ B,x=V  |-  x                -->     V
 B  |-  lambda F,K: E        -->     CLOS(B;F,K): return E
 
 B  |-  ((c):B').x           -->     V                                           if  (B').x --> V
-B  |-  ((c):B').x           -->     CLOS(B2,y=((c):B');F,K):S                   if  x # B' and B |- c.x ==> CLOS(B2;y,F,K):S and @instm(x,c)
+B  |-  ((c):B').x           -->     CLOS(B2,y=((c):B');F,K):S                   if  x # B' and B |- c.x ==> @instmethod CLOS(B2;y,F,K):S
 B  |-  ((c):B').x           -->     V                                           if  x # B' and B |- c.x ==> V otherwise
 
-B  |-  c.x                  -->     CLOS(B',y=c;F,K):S                          if  B |- c.x ==> CLOS(B';y,F,K):S and @classm(x,c)
+B  |-  c.x                  -->     CLOS(B',y=c;F,K):S                          if  B |- c.x ==> @classmethod CLOS(B';y,F,K):S
 B  |-  c.x                  -->     W                                           if  B |- c.x ==> W otherwise
 
-B  |-  c(.,B')              -->     (c):B'                                      if  B = B1,c=CLASS(d):B2  and  @immutable c
+B  |-  c(.,B')              -->     (c):B'                                      if  B = B1,c=CLASS(d):B2  and  N |- c(struct)
 
 B  |-  isinstance((c):B',d) -->     True                                        if  B |- c(d)
                             -->     False                                       if  not B |- c(d)
