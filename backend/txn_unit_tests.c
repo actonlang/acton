@@ -68,6 +68,8 @@ typedef struct actor_args
 	long read_head;
 	long read_head_after_replay;
 
+	queue_callback * qc;
+
 	vector_clock * vc;
 
 	int status;
@@ -341,24 +343,6 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 	return ret;
 }
 
-/*
-queue_callback * get_queue_callback(void (*callback)(queue_callback_args *))
-{
-	queue_callback * qc = (queue_callback *) malloc(sizeof(queue_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
-	qc->lock = (pthread_mutex_t *) ((char *)qc + sizeof(queue_callback));
-	qc->signal = (pthread_cond_t *) ((char *)qc + sizeof(queue_callback) + sizeof(pthread_mutex_t));
-	pthread_mutex_init(&(qc->lock), NULL);
-	pthread_cond_init(&(qc->signal), NULL);
-	qc->callback = callback;
-	return qc;
-}
-
-void free_queue_callback(queue_callback * qc)
-{
-	free(qc);
-}
-*/
-
 void * actor(void * cargs)
 {
 	unsigned int seed, randno;
@@ -368,15 +352,7 @@ void * actor(void * cargs)
 
 	actor_args * ca = (actor_args *) cargs;
 
-	queue_callback * qc = get_queue_callback(consumer_callback);
-
-/*
-	pthread_cond_t signal = PTHREAD_COND_INITIALIZER;
-	pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-	qc.lock = &lock;
-	qc.signal = &signal;
-	qc.callback = consumer_callback;
-*/
+	queue_callback * qc = ca->qc;
 
 	GET_RANDSEED(&seed, 0); // thread_id
 
@@ -388,6 +364,9 @@ void * actor(void * cargs)
 	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
 	if(ret)
 		return NULL;
+
+	if(debug)
+		printf("ACTOR %ld: Subscribed to queue %ld/%ld with callback (%p/%p/%p/%p)\n", (long) ca->consumer_id, (long) ca->queue_table_key, (long) ca->queue_id, qc, qc->lock, qc->signal, qc->callback);
 
 	increment_vc(ca->vc, (int) ca->consumer_id);
 
@@ -456,11 +435,34 @@ void * actor(void * cargs)
 		if(debug)
 			printf("ACTOR %ld: Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (long) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
 
-		pthread_mutex_lock(qc->lock);
+		ret = pthread_mutex_lock(qc->lock);
+
+		if(debug)
+			printf("ACTOR %ld: Locked consumer lock %p/%p, status=%d\n", (long) ca->consumer_id, qc, qc->lock, ret);
+
 		struct timespec ts;
 		clock_gettime(CLOCK_REALTIME, &ts);
 		ts.tv_sec += 3;
-		pthread_cond_timedwait(qc->signal, qc->lock, &ts);
+		ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
+
+		ret = pthread_mutex_unlock(qc->lock);
+
+		if(debug)
+			printf("ACTOR %ld: Unlocked consumer lock %p/%p, status=%d\n", (long) ca->consumer_id, qc, qc->lock, ret);
+
+		if(ret == 0)
+		{
+			if(debug)
+				printf("ACTOR %ld: Was signaled, status=%d, reading queue..\n", (long) ca->consumer_id, ret);
+		}
+		else
+		{
+			if(debug)
+				printf("ACTOR %ld: Wait timed out, status=%d, re-blocking..\n", (long) ca->consumer_id, ret);
+
+			continue;
+		}
+
 		// Received queue notification, reading:
 
 		read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -507,8 +509,6 @@ void * actor(void * cargs)
 			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, successful_enqueues=%d, private_read_head=%ld, no_enqueues=%d\n",
 					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->successful_enqueues, ca->read_head, ca->no_enqueues);
 		}
-
-		pthread_mutex_unlock(qc->lock);
 
 		if(rand_sleep)
 		{
@@ -565,6 +565,7 @@ int main(int argc, char **argv) {
 		cargs[i].queue_id = cargs[i].consumer_id;
 		cargs[i].no_enqueues = no_items;
 		cargs[i].vc = init_vc(no_actors, (int *) node_ids, (long *) counters, 0);
+		cargs[i].qc = get_queue_callback(consumer_callback);
 
 		ret = pthread_create(actor_ts+i, NULL, actor, &(cargs[i]));
 		printf("Test %s (%d) - %s (%d)\n", "create_actor_thread", i, ret==0?"OK":"FAILED", ret);
@@ -583,7 +584,7 @@ int main(int argc, char **argv) {
 	for(int i=0;i<no_actors;i++)
 	{
 		// Test enqueues:
-		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues+2?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues+((i==0)?2:0)?"OK":"FAILED", ret);
 
 		// Test dequeues:
 		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs[i].successful_dequeues==cargs[i].no_enqueues?"OK":"FAILED", ret);

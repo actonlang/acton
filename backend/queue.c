@@ -56,6 +56,7 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
+	int ret = 0;
 
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
@@ -115,13 +116,22 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 			qca->status = QUEUE_NOTIF_ENQUEUED;
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal);
+			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
 
-			pthread_mutex_lock(cs->callback->lock);
+			ret = pthread_mutex_lock(cs->callback->lock);
+
+#if (VERBOSITY > 0)
+			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
+
 			pthread_cond_signal(cs->callback->signal);
 			cs->callback->callback(qca);
-			pthread_mutex_unlock(cs->callback->lock);
+			ret = pthread_mutex_unlock(cs->callback->lock);
+
+#if (VERBOSITY > 0)
+			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
 
 			cs->notified=1;
 
@@ -622,6 +632,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
+	int ret = 0;
 
 	if(table == NULL)
 		return DB_ERR_NO_TABLE; // Table doesn't exist
@@ -652,18 +663,36 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 
 			qca->status = QUEUE_NOTIF_DELETED;
 
-			pthread_mutex_lock(cs->callback->lock);
+#if (VERBOSITY > 0)
+			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+#endif
+
+			ret = pthread_mutex_lock(cs->callback->lock);
+
+#if (VERBOSITY > 0)
+			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
+
 			pthread_cond_signal(cs->callback->signal);
 			cs->callback->callback(qca);
-			pthread_mutex_unlock(cs->callback->lock);
+			ret = pthread_mutex_unlock(cs->callback->lock);
+
+#if (VERBOSITY > 0)
+			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+#endif
 
 //			cs->notified=1;
+
+#if (VERBOSITY > 0)
+			printf("BACKEND: Notified subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+#endif
+
 		}
 	}
 
 	skiplist_free(db_row->consumer_state);
 
-	int ret = table_delete_row((WORD*) &(queue_id), version, table, fastrandstate);
+	ret = table_delete_row((WORD*) &(queue_id), version, table, fastrandstate);
 
 	if(use_lock)
 		pthread_mutex_unlock(table->lock);
