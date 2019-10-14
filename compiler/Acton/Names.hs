@@ -16,8 +16,10 @@ modrefs b                           = concat (map mrefs b)
         mref (ModRef _)             = []
         qref (QName n _)            = [n]
 
-declname (Decorator _ _ _ d)        = declname d
-declname d                          = dname d
+declnames (Decorator _ _ _ d : ds)  = declnames (d:ds)
+declnames (Extension{} : ds)        = declnames ds
+declnames (d : ds)                  = dname d : declnames ds
+declnames []                        = []
 
 splitDeclGroup []                   = []
 splitDeclGroup (d:ds)               = split (free d) [d] ds
@@ -25,7 +27,7 @@ splitDeclGroup (d:ds)               = split (free d) [d] ds
         split vs ds0 (d:ds)
           | any (`elem` ws) vs      = split (free d++vs) (d:ds0) ds
           | otherwise               = reverse ds0 : split (free d) [d] ds
-          where ws                  = map declname (d:ds)
+          where ws                  = declnames (d:ds)
 
 
 -- Control flow --------------------
@@ -336,9 +338,6 @@ instance Vars Type where
     free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
     free (TTuple _ p)               = free p
     free (TRecord _ k)              = free k
-    free (PSeq _ t)                 = free t
-    free (PSet _ t)                 = free t
-    free (PMap _ kt vt)             = free kt ++ free vt
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TAt  _ c)                 = free c
@@ -470,17 +469,10 @@ instance Subst Type where
     subst s (TFun l es p k t)       = TFun l $ subst s es $ subst s p $ subst s k $ subst s t
     subst s (TTuple l p)            = TTuple l $ subst s p
     subst s (TRecord l k)           = TRecord l $ subst s k
-    subst s (PSeq l t)              = PSeq l $ subst s t
-    subst s (PSet l t)              = PSet l $ subst s t
-    subst s (PMap l kt vt)          = PMap l $ subst s kt $ subst s vt
     subst s (TOpt l t)              = TOpt l $ subst s t
     subst s (TUnion l as)           = TUnion l $ return as
     subst s (TCon l c)              = TCon l $ subst s c
     subst s (TAt l c)               = TAt l $ subst s c
-    subst s (TStr l)                = TStr l
-    subst s (TInt l)                = TInt l
-    subst s (TFloat l)              = TFloat l
-    subst s (TBool l)               = TBool l
     subst s (TNone l)               = TNone l
 -}
 -- Names free in embedded lambda

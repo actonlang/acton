@@ -34,21 +34,20 @@ typeError                               = solveError
 
 chkRedef ss                             = True -- TBD
 
-chkCycles (Class _ n q cs b : ds)       = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
-chkCycles (Protocol _ n q cs b : ds)    = noforward cs n ds && all (chkDecl n ds) b && chkCycles ds
-chkCycles (Decorator _ qn args d : ds)  = noforward qn n ds && noforward args n ds && chkCycles (d:ds)
-  where n                               = declname d
+chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
+chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
+chkCycles (d@Decorator{} : ds)          = noforward (dqname d) d ds && noforward (dargs d) d ds && chkCycles (d:ds)
 chkCycles (d : ds)                      = chkCycles ds
 chkCycles []                            = True
 
-chkDecl n ds s@Decl{}                   = chkCycles (decls s ++ ds)
-chkDecl n ds s                          = noforward s n ds
+chkDecl d ds s@Decl{}                   = chkCycles (decls s ++ ds)
+chkDecl d ds s                          = noforward s d ds
 
 
-noforward x n y
+noforward x d ds
   | not $ null vs                       = err2 vs "Illegal forward reference:"
   | otherwise                           = True
-  where vs                              = free x `intersect` (n : bound y)
+  where vs                              = free x `intersect` declnames (d:ds)
 
 nodup x
   | not $ null vs                       = err2 vs "Duplicate names:"
