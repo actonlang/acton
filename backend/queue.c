@@ -90,7 +90,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 	int status = table_insert(queue_column_values, no_cols+2, NULL, table, fastrandstate);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Inserted queue entry %ld, status=%d\n", entry_id, status);
+	printf("BACKEND: Inserted queue entry %ld in queue %ld/%ld, status=%d\n", entry_id, (long) table_key, (long) queue_id, status);
 #endif
 
 	// Notify subscribers if they haven't been notified:

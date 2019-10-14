@@ -14,7 +14,7 @@
 
 int no_actors = 2;
 int no_collections = 2;
-int no_items = 2;
+int no_items = 20;
 
 int no_state_cols = 4;
 int no_state_primary_keys = 1;
@@ -220,10 +220,10 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 
 	for(int i=0;i<no_outgoing_counters;i++)
 	{
-		column_values[0] = (WORD) dest_id;
+		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
 
-		ret = enqueue(column_values, no_queue_cols, ca->queue_table_key, ca->queue_id, 1, ca->db, fastrandstate);
+		ret = enqueue(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, 1, ca->db, fastrandstate);
 
 		assert(ret == 0);
 
@@ -243,7 +243,12 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing_counters, int * msgs_sent, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	int ret = 0;
-	long dest_id = (long) ca->consumer_id + 1;
+	long dest_id = ((long) ca->consumer_id < no_actors - 1)? ((long) ca->consumer_id + 1) : 0;
+
+/*
+	if(debug)
+		printf("ACTOR %ld: Sending %d msgs to ACTOR %ld.\n", (long) ca->consumer_id, no_outgoing_counters, dest_id);
+*/
 
 	*msgs_sent=0;
 
@@ -251,10 +256,10 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 
 	for(int i=0;i<no_outgoing_counters;i++)
 	{
-		column_values[0] = (WORD) dest_id;
+		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
 
-		ret = enqueue_in_txn(column_values, no_queue_cols, ca->queue_table_key, ca->queue_id, txnid, ca->db, fastrandstate);
+		ret = enqueue_in_txn(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 
@@ -321,10 +326,16 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 		assert(ret == 0);
 
+		if(debug)
+			printf("ACTOR %ld: chekpointed local state in txn.\n", (long) ca->consumer_id);
+
 		// Send outgoing msgs in txn:
 		ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
 
 		assert(ret == 0);
+
+		if(debug)
+			printf("ACTOR %ld: sent %d outgoing msgs in txn.\n", (long) ca->consumer_id, *msgs_sent);
 	}
 
 	return ret;
@@ -370,6 +381,8 @@ void * actor(void * cargs)
 	{
 		send_seed_msgs(ca, &msgs_sent, &seed);
 		ca->successful_enqueues += msgs_sent;
+		if(debug)
+			printf("ACTOR %ld: sent %d seed outgoing msgs.\n", (long) ca->consumer_id, msgs_sent);
 	}
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -399,7 +412,15 @@ void * actor(void * cargs)
 			if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 				printf("ERROR: consume_queue returned %d\n", ret);
 
-			checkpoint_success = (commit_txn(txnid, ca->vc, ca->db, &seed) == VAL_STATUS_COMMIT);
+			if(debug)
+				printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (long) ca->consumer_id, (long) ca->read_head);
+
+			ret = commit_txn(txnid, ca->vc, ca->db, &seed);
+
+			if(debug)
+				printf("ACTOR %ld: Commit returned %d.\n", (long) ca->consumer_id, ret);
+
+			checkpoint_success = (ret == VAL_STATUS_COMMIT);
 		}
 
 		increment_vc(ca->vc, (int) ca->consumer_id);
@@ -407,12 +428,15 @@ void * actor(void * cargs)
 		ca->successful_consumes = ca->successful_dequeues;
 		ca->successful_enqueues += msgs_sent;
 
-		printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
-				(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
+		printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, no_enqueues=%d\n",
+				(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->no_enqueues);
 	}
 
 	while(ca->successful_consumes < ca->no_enqueues)
 	{
+		if(debug)
+			printf("ACTOR %ld: Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (long) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
+
 		pthread_mutex_lock(&lock);
 		struct timespec ts;
 		clock_gettime(CLOCK_REALTIME, &ts);
@@ -445,7 +469,15 @@ void * actor(void * cargs)
 				if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 					printf("ERROR: consume_queue returned %d\n", ret);
 
-				checkpoint_success = (commit_txn(txnid, ca->vc, ca->db, &seed) == VAL_STATUS_COMMIT);
+				if(debug)
+					printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (long) ca->consumer_id, (long) ca->read_head);
+
+				ret = commit_txn(txnid, ca->vc, ca->db, &seed);
+
+				if(debug)
+					printf("ACTOR %ld: Commit returned %d.\n", (long) ca->consumer_id, ret);
+
+				checkpoint_success = (ret == VAL_STATUS_COMMIT);
 			}
 
 			increment_vc(ca->vc, (int) ca->consumer_id);
@@ -453,8 +485,8 @@ void * actor(void * cargs)
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
 
-			printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
-					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
+			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, no_enqueues=%d\n",
+					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->no_enqueues);
 		}
 
 		pthread_mutex_unlock(&lock);
