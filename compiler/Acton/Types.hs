@@ -147,7 +147,6 @@ instance InfEnv Stmt where
                                              return []
     infEnv env (Assert _ es)            = do mapM (inferBool env) es
                                              return []
-    infEnv env (TypeSig _ ns t)         = return []
     infEnv env (Pass _)                 = return []
     infEnv env (Delete _ pat)
       | nodup pat                       = do _ <- infer env pat                     -- TODO: constrain pat targets to opt type

@@ -26,7 +26,6 @@ type Suite      = [Stmt]
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
-                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: TSchema }
                 | Assert        { sloc::SrcLoc, exprs::[Expr] }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, pattern::Pattern }
@@ -282,7 +281,6 @@ instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
     x@AugAssign{}       ==  y@AugAssign{}       = pattern x == pattern y && aop x == aop y && expr x == expr y
-    x@TypeSig{}         ==  y@TypeSig{}         = vars x == vars y && typ x == typ y
     x@Assert{}          ==  y@Assert{}          = exprs x == exprs y
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = pattern x == pattern y
@@ -469,16 +467,6 @@ importsOf (Module _ imps _)         = impsOf imps
     mRef (ModRef (0,Just qn))       = qn
     mRef _                          = error "dot prefix in name of import modules not supported"
 
-decorateDecl                        :: Decoration -> SrcLoc -> Decl -> Decl
-decorateDecl StaticMethod l d@Def{} = d{ dloc=l, modif=StaticMeth }
-decorateDecl ClassMethod l d@Def{}  = d{ dloc=l, modif=ClassMeth }
-decorateDecl InstMethod l d@Def{}   = d{ dloc=l, modif=InstMeth }
-decorateDecl decor l d@Signature{}  = d{ dloc=l, dec=decor }
-decorateDecl _ l d                  = d
-
-decorateSigs                        :: Decoration -> SrcLoc -> Stmt -> Stmt
-decorateSigs ds l s                 = s
-
 unop op e                           = UnOp l0 (Op l0 op) e
 binop e1 op e2                      = BinOp l0 e1 (Op l0 op) e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
@@ -567,7 +555,6 @@ instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
     pretty (AugAssign _ p o e)      = pretty p <+> pretty o <+> pretty e
-    pretty (TypeSig _ vs t)         = commaList vs <+> text ":" <+> pretty t
     pretty (Assert _ es)            = text "assert" <+> commaList es
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t
