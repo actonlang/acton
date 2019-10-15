@@ -329,7 +329,7 @@ data SolveErr                           = Defer
                                         | NotYet SrcLoc Doc
                                         deriving (Eq,Show,Typeable)
 
-instance Subst SolveErr where
+instance OSubst SolveErr where
     tyvars (ConflictingRow tv)          = [tv]
     tyvars (InfiniteType tv)            = [tv]
     tyvars (NoUnify t1 t2)              = (tyvars t1 ++ tyvars t2) \\ [[]]

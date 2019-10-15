@@ -729,7 +729,7 @@ decl :: Parser S.Decl
 decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> signature)
 
 signature :: Parser S.Decl
-signature = addLoc (uncurry (S.Signature NoLoc) <$> (tsig <* newline1))
+signature = addLoc (do (ns,t) <- tsig; return $ S.Signature NoLoc ns t S.NoDecoration)
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -759,8 +759,8 @@ for_stmt = addLoc $ do
 except :: Parser S.Except
 except = addLoc $ do
              rword "except"
-             mbt <- optional ((,) <$> test <*> optional (rword "as" *> name))
-             return (maybe (S.ExceptAll NoLoc) (\(t,mbn) -> maybe (S.Except NoLoc t) (S.ExceptAs NoLoc t) mbn) mbt)
+             mbx <- optional ((,) <$> name <*> optional (rword "as" *> name))
+             return (maybe (S.ExceptAll NoLoc) (\(x,mbn) -> maybe (S.Except NoLoc x) (S.ExceptAs NoLoc x) mbn) mbx)
             
 try_stmt = addLoc $ do
                 assertNotData
@@ -1214,23 +1214,12 @@ ctype    =  addLoc (
                     (p,k) <- parens funrows
                     arrow
                     t <- ctype
-<<<<<<< HEAD
-                    return (S.TFun NoLoc es p k t))
-        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
-        <|> try (parens (S.TTuple NoLoc <$> posrow))
-        <|> parens (return (S.TTuple NoLoc S.PosNil))
-        <|> try (brackets (S.pSequence <$> ctype))
-        <|> try (S.TVar NoLoc <$> cvar)
-        <|> S.TAt NoLoc <$> (symbol "@" *> ccon)
-        <|> S.TCon NoLoc <$> ccon)
-=======
                     return (S.CTFun NoLoc es p k t))
         <|> try (parens (S.CTStruct NoLoc <$> kwrow))
         <|> try (parens (S.CTTuple NoLoc <$> posrow <* optional comma))
         <|> parens (return (S.CTTuple NoLoc S.PosNil))
         <|> try (S.CTVar NoLoc <$> cvar)
         <|> S.CTCon NoLoc <$> ccon)
->>>>>>> f3e54a0... Fixed a few parser bugs
 
                 
 

@@ -49,16 +49,9 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], par
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
-                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema }
+                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema, dec::Decoration }
                 deriving (Show)
 
-data Decoration = ClassAttr
-                | InstAttr
-                | StaticMethod
-                | ClassMethod
-                | InstMethod
-                deriving (Eq,Show)
-    
 data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Int           { eloc::SrcLoc, ival::Integer, lexeme::String }
                 | Float         { eloc::SrcLoc, dval::Double, lexeme::String }
@@ -120,7 +113,7 @@ data Op a       = Op SrcLoc a deriving (Show)
 data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
 data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
-data Except     = ExceptAll SrcLoc | Except SrcLoc Expr | ExceptAs SrcLoc Expr Name deriving (Show)
+data Except     = ExceptAll SrcLoc | Except SrcLoc Name | ExceptAs SrcLoc Name Name deriving (Show)
 data Params     = Params [Param] StarPar [Param] StarPar deriving (Show,Eq)
 data Param      = Param Name (Maybe TSchema) (Maybe Expr) deriving (Show,Eq)
 data StarPar    = StarPar SrcLoc Name (Maybe Type) | NoStar deriving (Show)
@@ -140,7 +133,9 @@ data Binary     = Or|And|BOr|BXor|BAnd|ShiftL|ShiftR|Plus|Minus|Mult|MMult|Div|M
 data Comparison = Lt|Gt|Eq|GE|LE|LtGt|NEq|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Aug        = PlusA|MinusA|MultA|MMultA|DivA|ModA|PowA|BAndA|BOrA|BXorA|ShiftLA|ShiftRA|EuDivA deriving (Show,Eq)
 
-data Modif      = Sync Bool | Async | NoMod deriving (Show,Eq)
+data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
+data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show)
+    
 
 data OType      = OVar      OVar
                 -- Types
@@ -182,7 +177,7 @@ type ORow       = OType
 
 type OEffect    = ORow
 
-type OSubst     = [(OVar,OType)]
+type OSubstitution = [(OVar,OType)]
 
 ----
 
@@ -214,12 +209,14 @@ data Type       = TSelf     { tloc :: SrcLoc }
                 | TNone     { tloc :: SrcLoc }
                 deriving (Show,Generic)
 
+type Substitution = [(TVar,Type)]
+
 instance Data.Binary.Binary OType
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary Qonstraint
 instance Data.Binary.Binary Binary
 
-tvarSupply      = [ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
+tvarSupply      = [ TV $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
 
 
 -- SrcInfo ------------------
@@ -311,7 +308,7 @@ instance Eq Decl where
     Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1  ==  Protocol _ n2 q2 a2 b2  = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1 ==  Extension _ n2 q2 a2 b2 = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Signature _ ns1 t1      ==  Signature _ ns2 t2      = ns1 == ns2 && t1 == t2
+    Signature _ ns1 t1 d1   ==  Signature _ ns2 t2 d2   = ns1 == ns2 && t1 == t2 && d1 == d2
     _                       == _                        = False
 
 instance Eq Expr where
@@ -362,8 +359,8 @@ instance Eq a => Eq (Op a) where
 
 instance Eq Except where
     ExceptAll _         ==  ExceptAll _         = True
-    Except _ e1         ==  Except _ e2         = e1 == e2
-    ExceptAs _ e1 n1    ==  ExceptAs _ e2 n2    = e1 == e2 && n1 == n2
+    Except _ x1         ==  Except _ x2         = x1 == x2
+    ExceptAs _ x1 n1    ==  ExceptAs _ x2 n2    = x1 == x2 && n1 == n2
     _                   ==  _                   = False
 
 instance Eq StarPar where
@@ -473,7 +470,11 @@ importsOf (Module _ imps _)         = impsOf imps
     mRef _                          = error "dot prefix in name of import modules not supported"
 
 decorateDecl                        :: Decoration -> SrcLoc -> Decl -> Decl
-decorateDecl ds l d                 = d
+decorateDecl StaticMethod l d@Def{} = d{ dloc=l, modif=StaticMeth }
+decorateDecl ClassMethod l d@Def{}  = d{ dloc=l, modif=ClassMeth }
+decorateDecl InstMethod l d@Def{}   = d{ dloc=l, modif=InstMeth }
+decorateDecl decor l d@Signature{}  = d{ dloc=l, dec=decor }
+decorateDecl _ l d                  = d
 
 decorateSigs                        :: Decoration -> SrcLoc -> Stmt -> Stmt
 decorateSigs ds l s                 = s
@@ -587,7 +588,7 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n q ps a b md)    = pretty md <+> text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
+    pretty (Def _ n q ps a b md)    = prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
     pretty (Actor _ n q ps a b)     = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
@@ -597,7 +598,7 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Signature _ vs t)       = commaList vs <+> text ":" <+> pretty t
+    pretty (Signature _ vs t dec)   = pretty dec $+$ commaList vs <+> text ":" <+> pretty t
 
 instance Pretty Decoration where
     pretty ClassAttr                = text "@classattr"
@@ -605,6 +606,7 @@ instance Pretty Decoration where
     pretty StaticMethod             = text "@staticmethod"
     pretty ClassMethod              = text "@classmethod"
     pretty InstMethod               = text "@instmethod"
+    pretty NoDecoration             = empty
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
@@ -696,8 +698,8 @@ instance Pretty Handler where
     
 instance Pretty Except where
     pretty (ExceptAll _)            = text "except"
-    pretty (Except _ e)             = text "except" <+> pretty e
-    pretty (ExceptAs _ e n)         = text "except" <+> pretty e <+> text "as" <+> pretty n
+    pretty (Except _ x)             = text "except" <+> pretty x
+    pretty (ExceptAs _ x n)         = text "except" <+> pretty x <+> text "as" <+> pretty n
 
 instance Pretty Params where
     pretty (Params a b c d)         = hsep $ punctuate comma params
@@ -773,11 +775,13 @@ prettyPEs []                        = text "()"
 prettyPEs [p]                       = pretty p <> char ','
 prettyPEs ps                        = commaCat ps
 
-instance Pretty Modif where
-    pretty (Sync True)              = text "sync"
-    pretty (Sync False)             = empty -- text "(sync)"
-    pretty Async                    = text "async"
-    pretty NoMod                    = empty
+prettyMod (Sync True)              = (text "sync" <+>)
+prettyMod (Sync False)             = id -- (text "(sync)" <+>)
+prettyMod Async                    = (text "async" <+>)
+prettyMod NoMod                    = id
+prettyMod StaticMeth               = (text "@staticmethod" $+$)
+prettyMod ClassMeth                = (text "@classmethod" $+$)
+prettyMod InstMeth                 = (text "@instmethod" $+$)
 
 instance Pretty OType where
     pretty (OVar tv)                = pretty tv
@@ -873,7 +877,11 @@ unOVar tvs                          = [ v | OVar v <- tvs ]
 schemaVars                          = unOVar schemaOVars
 
 
-instance Pretty OSubst where
+instance Pretty OSubstitution where
+    pretty s                        = vcat (map pr s)
+      where pr (tv,t)               = pretty tv <+> equals <+> pretty t
+
+instance Pretty Substitution where
     pretty s                        = vcat (map pr s)
       where pr (tv,t)               = pretty tv <+> equals <+> pretty t
 

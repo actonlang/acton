@@ -61,7 +61,7 @@ instance Relabel Decl where
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
+    relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm
@@ -135,8 +135,8 @@ instance Relabel Handler where
 
 instance Relabel Except where
     relabel (ExceptAll _) = ExceptAll <$> newLoc
-    relabel (Except _ e) = Except <$> newLoc <*> relabel e
-    relabel (ExceptAs _ e n) = ExceptAs <$> newLoc <*> relabel e <*> relabel n
+    relabel (Except _ x) = Except <$> newLoc <*> relabel x
+    relabel (ExceptAs _ x n) = ExceptAs <$> newLoc <*> relabel x <*> relabel n
 
 instance Relabel Param where
     relabel (Param nm mba mbe) = Param <$> relabel nm <*> relabel mba <*> relabel mbe

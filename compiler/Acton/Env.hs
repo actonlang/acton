@@ -18,9 +18,7 @@ mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
   where Module _ imps _     = modul
 
 
-type OTEnv                  = [(Name,OType)]
-
-type TEnv                   = [(Name,TSchema)]
+type TEnv                   = [(Name,(TSchema,Decoration))]
 
 type Env                    = [(QName,NameInfo)]
 
@@ -33,40 +31,77 @@ data NameInfo               = NVar    (Maybe TSchema)
                             | NModule Env
                             deriving (Show)
 
+instance Pretty TEnv where
+    pretty tenv             = vcat (map pr tenv)
+      where pr (n,(t,dec))  = pretty dec $+$ pretty n <+> colon <+> pretty t
 
+instance Subst (TSchema, Decoration) where
+    nsubst s (t, dec)       = (nsubst s t, dec)
+    ntyvars (t, dec)        = ntyvars t
+
+instance Subst NameInfo where
+    nsubst s (NVar t)           = NVar (nsubst s t)
+    nsubst s (NState t)         = NState (nsubst s t)
+    nsubst s (NClass q c te)    = NClass (nsubst s q) (nsubst s c) (nsubst s te)
+    nsubst s (NProto q c te)    = NProto (nsubst s q) (nsubst s c) (nsubst s te)
+    nsubst s (NExt q c te)      = NExt (nsubst s q) (nsubst s c) (nsubst s te)
+    nsubst s (NTVar cs)         = NTVar (nsubst s cs)
+    
+    ntyvars (NVar t)            = ntyvars t
+    ntyvars (NState t)          = ntyvars t
+    ntyvars (NClass q c te)     = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
+    ntyvars (NProto q c te)     = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
+    ntyvars (NExt q c te)       = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
+    ntyvars (NTVar cs)          = ntyvars cs
+    
+prune                       :: [Name] -> TEnv -> TEnv
+prune vs                    = filter ((`notElem` vs) . fst)
+
+
+--------------------------------------------
+
+type OTEnv                  = [(Name,OType)]
+
+data OEnv                   = OEnv { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType }
+                            deriving (Eq,Show)
 instance Pretty OTEnv where
     pretty tenv             = vcat (map pr tenv)
       where pr (n,t)        = pretty n <+> colon <+> pretty t
 
-restrict vs                 = filter ((`elem` vs) . fst)
-
-prune vs                    = filter ((`notElem` vs) . fst)
-
-data OEnv                   = OEnv { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType }
-                            deriving (Eq,Show)
-instance Subst OEnv where
+instance OSubst OEnv where
     subst s env             = env{ venv = subst s (venv env), ret = subst s (ret env) }
     tyvars env              = tyvars (venv env)++ tyvars (ret env)
     
 
-emptyEnv                    = OEnv { venv = [], stvars = [], ret = Nothing }
+o_prune                     :: [Name] -> OTEnv -> OTEnv
+o_prune vs                  = filter ((`notElem` vs) . fst)
 
-reserve vs env              = env { venv = [ (v, Nothing) | v <- vs ] ++ venv env }
+o_emptyEnv                  :: OEnv
+o_emptyEnv                  = OEnv { venv = [], stvars = [], ret = Nothing }
 
-define te env               = env { venv = [ (v, Just t) | (v,t) <- te ] ++ venv env }
+o_reserve                   :: [Name] -> OEnv -> OEnv
+o_reserve vs env            = env { venv = [ (v, Nothing) | v <- vs ] ++ venv env }
 
-newstate vs env             = env { stvars = vs }
+o_define                    :: OTEnv -> OEnv -> OEnv
+o_define te env             = env { venv = [ (v, Just t) | (v,t) <- te ] ++ venv env }
 
-reserved env v              = lookup v (venv env) == Just Nothing
+o_newstate                  :: [Name] -> OEnv -> OEnv
+o_newstate vs env           = env { stvars = vs }
 
-findVar n env               = case lookup n (venv env) of
+o_reserved                  :: OEnv -> Name -> Bool
+o_reserved env v            = lookup v (venv env) == Just Nothing
+
+o_findVar                   :: Name -> OEnv -> OType
+o_findVar n env             = case lookup n (venv env) of
                                 Nothing       -> Control.Exception.throw $ NameNotFound n
                                 Just Nothing  -> Control.Exception.throw $ NameReserved n
                                 Just (Just t) -> t
 
-setReturn t env             = env { ret = Just t }
+o_setReturn                 :: OType -> OEnv -> OEnv
+o_setReturn t env           = env { ret = Just t }
 
-getReturn env               = fromJust $ ret env
+o_getReturn                 :: OEnv -> OType
+o_getReturn env             = fromJust $ ret env
 
 
 ----------------------------
@@ -80,8 +115,8 @@ builtin                     = [
                                 (nMapping,  NProto [a,b] [] []),
                                 (nSet,      NProto [a] [] [])
                               ]
-  where a:b:c:_             = [ TBind (TV n) [] | n <- tvarSupply ]
-        ta:tb:tc:_          = [ TVar NoLoc (TV n) | n <- tvarSupply ]
+  where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
+        ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
 
 
 old_builtins                = [
