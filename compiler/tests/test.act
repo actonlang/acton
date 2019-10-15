@@ -55,28 +55,36 @@ f22 : (,) -> int                                        # Should this really be 
 
 f23 : [A] => (Self, y:Self) -> [A]                      # functiona with Self and [A] disambiguation!
 
-x0 : (int,bool,*A,)
-x1 : (x : float)
-x2 : (x : (y : float,z : bool),**A,)
-x3 : [A]                                                # sequence that also could be the start of a qualified type
+z0 : (int,bool,*A,)
+z1 : (x : float)
+z2 : (x : (y : float,z : bool),**A,)
+z3 : [A]                                                # sequence that also could be the start of a qualified type
 
 
-@classattr
+# @classattr                                            # uncomment and get *two* error messages
 x : int
 
-@staticmethod
 def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
     pass
+
+
+protocol Apa():
+    def __init__(self):
+        pass
+    # @classattr
+    # x : int
+    @staticmethod
+    def __eq__(x:Self, y:Self) -> bool:
+        pass
+
 
 actor Test [T](v0:T):
     def m(x):
         pass
 
+
 def f(z):
     pass
-
-protocol Indexed[A,B]:                                   # just a protocol
-    __getitem__ : (Self, A) -> B
 
 extension Mapping[A,B(Eq)] (Eq):
     pass
@@ -84,6 +92,10 @@ extension Mapping[A,B(Eq)] (Eq):
 extension __builtin__.int (Eq):
     pass
 
+protocol Indexed[A,B]:                                   # just a protocol
+    __getitem__ : (A) -> B
+
 g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
 
 h : (f:[A]=>(A)->A, x:int, y:@dict[int,str]) -> str      # a rank-2 scheme with keyword arguments and an @ type
+

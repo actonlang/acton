@@ -26,8 +26,8 @@ type Suite      = [Stmt]
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
+                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: TSchema }
                 | Assert        { sloc::SrcLoc, exprs::[Expr] }
-                | TypeSig       { sloc::SrcLoc, vars :: [Name], typ :: TSchema}
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, pattern::Pattern }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
@@ -49,7 +49,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], par
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
-                | Decorator     { dloc::SrcLoc, dqname::QName, dargs::[Arg], decl::Decl }
+                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema }
                 deriving (Show)
 
 data Decoration = ClassAttr
@@ -285,6 +285,7 @@ instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
     x@AugAssign{}       ==  y@AugAssign{}       = pattern x == pattern y && aop x == aop y && expr x == expr y
+    x@TypeSig{}         ==  y@TypeSig{}         = vars x == vars y && typ x == typ y
     x@Assert{}          ==  y@Assert{}          = exprs x == exprs y
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = pattern x == pattern y
@@ -310,7 +311,8 @@ instance Eq Decl where
     Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1  ==  Protocol _ n2 q2 a2 b2  = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1 ==  Extension _ n2 q2 a2 b2 = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Decorator _ n1 a1 d1    ==  Decorator _ n2 a2 d2    = n1 == n2 && a1 == a2 && d1 == d2
+    Signature _ ns1 t1      ==  Signature _ ns2 t2      = ns1 == ns2 && t1 == t2
+    _                       == _                        = False
 
 instance Eq Expr where
     x@Var{}             ==  y@Var{}             = var x == var y
@@ -564,6 +566,7 @@ instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
     pretty (AugAssign _ p o e)      = pretty p <+> pretty o <+> pretty e
+    pretty (TypeSig _ vs t)         = commaList vs <+> text ":" <+> pretty t
     pretty (Assert _ es)            = text "assert" <+> commaList es
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t
@@ -571,7 +574,6 @@ instance Pretty Stmt where
     pretty (Raise _ e)              = text "raise" <+> pretty e
     pretty (Break _)                = text "break"
     pretty (Continue _)             = text "continue"
-    pretty (TypeSig _ vs t)         = commaList vs <+> text":" <+> pretty t
     pretty (If _ (b:bs) b2)         = prettyBranch "if" b $+$ vmap (prettyBranch "elif") bs $+$ prettyEnd "else" b2
     pretty (While _ e b b2)         = text "while" <+> pretty e <> colon $+$ prettySuite b $+$ prettyEnd "else" b2
     pretty (For _ p e b b2)         = text "for" <+> pretty p <+> text "in" <+> pretty e <> colon $+$ 
@@ -595,7 +597,7 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Decorator _ n as s)     = text "@" <> pretty n <> parens (commaList as) $+$ pretty s
+    pretty (Signature _ vs t)       = commaList vs <+> text ":" <+> pretty t
 
 instance Pretty Decoration where
     pretty ClassAttr                = text "@classattr"

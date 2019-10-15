@@ -38,6 +38,7 @@ instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
     relabel (Assign _ ts e) = Assign <$> newLoc <*> relabel ts <*> relabel e
     relabel (AugAssign _ p op e) = AugAssign <$> newLoc <*> relabel p <*> relabel op <*> relabel e
+    relabel (TypeSig _ ns t) = TypeSig <$> newLoc <*> relabel ns <*> relabel t
     relabel (Assert _ es) = Assert <$> newLoc <*> relabel es
     relabel (Pass _) = Pass <$> newLoc
     relabel (Delete _ p) = Delete <$> newLoc <*> relabel p
@@ -60,7 +61,7 @@ instance Relabel Decl where
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Decorator _ n args s) = Decorator <$> newLoc <*> relabel n <*> relabel args <*> relabel s
+    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm

@@ -36,7 +36,6 @@ chkRedef ss                             = True -- TBD
 
 chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
 chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
-chkCycles (d@Decorator{} : ds)          = noforward (dqname d) d ds && noforward (dargs d) d ds && chkCycles (d:ds)
 chkCycles (d : ds)                      = chkCycles ds
 chkCycles []                            = True
 
@@ -137,7 +136,6 @@ instance InfEnv [Stmt] where
 instance InfEnv Stmt where
     infEnv env (Expr _ e)               = do _ <- infer env e
                                              return []
-    infEnv env (TypeSig _ _ _)          = do return []
     infEnv env (Assign _ pats e)
       | nodup pats                      = do (te, t1) <- infEnvT env pats
                                              t2 <- infer env e
@@ -149,6 +147,7 @@ instance InfEnv Stmt where
                                              return []
     infEnv env (Assert _ es)            = do mapM (inferBool env) es
                                              return []
+    infEnv env (TypeSig _ ns t)         = return []
     infEnv env (Pass _)                 = return []
     infEnv env (Delete _ pat)
       | nodup pat                       = do _ <- infer env pat                     -- TODO: constrain pat targets to opt type
@@ -300,6 +299,7 @@ instance Infer Decl where
                                         
     infer env (Protocol l n q cs b)     = newOVar       -- undefined
     infer env (Extension l n q cs b)    = newOVar       -- undefined
+    infer env (Signature l ns t)        = newOVar       -- undefined.....
 
     infer env (Actor l n q p ann b)
       | nodup p && noshadow svars p && 
@@ -314,13 +314,6 @@ instance Infer Decl where
                                              return (OFun fx row t0)
       where svars                       = statevars b
 
-    infer env (Decorator l qn args d)
-      | nodup args                      = do t1 <- inferPure env deco
-                                             t2 <- infer env d
-                                             t0 <- newOVar
-                                             constrain [QEqu l 14 t1 (OFun ONil (OPos t2 ONil) t0)]    -- assumption on qn
-                                             return t0
-      where deco                        = if null args then qname2expr qn else Call l (qname2expr qn) args
 
 inferPure env e                         = do pushFX ONil
                                              t <- infer env e

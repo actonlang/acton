@@ -56,7 +56,7 @@ extractSrcSpan (Loc l r) file src = sp
 
 type Parser = St.StateT [CTX] (Parsec Void String)
 
-data CTX = PAR | SEQ | LOOP | DATA | DEF | CLASS | ACTOR deriving (Show,Eq)
+data CTX = PAR | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
 withCtx ctx = between (St.modify (ctx:)) (St.modify tail)
 
@@ -66,23 +66,25 @@ ifCtx accept ignore yes no = do
         c:_ | c `elem` accept -> yes
         _                     -> no
 
-onlyIn s        = fail ("statement only allowed inside " ++ s)
-notIn s         = fail ("statement not allowed inside " ++ s)
-success         = return ()
+onlyIn s            = fail ("statement only allowed inside " ++ s)
+notIn s             = fail ("statement not allowed inside " ++ s)
+success             = return ()
 
-assertActBody   = ifCtx [ACTOR]     []              success (onlyIn "an actor body")
-assertActScope  = ifCtx [ACTOR]     [SEQ,LOOP,DEF]  success (onlyIn "an actor")
-assertLoop      = ifCtx [LOOP]      [SEQ]           success (onlyIn "a loop")
-assertDef       = ifCtx [DEF]       [SEQ,LOOP]      success (onlyIn "a function")
-assertDefOrAct  = ifCtx [DEF,ACTOR] [SEQ,LOOP]      success (onlyIn "a function or an actor")
-assertNotData   = ifCtx [DATA]      [SEQ,LOOP]      (notIn "a data tree") success
+assertActBody       = ifCtx [ACTOR]             []              success (onlyIn "an actor body")
+assertActScope      = ifCtx [ACTOR]             [SEQ,LOOP,DEF]  success (onlyIn "an actor")
+assertLoop          = ifCtx [LOOP]              [SEQ]           success (onlyIn "a loop")
+assertClass         = ifCtx [CLASS]             [SEQ,LOOP]      success (onlyIn "a class")
+assertClassProtoExt = ifCtx [CLASS,PROTO,EXT]   [SEQ,LOOP]      success (onlyIn "a class, protocol or extension")
+assertDef           = ifCtx [DEF]               [SEQ,LOOP]      success (onlyIn "a function")
+assertDefOrAct      = ifCtx [DEF,ACTOR]         [SEQ,LOOP]      success (onlyIn "a function or an actor")
+assertNotData       = ifCtx [DATA]              [SEQ,LOOP]      (notIn "a data tree") success
 
-ifActScope      = ifCtx [ACTOR]     [SEQ,LOOP,DEF]
-    
-ifData          = ifCtx [DATA]      [SEQ,LOOP]
+ifActScope          = ifCtx [ACTOR]             [SEQ,LOOP,DEF]
 
-ifPar           = ifCtx [PAR]       []
-    
+ifData              = ifCtx [DATA]              [SEQ,LOOP]
+
+ifPar               = ifCtx [PAR]               []
+
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -351,11 +353,11 @@ top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
 -- decorated: decorators (classdef | funcdef)
 
 decoration :: Parser S.Decoration
-decoration = return S.ClassAttr <* rword "classattr"    
-         <|> return S.InstAttr <* rword "instattr" 
-         <|> return S.StaticMethod <* rword "staticmethod" 
-         <|> return S.ClassMethod <* rword "classmethod" 
-         <|> return S.InstMethod <* rword "instmethod"
+decoration = return S.ClassAttr <* assertClassProtoExt <* rword "classattr"
+         <|> return S.InstAttr <* assertClassProtoExt <* rword "instattr" 
+         <|> return S.StaticMethod <* assertClassProtoExt <* rword "staticmethod" 
+         <|> return S.InstMethod <* assertClassProtoExt <* rword "instmethod"
+         <|> return S.ClassMethod <* assertClass <* rword "classmethod" 
          <?> "decorator"
 
 decorator, decorators :: (S.Decoration -> SrcLoc -> a -> a) -> Parser (a -> a)
@@ -367,7 +369,6 @@ decorator dec = (do
             newline1
             return $ dec nm
        return (\d -> f l d))
-   <?> "decorator"
 
 decorators dec = do
        ds <- many (decorator dec)
@@ -721,7 +722,10 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef)
+decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> signature)
+
+signature :: Parser S.Decl
+signature = addLoc (uncurry (S.Signature NoLoc) <$> tsig)
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -1066,17 +1070,17 @@ actordef = addLoc $ do
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 
-classdef    = classdefGen "class" name S.Class
-protodef    = classdefGen "protocol" name S.Protocol
-extdef      = classdefGen "extension" dotted_name S.Extension
+classdef    = classdefGen "class" name CLASS S.Class
+protodef    = classdefGen "protocol" name PROTO S.Protocol
+extdef      = classdefGen "extension" dotted_name EXT S.Extension
 
-classdefGen k pname con = addLoc $ do
+classdefGen k pname ctx con = addLoc $ do
                 assertNotData
                 (s,_) <- withPos (rword k)
                 nm <- pname
                 q <- optbinds
                 cs <- optbounds
-                con NoLoc nm q cs <$> suite CLASS s
+                con NoLoc nm q cs <$> suite ctx s
 
 -- arglist: argument (',' argument)*  [',']
 -- argument: ( test [comp_for] |
