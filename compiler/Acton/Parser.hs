@@ -352,31 +352,31 @@ top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
 -- decorators: decorator+
 -- decorated: decorators (classdef | funcdef)
 
-decoration :: Parser S.Decoration
-decoration = rword "classattr" *> assertClassProtoExt *> return S.ClassAttr  
-         <|> rword "instattr" *> assertClassProtoExt *> return S.InstAttr
-         <|> rword "staticmethod" *> assertClassProtoExt *> return S.StaticMethod
-         <|> rword "instmethod" *> assertClassProtoExt *> return S.InstMethod
-         <|> rword "classmethod" *> assertClass *> return S.ClassMethod 
-         <?> "decorator"
+sig_decoration :: Parser S.Decoration
+sig_decoration = rword "@classattr" *> assertClassProtoExt *> newline1 *> return S.ClassAttr  
+             <|> rword "@instattr" *> assertClassProtoExt *> newline1 *> return S.InstAttr
+             <|> rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMethod
+             <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMethod
+             <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
+             <|> return S.NoDecoration
 
--- decorator, decorators :: (S.Decoration -> SrcLoc -> a -> a) -> Parser (a -> a)
-decorator dec = do
-       (l,f) <- withLoc $ do 
-            assertNotData
-            symbol "@"
-            nm <- decoration
-            newline1
-            return $ dec nm
-       return (\d -> f l d)
+fun_decoration :: Parser S.Modif
+fun_decoration = rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMeth
+             <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMeth
+             <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
+             <|> return S.NoMod
 
-decorators dec = do
+decorator1 decoration = do
        p <- L.indentLevel
-       ds <- many (atPos p (decorator dec))
+       d <- decoration
        p1 <- L.indentLevel
        if (p /= p1)
          then fail "decorated declaration must have same indentation as decoration"
-         else return (\st -> foldr ($) st ds)
+         else return d
+
+
+signature :: Parser S.Decl
+signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t dec)
 
 -- async_funcdef: ASYNC funcdef
 -- funcdef: modifier 'def' NAME parameters ['->' test] ':' suite
@@ -384,16 +384,19 @@ decorators dec = do
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              (p,md) <- withPos (modifier <* rword "def")
+              dec <- decorator1 fun_decoration
+              (p,md) <- withPos (modifier dec <* rword "def")
               S.Def NoLoc <$> name <*> optbinds <*> parameters <*> optional (arrow *> ctype) <*> suite DEF p <*> pure md
 
 
 -- modifier: ['sync' | 'async']
 
-modifier :: Parser S.Modif
-modifier = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
-           assertActScope *> rword "async" *> return S.Async <|>
-           ifActScope (return (S.Sync False)) (return S.NoMod)
+modifier :: S.Modif -> Parser S.Modif
+modifier S.NoMod = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
+                   assertActScope *> rword "async" *> return S.Async <|>
+                   ifActScope (return (S.Sync False)) (return S.NoMod)
+modifier m = return m
+
 
 optbinds :: Parser [S.TBind]
 optbinds = brackets (do b <- cbind; bs <- many (comma *> cbind); return (b:bs))
@@ -555,7 +558,6 @@ expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
             try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
---        <|> try (decorators S.decorateSigs <*> (uncurry (S.TypeSig NoLoc) <$> tsig))
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
 
 var_stmt :: Parser S.Stmt
@@ -726,11 +728,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> signature)
-
-signature :: Parser S.Decl
---signature = addLoc (uncurry (S.Signature NoLoc) <$> (tsig <* newline1))
-signature = addLoc (do (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t S.NoDecoration)
+decl = try signature <|> funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 

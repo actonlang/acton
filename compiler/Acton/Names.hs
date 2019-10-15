@@ -111,7 +111,6 @@ instance Vars Stmt where
     free (Expr _ e)                 = free e
     free (Assign _ ps e)            = free ps ++ free e
     free (AugAssign _ p op e)       = free p ++ bound p ++ free e
-    free (TypeSig _ ns t)           = free t
     free (Assert _ es)              = free es
     free (Pass _)                   = []
     free (Delete _ p)               = free p ++ bound p
@@ -128,7 +127,6 @@ instance Vars Stmt where
     free (VarAssign _ ps e)         = free ps ++ free e
     free (Decl _ ds)                = free ds
 
-    bound (TypeSig _ ns t)          = ns
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
     bound (Data _ p b)              = bound p ++ (filter istemp $ bound b)
