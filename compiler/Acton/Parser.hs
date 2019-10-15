@@ -725,7 +725,7 @@ decl :: Parser S.Decl
 decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> signature)
 
 signature :: Parser S.Decl
-signature = addLoc (uncurry (S.Signature NoLoc) <$> tsig)
+signature = addLoc (do (ns,t) <- tsig; return $ S.Signature NoLoc ns t S.NoDecoration)
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -755,8 +755,8 @@ for_stmt = addLoc $ do
 except :: Parser S.Except
 except = addLoc $ do
              rword "except"
-             mbt <- optional ((,) <$> test <*> optional (rword "as" *> name))
-             return (maybe (S.ExceptAll NoLoc) (\(t,mbn) -> maybe (S.Except NoLoc t) (S.ExceptAs NoLoc t) mbn) mbt)
+             mbx <- optional ((,) <$> name <*> optional (rword "as" *> name))
+             return (maybe (S.ExceptAll NoLoc) (\(x,mbn) -> maybe (S.Except NoLoc x) (S.ExceptAs NoLoc x) mbn) mbx)
             
 try_stmt = addLoc $ do
                 assertNotData
