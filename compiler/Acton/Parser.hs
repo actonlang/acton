@@ -353,26 +353,30 @@ top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
 -- decorated: decorators (classdef | funcdef)
 
 decoration :: Parser S.Decoration
-decoration = return S.ClassAttr <* assertClassProtoExt <* rword "classattr"
-         <|> return S.InstAttr <* assertClassProtoExt <* rword "instattr" 
-         <|> return S.StaticMethod <* assertClassProtoExt <* rword "staticmethod" 
-         <|> return S.InstMethod <* assertClassProtoExt <* rword "instmethod"
-         <|> return S.ClassMethod <* assertClass <* rword "classmethod" 
+decoration = rword "classattr" *> assertClassProtoExt *> return S.ClassAttr  
+         <|> rword "instattr" *> assertClassProtoExt *> return S.InstAttr
+         <|> rword "staticmethod" *> assertClassProtoExt *> return S.StaticMethod
+         <|> rword "instmethod" *> assertClassProtoExt *> return S.InstMethod
+         <|> rword "classmethod" *> assertClass *> return S.ClassMethod 
          <?> "decorator"
 
-decorator, decorators :: (S.Decoration -> SrcLoc -> a -> a) -> Parser (a -> a)
-decorator dec = (do
+-- decorator, decorators :: (S.Decoration -> SrcLoc -> a -> a) -> Parser (a -> a)
+decorator dec = do
        (l,f) <- withLoc $ do 
             assertNotData
             symbol "@"
             nm <- decoration
             newline1
             return $ dec nm
-       return (\d -> f l d))
+       return (\d -> f l d)
 
 decorators dec = do
-       ds <- many (decorator dec)
-       return (\st -> foldr ($) st ds)
+       p <- L.indentLevel
+       ds <- many (atPos p (decorator dec))
+       p1 <- L.indentLevel
+       if (p /= p1)
+         then fail "decorated declaration must have same indentation as decoration"
+         else return (\st -> foldr ($) st ds)
 
 -- async_funcdef: ASYNC funcdef
 -- funcdef: modifier 'def' NAME parameters ['->' test] ':' suite
@@ -551,7 +555,7 @@ expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
             try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
-        <|> try (decorators S.decorateSigs <*> (uncurry (S.TypeSig NoLoc) <$> tsig))
+--        <|> try (decorators S.decorateSigs <*> (uncurry (S.TypeSig NoLoc) <$> tsig))
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
 
 var_stmt :: Parser S.Stmt
@@ -725,7 +729,8 @@ decl :: Parser S.Decl
 decl = decorators S.decorateDecl <*> (funcdef <|> classdef <|> protodef <|> extdef <|> actordef <|> signature)
 
 signature :: Parser S.Decl
-signature = addLoc (do (ns,t) <- tsig; return $ S.Signature NoLoc ns t S.NoDecoration)
+--signature = addLoc (uncurry (S.Signature NoLoc) <$> (tsig <* newline1))
+signature = addLoc (do (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t S.NoDecoration)
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
