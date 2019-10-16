@@ -597,6 +597,8 @@ int main(int argc, char **argv) {
 		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs[i].successful_consumes==cargs[i].no_enqueues?"OK":"FAILED", ret);
 	}
 
+	print_long_db(db);
+
 	return 0;
 }
 

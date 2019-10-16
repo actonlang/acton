@@ -172,7 +172,10 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 {
 	db_table_t * table = (db_table_t *) malloc(sizeof(db_table_t));
 
+	table->table_key = table_key;
+
 	// Deep copy of schema (to allow caller to free his copy):
+
 	table->schema = db_create_schema(schema->col_types, schema->no_cols, schema->primary_key_idxs, schema->no_primary_keys, schema->clustering_key_idxs, schema->no_clustering_keys, schema->index_key_idxs, schema->no_index_keys);
 
 	table->rows = create_skiplist_long();
@@ -566,6 +569,22 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	return no_results+1;
 }
 
+void print_long_db(db_t * db)
+{
+	printf("DB: [%d tables]\n", db->tables->no_items);
+
+	for(snode_t * node = HEAD(db->tables);node!=NULL;node=NEXT(node))
+		print_long_table((db_table_t *) node->value);
+}
+
+void print_long_table(db_table_t * table)
+{
+	printf("DB_TABLE: %ld [%d rows]\n", (long) table->table_key, table->rows->no_items);
+
+	for(snode_t * node = HEAD(table->rows);node!=NULL;node=NEXT(node))
+		print_long_row((db_row_t*) node->value);
+}
+
 void print_long_row(db_row_t* row)
 {
 	char to_string[512];
@@ -573,12 +592,12 @@ void print_long_row(db_row_t* row)
 
 	long_row_to_string(row, (char *) to_string, &len);
 
-	printf("DB_ROW: %s\n", to_string);
+	printf("DB_ROW [%d cells]: %s\n", row->cells->no_items, to_string);
 }
 
 void long_row_to_string(db_row_t* row, char * to_string, int * len)
 {
-	sprintf(to_string, "%ld, {", (long) row->key);
+	sprintf(to_string, "{ %ld, ", (long) row->key);
 
 	if(row->cells != NULL)
 	{
@@ -591,10 +610,15 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len)
 		}
 	}
 
-	for(int i=0; i<row->no_columns; i++)
-		sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+	if(row->no_columns > 0)
+	{
+		sprintf(to_string + strlen(to_string), "[ ");
+		for(int i=0; i<row->no_columns; i++)
+			sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+		sprintf(to_string + strlen(to_string), " ]");
+	}
 
-	sprintf(to_string + strlen(to_string), "}");
+	sprintf(to_string + strlen(to_string), "}, ");
 
 	*len = strlen(to_string);
 }
