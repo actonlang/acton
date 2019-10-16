@@ -36,23 +36,23 @@ instance Pretty TEnv where
       where pr (n,(t,dec))  = pretty dec $+$ pretty n <+> colon <+> pretty t
 
 instance Subst (TSchema, Decoration) where
-    nsubst s (t, dec)       = (nsubst s t, dec)
-    ntyvars (t, dec)        = ntyvars t
+    subst s (t, dec)        = (subst s t, dec)
+    tyvars (t, dec)         = tyvars t
 
 instance Subst NameInfo where
-    nsubst s (NVar t)           = NVar (nsubst s t)
-    nsubst s (NState t)         = NState (nsubst s t)
-    nsubst s (NClass q c te)    = NClass (nsubst s q) (nsubst s c) (nsubst s te)
-    nsubst s (NProto q c te)    = NProto (nsubst s q) (nsubst s c) (nsubst s te)
-    nsubst s (NExt q c te)      = NExt (nsubst s q) (nsubst s c) (nsubst s te)
-    nsubst s (NTVar cs)         = NTVar (nsubst s cs)
+    subst s (NVar t)            = NVar (subst s t)
+    subst s (NState t)          = NState (subst s t)
+    subst s (NClass q c te)     = NClass (subst s q) (subst s c) (subst s te)
+    subst s (NProto q c te)     = NProto (subst s q) (subst s c) (subst s te)
+    subst s (NExt q c te)       = NExt (subst s q) (subst s c) (subst s te)
+    subst s (NTVar cs)          = NTVar (subst s cs)
     
-    ntyvars (NVar t)            = ntyvars t
-    ntyvars (NState t)          = ntyvars t
-    ntyvars (NClass q c te)     = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
-    ntyvars (NProto q c te)     = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
-    ntyvars (NExt q c te)       = (ntyvars q ++ ntyvars c ++ ntyvars te) \\ ntybound q
-    ntyvars (NTVar cs)          = ntyvars cs
+    tyvars (NVar t)             = tyvars t
+    tyvars (NState t)           = tyvars t
+    tyvars (NClass q c te)      = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
+    tyvars (NProto q c te)      = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
+    tyvars (NExt q c te)        = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
+    tyvars (NTVar cs)           = tyvars cs
     
 prune                       :: [Name] -> TEnv -> TEnv
 prune vs                    = filter ((`notElem` vs) . fst)
@@ -69,8 +69,8 @@ instance Pretty OTEnv where
       where pr (n,t)        = pretty n <+> colon <+> pretty t
 
 instance OSubst OEnv where
-    subst s env             = env{ venv = subst s (venv env), ret = subst s (ret env) }
-    tyvars env              = tyvars (venv env)++ tyvars (ret env)
+    oSubst s env            = env{ venv = oSubst s (venv env), ret = oSubst s (ret env) }
+    oTyvars env             = oTyvars (venv env)++ oTyvars (ret env)
     
 
 o_prune                     :: [Name] -> OTEnv -> OTEnv
