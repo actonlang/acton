@@ -96,13 +96,20 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
                 
-data Name       = Name SrcLoc String | Internal Int String deriving (Generic)
+data Name       = Name SrcLoc String | Internal String Int deriving (Generic)
 
 nloc (Name l _) = l
 nloc Internal{} = NoLoc
 
-nstr (Name _ s) = s
-nstr (Internal i s) = show i ++ "____" ++ s
+nstr (Name _ s) = shift s
+  where shift []            = []
+        shift str
+          | n == 0          = head str : shift (tail str)
+          | n <= 2          = replicate n '_' ++ shift rest
+          | otherwise       = replicate (n+1) '_' ++ shift rest
+          where (xs,rest)   = span (=='_') str
+                n           = length xs
+nstr (Internal s i) = s ++ "___" ++ show i
 
 data QName      = QName Name [Name] deriving (Show,Eq)
 data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
@@ -180,9 +187,9 @@ type OSubstitution = [(OVar,OType)]
 
 ----
 
-data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show)
+data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show)   -- bound names must *not* be Internal
 
-data TVar       = TV Name deriving (Eq,Show) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV Name deriving (Eq,Ord,Show) -- the Name is an uppercase letter, optionally followed by digits.
 
 data TCon       = TC QName [Type] deriving (Eq,Show)
 
@@ -215,7 +222,7 @@ instance Data.Binary.Binary Name
 instance Data.Binary.Binary Qonstraint
 instance Data.Binary.Binary Binary
 
-tvarSupply      = [ TV $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
+tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
 
 
 -- SrcInfo ------------------
@@ -349,8 +356,14 @@ instance Eq Expr where
 
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
-    Internal i1 s1      == Internal i2 s2       = i1 == i2 && s1 == s2
+    Internal s1 i1      == Internal s2 i2       = s1 == s2 && i1 == i2
     _                   == _                    = False
+
+instance Ord Name where
+    Name _ s1           <= Name _ s2            = s1 <= s2
+    Internal s1 i1      <= Internal s2 i2       = (s1,i1) <= (s2,i2)
+    Name _ _            <= Internal _ _         = True
+    _                   <= _                    = False
 
 instance Eq a => Eq (Op a) where
     Op _ x              ==  Op _ y              = x == y
@@ -427,25 +440,32 @@ instance Read Name where
 
 -- Builtins -----------------
 
-builtinName n                       = qName ["__builtin__",n]
+nBuiltin                            = name "__builtin__"
+qBuiltin n                          = QName nBuiltin [n]
 
-nSequence                           = builtinName "Sequence"
-nMapping                            = builtinName "Mapping"
-nSet                                = builtinName "Set"
+nSequence                           = name "Sequence"
+nMapping                            = name "Mapping"
+nSet                                = name "Set"
+nInt                                = name "int"
+nFloat                              = name "float"
+nBool                               = name "bool"
+nStr                                = name "str"
 
-nInt                                = builtinName "int"
-nFloat                              = builtinName "float"
-nBool                               = builtinName "bool"
-nStr                                = builtinName "str"
+qnSequence                          = qBuiltin nSequence
+qnMapping                           = qBuiltin nMapping
+qnSet                               = qBuiltin nSet
+qnInt                               = qBuiltin nInt
+qnFloat                             = qBuiltin nFloat
+qnBool                              = qBuiltin nBool
+qnStr                               = qBuiltin nStr
 
-pSequence a                         = TCon NoLoc (TC nSequence [a])
-pMapping a b                        = TCon NoLoc (TC nMapping [a,b])
-pSet a                              = TCon NoLoc (TC nSet [a])
-
-tInt                                = TCon NoLoc (TC nInt [])
-tFloat                              = TCon NoLoc (TC nFloat [])
-tBool                               = TCon NoLoc (TC nBool [])
-tStr                                = TCon NoLoc (TC nStr [])
+pSequence a                         = TCon NoLoc (TC qnSequence [a])
+pMapping a b                        = TCon NoLoc (TC qnMapping [a,b])
+pSet a                              = TCon NoLoc (TC qnSet [a])
+tInt                                = TCon NoLoc (TC qnInt [])
+tFloat                              = TCon NoLoc (TC qnFloat [])
+tBool                               = TCon NoLoc (TC qnBool [])
+tStr                                = TCon NoLoc (TC qnStr [])
 
 -- Helpers ------------------
 
@@ -926,7 +946,10 @@ instance Pretty Aug where
 
 instance Pretty TSchema where
     pretty (TSchema _ [] t)         = pretty t
-    pretty (TSchema _ q t)          = brackets (commaList q) <+> text "=>" <+> pretty t
+    pretty (TSchema _ q t)
+      | length vs0 == length q      = pretty t
+      | otherwise                   = brackets (commaList q) <+> text "=>" <+> pretty t
+      where vs0                     = [ v | TBind v [] <- q ]
 
 instance Pretty TVar where
     pretty (TV n)                   = pretty n
@@ -934,10 +957,10 @@ instance Pretty TVar where
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
     pretty (TC n [t])
-      | n == nSequence              = brackets (pretty t)
-      | n == nSet                   = braces (pretty t)
+      | n == qnSequence             = brackets (pretty t)
+      | n == qnSet                  = braces (pretty t)
     pretty (TC n [kt,vt])
-      | n == nMapping               = braces (pretty kt <> colon <+> pretty vt)
+      | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
     
 instance Pretty TBind where

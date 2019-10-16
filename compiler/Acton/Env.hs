@@ -5,6 +5,7 @@ import qualified Control.Exception
 import Debug.Trace
 import Acton.Syntax
 import Acton.Names
+import Acton.TypeM
 import Utils
 import Pretty
 import InterfaceFiles
@@ -18,46 +19,76 @@ mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
   where Module _ imps _     = modul
 
 
-type TEnv                   = [(Name,(TSchema,Decoration))]
+type TEnv                   = [(Name, NameInfo)]
 
-type Env                    = [(QName,NameInfo)]
+type Env                    = [(Name, Maybe NameInfo)]
 
-data NameInfo               = NVar    (Maybe TSchema)
-                            | NState  (Maybe Type)
+data NameInfo               = NVar    TSchema
+                            | NVarDec TSchema Decoration
+                            | NState  Type
                             | NClass  [TBind] [TCon] TEnv
                             | NProto  [TBind] [TCon] TEnv
-                            | NExt    [TBind] [TCon] TEnv
+                            | NExt    [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
                             | NTVar   [TCon]
-                            | NModule Env
-                            deriving (Show)
+                            | NModule TEnv
+                            deriving (Eq,Show)
 
 instance Pretty TEnv where
-    pretty tenv             = vcat (map pr tenv)
-      where pr (n,(t,dec))  = pretty dec $+$ pretty n <+> colon <+> pretty t
+    pretty tenv                 = vcat (map pretty tenv)
 
-instance Subst (TSchema, Decoration) where
-    subst s (t, dec)        = (subst s t, dec)
-    tyvars (t, dec)         = tyvars t
+instance Pretty (Name,NameInfo) where
+    pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
+    pretty (n, NVarDec t dec)   = pretty dec $+$ pretty n <+> colon <+> pretty t
+    pretty (n, NState t)        = text "var" <+> pretty n <+> colon <+> pretty t
+    pretty (n, NClass q u te)   = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NProto q u te)   = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NExt q u te)     = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NTVar u)         = pretty n <> parens (commaList u)
 
 instance Subst NameInfo where
-    subst s (NVar t)            = NVar (subst s t)
-    subst s (NState t)          = NState (subst s t)
-    subst s (NClass q c te)     = NClass (subst s q) (subst s c) (subst s te)
-    subst s (NProto q c te)     = NProto (subst s q) (subst s c) (subst s te)
-    subst s (NExt q c te)       = NExt (subst s q) (subst s c) (subst s te)
-    subst s (NTVar cs)          = NTVar (subst s cs)
-    
-    tyvars (NVar t)             = tyvars t
-    tyvars (NState t)           = tyvars t
-    tyvars (NClass q c te)      = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
-    tyvars (NProto q c te)      = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
-    tyvars (NExt q c te)        = (tyvars q ++ tyvars c ++ tyvars te) \\ tybound q
-    tyvars (NTVar cs)           = tyvars cs
+    msubst (NVar t)         = NVar <$> msubst t
+    msubst (NVarDec t dec)  = NVarDec <$> msubst t <*> return dec
+    msubst (NState t)       = NState <$> msubst t
+    msubst (NClass q u te)  = NClass <$> msubst q <*> msubst u <*> msubst te
+    msubst (NProto q u te)  = NProto <$> msubst q <*> msubst u <*> msubst te
+    msubst (NExt q u te)    = NExt <$> msubst q <*> msubst u <*> msubst te
+    msubst (NTVar cs)       = NTVar <$> msubst cs
+
+    tyfree (NVar t)         = tyfree t
+    tyfree (NVarDec t dec)  = tyfree t
+    tyfree (NState t)       = tyfree t
+    tyfree (NClass q u te)  = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
+    tyfree (NProto q u te)  = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
+    tyfree (NExt q u te)    = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
+    tyfree (NTVar u)        = tyfree u
     
 prune                       :: [Name] -> TEnv -> TEnv
-prune vs                    = filter ((`notElem` vs) . fst)
+prune xs                    = filter ((`notElem` xs) . fst)
 
+initEnv                     :: Env
+initEnv                     = define envBuiltin [ (nBuiltin, Just (NModule envBuiltin)) ]
 
+blockstate                  :: Env -> Env
+blockstate env              = [ (z, Nothing) | (z, Just (NState _)) <- env ] ++ env
+
+reserve                     :: [Name] -> Env -> Env
+reserve xs env              = [ (x, Nothing) | x <- xs ] ++ env
+
+define                      :: TEnv -> Env -> Env
+define te env               = [ (n, Just i) | (n,i) <- te ] ++ env
+
+reserved                    :: Env -> Name -> Bool
+reserved env n              = lookup n env == Just Nothing
+
+findname                    :: Env -> Name -> NameInfo
+findname env n              = case lookup n env of
+                                Nothing       -> Control.Exception.throw $ NameNotFound n
+                                Just Nothing  -> Control.Exception.throw $ NameReserved n
+                                Just (Just i) -> i
+                                
 --------------------------------------------
 
 type OTEnv                  = [(Name,OType)]
@@ -68,10 +99,12 @@ instance Pretty OTEnv where
     pretty tenv             = vcat (map pr tenv)
       where pr (n,t)        = pretty n <+> colon <+> pretty t
 
-instance OSubst OEnv where
-    oSubst s env            = env{ venv = oSubst s (venv env), ret = oSubst s (ret env) }
+instance MapSubst OEnv where
+    mapsubst env            = do venv' <- mapsubst (venv env)
+                                 ret' <- mapsubst (ret env)
+                                 return env{ venv = venv', ret = ret' }
     oTyvars env             = oTyvars (venv env)++ oTyvars (ret env)
-    
+
 
 o_prune                     :: [Name] -> OTEnv -> OTEnv
 o_prune vs                  = filter ((`notElem` vs) . fst)
@@ -106,15 +139,14 @@ o_getReturn env             = fromJust $ ret env
 
 ----------------------------
 
-autoImport                  :: Env
-autoImport                  = [ (QName n [], info) | (QName _ [n], info) <- builtin ]
-
-builtin                     :: Env
-builtin                     = [ 
-                                (nSequence, NProto [a] [] []),
+envBuiltin                  :: TEnv
+envBuiltin                  = [ (nSequence, NProto [a] [] []),
                                 (nMapping,  NProto [a,b] [] []),
-                                (nSet,      NProto [a] [] [])
-                              ]
+                                (nSet,      NProto [a] [] []),
+                                (nInt,      NClass [] [] []),
+                                (nFloat,    NClass [] [] []),
+                                (nBool,     NClass [] [] []),
+                                (nStr,      NClass [] [] []) ]
   where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
         ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
 
