@@ -81,8 +81,8 @@ class InfData a where
     infData                             :: OEnv -> a -> TypeM OTEnv
 
 
-generalize tvs cs t                     = OSchema (unOVar $ rng s) (subst s cs) (subst s t)
-  where s                               = (tyvars t \\ tvs) `zip` schemaOVars
+generalize tvs cs t                     = OSchema (unOVar $ rng s) (oSubst s cs) (oSubst s t)
+  where s                               = (oTyvars t \\ tvs) `zip` schemaOVars
 
 genTEnv env te                          = do cs <- constraints
                                              --traceM ("#### Reducing " ++ prstrs (dom te))
@@ -92,8 +92,8 @@ genTEnv env te                          = do cs <- constraints
                                              --traceM (prstr cs1)
                                              te1 <- mapsubst te
                                              dump [ INS (loc v) t | (v,t) <- te1 ]
-                                             tvs <- fmap tyvars $ mapM mapsubst $ map OVar $ tyvars env
-                                             let (cs2, cs3) = partition (null . (\\tvs) . tyvars) cs1
+                                             tvs <- fmap oTyvars $ mapM mapsubst $ map OVar $ oTyvars env
+                                             let (cs2, cs3) = partition (null . (\\tvs) . oTyvars) cs1
                                                  te2 = mapSnd (closeFX . generalize tvs cs3) te1
                                              --traceM ("#### Generalized " ++ prstrs (dom te))
                                              --traceM (prstr te2)

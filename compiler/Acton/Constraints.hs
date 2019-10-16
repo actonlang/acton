@@ -16,7 +16,7 @@ import Acton.Names
 import Acton.Env
 
 
-s1 @@ s2                                = s1 ++ [ (l,subst s1 t) | (l,t) <- s2 ]
+s1 @@ s2                                = s1 ++ [ (l,oSubst s1 t) | (l,t) <- s2 ]
 
 
 unify t1 t2                                 = do -- traceM ("unify " ++ prstr (QEqu l0 0 t1 t2))
@@ -28,14 +28,14 @@ unify' (OVar tv) t2                         = do s <- substitution
                                                  case Map.lookup tv s of
                                                    Just t1 -> unify' t1 t2
                                                    Nothing -> do t2' <- mapsubst t2
-                                                                 when (tv `elem` tyvars t2') (throwError $ InfiniteType tv)
-                                                                 substitute tv t2'
+                                                                 when (tv `elem` oTyvars t2') (throwError $ InfiniteType tv)
+                                                                 oSubstitute tv t2'
 unify' t1 (OVar tv)                         = do s <- substitution
                                                  case Map.lookup tv s of
                                                    Just t2 -> unify' t1 t2
                                                    Nothing -> do t1' <- mapsubst t1
-                                                                 when (tv `elem` tyvars t1') (throwError $ InfiniteType tv)
-                                                                 substitute tv t1'
+                                                                 when (tv `elem` oTyvars t1') (throwError $ InfiniteType tv)
+                                                                 oSubstitute tv t1'
 
 --       as declared      as called
 unify' (OFun a1 r1 t1) (OFun a2 r2 t2)      = do unify a1 a2
@@ -81,7 +81,7 @@ unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (rowTail
           | r2 == tl                        = throwError (ConflictingRow tv)
           | otherwise                       = do t <- newOVar
                                                  r <- newOVar
-                                                 substitute tv (OPos t r)
+                                                 oSubstitute tv (OPos t r)
                                                  return (t, r)
         findFst' r tl                       = error ("##### findFst' " ++ prstr r)
 
@@ -127,7 +127,7 @@ unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (
           | r2 == tl                        = throwError (ConflictingRow tv)
           | otherwise                       = do t <- newOVar
                                                  r <- newOVar
-                                                 substitute tv (OKwd n t r)
+                                                 oSubstitute tv (OKwd n t r)
                                                  return (t, revApp r0 r)
 
 unify' (OStar2 t r1) r2                     = do r <- newOVar
@@ -150,7 +150,7 @@ unify' (OSchema vs1 cs1 t1) (OSchema vs2 cs2 t2)
 -- Will go away when Rank-N records become nominal
 unify' (OSchema vs1 [] t1) t2               = do ts <- mapM (const newOVar) vs1
                                                  let s = vs1 `zip` ts
-                                                 unify' (subst s t1) t2
+                                                 unify' (oSubst s t1) t2
 
 unify' (OList t1) (ODict k2 v2)             = do unify t1 k2                  -- Temporary HACK...
                                                  unify OInt v2
@@ -224,7 +224,7 @@ effect l fx                             = do fx0 <- currentFX
 
 defer cs                                = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,cs:d,i,s))
 
-substitute tv t                         = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,d,i,Map.insert tv t s))
+oSubstitute tv t                         = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,d,i,Map.insert tv t s))
 
 dump info1                              = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,d,reverse info1 ++ i,s))
 
@@ -286,7 +286,7 @@ instance MapSubst OType where
     mapsubst (OStar1 t r)               = OStar1 <$> mapsubst t <*> mapsubst r
     mapsubst (OKwd n t r)               = OKwd n <$> mapsubst t <*> mapsubst r
     mapsubst (OStar2 t r)               = OStar2 <$> mapsubst t <*> mapsubst r
-    mapsubst (OSchema vs cs t)          = OSchema vs <$> mapsubst cs <*> mapsubst t     -- vs are always disjoint from dom(subst)
+    mapsubst (OSchema vs cs t)          = OSchema vs <$> mapsubst cs <*> mapsubst t     -- vs are always disjoint from dom(oSubst)
     mapsubst t                          = return t
 
 instance MapSubst Qonstraint where
@@ -308,8 +308,8 @@ newTEnv vs                              = (vs `zip`) <$> mapM (const newOVar) (n
 
 instantiate l t0@(OSchema vs cs t)      = do tvs <- newOVars (length vs)
                                              let s   = vs `zip` tvs
-                                                 cs1 = [ subst s c{cloc=l} | c <- cs ]
-                                                 t1  = subst s t
+                                                 cs1 = [ oSubst s c{cloc=l} | c <- cs ]
+                                                 t1  = oSubst s t
                                              constrain cs1
                                              dump [INS l t1]
                                              return t1
@@ -330,21 +330,21 @@ data SolveErr                           = Defer
                                         deriving (Eq,Show,Typeable)
 
 instance OSubst SolveErr where
-    tyvars (ConflictingRow tv)          = [tv]
-    tyvars (InfiniteType tv)            = [tv]
-    tyvars (NoUnify t1 t2)              = (tyvars t1 ++ tyvars t2) \\ [[]]
-    tyvars (NoSolve c err)              = (tyvars c ++ tyvars err) \\ [[]]
-    tyvars _                            = []
+    oTyvars (ConflictingRow tv)          = [tv]
+    oTyvars (InfiniteType tv)            = [tv]
+    oTyvars (NoUnify t1 t2)              = (oTyvars t1 ++ oTyvars t2) \\ [[]]
+    oTyvars (NoSolve c err)              = (oTyvars c ++ oTyvars err) \\ [[]]
+    oTyvars _                            = []
 
-    subst s (ConflictingRow tv)         = case lookup tv s of
+    oSubst s (ConflictingRow tv)         = case lookup tv s of
                                             Just (OVar tv') -> ConflictingRow tv'
                                             _               -> ConflictingRow tv
-    subst s (InfiniteType tv)           = case lookup tv s of
+    oSubst s (InfiniteType tv)           = case lookup tv s of
                                             Just (OVar tv') -> InfiniteType tv'
                                             _               -> InfiniteType tv
-    subst s (NoUnify t1 t2)             = NoUnify (subst s t1) (subst s t2)
-    subst s (NoSolve c err)             = NoSolve (subst s c) (subst s err)
-    subst s err                         = err
+    oSubst s (NoUnify t1 t2)             = NoUnify (oSubst s t1) (oSubst s t2)
+    oSubst s (NoSolve c err)             = NoSolve (oSubst s c) (oSubst s err)
+    oSubst s err                         = err
 
 instance Control.Exception.Exception SolveErr
 
@@ -462,8 +462,8 @@ equTxt n    = ("Types", "and", "do not unify (unknown tag version " ++ show n ++
 
 
 
-simplify x                              = subst s x
-  where s                               = [ (tv, wildOVar) | tv <- nub (tyvars x) ]
+simplify x                              = oSubst s x
+  where s                               = [ (tv, wildOVar) | tv <- nub (oTyvars x) ]
 
 solveAll cs                                 = do -- traceM ("##### SolveAll: ")
                                                  -- traceM (prstr cs)
