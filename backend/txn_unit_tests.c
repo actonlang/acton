@@ -584,17 +584,19 @@ int main(int argc, char **argv) {
 
 	for(int i=0;i<no_actors;i++)
 	{
+		int num_enqueues = cargs[i].no_enqueues+((i==0)?2:0);
+
 		// Test enqueues:
-		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, cargs[i].successful_enqueues==cargs[i].no_enqueues+((i==0)?2:0)?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "enqueue", i, (cargs[i].successful_enqueues>=num_enqueues && cargs[i].successful_enqueues<=num_enqueues+1)?"OK":"FAILED", ret);
 
 		// Test dequeues:
-		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs[i].successful_dequeues==cargs[i].no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "dequeue", i, cargs[i].successful_dequeues==cargs[i].successful_enqueues-((i==0)?2:0)?"OK":"FAILED", ret);
 
 		// Test read head sanity:
 		printf("Test %s (%d) - %s (%d)\n", "read_head", i, ((int) cargs[i].read_head)==(cargs[i].successful_dequeues - 1)?"OK":"FAILED", ret);
 
 		// Test consumes:
-		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs[i].successful_consumes==cargs[i].no_enqueues?"OK":"FAILED", ret);
+		printf("Test %s (%d) - %s (%d)\n", "consume", i, cargs[i].successful_consumes==cargs[i].successful_dequeues?"OK":"FAILED", ret);
 	}
 
 	print_long_db(db);
