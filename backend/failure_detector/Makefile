@@ -20,35 +20,44 @@ LFLAGS=-luuid#-latomic -lm
 
 LIBDIR=../../lib
 
-all: skiplist_test libdb db_unit_tests queue_unit_tests txn_unit_tests
-
-
+all: db_messages_test
 
 vector_clock.o:
 	cc vector_clock.c -c -I src $(LFLAGS) $(CFLAGS)
 
 db_messages.pb-c.c: db_messages.proto
 	protoc-c --c_out=. db_messages.proto
-
+	
 db_messages.pb-c.o: db_messages.pb-c.c
-	cc $(LFLAGS) $(CFLAGS) -I/usr/local/include -Wno-unused-value db_messages.pb-c.cå
+	cc db_messages.pb-c.c -c $(LFLAGS) $(CFLAGS)
 
-libvc: vector_clock.o db_messages.pb-c.o
-	ar rcs $(LIBDIR)/libvc.a vector_clock.o db_messages.pb-c.o
+cells.o: cells.c
+	cc cells.c -c $(LFLAGS) $(CFLAGS)
+
+db_queries.o: db_queries.c
+	cc db_queries.c -c $(LFLAGS) $(CFLAGS)
+
+fd.o: fd.c
+	cc fd.c -c $(LFLAGS) $(CFLAGS)
+
+
+libvc: vector_clock.o db_messages.pb-c.o $(LIBDIR)
+	ar rcs $(LIBDIR)/libvc.a vector_clock.o
 	ranlib $(LIBDIR)/libvc.a
 
-db_messages_test: db_messages_test.c
-	cc db_messages_test.c \
-		$(CFLAGS) -I ../src -I/usr/local/include -L ../lib \
-		-lvc $(LFLAGS) -L/usr/local/lib -pthread -lprotobuf-c \
-		$(LIBS) \
-		$(CFLAGS) \
-		-o queue_unit_tests
+libremote: db_messages.pb-c.o cells.o db_queries.o fd.o $(LIBDIR)
+	ar rcs $(LIBDIR)/libremote.a db_messages.pb-c.o cells.o db_queries.o fd.o
+	ranlib $(LIBDIR)/libremote.a
 
-	cc -pthread $(LFLAGS) $(CFLAGS) -I/usr/local/include -Wno-unused-value vector_clock. fd.c cells.c db_queries.c db_messages_test.c db_messages.pb-c.c -L/usr/local/lib -lprotobuf-c -o db_messages_test
+db_messages_test: db_messages_test.c libremote libvc
+	cc db_messages_test.c \
+		$(CFLAGS) -I ../src -I/usr/local/include \
+		-L $(LIBDIR) -L/usr/local/lib -lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
+		$(LIBS) \
+		-o db_messages_test
 
 $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o $(LIBDIR)/libvc.a db_messages_test
+	rm -rf *.o $(LIBDIR)/libvc.a $(LIBDIR)/libremote.a db_messages_test

@@ -41,7 +41,7 @@ typedef struct db_server
 
 db_schema_t * get_schema(db_t * db, WORD table_key)
 {
-	snode_t * node = skiplist_search(db->tables, (long) table_key);
+	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)
 		return NULL;

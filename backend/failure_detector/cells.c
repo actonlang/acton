@@ -12,6 +12,42 @@
 #include <limits.h>
 #include <assert.h>
 
+// Vector Clock serialization:
+
+int serialize_vc(vector_clock * vc, void ** buf, unsigned * len)
+{
+	VectorClockMessage msg = VECTOR_CLOCK_MESSAGE__INIT;
+	init_vc_msg(&msg, vc);
+
+	*len = vector_clock_message__get_packed_size (&msg);
+	*buf = malloc (*len);
+	vector_clock_message__pack (&msg, *buf);
+
+	free_vc_msg(&msg);
+
+	return 0;
+}
+
+int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
+{
+	  VectorClockMessage * msg = vector_clock_message__unpack (NULL, msg_len, buf);
+
+	  if (msg == NULL)
+	  { // Something failed
+	    fprintf(stderr, "error unpacking vector_clock message\n");
+	    return 1;
+	  }
+
+	  assert(msg->n_ids == msg->n_counters);
+
+	  *vc = init_vc_from_msg(msg);
+
+	  vector_clock_message__free_unpacked(msg, NULL);
+
+	  return 0;
+}
+
+
 // Cell Address:
 
 cell_address * init_cell_address(long table_key, long * keys, int no_keys)

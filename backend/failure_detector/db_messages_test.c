@@ -125,7 +125,7 @@ int main (int argc, const char * argv[])
 		assert(0);
 	}
 
-	// Generate dummy GS:
+	// Generate dummy Write Query:
 
 	long key = 1;
 	long column = 1;

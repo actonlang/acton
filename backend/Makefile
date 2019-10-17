@@ -20,11 +20,16 @@ LFLAGS=-luuid#-latomic -lm
 
 LIBDIR=../lib
 
-all: skiplist_test libdb db_unit_tests queue_unit_tests txn_unit_tests
+SUBDIRS = failure_detector
 
-libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
-	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o vector_clock.o txn_state.o txns.o
-	ranlib $(LIBDIR)/libdb.a
+.PHONY: subdirs $(SUBDIRS)
+
+subdirs: $(SUBDIRS)
+
+$(SUBDIRS):
+	$(MAKE) -C $@
+
+all: skiplist_test libdb db_unit_tests queue_unit_tests txn_unit_tests failure_detector client server
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -44,37 +49,48 @@ txn_state.o:
 txns.o:
 	cc txns.c -c -I src $(LFLAGS) $(CFLAGS)
 
+libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
+	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o vector_clock.o txn_state.o txns.o
+	ranlib $(LIBDIR)/libdb.a
 
-db_unit_tests: db_unit_tests.c
+db_unit_tests: db_unit_tests.c libdb
 	cc -std=c11 db_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
+		$(CFLAGS) -I ../src -L $(LIBDIR) \
 		-ldb $(LFLAGS) -pthread \
 		$(LIBS) \
-		$(CFLAGS) \
 		-o db_unit_tests
 
-queue_unit_tests: queue_unit_tests.c
+queue_unit_tests: queue_unit_tests.c libdb
 	cc queue_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
+		$(CFLAGS) -I ../src -L $(LIBDIR) \
 		-ldb $(LFLAGS) -pthread \
 		$(LIBS) \
-		$(CFLAGS) \
 		-o queue_unit_tests
 
-txn_unit_tests: txn_unit_tests.c
+txn_unit_tests: txn_unit_tests.c libdb
 	cc txn_unit_tests.c \
-		$(CFLAGS) -I ../src -L ../lib \
+		$(CFLAGS) -I ../src -L $(LIBDIR) \
 		-ldb $(LFLAGS) -pthread \
 		$(LIBS) \
-		$(CFLAGS) \
 		-o txn_unit_tests
 		
 skiplist_test: skiplist_test.c skiplist.c
 	cc skiplist_test.c skiplist.c \
 		$(CFLAGS) -I ../src \
 		$(LFLAGS) \
-		$(CFLAGS) \
 		-o skiplist_test
+		
+client: client.c libdb failure_detector
+	cc client.c \
+	 $(CFLAGS) \
+	 -L $(LIBDIR) -lremote -ldb -lprotobuf-c -pthread -luuid \
+	 -o client
+
+server: server.c libdb failure_detector
+	cc server.c \
+	 $(CFLAGS) \
+	 -L $(LIBDIR) -lremote -ldb -lprotobuf-c -pthread -luuid \
+	 -o server
 
 $(LIBDIR):
 	mkdir -p $(LIBDIR)

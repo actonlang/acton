@@ -53,4 +53,7 @@ int deserialize_cell(void * buf, unsigned msg_len, cell ** ca);
 int equals_cell(cell * ca1, cell * ca2);
 char * to_string_cell(cell * ca, char * msg_buff);
 
+int serialize_vc(vector_clock * vc, void ** buf, unsigned * len);
+int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
+
 #endif /* BACKEND_FAILURE_DETECTOR_CELLS_H_ */
