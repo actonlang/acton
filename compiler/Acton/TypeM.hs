@@ -103,9 +103,36 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst TSchema where
-    msubst (TSchema l q t)          = TSchema l <$> msubst q <*> msubst t           -- bound(q) and dom(currsubst) are known to be disjoint
+    msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
+      where relevant k v            = k `elem` vs0
+            vs0                     = tyfree sc
+            msubst' s               = TSchema l (subst s q') (subst s t')
+              where vs              = tybound q
+                    newvars         = tyfree (rng s)
+                    clashvars       = vs `intersect` newvars
+                    avoidvars       = vs0 ++ vs ++ newvars
+                    freshvars       = tvarSupply \\ avoidvars
+                    renaming_s      = clashvars `zip` map (TVar NoLoc) freshvars
+                    q'              = [ TBind (subst renaming_s v) (subst renaming_s cs) | TBind v cs <- q ]
+                    t'              = subst renaming_s t
+
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t)         = tybound q
+
+testSchemaSubst = do
+    putStrLn ("t:  " ++ render (pretty t))
+    putStrLn ("s1: " ++ render (pretty s1))
+    putStrLn ("s2: " ++ render (pretty s2))
+    putStrLn ("s3: " ++ render (pretty s3))
+    putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
+    putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
+    putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
+  where t   = TSchema NoLoc [TBind (TV (Name NoLoc "A")) [TC (QName (Name NoLoc "Eq") []) []]] 
+                            (TCon NoLoc (TC (QName (Name NoLoc "apa") []) [TVar NoLoc (TV (Name NoLoc "A")), 
+                                                                           TVar NoLoc (TV (Name NoLoc "B"))]))
+        s1  = [(TV (Name NoLoc "B"), TSelf NoLoc)]
+        s2  = [(TV (Name NoLoc "A"), TSelf NoLoc)]
+        s3  = [(TV (Name NoLoc "B"), TVar NoLoc (TV (Name NoLoc "A")))]
 
 instance Subst TVar where
     msubst v                        = do t <- msubst (TVar NoLoc v)
