@@ -31,6 +31,7 @@ data NameInfo               = NVar    TSchema
                             | NExt    [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
                             | NAlias  [TBind] Type
                             | NTVar   [TCon]
+                            | NPAttr  QName         -- protocol attribute (global), arg points to owning protocol
                             | NModule TEnv
                             deriving (Eq,Show)
 
@@ -47,9 +48,11 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NExt q us te)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
-    pretty (n, NAlias q t)      = text "type" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  equals <+> pretty t
+    pretty (n, NAlias q t)      = text "alias" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  parens (pretty t)
     pretty (n, NTVar us)        = pretty n <> parens (commaList us)
+    pretty (n, NPAttr qn)       = dot <> pretty n <+> equals <+> pretty qn <> dot <> pretty n
+    pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
 
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
@@ -60,6 +63,8 @@ instance Subst NameInfo where
     msubst (NExt q us te)       = NExt <$> msubst q <*> msubst us <*> msubst te
     msubst (NAlias q t)         = NAlias <$> msubst q <*> msubst t
     msubst (NTVar us)           = NTVar <$> msubst us
+    msubst (NPAttr qn)          = NPAttr <$> return qn
+    msubst (NModule te)         = NModule <$> return te     -- msubst te
 
     tyfree (NVar t)             = tyfree t
     tyfree (NDVar t dec)        = tyfree t
@@ -69,6 +74,8 @@ instance Subst NameInfo where
     tyfree (NExt q us te)       = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NAlias q t)         = (tyfree q ++ tyfree t) \\ tybound q
     tyfree (NTVar us)           = tyfree us
+    tyfree (NPAttr qn)          = []
+    tyfree (NModule te)         = []        -- tyfree te
     
 
 prune                       :: [Name] -> TEnv -> TEnv
