@@ -75,7 +75,8 @@ prune                       :: [Name] -> TEnv -> TEnv
 prune xs                    = filter ((`notElem` xs) . fst)
 
 initEnv                     :: Env
-initEnv                     = define envBuiltin [ (nBuiltin, Just (NModule envBuiltin)) ]
+initEnv                     = define autoImp [ (nBuiltin, Just (NModule envBuiltin)) ]
+  where autoImp             = importAll (QName nBuiltin []) envBuiltin
 
 blockstate                  :: Env -> Env
 blockstate env              = [ (z, Nothing) | (z, Just (NSVar _)) <- env ] ++ env
@@ -156,6 +157,16 @@ envBuiltin                  = [ (nSequence, NProto [a] [] []),
   where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
         ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
 
+importAll                   :: QName -> TEnv -> TEnv
+importAll (QName m ms) te   = mapMaybe imp te
+  where 
+    imp (n, NProto q _ _)   = Just (n, NAlias q (tcon n q))
+    imp (n, NClass q _ _)   = Just (n, NAlias q (tcon n q))
+    imp (n, NExt q _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
+    imp (n, NAlias q _)     = Just (n, NAlias q (tcon n q))
+    imp (n, NVar t)         = Just (n, NVar t)
+    imp _                   = Nothing
+    tcon n q                = TCon NoLoc (TC (QName m (ms++[n])) [ TVar NoLoc tv | TBind tv us <- q ])
 
 old_builtins                = [
                                 (nm "record", schema [a] []
