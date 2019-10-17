@@ -888,10 +888,6 @@ instance Pretty OSubstitution where
     pretty s                        = vcat (map pr s)
       where pr (tv,t)               = pretty tv <+> equals <+> pretty t
 
-instance Pretty Substitution where
-    pretty s                        = vcat (map pr s)
-      where pr (tv,t)               = pretty tv <+> equals <+> pretty t
-
 
 instance Pretty Unary where
     pretty Not                      = text "not "
@@ -1002,5 +998,6 @@ instance Pretty Type where
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     pretty (TNone _)                = text "None"
 
-
-    
+instance Pretty Substitution where
+    pretty s                        = vcat (map pr s)
+      where pr (tv,t)               = pretty tv <+> text "->" <+> pretty t
