@@ -24,11 +24,12 @@ type TEnv                   = [(Name, NameInfo)]
 type Env                    = [(Name, Maybe NameInfo)]
 
 data NameInfo               = NVar    TSchema
-                            | NVarDec TSchema Decoration
-                            | NState  Type
+                            | NDVar   TSchema Decoration
+                            | NSVar   Type
                             | NClass  [TBind] [TCon] TEnv
                             | NProto  [TBind] [TCon] TEnv
                             | NExt    [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
+                            | NAlias  [TBind] Type
                             | NTVar   [TCon]
                             | NModule TEnv
                             deriving (Eq,Show)
@@ -38,33 +39,38 @@ instance Pretty TEnv where
 
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
-    pretty (n, NVarDec t dec)   = pretty dec $+$ pretty n <+> colon <+> pretty t
-    pretty (n, NState t)        = text "var" <+> pretty n <+> colon <+> pretty t
-    pretty (n, NClass q u te)   = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
-    pretty (n, NProto q u te)   = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
-    pretty (n, NExt q u te)     = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList u <> colon $+$ (nest 4 $ pretty te)
-    pretty (n, NTVar u)         = pretty n <> parens (commaList u)
+    pretty (n, NDVar t dec)     = pretty dec $+$ pretty n <+> colon <+> pretty t
+    pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
+    pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NExt q us te)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NAlias q t)      = text "type" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  equals <+> pretty t
+    pretty (n, NTVar us)        = pretty n <> parens (commaList us)
 
 instance Subst NameInfo where
-    msubst (NVar t)         = NVar <$> msubst t
-    msubst (NVarDec t dec)  = NVarDec <$> msubst t <*> return dec
-    msubst (NState t)       = NState <$> msubst t
-    msubst (NClass q u te)  = NClass <$> msubst q <*> msubst u <*> msubst te
-    msubst (NProto q u te)  = NProto <$> msubst q <*> msubst u <*> msubst te
-    msubst (NExt q u te)    = NExt <$> msubst q <*> msubst u <*> msubst te
-    msubst (NTVar cs)       = NTVar <$> msubst cs
+    msubst (NVar t)             = NVar <$> msubst t
+    msubst (NDVar t dec)        = NDVar <$> msubst t <*> return dec
+    msubst (NSVar t)            = NSVar <$> msubst t
+    msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
+    msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
+    msubst (NExt q us te)       = NExt <$> msubst q <*> msubst us <*> msubst te
+    msubst (NAlias q t)         = NAlias <$> msubst q <*> msubst t
+    msubst (NTVar us)           = NTVar <$> msubst us
 
-    tyfree (NVar t)         = tyfree t
-    tyfree (NVarDec t dec)  = tyfree t
-    tyfree (NState t)       = tyfree t
-    tyfree (NClass q u te)  = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
-    tyfree (NProto q u te)  = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
-    tyfree (NExt q u te)    = (tyfree q ++ tyfree u ++ tyfree te) \\ tybound q
-    tyfree (NTVar u)        = tyfree u
+    tyfree (NVar t)             = tyfree t
+    tyfree (NDVar t dec)        = tyfree t
+    tyfree (NSVar t)            = tyfree t
+    tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
+    tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
+    tyfree (NExt q us te)       = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
+    tyfree (NAlias q t)         = (tyfree q ++ tyfree t) \\ tybound q
+    tyfree (NTVar us)           = tyfree us
     
+
 prune                       :: [Name] -> TEnv -> TEnv
 prune xs                    = filter ((`notElem` xs) . fst)
 
@@ -72,7 +78,7 @@ initEnv                     :: Env
 initEnv                     = define envBuiltin [ (nBuiltin, Just (NModule envBuiltin)) ]
 
 blockstate                  :: Env -> Env
-blockstate env              = [ (z, Nothing) | (z, Just (NState _)) <- env ] ++ env
+blockstate env              = [ (z, Nothing) | (z, Just (NSVar _)) <- env ] ++ env
 
 reserve                     :: [Name] -> Env -> Env
 reserve xs env              = [ (x, Nothing) | x <- xs ] ++ env
