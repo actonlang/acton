@@ -12,6 +12,8 @@ import Data.Typeable
 import Pretty
 import Utils
 import Acton.Syntax
+import Acton.Builtin
+import Acton.Printer
 import Acton.Names
 
 

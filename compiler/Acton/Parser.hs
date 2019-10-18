@@ -12,6 +12,7 @@ import Control.Monad.Combinators.Expr
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Data.List.NonEmpty
 import qualified Acton.Syntax as S
+import qualified Acton.Builtin as Builtin
 import qualified Acton.Names as Names
 import Utils
 import Debug.Trace
@@ -1204,7 +1205,7 @@ ctype    =  addLoc (
         <|> S.TOpt NoLoc <$> (qmark *> ctype)
         <|> braces (do t <- ctype
                        mbt <- optional (colon *> ctype)
-                       return (maybe (S.pSet t) (S.pMapping t) mbt))
+                       return (maybe (Builtin.pSet t) (Builtin.pMapping t) mbt))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
@@ -1216,7 +1217,7 @@ ctype    =  addLoc (
         <|> try (parens (S.TRecord NoLoc <$> kwdrow))
         <|> try (parens (S.TTuple NoLoc <$> posrow <* optional comma))
         <|> parens (return (S.TTuple NoLoc S.PosNil))
-        <|> try (brackets (S.pSequence <$> ctype))
+        <|> try (brackets (Builtin.pSequence <$> ctype))
         <|> try (S.TVar NoLoc <$> cvar)
         <|> S.TAt NoLoc <$> (symbol "@" *> ccon)
         <|> S.TCon NoLoc <$> ccon)

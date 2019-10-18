@@ -12,6 +12,8 @@ import System.Directory (doesFileExist)
 import Control.Monad
 
 import Acton.Syntax
+import Acton.Builtin
+import Acton.Printer
 import Acton.Names
 import Acton.TypeM
 import Utils
@@ -20,8 +22,6 @@ import InterfaceFiles
 
 type InterfaceMap           = [(QName,OType)]
 
-type ModMap                 = [(QName,TEnv)]
-
 mkEnv                       :: (FilePath,FilePath) -> InterfaceMap -> Module -> IO (InterfaceMap,OTEnv)
 mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
   where Module _ imps _     = modul
@@ -29,7 +29,7 @@ mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
 
 type TEnv                   = [(Name, NameInfo)]
 
-type Env                    = [(Name, Maybe NameInfo)]
+data Env                    = Env { names :: [(Name, Maybe NameInfo)], modules :: [(QName,TEnv)] }
 
 data NameInfo               = NVar    TSchema
                             | NDVar   TSchema Decoration
@@ -47,6 +47,13 @@ instance Data.Binary.Binary NameInfo
 
 instance Pretty TEnv where
     pretty tenv                 = vcat (map pretty tenv)
+
+instance Pretty Env where
+    pretty env                  = vcat (map pretty (names env))
+
+instance Pretty (Name, Maybe NameInfo) where
+    pretty (n, Nothing)         = pretty n <+> text "(reserved)"
+    pretty (n, Just i)          = pretty (n, i)
 
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
@@ -86,49 +93,8 @@ instance Subst NameInfo where
     tyfree (NAlias qn)          = []
     tyfree (NModule te)         = []        -- actually tyfree te, but te has no free variables (top-level)
     
+-------------------------------------------------------------------------------------------------------------------
 
-prune                       :: [Name] -> TEnv -> TEnv
-prune xs                    = filter ((`notElem` xs) . fst)
-
-initEnv                     :: Env
-initEnv                     = define autoImp [ (nBuiltin, Just (NModule envBuiltin)) ]
-  where autoImp             = importAll (QName nBuiltin []) envBuiltin
-
-blockstate                  :: Env -> Env
-blockstate env              = [ (z, Nothing) | (z, Just (NSVar _)) <- env ] ++ env
-
-reserve                     :: [Name] -> Env -> Env
-reserve xs env              = [ (x, Nothing) | x <- xs ] ++ env
-
-define                      :: TEnv -> Env -> Env
-define te env               = [ (n, Just i) | (n,i) <- reverse te ] ++ env
-
-reserved                    :: Env -> Name -> Bool
-reserved env n              = lookup n env == Just Nothing
-
-findname                    :: Name -> Env -> NameInfo
-findname n env              = case lookup n env of
-                                Nothing       -> Control.Exception.throw $ NameNotFound n
-                                Just Nothing  -> Control.Exception.throw $ NameReserved n
-                                Just (Just i) -> i
-
-findqual                    :: QName -> Env -> Maybe NameInfo
-findqual (QName n ns) env   = case lookup n env of
-                                Just (Just i) -> lkp i ns
-                                _ -> Nothing
-  where
-    lkp i []                = Just i
-    lkp (NModule te) (n:ns) = case lookup n te of
-                                Just i -> lkp i ns
-                                _ -> Nothing
-    lkp _ _                 = noModule (QName n ns)
-
-inject                      :: QName -> TEnv -> Env -> Env
-inject (QName n ns) te env  = undefined
-
-----------------------------
-
-envBuiltin                  :: TEnv
 envBuiltin                  = [ (nSequence, NProto [a] [] []),
                                 (nMapping,  NProto [a,b] [] []),
                                 (nSet,      NProto [a] [] []),
@@ -139,37 +105,59 @@ envBuiltin                  = [ (nSequence, NProto [a] [] []),
   where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
         ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
 
+--------------------------------------------------------------------------------------------------------------------
+
+prune                       :: [Name] -> TEnv -> TEnv
+prune xs                    = filter ((`notElem` xs) . fst)
+
+emptyEnv                    :: Env
+emptyEnv                    = Env{ names = [], modules = [] }
+
+initEnv                     :: Env
+initEnv                     = define autoImp $ addmod qnBuiltin envBuiltin emptyEnv
+  where autoImp             = importAll qnBuiltin envBuiltin
+
+blockstate                  :: Env -> Env
+blockstate env              = env{ names = [ (z, Nothing) | (z, Just (NSVar _)) <- names env ] ++ names env }
+
+reserve                     :: [Name] -> Env -> Env
+reserve xs env              = env{ names = [ (x, Nothing) | x <- xs ] ++ names env }
+
+define                      :: TEnv -> Env -> Env
+define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ names env }
+
+reserved                    :: Env -> Name -> Bool
+reserved env n              = lookup n (names env) == Just Nothing
+
+findname                    :: Name -> Env -> NameInfo
+findname n env              = case lookup n (names env) of
+                                Nothing       -> nameNotFound n
+                                Just Nothing  -> nameReserved n
+                                Just (Just i) -> i
+
+findqname                   :: QName -> Env -> (NameInfo, [Name])
+findqname qn env            = case findmod qn env of
+                                Just te -> (NModule te, [])
+                                Nothing -> case qn of
+                                    QName n [] -> nameNotFound n
+                                    QName n ns -> 
+                                        let (i, ns') = findqname (QName n (init ns)) env
+                                        in (i, ns'++[last ns])
+
+
+findmod                     :: QName -> Env -> Maybe TEnv
+findmod qn env              = lookup qn (modules env)
+
+addmod                      :: QName -> TEnv -> Env -> Env
+addmod qn te env            = env{ modules = (qn,te) : modules env }
+
 
 -- Import handling
-
-importSome                  :: [ImportItem] -> QName -> TEnv -> TEnv
-importSome items qn te      = map pick items
-  where 
-    te1                     = importAll qn te
-    pick (ImportItem n mbn) = case lookup n te1 of
-                                    Just i  -> (maybe n id mbn, i) 
-                                    Nothing -> noItem qn n
-
-importAll                   :: QName -> TEnv -> TEnv
-importAll (QName m ms) te   = mapMaybe imp te
-  where 
-    imp (n, NProto q _ _)   = Just (n, NAlias (qname n))
-    imp (n, NClass q _ _)   = Just (n, NAlias (qname n))
-    imp (n, NExt q _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
-    imp (n, NAlias qn)      = Just (n, NAlias (qname n))
-    imp (n, NVar t)         = Just (n, NVar t)
-    imp _                   = Nothing                               -- cannot happen
-    qname n                 = QName m (ms++[n])
-
-
-----------------------------------
-
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
 getImps ps env []               = return env
 getImps ps env (i:is)           = do env' <- impModule ps env i
                                      getImps ps env' is
-
 
 
 impModule                       :: (FilePath,FilePath) -> Env -> Import -> IO Env
@@ -188,25 +176,44 @@ impModule ps env (FromImportAll _ (ModRef (0,Just qn)))
 impModule _ _ i                 = illegalImport (loc i)
 
 
-doImp (p,sysp) env qn           = case findqual qn env of
-                                    Just (NModule te) -> return (env, te)
-                                    Just _ -> noModule qn
+doImp (p,sysp) env qn           = case findmod qn env of
+                                    Just te -> return (env, te)
                                     Nothing -> do
                                         found <- doesFileExist fpath
                                         if found
                                          then do te <- InterfaceFiles.readFile fpath
-                                                 return (inject qn te env, te)
+                                                 return (addmod qn te env, te)
                                          else do found <- doesFileExist fpath2
                                                  unless found (fileNotFound qn)
                                                  te <- InterfaceFiles.readFile fpath
-                                                 return (inject qn te env, te)
+                                                 return (addmod qn te env, te)
   where fpath                   = joinPath (p : qpath qn) ++ ".ty"
         fpath2                  = joinPath (sysp : qpath qn) ++ ".ty"
         qpath (QName n ns)      = nstr n : map nstr ns
 
 
------------------------------------------
+importSome                  :: [ImportItem] -> QName -> TEnv -> TEnv
+importSome items qn te      = map pick items
+  where 
+    te1                     = importAll qn te
+    pick (ImportItem n mbn) = case lookup n te1 of
+                                    Just i  -> (maybe n id mbn, i) 
+                                    Nothing -> noItem qn n
 
+importAll                   :: QName -> TEnv -> TEnv
+importAll (QName m ms) te   = mapMaybe imp te
+  where 
+    imp (n, NProto _ _ _)   = Just (n, NAlias (qname n))
+    imp (n, NClass _ _ _)   = Just (n, NAlias (qname n))
+    imp (n, NExt _ _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
+    imp (n, NAlias _)       = Just (n, NAlias (qname n))
+    imp (n, NVar t)         = Just (n, NVar t)
+    imp _                   = Nothing                               -- cannot happen
+    qname n                 = QName m (ms++[n])
+
+
+
+------------------------------------
 
 doImport (path,sysPath) ifaces qname
                                 = case lookup qname ifaces of
@@ -256,7 +263,7 @@ blend te ((n,t):itms)
 
 importModule                    :: (FilePath,FilePath) -> InterfaceMap -> OTEnv -> Import -> IO (InterfaceMap,OTEnv)
 importModule impPaths ifaces tenv s@Import{}
-                                = modItems ifaces tenv (modules s)
+                                = modItems ifaces tenv (moduls s)
   where modItems ifaces tenv [] = return (ifaces,tenv)
         modItems ifaces tenv (ModuleItem qname mbn : ms)
                                 = do (ifaces',t) <- doImport impPaths ifaces qname
@@ -451,8 +458,8 @@ o_reserved env v            = lookup v (venv env) == Just Nothing
 
 o_findVar                   :: Name -> OEnv -> OType
 o_findVar n env             = case lookup n (venv env) of
-                                Nothing       -> Control.Exception.throw $ NameNotFound n
-                                Just Nothing  -> Control.Exception.throw $ NameReserved n
+                                Nothing       -> nameNotFound n
+                                Just Nothing  -> nameReserved n
                                 Just (Just t) -> t
 
 o_setReturn                 :: OType -> OEnv -> OEnv
@@ -470,7 +477,6 @@ data CheckerError               = FileNotFound QName
                                 | NameReserved Name
                                 | IllegalImport SrcLoc
                                 | DuplicateImport Name
-                                | NoModule QName
                                 | NoItem QName Name
                                 | OtherError SrcLoc String
                                 deriving (Show)
@@ -478,23 +484,22 @@ data CheckerError               = FileNotFound QName
 instance Control.Exception.Exception CheckerError
 
 checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
-checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " not in scope")
-checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " not yet defined")
+checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
+checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is not accessible")
 checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
 checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
-checkerError (NoModule n)               = (loc n, " Name " ++ render (pretty n) ++ " does not identify a module")
 checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
 checkerError (OtherError l str)         = (l,str)
 
 nameNotFound n                          = Control.Exception.throw $ NameNotFound n
+
+nameReserved n                          = Control.Exception.throw $ NameNotFound n
 
 fileNotFound n                          = Control.Exception.throw $ FileNotFound n
 
 illegalImport l                         = Control.Exception.throw $ IllegalImport l
 
 duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
-
-noModule n                              = Control.Exception.throw $ NoModule n
 
 noItem m n                              = Control.Exception.throw $ NoItem m n
 
