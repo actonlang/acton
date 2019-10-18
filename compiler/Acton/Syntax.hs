@@ -228,7 +228,8 @@ data TCon       = TC QName [Type] deriving (Eq,Show,Read,Generic)
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-type EfxRow     = [Name] -- for now
+data FXRow      = FXsync FXRow | FXasync FXRow | FXact FXRow | FXmut FXRow | FXret Type FXRow | FXVar TVar | FXNil
+                deriving (Eq,Show,Read,Generic)
 
 data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show,Read,Generic)
 
@@ -240,7 +241,7 @@ data Type       = TSelf     { tloc :: SrcLoc }
                 | TVar      { tloc :: SrcLoc, cvar :: TVar }
                 | TCon      { tloc :: SrcLoc, ccon :: TCon }
                 | TAt       { tloc :: SrcLoc, ccon :: TCon }
-                | TFun      { tloc :: SrcLoc, ceffect :: EfxRow, posrow :: PosRow, kwdrow :: KwdRow, restype :: Type }
+                | TFun      { tloc :: SrcLoc, ceffect :: FXRow, posrow :: PosRow, kwdrow :: KwdRow, restype :: Type }
                 | TTuple    { tloc :: SrcLoc, posrow :: PosRow }
                 | TRecord   { tloc :: SrcLoc, kwdrow :: KwdRow }
                 | TOpt      { tloc :: SrcLoc, opttype :: Type }
@@ -260,6 +261,7 @@ instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
 instance Data.Binary.Binary UType
+instance Data.Binary.Binary FXRow
 instance Data.Binary.Binary PosRow
 instance Data.Binary.Binary KwdRow
 instance Data.Binary.Binary TBind

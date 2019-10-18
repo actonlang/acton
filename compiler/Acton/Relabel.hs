@@ -194,6 +194,15 @@ instance Relabel TCon where
 instance Relabel TBind where
     relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
 
+instance Relabel FXRow where
+    relabel (FXsync r) = FXsync <$> relabel r
+    relabel (FXasync r) = FXasync <$> relabel r
+    relabel (FXact r) = FXact <$> relabel r
+    relabel (FXmut r) = FXmut <$> relabel r
+    relabel (FXret t r) = FXret <$> relabel t <*> relabel r
+    relabel (FXVar tv) = FXVar <$> relabel tv
+    relabel FXNil = return FXNil
+
 instance Relabel PosRow where
     relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
     relabel (PosVar v) = PosVar <$> relabel v

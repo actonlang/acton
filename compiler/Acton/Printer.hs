@@ -402,6 +402,15 @@ instance Pretty UType where
     pretty (UCon n)                 = pretty n
     pretty (ULit str)               = text ('\'' : str ++"'")
 
+instance Pretty FXRow where
+    pretty (FXsync r)               = text "sync" <+> pretty r
+    pretty (FXasync r)              = text "async" <+> pretty r
+    pretty (FXact r)                = text "act" <+> pretty r
+    pretty (FXmut r)                = text "mut" <+> pretty r
+    pretty (FXret t r)              = text "ret" <> parens (pretty t) <+> pretty r
+    pretty (FXVar tv)               = pretty tv
+    pretty FXNil                    = empty
+
 instance Pretty PosRow where
     pretty (PosRow t PosNil)        = pretty t
     pretty (PosRow t p)             = pretty t <> comma <+> pretty p
@@ -424,7 +433,7 @@ instance Pretty Type where
     pretty (TVar _ v)               = pretty v
     pretty (TCon  _ c)              = pretty c
     pretty (TAt  _ c)               = text "@" <> pretty c
-    pretty (TFun _ es p k t)        = spaceSep pretty es <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
+    pretty (TFun _ e p k t)         = pretty e <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (TTuple _ pos)           = parens (pretty pos)
     pretty (TRecord _ kw)           = parens (pretty kw)

@@ -1136,6 +1136,18 @@ yield_expr = addLoc $ do
 
 --- Types ----------------------------------------------------------------------
 
+fx      :: Parser (S.FXRow -> S.FXRow)
+fx      =   rword "sync" *> return S.FXsync
+        <|> rword "async" *> return S.FXasync
+        <|> rword "act" *> return S.FXact
+        <|> rword "mut" *> return S.FXmut
+        <|> rword "ret" *> parens (S.FXret <$> ctype)
+
+fxrow   :: Parser S.FXRow
+fxrow   = do fxs <- many fx
+             tv <- optional cvar
+             return (foldr ($) (maybe S.FXNil S.FXVar tv) fxs)
+
 posrow :: Parser S.PosRow                   --non-empty posrow without trailing comma
 posrow  = do mbv <- star *> optional cvar  
              return (S.PosVar mbv)
@@ -1209,7 +1221,7 @@ ctype    =  addLoc (
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
-        <|> try (do es <- many name
+        <|> try (do es <- fxrow
                     (p,k) <- parens funrows
                     arrow
                     t <- ctype
