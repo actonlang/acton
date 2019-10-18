@@ -108,7 +108,7 @@ nstr (Name _ s) = shift s
                 n           = length xs
 nstr (Internal s i) = s ++ "___" ++ show i
 
-data QName      = QName Name [Name] deriving (Show,Eq,Generic)
+data QName      = QName Name [Name] deriving (Show,Read,Eq,Generic)
 data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe QName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
@@ -137,7 +137,7 @@ data Comparison = Lt|Gt|Eq|GE|LE|LtGt|NEq|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Aug        = PlusA|MinusA|MultA|MMultA|DivA|ModA|PowA|BAndA|BOrA|BXorA|ShiftLA|ShiftRA|EuDivA deriving (Show,Eq)
 
 data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
-data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show,Generic)
+data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show,Read,Generic)
     
 
 data OType      = OVar      OVar
@@ -209,21 +209,21 @@ isRow _         = False
 
 ---------------------------------------------------------------------------
 
-data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show,Generic)
+data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show,Read,Generic)
 
-data TVar       = TV Name deriving (Eq,Ord,Show,Generic) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV Name deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC QName [Type] deriving (Eq,Show,Generic)
+data TCon       = TC QName [Type] deriving (Eq,Show,Read,Generic)
 
-data UType      = UCon QName | ULit String deriving (Eq,Show,Generic)
+data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
 type EfxRow     = [Name] -- for now
 
-data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show,Generic)
+data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show,Read,Generic)
 
-data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show,Generic)
+data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show,Read,Generic)
 
-data TBind      = TBind TVar [TCon] deriving (Eq,Show,Generic)
+data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 data Type       = TSelf     { tloc :: SrcLoc }
                 | TVar      { tloc :: SrcLoc, cvar :: TVar }
@@ -235,7 +235,7 @@ data Type       = TSelf     { tloc :: SrcLoc }
                 | TOpt      { tloc :: SrcLoc, opttype :: Type }
                 | TUnion    { tloc :: SrcLoc, alts :: [UType] }
                 | TNone     { tloc :: SrcLoc }
-                deriving (Show,Generic)
+                deriving (Show,Read,Generic)
 
 type Substitution = [(TVar,Type)]
 
