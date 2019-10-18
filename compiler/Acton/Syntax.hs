@@ -111,7 +111,7 @@ nstr (Name _ s) = shift s
                 n           = length xs
 nstr (Internal s i) = s ++ "___" ++ show i
 
-data QName      = QName Name [Name] deriving (Show,Eq)
+data QName      = QName Name [Name] deriving (Show,Eq,Generic)
 data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe QName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
@@ -140,7 +140,7 @@ data Comparison = Lt|Gt|Eq|GE|LE|LtGt|NEq|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Aug        = PlusA|MinusA|MultA|MMultA|DivA|ModA|PowA|BAndA|BOrA|BXorA|ShiftLA|ShiftRA|EuDivA deriving (Show,Eq)
 
 data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
-data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show)
+data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show,Generic)
     
 
 data OType      = OVar      OVar
@@ -187,21 +187,21 @@ type OSubstitution = [(OVar,OType)]
 
 ----
 
-data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show)   -- bound names must *not* be Internal
+data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show,Generic)
 
-data TVar       = TV Name deriving (Eq,Ord,Show) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV Name deriving (Eq,Ord,Show,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC QName [Type] deriving (Eq,Show)
+data TCon       = TC QName [Type] deriving (Eq,Show,Generic)
 
-data UType      = UCon QName | ULit String deriving (Eq,Show)
+data UType      = UCon QName | ULit String deriving (Eq,Show,Generic)
 
 type EfxRow     = [Name] -- for now
 
-data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show)
+data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show,Generic)
 
-data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show)
+data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show,Generic)
 
-data TBind      = TBind TVar [TCon] deriving (Eq,Show)
+data TBind      = TBind TVar [TCon] deriving (Eq,Show,Generic)
 
 data Type       = TSelf     { tloc :: SrcLoc }
                 | TVar      { tloc :: SrcLoc, cvar :: TVar }
@@ -218,9 +218,19 @@ data Type       = TSelf     { tloc :: SrcLoc }
 type Substitution = [(TVar,Type)]
 
 instance Data.Binary.Binary OType
-instance Data.Binary.Binary Name
 instance Data.Binary.Binary Qonstraint
-instance Data.Binary.Binary Binary
+
+instance Data.Binary.Binary Name
+instance Data.Binary.Binary QName
+instance Data.Binary.Binary Decoration
+instance Data.Binary.Binary TSchema
+instance Data.Binary.Binary TVar
+instance Data.Binary.Binary TCon
+instance Data.Binary.Binary UType
+instance Data.Binary.Binary PosRow
+instance Data.Binary.Binary KwdRow
+instance Data.Binary.Binary TBind
+instance Data.Binary.Binary Type
 
 tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
 
