@@ -128,19 +128,27 @@ reserved env n              = lookup n (names env) == Just Nothing
 
 findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
-                                Nothing       -> nameNotFound n
-                                Just Nothing  -> nameReserved n
                                 Just (Just i) -> i
+                                Just Nothing  -> nameReserved n
+                                Nothing -> 
+                                    case findmod (QName n []) env of
+                                        Just te -> NModule te
+                                        Nothing -> nameNotFound n
 
 findqname                   :: QName -> Env -> (NameInfo, [Name])
-findqname qn env            = case findmod qn env of
-                                Just te -> (NModule te, [])
-                                Nothing -> case qn of
-                                    QName n [] -> nameNotFound n
-                                    QName n ns -> 
-                                        let (i, ns') = findqname (QName n (init ns)) env
-                                        in (i, ns'++[last ns])
-
+findqname qn env            = find qn []
+  where find qn ns          = case findmod qn env of
+                                Just te -> 
+                                    case ns of
+                                      []   -> (NModule te, [])
+                                      n:ns ->
+                                          case lookup n te of
+                                            Nothing -> noItem qn n
+                                            Just i  -> (i, ns)
+                                Nothing ->
+                                    case qchop qn of
+                                      Nothing     -> nameNotFound (qhead qn)
+                                      Just (qn,n) -> find qn (n:ns)
 
 findmod                     :: QName -> Env -> Maybe TEnv
 findmod qn env              = lookup qn (modules env)

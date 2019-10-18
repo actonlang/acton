@@ -108,7 +108,18 @@ nstr (Name _ s) = shift s
                 n           = length xs
 nstr (Internal s i) = s ++ "___" ++ show i
 
-data QName      = QName Name [Name] deriving (Show,Read,Eq,Generic)
+name            = Name NoLoc
+
+data QName      = QName { qhead::Name, qtail::[Name] } deriving (Show,Read,Eq,Generic)
+
+qName (s:ss)    = QName (name s) (map name ss)
+
+noQual n        = QName n []
+
+qchop qn        = case qtail qn of
+                    [] -> Nothing
+                    ns -> Just (QName (qhead qn) (init ns), last ns)
+
 data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe QName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
@@ -467,12 +478,6 @@ instance Read Name where
 
 
 -- Helpers ------------------
-
-name                                = Name NoLoc
-
-qName (str:strs)                    = QName (name str) (map name strs)
-
-noQual n                            = QName n []
 
 importsOf (Module _ imps _)         = impsOf imps
   where 
