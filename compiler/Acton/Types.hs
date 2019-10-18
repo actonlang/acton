@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct,typeError,env2type) where
+module Acton.Types(reconstruct,reconstruct2,typeError,env2type) where
 
 import Debug.Trace
 import Data.Typeable
@@ -18,7 +18,10 @@ import Acton.Env
 import Acton.TypeM
 import Acton.Constraints
 import qualified InterfaceFiles
-        
+
+reconstruct2                            :: String -> Env -> Module -> IO (TEnv, SrcInfo)
+reconstruct2 outname env modul          = return ([], [])
+
 reconstruct                             :: String -> OTEnv -> Module -> IO (OTEnv, SrcInfo)
 reconstruct outname ienv modul
   | chkRedef suite                      = let (te,inf) = o_runTypeM $ (,) <$> infTop env1 suite <*> o_dumped

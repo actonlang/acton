@@ -20,10 +20,9 @@ import Utils
 import Pretty
 import InterfaceFiles
 
-type InterfaceMap           = [(QName,OType)]
 
-mkEnv                       :: (FilePath,FilePath) -> InterfaceMap -> Module -> IO (InterfaceMap,OTEnv)
-mkEnv impPaths ifaces modul = getImports impPaths ifaces imps
+mkEnv2                      :: (FilePath,FilePath) -> Env -> Module -> IO Env
+mkEnv2 paths env modul      = getImps paths env imps
   where Module _ imps _     = modul
 
 
@@ -41,7 +40,7 @@ data NameInfo               = NVar    TSchema
                             | NPAttr  QName         -- protocol attribute (global), arg points to owning protocol
                             | NAlias  QName
                             | NModule TEnv
-                            deriving (Eq,Show,Generic)
+                            deriving (Eq,Show,Read,Generic)
 
 instance Data.Binary.Binary NameInfo
 
@@ -110,12 +109,10 @@ envBuiltin                  = [ (nSequence, NProto [a] [] []),
 prune                       :: [Name] -> TEnv -> TEnv
 prune xs                    = filter ((`notElem` xs) . fst)
 
-emptyEnv                    :: Env
-emptyEnv                    = Env{ names = [], modules = [] }
-
 initEnv                     :: Env
-initEnv                     = define autoImp $ addmod qnBuiltin envBuiltin emptyEnv
+initEnv                     = define autoImp $ addmod qnBuiltin envBuiltin env0
   where autoImp             = importAll qnBuiltin envBuiltin
+        env0                = Env{ names = [], modules = [] }
 
 blockstate                  :: Env -> Env
 blockstate env              = env{ names = [ (z, Nothing) | (z, Just (NSVar _)) <- names env ] ++ names env }
@@ -150,6 +147,9 @@ findmod qn env              = lookup qn (modules env)
 
 addmod                      :: QName -> TEnv -> Env -> Env
 addmod qn te env            = env{ modules = (qn,te) : modules env }
+
+dropnames                   :: Env -> Env
+dropnames env               = env{ names = names initEnv }
 
 
 -- Import handling
@@ -210,86 +210,6 @@ importAll (QName m ms) te   = mapMaybe imp te
     imp (n, NVar t)         = Just (n, NVar t)
     imp _                   = Nothing                               -- cannot happen
     qname n                 = QName m (ms++[n])
-
-
-
-------------------------------------
-
-doImport (path,sysPath) ifaces qname
-                                = case lookup qname ifaces of
-                                      Just t -> return (ifaces,t)
-                                      Nothing -> do
-                                         found <- doesFileExist fpath
-                                         if found
-                                          then do t <- InterfaceFiles.readFile fpath
-                                                  return ((qname,t):ifaces,t)
-                                          else do found <- doesFileExist fpath2
-                                                  unless found (fileNotFound qname)
-                                            -- traceM ("# import " ++ prstr qname)
-                                                  t <- InterfaceFiles.readFile  fpath2
-                                                  return ((qname,t):ifaces,t)
-  where fpath                   = joinPath (path : qpath qname) ++ ".ty"
-        fpath2                  = joinPath (sysPath : qpath qname) ++ ".ty"
-        qpath (QName n ns)      = nstr n : map nstr ns
-
-
--------------------------------------------
-
-getImports                      :: (FilePath,FilePath) -> InterfaceMap -> [Import] -> IO (InterfaceMap,OTEnv)
-getImports impPaths ifaces imps = getImp ifaces [] imps
-  where getImp ifaces tenv []   = return (ifaces,tenv)
-        getImp ifaces tenv (imp:imps)
-                                = do (ifaces',tenv') <- importModule impPaths ifaces tenv imp 
-                                     getImp ifaces' tenv' imps
-
--- NOTE: blend is still only approximate...
-
-blend te []                     = te
-blend te ((n,t):itms)
-          | null hit            = blend ((n,t):te) itms
---          | otherwise           = blend ((n,mix t t'):te0) te1
-          | otherwise           = blend (te0 ++ (n,mix t t'):te1) itms
-  where (te0,hit)               = break ((==n) . fst) te
-        (_,t'):te1              = hit
-        mix t t'
-          | t == t'             = t
-          | otherwise           = case (t,t') of
-                                    (ORecord r1,ORecord r2) -> ORecord (cat r1 r2)
-        cat ONil r              = r
-        cat (OPos t r1) r2      = OPos t (cat r1 r2)
-        cat (OStar1 t r1) r2    = OStar1 t (cat r1 r2)
-        cat (OKwd n t r1) r2    = OKwd n t (cat r1 r2)
-        cat (OStar2 t r1) r2    = OStar2 t (cat r1 r2)
-
-importModule                    :: (FilePath,FilePath) -> InterfaceMap -> OTEnv -> Import -> IO (InterfaceMap,OTEnv)
-importModule impPaths ifaces tenv s@Import{}
-                                = modItems ifaces tenv (moduls s)
-  where modItems ifaces tenv [] = return (ifaces,tenv)
-        modItems ifaces tenv (ModuleItem qname mbn : ms)
-                                = do (ifaces',t) <- doImport impPaths ifaces qname
-                                     modItems ifaces' (blend tenv (maybe [mkenv qname t] (\as -> [(as,t)]) mbn)) ms
-        mkenv (QName n vs) t    = (n, mk vs t)
-        mk [] t                 = t
-        mk (n:ns) t             = ORecord (OKwd n (mk ns t) ONil)
-importModule impPaths ifaces tenv s@FromImport{modul=ModRef (0,Just qname)}
-                                = do (ifaces',t) <- doImport impPaths ifaces qname
-                                     let tenv' = openRecord t
-                                     return (ifaces', blend tenv [ pickItem tenv' item | item <- items s ])
-  where pickItem tenv (ImportItem n as) 
-                                = case lookup n tenv of
-                                     Nothing -> err (loc n) ("Module " ++ render (pretty qname) ++ " does not export " ++ nstr n)
-                                     Just t -> (maybe n id as,t)
-importModule impPaths ifaces tenv s@FromImportAll{modul=ModRef (0,Just qname)}
-                                = do (ifaces',t) <- doImport impPaths ifaces qname
-                                     return (ifaces', blend tenv (openRecord t))
-importModule _ _ _      s       = illegalImport (loc s)
-
-openRecord (ORecord row)      = open row
-  where open ONil               = []
-        open (OKwd n t row)     = (n,t) : open row
-        open (OStar2 t row)     = openRecord t ++ open row
-openRecord t                    = error "Internal: openRecord"
-
 
 
 
