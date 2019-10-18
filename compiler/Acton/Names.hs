@@ -321,6 +321,15 @@ instance Vars TCon where
 instance Vars TBind where
     free (TBind v cs)               = free cs
 
+instance Vars FXRow where
+    free (FXsync r)                 = free r
+    free (FXasync r)                = free r
+    free (FXact r)                  = free r
+    free (FXmut r)                  = free r
+    free (FXret t r)                = free t ++ free r
+    free (FXVar tv)                 = free tv
+    free FXNil                      = []
+
 instance Vars PosRow where
     free (PosRow t p)               = free t ++ free p
     free (PosVar v)                 = free v

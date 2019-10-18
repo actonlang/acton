@@ -20,7 +20,13 @@ import Acton.Constraints
 import qualified InterfaceFiles
 
 reconstruct2                            :: String -> Env -> Module -> IO (TEnv, SrcInfo)
-reconstruct2 outname env modul          = return ([], [])
+reconstruct2 outname env modul          = let te  = runTypeM $ infTop' env1 suite
+                                              te' = [ (n,t) | (n,t) <- te, notemp n ]
+                                          in do
+                                              InterfaceFiles.writeFile (outname ++ ".ty") te'
+                                              return (te', [])
+  where Module _ _ suite                = modul
+        env1                            = reserve (bound suite) env
 
 reconstruct                             :: String -> OTEnv -> Module -> IO (OTEnv, SrcInfo)
 reconstruct outname ienv modul
@@ -64,6 +70,11 @@ noshadow svs x
 
 
 -- Infer -------------------------------
+
+infTop'                                 :: Env -> Suite -> TypeM TEnv
+infTop' env ss                          = do pushFX FXNil
+                                             popFX
+                                             return []
 
 infTop env ss                           = do o_pushFX ONil
                                              te <- infEnv env ss

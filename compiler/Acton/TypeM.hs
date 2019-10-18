@@ -19,7 +19,7 @@ import Acton.Names
 
 
 data Constraint                         = Constraint        -- ....
-                                        | EquFX     EfxRow EfxRow
+                                        | EquFX     FXRow FXRow
                                         deriving (Eq,Show)
 
 data TypeErr                            = TypeErr           -- ....
@@ -30,7 +30,7 @@ type TVarMap                            = Map TVar Type
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 constraints     :: [Constraint],
-                                                effectstack     :: [EfxRow],
+                                                effectstack     :: [FXRow],
                                                 deferred        :: [Constraint],
                                                 currsubst       :: TVarMap              -- domain *must* be Internal
                                           }
@@ -53,13 +53,13 @@ constrain cs                            = lift $ state $ \st -> ((), st{ constra
 collectConstraints                      :: TypeM [Constraint]
 collectConstraints                      = lift $ state $ \st -> (constraints st, st{ constraints = [] })
 
-pushFX                                  :: EfxRow -> TypeM ()
+pushFX                                  :: FXRow -> TypeM ()
 pushFX fx                               = lift $ state $ \st -> ((), st{ effectstack = fx : effectstack st })
 
-currFX                                  :: TypeM EfxRow
+currFX                                  :: TypeM FXRow
 currFX                                  = lift $ state $ \st -> (head (effectstack st), st)
 
-equFX                                   :: EfxRow -> TypeM ()
+equFX                                   :: FXRow -> TypeM ()
 equFX fx                                = do fx0 <- currFX
                                              constrain [EquFX fx fx0]
 
