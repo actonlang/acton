@@ -232,21 +232,21 @@ prettyPEs []                        = text "()"
 prettyPEs [p]                       = pretty p <> char ','
 prettyPEs ps                        = commaCat ps
 
-prettyMod (Sync True)              = (text "sync" <+>)
-prettyMod (Sync False)             = id -- (text "(sync)" <+>)
-prettyMod Async                    = (text "async" <+>)
-prettyMod NoMod                    = id
-prettyMod StaticMeth               = (text "@staticmethod" $+$)
-prettyMod ClassMeth                = (text "@classmethod" $+$)
-prettyMod InstMeth                 = (text "@instmethod" $+$)
+prettyMod (Sync True)               = (text "sync" <+>)
+prettyMod (Sync False)              = id -- (text "(sync)" <+>)
+prettyMod Async                     = (text "async" <+>)
+prettyMod NoMod                     = id
+prettyMod StaticMeth                = (text "@staticmethod" $+$)
+prettyMod ClassMeth                 = (text "@classmethod" $+$)
+prettyMod InstMeth                  = (text "@instmethod" $+$)
+
+
+instance Pretty SrcInfoTag where
+    pretty (GEN l t)                = text "GEN" <+> parens (pretty l) <> colon <+> pretty t
+    pretty (INS l t)                = text "INS" <+> parens (pretty l) <> colon <+> pretty t
 
 
 -------------------------------------------------------------------------------------------------
-
-instance Pretty InfoTag where
-    pretty (GEN l t)    = text "GEN" <+> parens (pretty l) <> colon <+> pretty t
-    pretty (INS l t)    = text "INS" <+> parens (pretty l) <> colon <+> pretty t
-
 
 instance Pretty OType where
     pretty (OVar tv)                = pretty tv
@@ -402,45 +402,45 @@ instance Pretty UType where
     pretty (UCon n)                 = pretty n
     pretty (ULit str)               = text ('\'' : str ++"'")
 
-instance Pretty FXRow where
-    pretty (FXsync r)               = text "sync" <+> pretty r
-    pretty (FXasync r)              = text "async" <+> pretty r
-    pretty (FXact r)                = text "act" <+> pretty r
-    pretty (FXmut r)                = text "mut" <+> pretty r
-    pretty (FXret t r)              = text "ret" <> parens (pretty t) <+> pretty r
-    pretty (FXVar tv)               = pretty tv
-    pretty FXNil                    = empty
+prettyFXRow (TRow _ n t r)
+  | n == syncKW                     = text "sync" <+> prettyFXRow r
+  | n == asyncKW                    = text "async" <+> prettyFXRow r
+  | n == actKW                      = text "act" <+> prettyFXRow r
+  | n == mutKW                      = text "mut" <+> prettyFXRow r
+  | n == retKW                      = text "ret" <> parens (pretty t) <+> prettyFXRow r
+prettyFXRow (TVar _ tv)             = pretty tv
+prettyFXRow (TNil _)                = empty
 
-instance Pretty PosRow where
-    pretty (PosRow t PosNil)        = pretty t
-    pretty (PosRow t p)             = pretty t <> comma <+> pretty p
-    pretty (PosVar mbn)             = text "*" <> maybe empty pretty mbn
-    pretty PosNil                   = empty
+prettyPosRow (TRow _ _ t (TNil _))  = pretty t
+prettyPosRow (TRow _ _ t p)         = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TVar _ v)             = text "*" <> pretty v
+prettyPosRow (TWild _)              = text "*"
+prettyPosRow (TNil _)               = empty
     
-instance Pretty KwdRow where
-    pretty (KwdRow n t KwdNil)      = pretty n <> colon <+> pretty t
-    pretty (KwdRow n t k)           = pretty n <> colon <+> pretty t <> comma <+> pretty k
-    pretty (KwdVar mbn)             = text "**" <> maybe empty pretty mbn
-    pretty KwdNil                   = empty
+prettyKwdRow (TRow _ n t (TNil _))  = pretty n <> colon <+> pretty t
+prettyKwdRow (TRow _ n t k)         = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TVar _ v)             = text "**" <> pretty v
+prettyKwdRow (TWild _)              = text "**"
+prettyKwdRow (TNil _)               = empty
     
-instance Pretty (PosRow, KwdRow) where
-    pretty (PosNil, k)              = pretty k
-    pretty (p, KwdNil)              = pretty p
-    pretty (p, k)                   = pretty p <> comma <+> pretty k
+prettyFunRow (TNil _) k             = prettyKwdRow k
+prettyFunRow p (TNil _)             = prettyPosRow p
+prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 
 instance Pretty Type where
-    pretty (TSelf _)                = text "Self"
     pretty (TVar _ v)               = pretty v
     pretty (TCon  _ c)              = pretty c
     pretty (TAt  _ c)               = text "@" <> pretty c
-    pretty (TFun _ e p k t)         = pretty e <+> parens (pretty (p,k)) <+> text "->" <+> pretty t
+    pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    pretty (TTuple _ pos)           = parens (pretty pos)
-    pretty (TRecord _ kw)           = parens (pretty kw)
+    pretty (TTuple _ pos)           = parens (prettyPosRow pos)
+    pretty (TRecord _ kw)           = parens (prettyKwdRow kw)
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
+    pretty (TSelf _)                = text "Self"
     pretty (TNone _)                = text "None"
+    pretty (TWild _)                = text "_"
 
 instance Pretty Substitution where
     pretty s                        = vcat (map pr s)

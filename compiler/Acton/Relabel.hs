@@ -194,25 +194,6 @@ instance Relabel TCon where
 instance Relabel TBind where
     relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
 
-instance Relabel FXRow where
-    relabel (FXsync r) = FXsync <$> relabel r
-    relabel (FXasync r) = FXasync <$> relabel r
-    relabel (FXact r) = FXact <$> relabel r
-    relabel (FXmut r) = FXmut <$> relabel r
-    relabel (FXret t r) = FXret <$> relabel t <*> relabel r
-    relabel (FXVar tv) = FXVar <$> relabel tv
-    relabel FXNil = return FXNil
-
-instance Relabel PosRow where
-    relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
-    relabel (PosVar v) = PosVar <$> relabel v
-    relabel PosNil = return PosNil
-
-instance Relabel KwdRow where
-    relabel (KwdRow n t k) = KwdRow <$> relabel n <*> relabel t <*> relabel k
-    relabel (KwdVar v) = KwdVar <$> relabel v
-    relabel KwdNil = return KwdNil
-
 instance Relabel Type where
     relabel (TSelf _) = TSelf <$> newLoc
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
@@ -224,3 +205,7 @@ instance Relabel Type where
     relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c
     relabel (TAt  _ c) = TAt <$> newLoc <*> relabel c
     relabel (TNone _) = TNone <$> newLoc
+    relabel (TWild _) = TWild <$> newLoc
+    relabel (TNil _) = TNil <$> newLoc
+    relabel (TRow _ n t r) = TRow <$> newLoc <*> relabel n <*> relabel t <*> relabel r
+

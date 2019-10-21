@@ -18,9 +18,11 @@ import Acton.Names
 
 
 
-data Constraint                         = Constraint        -- ....
-                                        | EquFX     FXRow FXRow
+data Constraint                         = Equ       Type Type
+                                        -- ...
                                         deriving (Eq,Show)
+
+type Constraints                        = [Constraint]
 
 data TypeErr                            = TypeErr           -- ....
                                         deriving (Eq,Show)
@@ -29,13 +31,14 @@ type TVarMap                            = Map TVar Type
 
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
-                                                constraints     :: [Constraint],
+                                                constraints     :: Constraints,
                                                 effectstack     :: [FXRow],
-                                                deferred        :: [Constraint],
-                                                currsubst       :: TVarMap              -- domain *must* be Internal
+                                                deferred        :: Constraints,
+                                                currsubst       :: TVarMap,
+                                                dumped          :: SrcInfo
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, constraints = [], effectstack = [], deferred = [], currsubst = s }
+initTypeState s                         = TypeState { nextint = 1, constraints = [], effectstack = [], deferred = [], currsubst = s, dumped = [] }
 
 type TypeM a                            = ExceptT TypeErr (State TypeState) a
 
@@ -47,10 +50,10 @@ runTypeM m                              = case evalState (runExceptT m) (initTyp
 newUnique                               :: TypeM Int
 newUnique                               = lift $ state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
-constrain                               :: [Constraint] -> TypeM ()
+constrain                               :: Constraints -> TypeM ()
 constrain cs                            = lift $ state $ \st -> ((), st{ constraints = cs ++ constraints st })
 
-collectConstraints                      :: TypeM [Constraint]
+collectConstraints                      :: TypeM Constraints
 collectConstraints                      = lift $ state $ \st -> (constraints st, st{ constraints = [] })
 
 pushFX                                  :: FXRow -> TypeM ()
@@ -61,15 +64,15 @@ currFX                                  = lift $ state $ \st -> (head (effectsta
 
 equFX                                   :: FXRow -> TypeM ()
 equFX fx                                = do fx0 <- currFX
-                                             constrain [EquFX fx fx0]
+                                             constrain [Equ fx fx0]
 
 popFX                                   :: TypeM ()
 popFX                                   = lift $ state $ \st -> ((), st{ effectstack = tail (effectstack st) })
 
-defer                                   :: [Constraint] -> TypeM ()
+defer                                   :: Constraints -> TypeM ()
 defer cs                                = lift $ state $ \st -> ((), st{ deferred = cs ++ deferred st })
 
-collectDeferred                         :: TypeM [Constraint]
+collectDeferred                         :: TypeM Constraints
 collectDeferred                         = lift $ state $ \st -> (deferred st, st)
 
 substitute                              :: TVar -> Type -> TypeM ()
@@ -77,6 +80,12 @@ substitute tv@(TV (Internal _ _)) t     = lift $ state $ \st -> ((), st{ currsub
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = lift $ state $ \st -> (currsubst st, st)
+
+dump                                    :: SrcInfo -> TypeM ()
+dump inf                                = lift $ state $ \st -> ((), st{ dumped = inf ++ dumped st })
+
+getDump                                 :: TypeM SrcInfo
+getDump                                 = lift $ state $ \st -> (dumped st, st)
 
 
 subst                                   :: Subst a => Substitution -> a -> a
@@ -103,6 +112,10 @@ instance Subst a => Subst (Maybe a) where
     msubst                          = maybe (return Nothing) (\x -> Just <$> msubst x)
     tyfree                          = maybe [] tyfree
     tybound                         = maybe [] tybound
+
+instance Subst Constraint where
+    msubst (Equ t1 t2)              = Equ <$> msubst t1 <*> msubst t2
+    tyfree (Equ t1 t2)              = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
@@ -148,34 +161,16 @@ instance Subst TCon where
     tyfree (TC n ts)                = tyfree ts
 
 instance Subst TBind where
-    msubst (TBind v cs)             = TBind v <$> msubst cs
-    tyfree (TBind v cs)             = v : tyfree cs
+    msubst (TBind v cs)             = TBind <$> msubst v <*> msubst cs
+    tyfree (TBind v cs)             = tyfree cs
     tybound (TBind v cs)            = [v]
-
-instance Subst PosRow where
-    msubst (PosRow t p)             = PosRow <$> msubst t <*> msubst p
-    msubst (PosVar v)               = PosVar <$> msubst v
-    msubst PosNil                   = return PosNil
-    
-    tyfree (PosRow t p)             = tyfree t ++ tyfree p
-    tyfree (PosVar (Just v))        = [v]
-    tyfree _                        = []
-
-instance Subst KwdRow where
-    msubst (KwdRow n t k)           = KwdRow n <$> msubst t <*> msubst k
-    msubst (KwdVar v)               = KwdVar <$> msubst v
-    msubst KwdNil                   = return KwdNil
-
-    tyfree (KwdRow n t k)           = tyfree t ++ tyfree k
-    tyfree (KwdVar (Just v))        = [v]
-    tyfree _                        = []
 
 instance Subst Type where
     msubst (TVar l v)               = do s <- getSubstitution
                                          case Map.lookup v s of
                                             Just t  -> msubst t
                                             Nothing -> return (TVar l v)
-    msubst (TFun l fx p k t)        = TFun l fx <$> msubst p <*> msubst k<*> msubst t
+    msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
     msubst (TTuple l p)             = TTuple l <$> msubst p
     msubst (TRecord l k)            = TRecord l <$> msubst k
     msubst (TOpt l t)               = TOpt l <$> msubst t
@@ -184,6 +179,9 @@ instance Subst Type where
     msubst (TAt l c)                = TAt l <$> msubst c
     msubst (TSelf l)                = return $ TSelf l
     msubst (TNone l)                = return $ TNone l
+    msubst (TWild l)                = return $ TWild l
+    msubst (TNil l)                 = return $ TNil l
+    msubst (TRow l n t r)           = TRow l n <$> msubst t <*> msubst r
 
     tyfree (TVar _ v)               = [v]
     tyfree (TFun _ fx p k t)        = tyfree p ++ tyfree k ++ tyfree t
@@ -195,7 +193,6 @@ instance Subst Type where
     tyfree (TAt _ c)                = tyfree c
     tyfree (TSelf _)                = []
     tyfree (TNone _)                = []
-
 
 
 ----------------------------------------
@@ -245,16 +242,13 @@ o_popFX                                 = (lift $ state $ \(u,c,t:f,d,i,s) -> ((
 o_deferred                              :: OTypeM Deferred
 o_deferred                              = lift $ state $ \(u,c,f,d,i,s) -> (d, (u,c,f,[],i,s))
 
-o_dumped                                :: OTypeM SrcInfo
-o_dumped                                = (lift $ state $ \(u,c,f,d,i,s) -> (reverse i, (u,c,f,d,[],s))) >>= mapsubst
-
 o_substitution                          = lift $ state $ \(u,c,f,d,i,s) -> (s, (u,c,f,d,i,s))
 
 o_resetsubst False                      = return ()
 o_resetsubst True                       = do (u,c,f,d,i,s) <- lift get
                                              c <- mapsubst c
                                              f <- mapsubst f
-                                             i <- mapsubst i
+--                                             i <- mapsubst i
                                              lift $ put (u,c,f,d,i,Map.empty)
 
 o_realsubst                             = do s <- o_substitution
@@ -269,13 +263,6 @@ oSubst s x                              = case evalState (runExceptT (mapsubst x
 class MapSubst a where
     mapsubst                            :: a -> OTypeM a
     oTyvars                             :: a -> [OVar]
-
-instance MapSubst InfoTag where
-    mapsubst (GEN l t)                  = GEN l <$> mapsubst t
-    mapsubst (INS l t)                  = INS l <$> mapsubst t
-
-    oTyvars (GEN _ t)                   = oTyvars t
-    oTyvars (INS _ t)                   = oTyvars t
 
 instance MapSubst a => MapSubst [a] where
     mapsubst                            = mapM mapsubst
@@ -491,16 +478,16 @@ equTxt 202  = ("Generic record type", "does not match", "(impossible)")         
 equTxt n    = ("Types", "and", "do not unify (unknown tag version " ++ show n ++ ")")
 
 
-openFX (OSchema vs cs (OFun fx r t))
+o_openFX (OSchema vs cs (OFun fx r t))
   | Just fx1 <- open fx             = OSchema (v:vs) cs (OFun fx1 r t)
   where open (OKwd n t fx)          = OKwd n t <$> open fx
         open (OPos t fx)            = OPos t <$> open fx
         open ONil                   = Just (OVar v)
         open _                      = Nothing
         v:_                         = schemaVars \\ vs
-openFX t                            = t
+o_openFX t                          = t
 
-closeFX (OSchema vs cs (OFun fx r t))
+o_closeFX (OSchema vs cs (OFun fx r t))
   | [v] <- soletail fx \\ vs1,
     v `elem` vs                     = OSchema (vs\\[v]) cs (OFun (oSubst [(v,ONil)] fx) r t)
   where vs1                         = oTyvars t ++ oTyvars r ++ oTyvars cs
@@ -508,5 +495,18 @@ closeFX (OSchema vs cs (OFun fx r t))
         soletail (OPos t fx)        = soletail fx \\ oTyvars t
         soletail (OVar v)           = [v]
         soletail _                  = []
+o_closeFX t                         = t
+
+openFX (TSchema l q (TFun l' fx p r t))
+  | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t)
+  where open (TRow l n t fx)        = TRow l n t <$> open fx
+        open (TNil l)               = Just (TVar l v)
+        open (TVar _ _)             = Nothing
+        v                           = head (tvarSupply \\ tybound q)
+openFX t                            = t
+
+closeFX (TSchema l q f@(TFun l' fx p r t))
+  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t)
+  where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
 closeFX t                           = t
 

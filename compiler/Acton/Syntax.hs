@@ -228,26 +228,67 @@ data TCon       = TC QName [Type] deriving (Eq,Show,Read,Generic)
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data FXRow      = FXsync FXRow | FXasync FXRow | FXact FXRow | FXmut FXRow | FXret Type FXRow | FXVar TVar | FXNil
-                deriving (Eq,Show,Read,Generic)
-
-data PosRow     = PosRow TSchema PosRow | PosVar (Maybe TVar) | PosNil deriving (Eq,Show,Read,Generic)
-
-data KwdRow     = KwdRow Name TSchema KwdRow | KwdVar (Maybe TVar) | KwdNil deriving (Show,Read,Generic)
-
 data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
-data Type       = TSelf     { tloc :: SrcLoc }
-                | TVar      { tloc :: SrcLoc, cvar :: TVar }
-                | TCon      { tloc :: SrcLoc, ccon :: TCon }
-                | TAt       { tloc :: SrcLoc, ccon :: TCon }
-                | TFun      { tloc :: SrcLoc, ceffect :: FXRow, posrow :: PosRow, kwdrow :: KwdRow, restype :: Type }
-                | TTuple    { tloc :: SrcLoc, posrow :: PosRow }
-                | TRecord   { tloc :: SrcLoc, kwdrow :: KwdRow }
-                | TOpt      { tloc :: SrcLoc, opttype :: Type }
-                | TUnion    { tloc :: SrcLoc, alts :: [UType] }
-                | TNone     { tloc :: SrcLoc }
+data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
+                | TCon      { tloc::SrcLoc, tcon::TCon }
+                | TAt       { tloc::SrcLoc, tcon::TCon }
+                | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
+                | TTuple    { tloc::SrcLoc, posrow::PosRow }
+                | TRecord   { tloc::SrcLoc, kwdrow::KwdRow }
+                | TOpt      { tloc::SrcLoc, opttype::Type }
+                | TUnion    { tloc::SrcLoc, alts::[UType] }
+                | TNone     { tloc::SrcLoc }
+                | TSelf     { tloc::SrcLoc }
+                | TWild     { tloc::SrcLoc }
+                | TNil      { tloc::SrcLoc }
+                | TRow      { tloc::SrcLoc, label::Name, rtype::TSchema, rtail::TRow }
                 deriving (Show,Read,Generic)
+
+type FXRow      = Type
+type PosRow     = Type
+type KwdRow     = Type
+type TRow       = Type
+
+
+tSchema t       = TSchema NoLoc [] t
+
+tCon c          = TCon NoLoc c
+tVar v          = TVar NoLoc v
+
+tNone           = TNone NoLoc
+tWild           = TWild NoLoc
+tNil            = TNil NoLoc
+
+rPos n          = Name NoLoc ("#" ++ show n)
+rSync           = Name NoLoc "sync"
+rAsync          = Name NoLoc "async"
+rAct            = Name NoLoc "actor"
+rMut            = Name NoLoc "mut"
+rRet            = Name NoLoc "ret"
+
+fxSync          = TRow NoLoc rSync (tSchema tNone)
+fxAsync         = TRow NoLoc rAsync (tSchema tNone)
+fxAct           = TRow NoLoc rAct (tSchema tNone)
+fxMut           = TRow NoLoc rMut (tSchema tNone)
+fxRet t         = TRow NoLoc rRet (tSchema t)
+fxVar v         = TVar NoLoc v
+fxNil           = TNil NoLoc
+
+posRow t r      = TRow NoLoc (rPos n) t r
+  where n       = rowDepth r + 1
+posVar mbv      = maybe tWild tVar mbv
+posNil          = tNil
+
+kwdRow n t      = TRow NoLoc n t
+kwdVar mbv      = maybe tWild tVar mbv
+kwdNil          = tNil
+
+rowDepth (TRow _ _ _ r) = rowDepth r + 1
+rowDepth _              = 0
+
+rowTail (TRow _ _ _ r)  = rowTail r
+rowTail r               = r
 
 type Substitution = [(TVar,Type)]
 
@@ -261,9 +302,6 @@ instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
 instance Data.Binary.Binary UType
-instance Data.Binary.Binary FXRow
-instance Data.Binary.Binary PosRow
-instance Data.Binary.Binary KwdRow
 instance Data.Binary.Binary TBind
 instance Data.Binary.Binary Type
 
@@ -272,15 +310,15 @@ tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "AB
 
 -- SrcInfo ------------------
 
-type SrcInfo        = [InfoTag]
+type SrcInfo            = [SrcInfoTag]
 
-data InfoTag        = GEN   SrcLoc OType
-                    | INS   SrcLoc OType
-                    deriving (Eq,Show)
+data SrcInfoTag         = GEN   SrcLoc TSchema
+                        | INS   SrcLoc TSchema
+                        deriving (Eq,Show)
 
-lookupGEN l info    = listToMaybe [ t | GEN l' t <- info, l' == l ]
+lookupGEN l info        = listToMaybe [ t | GEN l' t <- info, l' == l ]
 
-lookupINS l info    = listToMaybe [ t | INS l' t <- info, l' == l ]
+lookupINS l info        = listToMaybe [ t | INS l' t <- info, l' == l ]
 
 
 -- Locations ----------------
@@ -445,19 +483,7 @@ instance Eq Pattern where
 instance Eq TSchema where
     TSchema _ q1 t1     == TSchema _ q2 t2      = q1 == q2 && t1 == t2
 
-instance Eq KwdRow where
-    r1                  == r2                   = walk r2 r1 && walk r1 r2
-      where walk (KwdRow n t r) r0              = has n t r0 && walk r r0
-            walk r r0                           = ends r r
-            has n t (KwdRow n' t' r')           = n == n' && t == t' || has n t r'
-            has n t _                           = False
-            ends r (KwdRow _ _ r')              = ends r r'
-            ends (KwdVar v) (KwdVar v')         = v == v'
-            ends KwdNil KwdNil                  = True
-            ends _ _                            = False
-
 instance Eq Type where
-    TSelf _             == TSelf _              = True
     TVar _ v1           == TVar _ v2            = v1 == v2
     TCon _ c1           == TCon _ c2            = c1 == c2
     TAt _ c1            == TAt _ c2             = c1 == c2
@@ -466,7 +492,11 @@ instance Eq Type where
     TRecord _ r1        == TRecord _ r2         = r1 == r2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
+    TSelf _             == TSelf _              = True
     TNone _             == TNone _              = True
+    TWild _             == TWild _              = True
+    TNil _              == TNil _               = True
+    TRow _ n1 t1 r1     == TRow _ n2 t2 r2      = n1 == n2 && t1 == t2 && r1 == r2
     _                   == _                    = False
 
 
@@ -506,11 +536,13 @@ asyncFX                             = OKwd asyncKW ONone
 syncFX                              = OKwd syncKW ONone
 actFX                               = OKwd actKW ONone
 mutFX                               = OKwd mutKW ONone
+retFX                               = OKwd retKW ONone
 
 asyncKW                             = Name NoLoc "async"
 syncKW                              = Name NoLoc "sync"
 actKW                               = Name NoLoc "actor"
 mutKW                               = Name NoLoc "mut"
+retKW                               = Name NoLoc "ret"
 
 elemcore (Elem e)                   = e
 elemcore (Star e)                   = e

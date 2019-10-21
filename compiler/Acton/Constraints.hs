@@ -54,7 +54,7 @@ unify' _     ONone                          = return ()         -- temporary, un
 unify' ONone _                              = return ()         -- temporary, until the opt type...
 
 
-unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (rowTail r1)
+unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (o_rowTail r1)
                                                  unify t1 t2
                                                  unify r1 r2'
   where findFst r tl                        = do r' <- mapsubst r
@@ -98,7 +98,7 @@ unify' r1 (OStar1 t r2)                     = do r2' <- mapsubst r2
                                                         unify r1 r
                                                     _ -> throwError Defer
 
-unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (rowTail r1)
+unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (o_rowTail r1)
                                                  unify t1 t2
                                                  unify (del n r1) (del n r2')
   where findKwd r0 n r tl                   = do r0' <- mapsubst r0
@@ -153,7 +153,7 @@ unify' (OList t1) (ODict k2 v2)             = do unify t1 k2                  --
                                                  unify OInt v2
 
 
-unify' t1 t2                                = throwError (NoUnify (simplify t1) (simplify t2))
+unify' t1 t2                                = throwError (NoUnify (erase t1) (erase t2))
 
 
 
@@ -165,11 +165,11 @@ catRow ONil r2                              = r2
 catRow r1 ONil                              = r1
 catRow r1 r2                                = internal r1 r2
 
-rowTail (OPos _ r)                      = rowTail r
-rowTail (OStar1 _ r)                    = rowTail r
-rowTail (OKwd _ _ r)                    = rowTail r
-rowTail (OStar2 _ r)                    = rowTail r
-rowTail r                               = r             -- OVar v or ONil
+o_rowTail (OPos _ r)                    = o_rowTail r
+o_rowTail (OStar1 _ r)                  = o_rowTail r
+o_rowTail (OKwd _ _ r)                  = o_rowTail r
+o_rowTail (OStar2 _ r)                  = o_rowTail r
+o_rowTail r                             = r             -- OVar v or ONil
 
 revApp (OPos t r1) r2                   = revApp r1 (OPos t r2)
 revApp (OStar1 t r1) r2                 = revApp r1 (OStar1 t r2)
@@ -203,43 +203,52 @@ instantiate l t0@(OSchema vs cs t)      = do tvs <- newOVars (length vs)
                                                  cs1 = [ oSubst s c{cloc=l} | c <- cs ]
                                                  t1  = oSubst s t
                                              o_constrain cs1
-                                             o_dump [INS l t1]
+--                                             o_dump [INS l t1]
                                              return t1
-instantiate l t                         = do o_dump [INS l t]
+instantiate l t                         = do -- o_dump [INS l t]
                                              return t
 
 
-simplify x                              = oSubst s x
+erase x                                 = oSubst s x
   where s                               = [ (tv, wildOVar) | tv <- nub (oTyvars x) ]
 
-solveAll cs                                 = do -- traceM ("##### SolveAll: ")
+
+-- Reduce conservatively and remove entailed constraints
+simplify                                :: [Constraint] -> TypeM [Constraint]
+simplify cs                             = undefined
+
+-- Reduce aggressively or fail
+solve                                   :: [Constraint] -> TypeM ()
+solve cs                                = undefined
+
+o_solveAll cs                               = do -- traceM ("##### SolveAll: ")
                                                  -- traceM (prstr cs)
                                                  -- traceM ("##### Resolving "++ show (length cs))
                                                  -- o_resetsubst True
-                                                 resolveAll False cs
+                                                 o_resolveAll False cs
                                                  s <- o_realsubst
                                                  -- traceM ("##### Result:\n" ++ prstr s)
                                                  return ()
 
-reduce cs                                   = do red False cs
+o_reduce cs                                 = do red False cs
                                                  cs0 <- o_deferred
                                                  cs1 <- mapsubst cs0
-                                                 if cs0 == cs1 then return cs1 else reduce cs1
+                                                 if cs0 == cs1 then return cs1 else o_reduce cs1
 
-resolve cs                                  = do red True cs
+o_resolve cs                                = do red True cs
                                                  cs0 <- o_deferred
                                                  cs1 <- mapsubst cs0
-                                                 if cs1 == [] then return () else resolve cs1
+                                                 if cs1 == [] then return () else o_resolve cs1
                                                  
     
-resolveAll f cs                             = do red f cs
+o_resolveAll f cs                           = do red f cs
                                                  cs0 <- o_deferred
                                                  if cs0 == [] then return () else do
                                                      cs1 <- mapsubst cs0
                                                      let useForce = cs1 == cs0
                                                      -- traceM ("##### Reduced: "++show useForce++" "++show (length cs1))
                                                      -- when useForce (traceM (prstr cs0))
-                                                     resolveAll useForce cs1
+                                                     o_resolveAll useForce cs1
 
 red f []                                    = return ()
 red f (c : cs)                              = do c' <- mapsubst c
@@ -248,7 +257,7 @@ red f (c : cs)                              = do c' <- mapsubst c
   where handler c err                       = do c' <- mapsubst c
                                                  case err of
                                                      Defer -> o_defer c'
-                                                     _     -> throwError $ NoSolve (simplify c') err
+                                                     _     -> throwError $ NoSolve (erase c') err
 
 red1 f (QEqu _ _ t1 t2)                     = unify' t1 t2
 
@@ -259,8 +268,8 @@ red1 f (QIn _ _ t (ORecord r))              = do t1 <- newOVar; unify' t (OTuple
 
 red1 f (QDot l _ (ORecord r) n t)           = case lookupRow n r of
                                                 Right t0 -> do
-                                                    o_dump [GEN l t0]
-                                                    t1 <- instantiate l $ openFX t0
+                                                    -- o_dump [GEN l t0]
+                                                    t1 <- instantiate l $ o_openFX t0
                                                     cs1 <- o_constraints
                                                     unify' t1 t
                                                     red f cs1
@@ -411,8 +420,8 @@ red1 True (QPlus _ _ t)                     = unify' t OInt
 red1 True (QNum _ _ t)                      = unify' t OInt
 red1 True (QBool _ _ t)                     = unify' t OStr
 
-builtinFun l t u                            = do o_dump [GEN l t0]
-                                                 t1 <- instantiate l $ openFX t0
+builtinFun l t u                            = do -- o_dump [GEN l t0]
+                                                 t1 <- instantiate l $ o_openFX t0
                                                  unify' t1 u
   where t0                                  = OSchema [] [] t
 
