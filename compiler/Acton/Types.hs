@@ -20,24 +20,14 @@ import Acton.Constraints
 import qualified InterfaceFiles
 
 reconstruct2                            :: String -> Env -> Module -> IO (TEnv, SrcInfo)
-reconstruct2 outname env modul          = let te  = runTypeM $ infTop' env1 suite
+reconstruct2 outname env modul          = let (te,inf) = runTypeM $ (,) <$> infTop env1 suite <*> getDump
                                               te' = [ (n,t) | (n,t) <- te, notemp n ]
                                           in do
                                               InterfaceFiles.writeFile (outname ++ ".ty") te'
-                                              return (te', [])
+                                              return (te', inf)
   where Module _ _ suite                = modul
         env1                            = reserve (bound suite) env
 
-reconstruct                             :: String -> OTEnv -> Module -> IO (OTEnv, SrcInfo)
-reconstruct outname ienv modul
-  | chkRedef suite                      = let (te,inf) = o_runTypeM $ (,) <$> infTop env1 suite <*> o_dumped
-                                              tenv     = [ (n,t) | (n,t) <- te, notemp n ]
-                                              t        = env2type tenv
-                                          in do
-                                              InterfaceFiles.writeFile (outname ++ ".ty") t
-                                              return (tenv, inf)
-  where Module _ _ suite                = modul
-        env1                            = o_reserve (bound suite) $ o_define ienv $ o_define old_builtins o_emptyEnv
 
 typeError                               = solveError
 
@@ -71,51 +61,53 @@ noshadow svs x
 
 -- Infer -------------------------------
 
-infTop'                                 :: Env -> Suite -> TypeM TEnv
-infTop' env ss                          = do pushFX FXNil
-                                             popFX
-                                             return []
-
-infTop env ss                           = do o_pushFX ONil
+infTop env ss                           = do pushFX fxNil
                                              te <- infEnv env ss
-                                             o_popFX
-                                             cs <- o_constraints
-                                             solveAll cs
-                                             mapsubst te
+                                             popFX
+                                             cs <- collectConstraints
+                                             solve cs
+                                             msubst te
 
 class Infer a where
-    infer                               :: OEnv -> a -> OTypeM OType
+    infer                               :: Env -> a -> TypeM Type
 
 class InfEnv a where
-    infEnv                              :: OEnv -> a -> OTypeM OTEnv
+    infEnv                              :: Env -> a -> TypeM TEnv
 
 class InfEnvT a where
-    infEnvT                             :: OEnv -> a -> OTypeM (OTEnv,OType)
+    infEnvT                             :: Env -> a -> TypeM (TEnv,Type)
 
 class InfData a where
-    infData                             :: OEnv -> a -> OTypeM OTEnv
+    infData                             :: Env -> a -> TypeM TEnv
 
 
-generalize tvs cs t                     = OSchema (unOVar $ rng s) (oSubst s cs) (oSubst s t)
-  where s                               = (oTyvars t \\ tvs) `zip` schemaOVars
+splitGen                                :: [TVar] -> TEnv -> Constraints -> TypeM (Constraints, TEnv)
+splitGen tvs te cs
+  | null ambig_cs                       = return (fixed_cs, mapSnd generalize te)
+  | otherwise                           = do solve ambig_cs
+                                             cs1 <- simplify (fixed_cs++gen_cs)
+                                             te1 <- msubst te
+                                             tvs1 <- fmap tyfree $ mapM msubst $ map tVar tvs
+                                             splitGen tvs1 te1 cs1
+  where 
+    (fixed_cs, cs')                     = partition (null . (\\tvs) . tyfree) cs
+    (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
+    ambig te vs                         = or [ not $ null (vs \\ tyfree t) | (n, NVar t) <- te ]
+    q_new                               = mkBind gen_cs
+    generalize (NVar (TSchema l q t))   = NVar $ closeFX $ TSchema l (subst s (q_new++q)) (subst s t)
+      where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
+    mkGen i                             = i
+    mkBind                              :: Constraints -> [TBind]
+    mkBind cs                           = undefined         -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-genTEnv env te                          = do cs <- o_constraints
-                                             --traceM ("#### Reducing " ++ prstrs (dom te))
-                                             --traceM (prstr cs)
-                                             cs1 <- reduce cs
-                                             --traceM ("#### Residue " ++ prstrs (dom te))
-                                             --traceM (prstr cs1)
-                                             te1 <- mapsubst te
-                                             o_dump [ INS (loc v) t | (v,t) <- te1 ]
-                                             tvs <- fmap oTyvars $ mapM mapsubst $ map OVar $ oTyvars env
-                                             let (cs2, cs3) = partition (null . (\\tvs) . oTyvars) cs1
-                                                 te2 = mapSnd (closeFX . generalize tvs cs3) te1
-                                             --traceM ("#### Generalized " ++ prstrs (dom te))
-                                             --traceM (prstr te2)
-                                             --traceM ("#### Retaining " ++ prstrs (dom te))
-                                             --traceM (prstr cs2)
-                                             o_constrain cs2
-                                             o_dump [ GEN (loc v) t | (v,t) <- te2 ]
+genTEnv env te                          = do cs <- collectConstraints
+                                             cs1 <- simplify cs
+                                             te1 <- msubst te
+                                             tvs <- fmap tyfree $ mapM msubst $ map tVar $ tyfree env
+                                             (cs2, te2) <- splitGen tvs te1 cs1
+                                             constrain cs2
+                                             dump [ INS (loc v) t | (v, NVar t) <- te1 ]
+                                             dump [ GEN (loc v) t | (v, NVar t) <- te2 ]
                                              return te2
 
 commonTEnv env tenvs                    = mergeTEnv env tenvs (foldr intersect [] $ map dom tenvs)
@@ -129,7 +121,7 @@ mergeTEnv env tenvs vs                  = mapM merge (nub vs)
           | length ts == 1              = return (v, head ts)
           | all monotype ts             = do t <- unifyAll v ts
                                              return (v,t)
-          | all polytype ts             = do ts1 <- mapM (instantiate (loc v) . openFX) ts
+          | all polytype ts             = do ts1 <- mapM (instantiate (loc v) . o_openFX) ts
                                              t <- unifyAll v ts1
                                              head <$> genTEnv env [(v,t)]
           | otherwise                   = err2 vs "Name both defined and assigned:"
@@ -384,7 +376,7 @@ instance Infer Index where
 
 instance Infer Expr where
     infer env (Var l n)                 = do o_dump [GEN l t0]
-                                             instantiate l $ openFX t0
+                                             instantiate l $ o_openFX t0
       where t0                          = o_findVar n env
     infer env (Int _ val s)             = return OInt
     infer env (Float _ val s)           = return OFloat

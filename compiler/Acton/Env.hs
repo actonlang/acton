@@ -42,6 +42,7 @@ data NameInfo               = NVar    TSchema
                             | NModule TEnv
                             deriving (Eq,Show,Read,Generic)
 
+
 instance Data.Binary.Binary NameInfo
 
 instance Pretty TEnv where
@@ -91,7 +92,15 @@ instance Subst NameInfo where
     tyfree (NPAttr qn)          = []
     tyfree (NAlias qn)          = []
     tyfree (NModule te)         = []        -- actually tyfree te, but te has no free variables (top-level)
-    
+
+instance Subst SrcInfoTag where
+    msubst (GEN l t)                = GEN l <$> msubst t
+    msubst (INS l t)                = INS l <$> msubst t
+
+    tyfree (GEN _ t)                = tyfree t
+    tyfree (INS _ t)                = tyfree t
+
+
 -------------------------------------------------------------------------------------------------------------------
 
 envBuiltin                  = [ (nSequence, NProto [a] [] []),
