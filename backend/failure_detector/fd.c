@@ -104,7 +104,7 @@ char * to_string_gs(gossip_state * gs, char * msg_buff)
 {
 	sprintf(msg_buff, "GS(status=%d, node_id=%d, rack_id=%d, dc_id=%d, vc=", gs->status, gs->node_id, gs->rack_id, gs->dc_id);
 	to_string_vc(gs->vc, msg_buff + strlen(msg_buff));
-	sprintf(msg_buff, ")");
+	sprintf(msg_buff + strlen(msg_buff), ")");
 
 	return msg_buff;
 }

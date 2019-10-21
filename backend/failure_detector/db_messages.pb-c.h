@@ -26,9 +26,15 @@ typedef struct _VersionedCellMessage VersionedCellMessage;
 typedef struct _WriteQueryMessage WriteQueryMessage;
 typedef struct _ReadQueryMessage ReadQueryMessage;
 typedef struct _AckMessage AckMessage;
+typedef struct _RangeReadQueryMessage RangeReadQueryMessage;
+typedef struct _RangeReadResponseMessage RangeReadResponseMessage;
 typedef struct _TxnMessage TxnMessage;
+typedef struct _QueueQueryMessage QueueQueryMessage;
 typedef struct _ConsumerID ConsumerID;
 typedef struct _CreateQueueMessage CreateQueueMessage;
+typedef struct _DeleteQueueMessage DeleteQueueMessage;
+typedef struct _SubscribeQueueMessage SubscribeQueueMessage;
+typedef struct _UnsubscribeQueueMessage UnsubscribeQueueMessage;
 typedef struct _EnqueueMessage EnqueueMessage;
 typedef struct _EnqueueResponseMessage EnqueueResponseMessage;
 typedef struct _ReadQueueMessage ReadQueueMessage;
@@ -200,6 +206,32 @@ struct  _AckMessage
     , NULL, 0, 0, 0 }
 
 
+struct  _RangeReadQueryMessage
+{
+  ProtobufCMessage base;
+  CellAddressMessage *start_cell_address;
+  CellAddressMessage *end_cell_address;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define RANGE_READ_QUERY_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&range_read_query_message__descriptor) \
+    , NULL, NULL, 0, 0 }
+
+
+struct  _RangeReadResponseMessage
+{
+  ProtobufCMessage base;
+  size_t n_cells;
+  VersionedCellMessage **cells;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define RANGE_READ_RESPONSE_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&range_read_response_message__descriptor) \
+    , 0,NULL, 0, 0 }
+
+
 struct  _TxnMessage
 {
   ProtobufCMessage base;
@@ -221,6 +253,26 @@ struct  _TxnMessage
 #define TXN_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&txn_message__descriptor) \
     , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0, 0 }
+
+
+struct  _QueueQueryMessage
+{
+  ProtobufCMessage base;
+  CellAddressMessage *queue_address;
+  int32_t msg_type;
+  int32_t app_id;
+  int32_t shard_id;
+  int32_t consumer_id;
+  int32_t queue_index;
+  int32_t status;
+  size_t n_cells;
+  VersionedCellMessage **cells;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define QUEUE_QUERY_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&queue_query_message__descriptor) \
+    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, 0, 0 }
 
 
 struct  _ConsumerID
@@ -245,6 +297,44 @@ struct  _CreateQueueMessage
 #define CREATE_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&create_queue_message__descriptor) \
     , NULL, 0, 0 }
+
+
+struct  _DeleteQueueMessage
+{
+  ProtobufCMessage base;
+  CellAddressMessage *queue_address;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define DELETE_QUEUE_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&delete_queue_message__descriptor) \
+    , NULL, 0, 0 }
+
+
+struct  _SubscribeQueueMessage
+{
+  ProtobufCMessage base;
+  CellAddressMessage *queue_address;
+  ConsumerID *consumer_id;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define SUBSCRIBE_QUEUE_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&subscribe_queue_message__descriptor) \
+    , NULL, NULL, 0, 0 }
+
+
+struct  _UnsubscribeQueueMessage
+{
+  ProtobufCMessage base;
+  CellAddressMessage *queue_address;
+  ConsumerID *consumer_id;
+  int64_t txnid;
+  int64_t nonce;
+};
+#define UNSUBSCRIBE_QUEUE_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&unsubscribe_queue_message__descriptor) \
+    , NULL, NULL, 0, 0 }
 
 
 struct  _EnqueueMessage
@@ -545,6 +635,44 @@ AckMessage *
 void   ack_message__free_unpacked
                      (AckMessage *message,
                       ProtobufCAllocator *allocator);
+/* RangeReadQueryMessage methods */
+void   range_read_query_message__init
+                     (RangeReadQueryMessage         *message);
+size_t range_read_query_message__get_packed_size
+                     (const RangeReadQueryMessage   *message);
+size_t range_read_query_message__pack
+                     (const RangeReadQueryMessage   *message,
+                      uint8_t             *out);
+size_t range_read_query_message__pack_to_buffer
+                     (const RangeReadQueryMessage   *message,
+                      ProtobufCBuffer     *buffer);
+RangeReadQueryMessage *
+       range_read_query_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   range_read_query_message__free_unpacked
+                     (RangeReadQueryMessage *message,
+                      ProtobufCAllocator *allocator);
+/* RangeReadResponseMessage methods */
+void   range_read_response_message__init
+                     (RangeReadResponseMessage         *message);
+size_t range_read_response_message__get_packed_size
+                     (const RangeReadResponseMessage   *message);
+size_t range_read_response_message__pack
+                     (const RangeReadResponseMessage   *message,
+                      uint8_t             *out);
+size_t range_read_response_message__pack_to_buffer
+                     (const RangeReadResponseMessage   *message,
+                      ProtobufCBuffer     *buffer);
+RangeReadResponseMessage *
+       range_read_response_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   range_read_response_message__free_unpacked
+                     (RangeReadResponseMessage *message,
+                      ProtobufCAllocator *allocator);
 /* TxnMessage methods */
 void   txn_message__init
                      (TxnMessage         *message);
@@ -563,6 +691,25 @@ TxnMessage *
                       const uint8_t       *data);
 void   txn_message__free_unpacked
                      (TxnMessage *message,
+                      ProtobufCAllocator *allocator);
+/* QueueQueryMessage methods */
+void   queue_query_message__init
+                     (QueueQueryMessage         *message);
+size_t queue_query_message__get_packed_size
+                     (const QueueQueryMessage   *message);
+size_t queue_query_message__pack
+                     (const QueueQueryMessage   *message,
+                      uint8_t             *out);
+size_t queue_query_message__pack_to_buffer
+                     (const QueueQueryMessage   *message,
+                      ProtobufCBuffer     *buffer);
+QueueQueryMessage *
+       queue_query_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   queue_query_message__free_unpacked
+                     (QueueQueryMessage *message,
                       ProtobufCAllocator *allocator);
 /* ConsumerID methods */
 void   consumer_id__init
@@ -601,6 +748,63 @@ CreateQueueMessage *
                       const uint8_t       *data);
 void   create_queue_message__free_unpacked
                      (CreateQueueMessage *message,
+                      ProtobufCAllocator *allocator);
+/* DeleteQueueMessage methods */
+void   delete_queue_message__init
+                     (DeleteQueueMessage         *message);
+size_t delete_queue_message__get_packed_size
+                     (const DeleteQueueMessage   *message);
+size_t delete_queue_message__pack
+                     (const DeleteQueueMessage   *message,
+                      uint8_t             *out);
+size_t delete_queue_message__pack_to_buffer
+                     (const DeleteQueueMessage   *message,
+                      ProtobufCBuffer     *buffer);
+DeleteQueueMessage *
+       delete_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   delete_queue_message__free_unpacked
+                     (DeleteQueueMessage *message,
+                      ProtobufCAllocator *allocator);
+/* SubscribeQueueMessage methods */
+void   subscribe_queue_message__init
+                     (SubscribeQueueMessage         *message);
+size_t subscribe_queue_message__get_packed_size
+                     (const SubscribeQueueMessage   *message);
+size_t subscribe_queue_message__pack
+                     (const SubscribeQueueMessage   *message,
+                      uint8_t             *out);
+size_t subscribe_queue_message__pack_to_buffer
+                     (const SubscribeQueueMessage   *message,
+                      ProtobufCBuffer     *buffer);
+SubscribeQueueMessage *
+       subscribe_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   subscribe_queue_message__free_unpacked
+                     (SubscribeQueueMessage *message,
+                      ProtobufCAllocator *allocator);
+/* UnsubscribeQueueMessage methods */
+void   unsubscribe_queue_message__init
+                     (UnsubscribeQueueMessage         *message);
+size_t unsubscribe_queue_message__get_packed_size
+                     (const UnsubscribeQueueMessage   *message);
+size_t unsubscribe_queue_message__pack
+                     (const UnsubscribeQueueMessage   *message,
+                      uint8_t             *out);
+size_t unsubscribe_queue_message__pack_to_buffer
+                     (const UnsubscribeQueueMessage   *message,
+                      ProtobufCBuffer     *buffer);
+UnsubscribeQueueMessage *
+       unsubscribe_queue_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   unsubscribe_queue_message__free_unpacked
+                     (UnsubscribeQueueMessage *message,
                       ProtobufCAllocator *allocator);
 /* EnqueueMessage methods */
 void   enqueue_message__init
@@ -751,14 +955,32 @@ typedef void (*ReadQueryMessage_Closure)
 typedef void (*AckMessage_Closure)
                  (const AckMessage *message,
                   void *closure_data);
+typedef void (*RangeReadQueryMessage_Closure)
+                 (const RangeReadQueryMessage *message,
+                  void *closure_data);
+typedef void (*RangeReadResponseMessage_Closure)
+                 (const RangeReadResponseMessage *message,
+                  void *closure_data);
 typedef void (*TxnMessage_Closure)
                  (const TxnMessage *message,
+                  void *closure_data);
+typedef void (*QueueQueryMessage_Closure)
+                 (const QueueQueryMessage *message,
                   void *closure_data);
 typedef void (*ConsumerID_Closure)
                  (const ConsumerID *message,
                   void *closure_data);
 typedef void (*CreateQueueMessage_Closure)
                  (const CreateQueueMessage *message,
+                  void *closure_data);
+typedef void (*DeleteQueueMessage_Closure)
+                 (const DeleteQueueMessage *message,
+                  void *closure_data);
+typedef void (*SubscribeQueueMessage_Closure)
+                 (const SubscribeQueueMessage *message,
+                  void *closure_data);
+typedef void (*UnsubscribeQueueMessage_Closure)
+                 (const UnsubscribeQueueMessage *message,
                   void *closure_data);
 typedef void (*EnqueueMessage_Closure)
                  (const EnqueueMessage *message,
@@ -795,9 +1017,15 @@ extern const ProtobufCMessageDescriptor versioned_cell_message__descriptor;
 extern const ProtobufCMessageDescriptor write_query_message__descriptor;
 extern const ProtobufCMessageDescriptor read_query_message__descriptor;
 extern const ProtobufCMessageDescriptor ack_message__descriptor;
+extern const ProtobufCMessageDescriptor range_read_query_message__descriptor;
+extern const ProtobufCMessageDescriptor range_read_response_message__descriptor;
 extern const ProtobufCMessageDescriptor txn_message__descriptor;
+extern const ProtobufCMessageDescriptor queue_query_message__descriptor;
 extern const ProtobufCMessageDescriptor consumer_id__descriptor;
 extern const ProtobufCMessageDescriptor create_queue_message__descriptor;
+extern const ProtobufCMessageDescriptor delete_queue_message__descriptor;
+extern const ProtobufCMessageDescriptor subscribe_queue_message__descriptor;
+extern const ProtobufCMessageDescriptor unsubscribe_queue_message__descriptor;
 extern const ProtobufCMessageDescriptor enqueue_message__descriptor;
 extern const ProtobufCMessageDescriptor enqueue_response_message__descriptor;
 extern const ProtobufCMessageDescriptor read_queue_message__descriptor;

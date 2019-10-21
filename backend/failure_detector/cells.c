@@ -327,7 +327,7 @@ char * to_string_cell(cell * ca, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 
-	sprintf(crt_ptr, "CellAddress(table_key=%ld, keys={", ca->table_key);
+	sprintf(crt_ptr, "Cell(table_key=%ld, keys={", ca->table_key);
 	crt_ptr += strlen(crt_ptr);
 
 	for(int i=0;i<ca->no_keys;i++)

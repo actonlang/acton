@@ -250,7 +250,7 @@ range_read_query * init_range_read_query_copy(cell_address * start_cell_address,
 	return ca;
 }
 
-void init_range_read_query_msg(RangeReadQueryMessage * msg, read_query * ca, CellAddressMessage * start_cell_address_msg, CellAddressMessage * end_cell_address_msg)
+void init_range_read_query_msg(RangeReadQueryMessage * msg, range_read_query * ca, CellAddressMessage * start_cell_address_msg, CellAddressMessage * end_cell_address_msg)
 {
 	msg->txnid = ca->txnid;
 	msg->nonce = ca->nonce;
@@ -258,15 +258,15 @@ void init_range_read_query_msg(RangeReadQueryMessage * msg, read_query * ca, Cel
 	msg->end_cell_address = end_cell_address_msg;
 }
 
-read_query * init_range_read_query_from_msg(RangeReadQueryMessage * msg)
+range_read_query * init_range_read_query_from_msg(RangeReadQueryMessage * msg)
 {
 	cell_address * start_cell_address = init_cell_address_from_msg(msg->start_cell_address);
 	cell_address * end_cell_address = init_cell_address_from_msg(msg->end_cell_address);
-	read_query * c = init_read_query_copy(start_cell_address, end_cell_address, msg->txnid, msg->nonce);
+	range_read_query * c = init_range_read_query_copy(start_cell_address, end_cell_address, msg->txnid, msg->nonce);
 	return c;
 }
 
-void free_read_query_msg(RangeReadQueryMessage * msg)
+void free_range_read_query_msg(RangeReadQueryMessage * msg)
 {
 	free_cell_address_msg(msg->start_cell_address);
 	free_cell_address_msg(msg->end_cell_address);
@@ -312,13 +312,13 @@ char * to_string_range_read_query(range_read_query * ca, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 
-	sprintf(crt_ptr, "RangeReadQuery(txnid=%ld, nonce=%ld, ", ca->txnid, ca->nonce);
+	sprintf(crt_ptr, "RangeReadQuery(txnid=%ld, nonce=%ld, start_key=", ca->txnid, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	to_string_cell_address(ca->start_cell_address, crt_ptr);
 	crt_ptr += strlen(crt_ptr);
 
-	sprintf(crt_ptr, ", ");
+	sprintf(crt_ptr, ", end_key=");
 	crt_ptr += strlen(crt_ptr);
 
 	to_string_cell_address(ca->end_cell_address, crt_ptr);
@@ -418,8 +418,8 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 
 	*ca = init_ack_message_from_msg(msg);
 
-	to_string_ack_message(*ca, (char *) print_buff);
-	printf("Received ACK message: %s", print_buff);
+//	to_string_ack_message(*ca, (char *) print_buff);
+//	printf("Received ACK message: %s\n", print_buff);
 
 	ack_message__free_unpacked(msg, NULL);
 
@@ -468,7 +468,7 @@ range_read_response_message * init_range_read_response_message_copy(cell * cells
 	ca->no_cells = no_cells;
 	ca->cells = (cell *) malloc(no_cells * sizeof(cell));
 	for(int i=0;i<no_cells;i++)
-		copy_cell(ca->cells + i, cells[i]->table_key, cells[i]->keys, cells[i]->no_keys, cells[i]->columns, cells[i]->no_columns, cells[i]->version);
+		copy_cell(ca->cells + i, cells[i].table_key, cells[i].keys, cells[i].no_keys, cells[i].columns, cells[i].no_columns, cells[i].version);
 	ca->txnid = txnid;
 	ca->nonce = nonce;
 	return ca;
@@ -499,7 +499,7 @@ range_read_response_message * init_range_read_response_message_from_msg(RangeRea
 {
 	cell * cells = (cell *) malloc(msg->n_cells * sizeof(cell));
 	for(int i=0;i<msg->n_cells;i++)
-		copy_cell_from_msg(cells + i, msg->cells + i);
+		copy_cell_from_msg(cells + i, msg->cells[i]);
 
 	range_read_response_message * c = init_range_read_response_message(cells, msg->n_cells, msg->txnid, msg->nonce);
 	return c;
@@ -641,7 +641,7 @@ queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address
 	return ca;
 }
 
-queue_query_message * init_enqueue_message(cell_address * cell_address, cell ** cells, int no_cells, long txnid, long nonce)
+queue_query_message * init_enqueue_message(cell_address * cell_address, cell * cells, int no_cells, long txnid, long nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_ENQUEUE;
@@ -673,7 +673,7 @@ queue_query_message * init_consume_queue_message(cell_address * cell_address, in
 }
 
 
-queue_query_message * init_read_queue_response(cell_address * cell_address, cell ** cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, long txnid, long nonce)
+queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, long txnid, long nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_READ_QUEUE_RESPONSE;
@@ -688,7 +688,7 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
 }
 
 
-void free_queue_query_message(queue_query_message * ca)
+void free_queue_message(queue_query_message * ca)
 {
 	for(int i=0;i<ca->no_cells;i++)
 		free_cell_ptrs(ca->cells + i);
@@ -697,7 +697,7 @@ void free_queue_query_message(queue_query_message * ca)
 	free(ca);
 }
 
-void init_queue_query_message_msg(QueueQueryMessage * msg, queue_query_message * ca, CellAddressMessage * cell_address_msg)
+void init_queue_message_msg(QueueQueryMessage * msg, queue_query_message * ca, CellAddressMessage * cell_address_msg)
 {
 	VectorClockMessage ** vcs = NULL;
 
@@ -706,7 +706,7 @@ void init_queue_query_message_msg(QueueQueryMessage * msg, queue_query_message *
 	msg->nonce = ca->nonce;
 	msg->n_cells = ca->no_cells;
 
-	msg->cell_address = cell_address_msg;
+	msg->queue_address = cell_address_msg;
 
 	msg->app_id = ca->app_id;
 	msg->shard_id = ca->shard_id;
@@ -731,10 +731,10 @@ void init_queue_query_message_msg(QueueQueryMessage * msg, queue_query_message *
 	}
 }
 
-queue_query_message * init_queue_query_message_from_msg(QueueQueryMessage * msg)
+queue_query_message * init_queue_message_from_msg(QueueQueryMessage * msg)
 {
 	cell * cells = NULL;
-	cell_address * cell_address = init_cell_address_from_msg(msg->cell_address);
+	cell_address * cell_address = init_cell_address_from_msg(msg->queue_address);
 
 	switch(msg->msg_type)
 	{
@@ -760,7 +760,7 @@ queue_query_message * init_queue_query_message_from_msg(QueueQueryMessage * msg)
 			{
 				cells = (cell *) malloc(msg->n_cells * sizeof(cell));
 				for(int i=0;i<msg->n_cells;i++)
-					copy_cell_from_msg(cells + i, msg->cells + i);
+					copy_cell_from_msg(cells + i, msg->cells[i]);
 			}
 
 			return init_enqueue_message(cell_address, cells, msg->n_cells, msg->txnid, msg->nonce);
@@ -771,7 +771,7 @@ queue_query_message * init_queue_query_message_from_msg(QueueQueryMessage * msg)
 		}
 		case QUERY_TYPE_CONSUME_QUEUE:
 		{
-			return init_read_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->txnid, msg->nonce);
+			return init_consume_queue_message(cell_address, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->txnid, msg->nonce);
 		}
 		case QUERY_TYPE_READ_QUEUE_RESPONSE:
 		{
@@ -779,7 +779,7 @@ queue_query_message * init_queue_query_message_from_msg(QueueQueryMessage * msg)
 			{
 				cells = (cell *) malloc(msg->n_cells * sizeof(cell));
 				for(int i=0;i<msg->n_cells;i++)
-					copy_cell_from_msg(cells + i, msg->cells + i);
+					copy_cell_from_msg(cells + i, msg->cells[i]);
 			}
 
 			return init_read_queue_response(cell_address, cells, msg->n_cells, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->status, msg->txnid, msg->nonce);
@@ -789,7 +789,7 @@ queue_query_message * init_queue_query_message_from_msg(QueueQueryMessage * msg)
 	return NULL;
 }
 
-void free_queue_query_message_msg(QueueQueryMessage * msg)
+void free_queue_message_msg(QueueQueryMessage * msg)
 {
 	for(int i=0;i<msg->n_cells;i++)
 		free_cell_msg(msg->cells[i]);
@@ -798,25 +798,25 @@ void free_queue_query_message_msg(QueueQueryMessage * msg)
 }
 
 
-int serialize_queue_query_message(queue_query_message * ca, void ** buf, unsigned * len)
+int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len)
 {
 	QueueQueryMessage msg = QUEUE_QUERY_MESSAGE__INIT;
 	CellAddressMessage cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
 
 	init_cell_address_msg(&cell_address_msg, ca->cell_address);
-	init_queue_query_message_msg(&msg, ca, &cell_address_msg);
+	init_queue_message_msg(&msg, ca, &cell_address_msg);
 
 	*len = queue_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
 	queue_query_message__pack (&msg, *buf);
 
-	free_queue_query_message_msg(&msg);
+	free_queue_message_msg(&msg);
 
 	return 0;
 
 }
 
-int deserialize_queue_query_message(void * buf, unsigned msg_len, queue_query_message ** ca)
+int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca)
 {
 	QueueQueryMessage * msg = queue_query_message__unpack (NULL, msg_len, buf);
 
@@ -826,14 +826,14 @@ int deserialize_queue_query_message(void * buf, unsigned msg_len, queue_query_me
 	    return 1;
 	}
 
-	*ca = init_queue_query_message_from_msg(msg);
+	*ca = init_queue_message_from_msg(msg);
 
 	queue_query_message__free_unpacked(msg, NULL);
 
 	return 0;
 }
 
-char * to_string_queue_query_message(queue_query_message * ca, char * msg_buff)
+char * to_string_queue_message(queue_query_message * ca, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 
@@ -851,12 +851,12 @@ char * to_string_queue_query_message(queue_query_message * ca, char * msg_buff)
 		}
 		case QUERY_TYPE_SUBSCRIBE_QUEUE:
 		{
-			sprintf(crt_ptr, "SubscribeQueue(txnid=%ld, nonce=%ld, app_id=%ld, shard_id=%ld, consumer_id=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
+			sprintf(crt_ptr, "SubscribeQueue(txnid=%ld, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
 			break;
 		}
 		case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
 		{
-			sprintf(crt_ptr, "UnsubscribeQueue(txnid=%ld, nonce=%ld, app_id=%ld, shard_id=%ld, consumer_id=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
+			sprintf(crt_ptr, "UnsubscribeQueue(txnid=%ld, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
 			break;
 		}
 		case QUERY_TYPE_ENQUEUE:
@@ -866,17 +866,17 @@ char * to_string_queue_query_message(queue_query_message * ca, char * msg_buff)
 		}
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			sprintf(crt_ptr, "ReadQueue(txnid=%ld, nonce=%ld, app_id=%ld, shard_id=%ld, consumer_id=%ld, max_items=%d, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
+			sprintf(crt_ptr, "ReadQueue(txnid=%ld, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, max_items=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
 			break;
 		}
 		case QUERY_TYPE_CONSUME_QUEUE:
 		{
-			sprintf(crt_ptr, "ConsumeQueue(txnid=%ld, nonce=%ld, app_id=%ld, shard_id=%ld, consumer_id=%ld, new_consume_head=%d, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
+			sprintf(crt_ptr, "ConsumeQueue(txnid=%ld, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, new_consume_head=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
 			break;
 		}
 		case QUERY_TYPE_READ_QUEUE_RESPONSE:
 		{
-			sprintf(crt_ptr, "ReadQueueResponse(txnid=%ld, nonce=%ld, app_id=%ld, shard_id=%ld, consumer_id=%ld, no_entries=%d, new_read_head=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index);
+			sprintf(crt_ptr, "ReadQueueResponse(txnid=%ld, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, no_entries=%d, new_read_head=%ld, ", ca->txnid, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index);
 			break;
 		}
 	}
@@ -885,12 +885,28 @@ char * to_string_queue_query_message(queue_query_message * ca, char * msg_buff)
 	to_string_cell_address(ca->cell_address, crt_ptr);
 	crt_ptr += strlen(crt_ptr);
 
+	if(ca->no_cells > 0)
+	{
+		sprintf(crt_ptr, ", cells={");
+		crt_ptr += strlen(crt_ptr);
+		for(int i=0;i<ca->no_cells;i++)
+		{
+			to_string_cell(ca->cells+i, crt_ptr);
+			crt_ptr += strlen(crt_ptr);
+			sprintf(crt_ptr, ", ");
+			crt_ptr += strlen(crt_ptr);
+		}
+
+		sprintf(crt_ptr, "} )");
+		crt_ptr += strlen(crt_ptr);
+	}
+
 	sprintf(crt_ptr, ")");
 
 	return msg_buff;
 }
 
-int equals_queue_query_message(queue_query_message * ca1, queue_query_message * ca2)
+int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2)
 {
 	if(ca1->txnid != ca2->txnid || ca1->nonce != ca2->nonce ||
 		ca1->msg_type != ca2->msg_type || ca1->queue_index != ca2->queue_index ||
@@ -983,6 +999,11 @@ void free_txn_message(txn_message * ca)
 
 void init_txn_message_msg(TxnMessage * msg, txn_message * ca)
 {
+	msg->n_own_read_set = ca->no_own_read_set;
+	msg->n_own_write_set = ca->no_own_write_set;
+	msg->n_complete_read_set = ca->no_complete_read_set;
+	msg->n_complete_write_set = ca->no_complete_write_set;
+
 	VersionedCellMessage **own_read_set = (VersionedCellMessage **) malloc(msg->n_own_read_set * sizeof (VersionedCellMessage*));
 	VectorClockMessage ** vc_msgs_own_read_set = (VectorClockMessage **) malloc(msg->n_own_read_set * sizeof (VectorClockMessage*));
 

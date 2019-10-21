@@ -9,6 +9,7 @@
 #include "cells.h"
 #include "db_queries.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 
 #define MAX_MSG_SIZE_VC 1024
@@ -17,7 +18,7 @@ int write_msg_to_file (unsigned char *buff, unsigned len, FILE * fp)
 {
 	unsigned written = fwrite(buff, len, 1, fp);
 
-	printf("Wrote %d / %d bytes to file\n", written * len, len);
+//	printf("Wrote %d / %d bytes to file\n", written * len, len);
 
 	return (written == 1)? 0 : -1;
 }
@@ -29,7 +30,7 @@ int read_msg_from_file (unsigned max_length, unsigned char *buff, FILE * fp)
 
   while ((nread=fread(buff + cur_len, 1, max_length - cur_len, fp)) != 0)
   {
-	printf("Read %d bytes\n", nread);
+//	printf("Read %d bytes\n", nread);
     cur_len += nread;
     if (cur_len == max_length)
     {
@@ -40,6 +41,30 @@ int read_msg_from_file (unsigned max_length, unsigned char *buff, FILE * fp)
   return cur_len;
 }
 
+void write_read_from_file(void * buf_w, unsigned len_w, unsigned char *buf_r, unsigned * len_r)
+{
+	// Serialize it to file:
+
+	FILE * fptr_w = fopen("/tmp/vc.test","wb");
+	int success = write_msg_to_file(buf_w, len_w, fptr_w);
+	assert(success == 0);
+	fclose(fptr_w);
+
+	// Read it back:
+
+	FILE * fptr_r = fopen("/tmp/vc.test","rb");
+
+	*len_r = read_msg_from_file(MAX_MSG_SIZE_VC, buf_r, fptr_r);
+
+	if(*len_r != len_w)
+	{
+		printf("len_r=%d != len_w=%d\n", *len_r, len_w);
+		assert(0);
+	}
+	fclose(fptr_r);
+}
+
+
 int main (int argc, const char * argv[])
 {
 	FILE *fptr_w = NULL, * fptr_r = NULL;
@@ -49,118 +74,252 @@ int main (int argc, const char * argv[])
 	unsigned len_r;
 	char err_msg [100];
 
-	// Generate a dummy VC:
+	// Generate a dummy VC message:
 
 	int node_ids[] = {0,1};
 	long counters[] = {0,0};
 
-	vector_clock * vc = init_vc(2, node_ids, counters, 1);
+	vector_clock * vc = init_vc(2, node_ids, counters, 1), * vc_r = NULL;
 	add_component_vc(vc, 2, 0);
 	increment_vc(vc, 0);
 	increment_vc(vc, 0);
 	increment_vc(vc, 1);
 	increment_vc(vc, 2);
 	increment_vc(vc, 2);
-
-	// Serialize it to file:
-
-	fptr_w = fopen("/tmp/vc.test","wb");
-
 	serialize_vc(vc, &buf_w, &len_w);
-	int success = write_msg_to_file(buf_w, len_w, fptr_w);
-	assert(success == 0);
-	fclose(fptr_w);
-
-	// Read it back:
-
-	fptr_r = fopen("/tmp/vc.test","rb");
-	vector_clock * vc_r = NULL;
-
-	len_r = read_msg_from_file(MAX_MSG_SIZE_VC, buf_r, fptr_r);
-
-	if(len_r != len_w)
-	{
-		printf("len_r=%d != len_w=%d\n", len_r, len_w);
-		assert(0);
-	}
-
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_vc(buf_r, len_r, &vc_r);
-
+	printf("VC message: %s\n", to_string_vc(vc, err_msg));
 	if(compare_vc(vc, vc_r) != 0)
 	{
-		printf("VC mismatch: %s != %s\n", to_string_vc(vc, err_msg), to_string_vc(vc_r, err_msg));
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
-	// Generate dummy GS:
+	// Generate dummy GS message:
 
-	gossip_state * gs = init_gossip_state(0, 0, 0, 0, vc);
-
-	// Serialize it to file:
-
-	fptr_w = fopen("/tmp/vc.test","wb");
+	gossip_state * gs = init_gossip_state(0, 0, 0, 0, vc), * gs_r = NULL;
 	serialize_gs(gs, &buf_w, &len_w);
-	success = write_msg_to_file(buf_w, len_w, fptr_w);
-	assert(success == 0);
-	fclose(fptr_w);
-
-	// Read it back:
-
-	fptr_r = fopen("/tmp/vc.test","rb");
-	gossip_state * gs_r = NULL;
-
-	len_r = read_msg_from_file(MAX_MSG_SIZE_VC, buf_r, fptr_r);
-
-	if(len_r != len_w)
-	{
-		printf("len_r=%d != len_w=%d\n", len_r, len_w);
-		assert(0);
-	}
-
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_gs(buf_r, len_r, &gs_r);
 
+	printf("GossipState message: %s\n", to_string_gs(gs, err_msg));
 	if(!equals_gs(gs, gs_r))
 	{
-		printf("GS mismatch: %s != %s\n", to_string_gs(gs, err_msg), to_string_gs(gs_r, err_msg));
+		printf("GS read mismatch (%s)!\n", to_string_gs(gs_r, err_msg));
 		assert(0);
 	}
+
+	// Generate a dummy Cell and CellAddress:
+
+	long key = 1, end_key = 3;
+	long column = 1, end_column = 5;
+
+//	cell * cell = init_cell(0, &key, 1, &column, 1, vc);
+	int no_cells = 2;
+	cell * cll = (cell *) malloc(no_cells * sizeof(cell));
+	for(int i=0;i<no_cells;i++)
+		copy_cell(cll + i, 0, (i==0)?(&key) : (&end_key), 1, (i==0)?(&column) : (&end_column), 1, vc);
+	cell_address * cell_address = init_cell_address(0, &key, 1), * end_cell_address = init_cell_address(0, &end_key, 1);
 
 	// Generate dummy Write Query:
 
-	long key = 1;
-	long column = 1;
-
-	cell * cell = init_cell(0, &key, 1, &column, 1, vc);
-	write_query * wquery = init_write_query(cell, 2, 3);
-
-	// Serialize it to file:
-
-	fptr_w = fopen("/tmp/vc.test","wb");
+	write_query * wquery = init_write_query(cll, 2, 3), * wquery_r = NULL;
 	serialize_write_query(wquery, &buf_w, &len_w);
-	success = write_msg_to_file(buf_w, len_w, fptr_w);
-	assert(success == 0);
-	fclose(fptr_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_write_query(buf_r, len_r, &wquery_r);
 
-	// Read it back:
-
-	fptr_r = fopen("/tmp/vc.test","rb");
-	write_query * wquery_r = NULL;
-
-	len_r = read_msg_from_file(MAX_MSG_SIZE_VC, buf_r, fptr_r);
-
-	if(len_r != len_w)
+	printf("Write query: %s\n", to_string_write_query(wquery, err_msg));
+	if(!equals_write_query(wquery, wquery_r))
 	{
-		printf("len_r=%d != len_w=%d\n", len_r, len_w);
+		printf("Write query read mismatch (%s)!\n", to_string_write_query(wquery_r, err_msg));
 		assert(0);
 	}
 
-	deserialize_write_query(buf_r, len_r, &wquery_r);
+	// Generate dummy Read Query:
 
-	printf("Write query: %s, %s\n", to_string_write_query(wquery, err_msg), to_string_write_query(wquery_r, err_msg));
+	read_query * rquery = init_read_query(cell_address, 2, 3), * rquery_r = NULL;
+	serialize_read_query(rquery, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_read_query(buf_r, len_r, &rquery_r);
 
-	if(!equals_write_query(wquery, wquery_r))
+	printf("Read query: %s\n", to_string_read_query(rquery, err_msg));
+	if(!equals_read_query(rquery, rquery_r))
 	{
-		printf("Write query mismatch: %s != %s\n", to_string_write_query(wquery, err_msg), to_string_write_query(wquery_r, err_msg));
+		printf("Read query read mismatch (%s)!\n", to_string_read_query(rquery_r, err_msg));
+		assert(0);
+	}
+
+	// Ack Message:
+
+	ack_message * am = init_ack_message(cell_address, 1, 2, 3), * am_r = NULL;
+	serialize_ack_message(am, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_ack_message(buf_r, len_r, &am_r);
+
+	printf("Ack message: %s\n", to_string_ack_message(am, err_msg));
+	if(!equals_ack_message(am, am_r))
+	{
+		printf("Ack message read mismatch (%s)!\n", to_string_ack_message(am_r, err_msg));
+		assert(0);
+	}
+
+	// Range read query:
+
+	range_read_query * rrq = init_range_read_query(cell_address, end_cell_address, 2, 3), * rrq_r = NULL;
+	serialize_range_read_query(rrq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_range_read_query(buf_r, len_r, &rrq_r);
+
+	printf("Range Read Query: %s\n", to_string_range_read_query(rrq, err_msg));
+	if(!equals_range_read_query(rrq, rrq_r))
+	{
+		printf("Range Read Query read mismatch (%s)!\n", to_string_range_read_query(rrq_r, err_msg));
+		assert(0);
+	}
+
+	// Range read response:
+
+	range_read_response_message * rrm = init_range_read_response_message(cll, no_cells, 2, 3), * rrm_r = NULL;
+	serialize_range_read_response_message(rrm, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_range_read_response_message(buf_r, len_r, &rrm_r);
+
+	printf("Range Read Response: %s\n", to_string_range_read_response_message(rrm, err_msg));
+	if(!equals_range_read_response_message(rrm, rrm_r))
+	{
+		printf("Range Read Response read mismatch (%s)!\n", to_string_range_read_response_message(rrm_r, err_msg));
+		assert(0);
+	}
+
+	// Create queue message:
+
+	queue_query_message * cq = init_create_queue_message(cell_address, 2, 3), * cq_r = NULL;
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Create Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Create Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Delete queue message:
+
+	cq = init_delete_queue_message(cell_address, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Delete Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Delete Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Subscribe queue message:
+
+	cq = init_subscribe_queue_message(cell_address, 1, 2, 3, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Subscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Subscribe Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Unsubscribe queue message:
+
+	cq = init_unsubscribe_queue_message(cell_address, 1, 2, 3, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Unsubscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Unsubscribe Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Enqueue message:
+
+	cq = init_enqueue_message(cell_address, cll, no_cells, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Enqueue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Enqueue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Read queue message:
+
+	cq = init_read_queue_message(cell_address, 1, 2, 3, 2, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Read Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Read Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Consume queue message:
+
+	cq = init_consume_queue_message(cell_address, 1, 2, 3, 1, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Consume Queue: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Consume Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Read queue response message:
+
+	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, 2, 3);
+	serialize_queue_message(cq, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_queue_message(buf_r, len_r, &cq_r);
+
+	printf("Read Queue Response: %s\n", to_string_queue_message(cq, err_msg));
+	if(!equals_queue_message(cq, cq_r))
+	{
+		printf("Read Queue Response read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+
+	// Txn message:
+
+	txn_message * tm = init_txn_message(DB_TXN_VALIDATION,
+									cll, 2,
+									cll, 2,
+									cll, 2,
+									cll, 2,
+									2, 3), * tm_r = NULL;
+	serialize_txn_message(tm, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_txn_message(buf_r, len_r, &tm_r);
+
+	printf("Txn Message: %s\n", to_string_txn_message(tm, err_msg));
+	if(!equals_txn_message(tm, tm_r))
+	{
+		printf("Txn Message read mismatch (%s)!\n", to_string_txn_message(tm_r, err_msg));
 		assert(0);
 	}
 }
