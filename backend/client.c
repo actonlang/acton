@@ -72,40 +72,12 @@ db_schema_t * create_schema() {
 	return db_schema;
 }
 
-write_query * get_remote_insert_query(WORD * column_values, int no_cols, WORD table_key, remote_db_t * db, db_schema_t * schema, unsigned int * fastrandstate)
-{
-	write_query * wq = (write_query *) malloc(sizeof(write_query));
-	wq->txnid=0;
-	wq->nonce=requests;
-	requests++;
-
-	cell * c = (cell *) malloc(sizeof(cell));
-	c->table_key = (long) table_key;
-	c->no_keys = schema->no_primary_keys + schema->no_clustering_keys;
-	c->no_columns = schema->no_cols - c->no_keys;
-
-	assert(c->no_columns > 0);
-
-	c->keys = (long *) malloc(c->no_keys * sizeof(long));
-	for(int i=0;i<c->no_keys;i++)
-		c->keys[i] = (long) column_values[i];
-
-	c->columns = (long *) malloc(c->no_columns * sizeof(long));
-	for(int i=0;i<c->no_columns;i++)
-		c->columns[i] = (long) column_values[i+c->no_keys];
-
-	wq->cell = c;
-
-	return wq;
-}
-
-int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, remote_db_t * db, db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
+int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, long txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
-	write_query * wq = get_remote_insert_query(column_values, no_cols, table_key, db, schema, fastrandstate);
+	write_query * wq = build_write_query(column_values, no_cols, table_key, schema, txnid, nonce);
 	void * tmp_out_buf = NULL;
 	char print_buff[100];
-//	bzero(out_buf, BUFSIZE);
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
 
 	to_string_write_query(wq, (char *) print_buff);
@@ -137,39 +109,13 @@ int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, remote_d
 	return success;
 }
 
-read_query * get_remote_search_clustering_query(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, remote_db_t * db, db_schema_t * schema)
-{
-	int i=0;
-	read_query * q = (read_query *) malloc(sizeof(read_query));
-	q->txnid=0;
-	q->nonce=requests;
-	requests++;
-
-	cell_address * c = (cell_address *) malloc(sizeof(cell_address));
-	c->table_key = (long) table_key;
-	c->no_keys = schema->no_primary_keys + no_clustering_keys;
-
-	assert(c->no_keys > 0);
-
-	c->keys = (long *) malloc(c->no_keys * sizeof(long));
-	for(;i<schema->no_primary_keys;i++)
-		c->keys[i] = (long) primary_keys[i];
-
-	for(;i<c->no_keys;i++)
-		c->keys[i] = (long) clustering_keys[i-schema->no_primary_keys];
-
-	q->cell_address = c;
-
-	return q;
-}
-
-read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, remote_db_t * db, db_schema_t * schema, int sockfd)
+read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, long txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 	char print_buff[100];
 
-	read_query * q = get_remote_search_clustering_query(primary_keys, clustering_keys, no_clustering_keys, table_key, db, schema);
+	read_query * q = build_read_query(primary_keys, clustering_keys, no_clustering_keys, table_key, schema, txnid, nonce);
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
 	to_string_read_query(q, (char *) print_buff);
@@ -207,7 +153,7 @@ int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_remote_insert(column_values, no_cols, (WORD) 0, NULL, schema, sockfd, fastrandstate) != 0)
+				if(db_remote_insert(column_values, no_cols, (WORD) 0, schema, 0, requests++, sockfd) != 0)
 					return -1;
 			}
 		}

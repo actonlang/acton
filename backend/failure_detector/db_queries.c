@@ -33,6 +33,26 @@ write_query * init_write_query_copy(cell * cell, long txnid, long nonce)
 	return ca;
 }
 
+write_query * build_write_query(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long txnid, long nonce)
+{
+	cell * c = (cell *) malloc(sizeof(cell));
+	c->table_key = (long) table_key;
+	c->no_keys = no_primary_keys + no_clustering_keys;
+	c->no_columns = no_cols - c->no_keys;
+
+	assert(c->no_columns > 0);
+
+	c->keys = (long *) malloc(c->no_keys * sizeof(long));
+	for(int i=0;i<c->no_keys;i++)
+		c->keys[i] = (long) column_values[i];
+
+	c->columns = (long *) malloc(c->no_columns * sizeof(long));
+	for(int i=0;i<c->no_columns;i++)
+		c->columns[i] = (long) column_values[i+c->no_keys];
+
+	return init_write_query(c, txnid, nonce);
+}
+
 void free_write_query(write_query * ca)
 {
 	free_cell(ca->cell);
@@ -136,6 +156,26 @@ read_query * init_read_query_copy(cell_address * cell_address, long txnid, long 
 	ca->txnid = txnid;
 	ca->nonce = nonce;
 	return ca;
+}
+
+read_query * build_read_query(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, long txnid, long nonce)
+{
+	int i=0;
+
+	cell_address * c = (cell_address *) malloc(sizeof(cell_address));
+	c->table_key = (long) table_key;
+	c->no_keys = schema->no_primary_keys + no_clustering_keys;
+
+	assert(c->no_keys > 0);
+
+	c->keys = (long *) malloc(c->no_keys * sizeof(long));
+	for(;i<schema->no_primary_keys;i++)
+		c->keys[i] = (long) primary_keys[i];
+
+	for(;i<c->no_keys;i++)
+		c->keys[i] = (long) clustering_keys[i-schema->no_primary_keys];
+
+	return init_read_query(c, txnid, nonce);
 }
 
 void free_read_query(read_query * ca)
