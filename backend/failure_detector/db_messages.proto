@@ -80,6 +80,20 @@ message AckMessage {
 	required int64 nonce=4;
 }
 
+message RangeReadQueryMessage {
+	required CellAddressMessage start_cell_address=1;
+	required CellAddressMessage end_cell_address=2;
+	required int64 txnid=3;
+	required int64 nonce=4;
+}
+
+message RangeReadResponseMessage {
+	repeated VersionedCellMessage cells=1;
+	required int64 txnid=2;
+	required int64 nonce=3;
+}
+
+
 // Txn messages:
 
 message TxnMessage {
@@ -94,6 +108,26 @@ message TxnMessage {
 
 // Queue messages:
 
+message QueueQueryMessage {
+	required CellAddressMessage queue_address=1;
+	
+	required int32 msg_type=2;
+
+	required int32 app_id=3;
+	required int32 shard_id=4;
+	required int32 consumer_id=5;
+
+	required int32 queue_index=6;
+
+	required int32 status=7;
+	
+	repeated VersionedCellMessage cells=8;
+
+	required int64 txnid=9;
+	required int64 nonce=10;
+}
+
+
 message ConsumerID {
 	required int32 app_id=1;
 	required int32 shard_id=2;
@@ -104,6 +138,26 @@ message CreateQueueMessage {
 	required CellAddressMessage queue_address=1;
 	required int64 txnid=2;
 	required int64 nonce=3;
+}
+
+message DeleteQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required int64 txnid=2;
+	required int64 nonce=3;
+}
+
+message SubscribeQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required int64 txnid=3;
+	required int64 nonce=4;
+}
+
+message UnsubscribeQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required int64 txnid=3;
+	required int64 nonce=4;
 }
 
 message EnqueueMessage {

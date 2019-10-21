@@ -12,8 +12,7 @@
 #define COLLECTION_ID_0 0
 #define COLLECTION_ID_1 1
 
-int no_actors = 2;
-int no_collections = 2;
+int no_actors = 5;
 int no_items = 20;
 
 int no_state_cols = 4;
@@ -22,7 +21,7 @@ int no_state_clustering_keys = 2;
 int no_state_index_keys = 1;
 
 int no_queue_cols = 2;
-int no_queue_items = 10;
+
 WORD state_table_key = (WORD) 0;
 WORD queue_table_key = (WORD) 1;
 
@@ -213,7 +212,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstate)
 {
 	int ret = 0;
-	long dest_id = (long) ca->consumer_id + 1;
+	long dest_id = ((long) ca->consumer_id < no_actors - 1)? ((long) ca->consumer_id + 1) : 0;
 
 	int no_outgoing_counters = 2;
 
@@ -311,7 +310,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		counter_val++;
 		outgoing_counters[no_outgoing_counters++] = counter_val;
 
-		long dest_id = (long) ca->consumer_id + 1;
+		long dest_id = ((long) ca->consumer_id < no_actors - 1)? ((long) ca->consumer_id + 1) : 0;
 
 		skiplist_insert(ca->snd_counters, (WORD) dest_id, (WORD) counter_val, fastrandstate);
 		ca->total_snd++;
@@ -390,14 +389,14 @@ void * actor(void * cargs)
 		return (void *) read_status;
 	}
 
-	// Add app-specific message processing work here
-
 	if(entries_read > 0)
 	{
 		int checkpoint_success = 0;
 		while(!checkpoint_success)
 		{
 			uuid_t * txnid = new_txn(ca->db, &seed);
+
+			// Add app-specific message processing work here:
 
 			ret = process_messages(start_row, end_row, entries_read, &msgs_sent, txnid, ca, &seed);
 
@@ -446,7 +445,7 @@ void * actor(void * cargs)
 		ts.tv_sec += 3;
 		ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
 
-		ret = pthread_mutex_unlock(qc->lock);
+		pthread_mutex_unlock(qc->lock);
 
 		if(debug_lock)
 			printf("ACTOR %ld: Unlocked consumer lock %p/%p, status=%d\n", (long) ca->consumer_id, qc, qc->lock, ret);

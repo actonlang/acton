@@ -5,9 +5,18 @@
  */
 
 #include "cells.h"
+#include "../db.h"
 
 #ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 #define BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
+
+#define DB_TXN_BEGIN 0
+#define DB_TXN_VALIDATION 1
+#define DB_TXN_COMMIT 2
+#define DB_TXN_ABORT 3
+
+#define DB_ACK 0
+#define DB_NACK 1
 
 typedef struct write_query
 {
@@ -39,8 +48,6 @@ int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca);
 char * to_string_read_query(read_query * ca, char * msg_buff);
 int equals_read_query(read_query * ca1, read_query * ca2);
 
-#define DB_ACK 0
-#define DB_NACK 1
 
 typedef struct ack_message
 {
@@ -57,10 +64,79 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca);
 char * to_string_ack_message(ack_message * ca, char * msg_buff);
 int equals_ack_message(ack_message * ca1, ack_message * ca2);
 
-#define DB_TXN_BEGIN 0
-#define DB_TXN_VALIDATION 1
-#define DB_TXN_COMMIT 2
-#define DB_TXN_ABORT 3
+
+typedef struct range_read_query
+{
+	cell_address * start_cell_address;
+	cell_address * end_cell_address;
+	long txnid;
+	long nonce;
+} range_read_query;
+
+range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, long txnid, long nonce);
+void free_range_read_query(range_read_query * ca);
+int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len);
+int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query ** ca);
+char * to_string_range_read_query(range_read_query * ca, char * msg_buff);
+int equals_range_read_query(range_read_query * ca1, range_read_query * ca2);
+
+
+typedef struct range_read_response_message
+{
+	cell * cells;
+	int no_cells;
+	long txnid;
+	long nonce;
+} range_read_response_message;
+
+range_read_response_message * init_range_read_response_message(cell ** cells, int no_cells, long txnid, long nonce);
+void free_range_read_response_message(range_read_response_message * ca);
+int serialize_range_read_response_message(range_read_response_message * ca, void ** buf, unsigned * len);
+int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_read_response_message ** ca);
+char * to_string_range_read_response_message(range_read_response_message * ca, char * msg_buff);
+int equals_range_read_response_message(range_read_response_message * ca1, range_read_response_message * ca2);
+
+
+typedef struct queue_query_message
+{
+	cell_address * cell_address; // queue address
+	short msg_type; // {CREATE, DELETE, SUBSCRIBE, UNSUBSCRIBE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE}
+
+	int app_id;
+	int shard_id;
+	int consumer_id;
+
+	// For ENQUEUE:
+
+	cell * cells;
+	int no_cells;
+
+	// For READ_QUEUE (== max_entries) and CONSUME_QUEUE (== new_consume_head):
+
+	long queue_index;
+
+
+	// For RESPONSE type messages:
+
+	short status;
+
+	long txnid;
+	long nonce;
+} queue_query_message;
+
+queue_query_message * init_create_queue_message(cell_address * cell_address, long txnid, long nonce);
+queue_query_message * init_delete_queue_message(cell_address * cell_address, long txnid, long nonce);
+queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long txnid, long nonce);
+queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long txnid, long nonce);
+queue_query_message * init_enqueue_message(cell_address * cell_address, cell ** cells, int no_cells, long txnid, long nonce);
+queue_query_message * init_read_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long max_entries, long txnid, long nonce);
+queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long new_consume_head, long txnid, long nonce);
+queue_query_message * init_read_queue_response(cell_address * cell_address, cell ** cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, long txnid, long nonce);
+void free_queue_query_message(queue_query_message * ca);
+int serialize_queue_query_message(queue_query_message * ca, void ** buf, unsigned * len);
+int deserialize_queue_query_message(void * buf, unsigned msg_len, queue_query_message ** ca);
+char * to_string_queue_query_message(queue_query_message * ca, char * msg_buff);
+int equals_queue_query_message(queue_query_message * ca1, queue_query_message * ca2);
 
 typedef struct txn_message
 {
