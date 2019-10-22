@@ -87,7 +87,7 @@ instance DataVars Pattern where
 
 -- State variables -----------------
 
-vardefs b                           = concat [ bound ps | VarAssign _ ps _ <- b ]
+statedefs b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
 -- Free and bound names ------------
@@ -152,7 +152,7 @@ instance Vars Decl where
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
     bound (Extension _ n _ _ _)     = []
-    bound (Signature _ ns t dec)    = ns
+    bound (Signature _ ns t dec)    = []
 
 instance Vars Branch where
     free (Branch e ss)              = free e ++ free ss
