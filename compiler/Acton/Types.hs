@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct,reconstruct2,typeError,env2type) where
+module Acton.Types(reconstruct,reconstruct2,typeError) where
 
 import Debug.Trace
 import Data.Typeable
@@ -286,7 +286,7 @@ instance InfEnv Decl where
                                              popFX
                                              return [(n, nVar (tFun fx prow krow t))]     -- TODO: modif/NoDecoration
       where svars                       = statescope env
-
+{-
     infEnv env (Class l n q cs b)
       | nodup cs && chkRedef b          = do t0 <- newOVar
                                              inherited <- return ONil --inferSuper env cs
@@ -308,7 +308,7 @@ instance InfEnv Decl where
                                              o_constrain [QEqu (nloc n) 9 t internal]
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
-                                        
+-}                                        
     infEnv env (Protocol l n q cs b)    = return []       -- undefined
     infEnv env (Extension l n q cs b)   = return []       -- undefined
     infEnv env (Signature l ns t dec)   = return []       -- undefined.....
@@ -321,8 +321,6 @@ inferPure env e                         = do pushFX tNil
 
 env2row                                 = foldl (\r (n,NVar t _) -> kwdRow n t r)           -- TODO: stabilize this...
 
-env2type tenv                           = ORecord (env2row ONil tenv)
-
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do inferBool env e
                                              infEnv env b
@@ -330,21 +328,21 @@ instance InfEnv Branch where
 instance InfEnv [WithItem] where
     infEnv env []                       = return []
     infEnv env (item:items)             = do te1 <- infEnv env item
-                                             te2 <- infEnv (o_define te1 env) items
+                                             te2 <- infEnv (define te1 env) items
                                              return (te1++te2)
 
 instance InfEnv WithItem where
-    infEnv env (WithItem e Nothing)     = do _ <- infer env e                   -- TODO: Mgr o_constraint on t
+    infEnv env (WithItem e Nothing)     = do _ <- infer env e                   -- TODO: Mgr constraint on t
                                              return []
-    infEnv env (WithItem e (Just p))    = do t1 <- infer env e                  -- TODO: Mgr o_constraint on t1
+    infEnv env (WithItem e (Just p))    = do t1 <- infer env e                  -- TODO: Mgr constraint on t1
                                              (te, t2) <- infEnvT env p
-                                             o_constrain [QEqu (loc p) 16 t1 t2]  -- Eq of item and alias 
+                                             constrain [Equ t1 t2]              -- Eq of item and alias 
                                              return te
 
 instance InfEnv Handler where
     infEnv env (Handler ex b)           = do te <- infEnv env ex
-                                             te1 <- infEnv (o_define te env) b
-                                             return $ o_prune (dom te) te1
+                                             te1 <- infEnv (define te env) b
+                                             return $ prune (dom te) te1
 
 instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []

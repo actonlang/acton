@@ -760,7 +760,7 @@ for_stmt = addLoc $ do
 except :: Parser S.Except
 except = addLoc $ do
              rword "except"
-             mbx <- optional ((,) <$> name <*> optional (rword "as" *> name))
+             mbx <- optional ((,) <$> dotted_name <*> optional (rword "as" *> name))
              return (maybe (S.ExceptAll NoLoc) (\(x,mbn) -> maybe (S.Except NoLoc x) (S.ExceptAs NoLoc x) mbn) mbx)
             
 try_stmt = addLoc $ do
