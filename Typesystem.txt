@@ -167,27 +167,27 @@ N' = N,q,Self(c[q])     N' |- c[q] ~ class(o):n     N' |- ui ~ protocol(oi):ni  
 N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
 
 
-N' = N,q,bv(F,P,S):#,dzv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#,dzv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
 ---------------------------------------------------------------------------------------------------------------------- (Actor)
-N |- actor x[q](F,K):S  :  x: [q] => e,act(p,r)->t
+N |- actor x[q](F,K):S  :  x: [q] => e',act(p,r)->t
 
-N' = N,q,bv(F,P,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 -------------------------------------------------------------------------------------------------- (SyncMeth)
-N |- sync def x[q](F,K):S  :  x: [q] => e,sync(p,r)->t
+N |- sync def x[q](F,K):S  :  x: [q] => e',sync(p,r)->t
 
-N' = N,q,bv(F,P,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 -------------------------------------------------------------------------------------------------- (AsyncMeth)
-N |- async def x[q](F,K):S  :  x: [q] => e,async(p,r)->Msg[t]
+N |- async def x[q](F,K):S  :  x: [q] => e',async(p,r)->Msg[t]
 
-N' = N,q,bv(F,P,S):#    N' |- y,F : Self,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#    N' |- y,F : Self,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 --------------------------------------------------------------------------------------------------------- (InstMeth)
 N |- @instmethod def x[q](y,F,K):S  :  x : [q] => e(p,r)->t
 
-N' = N,q,bv(F,P,S):#    N' |- _class_ : u | e     N' |- F : @u,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#    N' |- _class_ : u | e     N' |- F : @u,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 ------------------------------------------------------------------------------------------------------------------------------- (ClassMeth)
 N |- @classmethod def x[q](y,F,K):S  :  x : [q] => e(p,r)->t
 
-N' = N,q,bv(F,P,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 -------------------------------------------------------------------------------------------------- (Def)
 N |- def x[q](F,K):S  :  x : [q] => e(p,r)->t
 
@@ -292,14 +292,14 @@ N |- u' ~ protocol(o):(x:T,n)     N |- w : u impl u'     N |- E : u      x not s
 -------------------------------------------------------------------------------------- (SelP)
 N |- E.x : [u/Self]T  ~>  w.x(E)
 
-N |- E : u | e     N |- u ~ class(o):(x:T,n)    x not staticm                       N |- E : @u     N |- u ~ class(o):(x:e(p,r)->t,n)     x instm
-------------------------------------------------------------- (SelC1)               -------------------------------------------------------------- (SelC2)
-N |- E.x : [u/Self]T | e                                                            N |- E.x : [u/Self]e(Self,p,r)->t | e'
-
-
-N |- E : @u     N |- u ~ class(o):(x:T,n)     x not instm
---------------------------------------------------------- (SelC3)
+N |- E : u | e     N |- u ~ class(o):(x:T,n)    x not staticm
+------------------------------------------------------------- (SelC1)
 N |- E.x : [u/Self]T | e
+
+N |- E : @u     N |- u ~ class(o):(x:e(p,r)->t,n)     x instm                       N |- E : @u     N |- u ~ class(o):(x:T,n)     x not instm
+-------------------------------------------------------------- (SelC2)              --------------------------------------------------------- (SelC3)
+N |- E.x : [u/Self]e(Self,p,r)->t | e'                                              N |- E.x : [u/Self]T | e
+
 
 N |- E : (x:T,r) | e                                                                N |- c[o] ~ class(o'):n
 -------------------- (Sel)                                                          ------------------------ (At)
