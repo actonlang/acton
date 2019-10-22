@@ -205,11 +205,6 @@ unOVar tvs      = [ v | OVar v <- tvs ]
 
 schemaVars      = unOVar schemaOVars
 
-monotype (OSchema _ _ _)    = False
-monotype _      = True
-
-polytype        = not . monotype
-
 isRow OPos{}    = True
 isRow OStar1{}  = True
 isRow OKwd{}    = True
@@ -253,10 +248,16 @@ type TRow       = Type
 
 tSchema t       = TSchema NoLoc [] t
 
-tCon c          = TCon NoLoc c
 tVar v          = TVar NoLoc v
-
+tCon c          = TCon NoLoc c
+tAt c           = TAt NoLoc c
+tFun fx p r t   = TFun NoLoc fx p r t
+tTuple p        = TTuple NoLoc p
+tRecord r       = TRecord NoLoc r
+tOpt t          = TOpt NoLoc t
+tUnion ts       = TUnion NoLoc ts
 tNone           = TNone NoLoc
+tSelf           = TSelf NoLoc
 tWild           = TWild NoLoc
 tNil            = TNil NoLoc
 
@@ -290,6 +291,10 @@ rowDepth _              = 0
 rowTail (TRow _ _ _ r)  = rowTail r
 rowTail r               = r
 
+
+tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
+
+
 type Substitution = [(TVar,Type)]
 
 instance Data.Binary.Binary OType
@@ -304,8 +309,6 @@ instance Data.Binary.Binary TCon
 instance Data.Binary.Binary UType
 instance Data.Binary.Binary TBind
 instance Data.Binary.Binary Type
-
-tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
 
 
 -- SrcInfo ------------------

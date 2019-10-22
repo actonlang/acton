@@ -14,6 +14,7 @@ import Utils
 import Acton.Syntax
 import Acton.Names
 import Acton.TypeM
+import Acton.Env
 
 
 unify t1 t2                                 = do -- traceM ("unify " ++ prstr (QEqu l0 0 t1 t2))
@@ -188,6 +189,51 @@ del n r                                 = r
 
 internal r1 r2                          = error ("Internal: Cannot unify: " ++ prstr r1 ++ " = " ++ prstr r2)
 
+
+-- Environment unification ---------------------------------------------------------------
+
+unifyTEnv env tenvs []                  = return []
+unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
+                                            [] -> unifyTEnv env tenvs vs
+                                            [ni] -> ((v,ni):) <$> unifyTEnv env tenvs vs
+                                            ni:nis -> do ni' <- unifN ni nis
+                                                         ((v,ni'):) <$> unifyTEnv env tenvs vs
+  where 
+    unifN (NVar (TSchema _ [] t) d) nis = do mapM (unifV t d) nis
+                                             return (NVar (tSchema t) d)
+    unifN (NSVar t) nis                 = do mapM (unifSV t) nis
+                                             return (NSVar t)
+    unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
+
+    unifV t d (NVar (TSchema _ [] t') d')
+      | d == d'                         = constrain [Equ t t']
+      | otherwise                       = err1 v "Inconsistent decorations for"
+    unifV t d ni                        = err1 v "Inconsistent bindings for"
+
+    unifSV t (NSVar t')                 = constrain [Equ t t']
+    unifSV t ni                         = err1 v "Inconsistent bindings for"
+
+
+instantiate env (TSchema _ [] t)        = return t
+instantiate env (TSchema _ q t)         = do tvs <- newTVars (length q)
+                                             let s = tybound q `zip` tvs
+                                                 q1 = subst s q
+                                                 t1 = subst s t
+                                             mapM (q_constrain env) q1
+                                             return t1
+
+q_constrain env (TBind tv cs)           = mapM (q_constr tv) cs
+  where q_constr tv tc@(TC qn ts)       = case followqname qn env of
+                                            NClass{} -> constrain [Sub (tVar tv) (tCon tc)]
+                                            NProto{} -> constrain [Impl (tVar tv) tc]
+
+
+followqname qn env                      = select i ns
+  where (i,ns)                          = findqname qn env
+        select (NAlias qn') ns          = select (followqname qn' env) ns
+        select i []                     = i
+        select _ _                      = notYet (loc qn) (text "Nested protocols or classes")
+
 ----------------------------------------
 
 
@@ -196,21 +242,21 @@ newOVar                                 = intOVar <$> o_unique
 
 newOVars n                              = mapM (const newOVar) [1..n]
 
-newTEnv vs                              = (vs `zip`) <$> mapM (const newOVar) (nub vs)
-
-instantiate l t0@(OSchema vs cs t)      = do tvs <- newOVars (length vs)
+o_instantiate l t0@(OSchema vs cs t)    = do tvs <- newOVars (length vs)
                                              let s   = vs `zip` tvs
                                                  cs1 = [ oSubst s c{cloc=l} | c <- cs ]
                                                  t1  = oSubst s t
                                              o_constrain cs1
 --                                             o_dump [INS l t1]
                                              return t1
-instantiate l t                         = do -- o_dump [INS l t]
+o_instantiate l t                       = do -- o_dump [INS l t]
                                              return t
 
 
 erase x                                 = oSubst s x
   where s                               = [ (tv, wildOVar) | tv <- nub (oTyvars x) ]
+
+---------
 
 
 -- Reduce conservatively and remove entailed constraints
@@ -269,7 +315,7 @@ red1 f (QIn _ _ t (ORecord r))              = do t1 <- newOVar; unify' t (OTuple
 red1 f (QDot l _ (ORecord r) n t)           = case lookupRow n r of
                                                 Right t0 -> do
                                                     -- o_dump [GEN l t0]
-                                                    t1 <- instantiate l $ o_openFX t0
+                                                    t1 <- o_instantiate l $ o_openFX t0
                                                     cs1 <- o_constraints
                                                     unify' t1 t
                                                     red f cs1
@@ -421,7 +467,7 @@ red1 True (QNum _ _ t)                      = unify' t OInt
 red1 True (QBool _ _ t)                     = unify' t OStr
 
 builtinFun l t u                            = do -- o_dump [GEN l t0]
-                                                 t1 <- instantiate l $ o_openFX t0
+                                                 t1 <- o_instantiate l $ o_openFX t0
                                                  unify' t1 u
   where t0                                  = OSchema [] [] t
 

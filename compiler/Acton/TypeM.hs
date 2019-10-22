@@ -19,13 +19,16 @@ import Acton.Names
 
 
 data Constraint                         = Equ       Type Type
+                                        | Sub       Type Type
+                                        | Impl      Type TCon
                                         -- ...
                                         deriving (Eq,Show)
 
 type Constraints                        = [Constraint]
 
-data TypeErr                            = TypeErr           -- ....
-                                        deriving (Eq,Show)
+data TypeErr                            = TypeErr
+                                        -- ...
+                                        deriving (Eq,Show,Typeable)
 
 type TVarMap                            = Map TVar Type
 
@@ -66,6 +69,10 @@ equFX                                   :: FXRow -> TypeM ()
 equFX fx                                = do fx0 <- currFX
                                              constrain [Equ fx fx0]
 
+subFX                                   :: FXRow -> TypeM ()
+subFX fx                                = do fx0 <- currFX
+                                             constrain [Sub fx fx0]
+
 popFX                                   :: TypeM ()
 popFX                                   = lift $ state $ \st -> ((), st{ effectstack = tail (effectstack st) })
 
@@ -87,6 +94,10 @@ dump inf                                = lift $ state $ \st -> ((), st{ dumped 
 getDump                                 :: TypeM SrcInfo
 getDump                                 = lift $ state $ \st -> (dumped st, st)
 
+
+newTVar                                 = TVar NoLoc <$> TV <$> Internal "V" <$> newUnique
+
+newTVars n                              = mapM (const newTVar) [1..n]
 
 subst                                   :: Subst a => Substitution -> a -> a
 subst s x                               = case evalState (runExceptT (msubst x)) (initTypeState $ Map.fromList s) of
@@ -344,6 +355,10 @@ data OSolveErr                          = Defer
                                         | NotYet SrcLoc Doc
                                         deriving (Eq,Show,Typeable)
 
+notYetExpr e                            = notYet (loc e) (pretty e)
+
+notYet loc doc                          = Control.Exception.throw $ NotYet loc doc
+
 instance MapSubst OSolveErr where
     mapsubst (ConflictingRow tv)        = do t <- mapsubst (OVar tv)
                                              case t of
@@ -510,3 +525,42 @@ closeFX (TSchema l q f@(TFun l' fx p r t))
   where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
 closeFX t                           = t
 
+
+-- Error handling ------------------------------------------------------------------------
+
+data CheckerError                       = FileNotFound QName
+                                        | NameNotFound Name
+                                        | NameReserved Name
+                                        | IllegalImport SrcLoc
+                                        | DuplicateImport Name
+                                        | NoItem QName Name
+                                        | OtherError SrcLoc String
+                                        deriving (Show)
+
+instance Control.Exception.Exception CheckerError
+
+checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
+checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
+checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is not accessible")
+checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
+checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
+checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
+checkerError (OtherError l str)         = (l,str)
+
+nameNotFound n                          = Control.Exception.throw $ NameNotFound n
+
+nameReserved n                          = Control.Exception.throw $ NameNotFound n
+
+fileNotFound n                          = Control.Exception.throw $ FileNotFound n
+
+illegalImport l                         = Control.Exception.throw $ IllegalImport l
+
+duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
+
+noItem m n                              = Control.Exception.throw $ NoItem m n
+
+err l s                                 = Control.Exception.throw $ OtherError l s
+
+err1 x s                                = err (loc x) (s ++ " " ++ prstr x)
+
+err2 (x:_) s                            = err1 x s

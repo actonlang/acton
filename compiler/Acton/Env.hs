@@ -30,8 +30,7 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env { names :: [(Name, Maybe NameInfo)], modules :: [(QName,TEnv)] }
 
-data NameInfo               = NVar    TSchema
-                            | NDVar   TSchema Decoration
+data NameInfo               = NVar    TSchema Decoration
                             | NSVar   Type
                             | NClass  [TBind] [TCon] TEnv
                             | NProto  [TBind] [TCon] TEnv
@@ -42,6 +41,7 @@ data NameInfo               = NVar    TSchema
                             | NModule TEnv
                             deriving (Eq,Show,Read,Generic)
 
+nVar t                      = NVar (tSchema t) NoDecoration
 
 instance Data.Binary.Binary NameInfo
 
@@ -56,8 +56,7 @@ instance Pretty (Name, Maybe NameInfo) where
     pretty (n, Just i)          = pretty (n, i)
 
 instance Pretty (Name,NameInfo) where
-    pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
-    pretty (n, NDVar t dec)     = pretty dec $+$ pretty n <+> colon <+> pretty t
+    pretty (n, NVar t dec)      = pretty dec $+$ pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
@@ -70,9 +69,13 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
 
+instance Subst Env where
+    msubst env                  = do ne <- msubst (names env)
+                                     return env{ names = ne }
+    tyfree env                  = tyfree (names env)
+
 instance Subst NameInfo where
-    msubst (NVar t)             = NVar <$> msubst t
-    msubst (NDVar t dec)        = NDVar <$> msubst t <*> return dec
+    msubst (NVar t dec)         = NVar <$> msubst t <*> return dec
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
@@ -82,8 +85,7 @@ instance Subst NameInfo where
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
 
-    tyfree (NVar t)             = tyfree t
-    tyfree (NDVar t dec)        = tyfree t
+    tyfree (NVar t dec)         = tyfree t
     tyfree (NSVar t)            = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
@@ -101,6 +103,16 @@ instance Subst SrcInfoTag where
     tyfree (INS _ t)                = tyfree t
 
 
+monotype (NVar _ StaticMethod)  = False
+monotype (NVar _ ClassMethod)   = False
+monotype (NVar _ InstMethod)    = False
+monotype (NClass _ _ _)         = False
+monotype (NProto _ _ _)         = False
+monotype _                      = True
+
+polytype                        = not . monotype
+
+
 -------------------------------------------------------------------------------------------------------------------
 
 envBuiltin                  = [ (nSequence, NProto [a] [] []),
@@ -113,6 +125,8 @@ envBuiltin                  = [ (nSequence, NProto [a] [] []),
   where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
         ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
 
+envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
+
 --------------------------------------------------------------------------------------------------------------------
 
 prune                       :: [Name] -> TEnv -> TEnv
@@ -123,17 +137,17 @@ initEnv                     = define autoImp $ addmod qnBuiltin envBuiltin env0
   where autoImp             = importAll qnBuiltin envBuiltin
         env0                = Env{ names = [], modules = [] }
 
-blockstate                  :: Env -> Env
-blockstate env              = env{ names = [ (z, Nothing) | (z, Just (NSVar _)) <- names env ] ++ names env }
+statescope                  :: Env -> [Name]
+statescope env              = [ z | (z, Just (NSVar _)) <- names env ]
 
-reserve                     :: [Name] -> Env -> Env
-reserve xs env              = env{ names = [ (x, Nothing) | x <- xs ] ++ names env }
+block                       :: [Name] -> Env -> Env
+block xs env                = env{ names = [ (x, Nothing) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ names env }
 
-reserved                    :: Env -> Name -> Bool
-reserved env n              = lookup n (names env) == Just Nothing
+blocked                     :: Env -> Name -> Bool
+blocked env n               = lookup n (names env) == Just Nothing
 
 findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
@@ -167,6 +181,9 @@ addmod qn te env            = env{ modules = (qn,te) : modules env }
 
 dropnames                   :: Env -> Env
 dropnames env               = env{ names = names initEnv }
+
+newTEnv vs                  = do ts <- newTVars (length vs)
+                                 return $ vs `zip` [ NVar (tSchema t) NoDecoration | t <- ts ]
 
 
 -- Import handling
@@ -224,10 +241,9 @@ importAll (QName m ms) te   = mapMaybe imp te
     imp (n, NClass _ _ _)   = Just (n, NAlias (qname n))
     imp (n, NExt _ _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
     imp (n, NAlias _)       = Just (n, NAlias (qname n))
-    imp (n, NVar t)         = Just (n, NVar t)
+    imp (n, NVar t dec)     = Just (n, NVar t dec)
     imp _                   = Nothing                               -- cannot happen
     qname n                 = QName m (ms++[n])
-
 
 
 -- Old builtins --------------------------------------------------------------------------
@@ -407,41 +423,3 @@ o_getReturn env             = fromJust $ ret env
 
 
 
--- Error handling ------------------------------------------------------------------------
-
-data CheckerError               = FileNotFound QName
-                                | NameNotFound Name
-                                | NameReserved Name
-                                | IllegalImport SrcLoc
-                                | DuplicateImport Name
-                                | NoItem QName Name
-                                | OtherError SrcLoc String
-                                deriving (Show)
-
-instance Control.Exception.Exception CheckerError
-
-checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
-checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
-checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is not accessible")
-checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
-checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
-checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
-checkerError (OtherError l str)         = (l,str)
-
-nameNotFound n                          = Control.Exception.throw $ NameNotFound n
-
-nameReserved n                          = Control.Exception.throw $ NameNotFound n
-
-fileNotFound n                          = Control.Exception.throw $ FileNotFound n
-
-illegalImport l                         = Control.Exception.throw $ IllegalImport l
-
-duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
-
-noItem m n                              = Control.Exception.throw $ NoItem m n
-
-err l s                                 = Control.Exception.throw $ OtherError l s
-
-err1 x s                                = err (loc x) (s ++ " " ++ prstr x)
-
-err2 (x:_) s                            = err1 x s
