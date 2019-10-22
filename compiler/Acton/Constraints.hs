@@ -223,16 +223,11 @@ instantiate env (TSchema _ q t)         = do tvs <- newTVars (length q)
                                              return t1
 
 q_constrain env (TBind tv cs)           = mapM (q_constr tv) cs
-  where q_constr tv tc@(TC qn ts)       = case followqname qn env of
+  where q_constr tv tc@(TC qn ts)       = case findqname qn env of
                                             NClass{} -> constrain [Sub (tVar tv) (tCon tc)]
                                             NProto{} -> constrain [Impl (tVar tv) tc]
 
 
-followqname qn env                      = select i ns
-  where (i,ns)                          = findqname qn env
-        select (NAlias qn') ns          = select (followqname qn' env) ns
-        select i []                     = i
-        select _ _                      = notYet (loc qn) (text "Nested protocols or classes")
 
 ----------------------------------------
 

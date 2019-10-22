@@ -129,11 +129,10 @@ envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
 
 --------------------------------------------------------------------------------------------------------------------
 
-prune                       :: [Name] -> TEnv -> TEnv
 prune xs                    = filter ((`notElem` xs) . fst)
 
 initEnv                     :: Env
-initEnv                     = define autoImp $ addmod qnBuiltin envBuiltin env0
+initEnv                     = define autoImp $ definemod qnBuiltin $ addmod qnBuiltin envBuiltin env0
   where autoImp             = importAll qnBuiltin envBuiltin
         env0                = Env{ names = [], modules = [] }
 
@@ -144,7 +143,14 @@ block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, Nothing) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ names env }
+define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ prune (dom te) (names env) }
+
+definemod                   :: QName -> Env -> Env
+definemod (QName n ns) env  = define [(n, defmod ns $ te1)] env
+  where te1                 = case lookup n (names env) of Just (Just (NModule te1)) -> te1; _ -> []
+        defmod [] te        = NModule $ fromJust $ findmod (QName n ns) env
+        defmod (n:ns) te    = NModule $ (n, defmod ns $ te2) : prune [n] te
+          where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just Nothing
@@ -153,25 +159,20 @@ findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
                                 Just (Just i) -> i
                                 Just Nothing  -> nameReserved n
-                                Nothing -> 
-                                    case findmod (QName n []) env of
-                                        Just te -> NModule te
-                                        Nothing -> nameNotFound n
+                                Nothing       -> nameNotFound n
 
-findqname                   :: QName -> Env -> (NameInfo, [Name])
-findqname qn env            = find qn []
-  where find qn ns          = case findmod qn env of
-                                Just te -> 
-                                    case ns of
-                                      []   -> (NModule te, [])
-                                      n:ns ->
-                                          case lookup n te of
-                                            Nothing -> noItem qn n
-                                            Just i  -> (i, ns)
-                                Nothing ->
-                                    case qchop qn of
-                                      Nothing     -> nameNotFound (qhead qn)
-                                      Just (qn,n) -> find qn (n:ns)
+findqname                   :: QName -> Env -> NameInfo
+findqname qn env            = case findname (qhead qn) env of
+                                NAlias qn' -> sel (qtail qn) (findqname qn' env)
+                                ni -> sel (qtail qn) ni
+  where 
+    sel [] ni               = ni
+    sel (n:ns) (NModule te) = case lookup n te of
+                                Just ni -> sel ns ni
+                                _       -> noItem qn n
+    sel (n:ns) NClass{}     = notYet (loc qn) (text "Qualified lookup inside class")
+    sel (n:ns) NProto{}     = notYet (loc qn) (text "Qualified lookup inside protocol")
+    sel (n:ns) _            = err1 n "Not a module name:"
 
 findmod                     :: QName -> Env -> Maybe TEnv
 findmod qn env              = lookup qn (modules env)
@@ -199,7 +200,7 @@ impModule ps env (Import _ ms)  = imp env ms
   where imp env []              = return env
         imp env (ModuleItem qn as : is)
                                 = do (env1,te) <- doImp ps env qn
-                                     let env2 = maybe env1 (\n->define [(n, NAlias qn)] env1) as
+                                     let env2 = maybe (definemod qn env1) (\n->define [(n, NAlias qn)] env1) as
                                      imp env2 is
 impModule ps env (FromImport _ (ModRef (0,Just qn)) items)
                                 = do (env1,te) <- doImp ps env qn
