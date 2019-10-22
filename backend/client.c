@@ -75,7 +75,7 @@ db_schema_t * create_schema() {
 int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, long txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
-	write_query * wq = build_write_query(column_values, no_cols, table_key, schema, txnid, nonce);
+	write_query * wq = build_write_query(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	void * tmp_out_buf = NULL;
 	char print_buff[100];
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
@@ -115,7 +115,7 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 	void * tmp_out_buf = NULL;
 	char print_buff[100];
 
-	read_query * q = build_read_query(primary_keys, clustering_keys, no_clustering_keys, table_key, schema, txnid, nonce);
+	read_query * q = build_read_query(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
 	to_string_read_query(q, (char *) print_buff);
@@ -137,6 +137,8 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 
 	return response;
 }
+
+
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 {
@@ -176,7 +178,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fast
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				read_response_message * response = db_remote_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, NULL, schema, sockfd);
+				read_response_message * response = db_remote_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, schema, 0, requests++, sockfd);
 				to_string_write_query(response, (char *) print_buff);
 				printf("Got back response: %s\n", print_buff);
 

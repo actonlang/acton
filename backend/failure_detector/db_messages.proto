@@ -59,18 +59,23 @@ message WriteQueryMessage {
 	required VersionedCellMessage cell=1; // CellMessage
 	required int64 txnid=2;
 	required int64 nonce=3;
+	
+	required int32 mtype=4;
 }
 
 message ReadQueryMessage {
 	required CellAddressMessage cell_address=1;
 	required int64 txnid=2;
 	required int64 nonce=3;
+	
+	required int32 mtype=4;
 }
 
 // message ReadResponseMessage {
 // 	required VersionedCellMessage cell=1;
 // 	required int64 txnid=2;
 // 	required int64 nonce=3;
+//	required int32 mtype=4;
 // }
 
 message AckMessage {
@@ -78,6 +83,8 @@ message AckMessage {
 	required int32 status=2; // 0 - ACK, 1 - NACK
 	required int64 txnid=3;
 	required int64 nonce=4;
+	
+	required int32 mtype=5;
 }
 
 message RangeReadQueryMessage {
@@ -85,12 +92,16 @@ message RangeReadQueryMessage {
 	required CellAddressMessage end_cell_address=2;
 	required int64 txnid=3;
 	required int64 nonce=4;
+	
+	required int32 mtype=5;
 }
 
 message RangeReadResponseMessage {
 	repeated VersionedCellMessage cells=1;
 	required int64 txnid=2;
 	required int64 nonce=3;
+	
+	required int32 mtype=4;
 }
 
 
@@ -104,6 +115,8 @@ message TxnMessage {
 	repeated VersionedCellMessage complete_write_set=5;
 	required int64 txnid=6;
 	required int64 nonce=7;
+	
+	required int32 mtype=8;
 }
 
 // Queue messages:
@@ -125,8 +138,12 @@ message QueueQueryMessage {
 
 	required int64 txnid=9;
 	required int64 nonce=10;
+	
+	required int32 mtype=11;
 }
 
+
+// Below message types are obsolete:
 
 message ConsumerID {
 	required int32 app_id=1;

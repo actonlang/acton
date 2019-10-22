@@ -1676,7 +1676,7 @@ const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
   (ProtobufCMessageInit) versioned_cell_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor write_query_message__field_descriptors[3] =
+static const ProtobufCFieldDescriptor write_query_message__field_descriptors[4] =
 {
   {
     "cell",
@@ -1714,16 +1714,29 @@ static const ProtobufCFieldDescriptor write_query_message__field_descriptors[3] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(WriteQueryMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned write_query_message__field_indices_by_name[] = {
   0,   /* field[0] = cell */
+  3,   /* field[3] = mtype */
   2,   /* field[2] = nonce */
   1,   /* field[1] = txnid */
 };
 static const ProtobufCIntRange write_query_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor write_query_message__descriptor =
 {
@@ -1733,14 +1746,14 @@ const ProtobufCMessageDescriptor write_query_message__descriptor =
   "WriteQueryMessage",
   "",
   sizeof(WriteQueryMessage),
-  3,
+  4,
   write_query_message__field_descriptors,
   write_query_message__field_indices_by_name,
   1,  write_query_message__number_ranges,
   (ProtobufCMessageInit) write_query_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor read_query_message__field_descriptors[3] =
+static const ProtobufCFieldDescriptor read_query_message__field_descriptors[4] =
 {
   {
     "cell_address",
@@ -1778,16 +1791,29 @@ static const ProtobufCFieldDescriptor read_query_message__field_descriptors[3] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ReadQueryMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned read_query_message__field_indices_by_name[] = {
   0,   /* field[0] = cell_address */
+  3,   /* field[3] = mtype */
   2,   /* field[2] = nonce */
   1,   /* field[1] = txnid */
 };
 static const ProtobufCIntRange read_query_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor read_query_message__descriptor =
 {
@@ -1797,14 +1823,14 @@ const ProtobufCMessageDescriptor read_query_message__descriptor =
   "ReadQueryMessage",
   "",
   sizeof(ReadQueryMessage),
-  3,
+  4,
   read_query_message__field_descriptors,
   read_query_message__field_indices_by_name,
   1,  read_query_message__number_ranges,
   (ProtobufCMessageInit) read_query_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ack_message__field_descriptors[4] =
+static const ProtobufCFieldDescriptor ack_message__field_descriptors[5] =
 {
   {
     "cell_address",
@@ -1854,9 +1880,22 @@ static const ProtobufCFieldDescriptor ack_message__field_descriptors[4] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    5,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(AckMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ack_message__field_indices_by_name[] = {
   0,   /* field[0] = cell_address */
+  4,   /* field[4] = mtype */
   3,   /* field[3] = nonce */
   1,   /* field[1] = status */
   2,   /* field[2] = txnid */
@@ -1864,7 +1903,7 @@ static const unsigned ack_message__field_indices_by_name[] = {
 static const ProtobufCIntRange ack_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor ack_message__descriptor =
 {
@@ -1874,14 +1913,14 @@ const ProtobufCMessageDescriptor ack_message__descriptor =
   "AckMessage",
   "",
   sizeof(AckMessage),
-  4,
+  5,
   ack_message__field_descriptors,
   ack_message__field_indices_by_name,
   1,  ack_message__number_ranges,
   (ProtobufCMessageInit) ack_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor range_read_query_message__field_descriptors[4] =
+static const ProtobufCFieldDescriptor range_read_query_message__field_descriptors[5] =
 {
   {
     "start_cell_address",
@@ -1931,9 +1970,22 @@ static const ProtobufCFieldDescriptor range_read_query_message__field_descriptor
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    5,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(RangeReadQueryMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned range_read_query_message__field_indices_by_name[] = {
   1,   /* field[1] = end_cell_address */
+  4,   /* field[4] = mtype */
   3,   /* field[3] = nonce */
   0,   /* field[0] = start_cell_address */
   2,   /* field[2] = txnid */
@@ -1941,7 +1993,7 @@ static const unsigned range_read_query_message__field_indices_by_name[] = {
 static const ProtobufCIntRange range_read_query_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor range_read_query_message__descriptor =
 {
@@ -1951,14 +2003,14 @@ const ProtobufCMessageDescriptor range_read_query_message__descriptor =
   "RangeReadQueryMessage",
   "",
   sizeof(RangeReadQueryMessage),
-  4,
+  5,
   range_read_query_message__field_descriptors,
   range_read_query_message__field_indices_by_name,
   1,  range_read_query_message__number_ranges,
   (ProtobufCMessageInit) range_read_query_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor range_read_response_message__field_descriptors[3] =
+static const ProtobufCFieldDescriptor range_read_response_message__field_descriptors[4] =
 {
   {
     "cells",
@@ -1996,16 +2048,29 @@ static const ProtobufCFieldDescriptor range_read_response_message__field_descrip
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(RangeReadResponseMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned range_read_response_message__field_indices_by_name[] = {
   0,   /* field[0] = cells */
+  3,   /* field[3] = mtype */
   2,   /* field[2] = nonce */
   1,   /* field[1] = txnid */
 };
 static const ProtobufCIntRange range_read_response_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor range_read_response_message__descriptor =
 {
@@ -2015,14 +2080,14 @@ const ProtobufCMessageDescriptor range_read_response_message__descriptor =
   "RangeReadResponseMessage",
   "",
   sizeof(RangeReadResponseMessage),
-  3,
+  4,
   range_read_response_message__field_descriptors,
   range_read_response_message__field_indices_by_name,
   1,  range_read_response_message__number_ranges,
   (ProtobufCMessageInit) range_read_response_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor txn_message__field_descriptors[7] =
+static const ProtobufCFieldDescriptor txn_message__field_descriptors[8] =
 {
   {
     "type",
@@ -2108,10 +2173,23 @@ static const ProtobufCFieldDescriptor txn_message__field_descriptors[7] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    8,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(TxnMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned txn_message__field_indices_by_name[] = {
   3,   /* field[3] = complete_read_set */
   4,   /* field[4] = complete_write_set */
+  7,   /* field[7] = mtype */
   6,   /* field[6] = nonce */
   1,   /* field[1] = own_read_set */
   2,   /* field[2] = own_write_set */
@@ -2121,7 +2199,7 @@ static const unsigned txn_message__field_indices_by_name[] = {
 static const ProtobufCIntRange txn_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor txn_message__descriptor =
 {
@@ -2131,14 +2209,14 @@ const ProtobufCMessageDescriptor txn_message__descriptor =
   "TxnMessage",
   "",
   sizeof(TxnMessage),
-  7,
+  8,
   txn_message__field_descriptors,
   txn_message__field_indices_by_name,
   1,  txn_message__number_ranges,
   (ProtobufCMessageInit) txn_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[10] =
+static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11] =
 {
   {
     "queue_address",
@@ -2260,12 +2338,25 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[10]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "mtype",
+    11,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(QueueQueryMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned queue_query_message__field_indices_by_name[] = {
   2,   /* field[2] = app_id */
   7,   /* field[7] = cells */
   4,   /* field[4] = consumer_id */
   1,   /* field[1] = msg_type */
+  10,   /* field[10] = mtype */
   9,   /* field[9] = nonce */
   0,   /* field[0] = queue_address */
   5,   /* field[5] = queue_index */
@@ -2276,7 +2367,7 @@ static const unsigned queue_query_message__field_indices_by_name[] = {
 static const ProtobufCIntRange queue_query_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 10 }
+  { 0, 11 }
 };
 const ProtobufCMessageDescriptor queue_query_message__descriptor =
 {
@@ -2286,7 +2377,7 @@ const ProtobufCMessageDescriptor queue_query_message__descriptor =
   "QueueQueryMessage",
   "",
   sizeof(QueueQueryMessage),
-  10,
+  11,
   queue_query_message__field_descriptors,
   queue_query_message__field_indices_by_name,
   1,  queue_query_message__number_ranges,

@@ -172,10 +172,11 @@ struct  _WriteQueryMessage
   VersionedCellMessage *cell;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define WRITE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&write_query_message__descriptor) \
-    , NULL, 0, 0 }
+    , NULL, 0, 0, 0 }
 
 
 struct  _ReadQueryMessage
@@ -184,10 +185,11 @@ struct  _ReadQueryMessage
   CellAddressMessage *cell_address;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define READ_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&read_query_message__descriptor) \
-    , NULL, 0, 0 }
+    , NULL, 0, 0, 0 }
 
 
 struct  _AckMessage
@@ -200,10 +202,11 @@ struct  _AckMessage
   int32_t status;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define ACK_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ack_message__descriptor) \
-    , NULL, 0, 0, 0 }
+    , NULL, 0, 0, 0, 0 }
 
 
 struct  _RangeReadQueryMessage
@@ -213,10 +216,11 @@ struct  _RangeReadQueryMessage
   CellAddressMessage *end_cell_address;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define RANGE_READ_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&range_read_query_message__descriptor) \
-    , NULL, NULL, 0, 0 }
+    , NULL, NULL, 0, 0, 0 }
 
 
 struct  _RangeReadResponseMessage
@@ -226,10 +230,11 @@ struct  _RangeReadResponseMessage
   VersionedCellMessage **cells;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define RANGE_READ_RESPONSE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&range_read_response_message__descriptor) \
-    , 0,NULL, 0, 0 }
+    , 0,NULL, 0, 0, 0 }
 
 
 struct  _TxnMessage
@@ -249,10 +254,11 @@ struct  _TxnMessage
   VersionedCellMessage **complete_write_set;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define TXN_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&txn_message__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0, 0 }
+    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0 }
 
 
 struct  _QueueQueryMessage
@@ -269,10 +275,11 @@ struct  _QueueQueryMessage
   VersionedCellMessage **cells;
   int64_t txnid;
   int64_t nonce;
+  int32_t mtype;
 };
 #define QUEUE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&queue_query_message__descriptor) \
-    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, 0, 0 }
+    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, 0, 0, 0 }
 
 
 struct  _ConsumerID

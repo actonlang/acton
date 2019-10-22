@@ -29,7 +29,7 @@ subdirs: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@
 
-all: skiplist_test libdb db_unit_tests queue_unit_tests txn_unit_tests failure_detector client server
+all: skiplist_test libdb libcomm db_unit_tests queue_unit_tests txn_unit_tests failure_detector client server
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -49,9 +49,16 @@ txn_state.o:
 txns.o:
 	cc txns.c -c -I src $(LFLAGS) $(CFLAGS)
 
+comm.o:
+	cc comm.c -c -I src $(LFLAGS) $(CFLAGS)
+
 libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
 	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o vector_clock.o txn_state.o txns.o
 	ranlib $(LIBDIR)/libdb.a
+
+libcomm: comm.o $(LIBDIR)
+	ar rcs $(LIBDIR)/libcomm.a comm.o
+	ranlib $(LIBDIR)/libcomm.a
 
 db_unit_tests: db_unit_tests.c libdb
 	cc -std=c11 db_unit_tests.c \
@@ -83,13 +90,13 @@ skiplist_test: skiplist_test.c skiplist.c
 client: client.c libdb failure_detector
 	cc client.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -lremote -ldb -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
 	 -o client
 
 server: server.c libdb failure_detector
 	cc server.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -lremote -ldb -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
 	 -o server
 
 $(LIBDIR):

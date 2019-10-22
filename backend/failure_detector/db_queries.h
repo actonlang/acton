@@ -10,6 +10,15 @@
 #ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 #define BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 
+#define RPC_TYPE_WRITE 0
+#define RPC_TYPE_READ 1
+#define RPC_TYPE_RANGE_READ 2
+#define RPC_TYPE_ACK 3
+#define RPC_TYPE_READ_RESPONSE 4
+#define RPC_TYPE_RANGE_READ_RESPONSE 5
+#define RPC_TYPE_QUEUE 6
+#define RPC_TYPE_TXN 7
+
 #define DB_TXN_BEGIN 0
 #define DB_TXN_VALIDATION 1
 #define DB_TXN_COMMIT 2
@@ -28,7 +37,7 @@ typedef struct write_query
 typedef write_query read_response_message;
 
 write_query * build_write_query(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long txnid, long nonce);
-int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+// int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 write_query * init_write_query(cell * cell, long txnid, long nonce);
 void free_write_query(write_query * ca);
 int serialize_write_query(write_query * ca, void ** buf, unsigned * len);
@@ -43,7 +52,7 @@ typedef struct read_query
 	long nonce;
 } read_query;
 
-read_query * build_read_query(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, long txnid, long nonce);
+read_query * build_read_query(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, long txnid, long nonce);
 read_query * init_read_query(cell_address * cell_address, long txnid, long nonce);
 void free_read_query(read_query * ca);
 int serialize_read_query(read_query * ca, void ** buf, unsigned * len);

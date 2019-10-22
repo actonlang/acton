@@ -824,6 +824,12 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 int db_insert_transactional(WORD * column_values, int no_cols, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
+#if (VERBOSE_BACKEND > 0)
+	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", no_cols);
+	for(int i=0;i<no_cols;i++)
+		printf("column_values[%d] = %ld\n", i, (long) column_values[i]);
+#endif
+
 	snode_t * node = skiplist_search(db->tables, table_key);
 
 	if(node == NULL)

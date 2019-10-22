@@ -46,6 +46,7 @@ typedef void *WORD;
 
 #define QUERY_TYPE_READ_QUEUE_RESPONSE 16
 
+#define VERBOSE_BACKEND 0
 
 typedef struct db_schema {
 	int * col_types;

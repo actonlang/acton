@@ -35,21 +35,9 @@ write_query * init_write_query_copy(cell * cell, long txnid, long nonce)
 
 write_query * build_write_query(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long txnid, long nonce)
 {
-	cell * c = (cell *) malloc(sizeof(cell));
-	c->table_key = (long) table_key;
-	c->no_keys = no_primary_keys + no_clustering_keys;
-	c->no_columns = no_cols - c->no_keys;
-
-	assert(c->no_columns > 0);
-
-	c->keys = (long *) malloc(c->no_keys * sizeof(long));
-	for(int i=0;i<c->no_keys;i++)
-		c->keys[i] = (long) column_values[i];
-
-	c->columns = (long *) malloc(c->no_columns * sizeof(long));
-	for(int i=0;i<c->no_columns;i++)
-		c->columns[i] = (long) column_values[i+c->no_keys];
-
+	int no_keys = no_primary_keys + no_clustering_keys;
+	assert(no_cols - no_keys > 0);
+	cell * c = init_cell_copy((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, NULL);
 	return init_write_query(c, txnid, nonce);
 }
 
@@ -86,6 +74,7 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len)
 
 	init_cell_msg(&vcell_msg, ca->cell, &vc_msg);
 	init_write_query_msg(&msg, ca, &vcell_msg);
+	msg.mtype = RPC_TYPE_WRITE;
 
 	*len = write_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -100,7 +89,7 @@ int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca)
 {
 	WriteQueryMessage * msg = write_query_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_WRITE)
 	{
 		fprintf(stderr, "error unpacking write query message\n");
 	    return 1;
@@ -158,22 +147,9 @@ read_query * init_read_query_copy(cell_address * cell_address, long txnid, long 
 	return ca;
 }
 
-read_query * build_read_query(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, long txnid, long nonce)
+read_query * build_read_query(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, long txnid, long nonce)
 {
-	int i=0;
-
-	cell_address * c = (cell_address *) malloc(sizeof(cell_address));
-	c->table_key = (long) table_key;
-	c->no_keys = schema->no_primary_keys + no_clustering_keys;
-
-	assert(c->no_keys > 0);
-
-	c->keys = (long *) malloc(c->no_keys * sizeof(long));
-	for(;i<schema->no_primary_keys;i++)
-		c->keys[i] = (long) primary_keys[i];
-
-	for(;i<c->no_keys;i++)
-		c->keys[i] = (long) clustering_keys[i-schema->no_primary_keys];
+	cell_address * c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) clustering_keys, no_clustering_keys);
 
 	return init_read_query(c, txnid, nonce);
 }
@@ -210,6 +186,7 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 
 	init_cell_address_msg(&cell_address_msg, ca->cell_address);
 	init_read_query_msg(&msg, ca, &cell_address_msg);
+	msg.mtype = RPC_TYPE_READ;
 
 	*len = read_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -224,7 +201,7 @@ int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca)
 {
 	ReadQueryMessage * msg = read_query_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_READ)
 	{
 		fprintf(stderr, "error unpacking read query message\n");
 	    return 1;
@@ -321,6 +298,7 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	init_cell_address_msg(&start_cell_address_msg, ca->start_cell_address);
 	init_cell_address_msg(&end_cell_address_msg, ca->end_cell_address);
 	init_range_read_query_msg(&msg, ca, &start_cell_address_msg, &end_cell_address_msg);
+	msg.mtype = RPC_TYPE_RANGE_READ;
 
 	*len = range_read_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -335,7 +313,7 @@ int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query 
 {
 	RangeReadQueryMessage * msg = range_read_query_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ)
 	{
 		fprintf(stderr, "error unpacking range read query message\n");
 	    return 1;
@@ -435,6 +413,7 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 
 	init_cell_address_msg(&cell_address_msg, ca->cell_address);
 	init_ack_message_msg(&msg, ca, &cell_address_msg);
+	msg.mtype = RPC_TYPE_ACK;
 
 	*len = ack_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -450,7 +429,7 @@ int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca)
 	AckMessage * msg = ack_message__unpack (NULL, msg_len, buf);
 	char print_buff[100];
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_ACK)
 	{
 		fprintf(stderr, "error unpacking ack query message\n");
 	    return 1;
@@ -566,6 +545,7 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 	RangeReadResponseMessage msg = RANGE_READ_RESPONSE_MESSAGE__INIT;
 
 	init_range_read_response_message_msg(&msg, ca);
+	msg.mtype = RPC_TYPE_RANGE_READ_RESPONSE;
 
 	*len = range_read_response_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -580,7 +560,7 @@ int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_
 {
 	RangeReadResponseMessage * msg = range_read_response_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_RANGE_READ_RESPONSE)
 	{
 		fprintf(stderr, "error unpacking range read response message\n");
 	    return 1;
@@ -845,6 +825,7 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 
 	init_cell_address_msg(&cell_address_msg, ca->cell_address);
 	init_queue_message_msg(&msg, ca, &cell_address_msg);
+	msg.mtype = RPC_TYPE_QUEUE;
 
 	*len = queue_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -860,7 +841,7 @@ int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message 
 {
 	QueueQueryMessage * msg = queue_query_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_QUEUE)
 	{
 		fprintf(stderr, "error unpacking queue query message\n");
 	    return 1;
@@ -1155,6 +1136,7 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len)
 	TxnMessage msg = TXN_MESSAGE__INIT;
 
 	init_txn_message_msg(&msg, ca);
+	msg.mtype = RPC_TYPE_TXN;
 
 	*len = txn_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -1169,7 +1151,7 @@ int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca)
 {
 	TxnMessage * msg = txn_message__unpack (NULL, msg_len, buf);
 
-	if (msg == NULL)
+	if (msg == NULL || msg->mtype != RPC_TYPE_TXN)
 	{
 		fprintf(stderr, "error unpacking read query message\n");
 	    return 1;

@@ -72,6 +72,25 @@ cell_address * init_cell_address_copy(long table_key, long * keys, int no_keys)
 	return ca;
 }
 
+cell_address * init_cell_address_copy2(long table_key, long * primary_keys, int no_primary_keys, long * clustering_keys, int no_clustering_keys)
+{
+	int i = 0;
+	cell_address * c = (cell_address *) malloc(sizeof(cell_address));
+	c->table_key = (long) table_key;
+	c->no_keys = no_primary_keys + no_clustering_keys;
+
+	assert(c->no_keys > 0);
+
+	c->keys = (long *) malloc(c->no_keys * sizeof(long));
+	for(;i<no_primary_keys;i++)
+		c->keys[i] = (long) primary_keys[i];
+
+	for(;i<c->no_keys;i++)
+		c->keys[i] = (long) clustering_keys[i-no_primary_keys];
+
+	return c;
+}
+
 void free_cell_address(cell_address * ca)
 {
 	free(ca->keys);
