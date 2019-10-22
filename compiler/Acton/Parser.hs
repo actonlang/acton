@@ -78,6 +78,7 @@ assertClass         = ifCtx [CLASS]             [SEQ,LOOP]      success (onlyIn 
 assertClassProtoExt = ifCtx [CLASS,PROTO,EXT]   [SEQ,LOOP]      success (onlyIn "a class, protocol or extension")
 assertDef           = ifCtx [DEF]               [SEQ,LOOP]      success (onlyIn "a function")
 assertDefOrAct      = ifCtx [DEF,ACTOR]         [SEQ,LOOP]      success (onlyIn "a function or an actor")
+assertNotNested     = ifCtx [PROTO,EXT]         [SEQ,LOOP]      (notIn "a protocol or extension") success
 assertNotData       = ifCtx [DATA]              [SEQ,LOOP]      (notIn "a data tree") success
 
 ifActScope          = ifCtx [ACTOR]             [SEQ,LOOP,DEF]
@@ -1080,6 +1081,7 @@ extdef      = classdefGen "extension" dotted_name EXT S.Extension
 
 classdefGen k pname ctx con = addLoc $ do
                 assertNotData
+                assertNotNested
                 (s,_) <- withPos (rword k)
                 nm <- pname
                 q <- optbinds
