@@ -20,6 +20,7 @@ typedef struct cell_address
 cell_address * init_cell_address(long table_key, long * keys, int no_keys);
 cell_address * init_cell_address_copy(long table_key, long * keys, int no_keys);
 cell_address * init_cell_address_copy2(long table_key, long * primary_keys, int no_primary_keys, long * clustering_keys, int no_clustering_keys);
+cell_address * init_cell_address_single_key_copy(long table_key, long key);
 void free_cell_address(cell_address * ca);
 void init_cell_address_msg(CellAddressMessage * msg, cell_address * ca);
 cell_address * init_cell_address_from_msg(CellAddressMessage * msg);

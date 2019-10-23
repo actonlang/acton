@@ -190,10 +190,10 @@ typedef struct txn_message
 	long nonce;
 } txn_message;
 
-txn_message * build_new_txn(uuid_t ** txndi);
-txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version);
-txn_message * build_abort_txn(uuid_t * txnid);
-txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version);
+txn_message * build_new_txn(uuid_t ** txnid, long nonce);
+txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce);
+txn_message * build_abort_txn(uuid_t * txnid, long nonce);
+txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, long nonce);
 
 txn_message * init_txn_message(int type,
 								cell * own_read_set, int no_own_read_set,

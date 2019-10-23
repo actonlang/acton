@@ -209,12 +209,32 @@ read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, l
 	return ca;
 }
 
+read_query * build_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_copy((long) table_key, (long *) primary_keys, no_primary_keys);
+
+	return init_read_query_copy(c, txnid, nonce);
+}
+
 read_query * build_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) clustering_keys, no_clustering_keys);
 
 	return init_read_query_copy(c, txnid, nonce);
 }
+
+read_query * build_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD* col_keys, int no_columns, WORD table_key, uuid_t * txnid, long nonce)
+{
+	assert(0); // Not supported
+	return NULL;
+}
+
+read_query * build_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce)
+{
+	assert(0); // Not supported
+	return NULL;
+}
+
 
 void free_read_query(read_query * ca)
 {
@@ -320,6 +340,28 @@ int equals_read_query(read_query * ca1, read_query * ca2)
 }
 
 // Range read query:
+
+range_read_query * build_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+{
+	cell_address * start_c = init_cell_address_copy((long) table_key, (long *) start_primary_keys, no_primary_keys);
+	cell_address * end_c = init_cell_address_copy((long) table_key, (long *) end_primary_keys, no_primary_keys);
+
+	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
+}
+
+range_read_query * build_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+{
+	cell_address * start_c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) start_clustering_keys, no_clustering_keys);
+	cell_address * end_c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) end_clustering_keys, no_clustering_keys);
+
+	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
+}
+
+range_read_query * build_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, WORD table_key, uuid_t * txnid, long nonce)
+{
+	assert(0); // Not supported
+	return NULL;
+}
 
 range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce)
 {
@@ -805,6 +847,54 @@ queue_query_message * init_query_message_basic(cell_address * cell_address, uuid
 	return ca;
 }
 
+queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	cell * entry = init_cell_copy((long) table_key, (long *) column_values, 0, (long *) column_values, no_cols, NULL);
+
+	return init_enqueue_message(c, entry, 1, txnid, nonce);
+}
+
+queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+												int max_entries, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_read_queue_message(c, app_id, shard_id, consumer_id, (long) max_entries, txnid, nonce);
+
+}
+
+queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+													long new_consume_head, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_consume_queue_message(c, app_id, shard_id, consumer_id, new_consume_head, txnid, nonce);
+}
+
+queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_create_queue_message(c, txnid, nonce);
+}
+
+queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_delete_queue_message(c, txnid, nonce);
+}
+
+queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_subscribe_queue_message(c, app_id, shard_id, consumer_id, txnid, nonce);
+}
+
+queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+{
+	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	return init_unsubscribe_queue_message(c, app_id, shard_id, consumer_id, txnid, nonce);
+}
+
+
 queue_query_message * init_create_queue_message(cell_address * cell_address, uuid_t * txnid, long nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
@@ -1140,6 +1230,50 @@ int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2)
 }
 
 // Txn Message:
+
+txn_message * build_new_txn(uuid_t ** txnid, long nonce)
+{
+	return init_txn_message_copy(DB_TXN_BEGIN,
+			NULL, 0, // own_read_set, no_own_read_set,
+			NULL, 0, // own_write_set, no_own_write_set,
+			NULL, 0, // complete_read_set, no_complete_read_set,
+			NULL, 0, // complete_write_set, no_complete_write_set,
+			txnid, nonce);
+}
+
+txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce)
+{
+	// In the current implementation, the server mirrors the txn's complete read and write sets, so there is no reason to re-send them from client:
+
+	return init_txn_message_copy(DB_TXN_VALIDATION,
+			NULL, 0, // own_read_set, no_own_read_set,
+			NULL, 0, // own_write_set, no_own_write_set,
+			NULL, 0, // complete_read_set, no_complete_read_set,
+			NULL, 0, // complete_write_set, no_complete_write_set,
+			txnid, nonce);
+}
+
+txn_message * build_commit_txn(uuid_t * txnid, vector_clock * , long nonce)
+{
+	// In the current implementation, the server mirrors the txn's complete read and write sets, so there is no reason to re-send them from client:
+
+	return init_txn_message_copy(DB_TXN_COMMIT,
+			NULL, 0, // own_read_set, no_own_read_set,
+			NULL, 0, // own_write_set, no_own_write_set,
+			NULL, 0, // complete_read_set, no_complete_read_set,
+			NULL, 0, // complete_write_set, no_complete_write_set,
+			txnid, nonce);
+}
+
+txn_message * build_abort_txn(uuid_t * txnid, long nonce)
+{
+	return init_txn_message_copy(DB_TXN_ABORT,
+			NULL, 0, // own_read_set, no_own_read_set,
+			NULL, 0, // own_write_set, no_own_write_set,
+			NULL, 0, // complete_read_set, no_complete_read_set,
+			NULL, 0, // complete_write_set, no_complete_write_set,
+			txnid, nonce);
+}
 
 txn_message * init_txn_message(int type,
 		cell * own_read_set, int no_own_read_set,

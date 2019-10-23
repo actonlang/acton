@@ -91,6 +91,17 @@ cell_address * init_cell_address_copy2(long table_key, long * primary_keys, int 
 	return c;
 }
 
+cell_address * init_cell_address_single_key_copy(long table_key, long key)
+{
+	cell_address * ca = (cell_address *) malloc(sizeof(cell_address));
+	ca->table_key = table_key;
+	ca->no_keys = 1;
+	ca->keys = (long *) malloc(sizeof(long));
+	ca->keys[0] = key;
+
+	return ca;
+}
+
 void free_cell_address(cell_address * ca)
 {
 	free(ca->keys);
