@@ -110,6 +110,43 @@ int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schem
 	return success;
 }
 
+int db_remote_delete_row(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
+{
+	unsigned len = 0;
+	write_query * wq = build_delete_row_in_txn(column_values, schema->no_primary_keys, table_key, txnid, nonce);
+	void * tmp_out_buf = NULL;
+	char print_buff[1024];
+	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
+
+	to_string_write_query(wq, (char *) print_buff);
+	printf("Sending delete row query: %s\n", print_buff);
+
+	// Send packet to server and wait for reply:
+
+    int n = write(sockfd, tmp_out_buf, len);
+    if (n < 0)
+    		error("ERROR writing to socket");
+    else
+		printf("Wrote %d bytes to socket\n", n);
+
+    bzero(in_buf, BUFSIZE);
+    n = -1;
+    while(n < 0)
+    {
+		n = read(sockfd, in_buf, BUFSIZE);
+		if (n < 0)
+			error("ERROR reading from socket");
+		else
+			printf("Read %d bytes from socket\n", n);
+    }
+
+    ack_message * ack;
+
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+}
+
 read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
@@ -165,6 +202,14 @@ int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 	}
 
 	return 0;
+}
+
+int delete_test(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
+// Deletes row for last actor
+{
+	uuid_t txnid;
+	uuid_generate(txnid);
+	return db_remote_delete_row((WORD *) (no_actors - 1), 1, (WORD) 0, schema, &txnid, requests++, sockfd);
 }
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)

@@ -97,6 +97,8 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 	int i=0;
 	int total_columns = wq->cell->no_keys + wq->cell->no_columns;
 
+	db_schema_t * schema = get_schema(db, (WORD) wq->cell->table_key);
+
 	switch(wq->msg_type)
 	{
 		case RPC_TYPE_WRITE:
@@ -109,11 +111,28 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 			for(;i<total_columns;i++)
 				column_values[i] = (WORD) wq->cell->columns[i-wq->cell->no_keys];
 
-			return db_insert_transactional(column_values, total_columns, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+			if(wq->txnid == NULL) // Write out of txn
+				return db_insert_transactional(column_values, total_columns, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+			else // Write in txn
+				return db_insert_in_txn(column_values, total_columns, schema->no_primary_keys, schema->no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
 		}
-		case RPC_TYPE_WRITE:
+		case RPC_TYPE_DELETE:
 		{
-			db_delete_row_transactional((WORD *) wq->cell->keys, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+			if(wq->txnid == NULL) // Delete out of txn
+			{
+				if(wq->cell->no_keys == schema->no_primary_keys)
+					return db_delete_row_transactional((WORD *) wq->cell->keys, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+				else
+					assert(0); // db_delete_cell not implemented yet
+			}
+			else
+			{
+				if(wq->cell->no_keys == schema->no_primary_keys)
+					return db_delete_row_in_txn((WORD *) wq->cell->keys, wq->cell->no_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				else
+					return db_delete_cell_in_txn((WORD *) wq->cell->keys, schema->no_primary_keys, schema->no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				// TO DO: To support db_delete_by_index_in_txn (in RPCs and backend)
+			}
 		}
 	}
 
