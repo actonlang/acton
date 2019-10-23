@@ -182,12 +182,11 @@ instance AddLoc S.Except where
            S.Except _ e -> return (S.Except l e)
            S.ExceptAs _ e nm -> return (S.ExceptAs l e nm)
      
-instance AddLoc S.Index where
+instance AddLoc S.Slice where
   addLoc p = do
           (l,i) <- withLoc p
           case i of
-            S.Index _ e -> return (S.Index l e)
-            S.Slice _ e1 e2 e3 -> return (S.Slice l e1 e2 e3)
+            S.Sliz _ e1 e2 e3 -> return (S.Sliz l e1 e2 e3)
 
 instance AddLoc S.Comp where
   addLoc p = do
@@ -615,9 +614,10 @@ apat lh = addLoc (
   where lvalue = do
             tmp <- atom_expr
             case tmp of
-                S.Dot _ e n  -> return $ S.PDot NoLoc e n
-                S.Ix _ e ix  -> return $ S.PIx NoLoc e ix
-                _            -> locate (loc tmp) >> fail ("illegal assignment target: " ++ show tmp)
+                S.Dot _ e n    -> return $ S.PDot NoLoc e n
+                S.Index _ e ix -> return $ S.PIndex NoLoc e ix
+                S.Slice _ e sl -> return $ S.PSlice NoLoc e sl
+                _              -> locate (loc tmp) >> fail ("illegal assignment target: " ++ show tmp)
         datapat = S.PData NoLoc <$> escname <*> many (brackets testlist)
         optannot = try (Just <$> (colon *> ttype)) <|> return Nothing
 
@@ -1029,13 +1029,17 @@ var = do
 
 trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
 trailer = withLoc (
+              try (do
+                is <- brackets indexlist
+                return (\a -> S.Index NoLoc a is))
+                <|>
+              (do
+                ss <- brackets slicelist
+                return (\a -> S.Slice NoLoc a ss))
+                <|>
               (do
                 mbas <- parens (optional arglist)
                 return (\a -> S.Call NoLoc a (maybe [] id mbas)))
-                <|>
-              (do
-                mbss <- brackets (optional subscriptlist)
-                return (\a -> S.Ix NoLoc a (maybe [] id mbss)))
                 <|>
               (do
                  dot
@@ -1050,12 +1054,11 @@ trailer = withLoc (
          strdot = do
                 (p,str) <- withPos stringP 
                 return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
-         subscriptlist = (:) <$> subscript <*> commaList subscript
-         subscript = addLoc (try (do 
+         indexlist = (:) <$> test <*> commaList test
+         slicelist = (:) <$> slice <*> commaList slice
+         slice = addLoc (do 
                 mbt <- optional test
-                S.Slice NoLoc mbt <$> (colon *> optional test) <*> optional (colon *> optional test))
-              <|>
-                S.Index NoLoc <$> test)
+                S.Sliz NoLoc mbt <$> (colon *> optional test) <*> optional (colon *> optional test))
                      
 --- Actor and class definitions ------------------------------------------------
 

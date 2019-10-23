@@ -176,7 +176,8 @@ instance Vars Expr where
     free (UStrings _ ss)            = []
     free (Call _ e es)              = free e ++ free es
     free (Await _ e)                = free e
-    free (Ix _ e ix)                = free e ++ free ix
+    free (Index _ e ix)             = free e ++ free ix
+    free (Slice _ e sl)             = free e ++ free sl
     free (Cond _ e1 e e2)           = free [e1,e,e2]
     free (BinOp _ e1 o e2)          = free [e1,e2]
     free (CompOp _ e ops)           = free e ++ free ops
@@ -265,9 +266,8 @@ instance Vars Arg where
 instance Vars OpArg where
     free (OpArg o e)                = free e
 
-instance Vars Index where
-    free (Index _ e)                = free e
-    free (Slice _ e1 e2 e3)         = free e1 ++ free e2 ++ free e3
+instance Vars Slice where
+    free (Sliz _ e1 e2 e3)          = free e1 ++ free e2 ++ free e3
 
 instance Vars Comp where
     free (CompFor _ pat e c)        = (free e ++ free c) \\ bound pat
@@ -280,7 +280,8 @@ instance Vars Comp where
 
 instance Vars Pattern where
     free (PVar _ n a)               = []
-    free (PIx _ e ix)               = free e ++ free ix
+    free (PIndex _ e ix)            = free e ++ free ix
+    free (PSlice _ e sl)            = free e ++ free sl
     free (PDot _ e n)               = free e
     free (PTuple _ ps)              = free ps
     free (PList _ ps)               = free ps
@@ -288,7 +289,8 @@ instance Vars Pattern where
     free (PData _ n ixs)            = free ixs
 
     bound (PVar _ n a)              = [n]
-    bound (PIx _ e ix)              = []
+    bound (PIndex _ e ix)           = []
+    bound (PSlice _ e sl)           = []
     bound (PDot _ e n)              = []
     bound (PTuple _ ps)             = bound ps
     bound (PList _ ps)              = bound ps
@@ -363,7 +365,8 @@ lambdafree s                        = lfreeS s
 
         lfree (Call _ e es)         = lfree e ++ concatMap (lfree . argcore) es
         lfree (Await _ e)           = lfree e
-        lfree (Ix _ e ix)           = lfree e ++ concatMap lfreeI ix
+        lfree (Index _ e ix)        = lfree e ++ concatMap lfree ix
+        lfree (Slice _ e sl)        = lfree e ++ concatMap lfreeZ sl
         lfree (Cond _ e1 e e2)      = concatMap lfree [e1,e,e2]
         lfree (BinOp _ e1 o e2)     = concatMap lfree [e1,e2]
         lfree (CompOp _ e ops)      = lfree e ++ concatMap lfree [ e | OpArg _ e <- ops ]
@@ -386,8 +389,7 @@ lambdafree s                        = lfreeS s
         lfree (Paren _ e)           = lfree e
         lfree _                     = []
         
-        lfreeI (Index _ e)          = lfree e
-        lfreeI (Slice _ e1 e2 e3)   = maybe [] lfree e1 ++ maybe [] lfree e2 ++ maybe [] (maybe [] lfree) e3
+        lfreeZ (Sliz _ e1 e2 e3)    = maybe [] lfree e1 ++ maybe [] lfree e2 ++ maybe [] (maybe [] lfree) e3
         
         lfreeA (Assoc k e)          = lfree k ++ lfree e
         lfreeA (StarStarAssoc e)    = lfree e
@@ -399,7 +401,8 @@ lambdafree s                        = lfreeS s
         lfreeP (PVar _ n a)         = []
         lfreeP (PTuple _ ps)        = concatMap (lfreeP . elemcore) ps
         lfreeP (PList _ ps)         = concatMap (lfreeP . elemcore) ps
-        lfreeP (PIx _ e ix)         = lfree e ++ concatMap lfreeI ix
+        lfreeP (PIndex _ e ix)      = lfree e ++ concatMap lfree ix
+        lfreeP (PSlice _ e sl)      = lfree e ++ concatMap lfreeZ sl
         lfreeP (PDot _ e n)         = lfree e
         lfreeP (PParen _ p)         = lfreeP p
         lfreeP (PData _ n ixs)      = concatMap lfree ixs

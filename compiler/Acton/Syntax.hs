@@ -61,7 +61,8 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | UStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, function::Expr, arguments::[Arg] }
                 | Await         { eloc::SrcLoc, exp1::Expr }
-                | Ix            { eloc::SrcLoc, exp1::Expr, index::[Index] }
+                | Index         { eloc::SrcLoc, exp1::Expr, index::[Expr] }
+                | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Slice] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Op Binary, exp2::Expr }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
@@ -85,7 +86,8 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 deriving (Show)
 
 data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
-                | PIx           { ploc::SrcLoc, pexp::Expr, pix::[Index] }
+                | PIndex        { ploc::SrcLoc, pexp::Expr, pindex::[Expr] }
+                | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
                 | PTuple        { ploc::SrcLoc, pelems::[Elem Pattern] }
@@ -138,7 +140,7 @@ data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 data Arg        = Arg Expr | KwArg Name Expr | StarArg Expr | StarStarArg Expr deriving (Show,Eq)
 
 data OpArg      = OpArg (Op Comparison) Expr deriving (Eq,Show)
-data Index      = Index SrcLoc Expr | Slice SrcLoc (Maybe Expr) (Maybe Expr) (Maybe (Maybe Expr)) deriving (Show)
+data Slice      = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe (Maybe Expr)) deriving (Show)
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
 
@@ -412,7 +414,8 @@ instance Eq Expr where
     x@UStrings{}        ==  y@UStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = function x == function y && arguments x == arguments y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
-    x@Ix{}              ==  y@Ix{}              = exp1 x == exp1 y && index x == index y
+    x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
+    x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
     x@Cond{}            ==  y@Cond{}            = exp1 x == exp1 y && cond x == cond y && exp2 x == exp2 y
     x@BinOp{}           ==  y@BinOp{}           = exp1 x == exp1 y && bop x == bop y && exp2 x == exp2 y
     x@CompOp{}          ==  y@CompOp{}          = exp1 x == exp1 y && ops x == ops y
@@ -461,10 +464,8 @@ instance Eq StarPar where
     NoStar              ==  NoStar              = True
     _                   ==  _                   = False
 
-instance Eq Index where
-    Index _ e1          ==  Index _ e2          = e1 == e2
-    Slice _ a1 b1 c1    ==  Slice _ a2 b2 c2    = a1 == a2 && b1 == b2 && c1 == c2
-    _                   ==  _                   = False
+instance Eq Slice where
+    Sliz _ a1 b1 c1     ==  Sliz _ a2 b2 c2     = a1 == a2 && b1 == b2 && c1 == c2
     
 instance Eq Comp where
     CompFor _ p1 e1 c1  ==  CompFor _ p2 e2 c2  = p1 == p2 && e1 == e2 && c1 == c2
@@ -476,7 +477,8 @@ instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
     PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
     PList _ ps1         == PList _ ps2          = ps1 == ps2
-    PIx _ e1 ix1        == PIx _ e2 ix2         = e1 == e2 && ix1 == ix2
+    PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
+    PSlice _ e1 sl1     == PSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
     PDot _ e1 n1        == PDot _ e2 n2         = e1 == e2 && n1 == n2
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
     PParen _ p1         == p2                   = p1 == p2
@@ -560,8 +562,6 @@ argcore (StarArg e)                 = e
 argcore (KwArg _ e)                 = e
 argcore (StarStarArg e)             = e
 
-slices ix                           = [ s | s@Slice{} <- ix ]
-
 isPosArg (Arg _)                    = True
 isPosArg (StarArg _)                = True
 isPosArg _                          = False
@@ -588,11 +588,12 @@ primitive t                         = t `elem` [OStr, OInt, OFloat, OBool, ONone
 pat2exp (PVar l n _)                = Var l n
 pat2exp (PTuple l ps)               = Tuple l (map pat2elem ps)
 pat2exp (PList l ps)                = List l (map pat2elem ps)
-pat2exp (PIx l e ix)                = Ix l e ix
+pat2exp (PIndex l e ix)             = Index l e ix
+pat2exp (PSlice l e sl)             = Slice l e sl
 pat2exp (PDot l e n)                = Dot l e n
 pat2exp (PParen l p)                = Paren l (pat2exp p)
 pat2exp (PData l n ixs)             = foldl g (Var (loc n) n) ixs
-  where g e ix                      = Ix (loc e `upto` loc ix) e [Index (loc ix) ix]
+  where g e ix                      = Index (loc e `upto` loc ix) e [ix]
 
 pat2elem (Elem p)                   = Elem (pat2exp p)
 pat2elem (Star p)                   = Star (pat2exp p)

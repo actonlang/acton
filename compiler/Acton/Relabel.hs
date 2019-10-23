@@ -75,7 +75,8 @@ instance Relabel Expr where
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
     relabel (UStrings _ ss) = UStrings <$> newLoc <*> return ss
     relabel (Call _ e es) = Call <$> newLoc <*> relabel e <*> relabel es
-    relabel (Ix _ e is) = Ix <$> newLoc <*> relabel e <*> relabel is
+    relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
+    relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> relabel op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
@@ -101,7 +102,8 @@ instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
     relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
     relabel (PList _ ps) = PList <$> newLoc <*> relabel ps
-    relabel (PIx _ e ix) = PIx <$> newLoc <*> relabel e <*> relabel ix
+    relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
+    relabel (PSlice _ e sl) = PSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (PDot _ e n) = PDot <$> newLoc <*> relabel e <*> relabel n
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
 
@@ -172,8 +174,8 @@ instance Relabel Assoc where
   relabel (Assoc e1 e2) = Assoc <$> relabel e1 <*> relabel e2
   relabel (StarStarAssoc e) = StarStarAssoc <$> relabel e
   
-instance Relabel Index where
-  relabel (Index _ e) = Index <$> newLoc <*> relabel e
+instance Relabel Slice where
+  relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
 instance Relabel Field where
   relabel (Field nm e) = Field <$> relabel nm <*> relabel e

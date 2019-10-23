@@ -18,6 +18,8 @@ nFloat                              = name "float"
 nBool                               = name "bool"
 nStr                                = name "str"
 nRef                                = name "Ref"
+nException                          = name "Exception"
+nTruth                              = name "Truth"
 
 qnIterable                          = qBuiltin nIterable
 qnSequence                          = qBuiltin nSequence
@@ -28,6 +30,8 @@ qnFloat                             = qBuiltin nFloat
 qnBool                              = qBuiltin nBool
 qnStr                               = qBuiltin nStr
 qnRef                               = qBuiltin nRef
+qnException                         = qBuiltin nException
+qnTruth                             = qBuiltin nTruth
 
 cIterable a                         = TC qnIterable [a]
 cSequence a                         = TC qnSequence [a]
@@ -38,6 +42,8 @@ cFloat                              = TC qnFloat []
 cBool                               = TC qnBool []
 cStr                                = TC qnStr []
 cRef                                = TC qnRef []
+cException                          = TC qnException []
+cTruth                              = TC qnTruth []
 
 pIterable a                         = tCon (cIterable a)
 pSequence a                         = tCon (cSequence a)
@@ -48,3 +54,5 @@ tFloat                              = tCon cFloat
 tBool                               = tCon cBool
 tStr                                = tCon cStr
 tRef                                = tCon cRef
+tException                          = tCon cException
+pTruth                              = tCon cTruth

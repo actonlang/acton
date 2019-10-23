@@ -100,7 +100,8 @@ instance Pretty Expr where
       | otherwise                   = pretty e <> text "(" <> commaList pos <> comma $$ nest 4 (prettyArgs kwds)
       where (pos,kwds)              = partition isPosArg es
     pretty (Await _ e)              = text "await" <+> pretty e
-    pretty (Ix _ e ix)              = pretty e <> brackets (commaList ix)
+    pretty (Index _ e ix)           = pretty e <> brackets (commaList ix)
+    pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
     pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
     pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2
     pretty (CompOp _ e ops)         = pretty e <+> hsep (map pretty ops)
@@ -205,9 +206,8 @@ instance Pretty Arg where
     pretty (StarArg e)              = text "*" <> pretty e
     pretty (StarStarArg e)          = text "**" <> pretty e
 
-instance Pretty Index where
-    pretty (Index _ e)              = pretty e
-    pretty (Slice _ a b c)          = pretty a <> colon <> pretty b <> prettySlice c
+instance Pretty Slice where
+    pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> prettySlice c
 
 prettySlice (Nothing)               = empty
 prettySlice (Just (Nothing))        = colon
@@ -223,7 +223,8 @@ instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps)            = prettyPEs ps
     pretty (PList _ ps)             = prettyPEs ps
-    pretty (PIx _ e ix)             = pretty e <> brackets (commaList ix)
+    pretty (PIndex _ e ix)          = pretty e <> brackets (commaList ix)
+    pretty (PSlice _ e sl)          = pretty e <> brackets (commaList sl)
     pretty (PDot _ e n)             = pretty e <> dot <> pretty n
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
