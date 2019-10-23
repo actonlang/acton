@@ -76,7 +76,7 @@ db_schema_t * create_schema() {
 int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
-	write_query * wq = build_write_query(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
+	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	void * tmp_out_buf = NULL;
 	char print_buff[1024];
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
@@ -116,7 +116,7 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 	void * tmp_out_buf = NULL;
 	char print_buff[1024];
 
-	read_query * q = build_read_query(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, nonce);
+	read_query * q = build_search_clustering_in_txn(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
 	to_string_read_query(q, (char *) print_buff);

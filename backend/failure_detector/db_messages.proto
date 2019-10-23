@@ -60,7 +60,9 @@ message WriteQueryMessage {
 	required bytes txnid=2;
 	required int64 nonce=3;
 	
-	required int32 mtype=4;
+	required int32 msg_type=4; // {RPC_TYPE_WRITE, RPC_TYPE_DELETE}
+	
+	required int32 mtype=5;
 }
 
 message ReadQueryMessage {

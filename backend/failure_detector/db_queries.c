@@ -15,19 +15,21 @@
 
 // Write Query:
 
-write_query * init_write_query(cell * cell, uuid_t * txnid, long nonce)
+write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
 	ca->cell = cell;
+	ca->msg_type = msg_type;
 	ca->txnid = txnid;
 	ca->nonce = nonce;
 	return ca;
 }
 
-write_query * init_write_query_copy(cell * cell, uuid_t * txnid, long nonce)
+write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
 	ca->cell = init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->version);
+	ca->msg_type = msg_type;
 	if(txnid != NULL)
 	{
 		ca->txnid = malloc(sizeof(uuid_t));
@@ -41,12 +43,36 @@ write_query * init_write_query_copy(cell * cell, uuid_t * txnid, long nonce)
 	return ca;
 }
 
-write_query * build_write_query(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
 	int no_keys = no_primary_keys + no_clustering_keys;
 	assert(no_cols - no_keys > 0);
 	cell * c = init_cell_copy((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, NULL);
-	return init_write_query_copy(c, txnid, nonce);
+	return init_write_query_copy(c, RPC_TYPE_WRITE, txnid, nonce);
+}
+
+write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+{
+	cell * c = init_cell_copy((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL);
+	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
+}
+
+write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+{
+	cell * c = init_cell_copy((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL);
+	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
+}
+
+write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce)
+{
+	assert (0); // Not supported
+	return 0;
 }
 
 void free_write_query(write_query * ca)
@@ -70,12 +96,13 @@ void init_write_query_msg(WriteQueryMessage * msg, write_query * ca, VersionedCe
 	}
 	msg->nonce = ca->nonce;
 	msg->cell = vcell_msg;
+	msg->msg_type = ca->msg_type;
 }
 
 write_query * init_write_query_from_msg(WriteQueryMessage * msg)
 {
 	cell * cell = init_cell_from_msg(msg->cell);
-	write_query * c = init_write_query_copy(cell, (uuid_t *) msg->txnid.data, msg->nonce);
+	write_query * c = init_write_query_copy(cell, msg->msg_type, (uuid_t *) msg->txnid.data, msg->nonce);
 	return c;
 }
 
@@ -131,7 +158,7 @@ char * to_string_write_query(write_query * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "WriteQuery(txnid=%s, nonce=%ld, ", uuid_str, ca->nonce);
+	sprintf(crt_ptr, "%s(txnid=%s, nonce=%ld, ", (ca->msg_type == RPC_TYPE_WRITE)?("WriteQuery"):("DeleteQuery"), uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	to_string_cell(ca->cell, crt_ptr);
@@ -144,7 +171,7 @@ char * to_string_write_query(write_query * ca, char * msg_buff)
 
 int equals_write_query(write_query * ca1, write_query * ca2)
 {
-	if(ca1->nonce != ca2->nonce || !equals_cell(ca1->cell, ca2->cell))
+	if(ca1->nonce != ca2->nonce || ca1->msg_type != ca2->msg_type || !equals_cell(ca1->cell, ca2->cell))
 		return 0;
 
 	if(ca1->txnid != NULL && ca2->txnid && uuid_compare(*(ca1->txnid), *(ca2->txnid)))
@@ -182,7 +209,7 @@ read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, l
 	return ca;
 }
 
-read_query * build_read_query(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+read_query * build_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) clustering_keys, no_clustering_keys);
 

@@ -97,15 +97,27 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 	int i=0;
 	int total_columns = wq->cell->no_keys + wq->cell->no_columns;
 
-	assert(wq->cell->no_columns > 0);
+	switch(wq->msg_type)
+	{
+		case RPC_TYPE_WRITE:
+		{
+			assert(wq->cell->no_columns > 0);
 
-	WORD * column_values = (WORD *) malloc(total_columns * sizeof(WORD));
-	for(;i<wq->cell->no_keys;i++)
-		column_values[i] = (WORD) wq->cell->keys[i];
-	for(;i<total_columns;i++)
-		column_values[i] = (WORD) wq->cell->columns[i-wq->cell->no_keys];
+			WORD * column_values = (WORD *) malloc(total_columns * sizeof(WORD));
+			for(;i<wq->cell->no_keys;i++)
+				column_values[i] = (WORD) wq->cell->keys[i];
+			for(;i<total_columns;i++)
+				column_values[i] = (WORD) wq->cell->columns[i-wq->cell->no_keys];
 
-	return db_insert(column_values, total_columns, (WORD) wq->cell->table_key, db, fastrandstate);
+			return db_insert_transactional(column_values, total_columns, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+		}
+		case RPC_TYPE_WRITE:
+		{
+			db_delete_row_transactional((WORD *) wq->cell->keys, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+		}
+	}
+
+	return 1;
 }
 
 vector_clock * get_empty_vc()
