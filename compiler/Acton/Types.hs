@@ -21,14 +21,11 @@ import Acton.Constraints
 import qualified InterfaceFiles
 
 reconstruct2                            :: String -> Env -> Module -> IO (TEnv, SrcInfo)
-reconstruct2 outname env modul          = let (te,inf) = runTypeM $ (,) <$> infTop env1 suite <*> getDump
-                                              te' = [ (n,t) | (n,t) <- te, notemp n ]
-                                          in do
-                                              InterfaceFiles.writeFile (outname ++ ".ty") te'
-                                              return (te', inf)
+reconstruct2 outname env modul          = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env te)
+                                             return (te, info)
   where Module _ _ suite                = modul
         env1                            = block (bound suite) env
-
+        (te,info)                       = runTypeM $ (,) <$> infTop env1 suite <*> getDump
 
 typeError                               = solveError
 

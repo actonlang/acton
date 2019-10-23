@@ -112,7 +112,56 @@ monotype _                      = True
 
 polytype                        = not . monotype
 
+-------------------------------------------------------------------------------------------------------------------
 
+class Unalias a where
+    unalias                     :: Env -> a -> a
+    unalias env                 = id
+
+instance (Unalias a) => Unalias [a] where
+    unalias env                 = map (unalias env)
+
+instance (Unalias a) => Unalias (Maybe a) where
+    unalias env                 = fmap (unalias env)
+
+instance Unalias QName where
+    unalias env qn              = case findqname qn env of
+                                    NAlias qn' -> unalias env qn'
+                                    _          -> qn        
+
+instance Unalias TSchema where
+    unalias env (TSchema l q t) = TSchema l (unalias env q) (unalias env t)
+
+instance Unalias TCon where
+    unalias env (TC qn ts)      = TC (unalias env qn) (unalias env ts)
+
+instance Unalias TBind where
+    unalias env (TBind tv cs)   = TBind tv (unalias env cs)
+
+instance Unalias Type where
+    unalias env (TCon l c)      = TCon l (unalias env c)
+    unalias env (TAt l c)       = TAt l (unalias env c)
+    unalias env (TFun l e p r t) = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
+    unalias env (TTuple l p)    = TTuple l (unalias env p)
+    unalias env (TRecord l r)   = TTuple l (unalias env r)
+    unalias env (TOpt l t)      = TOpt l (unalias env t)
+    unalias env (TRow l n t r)  = TRow l n (unalias env t) (unalias env r)
+    unalias env t               = t
+
+instance Unalias NameInfo where
+    unalias env (NVar t d)      = NVar (unalias env t) d
+    unalias env (NSVar t)       = NSVar (unalias env t)
+    unalias env (NClass q us te) = NClass (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NProto q us te) = NProto (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NExt q us te)  = NExt (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NTVar us)      = NTVar (unalias env us)
+    unalias env (NPAttr qn)     = NPAttr (unalias env qn)
+    unalias env (NAlias qn)     = NAlias (unalias env qn)
+    unalias env (NModule te)    = NModule (unalias env te)
+
+instance Unalias (Name,NameInfo) where
+    unalias env (n,i)           = (n, unalias env i)
+    
 -------------------------------------------------------------------------------------------------------------------
 
 envBuiltin                  = [ (nSequence, NProto [a] [] []),
