@@ -8,14 +8,6 @@ import Debug.Trace
 
 self                                = Name NoLoc "self"
 
-modrefs b                           = concat (map mrefs b)
-  where mrefs (Import _ is)         = concat [ qref n | ModuleItem n _ <- is ]
-        mrefs (FromImport _ n is)   = mref n
-        mrefs (FromImportAll _ n)   = mref n
-        mref (ModRef (0,Just n))    = qref n
-        mref (ModRef _)             = []
-        qref (QName n _)            = [n]
-
 declnames (Extension{} : ds)        = declnames ds
 declnames (Signature _ ns _ _: ds)  = ns ++ declnames ds
 declnames (d : ds)                  = dname d : declnames ds
@@ -202,8 +194,12 @@ instance Vars Expr where
 instance Vars Name where
     free n                          = [n]
 
+instance Vars ModName where
+    free (ModName (n:ns))           = [n]
+
 instance Vars QName where
-    free (QName n ns)               = [n]
+    free (QName m n)                = free m
+    free (NoQual n)                 = free n
 
 instance Vars Exception where
     free (Exception e1 e2)          = free e1 ++ free e2

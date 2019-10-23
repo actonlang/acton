@@ -11,7 +11,7 @@ import Prelude hiding((<>))
 version :: [Int]
 version = [0,1]
 
-data Module     = Module        QName [Import] [Stmt] deriving (Eq,Show)
+data Module     = Module        ModName [Import] [Stmt] deriving (Eq,Show)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
@@ -112,18 +112,18 @@ nstr (Internal s i) = s ++ "___" ++ show i
 
 name            = Name NoLoc
 
-data QName      = QName { qhead::Name, qtail::[Name] } deriving (Show,Read,Eq,Generic)
+data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
-qName (s:ss)    = QName (name s) (map name ss)
+modName ss      = ModName (map name ss)
 
-noQual n        = QName n []
+data QName      = QName { mname::ModName, item::Name } | NoQual { item::Name } deriving (Show,Read,Eq,Generic)
 
-qchop qn        = case qtail qn of
-                    [] -> Nothing
-                    ns -> Just (QName (qhead qn) (init ns), last ns)
+qName ss s      = QName (modName ss) (name s)
 
-data ModuleItem = ModuleItem QName (Maybe Name) deriving (Show,Eq)
-data ModRef     = ModRef (Int, Maybe QName) deriving (Show,Eq)
+noQual s        = NoQual (name s)
+
+data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
+data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
 data Op a       = Op SrcLoc a deriving (Show)
 data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
@@ -303,6 +303,7 @@ instance Data.Binary.Binary OType
 instance Data.Binary.Binary Qonstraint
 
 instance Data.Binary.Binary Name
+instance Data.Binary.Binary ModName
 instance Data.Binary.Binary QName
 instance Data.Binary.Binary Decoration
 instance Data.Binary.Binary TSchema
@@ -343,8 +344,12 @@ instance HasLoc Expr where
 instance HasLoc Name where
     loc                 = nloc
 
+instance HasLoc ModName where
+    loc (ModName ns)    = loc ns
+    
 instance HasLoc QName where
-    loc (QName n ns)    = loc (n:ns)
+    loc (QName m n)     = loc m `upto` loc n
+    loc (NoQual n)      = loc n
     
 instance HasLoc e => HasLoc (Elem e) where
     loc (Elem e)        = loc e
@@ -534,8 +539,6 @@ cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
 tuple es                            = Tuple l0 (map Elem es)
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
-
-qname2expr (QName n ns)             = foldl (\e m -> Dot (nloc n `upto` nloc m) e m) (Var (nloc n) n) ns
 
 asyncFX                             = OKwd asyncKW ONone
 syncFX                              = OKwd syncKW ONone

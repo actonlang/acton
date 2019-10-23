@@ -20,11 +20,11 @@ import Acton.TypeM
 import Acton.Constraints
 import qualified InterfaceFiles
 
-reconstruct2                            :: String -> Env -> Module -> IO (TEnv, SrcInfo)
-reconstruct2 outname env modul          = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env te)
+reconstruct                             :: String -> Env -> Module -> IO (TEnv, SrcInfo)
+reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env te)
                                              return (te, info)
-  where Module _ _ suite                = modul
-        env1                            = block (bound suite) env
+  where Module m _ suite                = modul
+        env1                            = block (bound suite) env{ defaultmod = m }
         (te,info)                       = runTypeM $ (,) <$> infTop env1 suite <*> getDump
 
 typeError                               = solveError
@@ -373,7 +373,7 @@ instance Infer Expr where
                                                 return t
                                             NClass q _ _ -> do
                                                 ts <- newTVars (length q)
-                                                return (tAt (TC (noQual n) ts))
+                                                return (tAt (TC (NoQual n) ts))
     infer env (Int _ val s)             = return OInt
     infer env (Float _ val s)           = return OFloat
     infer env e@Imaginary{}             = notYetExpr e

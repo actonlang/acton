@@ -20,14 +20,14 @@ import System.IO.Unsafe
 
 --- Main parsing and error message functions ------------------------------------------------------
 
-parseModule :: S.QName -> String -> IO (String,S.Module)
+parseModule :: S.ModName -> String -> IO (String,S.Module)
 parseModule qn file = do
     contents <- readFile file
     case runParser (St.evalStateT file_input []) file (contents ++ "\n") of
         Left err -> Control.Exception.throw err
         Right (i,s) -> return (contents, S.Module qn i s)
 
-parseTest file = snd (unsafePerformIO (parseModule (S.qName ["test"]) file))
+parseTest file = snd (unsafePerformIO (parseModule (S.modName ["test"]) file))
 
 parseTestStr p str = case runParser (St.evalStateT p []) "" str of
                        Left err -> putStrLn (errorBundlePretty err)
@@ -673,7 +673,7 @@ import_name = addLoc $ do
                  rword "import"
                  S.Import NoLoc <$> module_item `sepBy1` comma
   where module_item = do
-                          dn <- dotted_name
+                          dn <- module_name
                           S.ModuleItem dn <$> optional (rword "as" *> name)
                           
 import_from = addLoc $ do
@@ -687,7 +687,7 @@ import_from = addLoc $ do
   where                   
     import_module = do
                   ds <- many dot
-                  mbn <- optional dotted_name
+                  mbn <- optional module_name
                   return $ S.ModRef (length ds, mbn)
     import_items = ([] <$ star)   -- Note: [] means all...
                 <|> parens import_as_names
@@ -695,9 +695,17 @@ import_from = addLoc $ do
     import_as_name = S.ImportItem <$> name <*> optional (rword "as" *> name)
     import_as_names = (:) <$> import_as_name <*> commaList import_as_name 
 
-dotted_name = do
+module_name = do
   n <- name
-  S.QName n <$> many (dot *> escname)
+  ns <- many (dot *> escname)
+  return $ S.ModName (n:ns)
+  
+qual_name = do
+  n <- name
+  ns <- many (dot *> escname)
+  case n:ns of
+    [n] -> return $ S.NoQual n
+    ns' -> return $ S.QName (S.ModName (init ns')) (last ns')
   
 -- global_stmt: 'global' NAME (',' NAME)*
 -- nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
@@ -760,7 +768,7 @@ for_stmt = addLoc $ do
 except :: Parser S.Except
 except = addLoc $ do
              rword "except"
-             mbx <- optional ((,) <$> dotted_name <*> optional (rword "as" *> name))
+             mbx <- optional ((,) <$> qual_name <*> optional (rword "as" *> name))
              return (maybe (S.ExceptAll NoLoc) (\(x,mbn) -> maybe (S.Except NoLoc x) (S.ExceptAs NoLoc x) mbn) mbx)
             
 try_stmt = addLoc $ do
@@ -1080,7 +1088,7 @@ actordef = addLoc $ do
 
 classdef    = classdefGen "class" name CLASS S.Class
 protodef    = classdefGen "protocol" name PROTO S.Protocol
-extdef      = classdefGen "extension" dotted_name EXT S.Extension
+extdef      = classdefGen "extension" qual_name EXT S.Extension
 
 classdefGen k pname ctx con = addLoc $ do
                 assertNotData
@@ -1187,7 +1195,7 @@ funrows  = try (do mbv <- (star *> optional tvar); comma; k <- kwdrow; return (S
            try (do optional comma; return (S.posNil, S.kwdNil))
 
 tcon :: Parser S.TCon
-tcon =  do n <- dotted_name
+tcon =  do n <- qual_name
            args <- optional (brackets (do t <- ttype
                                           ts <- commaList ttype
                                           return (t:ts)))
@@ -1242,6 +1250,6 @@ ttype    =  addLoc (
                 
 
 utype :: Parser S.UType
-utype    =  S.UCon <$> dotted_name
+utype    =  S.UCon <$> qual_name
         <|> (\str -> S.ULit (init (tail str))) <$> shortString []
 

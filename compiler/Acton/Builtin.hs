@@ -6,8 +6,8 @@ import Acton.Syntax
 nSelf                               = name "__self__"
 
 nBuiltin                            = name "__builtin__"
-qnBuiltin                           = QName nBuiltin []
-qBuiltin n                          = QName nBuiltin [n]
+mBuiltin                            = ModName [nBuiltin]
+qBuiltin n                          = QName mBuiltin n
 
 nIterable                           = name "Iterable"
 nSequence                           = name "Sequence"
