@@ -56,7 +56,7 @@ message VersionedCellMessage {
 // DB queries:
 
 message WriteQueryMessage {
-	required VersionedCellMessage cell=1; // CellMessage
+	optional VersionedCellMessage cell=1; // CellMessage
 	required bytes txnid=2;
 	required int64 nonce=3;
 	
@@ -118,7 +118,9 @@ message TxnMessage {
 	required bytes txnid=6;
 	required int64 nonce=7;
 	
-	required int32 mtype=8;
+	optional VectorClockMessage version=8;
+	
+	required int32 mtype=9;
 }
 
 // Queue messages:

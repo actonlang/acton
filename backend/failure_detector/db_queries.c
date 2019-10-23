@@ -13,6 +13,27 @@
 #include <limits.h>
 #include <assert.h>
 
+// Remote DB API:
+
+remote_db_t * get_remote_db()
+{
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t));
+
+	db->servers = create_skiplist_long();
+	db->txn_state = create_skiplist_uuid();
+
+	return db;
+}
+
+int free_remote_db(remote_db_t * db)
+{
+	skiplist_free(db->servers);
+	skiplist_free(db->txn_state);
+	free(db);
+	return 0;
+}
+
+
 // Write Query:
 
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce)
@@ -28,7 +49,7 @@ write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long n
 write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
-	ca->cell = init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->version);
+	ca->cell = (cell != NULL)?(init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->version)):(NULL);
 	ca->msg_type = msg_type;
 	if(txnid != NULL)
 	{
@@ -47,19 +68,19 @@ write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_prim
 {
 	int no_keys = no_primary_keys + no_clustering_keys;
 	assert(no_cols - no_keys > 0);
-	cell * c = init_cell_copy((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, NULL);
+	cell * c = init_cell((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, NULL);
 	return init_write_query_copy(c, RPC_TYPE_WRITE, txnid, nonce);
 }
 
 write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
-	cell * c = init_cell_copy((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL);
+	cell * c = init_cell((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
 write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
-	cell * c = init_cell_copy((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL);
+	cell * c = init_cell((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
@@ -110,7 +131,8 @@ void free_write_query_msg(WriteQueryMessage * msg)
 {
 //	if(msg->txnid.data != NULL)
 //		free(msg->txnid.data);
-	free_cell_msg(msg->cell);
+	if(msg->cell != NULL)
+		free_cell_msg(msg->cell);
 }
 
 int serialize_write_query(write_query * ca, void ** buf, unsigned * len)
@@ -119,8 +141,9 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len)
 	VersionedCellMessage vcell_msg = VERSIONED_CELL_MESSAGE__INIT;
 	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
 
-	init_cell_msg(&vcell_msg, ca->cell, &vc_msg);
-	init_write_query_msg(&msg, ca, &vcell_msg);
+	if(ca->cell != NULL)
+		init_cell_msg(&vcell_msg, ca->cell, &vc_msg);
+	init_write_query_msg(&msg, ca, (ca->cell != NULL)?(&vcell_msg):(NULL));
 	msg.mtype = RPC_TYPE_WRITE;
 
 	*len = write_query_message__get_packed_size (&msg);
@@ -158,11 +181,14 @@ char * to_string_write_query(write_query * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "%s(txnid=%s, nonce=%ld, ", (ca->msg_type == RPC_TYPE_WRITE)?("WriteQuery"):("DeleteQuery"), uuid_str, ca->nonce);
+	sprintf(crt_ptr, "%s(txnid=%s, nonce=%ld, cell=", (ca->msg_type == RPC_TYPE_WRITE)?("WriteQuery"):("DeleteQuery"), uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
-	to_string_cell(ca->cell, crt_ptr);
-	crt_ptr += strlen(crt_ptr);
+	if(ca->cell != NULL)
+	{
+		to_string_cell(ca->cell, crt_ptr);
+		crt_ptr += strlen(crt_ptr);
+	}
 
 	sprintf(crt_ptr, ")");
 
@@ -859,7 +885,7 @@ queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, W
 												int max_entries, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_read_queue_message(c, app_id, shard_id, consumer_id, (long) max_entries, txnid, nonce);
+	return init_read_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, (long) max_entries, txnid, nonce);
 
 }
 
@@ -867,7 +893,7 @@ queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id
 													long new_consume_head, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_consume_queue_message(c, app_id, shard_id, consumer_id, new_consume_head, txnid, nonce);
+	return init_consume_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, new_consume_head, txnid, nonce);
 }
 
 queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
@@ -885,13 +911,13 @@ queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, u
 queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_subscribe_queue_message(c, app_id, shard_id, consumer_id, txnid, nonce);
+	return init_subscribe_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, txnid, nonce);
 }
 
 queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_unsubscribe_queue_message(c, app_id, shard_id, consumer_id, txnid, nonce);
+	return init_unsubscribe_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, txnid, nonce);
 }
 
 
@@ -1231,14 +1257,41 @@ int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2)
 
 // Txn Message:
 
-txn_message * build_new_txn(uuid_t ** txnid, long nonce)
+txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
+{
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+
+	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
+}
+
+uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
+{
+	txn_state * ts = NULL, * previous = NULL;
+
+	while(ts == NULL)
+	{
+		ts = init_txn_state();
+		previous = get_client_txn_state(&(ts->txnid), db);
+		if(previous != NULL)
+		{
+			free_txn_state(ts);
+			ts = NULL;
+		}
+	}
+
+	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+
+	return &(ts->txnid);
+}
+
+txn_message * build_new_txn(uuid_t * txnid, long nonce)
 {
 	return init_txn_message_copy(DB_TXN_BEGIN,
 			NULL, 0, // own_read_set, no_own_read_set,
 			NULL, 0, // own_write_set, no_own_write_set,
 			NULL, 0, // complete_read_set, no_complete_read_set,
 			NULL, 0, // complete_write_set, no_complete_write_set,
-			txnid, nonce);
+			txnid, NULL, nonce);
 }
 
 txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce)
@@ -1250,10 +1303,10 @@ txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long no
 			NULL, 0, // own_write_set, no_own_write_set,
 			NULL, 0, // complete_read_set, no_complete_read_set,
 			NULL, 0, // complete_write_set, no_complete_write_set,
-			txnid, nonce);
+			txnid, version, nonce);
 }
 
-txn_message * build_commit_txn(uuid_t * txnid, vector_clock * , long nonce)
+txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, long nonce)
 {
 	// In the current implementation, the server mirrors the txn's complete read and write sets, so there is no reason to re-send them from client:
 
@@ -1262,7 +1315,7 @@ txn_message * build_commit_txn(uuid_t * txnid, vector_clock * , long nonce)
 			NULL, 0, // own_write_set, no_own_write_set,
 			NULL, 0, // complete_read_set, no_complete_read_set,
 			NULL, 0, // complete_write_set, no_complete_write_set,
-			txnid, nonce);
+			txnid, version, nonce);
 }
 
 txn_message * build_abort_txn(uuid_t * txnid, long nonce)
@@ -1272,7 +1325,7 @@ txn_message * build_abort_txn(uuid_t * txnid, long nonce)
 			NULL, 0, // own_write_set, no_own_write_set,
 			NULL, 0, // complete_read_set, no_complete_read_set,
 			NULL, 0, // complete_write_set, no_complete_write_set,
-			txnid, nonce);
+			txnid, NULL, nonce);
 }
 
 txn_message * init_txn_message(int type,
@@ -1280,7 +1333,7 @@ txn_message * init_txn_message(int type,
 		cell * own_write_set, int no_own_write_set,
 		cell * complete_read_set, int no_complete_read_set,
 		cell * complete_write_set, int no_complete_write_set,
-		uuid_t * txnid, long nonce)
+		uuid_t * txnid, vector_clock * version, long nonce)
 {
 	txn_message * ca = (txn_message *) malloc(sizeof(txn_message));
 	ca->type = type;
@@ -1293,6 +1346,7 @@ txn_message * init_txn_message(int type,
 	ca->complete_write_set = complete_write_set;
 	ca->no_complete_write_set = no_complete_write_set;
 	ca->txnid = txnid;
+	ca->version = version;
 	ca->nonce = nonce;
 	return ca;
 }
@@ -1302,7 +1356,7 @@ txn_message * init_txn_message_copy(int type,
 		cell * own_write_set, int no_own_write_set,
 		cell * complete_read_set, int no_complete_read_set,
 		cell * complete_write_set, int no_complete_write_set,
-		uuid_t * txnid, long nonce)
+		uuid_t * txnid, vector_clock * version, long nonce)
 {
 	txn_message * ca = (txn_message *) malloc(sizeof(txn_message));
 
@@ -1316,6 +1370,8 @@ txn_message * init_txn_message_copy(int type,
 	{
 		ca->txnid = NULL;
 	}
+
+	ca->version = (version != NULL)?copy_vc(version):NULL;
 	ca->nonce = nonce;
 	ca->no_own_read_set = no_own_read_set;
 	ca->no_own_write_set = no_own_write_set;
@@ -1359,10 +1415,13 @@ void free_txn_message(txn_message * ca)
 		free_cell_ptrs(ca->complete_write_set+i);
 	free(ca->complete_write_set);
 
+	if(ca->version != NULL)
+		free_vc(ca->version);
+
 	free(ca);
 }
 
-void init_txn_message_msg(TxnMessage * msg, txn_message * ca)
+void init_txn_message_msg(TxnMessage * msg, txn_message * ca, VectorClockMessage * vc_msg)
 {
 	msg->n_own_read_set = ca->no_own_read_set;
 	msg->n_own_write_set = ca->no_own_write_set;
@@ -1437,6 +1496,18 @@ void init_txn_message_msg(TxnMessage * msg, txn_message * ca)
 		msg->txnid.data = NULL;
 		msg->txnid.len = 0;
 	}
+	if(ca->version != NULL)
+	{
+		init_vc_msg(vc_msg, ca->version);
+
+//		msg->has_version = 1;
+		msg->version = vc_msg;
+	}
+	else
+	{
+//		msg->has_version = 0;
+	}
+
 	msg->nonce = ca->nonce;
 }
 
@@ -1461,7 +1532,7 @@ txn_message * init_txn_message_from_msg(TxnMessage * msg)
 			own_write_set, msg->n_own_write_set,
 			complete_read_set, msg->n_complete_read_set,
 			complete_write_set, msg->n_complete_write_set,
-			(uuid_t *) msg->txnid.data, msg->nonce);
+			(uuid_t *) msg->txnid.data, (msg->version != NULL)?init_vc_from_msg(msg->version):NULL, msg->nonce); // msg->has_version
 
 	return c;
 }
@@ -1483,13 +1554,17 @@ void free_txn_message_msg(TxnMessage * msg)
 	for(int i=0;i<msg->n_complete_write_set;i++)
 		free_cell_msg(msg->complete_write_set[i]);
 	free(msg->complete_write_set);
+
+	if(msg->version != NULL) // msg->has_version
+		free_vc_msg(msg->version);
 }
 
 int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len)
 {
 	TxnMessage msg = TXN_MESSAGE__INIT;
+	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
 
-	init_txn_message_msg(&msg, ca);
+	init_txn_message_msg(&msg, ca, &vc_msg);
 	msg.mtype = RPC_TYPE_TXN;
 
 	*len = txn_message__get_packed_size (&msg);
@@ -1570,6 +1645,15 @@ char * to_string_txn_message(txn_message * ca, char * msg_buff)
 		crt_ptr += strlen(crt_ptr);
 	}
 
+	sprintf(crt_ptr, "}, version=");
+	crt_ptr += strlen(crt_ptr);
+
+	if(ca->version != NULL)
+	{
+		to_string_vc(ca->version, crt_ptr);
+		crt_ptr += strlen(crt_ptr);
+	}
+
 	sprintf(crt_ptr, ")");
 
 	return msg_buff;
@@ -1585,6 +1669,9 @@ int equals_txn_message(txn_message * ca1, txn_message * ca2)
 		return 0;
 
 	if(ca1->txnid != NULL && ca2->txnid && uuid_compare(*(ca1->txnid), *(ca2->txnid)))
+		return 0;
+
+	if(compare_vc(ca1->version, ca2->version))
 		return 0;
 
 	for(int i=0;i<ca1->no_own_read_set;i++)

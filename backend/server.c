@@ -150,16 +150,25 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 {
 	int no_keys = schema->no_primary_keys + schema->no_clustering_keys;
 	int no_columns = schema->no_cols - no_keys;
-	long * keys = (long *) malloc(no_keys);
-	long * columns = (long *) malloc(no_columns);
-	for(int i = 0;i < no_keys;i++)
-		keys[i] = q->cell_address->keys[i];
-	for(int i = 0;i < no_columns;i++)
-		columns[i] = (long) result->column_array[i];
-	vector_clock * vc = get_empty_vc();
+	long * keys = NULL, * columns = NULL;
+	read_response_message * m = NULL;
 
-	cell * c = init_cell(q->cell_address->table_key, keys, no_keys, columns, no_columns, vc);
-	read_response_message * m = init_write_query(c, q->txnid, q->nonce);
+	if(result == NULL)
+	{
+		m = init_write_query(NULL, RPC_TYPE_WRITE, q->txnid, q->nonce);
+	}
+	else
+	{
+		keys = (long *) malloc(no_keys);
+		columns = (long *) malloc(no_columns);
+		for(int i = 0;i < no_keys;i++)
+			keys[i] = q->cell_address->keys[i];
+		for(int i = 0;i < no_columns;i++)
+			columns[i] = (long) result->column_array[i];
+
+		cell * c = init_cell(q->cell_address->table_key, keys, no_keys, columns, no_columns, result->version);
+		m = init_write_query(c, RPC_TYPE_WRITE, q->txnid, q->nonce);
+	}
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];

@@ -172,11 +172,15 @@ struct  _WriteQueryMessage
   VersionedCellMessage *cell;
   ProtobufCBinaryData txnid;
   int64_t nonce;
+  /*
+   * {RPC_TYPE_WRITE, RPC_TYPE_DELETE}
+   */
+  int32_t msg_type;
   int32_t mtype;
 };
 #define WRITE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&write_query_message__descriptor) \
-    , NULL, {0,NULL}, 0, 0 }
+    , NULL, {0,NULL}, 0, 0, 0 }
 
 
 struct  _ReadQueryMessage
@@ -254,11 +258,12 @@ struct  _TxnMessage
   VersionedCellMessage **complete_write_set;
   ProtobufCBinaryData txnid;
   int64_t nonce;
+  VectorClockMessage *version;
   int32_t mtype;
 };
 #define TXN_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&txn_message__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, {0,NULL}, 0, 0 }
+    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, {0,NULL}, 0, NULL, 0 }
 
 
 struct  _QueueQueryMessage

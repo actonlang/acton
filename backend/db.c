@@ -489,7 +489,8 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 
 	db_row_t* row = table_search(primary_keys, table);
 
-//	if(row == NULL)
+	if(row == NULL)
+		return NULL;
 //		printf("Row not found by primary key %ld!\n", (long) primary_keys[0]);
 
 	for(int i=0;i<no_clustering_keys;i++)
@@ -545,6 +546,8 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	assert(no_clustering_keys <= schema->no_clustering_keys && "Too many clustering keys given");
 
 	db_row_t* row = table_search(primary_keys, table);
+
+	return 0;
 
 	for(int i=0;i<no_clustering_keys-1;i++)
 	{

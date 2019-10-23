@@ -127,7 +127,7 @@ int main (int argc, const char * argv[])
 
 	// Generate dummy Write Query:
 
-	write_query * wquery = init_write_query(cll, &txnid, 3), * wquery_r = NULL;
+	write_query * wquery = init_write_query(cll, RPC_TYPE_WRITE, &txnid, 3), * wquery_r = NULL;
 	serialize_write_query(wquery, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_write_query(buf_r, len_r, &wquery_r);
@@ -314,7 +314,7 @@ int main (int argc, const char * argv[])
 									cll, 2,
 									cll, 2,
 									cll, 2,
-									&txnid, 3), * tm_r = NULL;
+									&txnid, vc, 3), * tm_r = NULL;
 	serialize_txn_message(tm, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_txn_message(buf_r, len_r, &tm_r);

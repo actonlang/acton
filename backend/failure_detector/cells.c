@@ -286,6 +286,9 @@ cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg)
 
 cell * init_cell_from_msg(VersionedCellMessage * msg)
 {
+	if(msg == NULL)
+		return NULL;
+
 	vector_clock * vc = NULL;
 	if(msg->version != NULL)
 		vc = init_vc_from_msg(msg->version);
@@ -339,6 +342,15 @@ int deserialize_cell(void * buf, unsigned msg_len, cell ** ca)
 
 int equals_cell(cell * ca1, cell * ca2)
 {
+	if(ca1 == NULL && ca2 == NULL)
+		return 1;
+
+	if(ca1 != NULL && ca2 == NULL)
+		return 0;
+
+	if(ca1 == NULL && ca2 != NULL)
+		return 0;
+
 	if(ca1->table_key != ca2->table_key || ca1->no_keys != ca2->no_keys)
 		return 0;
 
@@ -349,6 +361,9 @@ int equals_cell(cell * ca1, cell * ca2)
 	for(int i=0;i<ca1->no_columns;i++)
 		if(ca1->columns[i] != ca2->columns[i])
 			return 0;
+
+	if(compare_vc(ca1->version, ca2->version))
+		return 0;
 
 	return 1;
 }

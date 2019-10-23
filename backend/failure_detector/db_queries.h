@@ -6,6 +6,7 @@
 
 #include "cells.h"
 #include "../db.h"
+#include "../txns.h"
 #include <uuid/uuid.h>
 
 #ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
@@ -29,6 +30,17 @@
 #define DB_ACK 0
 #define DB_NACK 1
 
+// Remote DB API:
+
+typedef struct remote_db {
+    int db_id;
+    skiplist_t * servers; // List of remote servers
+    skiplist_t * txn_state; // Client cache of txn state
+} remote_db_t;
+
+remote_db_t * get_remote_db();
+int free_remote_db(remote_db_t * db);
+
 typedef struct write_query
 {
 	cell * cell;
@@ -46,6 +58,7 @@ write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD tab
 write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce);
 
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce);
+write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 void free_write_query(write_query * ca);
 int serialize_write_query(write_query * ca, void ** buf, unsigned * len);
 int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca);
@@ -65,6 +78,7 @@ read_query * build_search_columns_in_txn(WORD* primary_keys, int no_primary_keys
 read_query * build_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce);
 
 read_query * init_read_query(cell_address * cell_address, uuid_t * txnid, long nonce);
+read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, long nonce);
 void free_read_query(read_query * ca);
 int serialize_read_query(read_query * ca, void ** buf, unsigned * len);
 int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca);
@@ -101,6 +115,7 @@ range_read_query * build_range_search_clustering_in_txn(WORD* primary_keys, int 
 range_read_query * build_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, WORD table_key, uuid_t * txnid, long nonce);
 
 range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce);
+range_read_query * init_range_read_query_copy(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce);
 void free_range_read_query(range_read_query * ca);
 int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len);
 int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query ** ca);
@@ -187,10 +202,14 @@ typedef struct txn_message
 	cell * complete_write_set;
 	int no_complete_write_set;
 	uuid_t * txnid;
+	vector_clock * version;
 	long nonce;
 } txn_message;
 
-txn_message * build_new_txn(uuid_t ** txnid, long nonce);
+txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db);
+uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
+
+txn_message * build_new_txn(uuid_t * txnid, long nonce);
 txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce);
 txn_message * build_abort_txn(uuid_t * txnid, long nonce);
 txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, long nonce);
@@ -200,7 +219,13 @@ txn_message * init_txn_message(int type,
 								cell * own_write_set, int no_own_write_set,
 								cell * complete_read_set, int no_complete_read_set,
 								cell * complete_write_set, int no_complete_write_set,
-								uuid_t * txnid, long nonce);
+								uuid_t * txnid, vector_clock * version, long nonce);
+txn_message * init_txn_message_copy(int type,
+		cell * own_read_set, int no_own_read_set,
+		cell * own_write_set, int no_own_write_set,
+		cell * complete_read_set, int no_complete_read_set,
+		cell * complete_write_set, int no_complete_write_set,
+		uuid_t * txnid, vector_clock * version, long nonce);
 void free_txn_message(txn_message * ca);
 int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len);
 int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca);

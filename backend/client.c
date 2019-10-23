@@ -21,13 +21,11 @@
 
 #define BUFSIZE 4096
 
+#define CLIENT_VERBOSITY 1
+
 long requests=0;
 char out_buf[BUFSIZE];
 char in_buf[BUFSIZE];
-
-typedef struct remote_db {
-    int db_id;
-} remote_db_t;
 
 typedef struct actor_collection_item {
 	int actor_id;
@@ -73,38 +71,64 @@ db_schema_t * create_schema() {
 	return db_schema;
 }
 
+int send_packet(void * buf, unsigned len, int sockfd)
+{
+    int n = write(sockfd, buf, len);
+    if (n < 0)
+    {
+    		error("ERROR writing to socket");
+    }
+    else
+    {
+#if CLIENT_VERBOSITY > 0
+		printf("Wrote %d bytes to socket\n", n);
+#endif
+    }
+
+    return 0;
+}
+
+int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * in_buf, unsigned in_buf_size, int * in_len)
+{
+	int ret = send_packet(out_buf, out_len, sockfd);
+
+	if(ret != 0)
+		return ret;
+
+    bzero(in_buf, in_buf_size);
+    *in_len = -1;
+    while(*in_len < 0)
+    {
+    		*in_len = read(sockfd, in_buf, BUFSIZE);
+		if (*in_len < 0)
+			error("ERROR reading from socket");
+		else
+			printf("Read %d bytes from socket\n", *in_len);
+    }
+
+    return 0;
+}
+
+
 int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
 	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	void * tmp_out_buf = NULL;
-	char print_buff[1024];
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
 
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
 	to_string_write_query(wq, (char *) print_buff);
 	printf("Sending write query: %s\n", print_buff);
+#endif
 
 	// Send packet to server and wait for reply:
 
-    int n = write(sockfd, tmp_out_buf, len);
-    if (n < 0)
-    		error("ERROR writing to socket");
-    else
-		printf("Wrote %d bytes to socket\n", n);
-
-    bzero(in_buf, BUFSIZE);
-    n = -1;
-    while(n < 0)
-    {
-		n = read(sockfd, in_buf, BUFSIZE);
-		if (n < 0)
-			error("ERROR reading from socket");
-		else
-			printf("Read %d bytes from socket\n", n);
-    }
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
 
     ack_message * ack;
-
     success = deserialize_ack_message(in_buf, n, &ack);
 
 	return success;
@@ -115,30 +139,18 @@ int db_remote_delete_row(WORD * column_values, int no_cols, WORD table_key, db_s
 	unsigned len = 0;
 	write_query * wq = build_delete_row_in_txn(column_values, schema->no_primary_keys, table_key, txnid, nonce);
 	void * tmp_out_buf = NULL;
-	char print_buff[1024];
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
 
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
 	to_string_write_query(wq, (char *) print_buff);
 	printf("Sending delete row query: %s\n", print_buff);
+#endif
 
 	// Send packet to server and wait for reply:
 
-    int n = write(sockfd, tmp_out_buf, len);
-    if (n < 0)
-    		error("ERROR writing to socket");
-    else
-		printf("Wrote %d bytes to socket\n", n);
-
-    bzero(in_buf, BUFSIZE);
-    n = -1;
-    while(n < 0)
-    {
-		n = read(sockfd, in_buf, BUFSIZE);
-		if (n < 0)
-			error("ERROR reading from socket");
-		else
-			printf("Read %d bytes from socket\n", n);
-    }
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
 
     ack_message * ack;
 
@@ -151,24 +163,20 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
-	char print_buff[1024];
 
 	read_query * q = build_search_clustering_in_txn(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
 	to_string_read_query(q, (char *) print_buff);
 	printf("Sending read query: %s\n", print_buff);
+#endif
 
 	// Send packet to server and wait for reply:
 
-    int n = write(sockfd, tmp_out_buf, len);
-    if (n < 0)
-      error("ERROR writing to socket");
-
-    bzero(in_buf, BUFSIZE);
-    n = read(sockfd, in_buf, BUFSIZE);
-    if (n < 0)
-      error("ERROR reading from socket");
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
 
     read_response_message * response;
     success = deserialize_write_query(in_buf, n, &response);
