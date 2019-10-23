@@ -170,26 +170,26 @@ struct  _WriteQueryMessage
    * CellMessage
    */
   VersionedCellMessage *cell;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define WRITE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&write_query_message__descriptor) \
-    , NULL, 0, 0, 0 }
+    , NULL, {0,NULL}, 0, 0 }
 
 
 struct  _ReadQueryMessage
 {
   ProtobufCMessage base;
   CellAddressMessage *cell_address;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define READ_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&read_query_message__descriptor) \
-    , NULL, 0, 0, 0 }
+    , NULL, {0,NULL}, 0, 0 }
 
 
 struct  _AckMessage
@@ -200,13 +200,13 @@ struct  _AckMessage
    * 0 - ACK, 1 - NACK
    */
   int32_t status;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define ACK_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ack_message__descriptor) \
-    , NULL, 0, 0, 0, 0 }
+    , NULL, 0, {0,NULL}, 0, 0 }
 
 
 struct  _RangeReadQueryMessage
@@ -214,13 +214,13 @@ struct  _RangeReadQueryMessage
   ProtobufCMessage base;
   CellAddressMessage *start_cell_address;
   CellAddressMessage *end_cell_address;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define RANGE_READ_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&range_read_query_message__descriptor) \
-    , NULL, NULL, 0, 0, 0 }
+    , NULL, NULL, {0,NULL}, 0, 0 }
 
 
 struct  _RangeReadResponseMessage
@@ -228,13 +228,13 @@ struct  _RangeReadResponseMessage
   ProtobufCMessage base;
   size_t n_cells;
   VersionedCellMessage **cells;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define RANGE_READ_RESPONSE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&range_read_response_message__descriptor) \
-    , 0,NULL, 0, 0, 0 }
+    , 0,NULL, {0,NULL}, 0, 0 }
 
 
 struct  _TxnMessage
@@ -252,13 +252,13 @@ struct  _TxnMessage
   VersionedCellMessage **complete_read_set;
   size_t n_complete_write_set;
   VersionedCellMessage **complete_write_set;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define TXN_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&txn_message__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0 }
+    , 0, 0,NULL, 0,NULL, 0,NULL, 0,NULL, {0,NULL}, 0, 0 }
 
 
 struct  _QueueQueryMessage
@@ -273,13 +273,13 @@ struct  _QueueQueryMessage
   int32_t status;
   size_t n_cells;
   VersionedCellMessage **cells;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
   int32_t mtype;
 };
 #define QUEUE_QUERY_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&queue_query_message__descriptor) \
-    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, 0, 0, 0 }
+    , NULL, 0, 0, 0, 0, 0, 0, 0,NULL, {0,NULL}, 0, 0 }
 
 
 struct  _ConsumerID
@@ -298,24 +298,24 @@ struct  _CreateQueueMessage
 {
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define CREATE_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&create_queue_message__descriptor) \
-    , NULL, 0, 0 }
+    , NULL, {0,NULL}, 0 }
 
 
 struct  _DeleteQueueMessage
 {
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define DELETE_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&delete_queue_message__descriptor) \
-    , NULL, 0, 0 }
+    , NULL, {0,NULL}, 0 }
 
 
 struct  _SubscribeQueueMessage
@@ -323,12 +323,12 @@ struct  _SubscribeQueueMessage
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
   ConsumerID *consumer_id;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define SUBSCRIBE_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&subscribe_queue_message__descriptor) \
-    , NULL, NULL, 0, 0 }
+    , NULL, NULL, {0,NULL}, 0 }
 
 
 struct  _UnsubscribeQueueMessage
@@ -336,12 +336,12 @@ struct  _UnsubscribeQueueMessage
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
   ConsumerID *consumer_id;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define UNSUBSCRIBE_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&unsubscribe_queue_message__descriptor) \
-    , NULL, NULL, 0, 0 }
+    , NULL, NULL, {0,NULL}, 0 }
 
 
 struct  _EnqueueMessage
@@ -352,12 +352,12 @@ struct  _EnqueueMessage
    */
   size_t n_cells;
   VersionedCellMessage **cells;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define ENQUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&enqueue_message__descriptor) \
-    , 0,NULL, 0, 0 }
+    , 0,NULL, {0,NULL}, 0 }
 
 
 struct  _EnqueueResponseMessage
@@ -365,12 +365,12 @@ struct  _EnqueueResponseMessage
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
   int64_t last_item_id;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define ENQUEUE_RESPONSE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&enqueue_response_message__descriptor) \
-    , NULL, 0, 0, 0 }
+    , NULL, 0, {0,NULL}, 0 }
 
 
 struct  _ReadQueueMessage
@@ -379,12 +379,12 @@ struct  _ReadQueueMessage
   CellAddressMessage *queue_address;
   ConsumerID *consumer_id;
   int64_t max_items;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define READ_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&read_queue_message__descriptor) \
-    , NULL, NULL, 0, 0, 0 }
+    , NULL, NULL, 0, {0,NULL}, 0 }
 
 
 struct  _ReadQueueResponseMessage
@@ -393,12 +393,12 @@ struct  _ReadQueueResponseMessage
   size_t n_queue_entries;
   VersionedCellMessage **queue_entries;
   ConsumerID *consumer_id;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define READ_QUEUE_RESPONSE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&read_queue_response_message__descriptor) \
-    , 0,NULL, NULL, 0, 0 }
+    , 0,NULL, NULL, {0,NULL}, 0 }
 
 
 struct  _ConsumeQueueMessage
@@ -407,12 +407,12 @@ struct  _ConsumeQueueMessage
   CellAddressMessage *queue_address;
   ConsumerID *consumer_id;
   int64_t new_consume_head;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define CONSUME_QUEUE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&consume_queue_message__descriptor) \
-    , NULL, NULL, 0, 0, 0 }
+    , NULL, NULL, 0, {0,NULL}, 0 }
 
 
 struct  _ConsumeQueueResponseMessage
@@ -425,12 +425,12 @@ struct  _ConsumeQueueResponseMessage
    */
   int32_t status;
   int64_t new_consume_head;
-  int64_t txnid;
+  ProtobufCBinaryData txnid;
   int64_t nonce;
 };
 #define CONSUME_QUEUE_RESPONSE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&consume_queue_response_message__descriptor) \
-    , NULL, NULL, 0, 0, 0, 0 }
+    , NULL, NULL, 0, 0, {0,NULL}, 0 }
 
 
 /* NodeStateMessage methods */

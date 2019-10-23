@@ -57,7 +57,7 @@ message VersionedCellMessage {
 
 message WriteQueryMessage {
 	required VersionedCellMessage cell=1; // CellMessage
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 	
 	required int32 mtype=4;
@@ -65,7 +65,7 @@ message WriteQueryMessage {
 
 message ReadQueryMessage {
 	required CellAddressMessage cell_address=1;
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 	
 	required int32 mtype=4;
@@ -73,7 +73,7 @@ message ReadQueryMessage {
 
 // message ReadResponseMessage {
 // 	required VersionedCellMessage cell=1;
-// 	required int64 txnid=2;
+// 	required bytes txnid=2;
 // 	required int64 nonce=3;
 //	required int32 mtype=4;
 // }
@@ -81,7 +81,7 @@ message ReadQueryMessage {
 message AckMessage {
 	required CellAddressMessage cell_address=1;
 	required int32 status=2; // 0 - ACK, 1 - NACK
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 	
 	required int32 mtype=5;
@@ -90,7 +90,7 @@ message AckMessage {
 message RangeReadQueryMessage {
 	required CellAddressMessage start_cell_address=1;
 	required CellAddressMessage end_cell_address=2;
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 	
 	required int32 mtype=5;
@@ -98,7 +98,7 @@ message RangeReadQueryMessage {
 
 message RangeReadResponseMessage {
 	repeated VersionedCellMessage cells=1;
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 	
 	required int32 mtype=4;
@@ -113,7 +113,7 @@ message TxnMessage {
 	repeated VersionedCellMessage own_write_set=3;
 	repeated VersionedCellMessage complete_read_set=4;
 	repeated VersionedCellMessage complete_write_set=5;
-	required int64 txnid=6;
+	required bytes txnid=6;
 	required int64 nonce=7;
 	
 	required int32 mtype=8;
@@ -136,7 +136,7 @@ message QueueQueryMessage {
 	
 	repeated VersionedCellMessage cells=8;
 
-	required int64 txnid=9;
+	required bytes txnid=9;
 	required int64 nonce=10;
 	
 	required int32 mtype=11;
@@ -153,40 +153,40 @@ message ConsumerID {
 
 message CreateQueueMessage {
 	required CellAddressMessage queue_address=1;
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 }
 
 message DeleteQueueMessage {
 	required CellAddressMessage queue_address=1;
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 }
 
 message SubscribeQueueMessage {
 	required CellAddressMessage queue_address=1;
 	required ConsumerID consumer_id=2;
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 }
 
 message UnsubscribeQueueMessage {
 	required CellAddressMessage queue_address=1;
 	required ConsumerID consumer_id=2;
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 }
 
 message EnqueueMessage {
 	repeated VersionedCellMessage cells=1; // CellMessage
-	required int64 txnid=2;
+	required bytes txnid=2;
 	required int64 nonce=3;
 }
 
 message EnqueueResponseMessage {
 	required CellAddressMessage queue_address=1;
 	required int64 last_item_id=2;	
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 }
 
@@ -194,14 +194,14 @@ message ReadQueueMessage {
 	required CellAddressMessage queue_address=1;
 	required ConsumerID consumer_id=2;
 	required int64 max_items=3;
-	required int64 txnid=4;
+	required bytes txnid=4;
 	required int64 nonce=5;
 }
 
 message ReadQueueResponseMessage {
 	repeated VersionedCellMessage queue_entries=1;
 	required ConsumerID consumer_id=2;
-	required int64 txnid=3;
+	required bytes txnid=3;
 	required int64 nonce=4;
 }
 
@@ -209,7 +209,7 @@ message ConsumeQueueMessage {
 	required CellAddressMessage queue_address=1;
 	required ConsumerID consumer_id=2;
 	required int64 new_consume_head=3;
-	required int64 txnid=4;
+	required bytes txnid=4;
 	required int64 nonce=5;
 }
 
@@ -218,7 +218,7 @@ message ConsumeQueueResponseMessage {
 	required ConsumerID consumer_id=2;
 	required int32 status=3; // 0 - ACK, 1 - NACK
 	required int64 new_consume_head=4;
-	required int64 txnid=5;
+	required bytes txnid=5;
 	required int64 nonce=6;
 }
 

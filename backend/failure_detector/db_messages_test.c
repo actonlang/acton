@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <uuid/uuid.h>
 
 #define MAX_MSG_SIZE_VC 1024
 
@@ -114,6 +115,8 @@ int main (int argc, const char * argv[])
 
 	long key = 1, end_key = 3;
 	long column = 1, end_column = 5;
+	uuid_t txnid;
+	uuid_generate(txnid);
 
 //	cell * cell = init_cell(0, &key, 1, &column, 1, vc);
 	int no_cells = 2;
@@ -124,7 +127,7 @@ int main (int argc, const char * argv[])
 
 	// Generate dummy Write Query:
 
-	write_query * wquery = init_write_query(cll, 2, 3), * wquery_r = NULL;
+	write_query * wquery = init_write_query(cll, &txnid, 3), * wquery_r = NULL;
 	serialize_write_query(wquery, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_write_query(buf_r, len_r, &wquery_r);
@@ -138,7 +141,7 @@ int main (int argc, const char * argv[])
 
 	// Generate dummy Read Query:
 
-	read_query * rquery = init_read_query(cell_address, 2, 3), * rquery_r = NULL;
+	read_query * rquery = init_read_query(cell_address, &txnid, 3), * rquery_r = NULL;
 	serialize_read_query(rquery, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_read_query(buf_r, len_r, &rquery_r);
@@ -152,7 +155,7 @@ int main (int argc, const char * argv[])
 
 	// Ack Message:
 
-	ack_message * am = init_ack_message(cell_address, 1, 2, 3), * am_r = NULL;
+	ack_message * am = init_ack_message(cell_address, 1, &txnid, 3), * am_r = NULL;
 	serialize_ack_message(am, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_ack_message(buf_r, len_r, &am_r);
@@ -166,7 +169,7 @@ int main (int argc, const char * argv[])
 
 	// Range read query:
 
-	range_read_query * rrq = init_range_read_query(cell_address, end_cell_address, 2, 3), * rrq_r = NULL;
+	range_read_query * rrq = init_range_read_query(cell_address, end_cell_address, &txnid, 3), * rrq_r = NULL;
 	serialize_range_read_query(rrq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_range_read_query(buf_r, len_r, &rrq_r);
@@ -180,7 +183,7 @@ int main (int argc, const char * argv[])
 
 	// Range read response:
 
-	range_read_response_message * rrm = init_range_read_response_message(cll, no_cells, 2, 3), * rrm_r = NULL;
+	range_read_response_message * rrm = init_range_read_response_message(cll, no_cells, &txnid, 3), * rrm_r = NULL;
 	serialize_range_read_response_message(rrm, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_range_read_response_message(buf_r, len_r, &rrm_r);
@@ -194,7 +197,7 @@ int main (int argc, const char * argv[])
 
 	// Create queue message:
 
-	queue_query_message * cq = init_create_queue_message(cell_address, 2, 3), * cq_r = NULL;
+	queue_query_message * cq = init_create_queue_message(cell_address, &txnid, 3), * cq_r = NULL;
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -208,7 +211,7 @@ int main (int argc, const char * argv[])
 
 	// Delete queue message:
 
-	cq = init_delete_queue_message(cell_address, 2, 3);
+	cq = init_delete_queue_message(cell_address, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -222,7 +225,7 @@ int main (int argc, const char * argv[])
 
 	// Subscribe queue message:
 
-	cq = init_subscribe_queue_message(cell_address, 1, 2, 3, 2, 3);
+	cq = init_subscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -236,7 +239,7 @@ int main (int argc, const char * argv[])
 
 	// Unsubscribe queue message:
 
-	cq = init_unsubscribe_queue_message(cell_address, 1, 2, 3, 2, 3);
+	cq = init_unsubscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -250,7 +253,7 @@ int main (int argc, const char * argv[])
 
 	// Enqueue message:
 
-	cq = init_enqueue_message(cell_address, cll, no_cells, 2, 3);
+	cq = init_enqueue_message(cell_address, cll, no_cells, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -264,7 +267,7 @@ int main (int argc, const char * argv[])
 
 	// Read queue message:
 
-	cq = init_read_queue_message(cell_address, 1, 2, 3, 2, 2, 3);
+	cq = init_read_queue_message(cell_address, 1, 2, 3, 2, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -278,7 +281,7 @@ int main (int argc, const char * argv[])
 
 	// Consume queue message:
 
-	cq = init_consume_queue_message(cell_address, 1, 2, 3, 1, 2, 3);
+	cq = init_consume_queue_message(cell_address, 1, 2, 3, 1, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -292,7 +295,7 @@ int main (int argc, const char * argv[])
 
 	// Read queue response message:
 
-	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, 2, 3);
+	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, &txnid, 3);
 	serialize_queue_message(cq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_queue_message(buf_r, len_r, &cq_r);
@@ -311,7 +314,7 @@ int main (int argc, const char * argv[])
 									cll, 2,
 									cll, 2,
 									cll, 2,
-									2, 3), * tm_r = NULL;
+									&txnid, 3), * tm_r = NULL;
 	serialize_txn_message(tm, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_txn_message(buf_r, len_r, &tm_r);

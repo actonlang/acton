@@ -1694,7 +1694,7 @@ static const ProtobufCFieldDescriptor write_query_message__field_descriptors[4] 
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(WriteQueryMessage, txnid),
     NULL,
@@ -1771,7 +1771,7 @@ static const ProtobufCFieldDescriptor read_query_message__field_descriptors[4] =
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(ReadQueryMessage, txnid),
     NULL,
@@ -1860,7 +1860,7 @@ static const ProtobufCFieldDescriptor ack_message__field_descriptors[5] =
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(AckMessage, txnid),
     NULL,
@@ -1950,7 +1950,7 @@ static const ProtobufCFieldDescriptor range_read_query_message__field_descriptor
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(RangeReadQueryMessage, txnid),
     NULL,
@@ -2028,7 +2028,7 @@ static const ProtobufCFieldDescriptor range_read_response_message__field_descrip
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(RangeReadResponseMessage, txnid),
     NULL,
@@ -2153,7 +2153,7 @@ static const ProtobufCFieldDescriptor txn_message__field_descriptors[8] =
     "txnid",
     6,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(TxnMessage, txnid),
     NULL,
@@ -2318,7 +2318,7 @@ static const ProtobufCFieldDescriptor queue_query_message__field_descriptors[11]
     "txnid",
     9,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(QueueQueryMessage, txnid),
     NULL,
@@ -2466,7 +2466,7 @@ static const ProtobufCFieldDescriptor create_queue_message__field_descriptors[3]
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(CreateQueueMessage, txnid),
     NULL,
@@ -2530,7 +2530,7 @@ static const ProtobufCFieldDescriptor delete_queue_message__field_descriptors[3]
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(DeleteQueueMessage, txnid),
     NULL,
@@ -2606,7 +2606,7 @@ static const ProtobufCFieldDescriptor subscribe_queue_message__field_descriptors
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(SubscribeQueueMessage, txnid),
     NULL,
@@ -2683,7 +2683,7 @@ static const ProtobufCFieldDescriptor unsubscribe_queue_message__field_descripto
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(UnsubscribeQueueMessage, txnid),
     NULL,
@@ -2748,7 +2748,7 @@ static const ProtobufCFieldDescriptor enqueue_message__field_descriptors[3] =
     "txnid",
     2,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(EnqueueMessage, txnid),
     NULL,
@@ -2824,7 +2824,7 @@ static const ProtobufCFieldDescriptor enqueue_response_message__field_descriptor
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(EnqueueResponseMessage, txnid),
     NULL,
@@ -2913,7 +2913,7 @@ static const ProtobufCFieldDescriptor read_queue_message__field_descriptors[5] =
     "txnid",
     4,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(ReadQueueMessage, txnid),
     NULL,
@@ -2991,7 +2991,7 @@ static const ProtobufCFieldDescriptor read_queue_response_message__field_descrip
     "txnid",
     3,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(ReadQueueResponseMessage, txnid),
     NULL,
@@ -3080,7 +3080,7 @@ static const ProtobufCFieldDescriptor consume_queue_message__field_descriptors[5
     "txnid",
     4,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(ConsumeQueueMessage, txnid),
     NULL,
@@ -3182,7 +3182,7 @@ static const ProtobufCFieldDescriptor consume_queue_response_message__field_desc
     "txnid",
     5,
     PROTOBUF_C_LABEL_REQUIRED,
-    PROTOBUF_C_TYPE_INT64,
+    PROTOBUF_C_TYPE_BYTES,
     0,   /* quantifier_offset */
     offsetof(ConsumeQueueResponseMessage, txnid),
     NULL,

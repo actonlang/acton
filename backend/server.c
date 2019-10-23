@@ -84,7 +84,7 @@ int get_ack_packet(int status, write_query * q,
 	ack_message * ack = init_ack_message(get_cell_address(q->cell), status, q->txnid, q->nonce);
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[512];
+	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
 	printf("Sending ack message: %s\n", print_buff);
 #endif
@@ -131,7 +131,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	read_response_message * m = init_write_query(c, q->txnid, q->nonce);
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[512];
+	char print_buff[1024];
 	to_string_write_query(m, (char *) print_buff);
 	printf("Sending read response message (write query): %s\n", print_buff);
 #endif

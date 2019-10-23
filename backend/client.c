@@ -17,8 +17,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <uuid/uuid.h>
 
-#define BUFSIZE 1024
+#define BUFSIZE 4096
 
 long requests=0;
 char out_buf[BUFSIZE];
@@ -72,12 +73,12 @@ db_schema_t * create_schema() {
 	return db_schema;
 }
 
-int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, long txnid, long nonce, int sockfd)
+int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
 	write_query * wq = build_write_query(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	void * tmp_out_buf = NULL;
-	char print_buff[100];
+	char print_buff[1024];
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
 
 	to_string_write_query(wq, (char *) print_buff);
@@ -109,11 +110,11 @@ int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schem
 	return success;
 }
 
-read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, long txnid, long nonce, int sockfd)
+read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
-	char print_buff[100];
+	char print_buff[1024];
 
 	read_query * q = build_read_query(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, nonce);
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
@@ -142,20 +143,22 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 {
+	uuid_t txnid;
+	uuid_generate(txnid);
+	WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
+
 	for(long aid=0;aid<no_actors;aid++)
 	{
 		for(long cid=0;cid<no_collections;cid++)
 		{
 			for(long iid=0;iid<no_items;iid++)
 			{
-				WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
-
 				column_values[0] = (WORD) aid;
 				column_values[1] = (WORD) cid;
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_remote_insert(column_values, no_cols, (WORD) 0, schema, 0, requests++, sockfd) != 0)
+				if(db_remote_insert(column_values, no_cols, (WORD) 0, schema, &txnid, requests++, sockfd) != 0)
 					return -1;
 			}
 		}
@@ -166,8 +169,11 @@ int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 {
-	char print_buff[1000];
+	char print_buff[1024];
 	WORD * cks = (WORD *) malloc(2 * sizeof(WORD));
+
+	uuid_t txnid;
+	uuid_generate(txnid);
 
 	for(long aid=0;aid<no_actors;aid++)
 	{
@@ -178,7 +184,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fast
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				read_response_message * response = db_remote_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, schema, 0, requests++, sockfd);
+				read_response_message * response = db_remote_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, sockfd);
 				to_string_write_query(response, (char *) print_buff);
 				printf("Got back response: %s\n", print_buff);
 
