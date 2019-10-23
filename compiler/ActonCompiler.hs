@@ -167,9 +167,9 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
 
 runRestPasses args paths src env tree = (do
                           let outbase = outBase paths
-                          env' <- Acton.Env.mkEnv2 (projSysRoot paths,syspath args) env tree
+                          env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env tree
                           
-                          (sigs,tyinfo) <- Acton.Types.reconstruct2 outbase env' tree
+                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' tree
                           iff (types args) $ dump "types" (Pretty.vprint tyinfo)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
 {-    

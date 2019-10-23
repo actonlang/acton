@@ -113,8 +113,12 @@ instance Relabel Exception where
 instance Relabel Name where
   relabel (Name _ s) = Name <$> newLoc <*> return s
 
+instance Relabel ModName where
+  relabel (ModName ns) = ModName <$> relabel ns
+
 instance Relabel QName where
-  relabel (QName nm nms) = QName <$> relabel nm <*> relabel nms
+  relabel (QName m n) = QName <$> relabel m <*> relabel n
+  relabel (NoQual n) = NoQual <$> relabel n
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn

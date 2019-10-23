@@ -153,12 +153,12 @@ testSchemaSubst = do
     putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
     putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
     putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
-  where t   = TSchema NoLoc [TBind (TV (Name NoLoc "A")) [TC (QName (Name NoLoc "Eq") []) []]] 
-                            (TCon NoLoc (TC (QName (Name NoLoc "apa") []) [TVar NoLoc (TV (Name NoLoc "A")), 
-                                                                           TVar NoLoc (TV (Name NoLoc "B"))]))
-        s1  = [(TV (Name NoLoc "B"), TSelf NoLoc)]
-        s2  = [(TV (Name NoLoc "A"), TSelf NoLoc)]
-        s3  = [(TV (Name NoLoc "B"), TVar NoLoc (TV (Name NoLoc "A")))]
+  where t   = TSchema NoLoc [TBind (TV (name "A")) [TC (noQual "Eq") []]] 
+                            (tCon (TC (noQual "apa") [tVar (TV (name "A")), 
+                                                      tVar (TV (name "B"))]))
+        s1  = [(TV (name "B"), tSelf)]
+        s2  = [(TV (name "A"), tSelf)]
+        s3  = [(TV (name "B"), tVar (TV (name "A")))]
 
 instance Subst TVar where
     msubst v                        = do t <- msubst (TVar NoLoc v)
@@ -528,12 +528,12 @@ closeFX t                           = t
 
 -- Error handling ------------------------------------------------------------------------
 
-data CheckerError                       = FileNotFound QName
+data CheckerError                       = FileNotFound ModName
                                         | NameNotFound Name
                                         | NameReserved Name
                                         | IllegalImport SrcLoc
                                         | DuplicateImport Name
-                                        | NoItem QName Name
+                                        | NoItem ModName Name
                                         | OtherError SrcLoc String
                                         deriving (Show)
 

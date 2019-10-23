@@ -5,6 +5,7 @@ import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
+import Prelude hiding ((<>))
 
 
 
@@ -139,8 +140,12 @@ instance Pretty Name where
       | otherwise                   = quotes (text str)
     pretty n                        = text (show n)
 
+instance Pretty ModName where
+    pretty (ModName ns)             = dotCat pretty ns
+
 instance Pretty QName where
-    pretty (QName n ns)             = dotCat pretty (n:ns)
+    pretty (QName m n)              = pretty m <> dot <> pretty n
+    pretty (NoQual n)               = pretty n
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n

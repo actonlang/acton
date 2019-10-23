@@ -18,17 +18,19 @@ import Acton.Names
 import Acton.TypeM
 import Utils
 import Pretty
-import InterfaceFiles
+--import InterfaceFiles
+import Prelude hiding ((<>))
 
 
-mkEnv2                      :: (FilePath,FilePath) -> Env -> Module -> IO Env
-mkEnv2 paths env modul      = getImps paths env imps
+
+mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env
+mkEnv paths env modul       = getImps paths env imps
   where Module _ imps _     = modul
 
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: [(Name, Maybe NameInfo)], modules :: [(QName,TEnv)] }
+data Env                    = Env { names :: [(Name, Maybe NameInfo)], modules :: [(ModName,TEnv)], defaultmod :: ModName }
 
 data NameInfo               = NVar    TSchema Decoration
                             | NSVar   Type
@@ -38,6 +40,7 @@ data NameInfo               = NVar    TSchema Decoration
                             | NTVar   [TCon]
                             | NPAttr  QName         -- protocol attribute (global), arg points to owning protocol
                             | NAlias  QName
+                            | NMAlias ModName
                             | NModule TEnv
                             deriving (Eq,Show,Read,Generic)
 
@@ -67,6 +70,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NTVar us)        = pretty n <> parens (commaList us)
     pretty (n, NPAttr qn)       = dot <> pretty n <+> equals <+> pretty qn <> dot <> pretty n
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
+    pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
 
 instance Subst Env where
@@ -83,6 +87,7 @@ instance Subst NameInfo where
     msubst (NTVar us)           = NTVar <$> msubst us
     msubst (NPAttr qn)          = NPAttr <$> return qn
     msubst (NAlias qn)          = NAlias <$> return qn
+    msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
 
     tyfree (NVar t dec)         = tyfree t
@@ -93,6 +98,7 @@ instance Subst NameInfo where
     tyfree (NTVar us)           = tyfree us
     tyfree (NPAttr qn)          = []
     tyfree (NAlias qn)          = []
+    tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but te has no free variables (top-level)
 
 instance Subst SrcInfoTag where
@@ -115,52 +121,65 @@ polytype                        = not . monotype
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
-    unalias                     :: Env -> a -> a
-    unalias env                 = id
+    unalias                         :: Env -> a -> a
+    unalias env                     = id
 
 instance (Unalias a) => Unalias [a] where
-    unalias env                 = map (unalias env)
+    unalias env                     = map (unalias env)
 
 instance (Unalias a) => Unalias (Maybe a) where
-    unalias env                 = fmap (unalias env)
+    unalias env                     = fmap (unalias env)
+
+instance Unalias ModName where
+    unalias env (ModName ns)        = norm [ (n,i) | (n,Just i) <- names env ] [] ns
+      where
+        norm te pre []              = ModName (reverse pre)
+        norm te pre (n:ns)          = case lookup n te of
+                                        Just (NModule te') -> norm te' (n:pre) ns
+                                        Just (NMAlias m) -> norm (findmod m env) [] ns
+                                        _ -> err1 (ModName (reverse (n:pre))) "Not a module prefix:"
 
 instance Unalias QName where
-    unalias env qn              = case findqname qn env of
-                                    NAlias qn' -> unalias env qn'
-                                    _          -> qn        
-
+    unalias env (QName m n)         = case lookup m' (modules env) of
+                                         Just te -> case lookup n te of
+                                                      Just (NAlias qn) -> qn
+                                                      Just _ -> QName m' n
+                                                      _ -> noItem m n
+      where m'                      = unalias env m
+    unalias env (NoQual n)          = QName (defaultmod env) n
+                                    
 instance Unalias TSchema where
-    unalias env (TSchema l q t) = TSchema l (unalias env q) (unalias env t)
+    unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
 
 instance Unalias TCon where
-    unalias env (TC qn ts)      = TC (unalias env qn) (unalias env ts)
+    unalias env (TC qn ts)          = TC (unalias env qn) (unalias env ts)
 
 instance Unalias TBind where
-    unalias env (TBind tv cs)   = TBind tv (unalias env cs)
+    unalias env (TBind tv cs)       = TBind tv (unalias env cs)
 
 instance Unalias Type where
-    unalias env (TCon l c)      = TCon l (unalias env c)
-    unalias env (TAt l c)       = TAt l (unalias env c)
-    unalias env (TFun l e p r t) = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
-    unalias env (TTuple l p)    = TTuple l (unalias env p)
-    unalias env (TRecord l r)   = TTuple l (unalias env r)
-    unalias env (TOpt l t)      = TOpt l (unalias env t)
-    unalias env (TRow l n t r)  = TRow l n (unalias env t) (unalias env r)
-    unalias env t               = t
+    unalias env (TCon l c)          = TCon l (unalias env c)
+    unalias env (TAt l c)           = TAt l (unalias env c)
+    unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
+    unalias env (TTuple l p)        = TTuple l (unalias env p)
+    unalias env (TRecord l r)       = TTuple l (unalias env r)
+    unalias env (TOpt l t)          = TOpt l (unalias env t)
+    unalias env (TRow l n t r)      = TRow l n (unalias env t) (unalias env r)
+    unalias env t                   = t
 
 instance Unalias NameInfo where
-    unalias env (NVar t d)      = NVar (unalias env t) d
-    unalias env (NSVar t)       = NSVar (unalias env t)
-    unalias env (NClass q us te) = NClass (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NProto q us te) = NProto (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NExt q us te)  = NExt (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NTVar us)      = NTVar (unalias env us)
-    unalias env (NPAttr qn)     = NPAttr (unalias env qn)
-    unalias env (NAlias qn)     = NAlias (unalias env qn)
-    unalias env (NModule te)    = NModule (unalias env te)
+    unalias env (NVar t d)          = NVar (unalias env t) d
+    unalias env (NSVar t)           = NSVar (unalias env t)
+    unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NExt q us te)      = NExt (unalias env q) (unalias env us) (unalias env te)
+    unalias env (NTVar us)          = NTVar (unalias env us)
+    unalias env (NPAttr qn)         = NPAttr (unalias env qn)
+    unalias env (NAlias qn)         = NAlias (unalias env qn)
+    unalias env (NModule te)        = NModule (unalias env te)
 
 instance Unalias (Name,NameInfo) where
-    unalias env (n,i)           = (n, unalias env i)
+    unalias env (n,i)               = (n, unalias env i)
     
 -------------------------------------------------------------------------------------------------------------------
 
@@ -181,9 +200,9 @@ envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
 prune xs                    = filter ((`notElem` xs) . fst)
 
 initEnv                     :: Env
-initEnv                     = define autoImp $ definemod qnBuiltin $ addmod qnBuiltin envBuiltin env0
-  where autoImp             = importAll qnBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [] }
+initEnv                     = define autoImp $ definemod mBuiltin $ addmod mBuiltin envBuiltin env0
+  where autoImp             = importAll mBuiltin envBuiltin
+        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin }
 
 statescope                  :: Env -> [Name]
 statescope env              = [ z | (z, Just (NSVar _)) <- names env ]
@@ -194,11 +213,11 @@ block xs env                = env{ names = [ (x, Nothing) | x <- nub xs ] ++ nam
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ prune (dom te) (names env) }
 
-definemod                   :: QName -> Env -> Env
-definemod (QName n ns) env  = define [(n, defmod ns $ te1)] env
-  where te1                 = case lookup n (names env) of Just (Just (NModule te1)) -> te1; _ -> []
-        defmod [] te        = NModule $ fromJust $ findmod (QName n ns) env
-        defmod (n:ns) te    = NModule $ (n, defmod ns $ te2) : prune [n] te
+definemod                   :: ModName -> Env -> Env
+definemod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
+  where te1                 = case lookup (head ns) (names env) of Just (Just (NModule te1)) -> te1; _ -> []
+        defmod [] te        = NModule $ findmod (ModName ns) env
+        defmod (n:ns) te    = NModule $ (n, defmod ns te2) : prune [n] te
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 blocked                     :: Env -> Name -> Bool
@@ -206,28 +225,26 @@ blocked env n               = lookup n (names env) == Just Nothing
 
 findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
+                                Just (Just (NAlias qn)) -> findqname qn env
                                 Just (Just i) -> i
                                 Just Nothing  -> nameReserved n
                                 Nothing       -> nameNotFound n
 
 findqname                   :: QName -> Env -> NameInfo
-findqname qn env            = case findname (qhead qn) env of
-                                NAlias qn' -> sel (qtail qn) (findqname qn' env)
-                                ni -> sel (qtail qn) ni
-  where 
-    sel [] ni               = ni
-    sel (n:ns) (NModule te) = case lookup n te of
-                                Just ni -> sel ns ni
-                                _       -> noItem qn n
-    sel (n:ns) NClass{}     = notYet (loc qn) (text "Qualified lookup inside class")
-    sel (n:ns) NProto{}     = notYet (loc qn) (text "Qualified lookup inside protocol")
-    sel (n:ns) _            = err1 n "Not a module name:"
+findqname (QName m n) env   = case lookup n (findmod (unalias env m) env) of
+                                Just (NAlias qn) -> findqname qn env
+                                Just i -> i
+                                _ -> noItem m n
+findqname (NoQual n) env    = findname n env
 
-findmod                     :: QName -> Env -> Maybe TEnv
-findmod qn env              = lookup qn (modules env)
 
-addmod                      :: QName -> TEnv -> Env -> Env
-addmod qn te env            = env{ modules = (qn,te) : modules env }
+findmod                     :: ModName -> Env -> TEnv
+findmod m env               = case lookup m (modules env) of
+                                Just te -> te
+
+addmod                      :: ModName -> TEnv -> Env -> Env
+addmod m te env             = env{ modules = (m,te) : modules env }
+
 
 dropnames                   :: Env -> Env
 dropnames env               = env{ names = names initEnv }
@@ -247,53 +264,52 @@ getImps ps env (i:is)           = do env' <- impModule ps env i
 impModule                       :: (FilePath,FilePath) -> Env -> Import -> IO Env
 impModule ps env (Import _ ms)  = imp env ms
   where imp env []              = return env
-        imp env (ModuleItem qn as : is)
-                                = do (env1,te) <- doImp ps env qn
-                                     let env2 = maybe (definemod qn env1) (\n->define [(n, NAlias qn)] env1) as
+        imp env (ModuleItem m as : is)
+                                = do (env1,te) <- doImp ps env m
+                                     let env2 = maybe (definemod m env1) (\n->define [(n, NMAlias m)] env1) as
                                      imp env2 is
-impModule ps env (FromImport _ (ModRef (0,Just qn)) items)
-                                = do (env1,te) <- doImp ps env qn
-                                     return $ define (importSome items qn te) env1
-impModule ps env (FromImportAll _ (ModRef (0,Just qn)))
-                                = do (env1,te) <- doImp ps env qn
-                                     return $ define (importAll qn te) env1
+impModule ps env (FromImport _ (ModRef (0,Just m)) items)
+                                = do (env1,te) <- doImp ps env m
+                                     return $ define (importSome items m te) env1
+impModule ps env (FromImportAll _ (ModRef (0,Just m)))
+                                = do (env1,te) <- doImp ps env m
+                                     return $ define (importAll m te) env1
 impModule _ _ i                 = illegalImport (loc i)
 
 
-doImp (p,sysp) env qn           = case findmod qn env of
+doImp (p,sysp) env m            = case lookup m (modules env) of
                                     Just te -> return (env, te)
                                     Nothing -> do
                                         found <- doesFileExist fpath
                                         if found
-                                         then do te <- InterfaceFiles.readFile fpath
-                                                 return (addmod qn te env, te)
+                                         then do te <- return [] -- InterfaceFiles.readFile fpath
+                                                 return (addmod m te env, te)
                                          else do found <- doesFileExist fpath2
-                                                 unless found (fileNotFound qn)
-                                                 te <- InterfaceFiles.readFile fpath
-                                                 return (addmod qn te env, te)
-  where fpath                   = joinPath (p : qpath qn) ++ ".ty"
-        fpath2                  = joinPath (sysp : qpath qn) ++ ".ty"
-        qpath (QName n ns)      = nstr n : map nstr ns
+                                                 unless found (fileNotFound m)
+                                                 te <- return [] -- InterfaceFiles.readFile fpath
+                                                 return (addmod m te env, te)
+  where fpath                   = joinPath (p : mpath m) ++ ".ty"
+        fpath2                  = joinPath (sysp : mpath m) ++ ".ty"
+        mpath (ModName ns)      = map nstr ns
 
 
-importSome                  :: [ImportItem] -> QName -> TEnv -> TEnv
-importSome items qn te      = map pick items
+importSome                  :: [ImportItem] -> ModName -> TEnv -> TEnv
+importSome items m te       = map pick items
   where 
-    te1                     = importAll qn te
+    te1                     = importAll m te
     pick (ImportItem n mbn) = case lookup n te1 of
                                     Just i  -> (maybe n id mbn, i) 
-                                    Nothing -> noItem qn n
+                                    Nothing -> noItem m n
 
-importAll                   :: QName -> TEnv -> TEnv
-importAll (QName m ms) te   = mapMaybe imp te
+importAll                   :: ModName -> TEnv -> TEnv
+importAll m te              = mapMaybe imp te
   where 
-    imp (n, NProto _ _ _)   = Just (n, NAlias (qname n))
-    imp (n, NClass _ _ _)   = Just (n, NAlias (qname n))
+    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
-    imp (n, NAlias _)       = Just (n, NAlias (qname n))
+    imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t dec)     = Just (n, NVar t dec)
     imp _                   = Nothing                               -- cannot happen
-    qname n                 = QName m (ms++[n])
 
 
 -- Old builtins --------------------------------------------------------------------------
