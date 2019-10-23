@@ -343,29 +343,37 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []
-    infEnv env (Except l x)             = do _ <- infer env (Var (nloc x) x)               -- TODO: Constraint on exception type...
-                                             return []
-    infEnv env (ExceptAs l x n)         = do t:r:fx:_ <- newOVars 3
-                                             t1 <- infer env (Var (nloc x) x)              -- TODO: Constraint on exception type...
-                                             o_constrain [QEqu l 15 t1 (OFun fx r t)]   -- eq of excpt-value and alias
-                                             return [(n,t)]
+    infEnv env (Except l x)             = case findqname x env of
+                                            NClass q us _
+                                              | cException `elem` us -> return []
+                                            _ -> err1 x "Not a class deriving from Exception"
+    infEnv env (ExceptAs l x n)         = case findqname x env of
+                                            NClass q us _
+                                              | cException `elem` us -> do
+                                                 ts <- newTVars (length q)
+                                                 return [(n, nVar (tCon (TC x ts)))] 
+                                            _ -> err1 x "Not a class deriving from Exception"
 
 
 inferBool env e                         = do t <- infer env e
-                                             let cs0 = []                          -- Will become QBool o_constraint....
+                                             constrain [Impl t cTruth]
                                              return ()
 
-instance Infer Index where
-    infer env (Index l e)               = infer env e
-    infer env (Slice l e1 e2 e3)        = do ts <- mapM (infer env) es
-                                             o_constrain [ QEqu (eloc e) 30 t OInt | (t,e) <- ts `zip` es ]
-                                             return OInt                          -- TODO: think this through...
-      where es                          = concat $ map maybeToList (e1:e1:maybeToList e3)
+inferSlice env (Sliz l e1 e2 e3)        = do ts <- mapM (infer env) es
+                                             constrain [ Equ t tInt | (t,e) <- ts `zip` es ]
+                                             return ()
+  where es                              = concat $ map maybeToList (e1:e1:maybeToList e3)
 
 instance Infer Expr where
-    infer env (Var l n)                 = do o_dump [GEN l t0]
-                                             o_instantiate l $ o_openFX t0
-      where t0                          = o_findVar n env
+    infer env (Var l n)                 = case findname n env of
+                                            NVar sc dec -> do 
+                                                dump [GEN l sc]
+                                                instantiate env $ openFX sc
+                                            NSVar t ->
+                                                return t
+                                            NClass q _ _ -> do
+                                                ts <- newTVars (length q)
+                                                return (tAt (TC (noQual n) ts))
     infer env (Int _ val s)             = return OInt
     infer env (Float _ val s)           = return OFloat
     infer env e@Imaginary{}             = notYetExpr e
@@ -389,13 +397,13 @@ instance Infer Expr where
                                              o_effect l fx
                                              o_constrain [QEqu l 37 t t0]
                                              return t0
-    infer env (Ix l e [i@Index{}])      = do t <- infer env e
+    infer env (Index l e [i])           = do t <- infer env e
                                              ti <- infer env i
                                              t0 <- newOVar
                                              o_constrain [QIx l 38 t ti t0]                               -- indexability of e
                                              return t0
-    infer env (Ix l e [s@Slice{}])      = do t <- infer env e
-                                             ti <- infer env s
+    infer env (Slice l e [i])           = do t <- infer env e
+                                             ti <- infer env i
                                              t0 <- newOVar
                                              o_constrain [QIx l 39 t ti t0]                               -- subscriptability of e
                                              return t
@@ -601,7 +609,12 @@ instance InfEnvT Pattern where
       | monotype t                      = return ([], t)
       | otherwise                       = err1 n "Illegal reassignment:"
       where t                           = o_findVar n env
-    infEnvT env (PIx l e [i@Index{}])   = do t <- infer env e
+    infEnvT env (PIndex l e [i])        = do t <- infer env e
+                                             ti <- infer env i
+                                             t0 <- newOVar
+                                             o_constrain [QIx l 1 t ti t0]
+                                             return ([], t0)                                    -- indexability of e
+    infEnvT env (PSlice l e [i])        = do t <- infer env e
                                              ti <- infer env i
                                              t0 <- newOVar
                                              o_constrain [QIx l 1 t ti t0]
