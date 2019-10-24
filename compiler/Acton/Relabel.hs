@@ -38,7 +38,6 @@ instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
     relabel (Assign _ ts e) = Assign <$> newLoc <*> relabel ts <*> relabel e
     relabel (AugAssign _ p op e) = AugAssign <$> newLoc <*> relabel p <*> relabel op <*> relabel e
-    relabel (TypeSig _ ns t) = TypeSig <$> newLoc <*> relabel ns <*> relabel t
     relabel (Assert _ es) = Assert <$> newLoc <*> relabel es
     relabel (Pass _) = Pass <$> newLoc
     relabel (Delete _ p) = Delete <$> newLoc <*> relabel p
@@ -61,7 +60,7 @@ instance Relabel Decl where
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
+    relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm
@@ -75,8 +74,9 @@ instance Relabel Expr where
     relabel (Strings _ ss) = Strings <$> newLoc <*> return ss
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
     relabel (UStrings _ ss) = UStrings <$> newLoc <*> return ss
-    relabel (Call _ e es) = Call <$> newLoc <*> relabel e <*> relabel es
-    relabel (Ix _ e is) = Ix <$> newLoc <*> relabel e <*> relabel is
+    relabel (Call _ e ps ks) = Call <$> newLoc <*> relabel e <*> relabel ps <*> relabel ks
+    relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
+    relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> relabel op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
@@ -87,22 +87,23 @@ instance Relabel Expr where
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
     relabel (Tuple _ es) = Tuple <$> newLoc <*> relabel es
-    relabel (Generator _ e c) = Generator <$> newLoc <*> relabel e <*> relabel c
+    relabel (TupleComp _ e c) = TupleComp <$> newLoc <*> relabel e <*> relabel c
+    relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
+    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (List _ es) = List <$> newLoc <*> relabel es
     relabel (ListComp _ e c) = ListComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Dict _ as) = Dict <$> newLoc <*> relabel as
     relabel (DictComp _ a c) = DictComp <$> newLoc <*> relabel a <*> relabel c
     relabel (Set _ es) = Set <$> newLoc <*> relabel es
     relabel (SetComp _ e c) = SetComp <$> newLoc <*> relabel e <*> relabel c
-    relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
-    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (Paren _ e) = Paren <$> newLoc <*> relabel e
 
 instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
     relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
     relabel (PList _ ps) = PList <$> newLoc <*> relabel ps
-    relabel (PIx _ e ix) = PIx <$> newLoc <*> relabel e <*> relabel ix
+    relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
+    relabel (PSlice _ e sl) = PSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (PDot _ e n) = PDot <$> newLoc <*> relabel e <*> relabel n
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
 
@@ -112,8 +113,12 @@ instance Relabel Exception where
 instance Relabel Name where
   relabel (Name _ s) = Name <$> newLoc <*> return s
 
+instance Relabel ModName where
+  relabel (ModName ns) = ModName <$> relabel ns
+
 instance Relabel QName where
-  relabel (QName nm nms) = QName <$> relabel nm <*> relabel nms
+  relabel (QName m n) = QName <$> relabel m <*> relabel n
+  relabel (NoQual n) = NoQual <$> relabel n
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn
@@ -135,8 +140,8 @@ instance Relabel Handler where
 
 instance Relabel Except where
     relabel (ExceptAll _) = ExceptAll <$> newLoc
-    relabel (Except _ e) = Except <$> newLoc <*> relabel e
-    relabel (ExceptAs _ e n) = ExceptAs <$> newLoc <*> relabel e <*> relabel n
+    relabel (Except _ x) = Except <$> newLoc <*> relabel x
+    relabel (ExceptAs _ x n) = ExceptAs <$> newLoc <*> relabel x <*> relabel n
 
 instance Relabel Param where
     relabel (Param nm mba mbe) = Param <$> relabel nm <*> relabel mba <*> relabel mbe
@@ -148,12 +153,16 @@ instance Relabel StarPar where
     relabel (StarPar _ n mbt) = StarPar <$> newLoc <*> relabel n <*> relabel mbt
     relabel NoStar = return NoStar
     
-instance Relabel Arg where
-    relabel (Arg e) = Arg <$> relabel e
-    relabel (KwArg nm e) = KwArg <$> relabel nm <*> relabel e
-    relabel (StarArg e) = StarArg <$> relabel e
-    relabel (StarStarArg e) = StarStarArg <$> relabel e
-
+instance Relabel PosArg where
+    relabel (PosArg e p) = PosArg <$> relabel e <*> relabel p
+    relabel (PosStar e) = PosStar <$> relabel e
+    relabel PosNil = return PosNil
+    
+instance Relabel KwdArg where
+    relabel (KwdArg n e k) = KwdArg n <$> relabel e <*> relabel k
+    relabel (KwdStar e) = KwdStar <$> relabel e
+    relabel KwdNil = return KwdNil
+    
 instance Relabel OpArg where
     relabel (OpArg op e) = OpArg <$> relabel op <*> relabel e
 
@@ -173,8 +182,8 @@ instance Relabel Assoc where
   relabel (Assoc e1 e2) = Assoc <$> relabel e1 <*> relabel e2
   relabel (StarStarAssoc e) = StarStarAssoc <$> relabel e
   
-instance Relabel Index where
-  relabel (Index _ e) = Index <$> newLoc <*> relabel e
+instance Relabel Slice where
+  relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
 instance Relabel Field where
   relabel (Field nm e) = Field <$> relabel nm <*> relabel e
@@ -195,16 +204,6 @@ instance Relabel TCon where
 instance Relabel TBind where
     relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
 
-instance Relabel PosRow where
-    relabel (PosRow t p) = PosRow <$> relabel t <*> relabel p
-    relabel (PosVar v) = PosVar <$> relabel v
-    relabel PosNil = return PosNil
-
-instance Relabel KwdRow where
-    relabel (KwdRow n t k) = KwdRow <$> relabel n <*> relabel t <*> relabel k
-    relabel (KwdVar v) = KwdVar <$> relabel v
-    relabel KwdNil = return KwdNil
-
 instance Relabel Type where
     relabel (TSelf _) = TSelf <$> newLoc
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
@@ -216,3 +215,7 @@ instance Relabel Type where
     relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c
     relabel (TAt  _ c) = TAt <$> newLoc <*> relabel c
     relabel (TNone _) = TNone <$> newLoc
+    relabel (TWild _) = TWild <$> newLoc
+    relabel (TNil _) = TNil <$> newLoc
+    relabel (TRow _ n t r) = TRow <$> newLoc <*> relabel n <*> relabel t <*> relabel r
+

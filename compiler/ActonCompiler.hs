@@ -83,7 +83,7 @@ treatOneFile args
                                         if make args
                                          then do let task = ActonTask qn src tree
                                                  chaseImportsAndCompile args paths task
-                                         else do runRestPasses args paths src [] tree
+                                         else do runRestPasses args paths src Acton.Env.initEnv tree
                                                  return ())
                                           `catch` handle Acton.Parser.parserError "" paths
 {-
@@ -105,9 +105,9 @@ treatOneFile args
                                  let t = read cont :: A.OType
                                  InterfaceFiles.writeFile (joinPath (projSrcRoot paths: modpath paths)++".ty") t
 
-        showTyFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
+        showTyFile paths    = do te <- InterfaceFiles.readFile (srcFile paths)
                                  putStrLn ("**** Type environment in " ++ (srcFile paths) ++ " ****")
-                                 putStrLn (Pretty.render (Pretty.pretty (Acton.Env.openRecord (t :: A.OType))))
+                                 putStrLn (Pretty.render (Pretty.pretty (te :: Acton.Env.TEnv)))
 
 --        showYtFile paths    = do t <- InterfaceFiles.readFile (srcFile paths)
 --                                 putStrLn (Pretty.render (Pretty.pretty (t :: Y.Stmt)))
@@ -165,11 +165,11 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
                                               return $ (pre, dirs, concat $ map splitPath $ lines $ contents)
                    where path    = joinPath [pre, ".acton"]
 
-runRestPasses args paths src ifaces tree = (do
+runRestPasses args paths src env tree = (do
                           let outbase = outBase paths
-                          (ifaces',ienv) <- Acton.Env.mkEnv (projSysRoot paths,syspath args) ifaces tree
+                          env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env tree
                           
-                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase ienv tree
+                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' tree
                           iff (types args) $ dump "types" (Pretty.vprint tyinfo)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
 {-    
@@ -189,7 +189,7 @@ runRestPasses args paths src ifaces tree = (do
                           unless (projSrcRoot paths == projSysRoot paths)
                              $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
-                          return (ifaces',Acton.Types.env2type sigs))       
+                          return (Acton.Env.dropnames env',sigs))
                              `catch` handle Acton.Env.checkerError src paths
                              `catch` handle Acton.Types.typeError src paths
 
@@ -237,7 +237,7 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs)        = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do foldM (doTask args paths) ([],[])
+                             then do foldM (doTask args paths) (Acton.Env.initEnv,[])
                                            ([PythonTask (A.qName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
@@ -288,21 +288,21 @@ chaseImportedFiles args paths imps tasks
                                                          (iqns ++ concatMap importsOf t) 
 
 
-doTask args paths ifaces@(actifaces,yangifaces) t@(ActonTask qn src m)
+doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
                              = do ok <- checkUptoDate paths ".ty" actFile tyFile [pyFile] (syspath args) (importsOf t)
                                   if ok then do iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                                 return ifaces
                                    else do checkDirs (projSysRoot paths) (init (mPath qn))
                                            iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
-                                           (mods,t) <- runRestPasses args (paths{modpath = mPath qn, ext = ".act"}) src actifaces m
+                                           (env',te) <- runRestPasses args (paths{modpath = mPath qn, ext = ".act"}) src env m
                                            iff (verbose args) (putStrLn "Done.")
-                                           return ((qn,t):mods,yangifaces)
+                                           return (Acton.Env.addmod qn te env', yangifaces)
   where actFile             = joinPath (projSrcRoot paths : mPath qn)++ ".act"
         outBase             = joinPath (projSysRoot paths : mPath qn)
         tyFile              = outBase ++ ".ty"
         pyFile              = outBase ++ ".py"
 {-        
-doTask args paths ifaces@(actifaces,yangifaces) t@(YangTask qn m) = do
+doTask args paths ifaces@(env, yangifaces) t@(YangTask qn m) = do
          let outFiles = case m of
                           Y.Module{} -> [actFile,pyFile,tyFile]
                           Y.Submodule{} -> []
@@ -314,11 +314,11 @@ doTask args paths ifaces@(actifaces,yangifaces) t@(YangTask qn m) = do
                   (etree,yangifaces',mbt) <- YangCompiler.runRestPasses qn (mkYangArgs args) (yangFile,joinPath (projSysRoot paths:init (mPath qn)),outbase) yangifaces m
                   iff (verbose args) (putStrLn ("Done."))
                   case mbt of
-                     Nothing -> return (actifaces,((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
+                     Nothing -> return (env, ((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
                      Just m -> do 
                                 iff (verbose args) (putStr ("Compiling "++  actFile ++ "... ") >> hFlush stdout)
                                 let m1 = Acton.Relabel.relab m
-                                (amods,t) <- runRestPasses args (Paths (projSysRoot paths) (projSysRoot paths) (mPath qn) ".act") "" actifaces m1
+                                (amods,t) <- runRestPasses args (Paths (projSysRoot paths) (projSysRoot paths) (mPath qn) ".act") "" env m1
                                 iff (verbose args) (putStrLn ("Done."))
                                 return ((qn,t):amods,((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
    where yangFile = joinPath (projSrcRoot paths: mPath qn) ++ ".yang"
@@ -330,15 +330,15 @@ doTask args paths ifaces@(actifaces,yangifaces) t@(YangTask qn m) = do
          [_,i]    = mPath qn
          id       = Y.Ident SpanEmpty i
 -}
-doTask args paths ifaces@(actifaces,yangifaces) (PythonTask qn)
+doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
                         = do ok <- checkUptoDate paths ".ty" typesFile tyFile [] (joinPath (syspath args : ["python"])) []
                              if ok then return ifaces --putStrLn ("Skipping  "++ typesFile ++ " (files are up to date).")
                               else do putStr ("Compiling "++  typesFile ++ "... ")
                                       cont <- readFile typesFile
-                                      let t = read cont :: A.OType
-                                      InterfaceFiles.writeFile tyFile t
+                                      let te = read cont :: Acton.Env.TEnv
+                                      InterfaceFiles.writeFile tyFile te
                                       putStrLn ("Done.")
-                                      return ((qn,t):actifaces,yangifaces)
+                                      return (Acton.Env.addmod qn te env, yangifaces)
    where pythonBase     = joinPath (syspath args : mPath qn)
          typesFile      =  pythonBase ++ ".types"
          tyFile         =  pythonBase ++ ".ty"

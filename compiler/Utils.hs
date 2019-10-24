@@ -55,9 +55,13 @@ prstrs xs                       = render (hsep $ punctuate comma (map pretty xs)
 
 prcat xs                        = render (vcat $ (map pretty xs))
 
+traceF f x                      = trace (f x) x
+
 ptrace doc                      = trace (render doc)
 
 ptraceM doc                     = traceM (render doc)
+
+ptraceF f                       = traceF (render . f)
 
 head_ tag []                    = error ("Prelude.head: empty list (" ++ show tag ++ ")")
 head_ tag xs                    = head xs

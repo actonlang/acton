@@ -13,10 +13,8 @@ import Pretty
 import Utils
 import Acton.Syntax
 import Acton.Names
+import Acton.TypeM
 import Acton.Env
-
-
-s1 @@ s2                                = s1 ++ [ (l,subst s1 t) | (l,t) <- s2 ]
 
 
 unify t1 t2                                 = do -- traceM ("unify " ++ prstr (QEqu l0 0 t1 t2))
@@ -24,18 +22,18 @@ unify t1 t2                                 = do -- traceM ("unify " ++ prstr (Q
 
 unify' (OVar tv1) (OVar tv2)
   | tv1 == tv2                              = return ()
-unify' (OVar tv) t2                         = do s <- substitution
+unify' (OVar tv) t2                         = do s <- o_substitution
                                                  case Map.lookup tv s of
                                                    Just t1 -> unify' t1 t2
                                                    Nothing -> do t2' <- mapsubst t2
-                                                                 when (tv `elem` tyvars t2') (throwError $ InfiniteType tv)
-                                                                 substitute tv t2'
-unify' t1 (OVar tv)                         = do s <- substitution
+                                                                 when (tv `elem` oTyvars t2') (throwError $ InfiniteType tv)
+                                                                 o_substitute tv t2'
+unify' t1 (OVar tv)                         = do s <- o_substitution
                                                  case Map.lookup tv s of
                                                    Just t2 -> unify' t1 t2
                                                    Nothing -> do t1' <- mapsubst t1
-                                                                 when (tv `elem` tyvars t1') (throwError $ InfiniteType tv)
-                                                                 substitute tv t1'
+                                                                 when (tv `elem` oTyvars t1') (throwError $ InfiniteType tv)
+                                                                 o_substitute tv t1'
 
 --       as declared      as called
 unify' (OFun a1 r1 t1) (OFun a2 r2 t2)      = do unify a1 a2
@@ -57,7 +55,7 @@ unify' _     ONone                          = return ()         -- temporary, un
 unify' ONone _                              = return ()         -- temporary, until the opt type...
 
 
-unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (rowTail r1)
+unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (o_rowTail r1)
                                                  unify t1 t2
                                                  unify r1 r2'
   where findFst r tl                        = do r' <- mapsubst r
@@ -81,7 +79,7 @@ unify' (OPos t1 r1) r2                      = do (t2,r2') <- findFst r2 (rowTail
           | r2 == tl                        = throwError (ConflictingRow tv)
           | otherwise                       = do t <- newOVar
                                                  r <- newOVar
-                                                 substitute tv (OPos t r)
+                                                 o_substitute tv (OPos t r)
                                                  return (t, r)
         findFst' r tl                       = error ("##### findFst' " ++ prstr r)
 
@@ -101,7 +99,7 @@ unify' r1 (OStar1 t r2)                     = do r2' <- mapsubst r2
                                                         unify r1 r
                                                     _ -> throwError Defer
 
-unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (rowTail r1)
+unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (o_rowTail r1)
                                                  unify t1 t2
                                                  unify (del n r1) (del n r2')
   where findKwd r0 n r tl                   = do r0' <- mapsubst r0
@@ -127,7 +125,7 @@ unify' (OKwd n t1 r1) r2                    = do (t2,r2') <- findKwd ONil n r2 (
           | r2 == tl                        = throwError (ConflictingRow tv)
           | otherwise                       = do t <- newOVar
                                                  r <- newOVar
-                                                 substitute tv (OKwd n t r)
+                                                 o_substitute tv (OKwd n t r)
                                                  return (t, revApp r0 r)
 
 unify' (OStar2 t r1) r2                     = do r <- newOVar
@@ -150,13 +148,13 @@ unify' (OSchema vs1 cs1 t1) (OSchema vs2 cs2 t2)
 -- Will go away when Rank-N records become nominal
 unify' (OSchema vs1 [] t1) t2               = do ts <- mapM (const newOVar) vs1
                                                  let s = vs1 `zip` ts
-                                                 unify' (subst s t1) t2
+                                                 unify' (oSubst s t1) t2
 
 unify' (OList t1) (ODict k2 v2)             = do unify t1 k2                  -- Temporary HACK...
                                                  unify OInt v2
 
 
-unify' t1 t2                                = throwError (NoUnify (simplify t1) (simplify t2))
+unify' t1 t2                                = throwError (NoUnify (erase t1) (erase t2))
 
 
 
@@ -168,11 +166,11 @@ catRow ONil r2                              = r2
 catRow r1 ONil                              = r1
 catRow r1 r2                                = internal r1 r2
 
-rowTail (OPos _ r)                      = rowTail r
-rowTail (OStar1 _ r)                    = rowTail r
-rowTail (OKwd _ _ r)                    = rowTail r
-rowTail (OStar2 _ r)                    = rowTail r
-rowTail r                               = r             -- OVar v or ONil
+o_rowTail (OPos _ r)                    = o_rowTail r
+o_rowTail (OStar1 _ r)                  = o_rowTail r
+o_rowTail (OKwd _ _ r)                  = o_rowTail r
+o_rowTail (OStar2 _ r)                  = o_rowTail r
+o_rowTail r                             = r             -- OVar v or ONil
 
 revApp (OPos t r1) r2                   = revApp r1 (OPos t r2)
 revApp (OStar1 t r1) r2                 = revApp r1 (OStar1 t r2)
@@ -192,307 +190,106 @@ del n r                                 = r
 internal r1 r2                          = error ("Internal: Cannot unify: " ++ prstr r1 ++ " = " ++ prstr r2)
 
 
+-- Environment unification ---------------------------------------------------------------
 
-type OVarMap                            = Map OVar OType
+unifyTEnv env tenvs []                  = return []
+unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
+                                            [] -> unifyTEnv env tenvs vs
+                                            [ni] -> ((v,ni):) <$> unifyTEnv env tenvs vs
+                                            ni:nis -> do ni' <- unifN ni nis
+                                                         ((v,ni'):) <$> unifyTEnv env tenvs vs
+  where 
+    unifN (NVar (TSchema _ [] t) d) nis = do mapM (unifV t d) nis
+                                             return (NVar (tSchema t) d)
+    unifN (NSVar t) nis                 = do mapM (unifSV t) nis
+                                             return (NSVar t)
+    unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
 
-type Deferred                           = [Qonstraint]
+    unifV t d (NVar (TSchema _ [] t') d')
+      | d == d'                         = constrain [Equ t t']
+      | otherwise                       = err1 v "Inconsistent decorations for"
+    unifV t d ni                        = err1 v "Inconsistent bindings for"
 
-type EffectStack                        = [OType]
-
-type Unique                             = Int
-
-type SolveState                         = (Unique, [Qonstraint], EffectStack, Deferred, SrcInfo, OVarMap)
-
-type TypeM a                            = ExceptT SolveErr (State SolveState) a
-
-runTypeM                                :: TypeM a -> a
-runTypeM m                              = case evalState (runExceptT m) (1,[],[],[],[],Map.empty) of
-                                            Right x  -> x
-                                            Left err -> error "Unhandled constraint-solver exception"
-
-unique                                  = lift $ state $ \(u,c,f,d,i,s) -> (u, (u+1,c,f,d,i,s))
-
-constrain cs                            = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,cs++c,f,d,i,s))
-
-pushFX t                                = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,t:f,d,i,s))
-
-currentFX                               :: TypeM OType
-currentFX                               = lift $ state $ \(u,c,t:f,d,i,s) -> (t, (u,c,t:f,d,i,s))
-
-effect l fx                             = do fx0 <- currentFX
-                                             constrain [QEqu l 36 fx fx0]
-
-defer cs                                = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,cs:d,i,s))
-
-substitute tv t                         = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,d,i,Map.insert tv t s))
-
-dump info1                              = lift $ state $ \(u,c,f,d,i,s) -> ((), (u,c,f,d,reverse info1 ++ i,s))
-
-constraints                             :: TypeM [Qonstraint]
-constraints                             = (lift $ state $ \(u,c,f,d,i,s) -> (c, (u,[],f,d,i,s))) >>= mapsubst
-
-popFX                                   :: TypeM ()
-popFX                                   = (lift $ state $ \(u,c,t:f,d,i,s) -> ((), (u,c,f,d,i,s)))
-
-deferred                                :: TypeM Deferred
-deferred                                = lift $ state $ \(u,c,f,d,i,s) -> (d, (u,c,f,[],i,s))
-
-dumped                                  :: TypeM SrcInfo
-dumped                                  = (lift $ state $ \(u,c,f,d,i,s) -> (reverse i, (u,c,f,d,[],s))) >>= mapsubst
-
-substitution                            = lift $ state $ \(u,c,f,d,i,s) -> (s, (u,c,f,d,i,s))
-
-resetsubst False                        = return ()
-resetsubst True                         = do (u,c,f,d,i,s) <- lift get
-                                             c <- mapsubst c
-                                             f <- mapsubst f
-                                             i <- mapsubst i
-                                             lift $ put (u,c,f,d,i,Map.empty)
-
-realsubst                               = do s <- substitution
-                                             mapsubst (Map.toList s)
-
-class MapSubst a where
-    mapsubst                            :: a -> TypeM a
-
-instance MapSubst InfoTag where
-    mapsubst (GEN l t)                  = GEN l <$> mapsubst t
-    mapsubst (INS l t)                  = INS l <$> mapsubst t
-
-instance MapSubst a => MapSubst [a] where
-    mapsubst                            = mapM mapsubst
-
-instance MapSubst a => MapSubst (Maybe a) where
-    mapsubst                            = mapM mapsubst
-
-instance MapSubst a => MapSubst (Name,a) where
-    mapsubst (v, t)                     = mapsubst t >>= \t' -> return (v,t')
-    
-instance MapSubst (OVar,OType) where
-    mapsubst (tv, t)                    = mapsubst t >>= \t' -> return (tv,t')
-
-instance MapSubst OType where
-    mapsubst (OVar l)                   = do s <- substitution
-                                             case Map.lookup l s of
-                                                 Just t  -> mapsubst t
-                                                 Nothing -> return (OVar l)
-    mapsubst (OFun act row t)           = OFun <$> mapsubst act <*> mapsubst row <*> mapsubst t
-    mapsubst (ORecord row)              = ORecord <$> mapsubst row
-    mapsubst (ODict t1 t2)              = ODict <$> mapsubst t1 <*> mapsubst t2
-    mapsubst (OTuple pos)               = OTuple <$> mapsubst pos
-    mapsubst (OList t)                  = OList <$> mapsubst t
-    mapsubst (OSet t)                   = OSet <$> mapsubst t
-    mapsubst (OPos t r)                 = OPos <$> mapsubst t <*> mapsubst r
-    mapsubst (OStar1 t r)               = OStar1 <$> mapsubst t <*> mapsubst r
-    mapsubst (OKwd n t r)               = OKwd n <$> mapsubst t <*> mapsubst r
-    mapsubst (OStar2 t r)               = OStar2 <$> mapsubst t <*> mapsubst r
-    mapsubst (OSchema vs cs t)          = OSchema vs <$> mapsubst cs <*> mapsubst t     -- vs are always disjoint from dom(subst)
-    mapsubst t                          = return t
-
-instance MapSubst Qonstraint where
-    mapsubst (QEqu l v t1 t2)           = QEqu l v <$> mapsubst t1 <*> mapsubst t2
-    mapsubst (QIn l v t1 t2)            = QIn l v <$> mapsubst t1 <*> mapsubst t2
-    mapsubst (QDot l v t1 n t2)         = QDot l v <$> mapsubst t1 <*> return n <*> mapsubst t2
-    mapsubst (QIx l v t1 t2 t3)         = QIx l v <$> mapsubst t1 <*> mapsubst t2 <*> mapsubst t3
-    mapsubst (QMod l v t1 t2)           = QMod l v <$> mapsubst t1 <*> mapsubst t2
-    mapsubst (QPlus l v t1)             = QPlus l v <$> mapsubst t1
-    mapsubst (QNum l v t1)              = QNum l v <$> mapsubst t1
-    mapsubst (QBool l v t1)             = QBool l v <$> mapsubst t1
+    unifSV t (NSVar t')                 = constrain [Equ t t']
+    unifSV t ni                         = err1 v "Inconsistent bindings for"
 
 
-newOVar                                 = intOVar <$> unique
+instantiate env (TSchema _ [] t)        = return t
+instantiate env (TSchema _ q t)         = do tvs <- newTVars (length q)
+                                             let s = tybound q `zip` tvs
+                                                 q1 = subst s q
+                                                 t1 = subst s t
+                                             mapM (q_constrain env) q1
+                                             return t1
+
+q_constrain env (TBind tv cs)           = mapM (q_constr tv) cs
+  where q_constr tv tc@(TC qn ts)       = case findqname qn env of
+                                            NClass{} -> constrain [Sub (tVar tv) (tCon tc)]
+                                            NProto{} -> constrain [Impl (tVar tv) tc]
+
+
+
+----------------------------------------
+
+
+
+newOVar                                 = intOVar <$> o_unique
 
 newOVars n                              = mapM (const newOVar) [1..n]
 
-newTEnv vs                              = (vs `zip`) <$> mapM (const newOVar) (nub vs)
-
-instantiate l t0@(OSchema vs cs t)      = do tvs <- newOVars (length vs)
+o_instantiate l t0@(OSchema vs cs t)    = do tvs <- newOVars (length vs)
                                              let s   = vs `zip` tvs
-                                                 cs1 = [ subst s c{cloc=l} | c <- cs ]
-                                                 t1  = subst s t
-                                             constrain cs1
-                                             dump [INS l t1]
+                                                 cs1 = [ oSubst s c{cloc=l} | c <- cs ]
+                                                 t1  = oSubst s t
+                                             o_constrain cs1
+--                                             o_dump [INS l t1]
                                              return t1
-instantiate l t                         = do dump [INS l t]
+o_instantiate l t                       = do -- o_dump [INS l t]
                                              return t
 
 
-data SolveErr                           = Defer
-                                        | EmptyRow
-                                        | KwdNotFound Name
-                                        | ConflictingRow OVar
-                                        | InfiniteType OVar
-                                        | NoUnify OType OType
-                                        | NoSelect Name
-                                        | NoOverload Qonstraint
-                                        | NoSolve Qonstraint SolveErr
-                                        | NotYet SrcLoc Doc
-                                        deriving (Eq,Show,Typeable)
+erase x                                 = oSubst s x
+  where s                               = [ (tv, wildOVar) | tv <- nub (oTyvars x) ]
 
-instance Subst SolveErr where
-    tyvars (ConflictingRow tv)          = [tv]
-    tyvars (InfiniteType tv)            = [tv]
-    tyvars (NoUnify t1 t2)              = (tyvars t1 ++ tyvars t2) \\ [[]]
-    tyvars (NoSolve c err)              = (tyvars c ++ tyvars err) \\ [[]]
-    tyvars _                            = []
-
-    subst s (ConflictingRow tv)         = case lookup tv s of
-                                            Just (OVar tv') -> ConflictingRow tv'
-                                            _               -> ConflictingRow tv
-    subst s (InfiniteType tv)           = case lookup tv s of
-                                            Just (OVar tv') -> InfiniteType tv'
-                                            _               -> InfiniteType tv
-    subst s (NoUnify t1 t2)             = NoUnify (subst s t1) (subst s t2)
-    subst s (NoSolve c err)             = NoSolve (subst s c) (subst s err)
-    subst s err                         = err
-
-instance Control.Exception.Exception SolveErr
-
-solveError err                          = (loc err,render (expl err))
-  where expl EmptyRow                   = text "Positional elements are missing"
-        expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-        expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
-        expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
-        expl (NoSelect n)               = text "Attribute" <+> pretty n <+> text "is not found"
-        expl (NoOverload c)             = explain c
-        expl (NoUnify t1 t2)
-          | isR t1 || isR t2            = text "Actual row" <+> pretty t1 <+> 
-                                          text "and expected row" <+> pretty t2 <+> 
-                                          text "do not match"
-          | otherwise                   = text "Actual type" <+> pretty t1 <+> 
-                                          text "and expected type" <+> pretty t2 <+> 
-                                          text "do not unify"
-          where isR ONil                = True
-                isR (OPos _ _)          = True
-                isR (OKwd _ _ _)        = True
-                isR (OStar1 _ _)        = True
-                isR (OStar2 _ _)        = True
-                isR _                   = False
-        expl (NoSolve c err)            = parens (text "version" <+> int (vn c)) $$ 
-                                          explain c $$ 
-                                          nonEmpty (text "because:" <+>) expl err
-        expl (NotYet _ doc)             = text "Not yet supported by type inference:" <+> doc
-        loc (NoSolve c _)               = cloc c
-        loc (NoOverload c)              = cloc c
-        loc (NotYet l _)                = l
-        loc _                           = l0
-
-explain (QEqu _ v t1 t2)                = text txt1 <+> pretty t1 $$
-                                          text txt2 <+> pretty t2 $$
-                                          if null txt3 then empty else text txt3
-  where (txt1,txt2,txt3)                = equTxt v
-explain (QIn _ v t1 t2)                 = text "Type" <+> pretty t2 <+> 
-                                          text "does not contain values of type" <+> pretty t1
-explain (QDot _ v t1 n t2)              = text "Cannot select attribute" <+> quotes (pretty n) <+> 
-                                          text "of type" <+> pretty t2 <+>
-                                          text "from value of type" <+> pretty t1
-explain (QIx _ v t1 t2 t3)              = text "Cannot select an item of type" <+> pretty t3 <+> 
-                                          text "with an index of type" <+> pretty t2 <+>
-                                          text "from value of type" <+> pretty t1
-explain (QNum _ v t1)                   = text "Type" <+> pretty t1 <+> 
-                                          text "is not numeric"
-explain (QPlus _ v t1)                  = text "Type" <+> pretty t1 <+> 
-                                          text "does not support the '+' operator"
-explain (QBool _ v t1)                  = text "Type" <+> pretty t1 <+> 
-                                          text "does not convert to a truth value"
-
-equTxt 36   = ("Top-level effect", "does not match the expected empty effect", "")                          -- scanTop
-equTxt 0    = ("Instance type", "does not match", "")                                                       -- Var inst dump
-
-equTxt 1    = ("Target type", "does not match right-hand side expression type", "")                         -- Assign
-equTxt 2    = ("Target type", "does not match right-hand side expression type", "")                         -- AugAssign
-equTxt 4    = ("Type", "does not match expected return type", "")                                           -- Return
-
-equTxt 5    = ("Function type", "does not match the expected type", "of the defined function identifier")   -- Def n
-
-equTxt 6    = ("The type of 'self'", "does not match the expected instance type", "")                       -- Class self
-equTxt 7    = ("The type of '__init__'", "does not match the expected function type", "")                   -- Class __init__
-equTxt 8    = ("Class type", "does not match the expected type", "of the defined class identifier")         -- Class n
-equTxt 9    = ("Method type", "does not match the expected type", "")                                       -- Class Def n
-
-equTxt 10   = ("The type of 'self'", "does not match the expected instance type", "")                       -- Actor self
-equTxt 11   = ("Actor type", "does not match the expected type", "of the defined actor identifier")         -- Actor n
-
-equTxt 13   = ("Data tree type", "does not match the type", "that is expected of the target")               -- Data
-equTxt 14   = ("Decorator type", "does not match the type", "determined by the decorated item")             -- Decorator
-equTxt 17   = ("Var target type", "does not match right-hand side expression type", "")                     -- VarAssign
-
-equTxt 12   = ("Method type", "does not match the expected type", "")                                       -- Actor Def n
-
-equTxt 15   = ("Exception type", "does not match the expected type", "of its alias")                        -- ExceptAs
-equTxt 16   = ("Item type", "does not match the expected type", "of its alias")                             -- WithItem
-equTxt 30   = ("Slice element type", "does not match the expected type", "")                                -- Slice
-
-equTxt 18   = ("Called function's type", "does not match the expected type", "")                            -- Call
-equTxt 37   = ("Awaited message's type", "does not match the expected type", "")                            -- Await
-equTxt 38   = ("Indexed expression's type", "does not match the expected type", "")                         -- Ix Index
-equTxt 39   = ("Sliced expression's type", "does not match the expected type", "")                          -- Ix Slice
-
-equTxt 19   = ("The 'true' branch type", "does not match the expected type", "of the conditional expression")   -- Cond true
-equTxt 20   = ("The 'false' branch type", "does not match the expected type", "of the conditional expression")  -- Cond false
-equTxt 21   = ("The parameter type", "does not match the expected type", "of the unary operator")           -- UnOp
-equTxt 22   = ("Referenced expression type", "does not match the expected tuple type", "")                  -- DotI
-equTxt 29   = ("Lambda type", "does not match", "")                                                         -- Lambda inst dump
-
-equTxt 23   = ("List element type", "does not match the expected type", "")                                 -- List
-equTxt 24   = ("Unpacking expression type", "does not match the expected list type", "")                    -- List
-equTxt 25   = ("Dictionary element type", "does not match the expected type", "")                           -- Dict
-equTxt 26   = ("Set element type", "does not match the expected type", "")                                  -- Set
-equTxt 27   = ("Unpacking expression type", "does not match the expected set type", "")                     -- Set
-
-equTxt 35   = ("Parenthesized expression type", "does not match", "")                                       -- Paren
-
-equTxt 28   = ("Type of default value", "does not match the expected type", "of the function parameter")    -- Param
-equTxt 33   = ("Parameter type", "does not match the type", "implied by the * operator")                    -- StarPar
-equTxt 34   = ("Parameter type", "does not match the type", "implied by the ** operator")                   -- StarPar
-
-equTxt 32   = ("Superclass type", "does not match the expected callable type", "")                          -- Arg
-equTxt 31   = ("Left comparison operand type", "does not match type", "of the right operand")               -- OpArg
-
-equTxt 101  = ("Union effect", "does not match", "(impossible)")                                            -- Def union fx
-equTxt 102  = ("Union effect", "does not match", "(impossible)")                                            -- Class union fx
-equTxt 103  = ("Union effect", "does not match", "(impossible)")                                            -- Actor union fx
-equTxt 104  = ("Union effect", "does not match", "(impossible)")                                            -- Actor Def union fx
-equTxt 105  = ("Union effect", "does not match", "(impossible)")                                            -- Lambda union fx
-
-equTxt 201  = ("Generic type", "does not match", "(impossible)")                                            -- Var gen dump
-equTxt 202  = ("Generic record type", "does not match", "(impossible)")                                     -- QDot Record gen dump
-
-equTxt n    = ("Types", "and", "do not unify (unknown tag version " ++ show n ++ ")")
+---------
 
 
+-- Reduce conservatively and remove entailed constraints
+simplify                                :: [Constraint] -> TypeM [Constraint]
+simplify cs                             = undefined
 
-simplify x                              = subst s x
-  where s                               = [ (tv, wildOVar) | tv <- nub (tyvars x) ]
+-- Reduce aggressively or fail
+solve                                   :: [Constraint] -> TypeM ()
+solve cs                                = undefined
 
-solveAll cs                                 = do -- traceM ("##### SolveAll: ")
+o_solveAll cs                               = do -- traceM ("##### SolveAll: ")
                                                  -- traceM (prstr cs)
                                                  -- traceM ("##### Resolving "++ show (length cs))
-                                                 -- resetsubst True
-                                                 resolveAll False cs
-                                                 s <- realsubst
+                                                 -- o_resetsubst True
+                                                 o_resolveAll False cs
+                                                 s <- o_realsubst
                                                  -- traceM ("##### Result:\n" ++ prstr s)
                                                  return ()
 
-reduce cs                                   = do red False cs
-                                                 cs0 <- deferred
+o_reduce cs                                 = do red False cs
+                                                 cs0 <- o_deferred
                                                  cs1 <- mapsubst cs0
-                                                 if cs0 == cs1 then return cs1 else reduce cs1
+                                                 if cs0 == cs1 then return cs1 else o_reduce cs1
 
-resolve cs                                  = do red True cs
-                                                 cs0 <- deferred
+o_resolve cs                                = do red True cs
+                                                 cs0 <- o_deferred
                                                  cs1 <- mapsubst cs0
-                                                 if cs1 == [] then return () else resolve cs1
+                                                 if cs1 == [] then return () else o_resolve cs1
                                                  
     
-resolveAll f cs                             = do red f cs
-                                                 cs0 <- deferred
+o_resolveAll f cs                           = do red f cs
+                                                 cs0 <- o_deferred
                                                  if cs0 == [] then return () else do
                                                      cs1 <- mapsubst cs0
                                                      let useForce = cs1 == cs0
                                                      -- traceM ("##### Reduced: "++show useForce++" "++show (length cs1))
                                                      -- when useForce (traceM (prstr cs0))
-                                                     resolveAll useForce cs1
+                                                     o_resolveAll useForce cs1
 
 red f []                                    = return ()
 red f (c : cs)                              = do c' <- mapsubst c
@@ -500,8 +297,8 @@ red f (c : cs)                              = do c' <- mapsubst c
                                                  red f cs
   where handler c err                       = do c' <- mapsubst c
                                                  case err of
-                                                     Defer -> defer c'
-                                                     _     -> throwError $ NoSolve (simplify c') err
+                                                     Defer -> o_defer c'
+                                                     _     -> throwError $ NoSolve (erase c') err
 
 red1 f (QEqu _ _ t1 t2)                     = unify' t1 t2
 
@@ -512,9 +309,9 @@ red1 f (QIn _ _ t (ORecord r))              = do t1 <- newOVar; unify' t (OTuple
 
 red1 f (QDot l _ (ORecord r) n t)           = case lookupRow n r of
                                                 Right t0 -> do
-                                                    dump [GEN l t0]
-                                                    t1 <- instantiate l $ openFX t0
-                                                    cs1 <- constraints
+                                                    -- o_dump [GEN l t0]
+                                                    t1 <- o_instantiate l $ o_openFX t0
+                                                    cs1 <- o_constraints
                                                     unify' t1 t
                                                     red f cs1
                                                 Left ONil ->
@@ -664,7 +461,9 @@ red1 True (QPlus _ _ t)                     = unify' t OInt
 red1 True (QNum _ _ t)                      = unify' t OInt
 red1 True (QBool _ _ t)                     = unify' t OStr
 
-builtinFun l t u                            = do dump [GEN l t0]
-                                                 t1 <- instantiate l $ openFX t0
+builtinFun l t u                            = do -- o_dump [GEN l t0]
+                                                 t1 <- o_instantiate l $ o_openFX t0
                                                  unify' t1 u
   where t0                                  = OSchema [] [] t
+
+

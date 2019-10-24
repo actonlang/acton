@@ -7,7 +7,7 @@ x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
 x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
-x9 : e1 e2 (int,*A,b : bool,**B) -> SomeClass[int]       # function with effects and all kinds of parameters
+x9 : sync X (int,*A,b : bool,**B) -> SomeClass[int]      # function with effects and all kinds of parameters
 
 a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
 a1 : (str,*,c : bool) -> None                            # function with * separation of pos and kwd parameters
@@ -71,10 +71,16 @@ def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explici
 protocol Apa():
     def __init__(self):
         pass
-    # @classattr
-    # x : int
+        
+    @classattr
+    x : int
+    
     @staticmethod
     def __eq__(x:Self, y:Self) -> bool:
+        pass
+    
+    # @classmethod
+    def f(x):
         pass
 
 

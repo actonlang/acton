@@ -1057,6 +1057,18 @@ class Indexed[S,A,B]():
 
 -----------------------------------------------------------------
 
+protocol Sliceable:
+    __getslice__    : (int?,int?,int?) -> Self
+====>
+"typeclass" Sliceable[S]:
+    __getslice__    : (S,int?,int?,int?) -> S
+====>
+class Sliceable[S,A]():
+    @classmethod
+    __getslice__    : (S,int?,int?,int?) -> S
+
+-----------------------------------------------------------------
+
 protocol Collection[A] (Container[A], Sized, Iterable[A]):
     __fromiter__    : (Iterable[A]) -> Self
 ====>
