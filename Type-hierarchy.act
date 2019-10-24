@@ -1057,15 +1057,15 @@ class Indexed[S,A,B]():
 
 -----------------------------------------------------------------
 
-protocol Sliceable[A]:
-    __getslice__    : (A) -> Self
+protocol Sliceable:
+    __getslice__    : (int?,int?,int?) -> Self
 ====>
-"typeclass" Sliceable[S,A]:
-    __getslice__    : (S,A) -> S
+"typeclass" Sliceable[S]:
+    __getslice__    : (S,int?,int?,int?) -> S
 ====>
 class Sliceable[S,A]():
     @classmethod
-    __getslice__    : (S,A) -> S
+    __getslice__    : (S,int?,int?,int?) -> S
 
 -----------------------------------------------------------------
 
