@@ -167,13 +167,6 @@ instance AddLoc (S.Op a) where
          (l,S.Op _ a) <- withLoc p
          return $ S.Op l a
 
-instance AddLoc S.StarPar where
-  addLoc p = do
-         (l,par) <- withLoc p
-         case par of
-            S.StarPar _ nm mba -> return (S.StarPar l nm mba)
-            S.NoStar -> return S.NoStar
-
 instance AddLoc S.Except where
   addLoc p = do
          (l,exc) <- withLoc p
@@ -387,7 +380,10 @@ funcdef =  addLoc $ do
               assertNotData
               dec <- decorator1 fun_decoration
               (p,md) <- withPos (modifier dec <* rword "def")
-              S.Def NoLoc <$> name <*> optbinds <*> parameters <*> optional (arrow *> ttype) <*> suite DEF p <*> pure md
+              n <- name
+              q <- optbinds
+              (ppar,kpar) <- parens (funpars True)
+              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
 
 
 -- modifier: ['sync' | 'async']
@@ -434,49 +430,6 @@ optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
 --param :: Parser S.StarPar -> Parser S.Param
 --param par = do S.StarPar _ nm mba <- par
 --               S.Param nm mba <$> optional (equals *> test)
-
--- Parameter lists ---------------------------------------------
-
--- Parameter lists in lambdas may not have type annotations, while those in def and actor declarations do
-param1, param2 :: Parser S.Param
-param1 = S.Param <$> name <*> optional (colon *> tscheme) <*> optional (equals *> test)
-
--- parameter lists in lambdas may not have type annotations
-param2 = S.Param <$>  name <*> return Nothing <*> optional (equals *> test)
-
--- parameter list for def and actor
-parameters = maybe (S.Params [] S.NoStar [] S.NoStar) id <$> (parens (optional (argslist param1 starpar1)))
-
-starpar1, starpar2 :: Parser S.StarPar
-starpar1 = addLoc (S.StarPar NoLoc <$> name <*> optional (colon *> ttype)) 
-starpar2 = addLoc (S.StarPar NoLoc <$> name <*> return Nothing) 
-
---typedargslist and varargslist have the same structure and we define a function argslist for the common pattern
---typedargslist = argslist params1
---varargslist = argslist params2
-
-argslist :: Parser S.Param -> Parser S.StarPar -> Parser S.Params
-argslist param starpar = 
-               (do p1 <- param
-                   ps <- many (try (comma *> param))
-                   mb  <- optional (comma *> optional parlist_starargs)
-                   return $ maybe (S.Params (p1:ps) S.NoStar [] S.NoStar)
-                                  (maybe (S.Params (p1:ps) S.NoStar [] S.NoStar) (\(s1,qs,s2) -> S.Params (p1:ps) s1 qs s2)) mb)
-             <|> (do
-                   (s1,ps,s2) <- parlist_starargs
-                   return $ S.Params [] s1 ps s2)
-   where parlist_starargs = (do
-                   singleStar
-                   mbt <- optional starpar
-                   let p1 = maybe S.NoStar id mbt
-                   ps <- many (try (comma *> param))
-                   mbmb <- optional (comma *> optional (starstar *> (starpar <* optional comma)))
-                   let p2 = maybe S.NoStar (maybe S.NoStar id) mbmb 
-                   return (p1,ps,p2))
-            <|> (do
-                   starstar
-                   sp <- starpar <* optional comma
-                   return (S.NoStar,[],sp))
 
 -- stmt: simple_stmt | compound_stmt
 -- simple_stmt: small_stmt (';' small_stmt)* [';'] NEWLINE
@@ -527,9 +480,8 @@ testlist_gen p = addLoc $ do
         f _ [S.Star e] Nothing = e
         f l es _ = S.Tuple l es
 
-exprlist, testlist, testlist_star_expr :: Parser S.Expr
-exprlist = testlist_gen (S.Elem <$> expr <|> star_expr)
-testlist = testlist_gen (S.Elem <$> test)
+testlist, testlist_star_expr :: Parser S.Expr
+testlist = testlist_gen (S.Elem <$> test)                          -- data[testlist] =  |  return testlist  |  for p in testlist  |  yield testlist
 testlist_star_expr = testlist_gen  (S.Elem <$> test <|> star_expr)
 
 augassign :: Parser (S.Op S.Aug)
@@ -848,9 +800,9 @@ test_nocond = or_test <|> lambdef_nocond
 
 lambdefGen t = addLoc $ do
             rword "lambda"
-            mbvs <- optional (argslist param2 starpar2)
+            (ppar,kpar) <- funpars False
             colon
-            S.Lambda NoLoc (maybe (S.Params [] S.NoStar [] S.NoStar) id mbvs) <$> t
+            S.Lambda NoLoc ppar kpar <$> t
 
 lambdef = lambdefGen test
 lambdef_nocond = lambdefGen test_nocond
@@ -1077,10 +1029,10 @@ actordef = addLoc $ do
                 (s,_) <- withPos (rword "actor")
                 nm <- name <?> "actor name"
                 q <- optbinds
-                ps <- parameters
+                (ppar,kpar) <- parens (funpars True)
                 mba <- optional (arrow *> ttype)
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ps mba ss
+                return $ S.Actor NoLoc nm q ppar kpar mba ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
@@ -1134,6 +1086,53 @@ yield_expr = addLoc $ do
               <|> S.Yield NoLoc <$> optional testlist)
 
 
+--- Params ---------------------------------------------------------------------
+
+parm :: Bool -> Parser (S.Name, Maybe S.TSchema, Maybe S.Expr)
+parm ann = do n <- name
+              mbt <- if ann then optional (colon *> tscheme) else return Nothing
+              mbe <- optional (equals *> test)
+              return (n, mbt, mbe)
+
+pstar :: Bool -> Parser (S.Name, Maybe S.Type)
+pstar ann = do n <- name
+               mbt <- if ann then optional (colon *> ttype) else return Nothing
+               return (n, mbt)
+
+pospar :: Bool -> Parser S.PosPar
+pospar ann = do (n,t) <- star *> pstar ann
+                return (S.PosSTAR n t)
+          <|> 
+             do p <- parm ann
+                ps <- many (try (comma *> parm ann))
+                mbs <- optional (comma *> optional (star *> pstar ann))
+                let tail = maybe S.PosNIL (maybe S.PosNIL (uncurry S.PosSTAR)) mbs
+                return (foldr (\(n,t,e) par -> S.PosPar n t e par) tail (p:ps))
+
+kwdpar :: Bool -> Parser S.KwdPar
+kwdpar ann = do (n,t) <- starstar *> pstar ann
+                return (S.KwdSTAR n t)
+          <|>
+             do p <- parm ann
+                ps <- many (try (comma *> parm ann))
+                mbs <- optional (comma *> optional ((starstar *> pstar ann) <* optional comma ))
+                let tail = maybe S.KwdNIL (maybe S.KwdNIL (uncurry S.KwdSTAR)) mbs
+                return (foldr (\(n,t,e) par -> S.KwdPar n t e par) tail (p:ps))
+
+funpars :: Bool -> Parser (S.PosPar, S.KwdPar)
+funpars ann = try (do (n,t) <- (star *> pstar ann); comma; k <- kwdpar ann; return (S.PosSTAR n t, k))
+           <|>
+              try (do (n,t) <- (star *> pstar ann); optional comma; return (S.PosSTAR n t, S.KwdNIL))
+           <|>
+              try (do k <- kwdpar ann; return (S.PosNIL, k))
+           <|>
+              try (do (n,t,e) <- parm ann; comma; (p,k) <- funpars ann; return (S.PosPar n t e p, k))
+           <|>
+              try (do (n,t,e) <- parm ann; optional comma; return (S.PosPar n t e S.PosNIL, S.KwdNIL))
+           <|>
+              try (do optional comma; return (S.PosNIL, S.KwdNIL))
+
+
 --- Args -----------------------------------------------------------------------
 
 posarg :: Parser S.PosArg
@@ -1146,19 +1145,21 @@ posarg  = do e <- star *> test
              let tail = maybe S.PosNil (maybe S.PosNil S.PosStar) mbe
              return (foldr S.PosArg tail (e:es))
 
+kwdbind :: Parser (S.Name, S.Expr)
+kwdbind = do v <- escname
+             colon
+             e <- test
+             return (v,e)
+
 kwdarg :: Parser S.KwdArg
 kwdarg  = do e <- starstar *> test
              return (S.KwdStar e)
          <|>
-          do b <- bind
-             bs <- many (try (comma *> bind))
+          do b <- kwdbind
+             bs <- many (try (comma *> kwdbind))
              mbe <- optional (comma *> optional ((starstar *> test) <* optional comma ))
              let tail = maybe S.KwdNil (maybe S.KwdNil S.KwdStar) mbe
              return (foldr (uncurry S.KwdArg) tail (b:bs))
-  where bind = do v <- escname
-                  colon
-                  e <- test
-                  return (v,e)
 
 funargs :: Parser (S.PosArg, S.KwdArg)
 funargs  = try (do e <- (star *> test); comma; k <- kwdarg; return (S.PosStar e, k))

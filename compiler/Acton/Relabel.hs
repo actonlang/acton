@@ -55,8 +55,8 @@ instance Relabel Stmt where
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
 
 instance Relabel Decl where
-    relabel (Def _ n q ps mba ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel mba <*> relabel ss <*> return md
-    relabel (Actor _ n q ps ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ann <*> relabel b
+    relabel (Def _ n q ps ks ann ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel ss <*> return md
+    relabel (Actor _ n q ps ks ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
@@ -83,7 +83,7 @@ instance Relabel Expr where
     relabel (UnOp _ op e) = UnOp <$> newLoc <*> relabel op <*> relabel e 
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
     relabel (DotI _ e i) = DotI <$> newLoc <*> relabel e <*> return i
-    relabel (Lambda _ ps e) = Lambda <$> newLoc <*> relabel ps <*> relabel e
+    relabel (Lambda _ ps ks e) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
     relabel (Tuple _ es) = Tuple <$> newLoc <*> relabel es
@@ -143,15 +143,15 @@ instance Relabel Except where
     relabel (Except _ x) = Except <$> newLoc <*> relabel x
     relabel (ExceptAs _ x n) = ExceptAs <$> newLoc <*> relabel x <*> relabel n
 
-instance Relabel Param where
-    relabel (Param nm mba mbe) = Param <$> relabel nm <*> relabel mba <*> relabel mbe
-
-instance Relabel Params where
-    relabel (Params p s1 k s2) = Params <$> relabel p <*> relabel s1 <*> relabel k <*> relabel s2
-
-instance Relabel StarPar where
-    relabel (StarPar _ n mbt) = StarPar <$> newLoc <*> relabel n <*> relabel mbt
-    relabel NoStar = return NoStar
+instance Relabel PosPar where
+    relabel (PosPar n t e p) = PosPar <$> relabel n <*> relabel t <*> relabel e <*> relabel p
+    relabel (PosSTAR n t) = PosSTAR <$> relabel n <*> relabel t
+    relabel PosNIL = return PosNIL
+    
+instance Relabel KwdPar where
+    relabel (KwdPar n t e k) = KwdPar <$> relabel n <*> relabel t <*> relabel e <*> relabel k
+    relabel (KwdSTAR n t) = KwdSTAR <$> relabel n <*> relabel t
+    relabel KwdNIL = return KwdNIL
     
 instance Relabel PosArg where
     relabel (PosArg e p) = PosArg <$> relabel e <*> relabel p
@@ -159,7 +159,7 @@ instance Relabel PosArg where
     relabel PosNil = return PosNil
     
 instance Relabel KwdArg where
-    relabel (KwdArg n e k) = KwdArg n <$> relabel e <*> relabel k
+    relabel (KwdArg n e k) = KwdArg <$> relabel n <*> relabel e <*> relabel k
     relabel (KwdStar e) = KwdStar <$> relabel e
     relabel KwdNil = return KwdNil
     
