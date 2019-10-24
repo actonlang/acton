@@ -39,4 +39,3 @@ list_t sieve(int n) {
 int main() {
   printf("%d\n",list_len(sieve(10000000)));
 }
-  
