@@ -110,7 +110,7 @@ int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * 
 }
 
 
-int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
+int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, nonce);
@@ -134,7 +134,7 @@ int db_remote_insert(WORD * column_values, int no_cols, WORD table_key, db_schem
 	return success;
 }
 
-int db_remote_delete_row(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
+int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	write_query * wq = build_delete_row_in_txn(column_values, schema->no_primary_keys, table_key, txnid, nonce);
@@ -159,7 +159,9 @@ int db_remote_delete_row(WORD * column_values, int no_cols, WORD table_key, db_s
 	return success;
 }
 
-read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd)
+read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
+														WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce,
+														int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -184,6 +186,175 @@ read_response_message* db_remote_search_clustering(WORD* primary_keys, WORD* clu
 	return response;
 }
 
+uuid_t * remote_new_txn(long nonce, int sockfd, remote_db_t * db, unsigned int * seedptr)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+	int status = -2;
+
+	while(status == -2) // txnid already exists on server
+	{
+		uuid_t * txnid = new_client_txn(db, seedptr);
+		txn_message * q = build_new_txn(txnid, nonce);
+		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
+
+	#if CLIENT_VERBOSITY > 0
+		char print_buff[1024];
+		to_string_txn_message(q, (char *) print_buff);
+		printf("Sending new txn: %s\n", print_buff);
+	#endif
+
+		// Send packet to server and wait for reply:
+
+		int n = -1;
+		success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+		ack_message * ack;
+		success = deserialize_ack_message(in_buf, n, &ack);
+		status = ack->status;
+	}
+
+	assert(status == 0);
+
+	return txnid;
+}
+
+int remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	txn_message * q = build_validate_txn(txnid, version, nonce);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_txn_message(q, (char *) print_buff);
+	printf("Sending validate txn: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+	ack_message * ack;
+	success = deserialize_ack_message(in_buf, n, &ack);
+
+	assert(success == 0);
+
+	return ack->status;
+}
+
+int remote_abort_txn(uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	txn_message * q = build_abort_txn(txnid, nonce);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_txn_message(q, (char *) print_buff);
+	printf("Sending abort txn: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+	ack_message * ack;
+	success = deserialize_ack_message(in_buf, n, &ack);
+
+	assert(success == 0);
+
+	return ack->status;
+}
+
+int remote_persist_txn(uuid_t * txnid, vector_clock * version, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	txn_message * q = build_commit_txn(txnid, version, nonce);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_txn_message(q, (char *) print_buff);
+	printf("Sending commit txn: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+	ack_message * ack;
+	success = deserialize_ack_message(in_buf, n, &ack);
+
+	assert(success == 0);
+
+	return ack->status;
+}
+
+
+int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int sockfd, db_t * db, unsigned int * fastrandstate)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+#if (CLIENT_VERBOSITY > 0)
+	char uuid_str[37];
+	uuid_unparse_lower(*txnid, uuid_str);
+#endif
+#if (CLIENT_VERBOSITY > 1)
+	printf("CLIENT: Attempting to validate txn %s\n", uuid_str);
+#endif
+
+	int res = remote_validate_txn(txnid, version, nonce, sockfd, db);
+
+#if (CLIENT_VERBOSITY > 1)
+	printf("CLIENT: validate txn %s returned %d\n", uuid_str, res);
+#endif
+
+	if(res == VAL_STATUS_COMMIT)
+	{
+		int persist_status = -2;
+		while(persist_status != 0)
+		{
+			persist_status = remote_persist_txn(txnid, version, nonce+1, sockfd, db);
+
+#if (CLIENT_VERBOSITY > 0)
+			printf("CLIENT: persist txn %s returned %d\n", uuid_str, persist_status);
+#endif
+		}
+
+		res = close_client_txn(txnid, db); // Clear local cached txn state on client
+
+#if (CLIENT_VERBOSITY > 1)
+		printf("CLIENT: close txn %s returned %d\n", uuid_str, res);
+#endif
+	}
+	else if(res == VAL_STATUS_ABORT)
+	{
+		res = remote_abort_txn(txnid, nonce+1, sockfd, db);
+
+#if (CLIENT_VERBOSITY > 0)
+		printf("CLIENT: abort txn %s returned %d\n", uuid_str, res);
+#endif
+	}
+	else
+	{
+		assert(0);
+	}
+
+	return 0;
+}
+
+
 
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
@@ -203,7 +374,7 @@ int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_remote_insert(column_values, no_cols, (WORD) 0, schema, &txnid, requests++, sockfd) != 0)
+				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, NULL, requests++, sockfd) != 0) // &txnid
 					return -1;
 			}
 		}
@@ -218,7 +389,7 @@ int delete_test(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 	uuid_t txnid;
 	uuid_generate(txnid);
 	WORD row_key = (WORD) no_actors - 1;
-	return db_remote_delete_row(&row_key, 1, (WORD) 0, schema, &txnid, requests++, sockfd);
+	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, NULL, requests++, sockfd); //  &txnid
 }
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
@@ -238,7 +409,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fast
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				read_response_message * response = db_remote_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, sockfd);
+				read_response_message * response = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, sockfd);
 				to_string_write_query(response, (char *) print_buff);
 				printf("Got back response: %s\n", print_buff);
 

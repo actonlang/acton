@@ -1284,6 +1284,19 @@ uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
 	return &(ts->txnid);
 }
 
+int close_client_txn(uuid_t * txnid, remote_db_t * db)
+{
+	txn_state * ts = get_client_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	skiplist_delete(db->txn_state, txnid);
+	free_txn_state(ts);
+
+	return 0;
+}
+
+
 txn_message * build_new_txn(uuid_t * txnid, long nonce)
 {
 	return init_txn_message_copy(DB_TXN_BEGIN,

@@ -24,16 +24,27 @@ int abort_txn(uuid_t * txnid, db_t * db);
 int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int * fastrandstate);
 
 int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+
 db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+
+db_row_t* db_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key,
+										uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+									WORD* col_keys, int no_columns, WORD table_key,
+									uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+
 int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
 							WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
+									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+									 snode_t** start_row, snode_t** end_row,
+									 WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+								snode_t** start_row, snode_t** end_row,
+								WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 
-db_row_t* db_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
-int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
-db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD* col_keys, int no_columns, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
-db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
-int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, snode_t** start_row, snode_t** end_row, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);

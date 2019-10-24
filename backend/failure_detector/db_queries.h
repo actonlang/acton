@@ -208,6 +208,7 @@ typedef struct txn_message
 
 txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db);
 uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
+int close_client_txn(uuid_t * txnid, remote_db_t * db);
 
 txn_message * build_new_txn(uuid_t * txnid, long nonce);
 txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce);
