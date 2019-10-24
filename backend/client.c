@@ -355,6 +355,131 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int so
 }
 
 
+db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+									WORD* col_keys, int no_columns, WORD table_key,
+									uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
+							snode_t** start_row, snode_t** end_row,
+							WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
+									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+									 snode_t** start_row, snode_t** end_row,
+									 WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+								snode_t** start_row, snode_t** end_row,
+								WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+
+int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+
+// Queue ops:
+
+int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, int * entries_read, long * new_read_head,
+		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
+		db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					long new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+								db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+								uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+
+
 
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
