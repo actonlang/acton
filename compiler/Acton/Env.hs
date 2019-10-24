@@ -18,8 +18,8 @@ import Acton.Names
 import Acton.TypeM
 import Utils
 import Pretty
---import InterfaceFiles
-import Prelude hiding ((<>))
+import InterfaceFiles
+-- import Prelude hiding ((<>))
 
 
 
@@ -282,11 +282,11 @@ doImp (p,sysp) env m            = case lookup m (modules env) of
                                     Nothing -> do
                                         found <- doesFileExist fpath
                                         if found
-                                         then do te <- return [] -- InterfaceFiles.readFile fpath
+                                         then do te <- InterfaceFiles.readFile fpath
                                                  return (addmod m te env, te)
                                          else do found <- doesFileExist fpath2
                                                  unless found (fileNotFound m)
-                                                 te <- return [] -- InterfaceFiles.readFile fpath
+                                                 te <- InterfaceFiles.readFile fpath
                                                  return (addmod m te env, te)
   where fpath                   = joinPath (p : mpath m) ++ ".ty"
         fpath2                  = joinPath (sysp : mpath m) ++ ".ty"

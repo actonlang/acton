@@ -59,7 +59,7 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | UStrings      { eloc::SrcLoc, sval::[String] }
-                | Call          { eloc::SrcLoc, function::Expr, arguments::[Arg] }
+                | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::[Expr] }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Slice] }
@@ -73,15 +73,15 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, elems::[Elem Expr] }
-                | Generator     { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
+                | TupleComp     { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
+                | Record        { eloc::SrcLoc, fields::[Field] }
+                | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem Expr] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
                 | DictComp      { eloc::SrcLoc, assoc1::Assoc, comp::Comp }
                 | Set           { eloc::SrcLoc, elems::[Elem Expr] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
-                | Record        { eloc::SrcLoc, fields::[Field] }
-                | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
@@ -137,7 +137,8 @@ data StarPar    = StarPar SrcLoc Name (Maybe Type) | NoStar deriving (Show)
 data Elem e     = Elem e | Star e deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStarAssoc Expr deriving (Show,Eq)
 data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
-data Arg        = Arg Expr | KwArg Name Expr | StarArg Expr | StarStarArg Expr deriving (Show,Eq)
+data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
+data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
 
 data OpArg      = OpArg (Op Comparison) Expr deriving (Eq,Show)
 data Slice      = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe (Maybe Expr)) deriving (Show)
@@ -278,12 +279,12 @@ fxRet t         = TRow NoLoc rRet (tSchema t)
 fxVar v         = TVar NoLoc v
 fxNil           = TNil NoLoc
 
-posRow t r      = TRow NoLoc (rPos n) t r
+posRow t r      = TRow NoLoc (rPos n) (tSchema t) r
   where n       = rowDepth r + 1
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil
 
-kwdRow n t      = TRow NoLoc n t
+kwdRow n sc     = TRow NoLoc n sc
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil
 
@@ -417,7 +418,7 @@ instance Eq Expr where
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
     x@UStrings{}        ==  y@UStrings{}        = sval x == sval y
-    x@Call{}            ==  y@Call{}            = function x == function y && arguments x == arguments y
+    x@Call{}            ==  y@Call{}            = function x == function y && pargs x == pargs y && kargs x == kargs y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
@@ -428,18 +429,18 @@ instance Eq Expr where
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
     x@Lambda{}          ==  y@Lambda{}          = pars x == pars y && exp1 x == exp1 y
-    x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
-    x@Generator{}       ==  y@Generator{}       = elem1 x == elem1 y && comp x == comp y
+    x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
+    x@TupleComp{}       ==  y@TupleComp{}       = elem1 x == elem1 y && comp x == comp y
+    x@Record{}          ==  y@Record{}          = fields x == fields y
+    x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
     x@Dict{}            ==  y@Dict{}            = assocs x == assocs y
     x@DictComp{}        ==  y@DictComp{}        = assoc1 x == assoc1 y && comp x == comp y
     x@Set{}             ==  y@Set{}             = elems x == elems y
     x@SetComp{}         ==  y@SetComp{}         = elem1 x == elem1 y && comp x == comp y
-    x@Record{}          ==  y@Record{}          = fields x == fields y
-    x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@Paren{}           ==  y                   = exp1 x == y
     x                   ==  y@Paren{}           = x == exp1 y
     _                   ==  _                   = False
@@ -552,22 +553,6 @@ actKW                               = Name NoLoc "actor"
 mutKW                               = Name NoLoc "mut"
 retKW                               = Name NoLoc "ret"
 
-elemcore (Elem e)                   = e
-elemcore (Star e)                   = e
-
-fieldcore (Field _ e)               = e
-fieldcore (StarStarField e)         = e
-
-paramcores (Params ps _ ks _)       = [ e | Param _ _ (Just e) <- ps ++ ks ]
-
-argcore (Arg e)                     = e
-argcore (StarArg e)                 = e
-argcore (KwArg _ e)                 = e
-argcore (StarStarArg e)             = e
-
-isPosArg (Arg _)                    = True
-isPosArg (StarArg _)                = True
-isPosArg _                          = False
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

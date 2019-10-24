@@ -5,7 +5,7 @@ import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
-import Prelude hiding ((<>))
+-- import Prelude hiding ((<>))
 
 
 
@@ -71,17 +71,22 @@ prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySu
 prettyEnd kw []                     = empty
 prettyEnd kw b                      = text kw <> colon $+$ prettySuite b
 
-prettyArgs []                       = text ")"
-prettyArgs [kwd]                    = prettyArg kwd <> text ")"
-prettyArgs (kwd:kwds)               = prettyArg kwd <> comma $$ prettyArgs kwds
-    
-prettyArg (KwArg kw (Call _ e es))
-  | length kwds == 0                = f <> parens (commaList es)
-  | length pos == 0                 = f <> text "(" $$ nest 4 (prettyArgs kwds)
-  | otherwise                       = f <> text "(" <> commaList pos <> comma $$ nest 4 (prettyArgs kwds)
-  where (pos,kwds)                  = partition isPosArg es
-        f                           = pretty kw <+> equals <+> pretty e
-prettyArg arg                       = pretty arg
+instance Pretty PosArg where
+    pretty (PosArg e PosNil)        = pretty e
+    pretty (PosArg e p)             = pretty e <> comma <+> pretty p
+    pretty (PosStar e)              = text "*" <> pretty e
+    pretty PosNil                   = empty
+
+instance Pretty KwdArg where
+    pretty (KwdArg n e KwdNil)      = pretty n <+> equals <+> pretty e
+    pretty (KwdArg n e k)           = pretty n <+> equals <+> pretty e <> comma <+> pretty k
+    pretty (KwdStar e)              = text "**" <> pretty e
+    pretty KwdNil                   = empty
+
+instance Pretty (PosArg,KwdArg) where
+    pretty (PosNil, ks)             = pretty ks
+    pretty (ps, KwdNil)             = pretty ps
+    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
@@ -95,11 +100,7 @@ instance Pretty Expr where
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
     pretty (UStrings _ ss)          = hcat (map pretty ss)
-    pretty (Call _ e es)
-      | length kwds < 2             = pretty e <> parens (commaList es)
-      | length pos == 0             = pretty e <> text "(" $$ nest 4 (prettyArgs kwds)
-      | otherwise                   = pretty e <> text "(" <> commaList pos <> comma $$ nest 4 (prettyArgs kwds)
-      where (pos,kwds)              = partition isPosArg es
+    pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (commaList ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
@@ -110,10 +111,13 @@ instance Pretty Expr where
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
     pretty (Lambda _ ps e)          = text "lambda" <+> pretty ps <> colon <+> pretty e
-    pretty (Tuple _ es)             = prettyTuple es
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
-    pretty (Generator _ e co)       = pretty e <+> pretty co
+    pretty (Tuple _ es)             = prettyTuple es
+    pretty (TupleComp _ e co)       = pretty e <+> pretty co
+    pretty (Record _ [])            = text "record" <> parens empty
+    pretty (Record _ fs)            = parens (commaList fs)
+    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -121,9 +125,6 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
-    pretty (Record _ [])            = text "record" <> parens empty
-    pretty (Record _ fs)            = parens (commaList fs)
-    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (Paren _ e)              = parens (pretty e)
 
 instance Pretty OpArg where
@@ -204,12 +205,6 @@ instance Pretty ModuleItem where
 
 instance Pretty ImportItem where
     pretty (ImportItem n1 n2)       = pretty n1 <+> nonEmpty (text "as" <+>) pretty n2
-
-instance Pretty Arg where
-    pretty (Arg e)                  = pretty e
-    pretty (KwArg n e)              = pretty n <+> equals <+> pretty e
-    pretty (StarArg e)              = text "*" <> pretty e
-    pretty (StarStarArg e)          = text "**" <> pretty e
 
 instance Pretty Slice where
     pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> prettySlice c
