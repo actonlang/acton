@@ -21,9 +21,16 @@ import Acton.Names
 data Constraint                         = Equ       Type Type
                                         | Sub       Type Type
                                         | Impl      Type TCon
+                                        | Sel       Type Name Type
                                         -- ...
                                         deriving (Eq,Show)
 
+instance Pretty Constraint where
+    pretty (Equ t1 t2)                  = pretty t1 <+> text "  =  " <+> pretty t2
+    pretty (Sub t1 t2)                  = pretty t1 <+> text "  <  " <+> pretty t2
+    pretty (Impl t u)                   = pretty t <+> text "  impl  " <+> pretty u
+    pretty (Sel t1 n t2)                = pretty t1 <+> text "  ." <> pretty n <> text "  " <+> pretty t2
+    
 type Constraints                        = [Constraint]
 
 data TypeErr                            = TypeErr

@@ -252,51 +252,50 @@ instance InfEnv Decl where
     infEnv env (Actor l n q p ann b)        -- TODO: schema [q] => (p) -> ann
       | nodup p && noshadow svars p && 
         chkRedef b                      = do pushFX (fxAct tWild)
-                                             let env0 = block (bound p ++ bound b ++ svars ++ oldstate) $ define envActorSelf env
-                                             (prow, krow, te0) <- infParams env0 p
-                                             let env1 = define te0 env0
-                                             te1 <- infEnv env1 b
+                                             (prow, krow, te0) <- infParams env1 p
+                                             te1 <- infEnv (define te0 env1) b
                                              te2 <- genTEnv env te1
                                              fx <- fxAct <$> newTVar
                                              return [(n, nVar (tFun fx prow krow (tRecord $ env2row tNil te2)))]
       where svars                       = statedefs b
             oldstate                    = statescope env
-
+            env1                        = block (bound p ++ bound b ++ svars ++ oldstate) $ define envActorSelf env
+            
     infEnv env (Def l n q p ann b (Sync _)) -- TODO: schema [q] => (p) -> ann
       | nodup p && noshadow svars p     = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
-                                             let env1 = block (bound p ++ bound b) env
                                              (prow, krow, te) <- infParams env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
                                              fx <- fxSync <$> newTVar
                                              return [(n, nVar (tFun fx prow krow t))]
       where svars                       = statescope env
+            env1                        = block (bound p ++ bound b) env
 
     infEnv env (Def l n q p ann b Async)    -- TODO: schema [q] => (p) -> ann
       | nodup p && noshadow svars p     = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
-                                             let env1 = block (bound p ++ bound b) env
                                              (prow, krow, te) <- infParams env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
                                              return [(n, nVar (tFun fx prow krow ({-tMsg-}t)))]
       where svars                       = statescope env
+            env1                        = block (bound p ++ bound b) env
 
     infEnv env (Def l n q p ann b modif)    -- TODO: schema [q] => (p) -> ann
       | nodup p                         = do t <- newTVar
                                              fx <- newTVar
                                              pushFX (fxRet t fx)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
-                                             let env1 = block (bound p ++ bound b ++ svars) env
                                              (prow, krow, te) <- infParams env1 p
                                              _ <- infEnv (define te env1) b
                                              popFX
                                              return [(n, nVar (tFun fx prow krow t))]     -- TODO: modif/NoDecoration
       where svars                       = statescope env
+            env1                        = block (bound p ++ bound b ++ svars) env
 {-
     infEnv env (Class l n q cs b)
       | nodup cs && chkRedef b          = do t0 <- newOVar
@@ -390,9 +389,11 @@ instance Infer Expr where
     infer env (Strings _ ss)            = return tStr
     infer env (BStrings _ ss)           = return tStr
     infer env (UStrings _ ss)           = return tStr
-    infer env (Call l e args)           = do t <- infer env e
+    infer env (Call l e ps ks)          = do t <- infer env e
                                              dump [INS (loc e) t]
-                                             (prow, krow) <- inferArgs env args
+                                             prow <- infer env ps
+                                             krow <- infer env ks
+--                                             (prow, krow) <- inferArgs env args
                                              t0 <- newTVar
                                              fx <- currFX
                                              constrain [Sub t (tFun fx prow krow t0)]
@@ -474,31 +475,40 @@ instance Infer Expr where
             protocol Is                 = cIdentity
             protocol IsNot              = cIdentity
     infer env (Dot l e n)               = do t <- infer env e
-                                             t0 <- newOVar
-                                             o_constrain [QDot l 1 t n t0]                                -- n-selectability of e
+                                             t0 <- newTVar
+                                             constrain [Sel t n t0]
                                              return t0
     infer env (DotI l e i)              = do t <- infer env e
-                                             t0:tvs <- newOVars (i+2)
-                                             o_constrain [QEqu l 22 t (OTuple (row t0 tvs i))]            -- index-selectability of e
+                                             t0:tvs <- newTVars (i+2)
+                                             constrain [Equ t (tTuple (row t0 tvs i))]
                                              return t0
-      where row t0 (t1:tvs) 0           = OPos t0 t1
-            row t0 (t1:tvs) n           = OPos t1 (row t0 tvs (n-1))
+      where row t0 [r] 0                = posRow t0 r
+            row t0 (t1:tvs) n           = posRow t1 (row t0 tvs (n-1))
     infer env (Lambda l par e)
-      | nodup par                       = do t0:fx:_ <- newOVars 2
-                                             o_pushFX fx
-                                             (te, row) <- infEnvT env par
-                                             t <- infer (o_define te env) e
-                                             o_popFX
-                                             o_dump [INS l $ OFun fx row t]
-                                             return (OFun fx row t)
-    infer env (Tuple l es)              = do r <- infer env es
-                                             return (OTuple r)
+      | nodup par                       = do fx <- newTVar
+                                             pushFX fx
+                                             (prow, krow, te) <- infParams env1 par
+                                             t <- infer (define te env1) e
+                                             popFX
+                                             dump [INS l $ tFun fx prow krow t]
+                                             return (tFun fx prow krow t)
+      where env1                        = block (bound par) env
     infer env e@Yield{}                 = notYetExpr e
     infer env e@YieldFrom{}             = notYetExpr e
-    infer env (Generator l (Elem e) co)
+    infer env (Tuple l es)              = do ts <- mapM (infer env) es
+                                             return (OTuple r)
+    infer env (TupleComp l (Elem e) co)
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (o_define te env) e
-                                             return (OList t)                                  -- !! Should be CGenerator...
+                                             return (OList t)                   -- !! Big over-generalization, for now
+    infer env (Record l fs)             = do te <- infer env fs
+                                             return (ORecord te)
+    infer env (RecordComp l n e co)     = do te <- infEnv env co
+                                             let env1 = o_define te env
+                                             _ <- infer env1 (Var (nloc n) n)
+                                             _ <- infer env1 e
+                                             r <- newOVar
+                                             return (ORecord r)                 -- !! Big over-generalization, for now
     infer env (List l es)               = do r <- infer env es
                                              t0 <- newOVar
                                              o_constrain (fold t0 (map loc es) r)
@@ -529,14 +539,6 @@ instance Infer Expr where
       | nodup co                        = do te <- infEnv env co
                                              t <- infer (o_define te env) e
                                              return (OSet t)
-    infer env (Record l fs)             = do te <- infer env fs
-                                             return (ORecord te)
-    infer env (RecordComp l n e co)     = do te <- infEnv env co
-                                             let env1 = o_define te env
-                                             _ <- infer env1 (Var (nloc n) n)
-                                             _ <- infer env1 e
-                                             r <- newOVar
-                                             return (ORecord r)                 -- !! Big over-generalization, for now
     infer env (Paren l e)               = infer env e
 
 
@@ -581,31 +583,26 @@ infKwd env (Param n a (Just e) : ps) s  = do t <- newTVar
                                              (r, te) <- infKwd (define [(n,nVar t)] env) ps s
                                              return (kwdRow n t r, (n,nVar t):te)
 
-inferArgs                               :: Env -> [Arg] -> TypeM (PosRow, KwdRow)
-inferArgs env (Arg e : args)            = do t <- infer env e
-                                             (prow, krow) <- inferArgs env args
-                                             return (posRow t prow, krow)
-inferArgs env (StarArg e : args)        = do t <- infer env e
+instance Infer PosArg where
+    infer env (PosArg e p)              = do t <- infer env e
+                                             prow <- infer env p
+                                             return (posRow t prow)
+    infer env (PosStar e)               = do t <- infer env t
                                              prow <- newTVar
                                              constrain [Equ t (tTuple prow)]
-                                             krow <- inferArgs2 env args
-                                             return (prow, krow)
-inferArgs env args                      = do krow <- inferArgs2 env args
-                                             return (posNil, krow)
-
-inferArgs2 env (KwArg n e : args)       = do t <- infer env e
-                                             krow <- inferArgs2 env args
+                                             return prow
+    infer env PosNil                    = return posNil
+    
+instance Infer KwdArg where
+    infer env (KwdArg n e k)            = do t <- infer env e
+                                             krow <- infer env k
                                              return (kwdRow n t krow)
-inferArgs2 env (StarStarArg e : args)
-  | null args                           = do t <- infer env e
+    infer env (KwdStar e)               = do t <- infer env t
                                              krow <- newTVar
                                              constrain [Equ t (tRecord krow)]
                                              return krow
-  | otherwise                           = err1 (head args) "Unexpected argument after ** expansion"
-inferArgs2 env []                       = return kwdNil
-inferArgs2 env args                     = err1 (head args) "Unexpected positional argument"
-
-
+    infer env KwdNil                    = return kwdNil
+    
 instance Infer Assoc where
     infer env (Assoc k v)               = ODict <$> infer env k <*> infer env v
     infer env (StarStarAssoc e)         = infer env e
@@ -700,7 +697,7 @@ instance Infer Pattern where
       where noenv ([], t)               = t
             noenv (te, _)               = nameNotFound (head (dom te))
                                              
-
+{-
 inferSuper env (Arg e : args)           = do t <- inferPure env e
                                              r <- inferSuper env args
                                              r':t':_ <- newOVars 2
@@ -717,3 +714,4 @@ getInit l tenv                          = case partition ((=="__init__") . nstr 
                                             ([],_) -> notYet l (text "Class declaration without an '__init__' method")
                                             ([(n,t)],tenv1) -> (nloc n, t, tenv1)
 
+-}

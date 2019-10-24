@@ -166,7 +166,7 @@ instance Vars Expr where
     free (Strings _ ss)             = []
     free (BStrings _ ss)            = []
     free (UStrings _ ss)            = []
-    free (Call _ e es)              = free e ++ free es
+    free (Call _ e ps ks)           = free e ++ free ps ++ free ks
     free (Await _ e)                = free e
     free (Index _ e ix)             = free e ++ free ix
     free (Slice _ e sl)             = free e ++ free sl
@@ -177,18 +177,18 @@ instance Vars Expr where
     free (Dot _ e n)                = free e
     free (DotI _ e i)               = free e
     free (Lambda _ ps e)            = free ps ++ (free e \\ bound ps)
-    free (Tuple _ es)               = free es
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
-    free (Generator _ e co)         = (free e \\ bound co) ++ free co
+    free (Tuple _ es)               = free es
+    free (TupleComp _ e co)         = (free e \\ bound co) ++ free co
+    free (Record _ fs)              = free fs
+    free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
     free (List _ es)                = free es
     free (ListComp _ e co)          = (free e \\ bound co) ++ free co
     free (Dict _ es)                = free es
     free (DictComp _ e co)          = (free e \\ bound co) ++ free co
     free (Set _ es)                 = free es
     free (SetComp _ e co)           = (free e \\ bound co) ++ free co
-    free (Record _ fs)              = free fs
-    free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
     free (Paren _ e)                = free e
 
 instance Vars Name where
@@ -250,15 +250,16 @@ instance Vars WithItem where
 
     bound (WithItem e p)            = bound p
     
-instance Vars Arg where
-    free (Arg e)                    = free e
-    free (KwArg n e)                = free e
-    free (StarArg e)                = free e
-    free (StarStarArg e)            = free e
-
-    bound (KwArg n e)               = [n]
-    bound _                         = []
-
+instance Vars PosArg where
+    free (PosArg e p)               = free e ++ free p
+    free (PosStar e)                = free e
+    free PosNil                     = []
+    
+instance Vars KwdArg where
+    free (KwdArg n e k)             = free e ++ free k
+    free (KwdStar e)                = free e
+    free KwdNil                     = []
+    
 instance Vars OpArg where
     free (OpArg o e)                = free e
 
@@ -337,70 +338,4 @@ instance Vars Type where
 -- Called during translation to ensure that lambdas contain no state variables
 -- Will become defunct once lambda-lifting works directly on Acton code
 
-lambdafree s                        = lfreeS s
-  where lfreeS (Expr _ e)           = lfree e
-        lfreeS (Assign _ ps e)      = concatMap lfreeP ps ++ lfree e
-        lfreeS (AugAssign _ p op e) = lfreeP p ++ lfree e
-        lfreeS (Assert _ es)        = concatMap lfree es
-        lfreeS (Delete _ p)         = lfreeP p
-        lfreeS (Return _ e)         = maybe [] lfree e
-        lfreeS (Raise _ ex)         = maybe [] (\(Exception e1 e2) -> lfree e1 ++ maybe [] lfree e2) ex
-        lfreeS (If _ branches els)  = concatMap lfree [ e | Branch e _ <- branches ]
-        lfreeS (While _ e b els)    = lfree e
-        lfreeS (For _ p e b els)    = lfreeP p ++ lfree e
-        lfreeS (With _ items b)     = concat [ lfree e ++ maybe [] lfreeP p | WithItem e p <- items ]
-        lfreeS (Data _ p b)         = maybe [] lfreeP p
-        lfreeS (VarAssign _ ps e)   = concatMap lfreeP ps ++ lfree e
-        lfreeS (Decl _ ds)          = concatMap lfreeD ds
-        lfreeS _                    = []
-
-        lfreeD (Class _ n q cs b)   = concatMap lfreeS b
-        lfreeD (Protocol _ n q cs b)    = concatMap lfreeS b
-        lfreeD (Extension _ n q cs b)   = concatMap lfreeS b
-        lfreeD _                    = []
-
-        lfree (Call _ e es)         = lfree e ++ concatMap (lfree . argcore) es
-        lfree (Await _ e)           = lfree e
-        lfree (Index _ e ix)        = lfree e ++ concatMap lfree ix
-        lfree (Slice _ e sl)        = lfree e ++ concatMap lfreeZ sl
-        lfree (Cond _ e1 e e2)      = concatMap lfree [e1,e,e2]
-        lfree (BinOp _ e1 o e2)     = concatMap lfree [e1,e2]
-        lfree (CompOp _ e ops)      = lfree e ++ concatMap lfree [ e | OpArg _ e <- ops ]
-        lfree (UnOp _ o e)          = lfree e
-        lfree (Dot _ e n)           = lfree e
-        lfree (DotI _ e i)          = lfree e
-        lfree (Lambda _ ps e)       = concatMap lfree (paramcores ps) ++ (free e \\ bound ps)  -- NOTE: free e, not lambdafree e!
-        lfree (Tuple _ es)          = concatMap (lfree . elemcore) es
-        lfree (Yield _ e)           = maybe [] lfree e
-        lfree (YieldFrom _ e)       = lfree e
-        lfree (Generator _ e c)     = (lfree (elemcore e) \\ bound c) ++ lfreeC c
-        lfree (List _ es)           = concatMap (lfree . elemcore) es
-        lfree (ListComp _ e c)      = (lfree (elemcore e) \\ bound c) ++ lfreeC c
-        lfree (Dict _ es)           = concatMap lfreeA es
-        lfree (DictComp _ e c)      = (lfreeA e \\ bound c) ++ lfreeC c
-        lfree (Set _ es)            = concatMap (lfree . elemcore) es
-        lfree (SetComp _ e c)       = (lfree (elemcore e) \\ bound c) ++ lfreeC c
-        lfree (Record _ fs)         = concatMap (lfree . fieldcore) fs
-        lfree (RecordComp _ n e c)  = ((n : lfree e) \\ bound c) ++ lfreeC c
-        lfree (Paren _ e)           = lfree e
-        lfree _                     = []
-        
-        lfreeZ (Sliz _ e1 e2 e3)    = maybe [] lfree e1 ++ maybe [] lfree e2 ++ maybe [] (maybe [] lfree) e3
-        
-        lfreeA (Assoc k e)          = lfree k ++ lfree e
-        lfreeA (StarStarAssoc e)    = lfree e
-
-        lfreeC (CompFor _ p e c)    = lfree e ++ lfreeP p ++ (lfreeC c \\ bound p)
-        lfreeC (CompIf _ e c)       = lfree e ++ lfreeC c
-        lfreeC NoComp               = []
-        
-        lfreeP (PVar _ n a)         = []
-        lfreeP (PTuple _ ps)        = concatMap (lfreeP . elemcore) ps
-        lfreeP (PList _ ps)         = concatMap (lfreeP . elemcore) ps
-        lfreeP (PIndex _ e ix)      = lfree e ++ concatMap lfree ix
-        lfreeP (PSlice _ e sl)      = lfree e ++ concatMap lfreeZ sl
-        lfreeP (PDot _ e n)         = lfree e
-        lfreeP (PParen _ p)         = lfreeP p
-        lfreeP (PData _ n ixs)      = concatMap lfree ixs
-
-
+lambdafree s                        = undefined

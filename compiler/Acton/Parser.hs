@@ -994,7 +994,7 @@ commaList p = many (try (comma *> p)) <* optional comma
 testlist_comp :: Parser S.Expr
 testlist_comp = addLoc $ do
       e <- elem
-      (S.Generator NoLoc e <$> comp_for) <|> ((S.Paren NoLoc . f) <$> elems e)
+      (S.TupleComp NoLoc e <$> comp_for) <|> ((S.Paren NoLoc . f) <$> elems e)
    where elem = (S.Elem <$> test) <|> star_expr
          elems e = do
             es <- many (try (comma *> elem))
@@ -1046,8 +1046,8 @@ trailer = withLoc (
                 return (\a -> S.Slice NoLoc a ss))
                 <|>
               (do
-                mbas <- parens (optional arglist)
-                return (\a -> S.Call NoLoc a (maybe [] id mbas)))
+                (ps,ks) <- parens funargs
+                return (\a -> S.Call NoLoc a ps ks))
                 <|>
               (do
                  dot
@@ -1109,20 +1109,6 @@ classdefGen k pname ctx con = addLoc $ do
 -- comp_for: [ASYNC] 'for' exprlist 'in' or_test [comp_iter]
 -- comp_if: 'if' test_nocond [comp_iter]
 
-arglist = (:) <$> argument <*> commaList argument
-
-argument = ((try $ do
-            nm <- escname
-            equals
-            e1 <- test
-            return $ S.KwArg nm e1)
-         <|>
-                   --fail "Only an identifier allowed to the left of equality sign in argument list" )
-            (do e <- test
-                maybe (S.Arg e) (S.Arg . S.Generator (S.eloc e) (S.Elem e)) <$> optional comp_for)
-         <|> (starstar *> (S.StarStarArg <$> test))
-         <|> (star *> (S.StarArg <$> test))) <?> "argument"
-           
 comp_iter, comp_for, comp_if :: Parser S.Comp
 comp_iter = comp_for <|> comp_if
 
@@ -1147,6 +1133,47 @@ yield_expr = addLoc $ do
              (S.YieldFrom NoLoc <$> (rword "from" *> test)
               <|> S.Yield NoLoc <$> optional testlist)
 
+
+--- Args -----------------------------------------------------------------------
+
+posarg :: Parser S.PosArg
+posarg  = do e <- star *> test
+             return (S.PosStar e)
+         <|> 
+          do e <- test
+             es <- many (try (comma *> test))
+             mbe <- optional (comma *> optional (star *> test))
+             let tail = maybe S.PosNil (maybe S.PosNil S.PosStar) mbe
+             return (foldr S.PosArg tail (e:es))
+
+kwdarg :: Parser S.KwdArg
+kwdarg  = do e <- starstar *> test
+             return (S.KwdStar e)
+         <|>
+          do b <- bind
+             bs <- many (try (comma *> bind))
+             mbe <- optional (comma *> optional ((starstar *> test) <* optional comma ))
+             let tail = maybe S.KwdNil (maybe S.KwdNil S.KwdStar) mbe
+             return (foldr (uncurry S.KwdArg) tail (b:bs))
+  where bind = do v <- escname
+                  colon
+                  e <- test
+                  return (v,e)
+
+funargs :: Parser (S.PosArg, S.KwdArg)
+funargs  = try (do e <- (star *> test); comma; k <- kwdarg; return (S.PosStar e, k))
+        <|>
+           try (do e <- (star *> test); optional comma; return (S.PosStar e, S.KwdNil))
+        <|>
+           try (do k <- kwdarg; return (S.PosNil, k))
+        <|>
+           try (do e <- test; comma; (p,k) <- funargs; return (S.PosArg e p, k))
+        <|>
+           try (do e <- test; optional comma; return (S.PosArg e S.PosNil, S.KwdNil))
+        <|>
+           try (do optional comma; return (S.PosNil, S.KwdNil))
+
+
 --- Types ----------------------------------------------------------------------
 
 fx      :: Parser (S.FXRow -> S.FXRow)
@@ -1165,8 +1192,8 @@ posrow :: Parser S.PosRow                   --non-empty posrow without trailing 
 posrow  = do mbv <- star *> optional tvar  
              return (S.posVar mbv)
          <|> 
-          do t <- tscheme
-             ts <- many (try (comma *> tscheme))
+          do t <- ttype
+             ts <- many (try (comma *> ttype))
              mbv <- optional (comma *> optional (star *> optional tvar))
              let tail = maybe S.posNil (maybe S.posNil S.posVar) mbv
              return (foldr S.posRow tail (t:ts))
@@ -1188,9 +1215,9 @@ funrows  = try (do mbv <- (star *> optional tvar); comma; k <- kwdrow; return (S
         <|>
            try (do k <- kwdrow; return (S.posNil, k))
         <|>
-           try (do t <- tscheme; comma; (p,k) <- funrows; return (S.posRow t p, k))
+           try (do t <- ttype; comma; (p,k) <- funrows; return (S.posRow t p, k))
         <|>
-           try (do t <- tscheme; optional comma; return (S.posRow t S.posNil, S.kwdNil))
+           try (do t <- ttype; optional comma; return (S.posRow t S.posNil, S.kwdNil))
         <|>
            try (do optional comma; return (S.posNil, S.kwdNil))
 
