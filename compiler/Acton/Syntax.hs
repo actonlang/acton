@@ -144,10 +144,10 @@ data Slice      = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe (Maybe Expr)) der
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
 
-data Unary      = Not|BNot|UMinus|UPlus deriving (Show,Eq)
-data Binary     = Or|And|BOr|BXor|BAnd|ShiftL|ShiftR|Plus|Minus|Mult|MMult|Div|Mod|EuDiv|Pow deriving (Show,Read,Eq,Generic)
-data Comparison = Lt|Gt|Eq|GE|LE|LtGt|NEq|In|NotIn|Is|IsNot deriving (Show,Eq)
-data Aug        = PlusA|MinusA|MultA|MMultA|DivA|ModA|PowA|BAndA|BOrA|BXorA|ShiftLA|ShiftRA|EuDivA deriving (Show,Eq)
+data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq)
+data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,Generic)
+data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
+data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
 data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
 data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show,Read,Generic)
@@ -319,7 +319,7 @@ instance Data.Binary.Binary Type
 type SrcInfo            = [SrcInfoTag]
 
 data SrcInfoTag         = GEN   SrcLoc TSchema
-                        | INS   SrcLoc TSchema
+                        | INS   SrcLoc Type
                         deriving (Eq,Show)
 
 lookupGEN l info        = listToMaybe [ t | GEN l' t <- info, l' == l ]
