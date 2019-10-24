@@ -46,9 +46,9 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n q ps a b md)    = prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
+    pretty (Def _ n q ps ks a b md) = prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
-    pretty (Actor _ n q ps a b)     = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty ps) <>
+    pretty (Actor _ n q ps ks a b)  = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
@@ -70,6 +70,27 @@ prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySu
 
 prettyEnd kw []                     = empty
 prettyEnd kw b                      = text kw <> colon $+$ prettySuite b
+
+prettyOpt sep Nothing               = empty
+prettyOpt sep (Just a)              = sep <+> pretty a
+
+
+instance Pretty PosPar where
+    pretty (PosPar n t e PosNIL)    = pretty n <+> prettyOpt colon t <+> prettyOpt equals e
+    pretty (PosPar n t e p)         = pretty n <+> prettyOpt colon t <+> prettyOpt equals e <> comma <+> pretty p
+    pretty (PosSTAR n t)            = text "*" <> pretty n <+> prettyOpt colon t
+    pretty PosNIL                   = empty
+
+instance Pretty KwdPar where
+    pretty (KwdPar n t e KwdNIL)    = pretty n <+> prettyOpt colon t <+> prettyOpt equals e
+    pretty (KwdPar n t e k)         = pretty n <+> prettyOpt colon t <+> prettyOpt equals e <> comma <+> pretty k
+    pretty (KwdSTAR n t)            = text "**" <> pretty n <+> prettyOpt colon t
+    pretty KwdNIL                   = empty
+
+instance Pretty (PosPar,KwdPar) where
+    pretty (PosNIL, ks)             = pretty ks
+    pretty (ps, KwdNIL)             = pretty ps
+    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
@@ -110,7 +131,7 @@ instance Pretty Expr where
     pretty (UnOp _ o e)             = pretty o <> pretty e
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
-    pretty (Lambda _ ps e)          = text "lambda" <+> pretty ps <> colon <+> pretty e
+    pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ es)             = prettyTuple es
@@ -164,23 +185,6 @@ instance Pretty Except where
     pretty (ExceptAll _)            = text "except"
     pretty (Except _ x)             = text "except" <+> pretty x
     pretty (ExceptAs _ x n)         = text "except" <+> pretty x <+> text "as" <+> pretty n
-
-instance Pretty Params where
-    pretty (Params a b c d)         = hsep $ punctuate comma params
-      where ps                      = map pretty a
-            kw                      = map pretty c
-            psE0                    = nonEmpty (text "*" <>) pretty b
-            psE                     = if isEmpty psE0 && kw /= [] then text "*" else psE0
-            kwE                     = nonEmpty (text "**" <>) pretty d
-            params                  = filter (not . isEmpty) (ps ++ [psE] ++ kw ++ [kwE])
-
-instance Pretty Param where
-    pretty (Param n ann Nothing)    = pretty n <> prettyAnn ann
-    pretty (Param n ann (Just e))   = pretty n <> prettyAnn ann <+> equals <+> pretty e
-
-instance Pretty StarPar where
-    pretty (StarPar _ n ann)        = pretty n <> prettyAnn ann
-    pretty NoStar                   = empty
 
 prettyAnn Nothing                   = empty
 prettyAnn (Just a)                  = colon <+> pretty a

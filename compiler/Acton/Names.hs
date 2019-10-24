@@ -132,15 +132,15 @@ instance Vars Stmt where
     bound _                         = []
 
 instance Vars Decl where
-    free (Def _ n q ps annot b md)  = (free ps ++ free b) \\ (n : bound ps ++ bound b)
-    free (Actor _ n q ps annot b)   = (free ps ++ free b) \\ (n : self : bound ps ++ bound b)
+    free (Def _ n q ps ks ann b md) = (free ps ++ free ks ++ free b) \\ (n : bound ps ++ bound ks ++ bound b)
+    free (Actor _ n q ps ks ann b)  = (free ps ++ free ks ++ free b) \\ (n : self : bound ps ++ bound ks ++ bound b)
     free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound b)
     free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound b)
     free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ bound b
     free (Signature _ ns t dec)     = free t
 
-    bound (Def _ n _ _ _ _ _)       = [n]
-    bound (Actor _ n _ _ _ _)       = [n]
+    bound (Def _ n _ _ _ _ _ _)     = [n]
+    bound (Actor _ n _ _ _ _ _)     = [n]
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
     bound (Extension _ n _ _ _)     = []
@@ -176,7 +176,7 @@ instance Vars Expr where
     free (UnOp _ o e)               = free e
     free (Dot _ e n)                = free e
     free (DotI _ e i)               = free e
-    free (Lambda _ ps e)            = free ps ++ (free e \\ bound ps)
+    free (Lambda _ ps ks e)         = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
     free (Tuple _ es)               = free es
@@ -213,19 +213,28 @@ instance Vars Except where
     bound (Except _ x)              = []
     bound (ExceptAs _ x n)          = [n]
 
-instance Vars Params where
-    free (Params p s1 k s2)         = free p ++ free s1 ++ free k ++ free s2
-
-    bound (Params p s1 k s2)        = bound p ++ bound s1 ++ bound k ++ bound s2
-
-instance Vars Param where
-    free (Param n annot v)          = free v
-
-    bound (Param n annot v)         = [n]
+instance Vars PosPar where
+    free (PosPar n t e p)           = free e ++ free p
+    free (PosSTAR n t)              = []
+    free PosNIL                     = []
     
-instance Vars StarPar where
-    bound (StarPar _ n annot)       = [n]
-    bound NoStar                    = []
+    bound (PosPar n t e p)          = n : bound p
+    bound (PosSTAR n t)             = [n]
+    bound PosNIL                    = []
+
+instance Vars KwdPar where
+    free (KwdPar n t e k)           = free e ++ free k
+    free (KwdSTAR n t)              = []
+    free KwdNIL                     = []
+    
+    bound (KwdPar n t e k)          = n : bound k
+    bound (KwdSTAR n t)             = [n]
+    bound KwdNIL                    = []
+
+instance Vars (PosPar,KwdPar) where
+    free (ppar,kpar)                = free ppar ++ free kpar
+    
+    bound (ppar,kpar)               = bound ppar ++ bound kpar
 
 instance Vars e => Vars (Elem e) where
     free (Elem e)                   = free e

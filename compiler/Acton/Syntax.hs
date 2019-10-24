@@ -40,8 +40,8 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], params::Params, ann::(Maybe Type), dbody::Suite, modif::Modif }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::[TBind], params::Params, ann::(Maybe Type), dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, modif::Modif }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::[TBind], pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
@@ -69,7 +69,7 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | UnOp          { eloc::SrcLoc, uop::Op Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
-                | Lambda        { eloc::SrcLoc, pars::Params, exp1::Expr }
+                | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, elems::[Elem Expr] }
@@ -130,13 +130,13 @@ data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
 data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show)
-data Params     = Params [Param] StarPar [Param] StarPar deriving (Show,Eq)
-data Param      = Param Name (Maybe TSchema) (Maybe Expr) deriving (Show,Eq)
-data StarPar    = StarPar SrcLoc Name (Maybe Type) | NoStar deriving (Show)
 
 data Elem e     = Elem e | Star e deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStarAssoc Expr deriving (Show,Eq)
 data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
+
+data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
+data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
 data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
 data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
 
@@ -398,13 +398,13 @@ instance Eq Stmt where
     _                   ==  _                   = False
 
 instance Eq Decl where
-    Def _ n1 q1 p1 a1 b1 m1 ==  Def _ n2 q2 p2 a2 b2 m2 = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2 && m1 == m2
-    Actor _ n1 q1 p1 a1 b1  ==  Actor _ n2 q2 p2 a2 b2  = n1 == n2 && q1 == q2 && p1 == p2 && a1 == a2 && b1 == b2
-    Class _ n1 q1 a1 b1     ==  Class _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Protocol _ n1 q1 a1 b1  ==  Protocol _ n2 q2 a2 b2  = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Extension _ n1 q1 a1 b1 ==  Extension _ n2 q2 a2 b2 = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Signature _ ns1 t1 d1   ==  Signature _ ns2 t2 d2   = ns1 == ns2 && t1 == t2 && d1 == d2
-    _                       == _                        = False
+    Def _ n1 q1 p1 k1 a1 b1 m1  ==  Def _ n2 q2 p2 k2 a2 b2 m2  = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2 && m1 == m2
+    Actor _ n1 q1 p1 k1 a1 b1   ==  Actor _ n2 q2 p2 k2 a2 b2   = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2
+    Class _ n1 q1 a1 b1         ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Protocol _ n1 q1 a1 b1      ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Extension _ n1 q1 a1 b1     ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Signature _ ns1 t1 d1       ==  Signature _ ns2 t2 d2       = ns1 == ns2 && t1 == t2 && d1 == d2
+    _                           == _                            = False
 
 instance Eq Expr where
     x@Var{}             ==  y@Var{}             = var x == var y
@@ -428,7 +428,7 @@ instance Eq Expr where
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
-    x@Lambda{}          ==  y@Lambda{}          = pars x == pars y && exp1 x == exp1 y
+    x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
     x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
@@ -463,11 +463,6 @@ instance Eq Except where
     ExceptAll _         ==  ExceptAll _         = True
     Except _ x1         ==  Except _ x2         = x1 == x2
     ExceptAs _ x1 n1    ==  ExceptAs _ x2 n2    = x1 == x2 && n1 == n2
-    _                   ==  _                   = False
-
-instance Eq StarPar where
-    StarPar _ n1 ann1   ==  StarPar _ n2 ann2   = n1 == n2 && ann1 == ann2
-    NoStar              ==  NoStar              = True
     _                   ==  _                   = False
 
 instance Eq Slice where
