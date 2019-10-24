@@ -109,6 +109,7 @@ int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * 
     return 0;
 }
 
+// Write ops:
 
 int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
@@ -132,6 +133,12 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
     success = deserialize_ack_message(in_buf, n, &ack);
 
 	return success;
+}
+
+int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported
+	return 0;
 }
 
 int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
@@ -159,6 +166,66 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 	return success;
 }
 
+int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clustering_keys, db_schema_t * schema, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	write_query * wq = build_delete_cell_in_txn(column_values, schema->no_primary_keys, no_clustering_keys, table_key, txnid, nonce);
+	void * tmp_out_buf = NULL;
+	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_write_query(wq, (char *) print_buff);
+	printf("Sending delete cell query: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+
+}
+
+int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+
+// Read ops:
+
+db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	read_query * q = build_search_in_txn(primary_keys, no_primary_keys, table_key, txnid, nonce);
+	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_read_query(q, (char *) print_buff);
+	printf("Sending read row query: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    read_response_message * response;
+    success = deserialize_write_query(in_buf, n, &response);
+
+	return response;
+}
+
 read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
 														WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce,
 														int sockfd, remote_db_t * db)
@@ -172,7 +239,7 @@ read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD*
 #if CLIENT_VERBOSITY > 0
 	char print_buff[1024];
 	to_string_read_query(q, (char *) print_buff);
-	printf("Sending read query: %s\n", print_buff);
+	printf("Sending read cell query: %s\n", print_buff);
 #endif
 
 	// Send packet to server and wait for reply:
@@ -185,6 +252,298 @@ read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD*
 
 	return response;
 }
+
+db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+									WORD* col_keys, int no_columns, WORD table_key,
+									uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported; TO DO
+	return 0;
+}
+
+int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
+							snode_t** start_row, snode_t** end_row,
+							WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	range_read_query * q = build_range_search_in_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, txnid, nonce);
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_range_read_query(q, (char *) print_buff);
+	printf("Sending range read row query: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    range_read_response_message * response;
+    success = deserialize_range_read_response_message(in_buf, n, &response);
+
+    // TO DO: Parse range_read_response_message to row list
+
+	return response;
+}
+
+int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
+									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
+									 snode_t** start_row, snode_t** end_row,
+									 WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	range_read_query * q = build_range_search_clustering_in_txn(primary_keys, no_primary_keys,
+															start_clustering_keys, end_clustering_keys, no_clustering_keys,
+															table_key, txnid, nonce);
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_range_read_query(q, (char *) print_buff);
+	printf("Sending range read cell query: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    range_read_response_message * response;
+    success = deserialize_range_read_response_message(in_buf, n, &response);
+
+    // TO DO: Parse range_read_response_message to row list
+
+	return response;
+}
+
+int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
+								snode_t** start_row, snode_t** end_row,
+								WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported; TO DO
+	return 0;
+}
+
+// Queue ops:
+
+int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_create_queue_in_txn(table_key, queue_id, txnid, nonce);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+}
+
+int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_delete_queue_in_txn(table_key, queue_id, txnid, nonce);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+}
+
+int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, table_key, queue_id, txnid, nonce);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+}
+
+int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+		int max_entries, int * entries_read, long * new_read_head,
+		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
+		db_t * db, unsigned int * fastrandstate)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_read_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, max_entries, txnid, nonce);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+	queue_query_message * response;
+    success = deserialize_queue_message(in_buf, n, &response);
+
+    assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
+
+    // TO DO: Parse queue read response message to row list:
+
+	return success;
+}
+
+int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					long new_consume_head, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_consume_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, new_consume_head, txnid, nonce);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+	return success;
+}
+
+int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_subscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, nonce); // txnid
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+    // TO DO: Add local subscription on client:
+
+	return success;
+}
+
+int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						long nonce, int sockfd, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	queue_query_message * q = build_unsubscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, nonce); // txnid
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len);
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_queue_message(q, (char *) print_buff);
+	printf("Sending queue message: %s\n", print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
+
+    ack_message * ack;
+    success = deserialize_ack_message(in_buf, n, &ack);
+
+    // TO DO: Remove local subscription from client:
+
+	return success;
+}
+
+int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+								uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+{
+	assert (0); // Not supported
+	return 0;
+}
+
+// Txn mgmt:
 
 uuid_t * remote_new_txn(long nonce, int sockfd, remote_db_t * db, unsigned int * seedptr)
 {
@@ -301,7 +660,7 @@ int remote_persist_txn(uuid_t * txnid, vector_clock * version, long nonce, int s
 }
 
 
-int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int sockfd, db_t * db, unsigned int * fastrandstate)
+int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -355,132 +714,10 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int so
 }
 
 
-db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-db_row_t* db_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
-									WORD* col_keys, int no_columns, WORD table_key,
-									uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-	assert (0); // Not supported
-	return 0;
-}
-
-db_row_t* db_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int db_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-							snode_t** start_row, snode_t** end_row,
-							WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int db_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
-									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-									 snode_t** start_row, snode_t** end_row,
-									 WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-								snode_t** start_row, snode_t** end_row,
-								WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-
-int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-	assert (0); // Not supported
-	return 0;
-}
-
-int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-	assert (0); // Not supported
-	return 0;
-}
-
-
-// Queue ops:
-
-int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
-		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
-		db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
-						db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-								db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
-						uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-	assert (0); // Not supported
-	return 0;
-}
-
-int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-								uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-	assert (0); // Not supported
-	return 0;
-}
-
-int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
-
-int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
-{
-
-}
 
 
 
-
+// Tests:
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 {

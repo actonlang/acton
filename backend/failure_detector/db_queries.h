@@ -148,7 +148,7 @@ typedef struct queue_query_message
 	int shard_id;
 	int consumer_id;
 
-	// For ENQUEUE:
+	// For ENQUEUE and READ_QUEUE_RESPONSE:
 
 	cell * cells;
 	int no_cells;
@@ -166,6 +166,8 @@ typedef struct queue_query_message
 	long nonce;
 } queue_query_message;
 
+queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
+queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 												int max_entries, uuid_t * txnid, long nonce);
@@ -173,8 +175,6 @@ queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id
 													long new_consume_head, uuid_t * txnid, long nonce);
 queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
-queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
-queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 
 queue_query_message * init_create_queue_message(cell_address * cell_address, uuid_t * txnid, long nonce);
 queue_query_message * init_delete_queue_message(cell_address * cell_address, uuid_t * txnid, long nonce);
