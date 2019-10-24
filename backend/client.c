@@ -217,7 +217,8 @@ int delete_test(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
 {
 	uuid_t txnid;
 	uuid_generate(txnid);
-	return db_remote_delete_row((WORD *) (no_actors - 1), 1, (WORD) 0, schema, &txnid, requests++, sockfd);
+	WORD row_key = (WORD) no_actors - 1;
+	return db_remote_delete_row(&row_key, 1, (WORD) 0, schema, &txnid, requests++, sockfd);
 }
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
@@ -298,6 +299,8 @@ int main(int argc, char **argv) {
     populate_db(schema, sockfd, &seed);
 
     test_search_pk_ck1_ck2(schema, sockfd, &seed);
+
+    delete_test(schema, sockfd, &seed);
 
     close(sockfd);
     return 0;

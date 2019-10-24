@@ -1681,7 +1681,7 @@ static const ProtobufCFieldDescriptor write_query_message__field_descriptors[5] 
   {
     "cell",
     1,
-    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
     offsetof(WriteQueryMessage, cell),
