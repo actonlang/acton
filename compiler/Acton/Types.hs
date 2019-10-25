@@ -619,7 +619,7 @@ instance InfEnv Comp where
                                              t2 <- infer env e
                                              te2 <- infEnv (define te1 env) c
                                              constrain [Impl t2 (cIterable t1)]
-                                             return (te1++te2)
+                                             return (te2++te1)
 
 instance Infer Exception where
     infer env (Exception e1 Nothing)    = do t1 <- infer env e1
@@ -632,24 +632,43 @@ instance Infer Exception where
                                              return t1
 
 instance InfEnvT [Pattern] where
-    infEnvT env [p]                     = infEnvT env p
+    infEnvT env []                      = do t <- newTVar
+                                             return ([], t)
     infEnvT env (p:ps)                  = do (te1, t1) <- infEnvT env p
                                              (te2, t2) <- infEnvT (define te1 env) ps
                                              constrain [Equ t1 t2]
-                                             return (te1++te2, t1)
-{-
-instance InfEnvT [Elem Pattern] where
-    infEnvT env (Elem p : elems)        = do (te1, t) <- infEnvT env p
-                                             (te2, r) <- infEnvT (define te1 env) elems
-                                             return (te1++te2, OPos t r)
-    infEnvT env (Star p : elems)        = do (te1, t) <- infEnvT env p
-                                             (te2, r) <- infEnvT env elems
-                                             return (te1++te2, OStar1 t r)
-    infEnvT env []                      = return ([], ONil)
--}
+                                             return (te2++te1, t1)
+
+instance InfEnvT (Maybe Pattern) where
+    infEnvT env Nothing                 = do t <- newTVar
+                                             return ([], pSequence t)
+    infEnvT env (Just p)                = do (te, t) <- infEnvT env p
+                                             return (te, pSequence t)
+
+instance InfEnvT PosPat where
+    infEnvT env (PosPat p ps)           = do (te1, t) <- infEnvT env p
+                                             (te2, r) <- infEnvT (define te1 env) ps
+                                             return (te2++te1, posRow (tSchema t) r)
+    infEnvT env (PosPatStar p)          = do (te, t) <- infEnvT env p
+                                             r <- newTVar
+                                             constrain [Equ t (tTuple r)]
+                                             return (te, r)
+    infEnvT env PosPatNil               = return ([], posNil)
+
+
+instance InfEnvT KwdPat where
+    infEnvT env (KwdPat n p ps)         = do (te1, t) <- infEnvT env p
+                                             (te2, r) <- infEnvT (define te1 env) ps
+                                             return (te2++te1, kwdRow n (tSchema t) r)
+    infEnvT env (KwdPatStar p)          = do (te, t) <- infEnvT env p
+                                             r <- newTVar
+                                             constrain [Equ t (tRecord r)]
+                                             return (te, r)
+    infEnvT env KwdPatNil               = return ([], kwdNil)
+
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar _ n Nothing)
+    infEnvT env (PVar _ n Nothing)                                                      -- TODO: utilize annot
       | reserved env n                  = do t <- newTVar
                                              return ([(n,nVar t)], t)
       | Just t <- monotype info         = return ([], t)
@@ -668,17 +687,14 @@ instance InfEnvT Pattern where
                                              t0 <- newTVar
                                              constrain [Sel t n t0]
                                              return ([], t0)
---    infEnvT env (PTuple _ ps)           = do (te, r) <- infEnvT env ps
---                                             return (te, OTuple r)
-{-
-    infEnvT env (PList _ ps)            = do (te, r) <- infEnvT env ps
-                                             t0 <- newTVar
-                                             o_constrain (fold t0 (map loc ps) r)
-                                             return (te, OList t0)
-      where fold t0 [] ONil             = []
-            fold t0 (l:ls) (OPos t r)   = QEqu l 23 t t0 : fold t0 ls r
-            fold t0 (l:ls) (OStar1 t r) = QEqu l 24 t (OList t0) : fold t0 ls r
--}
+--    infEnvT env (PTuple _ ps)           = do (te, prow) <- infEnvT env ps
+--                                             return (te, tTuple prow)
+--    infEnvT env (PRecord _ ps)          = do (te, krow) <- infEnvT env ps
+--                                             return (te, tRecord krow)
+    infEnvT env (PList _ ps p)          = do (te1, t1) <- infEnvT env ps
+                                             (te2, t2) <- infEnvT (define te1 env) p
+                                             constrain [Equ (pSequence t1) t2]
+                                             return (te2++te1, t2)
     infEnvT env (PParen l p)            = infEnvT env p
     infEnvT env (PData l n es)          = do t0 <- newTVar
                                              t <- inferIxs env t0 es
@@ -688,7 +704,7 @@ inferIxs env t0 []                      = return t0
 inferIxs env t0 (i:is)                  = do t1 <- newTVar
                                              ti <- infer env i
                                              constrain [Impl t0 (cIndexed ti t1)]
-                                             inferIxs env t1 is 
+                                             inferIxs env t1 is
 
 instance Infer Pattern where
     infer env p                         = noenv <$> infEnvT env p

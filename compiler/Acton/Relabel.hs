@@ -100,6 +100,8 @@ instance Relabel Expr where
 
 instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
+--    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
+--    relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
     relabel (PTuple _ ps p) = PTuple <$> newLoc <*> relabel ps <*> relabel p
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
@@ -162,6 +164,16 @@ instance Relabel KwdArg where
     relabel (KwdArg n e k) = KwdArg <$> relabel n <*> relabel e <*> relabel k
     relabel (KwdStar e) = KwdStar <$> relabel e
     relabel KwdNil = return KwdNil
+    
+instance Relabel PosPat where
+    relabel (PosPat p ps) = PosPat <$> relabel p <*> relabel ps
+    relabel (PosPatStar p) = PosPatStar <$> relabel p
+    relabel PosPatNil = return PosPatNil
+    
+instance Relabel KwdPat where
+    relabel (KwdPat n p ps) = KwdPat <$> relabel n <*> relabel p <*> relabel ps
+    relabel (KwdPatStar p) = KwdPatStar <$> relabel p
+    relabel KwdPatNil = return KwdPatNil
     
 instance Relabel OpArg where
     relabel (OpArg op e) = OpArg <$> relabel op <*> relabel e

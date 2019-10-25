@@ -72,8 +72,11 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
+--                | Tuple         { eloc::SrcLoc, parg::PosArg }
                 | Tuple         { eloc::SrcLoc, elems::[Elem] }
+--                | TupleComp     { eloc::SrcLoc, exp1::Exp, comp::Comp }
                 | TupleComp     { eloc::SrcLoc, elem1::Elem, comp::Comp }
+--                | Record        { eloc::SrcLoc, kargs::KwdArg }
                 | Record        { eloc::SrcLoc, fields::[Field] }
                 | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem] }
@@ -90,6 +93,8 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
+--                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
+--                | PTuple        { ploc::SrcLoc, ppat::PosPat }
                 | PTuple        { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
@@ -137,8 +142,12 @@ data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
 data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
 data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
+
 data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
 data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
+
+data PosPat     = PosPat Pattern PosPat | PosPatStar Pattern | PosPatNil deriving (Show,Eq)
+data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil deriving (Show,Eq)
 
 data OpArg      = OpArg (Op Comparison) Expr deriving (Eq,Show)
 data Slice      = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe (Maybe Expr)) deriving (Show)
@@ -431,8 +440,11 @@ instance Eq Expr where
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
+--    x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
     x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
+--    x@TupleComp{}       ==  y@TupleComp{}       = exp1 x == exp1 y && comp x == comp y
     x@TupleComp{}       ==  y@TupleComp{}       = elem1 x == elem1 y && comp x == comp y
+--    x@Record{}          ==  y@Record{}          = kargs x == kargs y
     x@Record{}          ==  y@Record{}          = fields x == fields y
     x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@List{}            ==  y@List{}            = elems x == elems y
@@ -476,6 +488,8 @@ instance Eq Comp where
 
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
+--    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
+--    PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
     PTuple _ ps1 p1     == PTuple _ ps2 p2      = ps1 == ps2 && p1 == p2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
