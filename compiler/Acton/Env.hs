@@ -31,7 +31,7 @@ mkEnv paths env modul       = getImps paths env imps
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: [(Name, Maybe NameInfo)], modules :: [(ModName,TEnv)], defaultmod :: ModName }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName }
 
 data NameInfo               = NVar    TSchema Decoration
                             | NSVar   Type
@@ -43,6 +43,8 @@ data NameInfo               = NVar    TSchema Decoration
                             | NAlias  QName
                             | NMAlias ModName
                             | NModule TEnv
+                            | NReserved
+                            | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
 nVar t                      = NVar (tSchema t) NoDecoration
@@ -54,10 +56,6 @@ instance Pretty TEnv where
 
 instance Pretty Env where
     pretty env                  = vcat (map pretty (names env))
-
-instance Pretty (Name, Maybe NameInfo) where
-    pretty (n, Nothing)         = pretty n <+> text "(reserved)"
-    pretty (n, Just i)          = pretty (n, i)
 
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t dec)      = pretty dec $+$ pretty n <+> colon <+> pretty t
@@ -73,6 +71,8 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
+    pretty (n, NReserved)       = pretty n <+> text "(reserved)"
+    pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
 instance Subst Env where
     msubst env                  = do ne <- msubst (names env)
@@ -90,6 +90,8 @@ instance Subst NameInfo where
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
+    msubst NReserved            = return NReserved
+    msubst NBlocked             = return NBlocked
 
     tyfree (NVar t dec)         = tyfree t
     tyfree (NSVar t)            = tyfree t
@@ -100,7 +102,9 @@ instance Subst NameInfo where
     tyfree (NPAttr qn)          = []
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
-    tyfree (NModule te)         = []        -- actually tyfree te, but te has no free variables (top-level)
+    tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
+    tyfree NReserved            = []
+    tyfree NBlocked             = []
 
 instance Subst SrcInfoTag where
     msubst (GEN l t)                = GEN l <$> msubst t
@@ -131,7 +135,7 @@ instance (Unalias a) => Unalias (Maybe a) where
     unalias env                     = fmap (unalias env)
 
 instance Unalias ModName where
-    unalias env (ModName ns)        = norm [ (n,i) | (n,Just i) <- names env ] [] ns
+    unalias env (ModName ns)        = norm (names env) [] ns
       where
         norm te pre []              = ModName (reverse pre)
         norm te pre (n:ns)          = case lookup n te of
@@ -177,6 +181,8 @@ instance Unalias NameInfo where
     unalias env (NPAttr qn)         = NPAttr (unalias env qn)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
+    unalias env NReserved           = NReserved
+    unalias env NBlocked            = NBlocked
 
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
@@ -205,34 +211,37 @@ initEnv                     = define autoImp $ definemod mBuiltin $ addmod mBuil
         env0                = Env{ names = [], modules = [], defaultmod = mBuiltin }
 
 statescope                  :: Env -> [Name]
-statescope env              = [ z | (z, Just (NSVar _)) <- names env ]
+statescope env              = [ z | (z, NSVar _) <- names env ]
+
+reserve                     :: [Name] -> Env -> Env
+reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
 
 block                       :: [Name] -> Env -> Env
-block xs env                = env{ names = [ (x, Nothing) | x <- nub xs ] ++ names env }
-
-reserve                     = block
+block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ prune (dom te) (names env) }
+define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
 definemod                   :: ModName -> Env -> Env
 definemod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
-  where te1                 = case lookup (head ns) (names env) of Just (Just (NModule te1)) -> te1; _ -> []
+  where te1                 = case lookup (head ns) (names env) of Just (NModule te1) -> te1; _ -> []
         defmod [] te        = NModule $ findmod (ModName ns) env
         defmod (n:ns) te    = NModule $ (n, defmod ns te2) : prune [n] te
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 blocked                     :: Env -> Name -> Bool
-blocked env n               = lookup n (names env) == Just Nothing
+blocked env n               = lookup n (names env) == Just NBlocked
 
-reserved                    = blocked
+reserved                    :: Env -> Name -> Bool
+reserved env n              = lookup n (names env) == Just NReserved
 
 findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
-                                Just (Just (NAlias qn)) -> findqname qn env
-                                Just (Just i) -> i
-                                Just Nothing  -> nameReserved n
-                                Nothing       -> nameNotFound n
+                                Just (NAlias qn) -> findqname qn env
+                                Just NReserved -> nameReserved n
+                                Just NBlocked -> nameBlocked n
+                                Just info -> info
+                                Nothing -> nameNotFound n
 
 findqname                   :: QName -> Env -> NameInfo
 findqname (QName m n) env   = case lookup n (findmod (unalias env m) env) of
@@ -321,6 +330,7 @@ importAll m te              = mapMaybe imp te
 data CheckerError                       = FileNotFound ModName
                                         | NameNotFound Name
                                         | NameReserved Name
+                                        | NameBlocked Name
                                         | IllegalImport SrcLoc
                                         | DuplicateImport Name
                                         | NoItem ModName Name
@@ -331,7 +341,8 @@ instance Control.Exception.Exception CheckerError
 
 checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
 checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
-checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is not accessible")
+checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
+checkerError (NameBlocked n)            = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
 checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
 checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
 checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
@@ -339,7 +350,9 @@ checkerError (OtherError l str)         = (l,str)
 
 nameNotFound n                          = Control.Exception.throw $ NameNotFound n
 
-nameReserved n                          = Control.Exception.throw $ NameNotFound n
+nameReserved n                          = Control.Exception.throw $ NameReserved n
+
+nameBlocked n                           = Control.Exception.throw $ NameBlocked n
 
 fileNotFound n                          = Control.Exception.throw $ FileNotFound n
 
