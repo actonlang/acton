@@ -30,12 +30,17 @@
 #define DB_ACK 0
 #define DB_NACK 1
 
+#define CLIENT_ERR_SUBSCRIPTION_EXISTS 1
+#define CLIENT_ERR_NO_SUBSCRIPTION_EXISTS 2
+
 // Remote DB API:
 
 typedef struct remote_db {
     int db_id;
     skiplist_t * servers; // List of remote servers
     skiplist_t * txn_state; // Client cache of txn state
+    skiplist_t * queue_subscriptions; // Client cache of txn state
+    pthread_mutex_t* subscribe_lock;
 } remote_db_t;
 
 remote_db_t * get_remote_db();
@@ -189,6 +194,13 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca);
 char * to_string_queue_message(queue_query_message * ca, char * msg_buff);
 int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2);
+
+// Subscription handling client-side:
+
+int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, short use_lock, remote_db_t * db, unsigned int * fastrandstate);
+int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						short use_lock, remote_db_t * db);
 
 typedef struct txn_message
 {

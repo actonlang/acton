@@ -106,15 +106,7 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 			if(cs->callback == NULL || cs->notified > 0)
 				continue;
 
-			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
-			qca->table_key = table_key;
-			qca->queue_id = queue_id;
-
-			qca->app_id = cs->app_id;
-			qca->shard_id = cs->shard_id;
-			qca->consumer_id = cs->consumer_id;
-
-			qca->status = QUEUE_NOTIF_ENQUEUED;
+			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (VERBOSITY > 0)
 			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
@@ -654,15 +646,11 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 		if(cell->value != NULL)
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
-			queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
-			qca->table_key = table_key;
-			qca->queue_id = queue_id;
 
-			qca->app_id = cs->app_id;
-			qca->shard_id = cs->shard_id;
-			qca->consumer_id = cs->consumer_id;
+			if(cs->callback == NULL || cs->notified > 0)
+				continue;
 
-			qca->status = QUEUE_NOTIF_DELETED;
+			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_DELETED);
 
 #if (VERBOSITY > 0)
 			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);

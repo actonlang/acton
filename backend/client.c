@@ -338,7 +338,7 @@ int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_i
 
 // Queue ops:
 
-int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -363,7 +363,7 @@ int create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonc
 	return success;
 }
 
-int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -388,7 +388,7 @@ int delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonc
 	return success;
 }
 
-int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -413,7 +413,7 @@ int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue
 	return success;
 }
 
-int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		db_t * db, unsigned int * fastrandstate)
@@ -445,7 +445,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	return success;
 }
 
-int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					long new_consume_head, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
@@ -471,9 +471,9 @@ int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD tabl
 	return success;
 }
 
-int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
-						long nonce, int sockfd, remote_db_t * db)
+						long nonce, int sockfd, remote_db_t * db, unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -495,12 +495,15 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
 
-    // TO DO: Add local subscription on client:
+    if(success == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
 
-	return success;
+    // Add local subscription on client:
+
+    return subscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, callback, 1, db, fastrandstate);
 }
 
-int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						long nonce, int sockfd, remote_db_t * db)
 {
 	unsigned len = 0;
@@ -523,20 +526,23 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
 
-    // TO DO: Remove local subscription from client:
+    if(success == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
+    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 
-	return success;
+    // Remove local subscription from client:
+
+    return unsubscribe_queue_client(consumer_id, shard_id, app_id, table_key, queue_id, 1, db);
 }
 
-int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
-						uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+						uuid_t * txnid, long nonce, int sockfd, remote_db_t * db, unsigned int * fastrandstate)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
-int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 								uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 {
 	assert (0); // Not supported

@@ -15,12 +15,48 @@
 
 // Remote DB API:
 
+
+	WORD table_key;
+	WORD queue_id;
+
+	WORD consumer_id;
+	WORD shard_id;
+	WORD app_id;
+
+	int status;
+
+int queue_callback_cmp(WORD e1, WORD e2)
+{
+	queue_callback_args * a1 = (queue_callback_args *) e1;
+	queue_callback_args * a2 = (queue_callback_args *) e2;
+
+	if(a1->consumer_id != a2->consumer_id)
+		return (long) a1->consumer_id - (long) a2->consumer_id;
+
+	if(a1->queue_id != a2->queue_id)
+		return (long) a1->queue_id - (long) a2->queue_id;
+
+	if(a1->table_key != a2->table_key)
+		return (long) a1->table_key - (long) a2->table_key;
+
+	if(a1->shard_id != a2->shard_id)
+		return (long) a1->shard_id - (long) a2->shard_id;
+
+	if(a1->app_id != a2->app_id)
+		return (long) a1->app_id - (long) a2->app_id;
+
+	return 0;
+}
+
 remote_db_t * get_remote_db()
 {
-	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t));
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + sizeof(pthread_mutex_t));
 
 	db->servers = create_skiplist_long();
 	db->txn_state = create_skiplist_uuid();
+	db->queue_subscriptions = create_skiplist(&queue_callback_cmp);
+	db->subscribe_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t));
+	pthread_mutex_init(db->subscribe_lock, NULL);
 
 	return db;
 }
@@ -29,6 +65,7 @@ int free_remote_db(remote_db_t * db)
 {
 	skiplist_free(db->servers);
 	skiplist_free(db->txn_state);
+	skiplist_free(db->queue_subscriptions);
 	free(db);
 	return 0;
 }
@@ -1255,7 +1292,69 @@ int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2)
 	return 1;
 }
 
-// Txn Message:
+// Subscription handling client-side:
+
+int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, short use_lock, remote_db_t * db, unsigned int * fastrandstate)
+{
+	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+	if(use_lock)
+		pthread_mutex_lock(db->subscribe_lock);
+
+	snode_t * subscription_node = skiplist_search(db->queue_subscriptions, (WORD) qca);
+
+	if(subscription_node != NULL)
+	{
+		if(use_lock)
+			pthread_mutex_unlock(db->subscribe_lock);
+
+		return CLIENT_ERR_SUBSCRIPTION_EXISTS; // Subscription already exists
+	}
+
+	int status = skiplist_insert(db->queue_subscriptions, (WORD) qca, (WORD) callback, fastrandstate);
+
+	if(use_lock)
+		pthread_mutex_unlock(db->subscribe_lock);
+
+	assert(status == 0);
+
+#if (VERBOSITY > 0)
+	printf("CLIENT: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
+					(long) app_id, (long) shard_id, (long) consumer_id,
+					(long) table_key, (long) queue_id, cs->callback);
+#endif
+
+	return status;
+}
+
+int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						short use_lock, remote_db_t * db)
+{
+	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+	if(use_lock)
+		pthread_mutex_lock(db->subscribe_lock);
+
+	queue_callback * callback = skiplist_delete(db->queue_subscriptions, (WORD) qca);
+
+	if(use_lock)
+		pthread_mutex_unlock(db->subscribe_lock);
+
+	assert(callback != NULL);
+
+	free_queue_callback(callback);
+
+#if (VERBOSITY > 0)
+	printf("CLIENT: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld with callback %p\n",
+					(long) app_id, (long) shard_id, (long) consumer_id,
+					(long) table_key, (long) queue_id, cs->callback);
+#endif
+
+	return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
+}
+
+// Txn state handling client-side:
 
 txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
 {
@@ -1296,6 +1395,7 @@ int close_client_txn(uuid_t * txnid, remote_db_t * db)
 	return 0;
 }
 
+// Txn Message:
 
 txn_message * build_new_txn(uuid_t * txnid, long nonce)
 {
