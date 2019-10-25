@@ -180,7 +180,7 @@ instance Relabel e => Relabel (Elem e) where
 
 instance Relabel Assoc where
   relabel (Assoc e1 e2) = Assoc <$> relabel e1 <*> relabel e2
-  relabel (StarStarAssoc e) = StarStarAssoc <$> relabel e
+  relabel (StarStar e) = StarStar <$> relabel e
   
 instance Relabel Slice where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3

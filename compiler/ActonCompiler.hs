@@ -76,12 +76,12 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
 
 treatOneFile args
                 = do paths <- findPaths args
-                     let qn = A.qName (modpath paths)
+                     let mn = A.modName (modpath paths)
                      (case ext paths of
-                        ".act"   -> (do (src,tree) <- Acton.Parser.parseModule qn (srcFile paths)
+                        ".act"   -> (do (src,tree) <- Acton.Parser.parseModule mn (srcFile paths)
                                         iff (parse args) $ dump "parse" (Pretty.print tree)
                                         if make args
-                                         then do let task = ActonTask qn src tree
+                                         then do let task = ActonTask mn src tree
                                                  chaseImportsAndCompile args paths task
                                          else do runRestPasses args paths src Acton.Env.initEnv tree
                                                  return ())
@@ -93,7 +93,7 @@ treatOneFile args
                                              m <- Yang.Parser.parseFile yangFile
                                              let task = YangTask (A.qName ["yang",yangbody]) m
                                              chaseImportsAndCompile args paths task
-                                     else YangCompiler.compileYangFile qn (mkYangArgs args)
+                                     else YangCompiler.compileYangFile mn (mkYangArgs args)
 -}
                         ".types" -> compTypesFile paths
                         ".ty"    -> showTyFile paths
@@ -133,11 +133,10 @@ data Paths      = Paths {projSrcRoot :: FilePath,
 srcFile paths           = joinPath (projSrcRoot paths:modpath paths) ++ ext paths
 outBase paths           = joinPath (projSysRoot paths:modpath paths)
 
-mPath ::   A.QName -> [String]
-mPath (A.QName n ns)
-                        = A.nstr n : map A.nstr ns
+mPath                   :: A.ModName -> [String]
+mPath (A.ModName ns)    = map A.nstr ns
 
-checkDirs :: FilePath -> [String] -> IO ()
+checkDirs               :: FilePath -> [String] -> IO ()
 checkDirs path []       = return ()
 checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
                              if found
@@ -147,7 +146,7 @@ checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
                                       checkDirs path1 dirs
   where path1           = joinPath [path,d]
 
-findPaths :: Args -> IO Paths
+findPaths               :: Args -> IO Paths
 findPaths args          = do absfile <- canonicalizePath (head (files args))
                              sysRoot <- canonicalizePath (syspath args)
                              (projRoot,dirsSrc,dirsTarget) <- findDirs absfile
@@ -220,11 +219,11 @@ mkYangArgs args         = YangCompiler.Args {
 -}
                       
 
-data CompileTask        = ActonTask  {name :: A.QName, src :: String, atree:: A.Module}
+data CompileTask        = ActonTask  {name :: A.ModName, src :: String, atree:: A.Module}
 --                        | YangTask   {name :: A.QName, ytree :: Y.Stmt} 
-                        | PythonTask {name :: A.QName} deriving (Show)
+                        | PythonTask {name :: A.ModName} deriving (Show)
 
-importsOf :: CompileTask -> [A.QName]
+importsOf :: CompileTask -> [A.ModName]
 importsOf t@ActonTask{} = A.importsOf (atree t)
 --importsOf t@YangTask{}  = map ((\str -> A.qName ["yang",str]) . Y.istr . Y.ident) is
 --   where m              = ytree t
@@ -238,7 +237,7 @@ chaseImportsAndCompile args paths task
                                 (as,cs)        = Data.List.partition isAcyclic sccs
                             if null cs
                              then do foldM (doTask args paths) (Acton.Env.initEnv,[])
-                                           ([PythonTask (A.qName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
+                                           ([PythonTask (A.modName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
@@ -247,17 +246,17 @@ chaseImportsAndCompile args paths task
         showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (mPath (name t)))++" ") ts
         pythonFiles    = ["dwdm", "getenv", "logging", "netconf_","power","re","timestamp","traceback","xmlparse", "xmlprint"]
 
-chaseImportedFiles :: Args -> Paths -> [A.QName] -> [CompileTask] -> IO ([CompileTask])
+chaseImportedFiles :: Args -> Paths -> [A.ModName] -> [CompileTask] -> IO ([CompileTask])
 chaseImportedFiles args paths imps tasks
                             = do newtasks <- mapM (readAFile tasks) imps
                                  let newtasks' = concat newtasks
                                  chaseRecursively (tasks++newtasks') (map name newtasks') (concatMap importsOf newtasks')
 
-  where readAFile tasks qn  = do let ps = mPath qn  -- read and parse file qn in the project directory, unless it is already in tasks 
+  where readAFile tasks mn  = do let ps = mPath mn  -- read and parse file qn in the project directory, unless it is already in tasks 
                                      srcBase = joinPath (projSrcRoot paths:ps)
                                  if head ps == "python"
                                   then return []
-                                  else case lookUp qn tasks of
+                                  else case lookUp mn tasks of
                                          Just t -> return []
                                          Nothing -> {- if head ps == "yang" 
                                                      then do let yangFile = srcBase ++ ".yang"
@@ -268,13 +267,13 @@ chaseImportedFiles args paths imps tasks
                                                      else -} 
                                                           do let actFile = srcBase ++ ".act"
                                                              ok <- System.Directory.doesFileExist actFile
-                                                             if ok then do (src,m) <- Acton.Parser.parseModule qn actFile
-                                                                           return [ActonTask qn src m]
+                                                             if ok then do (src,m) <- Acton.Parser.parseModule mn actFile
+                                                                           return [ActonTask mn src m]
                                                              else return []
   
-        lookUp qn (t : ts)
-          |name t == qn      = Just t
-          |otherwise         = lookUp qn ts
+        lookUp mn (t : ts)
+          | name t == mn     = Just t
+          | otherwise        = lookUp mn ts
         lookUp _ []          = Nothing
         
         chaseRecursively tasks qns []
@@ -343,7 +342,7 @@ doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
          typesFile      =  pythonBase ++ ".types"
          tyFile         =  pythonBase ++ ".ty"
          
-checkUptoDate :: Paths -> String -> FilePath -> FilePath -> [FilePath] -> FilePath -> [A.QName] -> IO Bool
+checkUptoDate :: Paths -> String -> FilePath -> FilePath -> [FilePath] -> FilePath -> [A.ModName] -> IO Bool
 checkUptoDate paths ext srcFile iFile outFiles libRoot imps
                         = do srcExists <- System.Directory.doesFileExist srcFile
                              outExists <- mapM System.Directory.doesFileExist (iFile:outFiles)
@@ -352,11 +351,11 @@ checkUptoDate paths ext srcFile iFile outFiles libRoot imps
                                       outTimes <- mapM System.Directory.getModificationTime (iFile:outFiles)
                                       impsOK   <- mapM (impOK (head outTimes)) imps
                                       return (all (srcTime <) outTimes && and impsOK)
-  where impOK iTime qn = do let impFile = joinPath (projSysRoot paths : mPath qn) ++ ext
+  where impOK iTime mn = do let impFile = joinPath (projSysRoot paths : mPath mn) ++ ext
                             ok <- System.Directory.doesFileExist impFile
                             if ok then do impfileTime <- System.Directory.getModificationTime impFile
                                           return (impfileTime < iTime)
-                             else do let impSysFile = joinPath (libRoot : mPath qn) ++ ext
+                             else do let impSysFile = joinPath (libRoot : mPath mn) ++ ext
                                      ok <-  System.Directory.doesFileExist impSysFile
                                      if ok then do impfileTime <- System.Directory.getModificationTime impSysFile
                                                    return (impfileTime < iTime)
@@ -365,6 +364,6 @@ checkUptoDate paths ext srcFile iFile outFiles libRoot imps
 
 
 -- Data.Graph requires that the type of keys for nodes is an instance of Ord 
-instance Ord A.QName where
+instance Ord A.ModName where
     compare n1 n2 = compare (mPath n1) (mPath n2)
     

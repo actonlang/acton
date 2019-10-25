@@ -245,7 +245,7 @@ instance Vars e => Vars (Elem e) where
     
 instance Vars Assoc where
     free (Assoc k v)                = free k ++ free v
-    free (StarStarAssoc e)          = free e
+    free (StarStar e)               = free e
 
 instance Vars Field where
     free (Field n e)                = free e
