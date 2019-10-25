@@ -181,6 +181,11 @@ int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_
 // Lower level API:
 
 db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned int * fastrandstate);
+db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
+									int * clustering_key_idxs, int no_clustering_keys,
+									int no_cols, unsigned int * fastrandstate);
+// Assumes key indexes are in order (rartition keys, followed by clustering keys, followed by columns). Also assumes a single partition key
+db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, unsigned int * fastrandstate);
 void free_db_row(db_row_t * row, db_schema_t * schema);
 void long_row_to_string(db_row_t* row, char * to_string, int * len);
 void print_long_db(db_t * db);

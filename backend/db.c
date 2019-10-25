@@ -32,36 +32,77 @@ db_row_t * create_empty_row(WORD key)
 	return row;
 }
 
-db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned int * fastrandstate)
-{
-	assert(schema->no_primary_keys == 1);
 
-	db_cell_t * row = create_empty_row(column_values[schema->primary_key_idxs[0]]);
+db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
+									int * clustering_key_idxs, int no_clustering_keys,
+									int no_cols, unsigned int * fastrandstate)
+{
+	assert(no_primary_keys == 1);
+
+	db_cell_t * row = create_empty_row(column_values[primary_key_idxs[0]]);
 
 	// Several clustering keys mean several levels of depth (a la super columns):
 
 	db_cell_t * crt_cell = row, * new_cell = NULL;
 
-	for(int i=0; i<schema->no_clustering_keys; i++, crt_cell = new_cell)
+	for(int i=0; i<no_clustering_keys; i++, crt_cell = new_cell)
 	{
 		crt_cell->cells = create_skiplist_long();
 
-		new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
+		new_cell = create_empty_row(column_values[clustering_key_idxs[i]]);
 
-		if(i == schema->no_clustering_keys - 1)
+		if(i == no_clustering_keys - 1)
 		{
-			new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
+			new_cell->no_columns = no_cols - no_primary_keys - no_clustering_keys;
 			new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
 			for(int j=0;j<new_cell->no_columns;j++)
 			{
-				new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
 			}
 		}
 
-		skiplist_insert(crt_cell->cells, column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+		skiplist_insert(crt_cell->cells, column_values[clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
 	}
 
 	return row;
+}
+
+// Assumes key indexes are in order (rartition keys, followed by clustering keys, followed by columns). Also assumes a single partition key
+db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, unsigned int * fastrandstate)
+{
+	db_cell_t * row = create_empty_row(keys[0]); // single partition key
+
+	// Several clustering keys mean several levels of depth (a la super columns):
+
+	db_cell_t * crt_cell = row, * new_cell = NULL;
+
+	for(int i=1; i<no_keys; i++, crt_cell = new_cell)
+	{
+		crt_cell->cells = create_skiplist_long();
+
+		new_cell = create_empty_row(keys[i]);
+
+		if(i == no_keys - 1)
+		{
+			new_cell->no_columns = no_cols;
+			new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
+			for(int j=0;j<new_cell->no_columns;j++)
+			{
+				new_cell->column_array[j] = cols[j];
+			}
+		}
+
+		skiplist_insert(crt_cell->cells, keys[i], (WORD) new_cell, fastrandstate);
+	}
+
+	return row;
+}
+
+db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned int * fastrandstate)
+{
+	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
+										schema->clustering_key_idxs, schema->no_clustering_keys,
+										schema->no_cols, fastrandstate);
 }
 
 void free_db_cell(db_row_t * row, int depth)

@@ -269,7 +269,8 @@ db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key
 
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
-							WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+							WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db,
+							unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -291,15 +292,31 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
     range_read_response_message * response;
     success = deserialize_range_read_response_message(in_buf, n, &response);
 
-    // TO DO: Parse range_read_response_message to row list
+    if(success < 0)
+    		return success;
 
-	return response;
+    // Parse range_read_response_message to row list:
+
+    skiplist_t * rows = create_skiplist_long();
+    for(int i=0;i<response->no_cells;i++)
+    {
+    		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
+    													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+													fastrandstate); // Note that cell versions are only kept on the server, we don't return them to the client
+    		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, fastrandstate);
+    }
+
+    *start_row = HEAD(rows);
+    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
+
+	return success;
 }
 
 int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
 									 WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
 									 snode_t** start_row, snode_t** end_row,
-									 WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+									 WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db,
+									 unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -323,9 +340,24 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
     range_read_response_message * response;
     success = deserialize_range_read_response_message(in_buf, n, &response);
 
-    // TO DO: Parse range_read_response_message to row list
+    if(success < 0)
+    		return success;
 
-	return response;
+    // Parse range_read_response_message to row list:
+
+    skiplist_t * rows = create_skiplist_long();
+    for(int i=0;i<response->no_cells;i++)
+    {
+    		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
+    													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+													fastrandstate); // Note that cell versions are only kept on the server, we don't return them to the client
+    		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, fastrandstate);
+    }
+
+    *start_row = HEAD(rows);
+    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
+
+	return success;
 }
 
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
@@ -440,7 +472,22 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
 
+    if(success < 0)
+    		return success;
+
     // TO DO: Parse queue read response message to row list:
+
+    skiplist_t * rows = create_skiplist_long();
+    for(int i=0;i<response->no_cells;i++)
+    {
+    		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
+    													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+													fastrandstate); // Note that cell versions are only kept on the server, we don't return them to the client
+    		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, fastrandstate);
+    }
+
+    *start_row = HEAD(rows);
+    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
 
 	return success;
 }
