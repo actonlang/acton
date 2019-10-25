@@ -69,8 +69,8 @@ instance DataVars Branch where
     datavars n (Branch e ss)        = datavars n ss
 
 instance DataVars Pattern where
-    datavars n (PTuple _ ps)        = bound ps
-    datavars n (PList _ ps)         = bound ps
+    datavars n (PTuple _ ps p)      = bound ps ++ bound p
+    datavars n (PList _ ps p)       = bound ps ++ bound p
     datavars n (PParen _ p)         = bound p
     datavars n (PData _ v ixs)
       | length ixs >= n             = [v]
@@ -236,7 +236,7 @@ instance Vars (PosPar,KwdPar) where
     
     bound (ppar,kpar)               = bound ppar ++ bound kpar
 
-instance Vars e => Vars (Elem e) where
+instance Vars Elem where
     free (Elem e)                   = free e
     free (Star e)                   = free e
 
@@ -289,8 +289,8 @@ instance Vars Pattern where
     free (PIndex _ e ix)            = free e ++ free ix
     free (PSlice _ e sl)            = free e ++ free sl
     free (PDot _ e n)               = free e
-    free (PTuple _ ps)              = free ps
-    free (PList _ ps)               = free ps
+    free (PTuple _ ps p)            = free ps ++ free p
+    free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
 
@@ -298,8 +298,8 @@ instance Vars Pattern where
     bound (PIndex _ e ix)           = []
     bound (PSlice _ e sl)           = []
     bound (PDot _ e n)              = []
-    bound (PTuple _ ps)             = bound ps
-    bound (PList _ ps)              = bound ps
+    bound (PTuple _ ps p)           = bound ps ++ bound p
+    bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
 

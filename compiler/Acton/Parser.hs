@@ -470,7 +470,7 @@ assign :: Parser S.Pattern
 assign = lhs <* equals
 
 -- common pattern for expression lists
-testlist_gen :: Parser (S.Elem S.Expr) -> Parser S.Expr
+testlist_gen :: Parser S.Elem -> Parser S.Expr
 testlist_gen p = addLoc $ do
      e <- p
      es <- many (try (comma *> p))
@@ -534,22 +534,19 @@ lhs = pattern True
 
 pattern :: Bool -> Parser S.Pattern
 pattern lh = addLoc $ do
-    ps <- pelems lh
+    (ps,mbp) <- pelems lh
     mbc <- optional comma
-    return (f ps mbc)
+    return (f ps mbp mbc)
   where 
-    f [S.Elem p] Nothing = p
-    f [S.Star p] Nothing = p
-    f ps _               = S.PTuple NoLoc ps
+    f [p] mbp Nothing = p
+    f ps mbp _        = S.PTuple NoLoc ps mbp
 
-pelems :: Bool -> Parser [S.Elem S.Pattern]
+pelems :: Bool -> Parser ([S.Pattern], Maybe S.Pattern)
 pelems lh = do
-    p <- pelem lh
-    ps <- many (try (comma *> pelem lh))
-    return (p:ps)
-
-pelem :: Bool -> Parser (S.Elem S.Pattern)
-pelem lh = S.Elem <$> apat lh <|> S.Star <$> (star *> apat lh) 
+    p <- apat lh
+    ps <- many (try (comma *> apat lh))
+    mbp <- optional (comma *> star *> apat lh)
+    return (p:ps, mbp)
 
 apat :: Bool -> Parser S.Pattern
 apat lh = addLoc (
@@ -557,11 +554,11 @@ apat lh = addLoc (
         <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
-            ((try . parens) $ return (S.PTuple NoLoc []))
+            ((try . parens) $ return (S.PTuple NoLoc [] Nothing))
         <|>
             ((try . parens) $ S.PParen NoLoc <$> pattern lh)
         <|>
-            (brackets $ (S.PList NoLoc . maybe [] id) <$> optional (pelems lh))
+            (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional (pelems lh))
         )
   where lvalue = do
             tmp <- atom_expr
@@ -851,7 +848,7 @@ comp_op =   S.Lt <$ opPref "<"
         <|> S.IsNot <$ try (symbol "is" *> symbol "not")
         <|> S.Is <$ (symbol "is") <?> "comparison operator"
 
-star_expr :: Parser (S.Elem S.Expr)
+star_expr :: Parser S.Elem
 star_expr = S.Star <$> (star *> expr)                                        
 
 -- expr: xor_expr ('|' xor_expr)*

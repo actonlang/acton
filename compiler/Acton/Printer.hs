@@ -189,7 +189,7 @@ instance Pretty Except where
 prettyAnn Nothing                   = empty
 prettyAnn (Just a)                  = colon <+> pretty a
 
-instance Pretty e => Pretty (Elem e) where
+instance Pretty Elem where
     pretty (Elem e)                 = pretty e
     pretty (Star e)                 = text "*" <> pretty e
 
@@ -225,17 +225,18 @@ instance Pretty Comp where
 
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
-    pretty (PTuple _ ps)            = prettyPEs ps
-    pretty (PList _ ps)             = prettyPEs ps
+    pretty (PTuple _ ps p)          = prettyPats ps p
+    pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PIndex _ e ix)          = pretty e <> brackets (commaList ix)
     pretty (PSlice _ e sl)          = pretty e <> brackets (commaList sl)
     pretty (PDot _ e n)             = pretty e <> dot <> pretty n
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
 
-prettyPEs []                        = text "()"
-prettyPEs [p]                       = pretty p <> char ','
-prettyPEs ps                        = commaCat ps
+prettyPats [] Nothing               = empty
+prettyPats ps Nothing               = commaSep pretty ps
+prettyPats [] (Just p)              = text "*" <> pretty p
+prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <> pretty p
 
 prettyMod (Sync True)               = (text "sync" <+>)
 prettyMod (Sync False)              = id -- (text "(sync)" <+>)
