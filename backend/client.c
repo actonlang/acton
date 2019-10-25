@@ -131,8 +131,14 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
@@ -160,10 +166,15 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
 
     ack_message * ack;
-
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clustering_keys, db_schema_t * schema, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
@@ -185,10 +196,15 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clusteri
 	success = send_packet_wait_reply(tmp_out_buf, len, sockfd, (void *) in_buf, BUFSIZE, &n);
 
     ack_message * ack;
-
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 
 }
 
@@ -201,7 +217,9 @@ int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, u
 
 // Read ops:
 
-db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
+db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
+		uuid_t * txnid, long nonce, int sockfd, remote_db_t * db,
+		unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -222,13 +240,23 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 
     read_response_message * response;
     success = deserialize_write_query(in_buf, n, &response);
+    assert(success == 0);
 
-	return response;
+#if CLIENT_VERBOSITY > 0
+	to_string_write_query(response, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+    if(success != 0)
+    		return success;
+
+    return create_db_row_schemaless2((WORD *) response->cell->keys, response->cell->no_keys,
+        									(WORD *) response->cell->columns, response->cell->no_columns, fastrandstate);
 }
 
-read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
+db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
 														WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce,
-														int sockfd, remote_db_t * db)
+														int sockfd, remote_db_t * db, unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -249,8 +277,15 @@ read_response_message* remote_search_clustering_in_txn(WORD* primary_keys, WORD*
 
     read_response_message * response;
     success = deserialize_write_query(in_buf, n, &response);
+    assert(success == 0);
 
-	return response;
+#if CLIENT_VERBOSITY > 0
+	to_string_write_query(response, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+    return create_db_row_schemaless2((WORD *) response->cell->keys, response->cell->no_keys,
+        									(WORD *) response->cell->columns, response->cell->no_columns, fastrandstate);
 }
 
 db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
@@ -291,6 +326,12 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
     range_read_response_message * response;
     success = deserialize_range_read_response_message(in_buf, n, &response);
+    assert(success == 0);
+
+#if CLIENT_VERBOSITY > 0
+	to_string_range_read_response_message(response, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
     if(success < 0)
     		return success;
@@ -339,6 +380,12 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
     range_read_response_message * response;
     success = deserialize_range_read_response_message(in_buf, n, &response);
+    assert(success == 0);
+
+#if CLIENT_VERBOSITY > 0
+	to_string_range_read_response_message(response, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
     if(success < 0)
     		return success;
@@ -391,8 +438,14 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, lo
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
@@ -416,8 +469,14 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, lo
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
@@ -441,8 +500,14 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -469,6 +534,12 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	queue_query_message * response;
     success = deserialize_queue_message(in_buf, n, &response);
+    assert(success == 0);
+
+#if CLIENT_VERBOSITY > 0
+	to_string_queue_message(response, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
     assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
 
@@ -489,7 +560,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     *start_row = HEAD(rows);
     for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
 
-	return success;
+	return response->status;
 }
 
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -514,8 +585,14 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	return success;
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+	return ack->status;
 }
 
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -541,8 +618,14 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-    if(success == CLIENT_ERR_SUBSCRIPTION_EXISTS)
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
     		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
 
     // Add local subscription on client:
@@ -572,8 +655,14 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     ack_message * ack;
     success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-    if(success == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
+
+    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
     		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 
     // Remove local subscription from client:
@@ -623,7 +712,13 @@ uuid_t * remote_new_txn(long nonce, int sockfd, remote_db_t * db, unsigned int *
 
 		ack_message * ack;
 		success = deserialize_ack_message(in_buf, n, &ack);
+	    assert(success == 0);
 		status = ack->status;
+
+#if CLIENT_VERBOSITY > 0
+		to_string_ack_message(ack, (char *) print_buff);
+		printf("Got back response: %s\n", print_buff);
+#endif
 	}
 
 	assert(status == 0);
@@ -652,8 +747,12 @@ int remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, int 
 
 	ack_message * ack;
 	success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	assert(success == 0);
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
 	return ack->status;
 }
@@ -679,8 +778,12 @@ int remote_abort_txn(uuid_t * txnid, long nonce, int sockfd, remote_db_t * db)
 
 	ack_message * ack;
 	success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	assert(success == 0);
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
 	return ack->status;
 }
@@ -706,8 +809,12 @@ int remote_persist_txn(uuid_t * txnid, vector_clock * version, long nonce, int s
 
 	ack_message * ack;
 	success = deserialize_ack_message(in_buf, n, &ack);
+    assert(success == 0);
 
-	assert(success == 0);
+#if CLIENT_VERBOSITY > 0
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Got back response: %s\n", print_buff);
+#endif
 
 	return ack->status;
 }
@@ -767,9 +874,6 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, int so
 }
 
 
-
-
-
 // Tests:
 
 int populate_db(db_schema_t * schema, int sockfd, unsigned int * fastrandstate)
@@ -824,15 +928,13 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, int sockfd, unsigned int * fast
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				read_response_message * response = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, sockfd);
-				to_string_write_query(response, (char *) print_buff);
-				printf("Got back response: %s\n", print_buff);
+				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, sockfd);
 
-//				if((long) row->key != cid)
-//				{
-//					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
-//					return -1;
-//				}
+				if((long) row->key != cid)
+				{
+					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+					return -1;
+				}
 			}
 		}
 	}
