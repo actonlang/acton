@@ -264,7 +264,7 @@ tSelf           = TSelf NoLoc
 tWild           = TWild NoLoc
 tNil            = TNil NoLoc
 
-rPos n          = Name NoLoc ("#" ++ show n)
+rPos n          = Name NoLoc (show n)
 rSync           = Name NoLoc "sync"
 rAsync          = Name NoLoc "async"
 rAct            = Name NoLoc "actor"
@@ -279,7 +279,7 @@ fxRet t         = TRow NoLoc rRet (tSchema t)
 fxVar v         = TVar NoLoc v
 fxNil           = TNil NoLoc
 
-posRow t r      = TRow NoLoc (rPos n) (tSchema t) r
+posRow sc r     = TRow NoLoc (rPos n) sc r
   where n       = rowDepth r + 1
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil

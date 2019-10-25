@@ -157,10 +157,10 @@ prettyTuple [e]                     = pretty e <> char ','
 prettyTuple es                      = commaCat es
 
 instance Pretty Name where
-    pretty (Name _ str)
+    pretty nm
       | isIdent str                 = text str
       | otherwise                   = quotes (text str)
-    pretty n                        = text (show n)
+      where str                     = nstr nm
 
 instance Pretty ModName where
     pretty (ModName ns)             = dotCat pretty ns
@@ -382,10 +382,7 @@ instance Pretty Aug where
 
 instance Pretty TSchema where
     pretty (TSchema _ [] t)         = pretty t
-    pretty (TSchema _ q t)
-      | length vs0 == length q      = pretty t
-      | otherwise                   = brackets (commaList q) <+> text "=>" <+> pretty t
-      where vs0                     = [ v | TBind v [] <- q ]
+    pretty (TSchema _ q t)          = brackets (commaList q) <+> text "=>" <+> pretty t
 
 instance Pretty TVar where
     pretty (TV n)                   = pretty n
@@ -446,6 +443,7 @@ instance Pretty Type where
     pretty (TSelf _)                = text "Self"
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
+    pretty row                      = prettyKwdRow row
 
 instance Pretty Substitution where
     pretty s                        = vcat (map pr s)
