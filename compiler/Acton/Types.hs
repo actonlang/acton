@@ -30,8 +30,6 @@ reconstruct outname env modul           = do InterfaceFiles.writeFile (outname +
 typeError                               = solveError
 
 
-chkRedef ss                             = True -- TBD
-
 chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
 chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
 chkCycles (d : ds)                      = chkCycles ds
@@ -258,8 +256,7 @@ instance InfEnv [Decl] where
 
 instance InfEnv Decl where
     infEnv env (Actor l n q p k ann b)  -- TODO: schema [q] => (p,k) -> ann
-      | nodup (p,k) && noshadow svars p
-        && chkRedef b                   = do pushFX (fxAct tWild)
+      | nodup (p,k) && noshadow svars p = do pushFX (fxAct tWild)
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
                                              te2 <- infEnv (define te1 (define te0 env1)) b
@@ -309,9 +306,9 @@ instance InfEnv Decl where
       where svars                       = statescope env
             env1                        = block (bound (p,k) ++ bound b ++ svars) env
 {-
-    infEnv env (Class l n q cs b)
-      | nodup cs && chkRedef b          = do t0 <- newOVar
-                                             inherited <- return ONil --inferSuper env cs
+    infEnv env (Class l n q us b)
+      | nodup us                        = do t0 <- newOVar
+                                             inherited <- return ONil --inferSuper env us
                                              o_pushFX ONil
                                              te <- infEnv env0 b                     -- visible bindings in b???
                                              (l1, t1, te1) <- getInit l <$> mapM (wrap t0) te
@@ -331,8 +328,8 @@ instance InfEnv Decl where
                                              return (n,external)                        -- assumption on method n
               | otherwise               = return (n,t)
 -}                                        
-    infEnv env (Protocol l n q cs b)    = return []       -- undefined
-    infEnv env (Extension l n q cs b)   = return []       -- undefined
+    infEnv env (Protocol l n q us b)    = return []       -- undefined
+    infEnv env (Extension l n q us b)   = return []       -- undefined
     infEnv env (Signature l ns t dec)   = return []       -- undefined.....
 
 

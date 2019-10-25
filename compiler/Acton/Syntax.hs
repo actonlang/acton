@@ -72,16 +72,16 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
-                | Tuple         { eloc::SrcLoc, elems::[Elem Expr] }
-                | TupleComp     { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
+                | Tuple         { eloc::SrcLoc, elems::[Elem] }
+                | TupleComp     { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Record        { eloc::SrcLoc, fields::[Field] }
                 | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
-                | List          { eloc::SrcLoc, elems::[Elem Expr] }
-                | ListComp      { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
+                | List          { eloc::SrcLoc, elems::[Elem] }
+                | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
                 | DictComp      { eloc::SrcLoc, assoc1::Assoc, comp::Comp }
-                | Set           { eloc::SrcLoc, elems::[Elem Expr] }
-                | SetComp       { eloc::SrcLoc, elem1::Elem Expr, comp::Comp }
+                | Set           { eloc::SrcLoc, elems::[Elem] }
+                | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 deriving (Show)
 
@@ -90,8 +90,8 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
-                | PTuple        { ploc::SrcLoc, pelems::[Elem Pattern] }
-                | PList         { ploc::SrcLoc, pelems::[Elem Pattern] }
+                | PTuple        { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
+                | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
                 
@@ -131,7 +131,7 @@ data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show)
 
-data Elem e     = Elem e | Star e deriving (Show,Eq)
+data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
 data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
@@ -352,7 +352,7 @@ instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
     loc (NoQual n)      = loc n
     
-instance HasLoc e => HasLoc (Elem e) where
+instance HasLoc Elem where
     loc (Elem e)        = loc e
     loc (Star e)        = loc e
 
@@ -476,8 +476,8 @@ instance Eq Comp where
 
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
-    PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
-    PList _ ps1         == PList _ ps2          = ps1 == ps2
+    PTuple _ ps1 p1     == PTuple _ ps2 p2      = ps1 == ps2 && p1 == p2
+    PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
     PSlice _ e1 sl1     == PSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
     PDot _ e1 n1        == PDot _ e2 n2         = e1 == e2 && n1 == n2
@@ -567,17 +567,3 @@ istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
 notemp                              = not . istemp
 
 primitive t                         = t `elem` [OStr, OInt, OFloat, OBool, ONone]
-
-pat2exp (PVar l n _)                = Var l n
-pat2exp (PTuple l ps)               = Tuple l (map pat2elem ps)
-pat2exp (PList l ps)                = List l (map pat2elem ps)
-pat2exp (PIndex l e ix)             = Index l e ix
-pat2exp (PSlice l e sl)             = Slice l e sl
-pat2exp (PDot l e n)                = Dot l e n
-pat2exp (PParen l p)                = Paren l (pat2exp p)
-pat2exp (PData l n ixs)             = foldl g (Var (loc n) n) ixs
-  where g e ix                      = Index (loc e `upto` loc ix) e [ix]
-
-pat2elem (Elem p)                   = Elem (pat2exp p)
-pat2elem (Star p)                   = Star (pat2exp p)
-

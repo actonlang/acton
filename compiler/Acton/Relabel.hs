@@ -100,8 +100,8 @@ instance Relabel Expr where
 
 instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
-    relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
-    relabel (PList _ ps) = PList <$> newLoc <*> relabel ps
+    relabel (PTuple _ ps p) = PTuple <$> newLoc <*> relabel ps <*> relabel p
+    relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (PSlice _ e sl) = PSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (PDot _ e n) = PDot <$> newLoc <*> relabel e <*> relabel n
@@ -174,7 +174,7 @@ instance Relabel Comp where
 instance Relabel WithItem where
     relabel (WithItem e p) = WithItem <$> relabel e <*> relabel p
 
-instance Relabel e => Relabel (Elem e) where
+instance Relabel Elem where
   relabel (Elem e) = Elem <$> relabel e
   relabel (Star e) = Star <$> relabel e
 
