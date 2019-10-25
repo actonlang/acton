@@ -91,12 +91,20 @@ splitGen tvs te cs
     (fixed_cs, cs')                     = partition (null . (\\tvs) . tyfree) cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
     ambig te vs                         = or [ not $ null (vs \\ tyfree t) | (n, NVar t _) <- te ]
-    q_new                               = mkBind gen_cs
+    q_new                               = mkBinds gen_cs
     generalize (NVar (TSchema l q t) d) = NVar (closeFX $ TSchema l (subst s (q_new++q)) (subst s t)) d
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
-    mkGen i                             = i
-    mkBind                              :: Constraints -> [TBind]
-    mkBind cs                           = undefined         -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+mkBinds cs                              = collect [] $ catMaybes $ map bound cs
+  where
+    bound (Sub (TVar _ v) (TCon _ u))   = Just $ TBind v [u]
+    bound (Impl (TVar _ v) u)           = Just $ TBind v [u]
+    bound c                             = trace ("### Unreduced constraint: " ++ prstr c) $ Nothing
+    collect vs []                       = []
+    collect vs (TBind v us : q)
+      | v `elem` vs                     = collect vs q
+      | otherwise                       = TBind v (us ++ concat [ us' | TBind v' us' <- q, v' == v ]) : collect (v:vs) q
+    
 
 genTEnv                                 :: Env -> TEnv -> TypeM TEnv
 genTEnv env te                          = do cs <- collectConstraints
@@ -483,11 +491,9 @@ instance Infer Expr where
                                              constrain [Sel t n t0]
                                              return t0
     infer env (DotI l e i)              = do t <- infer env e
-                                             t0:tvs <- newTVars (i+2)
-                                             constrain [Equ t (tTuple (row t0 tvs i))]
+                                             t0 <- newTVar
+                                             constrain [Sel t (rPos i) t0]
                                              return t0
-      where row t0 [r] 0                = posRow t0 r
-            row t0 (t1:tvs) n           = posRow t1 (row t0 tvs (n-1))
     infer env (Lambda l p k e)
       | nodup (p,k)                     = do fx <- newTVar
                                              pushFX fx
@@ -574,7 +580,7 @@ instance InfEnvT PosPar where
     infEnvT env (PosPar n ann e p)      = do t <- newTVar                       -- TODO: use ann
                                              t1 <- infer env e
                                              (te,r) <- infEnvT (define [(n,nVar t)] env) p
-                                             return ((n,nVar t):te, posRow t r)
+                                             return ((n,nVar t):te, posRow (tSchema t) r)
     infEnvT env (PosSTAR n ann)         = do r <- newTVar                       -- TODO: use ann
                                              return ([(n, nVar $ tTuple r)], r)
     infEnvT env PosNIL                  = return ([], posNil)
@@ -591,7 +597,7 @@ instance InfEnvT KwdPar where
 instance Infer PosArg where
     infer env (PosArg e p)              = do t <- infer env e
                                              prow <- infer env p
-                                             return (posRow t prow)
+                                             return (posRow (tSchema t) prow)
     infer env (PosStar e)               = do t <- infer env e
                                              prow <- newTVar
                                              constrain [Sub t (tTuple prow)]

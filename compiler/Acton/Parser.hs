@@ -520,12 +520,12 @@ var_stmt = addLoc $
 tsig = do v <- name
           vs <- commaList name
           colon
-          t <- tscheme
+          t <- tschema
           return (v:vs,t)
  
 tsig1 = do v <- name
            colon
-           t <- tscheme
+           t <- tschema
            return (v,t)
  
 target = pattern False
@@ -1090,7 +1090,7 @@ yield_expr = addLoc $ do
 
 parm :: Bool -> Parser (S.Name, Maybe S.TSchema, Maybe S.Expr)
 parm ann = do n <- name
-              mbt <- if ann then optional (colon *> tscheme) else return Nothing
+              mbt <- if ann then optional (colon *> tschema) else return Nothing
               mbe <- optional (equals *> test)
               return (n, mbt, mbe)
 
@@ -1193,8 +1193,8 @@ posrow :: Parser S.PosRow                   --non-empty posrow without trailing 
 posrow  = do mbv <- star *> optional tvar  
              return (S.posVar mbv)
          <|> 
-          do t <- ttype
-             ts <- many (try (comma *> ttype))
+          do t <- tschema
+             ts <- many (try (comma *> tschema))
              mbv <- optional (comma *> optional (star *> optional tvar))
              let tail = maybe S.posNil (maybe S.posNil S.posVar) mbv
              return (foldr S.posRow tail (t:ts))
@@ -1216,9 +1216,9 @@ funrows  = try (do mbv <- (star *> optional tvar); comma; k <- kwdrow; return (S
         <|>
            try (do k <- kwdrow; return (S.posNil, k))
         <|>
-           try (do t <- ttype; comma; (p,k) <- funrows; return (S.posRow t p, k))
+           try (do t <- tschema; comma; (p,k) <- funrows; return (S.posRow t p, k))
         <|>
-           try (do t <- ttype; optional comma; return (S.posRow t S.posNil, S.kwdNil))
+           try (do t <- tschema; optional comma; return (S.posRow t S.posNil, S.kwdNil))
         <|>
            try (do optional comma; return (S.posNil, S.kwdNil))
 
@@ -1239,8 +1239,8 @@ optbounds :: Parser [S.TCon]
 optbounds = do bounds <- optional (parens (optional ((:) <$> tcon <*> commaList tcon)))
                return $ maybe [] (maybe [] id) bounds
 
-tscheme :: Parser S.TSchema
-tscheme = addLoc $
+tschema :: Parser S.TSchema
+tschema = addLoc $
             try (do 
                 bs <- brackets (do n <- tbind
                                    ns <- commaList tbind

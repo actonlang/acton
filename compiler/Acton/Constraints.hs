@@ -256,11 +256,11 @@ erase x                                 = oSubst s x
 
 -- Reduce conservatively and remove entailed constraints
 simplify                                :: [Constraint] -> TypeM [Constraint]
-simplify cs                             = undefined
+simplify cs                             = return cs
 
 -- Reduce aggressively or fail
 solve                                   :: [Constraint] -> TypeM ()
-solve cs                                = undefined
+solve cs                                = return ()
 
 o_solveAll cs                               = do -- traceM ("##### SolveAll: ")
                                                  -- traceM (prstr cs)

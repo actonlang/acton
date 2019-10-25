@@ -133,7 +133,13 @@ instance Subst a => Subst (Maybe a) where
 
 instance Subst Constraint where
     msubst (Equ t1 t2)              = Equ <$> msubst t1 <*> msubst t2
+    msubst (Sub t1 t2)              = Sub <$> msubst t1 <*> msubst t1
+    msubst (Impl t c)               = Impl <$> msubst t <*> msubst c
+    msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
     tyfree (Equ t1 t2)              = tyfree t1 ++ tyfree t2
+    tyfree (Sub t1 t2)              = tyfree t1 ++ tyfree t2
+    tyfree (Impl t c)               = tyfree t ++ tyfree c
+    tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
@@ -188,29 +194,32 @@ instance Subst Type where
                                          case Map.lookup v s of
                                             Just t  -> msubst t
                                             Nothing -> return (TVar l v)
+    msubst (TCon l c)               = TCon l <$> msubst c
+    msubst (TAt l c)                = TAt l <$> msubst c
     msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
     msubst (TTuple l p)             = TTuple l <$> msubst p
     msubst (TRecord l k)            = TRecord l <$> msubst k
     msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TUnion l as)            = return $ TUnion l as
-    msubst (TCon l c)               = TCon l <$> msubst c
-    msubst (TAt l c)                = TAt l <$> msubst c
-    msubst (TSelf l)                = return $ TSelf l
     msubst (TNone l)                = return $ TNone l
+    msubst (TSelf l)                = return $ TSelf l
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l)                 = return $ TNil l
     msubst (TRow l n t r)           = TRow l n <$> msubst t <*> msubst r
 
     tyfree (TVar _ v)               = [v]
+    tyfree (TCon _ c)               = tyfree c
+    tyfree (TAt _ c)                = tyfree c
     tyfree (TFun _ fx p k t)        = tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p)             = tyfree p
     tyfree (TRecord _ k)            = tyfree k
     tyfree (TOpt _ t)               = tyfree t
     tyfree (TUnion _ as)            = []
-    tyfree (TCon _ c)               = tyfree c
-    tyfree (TAt _ c)                = tyfree c
-    tyfree (TSelf _)                = []
     tyfree (TNone _)                = []
+    tyfree (TSelf _)                = []
+    tyfree (TWild _)                = []
+    tyfree (TNil _)                 = []
+    tyfree (TRow _ _ t r)           = tyfree t ++ tyfree r
 
 
 ----------------------------------------
