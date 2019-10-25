@@ -284,11 +284,31 @@ instance Vars Comp where
     bound (CompIf _ e c)            = bound c
     bound NoComp                    = []
 
+instance Vars PosPat where
+    free (PosPat p ps)              = free p ++ free ps
+    free (PosPatStar p)             = free p
+    free PosPatNil                  = []
+
+    bound (PosPat p ps)             = bound p ++ bound ps
+    bound (PosPatStar p)            = bound p
+    bound PosPatNil                 = []
+    
+instance Vars KwdPat where
+    free (KwdPat n p ps)            = free p ++ free ps
+    free (KwdPatStar p)             = free p
+    free KwdPatNil                  = []
+
+    bound (KwdPat n p ps)           = bound p ++ bound ps
+    bound (KwdPatStar p)            = bound p
+    bound KwdPatNil                 = []
+    
 instance Vars Pattern where
     free (PVar _ n a)               = []
     free (PIndex _ e ix)            = free e ++ free ix
     free (PSlice _ e sl)            = free e ++ free sl
     free (PDot _ e n)               = free e
+--    free (PRecord _ ps)             = free ps
+--    free (PTuple _ ps)              = free ps
     free (PTuple _ ps p)            = free ps ++ free p
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
@@ -298,6 +318,8 @@ instance Vars Pattern where
     bound (PIndex _ e ix)           = []
     bound (PSlice _ e sl)           = []
     bound (PDot _ e n)              = []
+--    bound (PRecord _ ps)            = bound ps
+--    bound (PTuple _ ps)             = bound ps
     bound (PTuple _ ps p)           = bound ps ++ bound p
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p

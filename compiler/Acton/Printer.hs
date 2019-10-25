@@ -223,9 +223,23 @@ instance Pretty Comp where
     pretty NoComp                   = empty
 
 
+instance Pretty PosPat where
+    pretty (PosPat p PosPatNil)     = pretty p
+    pretty (PosPat p ps)            = pretty p <> comma <+> pretty ps
+    pretty (PosPatStar p)           = text "*" <> pretty p
+    pretty PosPatNil                = empty
+
+instance Pretty KwdPat where
+    pretty (KwdPat n p KwdPatNil)   = pretty n <+> equals <+> pretty p
+    pretty (KwdPat n p ps)          = pretty n <+> equals <+> pretty p <> comma <+> pretty ps
+    pretty (KwdPatStar p)           = text "**" <> pretty p
+    pretty KwdPatNil                = empty
+
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps p)          = prettyPats ps p
+--    pretty (PTuple _ ps)            = pretty ps
+--    pretty (PRecord _ ps)           = parens (pretty ps)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PIndex _ e ix)          = pretty e <> brackets (commaList ix)
     pretty (PSlice _ e sl)          = pretty e <> brackets (commaList sl)
