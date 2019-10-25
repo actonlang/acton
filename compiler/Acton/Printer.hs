@@ -195,7 +195,7 @@ instance Pretty e => Pretty (Elem e) where
 
 instance Pretty Assoc where
     pretty (Assoc k v)              = pretty k <> colon <+> pretty v
-    pretty (StarStarAssoc e)        = text "**" <> pretty e
+    pretty (StarStar e)             = text "**" <> pretty e
 
 instance Pretty Field where
     pretty (Field n e)              = pretty n <+> equals <+> pretty e

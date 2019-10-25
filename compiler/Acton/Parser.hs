@@ -976,7 +976,7 @@ dictorsetmaker = (try $ maker S.Dict S.DictComp assoc)
      where elem = (S.Elem <$> test) <|> star_expr
            assoc = (S.Assoc <$> test) <*> (colon *> test)
                 <|>
-                   (S.StarStarAssoc <$> (starstar *> expr))
+                   (S.StarStar <$> (starstar *> expr))
 
 var = do
          nm <- name

@@ -132,7 +132,7 @@ data Handler    = Handler Except Suite deriving (Show,Eq)
 data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName Name deriving (Show)
 
 data Elem e     = Elem e | Star e deriving (Show,Eq)
-data Assoc      = Assoc Expr Expr | StarStarAssoc Expr deriving (Show,Eq)
+data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
 data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
 data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
@@ -358,7 +358,7 @@ instance HasLoc e => HasLoc (Elem e) where
 
 instance HasLoc Assoc where
     loc (Assoc k v)     = loc k `upto` loc v
-    loc (StarStarAssoc e) = loc e
+    loc (StarStar e)    = loc e
 
 instance HasLoc Pattern where
     loc                 = ploc

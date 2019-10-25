@@ -23,6 +23,7 @@ import InterfaceFiles
 
 
 
+
 mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env
 mkEnv paths env modul       = getImps paths env imps
   where Module _ imps _     = modul
@@ -109,14 +110,13 @@ instance Subst SrcInfoTag where
     tyfree (INS _ t)                = tyfree t
 
 
-monotype (NVar _ StaticMethod)  = False
-monotype (NVar _ ClassMethod)   = False
-monotype (NVar _ InstMethod)    = False
-monotype (NClass _ _ _)         = False
-monotype (NProto _ _ _)         = False
-monotype _                      = True
+monotype (NVar _ StaticMethod)      = Nothing
+monotype (NVar _ ClassMethod)       = Nothing
+monotype (NVar _ InstMethod)        = Nothing
+monotype (NVar (TSchema _ [] t) _)  = Just t
+monotype (NSVar t)                  = Just t
+monotype _                          = Nothing
 
-polytype                        = not . monotype
 
 -------------------------------------------------------------------------------------------------------------------
 
@@ -210,6 +210,8 @@ statescope env              = [ z | (z, Just (NSVar _)) <- names env ]
 block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, Nothing) | x <- nub xs ] ++ names env }
 
+reserve                     = block
+
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = [ (n, Just i) | (n,i) <- reverse te ] ++ prune (dom te) (names env) }
 
@@ -222,6 +224,8 @@ definemod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
 
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just Nothing
+
+reserved                    = blocked
 
 findname                    :: Name -> Env -> NameInfo
 findname n env              = case lookup n (names env) of
@@ -310,6 +314,52 @@ importAll m te              = mapMaybe imp te
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t dec)     = Just (n, NVar t dec)
     imp _                   = Nothing                               -- cannot happen
+
+
+-- Error handling ------------------------------------------------------------------------
+
+data CheckerError                       = FileNotFound ModName
+                                        | NameNotFound Name
+                                        | NameReserved Name
+                                        | IllegalImport SrcLoc
+                                        | DuplicateImport Name
+                                        | NoItem ModName Name
+                                        | OtherError SrcLoc String
+                                        deriving (Show)
+
+instance Control.Exception.Exception CheckerError
+
+checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
+checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
+checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is not accessible")
+checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
+checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
+checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
+checkerError (OtherError l str)         = (l,str)
+
+nameNotFound n                          = Control.Exception.throw $ NameNotFound n
+
+nameReserved n                          = Control.Exception.throw $ NameNotFound n
+
+fileNotFound n                          = Control.Exception.throw $ FileNotFound n
+
+illegalImport l                         = Control.Exception.throw $ IllegalImport l
+
+duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
+
+noItem m n                              = Control.Exception.throw $ NoItem m n
+
+err l s                                 = Control.Exception.throw $ OtherError l s
+
+err1 x s                                = err (loc x) (s ++ " " ++ prstr x)
+
+err2 (x:_) s                            = err1 x s
+
+
+
+
+
+
 
 
 -- Old builtins --------------------------------------------------------------------------
