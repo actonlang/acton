@@ -33,7 +33,6 @@ parseTestStr p str = case runParser (St.evalStateT p []) "" str of
                        Left err -> putStrLn (errorBundlePretty err)
                        Right t  -> print t
 
-
 parserError :: ParseErrorBundle String Void -> (SrcLoc,String)
 parserError err = (NoLoc,errorBundlePretty err)
 
@@ -230,7 +229,7 @@ symbol str = lexeme (string str)
 newline1 :: Parser [S.Stmt]
 newline1 = const [] <$> (eol *> sc2)
 
---- strings in their many variants ---
+--- Strings in their many variants -----------------------------------------------
 
 stringPP prefix = longString prefix <|> shortString prefix
 
@@ -262,7 +261,7 @@ strings = addLoc $ do
       else if all (\s -> head s == 'u') ss then return $ S.UStrings NoLoc ss
            else return $ S.Strings NoLoc ss
       
--- reserved words and other symbols
+-- Reserved words, other symbols and names ----------------------------------------------------------
 
 rword :: String -> Parser ()
 rword w = (lexeme . try) (string w *> notFollowedBy (alphaNumChar <|> char '_'))
@@ -297,23 +296,35 @@ identifier = (lexeme . try) (p >>= check)
                 else return x
     restChars = takeWhileP Nothing (\c -> isAlphaNum c || c=='_') <?> "alphanumeric char or underscore"
 
-name, escname :: Parser S.Name
+name, escname, tvarname :: Parser S.Name
 name = do off <- getOffset
           x <- identifier
           if isUpper (head x) && all isDigit (tail x)
             then fail ("Type variable "++x++" cannot be a name")
             else return $ S.Name (Loc off (off+length x)) x
 
-tvarname :: Parser S.Name
+escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> stringP)
+
 tvarname = do off <- getOffset
               x <- identifier
               if isUpper (head x) && all isDigit (tail x)
                then return $ S.Name (Loc off (off+length x)) x
                else fail ("Name "++x++" cannot be a type variable")
   
-              
-                
-escname = name <|> addLoc ((\str -> S.Name NoLoc  (init (tail str))) <$> stringP)
+module_name :: Parser S.ModName
+module_name = do
+  n <- name
+  ns <- many (dot *> escname)
+  return $ S.ModName (n:ns)
+
+qual_name :: Parser S.QName
+qual_name = do
+  n <- name
+  ns <- many (dot *> escname)
+  case n:ns of
+    [n] -> return $ S.NoQual n
+    ns' -> return $ S.QName (S.ModName (init ns')) (last ns')
+  
 
 -- recognizers for numbers are used directly in function atom below.
 
@@ -326,12 +337,8 @@ brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* char ']') <* currSC
 
 braces p = withCtx PAR (L.symbol sc2 "{" *> p <* char '}') <* currSC
 
---- Parsers, ordered as in Python 3.6 reference grammar --------------------------
-
--- single_input: NEWLINE | simple_stmt | compound_stmt NEWLINE
--- file_input: (NEWLINE | stmt)* ENDMARKER
--- eval_input: testlist NEWLINE* ENDMARKER
-
+--- Top-level parsers ------------------------------------------------------------
+ 
 file_input :: Parser ([S.Import], S.Suite)
 file_input = sc2 *> ((,) <$> imports <*> top_suite <* eof)
 
@@ -341,206 +348,71 @@ imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)
 top_suite :: Parser S.Suite
 top_suite = concat <$> (many (L.nonIndented sc2 stmt <|> newline1))
 
+-- Row parsers ----------------------------------------------------------------------
 
--- decorator: '@' dotted_name [ '(' [arglist] ')' ] NEWLINE
--- decorators: decorator+
--- decorated: decorators (classdef | funcdef)
+-- non-empty positional row without trailing comma
+posItems:: (a -> b -> b) -> (c -> b) -> b -> Parser a -> Parser c -> Parser b
+posItems fCons fStar fNil item staritem =
+           fStar <$> (star *> staritem)
+        <|> 
+           do e <- item
+              es <- many (try (comma *> item)) 
+              mbe <- optional (try (comma *> star *> staritem))
+              let tail = maybe fNil fStar mbe
+              return (foldr fCons tail (e:es))
 
-sig_decoration :: Parser S.Decoration
-sig_decoration = rword "@classattr" *> assertClassProtoExt *> newline1 *> return S.ClassAttr  
-             <|> rword "@instattr" *> assertClassProtoExt *> newline1 *> return S.InstAttr
-             <|> rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMethod
-             <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMethod
-             <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
-             <|> return S.NoDecoration
+--non-empty kwd row with optional trailing comma
+kwdItems:: (a -> b -> b) -> (c -> b) -> b -> Parser a -> Parser c -> Parser b
+kwdItems fCons fStar fNil item staritem =
+          fStar <$> (starstar *> staritem <* optional comma)
+        <|>
+          do b <- item
+             bs <- many (try (comma *> item))
+             mbe <- optional (try (comma *> optional ((starstar *> staritem) <* optional comma )))
+             let tail = maybe fNil (maybe fNil fStar) mbe
+             return (foldr fCons tail (b:bs))
 
-fun_decoration :: Parser S.Modif
-fun_decoration = rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMeth
-             <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMeth
-             <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
-             <|> return S.NoMod
+-- parameter list consisting of posItems followed by kwdItems
+-- Unfortunately, the parser below does not make use of posItems
+funItems :: (a1 -> t1 -> t1) -> (a -> t1) -> t1 -> Parser a1 -> Parser a -> Parser t -> t -> Parser (t1,t)
+funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
+              try (do i <- star *> posstaritem; comma; k <- kwdItems; return (posStar i, k))
+           <|>
+              try (do i <- star *> posstaritem; optional comma; return (posStar i, kwdNil))
+           <|>
+              try (do k <- kwdItems; return (posNil, k))
+           <|>
+              try (do i <- positem; comma; (p,k) <- funItems posCons posStar posNil positem posstaritem kwdItems kwdNil; return (posCons i p, k))
+           <|>
+              try (do i <- positem; optional comma; return (posCons i posNil, kwdNil))
+           <|>
+              try (do optional comma; return (posNil, kwdNil))
 
-decorator1 decoration = do
-       p <- L.indentLevel
-       d <- decoration
-       p1 <- L.indentLevel
-       if (p /= p1)
-         then fail "decorated declaration must have same indentation as decoration"
-         else return d
-
-
-signature :: Parser S.Decl
-signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t dec)
-
--- async_funcdef: ASYNC funcdef
--- funcdef: modifier 'def' NAME parameters ['->' test] ':' suite
-
-funcdef :: Parser S.Decl
-funcdef =  addLoc $ do
-              assertNotData
-              dec <- decorator1 fun_decoration
-              (p,md) <- withPos (modifier dec <* rword "def")
-              n <- name
-              q <- optbinds
-              (ppar,kpar) <- parens (funpars True)
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
-
-
--- modifier: ['sync' | 'async']
-
-modifier :: S.Modif -> Parser S.Modif
-modifier S.NoMod = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
-                   assertActScope *> rword "async" *> return S.Async <|>
-                   ifActScope (return (S.Sync False)) (return S.NoMod)
-modifier m = return m
-
-
-optbinds :: Parser [S.TBind]
-optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
-            <|>
-           return []
-
-
--- parameters: '(' [typedargslist] ')'
--- typedargslist:
---    (tfpdef ['=' test] (',' tfpdef ['=' test])*
---       [',' [ '*' [tfpdef] (',' tfpdef ['=' test])* [',' ['**' tfpdef [',']]] | '**' tfpdef [',']]]
---  | '*' [tfpdef] (',' tfpdef ['=' test])* [',' ['**' tfpdef [',']]]
---  | '**' tfpdef [','])
--- tfpdef: NAME [':' test]
---
--- The above grammar for typedargslist is incomprehensible.
--- Also, varargslist has the same syntax with tfpdef replaced by NAME
--- So we do a general, parameterized, version argslist first 
--- To make it a little more readable, we define
---
--- param: tfpdef ['=' test]
--- parlist_starargs:  '*' [tfpdef] (',' param)* [',' ['**' tfpdef [',']]] | '**' tfpdef [',']
--- annot: test
---
--- and get
---
--- tfpdef: NAME [':' annot]
--- parameters: '(' [typedargslist] ')'
--- typedargslist: 
---      (param (',' param)* [',' [ parlist_starargs]]
---    | parlist_starargs
---    | '**' tfpdef [','])
-
---param :: Parser S.StarPar -> Parser S.Param
---param par = do S.StarPar _ nm mba <- par
---               S.Param nm mba <$> optional (equals *> test)
-
--- stmt: simple_stmt | compound_stmt
--- simple_stmt: small_stmt (';' small_stmt)* [';'] NEWLINE
-
-stmt, simple_stmt :: Parser [S.Stmt]
-stmt = (try simple_stmt <|> decl_group <|> ((:[]) <$> compound_stmt)) <?> "statement"
-
-simple_stmt = ((small_stmt `sepBy1` semicolon) <* optional semicolon) <* newline1
-
---- Small statements ---------------------------------------------------------------------------------
-
--- small_stmt: (expr_stmt | del_stmt | pass_stmt | flow_stmt |
---             import_stmt | assert_stmt)
-
-small_stmt :: Parser S.Stmt
-small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt  <|>
-             assert_stmt <|> var_stmt
-
--- expr_stmt: testlist_star_expr (
---                                   annassign
---                                 | augassign (yield_expr | testlist)
---                                 | ('=' (yield_expr | testlist_star_expr))*
---                               )
-
--- | 'var' testlist_star_expr many_assign                               { VarAssign ($1><$3) (Target $2:fst $3) (snd $3) }
-
--- annassign: ':' test ['=' test]
--- testlist_star_expr: (test|star_expr) (',' (test|star_expr))* [',']
--- exprlist: (expr|star_expr) (',' (expr|star_expr))* [',']               **** exprlist and testlist occur
--- testlist: test (',' test)* [',']                                       **** later in grammar but are shown here
-
--- augassign: ('+=' | '-=' | '*=' | '@=' | '/=' | '%=' | '&=' | '|=' | '^=' |
---            '<<=' | '>>=' | '**=' | '//=')
-
--- assign:  ('=' (yield_expr | testlist_star_expr))
-
-assign :: Parser S.Pattern
-assign = lhs <* equals
-
--- common pattern for expression lists
-testlist_gen :: Parser S.Elem -> Parser S.Expr
-testlist_gen p = addLoc $ do
-     e <- p
-     es <- many (try (comma *> p))
-     mbc <- optional comma
-     return (f NoLoc (e:es) mbc)
-  where f _ [S.Elem e] Nothing = e
-        f _ [S.Star e] Nothing = e
-        f l es _ = S.Tuple l es
-
-testlist, testlist_star_expr :: Parser S.Expr
-testlist = testlist_gen (S.Elem <$> test)                          -- data[testlist] =  |  return testlist  |  for p in testlist  |  yield testlist
-testlist_star_expr = testlist_gen  (S.Elem <$> test <|> star_expr)
-
-augassign :: Parser (S.Op S.Aug)
-augassign = addLoc (S.Op NoLoc <$> (assertNotData *> augops))
-  where augops = S.PlusA   <$ symbol "+="
-             <|> S.MinusA  <$ symbol "-="
-             <|> S.MultA   <$ symbol "*="
-             <|> S.MMultA  <$ symbol "@="
-             <|> S.DivA    <$ symbol "/="
-             <|> S.ModA    <$ symbol "%="
-             <|> S.BAndA   <$ symbol "&="
-             <|> S.BOrA    <$ symbol "|="
-             <|> S.BXorA   <$ symbol "^="
-             <|> S.ShiftLA <$ symbol "<<="
-             <|> S.ShiftRA <$ symbol ">>="
-             <|> S.PowA    <$ symbol "**="
-             <|> S.EuDivA  <$ symbol "//="
-
-
-rhs :: Parser S.Expr
-rhs = yield_expr <|> testlist_star_expr
-
-trysome p = do x <- p; rest [x]
-  where rest xs = (try p >>= \x -> rest (x:xs)) <|> return (reverse xs)
-
-expr_stmt :: Parser S.Stmt
-expr_stmt = addLoc $
-            try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
-        <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
-        <|> assertNotData *> (S.Expr NoLoc <$> rhs)
-
-var_stmt :: Parser S.Stmt
-var_stmt = addLoc $ 
-            try (assertActBody *> rword "var" *> (S.VarAssign NoLoc <$> trysome assign <*> rhs))
-
-tsig = do v <- name
-          vs <- commaList name
-          colon
-          t <- tschema
-          return (v:vs,t)
+tuple_or_single posItems headItems len tup =
+      do pa <- posItems
+         mbc <- optional comma
+         return (f pa mbc)
+    where f pa mbc
+            | len pa == 1 = maybe (headItems pa) (const (tup pa)) mbc
+            | otherwise  = tup pa
+        
  
-tsig1 = do v <- name
-           colon
-           t <- tschema
-           return (v,t)
- 
+-- Patterns ------------------------------------------------------------------------------------
+
+pospat :: Bool -> Parser S.PosPat
+pospat lh = posItems S.PosPat S.PosPatStar S.PosPatNil (apat lh) (apat lh)
+
+kwdpat :: Bool -> Parser S.KwdPat 
+kwdpat lh = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
+
+target, lhs :: Parser S.Pattern
 target = pattern False
 
 lhs = pattern True
 
 pattern :: Bool -> Parser S.Pattern
-pattern lh = addLoc $ do
-    (ps,mbp) <- pelems lh
-    mbc <- optional comma
-    return (f ps mbp mbc)
-  where 
-    f [p] mbp Nothing = p
-    f ps mbp _        = S.PTuple NoLoc ps mbp
-
+pattern lh = addLoc $ tuple_or_single (pospat lh) S.posPatHead S.posPatLen (S.PTuple NoLoc)
+  
 pelems :: Bool -> Parser ([S.Pattern], Maybe S.Pattern)
 pelems lh = do
     p <- apat lh
@@ -554,7 +426,7 @@ apat lh = addLoc (
         <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
-            ((try . parens) $ return (S.PTuple NoLoc [] Nothing))
+            ((try . parens) $ return (S.PTuple NoLoc S.PosPatNil))
         <|>
             ((try . parens) $ S.PParen NoLoc <$> pattern lh)
         <|>
@@ -567,11 +439,56 @@ apat lh = addLoc (
                 S.Index _ e ix -> return $ S.PIndex NoLoc e ix
                 S.Slice _ e sl -> return $ S.PSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal assignment target: " ++ show tmp)
-        datapat = S.PData NoLoc <$> escname <*> many (brackets testlist)
+        datapat = S.PData NoLoc <$> escname <*> many (brackets exprlist)
         optannot = try (Just <$> (colon *> ttype)) <|> return Nothing
 
--- del_stmt: 'del' exprlist
--- pass_stmt: 'pass'
+------------------------------------------------------------------------------------------------
+-- Statements ----------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+
+stmt, simple_stmt :: Parser [S.Stmt]
+stmt = (try simple_stmt <|> decl_group <|> ((:[]) <$> compound_stmt)) <?> "statement"
+
+simple_stmt = ((small_stmt `sepEndBy1` semicolon)) <* newline1
+
+--- Small statements ---------------------------------------------------------------------------------
+
+small_stmt :: Parser S.Stmt
+small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt
+
+expr_stmt :: Parser S.Stmt
+expr_stmt = addLoc $
+            try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
+        <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
+        <|> assertNotData *> (S.Expr NoLoc <$> rhs)
+   where augassign :: Parser (S.Op S.Aug)
+         augassign = addLoc (S.Op NoLoc <$> (assertNotData *> augops))
+          where augops = S.PlusA   <$ symbol "+="
+                     <|> S.MinusA  <$ symbol "-="
+                     <|> S.MultA   <$ symbol "*="
+                     <|> S.MMultA  <$ symbol "@="
+                     <|> S.DivA    <$ symbol "/="
+                     <|> S.ModA    <$ symbol "%="
+                     <|> S.BAndA   <$ symbol "&="
+                     <|> S.BOrA    <$ symbol "|="
+                     <|> S.BXorA   <$ symbol "^="
+                     <|> S.ShiftLA <$ symbol "<<="
+                     <|> S.ShiftRA <$ symbol ">>="
+                     <|> S.PowA    <$ symbol "**="
+                     <|> S.EuDivA  <$ symbol "//="
+
+assign :: Parser S.Pattern
+assign = lhs <* equals
+
+rhs :: Parser S.Expr
+rhs = yield_expr <|> exprlist
+
+trysome p = do x <- p; rest [x]
+  where rest xs = (try p >>= \x -> rest (x:xs)) <|> return (reverse xs)
+
+var_stmt :: Parser S.Stmt
+var_stmt = addLoc $ 
+            try (assertActBody *> rword "var" *> (S.VarAssign NoLoc <$> trysome assign <*> rhs))
 
 del_stmt = addLoc $ do
             assertNotData
@@ -580,13 +497,7 @@ del_stmt = addLoc $ do
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 
--- flow_stmt: break_stmt | continue_stmt | return_stmt | raise_stmt | yield_stmt
-
 flow_stmt = break_stmt <|>  continue_stmt <|>  return_stmt <|>  raise_stmt <|>  yield_stmt
-
--- break_stmt: 'break'
--- continue_stmt: 'continue'
--- return_stmt: 'return' [testlist]
 
 break_stmt =  S.Break <$> (assertLoop *> rwordLoc "break")
 
@@ -595,91 +506,48 @@ continue_stmt =  S.Continue <$> (assertLoop *> rwordLoc "continue")
 return_stmt = addLoc $ do    -- the notFollowedBy colon here is to avoid confusion with data_stmt return case
                 assertDefOrAct
                 rword "return" <* notFollowedBy colon
-                S.Return NoLoc <$> optional testlist
-                
--- yield_stmt: yield_expr
--- raise_stmt: 'raise' [test ['from' test]]
-
+                S.Return NoLoc <$> optional exprlist
+ 
 yield_stmt = yield_expr >>= \e -> return $ S.Expr (S.eloc e) e
 
 raise_stmt = addLoc $ do
                rword "raise"
-               S.Raise NoLoc <$> (optional $ S.Exception <$> test <*> optional (rword "from" *> test))
+               S.Raise NoLoc <$> (optional $ S.Exception <$> expr <*> optional (rword "from" *> expr))
                                      
--- import_stmt: import_name | import_from
--- import_name: 'import' dotted_as_names
--- import_from: ('from' (('.' | '...')* dotted_name | ('.' | '...')+)
---               'import' ('*' | '(' import_as_names ')' | import_as_names))
--- import_as_name: NAME ['as' NAME]
--- dotted_as_name: dotted_name ['as' NAME]
--- import_as_names: import_as_name (',' import_as_name)* [',']
--- dotted_as_names: dotted_as_name (',' dotted_as_name)*
--- dotted_name: NAME ('.' NAME)*
-
 import_stmt = import_name <|> import_from
-
-import_name = addLoc $ do
-                 rword "import"
-                 S.Import NoLoc <$> module_item `sepBy1` comma
-  where module_item = do
-                          dn <- module_name
-                          S.ModuleItem dn <$> optional (rword "as" *> name)
+   where import_name = addLoc $ do
+                rword "import"
+                S.Import NoLoc <$> module_item `sepBy1` comma
+         module_item = do
+                dn <- module_name
+                S.ModuleItem dn <$> optional (rword "as" *> name)
                           
-import_from = addLoc $ do
-                 rword "from"
-                 mr <- import_module
-                 rword "import"
-                 is <- import_items
-                 case is of
+         import_from = addLoc $ do
+                rword "from"
+                mr <- import_module
+                rword "import"
+                is <- import_items
+                case is of
                    [] -> return $ S.FromImportAll NoLoc mr
                    _  -> return $ S.FromImport NoLoc mr is
-  where                   
-    import_module = do
-                  ds <- many dot
-                  mbn <- optional module_name
-                  return $ S.ModRef (length ds, mbn)
-    import_items = ([] <$ star)   -- Note: [] means all...
-                <|> parens import_as_names
-                <|> import_as_names
-    import_as_name = S.ImportItem <$> name <*> optional (rword "as" *> name)
-    import_as_names = (:) <$> import_as_name <*> commaList import_as_name 
+                 
+         import_module = do
+                ds <- many dot
+                mbn <- optional module_name
+                return $ S.ModRef (length ds, mbn)
+         import_items = ([] <$ star)   -- Note: [] means all...
+                     <|> parens import_as_names
+                     <|> import_as_names
+         import_as_name = S.ImportItem <$> name <*> optional (rword "as" *> name)
+         import_as_names = (:) <$> import_as_name <*> commaList import_as_name 
 
-module_name = do
-  n <- name
-  ns <- many (dot *> escname)
-  return $ S.ModName (n:ns)
-  
-qual_name = do
-  n <- name
-  ns <- many (dot *> escname)
-  case n:ns of
-    [n] -> return $ S.NoQual n
-    ns' -> return $ S.QName (S.ModName (init ns')) (last ns')
-  
 -- global_stmt: 'global' NAME (',' NAME)*
 -- nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
--- assert_stmt: 'assert' test [',' test]
+-- assert_stmt: 'assert' expr [',' expr]
 
-assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> test `sepBy1` comma)
+assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr `sepBy1` comma)
 
---- Compound statements ------------------------------------------------------------------
-
--- compound_stmt: if_stmt | while_stmt | for_stmt | try_stmt |
---                with_stmt | funcdef | classdef | decorated
--- if_stmt: 'if' test ':' suite ('elif' test ':' suite)* ['else' ':' suite]
--- while_stmt: 'while' test ':' suite ['else' ':' suite]
--- for_stmt: 'for' exprlist 'in' testlist ':' suite ['else' ':' suite]
--- try_stmt: ('try' ':' suite
---            ((except_clause ':' suite)+
---             ['else' ':' suite]
---             ['finally' ':' suite] |
---            'finally' ':' suite))
--- with_stmt: 'with' with_item (',' with_item)*  ':' suite
--- with_item: test ['as' expr]
--- except_clause: 'except' [test ['as' NAME]]
-
-compound_stmt :: Parser S.Stmt
-compound_stmt =  if_stmt <|> while_stmt <|> for_stmt <|> try_stmt <|> with_stmt <|> data_stmt
+-- Declaration groups ------------------------------------------------------------------
 
 decl_group :: Parser [S.Stmt]
 decl_group = do p <- L.indentLevel
@@ -688,6 +556,87 @@ decl_group = do p <- L.indentLevel
 
 decl :: Parser S.Decl
 decl = try signature <|> funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decorator1 decoration = do
+       p <- L.indentLevel
+       d <- decoration
+       p1 <- L.indentLevel
+       if (p /= p1)
+         then fail "Decorated declaration must have same indentation as decoration"
+         else return d
+
+signature :: Parser S.Decl
+signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t dec)
+   where sig_decoration = rword "@classattr" *> assertClassProtoExt *> newline1 *> return S.ClassAttr  
+                      <|> rword "@instattr" *> assertClassProtoExt *> newline1 *> return S.InstAttr
+                      <|> rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMethod
+                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMethod
+                      <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
+                      <|> return S.NoDecoration
+                      
+         tsig = do v <- name
+                   vs <- commaList name
+                   colon
+                   t <- tschema
+                   return (v:vs,t)
+ 
+funcdef :: Parser S.Decl
+funcdef =  addLoc $ do
+              assertNotData
+              dec <- decorator1 fun_decoration
+              (p,md) <- withPos (modifier dec <* rword "def")
+              n <- name
+              q <- optbinds
+              (ppar,kpar) <- parens (funpars True)
+              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
+   where modifier :: S.Modif -> Parser S.Modif
+         modifier S.NoMod = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
+                            assertActScope *> rword "async" *> return S.Async <|>
+                            ifActScope (return (S.Sync False)) (return S.NoMod)
+         modifier m = return m
+
+         fun_decoration = rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMeth
+                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMeth
+                      <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
+                      <|> return S.NoMod
+
+
+optbinds :: Parser [S.TBind]
+optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
+            <|>
+           return []
+
+actordef = addLoc $ do 
+                assertNotData
+                (s,_) <- withPos (rword "actor")
+                nm <- name <?> "actor name"
+                q <- optbinds
+                (ppar,kpar) <- parens (funpars True)
+                mba <- optional (arrow *> ttype)
+                ss <- suite ACTOR s
+                return $ S.Actor NoLoc nm q ppar kpar mba ss
+
+-- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
+-- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+
+classdef    = classdefGen "class" name CLASS S.Class
+protodef    = classdefGen "protocol" name PROTO S.Protocol
+extdef      = classdefGen "extension" qual_name EXT S.Extension
+
+classdefGen k pname ctx con = addLoc $ do
+                assertNotData
+                assertNotNested
+                (s,_) <- withPos (rword k)
+                nm <- pname
+                q <- optbinds
+                cs <- optbounds
+                con NoLoc nm q cs <$> suite ctx s
+
+-- Compound statements -------------------------------------------------------------------------
+
+compound_stmt :: Parser S.Stmt
+compound_stmt =  if_stmt <|> while_stmt <|> for_stmt <|> try_stmt <|> with_stmt <|> data_stmt
+
 
 else_part p = atPos p (rword "else" *> suite SEQ p)
 
@@ -697,11 +646,11 @@ if_stmt = addLoc $ do
              bs <- many (atPos p (rword "elif" *> branch p))
              S.If NoLoc (b:bs) . maybe [] id <$>  optional (else_part p)
 
-branch p = S.Branch <$> test <*> suite SEQ p
+branch p = S.Branch <$> expr <*> suite SEQ p
 
 while_stmt = addLoc $ do
                  (p,_) <- withPos (rword "while")
-                 e <- test
+                 e <- expr
                  ss1 <- suite LOOP p
                  S.While NoLoc e ss1 . maybe [] id <$>  optional (else_part p)
                  
@@ -709,7 +658,7 @@ for_stmt = addLoc $ do
                  (p,_) <- withPos (rword "for")
                  pat <- target
                  rword "in"
-                 e <- testlist
+                 e <- exprlist
                  ss <- suite LOOP p
                  S.For NoLoc pat e ss . maybe [] id <$> optional (else_part p)
 
@@ -742,12 +691,9 @@ with_stmt = addLoc $ do
                 assertNotData
                 (s,_) <- withPos (rword "with")
                 S.With NoLoc <$> (with_item `sepBy1` comma) <*> suite SEQ s
-  where with_item = S.WithItem <$> test <*> optional (rword "as" *> target)
+  where with_item = S.WithItem <$> expr <*> optional (rword "as" *> target)
                  
--- data_stmt
---   : testlist_star_expr ':' 'indent' many_stmts 'dedent'  
---   | 'return' ':' 'indent' many_stmts 'dedent'            
-
+ 
 data_stmt = addLoc $
            do (s,pat) <- withPos lhs
               S.Data NoLoc (Just pat) <$> suite DATA s
@@ -755,9 +701,7 @@ data_stmt = addLoc $
            do (s,_) <- withPos (assertDefOrAct *> rword "return")
               S.Data NoLoc Nothing <$> suite DATA s
 
--- suite: simple_stmt | NEWLINE INDENT stmt+ DEDENT
-
-suite :: CTX -> Pos  -> Parser S.Suite
+suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
     colon
     withCtx c (try simple_stmt <|> indentSuite p)
@@ -771,29 +715,30 @@ suite c p = do
                 EQ -> stmt
                 GT -> L.incorrectIndent GT p2 p1)
 
+------------------------------------------------------------------------------------------------
 --- Expressions ----------------------------------------------------------------
+------------------------------------------------------------------------------------------------
 
--- test: or_test ['if' or_test 'else' test] | lambdef
--- test_nocond: or_test | lambdef_nocond
--- lambdef: 'lambda' [varargslist] ':' test
--- lambdef_nocond: 'lambda' [varargslist] ':' test_nocond
-
--- or_test: and_test ('or' and_test)*
--- and_test: not_test ('and' not_test)*
--- not_test: 'not' not_test | comparison
--- comparison: expr (comp_op expr)*
-
-test =  lambdef
+-- The most general form of expression
+expr :: Parser S.Expr
+expr =  lambdef
        <|>
         do
-          e1 <- or_test
+          e1 <- or_expr
           mbp <- optional if_part
           case mbp of
             Nothing -> return e1
             Just (c,e2) -> return $ S.Cond (S.eloc e1) e1 c e2
-   where if_part = (,) <$> (rword "if" *> or_test) <*> (rword "else" *> test)
+   where if_part = (,) <$> (rword "if" *> or_expr) <*> (rword "else" *> expr)
 
-test_nocond = or_test <|> lambdef_nocond
+-- Non-empty list of comma-separated expressions.
+-- If more than one expr, build a tuple.
+-- if only one, leave as it is unless there is a trailing comma when we build a one-element tuple.
+exprlist :: Parser S.Expr
+exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (S.Tuple NoLoc)
+ 
+
+expr_nocond = or_expr <|> lambdef_nocond
 
 lambdefGen t = addLoc $ do
             rword "lambda"
@@ -801,13 +746,15 @@ lambdefGen t = addLoc $ do
             colon
             S.Lambda NoLoc ppar kpar <$> t
 
-lambdef = lambdefGen test
-lambdef_nocond = lambdefGen test_nocond
+lambdef = lambdefGen expr
+lambdef_nocond = lambdefGen expr_nocond
 
--- the intermediate levels between or_test and comparison, i.e. and_test and not_test,
--- are handled by makeExprParser from Text.Megparsec.Expr
+-- Logical expressions ------------------------------------------------------------------
 
--- Three auxiliary functions used in building tables for mkExprParser
+-- The intermediate levels between or_expr and comparison, i.e. expressions involving and, or and not,
+-- are handled by makeExprParser from Text.Megaparsec.Expr
+
+-- Three auxiliary functions used in building tables for makeExprParser
 binary name op = InfixL $ do
                 l <- name
                 return $ \e1 e2 ->  S.BinOp (S.eloc e1 `upto` S.eloc e2) e1 (S.Op l op) e2
@@ -818,7 +765,7 @@ unop name op = do
 
 prefix name op = Prefix (unop name op)
 
-or_test = makeExprParser comparison btable
+or_expr = makeExprParser comparison btable
 
 btable :: [[Operator Parser S.Expr]]
 btable = [ [ prefix (rwordLoc "not") S.Not]
@@ -826,44 +773,32 @@ btable = [ [ prefix (rwordLoc "not") S.Not]
          , [ binary (rwordLoc "or") S.Or] ]
 
 comparison = addLoc (do
-  e <- expr
+  e <- arithexpr
   ps <- many (do
                  op <- addLoc (S.Op NoLoc <$> comp_op)
-                 S.OpArg op <$> expr)
+                 S.OpArg op <$> arithexpr)
   case ps of
         [] -> return e
         _  -> return $ S.CompOp NoLoc e ps) <?> "relational expression"
-
--- comp_op: '<'|'>'|'=='|'>='|'<='|'<>'|'!='|'in'|'not' 'in'|'is'|'is' 'not'
-
-comp_op =   S.Lt <$ opPref "<"
-        <|> S.Gt <$ opPref ">"
-        <|> S.Eq <$ symbol "=="
-        <|> S.GE <$ symbol ">="
-        <|> S.LE <$ symbol "<="
-        <|> S.LtGt <$ symbol "<>"
-        <|> S.NEq <$ symbol "!="
-        <|> S.In <$ symbol "in"
-        <|> S.NotIn <$ (symbol "not" *> symbol "in")
-        <|> S.IsNot <$ try (symbol "is" *> symbol "not")
-        <|> S.Is <$ (symbol "is") <?> "comparison operator"
+   where comp_op = S.Lt <$ opPref "<"
+                <|> S.Gt <$ opPref ">"
+                <|> S.Eq <$ symbol "=="
+                <|> S.GE <$ symbol ">="
+                <|> S.LE <$ symbol "<="
+                <|> S.LtGt <$ symbol "<>"
+                <|> S.NEq <$ symbol "!="
+                <|> S.In <$ symbol "in"
+                <|> S.NotIn <$ (symbol "not" *> symbol "in")
+                <|> S.IsNot <$ try (symbol "is" *> symbol "not")
+                <|> S.Is <$ (symbol "is") <?> "comparison operator"
 
 star_expr :: Parser S.Elem
-star_expr = S.Star <$> (star *> expr)                                        
+star_expr = S.Star <$> (star *> arithexpr)                                        
 
--- expr: xor_expr ('|' xor_expr)*
--- xor_expr: and_expr ('^' and_expr)*
--- and_expr: shift_expr ('&' shift_expr)*
--- shift_expr: arith_expr (('<<'|'>>') arith_expr)*
--- arith_expr: term (('+'|'-') term)*
--- term: factor (('*'|'@'|'/'|'%'|'//') factor)*
--- factor: ('+'|'-'|'~') factor | power
--- power: atom_expr ['**' factor]
-
--- Again, everything between expr and factor is handled by makeExprParser
-
-expr :: Parser S.Expr
-expr = makeExprParser factor table <?> "arithmetic expression"
+-- Arithmetic expressions ----------------------------------------------------------
+-- Again, everything between arithexpr and factor is handled by makeExprParser
+arithexpr :: Parser S.Expr
+arithexpr = makeExprParser factor table <?> "arithmetic expression"
 
 table :: [[Operator Parser S.Expr]]
 table = [ [ binary (opPrefLoc "*") S.Mult, binary (opPrefLoc "/") S.Div, binary (opPrefLoc "@") S.MMult,
@@ -886,17 +821,9 @@ power = addLoc $ do
   where expo = do l <- opPrefLoc "**"
                   f <- factor
                   return (l,f)
-                  
--- atom_expr: [AWAIT] atom trailer*
--- atom: ('(' [yield_expr|testlist_comp] ')' |
---        '[' [testlist_comp] ']' |
---        '{' [dictorsetmaker] '}' |
---        NAME | NUMBER | STRING+ | '...' | 'None' | 'True' | 'False')
--- testlist_comp: (test|star_expr) ( comp_for | (',' (test|star_expr))* [','] )
--- dictorsetmaker: ( ((test ':' test | '**' expr)
---                    (comp_for | (',' (test ':' test | '**' expr))* [','])) |
---                   ((test | star_expr)
---                    (comp_for | (',' (test | star_expr))* [','])) )
+
+-- recurring pattern below
+commaList p = many (try (comma *> p)) <* optional comma
 
 atom_expr = do
               await <- optional $ withLoc $ rword "await" *> return (S.Await NoLoc)
@@ -906,158 +833,116 @@ atom_expr = do
               return $ maybe e (app e) await 
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
              
-atom :: Parser S.Expr
-atom =  addLoc (try strings
-       <|>
-         ((try . parens) $ return (S.Tuple NoLoc []))
-       <|>
-         ((try . parens) $ S.Paren NoLoc <$> yield_expr)
-       <|>
-         (try . parens) testlist_comp
-       <|>
-         (try . parens) recordmaker
-       <|>
-        (brackets $ do
-                     mbe <- optional testlist_comp2
-                     return $ maybe (S.List NoLoc []) id mbe)
-       <|>
-        (braces $ do
-                    mbe <- optional dictorsetmaker
-                    return $ maybe (S.Dict NoLoc []) id mbe)
-       <|> var
-       <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
-       <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
-       <|> (\i -> S.Int NoLoc i ("0x"++showHex i "")) <$> (string "0x" *> lexeme L.hexadecimal)
-       <|> (\i -> S.Int NoLoc i (show i)) <$> (lexeme L.decimal)
-       <|> (S.Ellipsis <$> rwordLoc "...")
-       <|> (S.None <$>  rwordLoc "None")
-       <|> (S.NotImplemented  <$>  rwordLoc "NotImplemented")
-       <|> (\l -> S.Bool l True) <$> rwordLoc "True"
-       <|> (\l -> S.Bool l False) <$> rwordLoc "False")
-       <?> "atomic expression"
+        atom :: Parser S.Expr
+        atom =  addLoc (try strings
+               <|>
+                 ((try . parens) $ return (S.Tuple NoLoc S.PosNil))
+               <|>
+                 ((try . parens) $ S.Paren NoLoc <$> yield_expr)
+               <|>
+                 (try . parens) exprlist2
+               <|>
+                 (try . parens) recordmaker
+               <|>
+                (brackets $ do
+                             mbe <- optional listmaker
+                             return $ maybe (S.List NoLoc []) id mbe)
+               <|>
+                (braces $ do
+                            mbe <- optional dictorsetmaker
+                            return $ maybe (S.Dict NoLoc []) id mbe)
+               <|> var
+               <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
+               <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
+               <|> (\i -> S.Int NoLoc i ("0x"++showHex i "")) <$> (string "0x" *> lexeme L.hexadecimal)
+               <|> (\i -> S.Int NoLoc i (show i)) <$> (lexeme L.decimal)
+               <|> (S.Ellipsis <$> rwordLoc "...")
+               <|> (S.None <$>  rwordLoc "None")
+               <|> (S.NotImplemented  <$>  rwordLoc "NotImplemented")
+               <|> (\l -> S.Bool l True) <$> rwordLoc "True"
+               <|> (\l -> S.Bool l False) <$> rwordLoc "False")
+               <?> "atomic expression"
 
--- recurring pattern below
-commaList p = many (try (comma *> p)) <* optional comma
-
--- testlist_comp version used in parentheses, building a tuple
-testlist_comp :: Parser S.Expr
-testlist_comp = addLoc $ do
-      e <- elem
-      (S.TupleComp NoLoc e <$> comp_for) <|> ((S.Paren NoLoc . f) <$> elems e)
-   where elem = (S.Elem <$> test) <|> star_expr
-         elems e = do
-            es <- many (try (comma *> elem))
-            mbc <- optional comma
-            return (e:es,mbc)
-         f ([S.Elem e],Nothing) = e
-         f (es,_) = S.Tuple NoLoc es
-
--- common pattern in functions building lists, sets and dictionaries
-maker constr constrComp p = do
-           (l,a) <- withLoc p
-           (constrComp l a <$> comp_for) <|> ((\as -> (constr l (a:as))) <$> commaList p)
-
--- testlist_comp version used in  brackets, building a list
-testlist_comp2 = maker S.List S.ListComp elem 
-   where elem = (S.Elem <$> test) <|> star_expr
-
-recordmaker = addLoc $ do
-         f@(S.Field n e) <- eqn         
-         (S.RecordComp NoLoc n e <$> comp_for) <|> ((\fs -> (S.Record NoLoc (f:fs))) <$> commaList field)
-   where eqn = S.Field <$> escname <*> (equals *> test)
-         field = eqn <|> (S.StarStarField <$> (starstar *> expr))                   
-
-dictorsetmaker :: Parser S.Expr
-dictorsetmaker = (try $ maker S.Dict S.DictComp assoc)
-                    <|> maker S.Set S.SetComp elem
-     where elem = (S.Elem <$> test) <|> star_expr
-           assoc = (S.Assoc <$> test) <*> (colon *> test)
-                <|>
-                   (S.StarStar <$> (starstar *> expr))
-
-var = do
-         nm <- name
-         return (S.Var (S.nloc nm) nm)
-
--- trailer: '(' [arglist] ')' | '[' subscriptlist ']' | '.' NAME
--- subscriptlist: subscript (',' subscript)* [',']
--- subscript: test | [test] ':' [test] [sliceop]
--- sliceop: ':' [test]
-
-trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
-trailer = withLoc (
-              try (do
-                is <- brackets indexlist
-                return (\a -> S.Index NoLoc a is))
-                <|>
-              (do
-                ss <- brackets slicelist
-                return (\a -> S.Slice NoLoc a ss))
-                <|>
-              (do
-                (ps,ks) <- parens funargs
-                return (\a -> S.Call NoLoc a ps ks))
-                <|>
-              (do
-                 dot
-                 intdot <|> iddot <|> strdot))
-                 
-   where iddot  = do 
-             nm <- name
-             return (\a -> S.Dot NoLoc a nm)
-         intdot  = do 
-                i <- lexeme L.decimal
-                return (\a -> S.DotI NoLoc a i)
-         strdot = do
-                (p,str) <- withPos stringP 
-                return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
-         indexlist = (:) <$> test <*> commaList test
-         slicelist = (:) <$> slice <*> commaList slice
-         slice = addLoc (do 
-                mbt <- optional test
-                S.Sliz NoLoc mbt <$> (colon *> optional test) <*> optional (colon *> optional test))
+        -- A non-empty tuple or parenthesized expression. Empty tuple handled directly in atom.
+        -- The difference from exprlist is that here a tuple comprehension is allowed.
+        -- NOTE: exprlist23 and recordmaker have the same structure; could be refactored.
+        exprlist2 :: Parser S.Expr
+        exprlist2 = addLoc $ do
+               e <- star *> expr
+               return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
+             <|> do
+               e <- expr
+               mb <- optional (S.TupleComp NoLoc e <$> comp_for
+                                 <|>
+                               do mp <- comma *> optional (posarg <* optional comma)
+                                  return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
+               return (maybe (S.Paren NoLoc e) id mb)
+            
+        recordmaker =  addLoc $ do
+               e <- starstar *> expr
+               return $ S.Record NoLoc (S.KwdStar e)
+             <|> do
+               (n,e) <- kwdbind
+               mb <- optional (S.RecordComp NoLoc n e <$> comp_for
+                                 <|>
+                               do mp <- comma *> optional kwdarg
+                                  return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
+               return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
                      
---- Actor and class definitions ------------------------------------------------
+        -- common pattern in functions building lists, sets and dictionaries
+        maker constr constrComp p = do
+                   (l,a) <- withLoc p
+                   (constrComp l a <$> comp_for) <|> ((\as -> (constr l (a:as))) <$> commaList p)
 
--- actordef: 'actor' name parameters optarrowannot ':' suite
+        -- exprlist_comp version used in  brackets, building a list
+        listmaker = maker S.List S.ListComp elem 
+           where elem = (S.Elem <$> expr) <|> star_expr
 
-actordef = addLoc $ do 
-                assertNotData
-                (s,_) <- withPos (rword "actor")
-                nm <- name <?> "actor name"
-                q <- optbinds
-                (ppar,kpar) <- parens (funpars True)
-                mba <- optional (arrow *> ttype)
-                ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar mba ss
+        dictorsetmaker :: Parser S.Expr
+        dictorsetmaker = (try $ maker S.Dict S.DictComp assoc)
+                            <|> maker S.Set S.SetComp elem
+             where elem = (S.Elem <$> expr) <|> star_expr
+                   assoc = (S.Assoc <$> expr) <*> (colon *> expr)
+                        <|>
+                           (S.StarStar <$> (starstar *> arithexpr))
 
--- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
--- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite
--- extdef: 'class' NAME ['(' [arglist] ')'] ':' suite
+        var = do nm <- name
+                 return (S.Var (S.nloc nm) nm)
 
-classdef    = classdefGen "class" name CLASS S.Class
-protodef    = classdefGen "protocol" name PROTO S.Protocol
-extdef      = classdefGen "extension" qual_name EXT S.Extension
-
-classdefGen k pname ctx con = addLoc $ do
-                assertNotData
-                assertNotNested
-                (s,_) <- withPos (rword k)
-                nm <- pname
-                q <- optbinds
-                cs <- optbounds
-                con NoLoc nm q cs <$> suite ctx s
-
--- arglist: argument (',' argument)*  [',']
--- argument: ( test [comp_for] |
---             test '=' test |
---            '**' test |
---            '*' test )
-
--- comp_iter: comp_for | comp_if
--- comp_for: [ASYNC] 'for' exprlist 'in' or_test [comp_iter]
--- comp_if: 'if' test_nocond [comp_iter]
-
+        trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
+        trailer = withLoc (
+                      try (do
+                        is <- brackets indexlist
+                        return (\a -> S.Index NoLoc a is))
+                        <|>
+                      (do
+                        ss <- brackets slicelist
+                        return (\a -> S.Slice NoLoc a ss))
+                        <|>
+                      (do
+                        (ps,ks) <- parens funargs
+                        return (\a -> S.Call NoLoc a ps ks))
+                        <|>
+                      (do
+                         dot
+                         intdot <|> iddot <|> strdot))
+                 
+           where iddot  = do 
+                     nm <- name
+                     return (\a -> S.Dot NoLoc a nm)
+                 intdot  = do 
+                        i <- lexeme L.decimal
+                        return (\a -> S.DotI NoLoc a i)
+                 strdot = do
+                        (p,str) <- withPos stringP 
+                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
+                 indexlist = (:) <$> expr <*> commaList expr
+                 slicelist = (:) <$> slice <*> commaList slice
+                 slice = addLoc (do 
+                        mbt <- optional expr
+                        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> optional (colon *> optional expr))
+                     
+ 
 comp_iter, comp_for, comp_if :: Parser S.Comp
 comp_iter = comp_for <|> comp_if
 
@@ -1065,22 +950,19 @@ comp_for = addLoc (do
             rword "for"
             pat <- target
             rword "in"
-            e <- or_test
+            e <- or_expr
             S.CompFor NoLoc pat e . maybe S.NoComp id <$> optional comp_iter)
 
 comp_if = addLoc $ do
             rword "if"
-            e <- test_nocond
+            e <- expr_nocond
             S.CompIf NoLoc e . maybe S.NoComp id <$> optional comp_iter
            
--- yield_expr: 'yield' [yield_arg]
--- yield_arg: 'from' test | testlist
-
 yield_expr = addLoc $ do 
              assertDef
              rword "yield"
-             (S.YieldFrom NoLoc <$> (rword "from" *> test)
-              <|> S.Yield NoLoc <$> optional testlist)
+             (S.YieldFrom NoLoc <$> (rword "from" *> expr)
+              <|> S.Yield NoLoc <$> optional exprlist)
 
 
 --- Params ---------------------------------------------------------------------
@@ -1088,7 +970,7 @@ yield_expr = addLoc $ do
 parm :: Bool -> Parser (S.Name, Maybe S.TSchema, Maybe S.Expr)
 parm ann = do n <- name
               mbt <- if ann then optional (colon *> tschema) else return Nothing
-              mbe <- optional (equals *> test)
+              mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
 pstar :: Bool -> Parser (S.Name, Maybe S.Type)
@@ -1097,80 +979,33 @@ pstar ann = do n <- name
                return (n, mbt)
 
 pospar :: Bool -> Parser S.PosPar
-pospar ann = do (n,t) <- star *> pstar ann
-                return (S.PosSTAR n t)
-          <|> 
-             do p <- parm ann
-                ps <- many (try (comma *> parm ann))
-                mbs <- optional (comma *> optional (star *> pstar ann))
-                let tail = maybe S.PosNIL (maybe S.PosNIL (uncurry S.PosSTAR)) mbs
-                return (foldr (\(n,t,e) par -> S.PosPar n t e par) tail (p:ps))
+pospar ann = posItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann)
 
 kwdpar :: Bool -> Parser S.KwdPar
-kwdpar ann = do (n,t) <- starstar *> pstar ann
-                return (S.KwdSTAR n t)
-          <|>
-             do p <- parm ann
-                ps <- many (try (comma *> parm ann))
-                mbs <- optional (comma *> optional ((starstar *> pstar ann) <* optional comma ))
-                let tail = maybe S.KwdNIL (maybe S.KwdNIL (uncurry S.KwdSTAR)) mbs
-                return (foldr (\(n,t,e) par -> S.KwdPar n t e par) tail (p:ps))
+kwdpar ann = kwdItems (\(n,t,e) par -> S.KwdPar n t e par) (uncurry S.KwdSTAR) S.KwdNIL (parm ann) (pstar ann)
 
 funpars :: Bool -> Parser (S.PosPar, S.KwdPar)
-funpars ann = try (do (n,t) <- (star *> pstar ann); comma; k <- kwdpar ann; return (S.PosSTAR n t, k))
-           <|>
-              try (do (n,t) <- (star *> pstar ann); optional comma; return (S.PosSTAR n t, S.KwdNIL))
-           <|>
-              try (do k <- kwdpar ann; return (S.PosNIL, k))
-           <|>
-              try (do (n,t,e) <- parm ann; comma; (p,k) <- funpars ann; return (S.PosPar n t e p, k))
-           <|>
-              try (do (n,t,e) <- parm ann; optional comma; return (S.PosPar n t e S.PosNIL, S.KwdNIL))
-           <|>
-              try (do optional comma; return (S.PosNIL, S.KwdNIL))
-
+funpars ann =  funItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann) (kwdpar ann) S.KwdNIL
 
 --- Args -----------------------------------------------------------------------
 
-posarg :: Parser S.PosArg
-posarg  = do e <- star *> test
-             return (S.PosStar e)
-         <|> 
-          do e <- test
-             es <- many (try (comma *> test))
-             mbe <- optional (comma *> optional (star *> test))
-             let tail = maybe S.PosNil (maybe S.PosNil S.PosStar) mbe
-             return (foldr S.PosArg tail (e:es))
+-- Position/Keyword lists of expr's.
+-- posarg is used in exprlist to bild the general form of comma-separated expressions 
 
 kwdbind :: Parser (S.Name, S.Expr)
 kwdbind = do v <- escname
              colon
-             e <- test
+             e <- expr
              return (v,e)
 
+posarg :: Parser S.PosArg
+posarg = posItems S.PosArg S.PosStar S.PosNil expr expr
+
 kwdarg :: Parser S.KwdArg
-kwdarg  = do e <- starstar *> test
-             return (S.KwdStar e)
-         <|>
-          do b <- kwdbind
-             bs <- many (try (comma *> kwdbind))
-             mbe <- optional (comma *> optional ((starstar *> test) <* optional comma ))
-             let tail = maybe S.KwdNil (maybe S.KwdNil S.KwdStar) mbe
-             return (foldr (uncurry S.KwdArg) tail (b:bs))
+kwdarg = kwdItems (uncurry S.KwdArg) S.KwdStar S.KwdNil kwdbind expr
 
 funargs :: Parser (S.PosArg, S.KwdArg)
-funargs  = try (do e <- (star *> test); comma; k <- kwdarg; return (S.PosStar e, k))
-        <|>
-           try (do e <- (star *> test); optional comma; return (S.PosStar e, S.KwdNil))
-        <|>
-           try (do k <- kwdarg; return (S.PosNil, k))
-        <|>
-           try (do e <- test; comma; (p,k) <- funargs; return (S.PosArg e p, k))
-        <|>
-           try (do e <- test; optional comma; return (S.PosArg e S.PosNil, S.KwdNil))
-        <|>
-           try (do optional comma; return (S.PosNil, S.KwdNil))
-
+funargs = funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 
 --- Types ----------------------------------------------------------------------
 
@@ -1186,38 +1021,18 @@ fxrow   = do fxs <- many fx
              tv <- optional tvar
              return (foldr ($) (maybe S.fxNil S.fxVar tv) fxs)
 
-posrow :: Parser S.PosRow                   --non-empty posrow without trailing comma
-posrow  = do mbv <- star *> optional tvar  
-             return (S.posVar mbv)
-         <|> 
-          do t <- tschema
-             ts <- many (try (comma *> tschema))
-             mbv <- optional (comma *> optional (star *> optional tvar))
-             let tail = maybe S.posNil (maybe S.posNil S.posVar) mbv
-             return (foldr S.posRow tail (t:ts))
+posrow :: Parser S.PosRow 
+posrow = posItems S.posRow S.posVar S.posNil tschema (optional tvar)
 
-kwdrow :: Parser S.KwdRow                    --non-empty kwrow with optional trailing comma
-kwdrow  = do mbv <- starstar *> optional tvar
-             return (S.kwdVar mbv)
-         <|>
-          do p <- tsig1
-             ps <- many (try (comma *> tsig1))
-             mbv <- optional (comma *> optional ((starstar *> optional tvar) <* optional comma ))
-             let tail = maybe S.kwdNil (maybe S.kwdNil S.kwdVar) mbv
-             return (foldr (uncurry S.kwdRow) tail (p:ps))
-
+kwdrow :: Parser S.KwdRow                   
+kwdrow = kwdItems (uncurry S.kwdRow) S.kwdVar S.kwdNil tsig1 (optional tvar)
+   where tsig1 = do v <- name
+                    colon
+                    t <- tschema
+                    return (v,t)
+ 
 funrows :: Parser (S.PosRow, S.KwdRow)
-funrows  = try (do mbv <- (star *> optional tvar); comma; k <- kwdrow; return (S.posVar mbv, k))
-        <|>
-           try (do mbv <- (star *> optional tvar); optional comma; return (S.posVar mbv, S.kwdNil))
-        <|>
-           try (do k <- kwdrow; return (S.posNil, k))
-        <|>
-           try (do t <- tschema; comma; (p,k) <- funrows; return (S.posRow t p, k))
-        <|>
-           try (do t <- tschema; optional comma; return (S.posRow t S.posNil, S.kwdNil))
-        <|>
-           try (do optional comma; return (S.posNil, S.kwdNil))
+funrows = funItems S.posRow S.posVar S.posNil tschema (optional tvar) kwdrow S.kwdNil
 
 tcon :: Parser S.TCon
 tcon =  do n <- qual_name
