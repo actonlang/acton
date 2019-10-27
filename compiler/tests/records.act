@@ -1,0 +1,8 @@
+r1 = {x : int}
+r2 = {x:int,y:bool}
+r3 = {x:int,y:bool,}
+r4 = {x:int,y:bool,**f(a)}
+r5 = {x:int,y:bool,**f(a),}
+r6 = {**f(x,y)}
+r7 = {a:b for a,b in g(t)}
+r8 = {a:b for a,b, in g(t)}

@@ -72,12 +72,10 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
---                | Tuple         { eloc::SrcLoc, parg::PosArg }
-                | Tuple         { eloc::SrcLoc, elems::[Elem] }
---                | TupleComp     { eloc::SrcLoc, exp1::Exp, comp::Comp }
-                | TupleComp     { eloc::SrcLoc, elem1::Elem, comp::Comp }
---                | Record        { eloc::SrcLoc, kargs::KwdArg }
-                | Record        { eloc::SrcLoc, fields::[Field] }
+                | Tuple         { eloc::SrcLoc, parg::PosArg }
+                | TupleComp     { eloc::SrcLoc, exp1::Expr, comp::Comp }
+                | Record        { eloc::SrcLoc, kargs::KwdArg }
+ --               | Record        { eloc::SrcLoc, fields::[Field] }
                 | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
@@ -93,9 +91,8 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
---                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
---                | PTuple        { ploc::SrcLoc, ppat::PosPat }
-                | PTuple        { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
+                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
+                | PTuple        { ploc::SrcLoc, ppat::PosPat }
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
@@ -138,7 +135,7 @@ data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName
 
 data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
-data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
+-- data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
 data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
 data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
@@ -440,12 +437,12 @@ instance Eq Expr where
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
---    x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
-    x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
+    x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
+--    x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
 --    x@TupleComp{}       ==  y@TupleComp{}       = exp1 x == exp1 y && comp x == comp y
     x@TupleComp{}       ==  y@TupleComp{}       = elem1 x == elem1 y && comp x == comp y
---    x@Record{}          ==  y@Record{}          = kargs x == kargs y
-    x@Record{}          ==  y@Record{}          = fields x == fields y
+    x@Record{}          ==  y@Record{}          = kargs x == kargs y
+--    x@Record{}          ==  y@Record{}          = fields x == fields y
     x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
@@ -489,8 +486,8 @@ instance Eq Comp where
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
 --    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
---    PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
-    PTuple _ ps1 p1     == PTuple _ ps2 p2      = ps1 == ps2 && p1 == p2
+    PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
+--    PTuple _ ps1 p1     == PTuple _ ps2 p2      = ps1 == ps2 && p1 == p2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
     PSlice _ e1 sl1     == PSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
@@ -546,7 +543,7 @@ importsOf (Module _ imps _)         = impsOf imps
 unop op e                           = UnOp l0 (Op l0 op) e
 binop e1 op e2                      = BinOp l0 e1 (Op l0 op) e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
-tuple es                            = Tuple l0 (map Elem es)
+-- tuple es                            = Tuple l0 (map Elem es)
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
@@ -581,3 +578,23 @@ istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
 notemp                              = not . istemp
 
 primitive t                         = t `elem` [OStr, OInt, OFloat, OBool, ONone]
+ 
+posParLen PosNIL = 0
+posParLen (PosSTAR _ _) = 0
+posParLen (PosPar _ _ _ r) = 1 + posParLen r
+
+posArgLen PosNil = 0
+posArgLen (PosStar _) = 0
+posArgLen (PosArg _ r) = 1 + posArgLen r
+
+posPatLen PosPatNil = 0
+posPatLen (PosPatStar _) = 0
+posPatLen (PosPat _ r) = 1 + posPatLen r
+
+posRowLen = rowDepth
+
+posParHead (PosPar a b c _) = (a,b,c)
+posArgHead (PosArg a _) = a
+posPatHead (PosPat a _) = a
+posRowHead (TRow _ _ a _) = a
+ 
