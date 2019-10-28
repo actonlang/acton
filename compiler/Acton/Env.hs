@@ -47,7 +47,17 @@ data NameInfo               = NVar    TSchema Decoration
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
-nVar t                      = NVar (tSchema t) NoDecoration
+nVar                        :: Name -> Type -> TEnv
+nVar n t                    = [(n, NVar (tSchema t) NoDecoration)]
+
+nVars                       :: TEnv -> [(Name, TSchema)]
+nVars te                    = [ (n,sc) | (n, NVar sc _) <- te ]
+
+mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
+mapVars f te                = map g te
+  where g (n, NVar sc d)    = (n, NVar (f sc) d)
+        g (n, i)            = (n, i)
+
 
 instance Data.Binary.Binary NameInfo
 
@@ -265,7 +275,58 @@ newTEnv vs                  = do ts <- newTVars (length vs)
                                  return $ vs `zip` [ NVar (tSchema t) NoDecoration | t <- ts ]
 
 
--- Import handling
+-- Instantiation -------------------------------------------------------------------------
+
+typeOfName n env            = typeOfQName (NoQual n) env
+
+typeOfQName qn env          = instN (findqname qn env)
+  where
+    instN (NVar sc _)       = instT (openFX sc)
+    instN (NSVar t)         = return t
+    instN (NClass q _ _)    = do ts <- newTVars (length q)
+                                 let s = tybound q `zip` ts
+                                 mapM constrB (subst s q)
+                                 return (tAt (TC qn ts))
+    instN _                 = err1 qn "Unexpected name..."
+
+    instT (TSchema _ [] t)  = return t
+    instT (TSchema _ q t)   = do tvs <- newTVars (length q)
+                                 let s = tybound q `zip` tvs
+                                 mapM constrB (subst s q)
+                                 return (subst s t)
+
+    constrB (TBind tv us)   = mapM (constrV tv) us
+    constrV v tc@(TC qn ts) = case findqname qn env of
+                                NClass{} -> constrain [Sub (tVar v) (tCon tc)]
+                                NProto{} -> constrain [Impl (tVar v) tc]
+
+
+-- Environment unification ---------------------------------------------------------------
+
+unifyTEnv env tenvs []                  = return []
+unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
+                                            [] -> unifyTEnv env tenvs vs
+                                            [ni] -> ((v,ni):) <$> unifyTEnv env tenvs vs
+                                            ni:nis -> do ni' <- unifN ni nis
+                                                         ((v,ni'):) <$> unifyTEnv env tenvs vs
+  where 
+    unifN (NVar (TSchema _ [] t) d) nis = do mapM (unifV t d) nis
+                                             return (NVar (tSchema t) d)
+    unifN (NSVar t) nis                 = do mapM (unifSV t) nis
+                                             return (NSVar t)
+    unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
+
+    unifV t d (NVar (TSchema _ [] t') d')
+      | d == d'                         = constrain [Equ t t']
+      | otherwise                       = err1 v "Inconsistent decorations for"
+    unifV t d ni                        = err1 v "Inconsistent bindings for"
+
+    unifSV t (NSVar t')                 = constrain [Equ t t']
+    unifSV t ni                         = err1 v "Inconsistent bindings for"
+
+
+
+-- Import handling -----------------------------------------------------------------------
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
 getImps ps env []               = return env

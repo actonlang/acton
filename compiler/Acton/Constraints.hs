@@ -190,45 +190,6 @@ del n r                                 = r
 internal r1 r2                          = error ("Internal: Cannot unify: " ++ prstr r1 ++ " = " ++ prstr r2)
 
 
--- Environment unification ---------------------------------------------------------------
-
-unifyTEnv env tenvs []                  = return []
-unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
-                                            [] -> unifyTEnv env tenvs vs
-                                            [ni] -> ((v,ni):) <$> unifyTEnv env tenvs vs
-                                            ni:nis -> do ni' <- unifN ni nis
-                                                         ((v,ni'):) <$> unifyTEnv env tenvs vs
-  where 
-    unifN (NVar (TSchema _ [] t) d) nis = do mapM (unifV t d) nis
-                                             return (NVar (tSchema t) d)
-    unifN (NSVar t) nis                 = do mapM (unifSV t) nis
-                                             return (NSVar t)
-    unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
-
-    unifV t d (NVar (TSchema _ [] t') d')
-      | d == d'                         = constrain [Equ t t']
-      | otherwise                       = err1 v "Inconsistent decorations for"
-    unifV t d ni                        = err1 v "Inconsistent bindings for"
-
-    unifSV t (NSVar t')                 = constrain [Equ t t']
-    unifSV t ni                         = err1 v "Inconsistent bindings for"
-
-
-instantiate env (TSchema _ [] t)        = return t
-instantiate env (TSchema _ q t)         = do tvs <- newTVars (length q)
-                                             let s = tybound q `zip` tvs
-                                                 q1 = subst s q
-                                                 t1 = subst s t
-                                             mapM (q_constrain env) q1
-                                             return t1
-
-q_constrain env (TBind tv cs)           = mapM (q_constr tv) cs
-  where q_constr tv tc@(TC qn ts)       = case findqname qn env of
-                                            NClass{} -> constrain [Sub (tVar tv) (tCon tc)]
-                                            NProto{} -> constrain [Impl (tVar tv) tc]
-
-
-
 ----------------------------------------
 
 
