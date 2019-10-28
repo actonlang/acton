@@ -69,7 +69,7 @@ instance DataVars Branch where
     datavars n (Branch e ss)        = datavars n ss
 
 instance DataVars Pattern where
-    datavars n (PTuple _ ps p)      = bound ps ++ bound p
+    datavars n (PTuple _ ps)        = bound ps
     datavars n (PList _ ps p)       = bound ps ++ bound p
     datavars n (PParen _ p)         = bound p
     datavars n (PData _ v ixs)
@@ -247,13 +247,6 @@ instance Vars Assoc where
     free (Assoc k v)                = free k ++ free v
     free (StarStar e)               = free e
 
-instance Vars Field where
-    free (Field n e)                = free e
-    free (StarStarField e)          = free e
-    
-    bound (Field n e)               = [n]
-    bound (StarStarField e)         = []
-
 instance Vars WithItem where
     free (WithItem e p)             = free e ++ free p
 
@@ -308,8 +301,7 @@ instance Vars Pattern where
     free (PSlice _ e sl)            = free e ++ free sl
     free (PDot _ e n)               = free e
 --    free (PRecord _ ps)             = free ps
---    free (PTuple _ ps)              = free ps
-    free (PTuple _ ps p)            = free ps ++ free p
+    free (PTuple _ ps)              = free ps
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
@@ -319,8 +311,7 @@ instance Vars Pattern where
     bound (PSlice _ e sl)           = []
     bound (PDot _ e n)              = []
 --    bound (PRecord _ ps)            = bound ps
---    bound (PTuple _ ps)             = bound ps
-    bound (PTuple _ ps p)           = bound ps ++ bound p
+    bound (PTuple _ ps)             = bound ps
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]

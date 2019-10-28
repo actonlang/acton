@@ -101,8 +101,7 @@ instance Relabel Expr where
 instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
 --    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
---    relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
-    relabel (PTuple _ ps p) = PTuple <$> newLoc <*> relabel ps <*> relabel p
+    relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (PSlice _ e sl) = PSlice <$> newLoc <*> relabel e <*> relabel sl
@@ -196,10 +195,6 @@ instance Relabel Assoc where
   
 instance Relabel Slice where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
-
-instance Relabel Field where
-  relabel (Field nm e) = Field <$> relabel nm <*> relabel e
-  relabel (StarStarField e) = StarStarField <$> relabel e
 
 instance Relabel OType where
   relabel = undefined

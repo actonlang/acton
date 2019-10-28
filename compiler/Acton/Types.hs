@@ -223,11 +223,13 @@ instance InfEnv Stmt where
       | nodup vs && chkCycles ds        = do te <- newTEnv vs
                                              let env1 = define te env
                                              te1 <- infEnv env1 ds
---                                             constrain [ Equ t (findname v env1) | (v,t) <- te1 ]  -- eq of name and rhs
+                                             constrain [ Equ (ntype t) (ntype $ findname v env1) | (v,t) <- te1 ]
                                              te2 <- genTEnv env te1
                                              return te2
-      where vs                          = bound ds
-            redefs                      = filter (not . blocked env) vs
+      where
+        vs                              = bound ds
+        redefs                          = filter (not . blocked env) vs
+        ntype (NVar (TSchema _ [] t) _) = t
 
 
 -- instance InfData [Stmt] where
