@@ -250,7 +250,6 @@ findqname (QName m n) env   = case lookup n (findmod (unalias env m) env) of
                                 _ -> noItem m n
 findqname (NoQual n) env    = findname n env
 
-
 findmod                     :: ModName -> Env -> TEnv
 findmod m env               = case lookup m (modules env) of
                                 Just te -> te

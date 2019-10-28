@@ -134,10 +134,10 @@ instance Pretty Expr where
     pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
-    pretty (Tuple _ es)             = prettyTuple es
+    pretty (Tuple _ pargs)          = pretty pargs
     pretty (TupleComp _ e co)       = pretty e <+> pretty co
-    pretty (Record _ [])            = text "record" <> parens empty
-    pretty (Record _ fs)            = parens (commaList fs)
+    pretty (Record _ KwdNil)        = text "record" <> parens empty
+    pretty (Record _ kargs)         = parens (pretty kargs)
     pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
@@ -197,10 +197,6 @@ instance Pretty Assoc where
     pretty (Assoc k v)              = pretty k <> colon <+> pretty v
     pretty (StarStar e)             = text "**" <> pretty e
 
-instance Pretty Field where
-    pretty (Field n e)              = pretty n <+> equals <+> pretty e
-    pretty (StarStarField e)        = text "**" <> pretty e
-
 instance Pretty WithItem where
     pretty (WithItem e p)           = pretty e <+> nonEmpty (text "as" <+>) pretty p
 
@@ -237,8 +233,7 @@ instance Pretty KwdPat where
 
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
-    pretty (PTuple _ ps p)          = prettyPats ps p
---    pretty (PTuple _ ps)            = pretty ps
+    pretty (PTuple _ ps)            = pretty ps
 --    pretty (PRecord _ ps)           = parens (pretty ps)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PIndex _ e ix)          = pretty e <> brackets (commaList ix)

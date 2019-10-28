@@ -75,7 +75,6 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Tuple         { eloc::SrcLoc, parg::PosArg }
                 | TupleComp     { eloc::SrcLoc, exp1::Expr, comp::Comp }
                 | Record        { eloc::SrcLoc, kargs::KwdArg }
- --               | Record        { eloc::SrcLoc, fields::[Field] }
                 | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
@@ -91,7 +90,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
                 | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
-                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
+--                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat }
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
@@ -438,11 +437,8 @@ instance Eq Expr where
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
     x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
---    x@Tuple{}           ==  y@Tuple{}           = elems x == elems y
---    x@TupleComp{}       ==  y@TupleComp{}       = exp1 x == exp1 y && comp x == comp y
-    x@TupleComp{}       ==  y@TupleComp{}       = elem1 x == elem1 y && comp x == comp y
+    x@TupleComp{}       ==  y@TupleComp{}       = exp1 x == exp1 y && comp x == comp y
     x@Record{}          ==  y@Record{}          = kargs x == kargs y
---    x@Record{}          ==  y@Record{}          = fields x == fields y
     x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
@@ -487,7 +483,6 @@ instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
 --    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
     PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
---    PTuple _ ps1 p1     == PTuple _ ps2 p2      = ps1 == ps2 && p1 == p2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
     PSlice _ e1 sl1     == PSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
