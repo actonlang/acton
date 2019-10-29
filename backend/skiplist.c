@@ -234,6 +234,25 @@ void skiplist_free(skiplist_t *list)
     free(list);
 }
 
+void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD))
+{
+    snode_t *current_node = list->header->forward[0];
+    while(current_node != NULL) {
+        snode_t *next_node = current_node->forward[0];
+        free(current_node->forward);
+        free_val(current_node->value);
+        free(current_node);
+        current_node = next_node;
+    }
+
+    free(list->header->forward);
+    free(list->header);
+
+//    free(current_node->forward);
+//    free(current_node);
+    free(list);
+}
+
 void skiplist_dump(skiplist_t *list) {
     snode_t *x = list->header;
     while (x && x->forward[0] != NULL) {

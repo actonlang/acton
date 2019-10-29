@@ -51,6 +51,9 @@ txns.o:
 
 comm.o:
 	cc comm.c -c -I src $(LFLAGS) $(CFLAGS)
+	
+client_api.o:
+	cc client_api.c -c -I src $(LFLAGS) $(CFLAGS)
 
 libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
 	ar rcs $(LIBDIR)/libdb.a db.o queue.o skiplist.o vector_clock.o txn_state.o txns.o
@@ -59,6 +62,10 @@ libdb: txns.o txn_state.o db.o queue.o vector_clock.o skiplist.o $(LIBDIR)
 libcomm: comm.o $(LIBDIR)
 	ar rcs $(LIBDIR)/libcomm.a comm.o
 	ranlib $(LIBDIR)/libcomm.a
+
+libdbclient: client_api.o failure_detector $(LIBDIR)
+	ar rcs $(LIBDIR)/dbclient.a client_api.o
+	ranlib $(LIBDIR)/dbclient.a
 
 db_unit_tests: db_unit_tests.c libdb
 	cc -std=c11 db_unit_tests.c \
@@ -87,10 +94,10 @@ skiplist_test: skiplist_test.c skiplist.c
 		$(LFLAGS) \
 		-o skiplist_test
 		
-client: client.c libdb failure_detector
+client: client.c libdb libdbclient
 	cc client.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
 	 -o client
 
 server: server.c libdb failure_detector

@@ -33,18 +33,6 @@
 #define CLIENT_ERR_SUBSCRIPTION_EXISTS 1
 #define CLIENT_ERR_NO_SUBSCRIPTION_EXISTS 2
 
-// Remote DB API:
-
-typedef struct remote_db {
-    int db_id;
-    skiplist_t * servers; // List of remote servers
-    skiplist_t * txn_state; // Client cache of txn state
-    skiplist_t * queue_subscriptions; // Client cache of txn state
-    pthread_mutex_t* subscribe_lock;
-} remote_db_t;
-
-remote_db_t * get_remote_db();
-int free_remote_db(remote_db_t * db);
 
 typedef struct write_query
 {
