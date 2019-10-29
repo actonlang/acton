@@ -74,7 +74,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, NULL, requests++, db) != 0) // &txnid
+				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, NULL, db) != 0) // &txnid
 					return -1;
 			}
 		}
@@ -89,7 +89,7 @@ int delete_test(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 	uuid_t txnid;
 	uuid_generate(txnid);
 	WORD row_key = (WORD) no_actors - 1;
-	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, NULL, requests++, db); //  &txnid
+	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, NULL, db); //  &txnid
 }
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
@@ -109,7 +109,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, requests++, db);
+				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, db);
 
 				if((long) row->key != cid)
 				{

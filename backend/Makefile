@@ -64,8 +64,8 @@ libcomm: comm.o $(LIBDIR)
 	ranlib $(LIBDIR)/libcomm.a
 
 libdbclient: client_api.o failure_detector $(LIBDIR)
-	ar rcs $(LIBDIR)/dbclient.a client_api.o
-	ranlib $(LIBDIR)/dbclient.a
+	ar rcs $(LIBDIR)/libdbclient.a client_api.o
+	ranlib $(LIBDIR)/libdbclient.a
 
 db_unit_tests: db_unit_tests.c libdb
 	cc -std=c11 db_unit_tests.c \
