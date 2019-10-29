@@ -188,7 +188,7 @@ runRestPasses args paths src env tree = (do
                           unless (projSrcRoot paths == projSysRoot paths)
                              $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
-                          return (Acton.Env.dropnames env',sigs))
+                          return (Acton.Env.dropNames env',sigs))
                              `catch` handle Acton.Env.checkerError src paths
                              `catch` handle Acton.Types.typeError src paths
 
@@ -295,7 +295,7 @@ doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
                                            iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                            (env',te) <- runRestPasses args (paths{modpath = mPath qn, ext = ".act"}) src env m
                                            iff (verbose args) (putStrLn "Done.")
-                                           return (Acton.Env.addmod qn te env', yangifaces)
+                                           return (Acton.Env.addMod qn te env', yangifaces)
   where actFile             = joinPath (projSrcRoot paths : mPath qn)++ ".act"
         outBase             = joinPath (projSysRoot paths : mPath qn)
         tyFile              = outBase ++ ".ty"
@@ -337,7 +337,7 @@ doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
                                       let te = read cont :: Acton.Env.TEnv
                                       InterfaceFiles.writeFile tyFile te
                                       putStrLn ("Done.")
-                                      return (Acton.Env.addmod qn te env, yangifaces)
+                                      return (Acton.Env.addMod qn te env, yangifaces)
    where pythonBase     = joinPath (syspath args : mPath qn)
          typesFile      =  pythonBase ++ ".types"
          tyFile         =  pythonBase ++ ".ty"

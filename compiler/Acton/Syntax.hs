@@ -371,6 +371,15 @@ instance HasLoc Pattern where
 instance HasLoc TSchema where
     loc (TSchema l _ _) = l
 
+instance HasLoc TVar where
+    loc (TV v)          = loc v
+
+instance HasLoc TCon where
+    loc (TC c ts)       = loc c `upto` loc ts
+
+instance HasLoc Type where
+    loc                 = tloc
+
 -- Eq -------------------------
 
 instance Eq Import where

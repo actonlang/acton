@@ -31,7 +31,7 @@ mkEnv paths env modul       = getImps paths env imps
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, selfbound :: Maybe TCon }
 
 data NameInfo               = NVar    TSchema Decoration
                             | NSVar   Type
@@ -49,6 +49,9 @@ data NameInfo               = NVar    TSchema Decoration
 
 nVar                        :: Name -> Type -> TEnv
 nVar n t                    = [(n, NVar (tSchema t) NoDecoration)]
+
+nVar'                       :: Name -> TSchema -> TEnv
+nVar' n sc                  = [(n, NVar sc NoDecoration)]
 
 nVars                       :: TEnv -> [(Name, TSchema)]
 nVars te                    = [ (n,sc) | (n, NVar sc _) <- te ]
@@ -124,14 +127,6 @@ instance Subst SrcInfoTag where
     tyfree (INS _ t)                = tyfree t
 
 
-monotype (NVar _ StaticMethod)      = Nothing
-monotype (NVar _ ClassMethod)       = Nothing
-monotype (NVar _ InstMethod)        = Nothing
-monotype (NVar (TSchema _ [] t) _)  = Just t
-monotype (NSVar t)                  = Just t
-monotype _                          = Nothing
-
-
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
@@ -150,7 +145,7 @@ instance Unalias ModName where
         norm te pre []              = ModName (reverse pre)
         norm te pre (n:ns)          = case lookup n te of
                                         Just (NModule te') -> norm te' (n:pre) ns
-                                        Just (NMAlias m) -> norm (findmod m env) [] ns
+                                        Just (NMAlias m) -> norm (findMod m env) [] ns
                                         _ -> err1 (ModName (reverse (n:pre))) "Not a module prefix:"
 
 instance Unalias QName where
@@ -216,12 +211,12 @@ envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
 prune xs                    = filter ((`notElem` xs) . fst)
 
 initEnv                     :: Env
-initEnv                     = define autoImp $ definemod mBuiltin $ addmod mBuiltin envBuiltin env0
+initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuiltin envBuiltin env0
   where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin }
+        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, selfbound = Nothing }
 
-statescope                  :: Env -> [Name]
-statescope env              = [ z | (z, NSVar _) <- names env ]
+stateScope                  :: Env -> [Name]
+stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 reserve                     :: [Name] -> Env -> Env
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
@@ -232,12 +227,19 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
-definemod                   :: ModName -> Env -> Env
-definemod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
+defineMod                   :: ModName -> Env -> Env
+defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
   where te1                 = case lookup (head ns) (names env) of Just (NModule te1) -> te1; _ -> []
-        defmod [] te        = NModule $ findmod (ModName ns) env
+        defmod [] te        = NModule $ findMod (ModName ns) env
         defmod (n:ns) te    = NModule $ (n, defmod ns te2) : prune [n] te
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
+
+defineTVars                 :: [TBind] -> Env -> Env
+defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] }
+
+defineSelf                  :: Name -> [TBind] -> Env -> Env
+defineSelf n q env          = env{ selfbound = Just tc }
+  where tc                  = TC (NoQual n) [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just NBlocked
@@ -245,31 +247,46 @@ blocked env n               = lookup n (names env) == Just NBlocked
 reserved                    :: Env -> Name -> Bool
 reserved env n              = lookup n (names env) == Just NReserved
 
-findname                    :: Name -> Env -> NameInfo
-findname n env              = case lookup n (names env) of
-                                Just (NAlias qn) -> findqname qn env
+findName                    :: Name -> Env -> NameInfo
+findName n env              = case lookup n (names env) of
+                                Just (NAlias qn) -> findQName qn env
                                 Just NReserved -> nameReserved n
                                 Just NBlocked -> nameBlocked n
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
-findqname                   :: QName -> Env -> NameInfo
-findqname (QName m n) env   = case lookup n (findmod (unalias env m) env) of
-                                Just (NAlias qn) -> findqname qn env
+findQName                   :: QName -> Env -> NameInfo
+findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
+                                Just (NAlias qn) -> findQName qn env
                                 Just i -> i
                                 _ -> noItem m n
-findqname (NoQual n) env    = findname n env
+findQName (NoQual n) env    = findName n env
 
-findmod                     :: ModName -> Env -> TEnv
-findmod m env               = case lookup m (modules env) of
+assignableType              :: Name -> Env -> Type
+assignableType n env        = case findName n env of
+                                NVar (TSchema _ [] t) d | d `notElem` mdec -> t
+                                NSVar t -> t
+                                _ -> err1 n "Not an assignable name:"
+  where mdec                = [StaticMethod, ClassMethod, InstMethod]
+
+
+findMod                     :: ModName -> Env -> TEnv
+findMod m env               = case lookup m (modules env) of
                                 Just te -> te
 
-addmod                      :: ModName -> TEnv -> Env -> Env
-addmod m te env             = env{ modules = (m,te) : modules env }
+addMod                      :: ModName -> TEnv -> Env -> Env
+addMod m te env             = env{ modules = (m,te) : modules env }
 
 
-dropnames                   :: Env -> Env
-dropnames env               = env{ names = names initEnv }
+dropNames                   :: Env -> Env
+dropNames env               = env{ names = names initEnv }
+
+findType                    :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)
+findType n env              = case findQName n env of
+                                NClass q us te -> (False,q,us,te)
+                                NProto q us te -> (True,q,us,te)
+                                _ -> err1 n "Not a class or protocol name:"
+
 
 newTEnv vs                  = do ts <- newTVars (length vs)
                                  return $ vs `zip` [ NVar (tSchema t) NoDecoration | t <- ts ]
@@ -277,28 +294,57 @@ newTEnv vs                  = do ts <- newTVars (length vs)
 
 -- Instantiation -------------------------------------------------------------------------
 
+monotypeOfName n env        = monotypeOfQName (NoQual n) env
+
+monotypeOfQName qn env      = case findQName qn env of
+                                NVar (TSchema _ [] t) _ -> t
+                                NSVar t -> t
+                                _ -> error ("(internal) Not a monotyped name:" ++ prstr qn)
+
 typeOfName n env            = typeOfQName (NoQual n) env
 
-typeOfQName qn env          = instN (findqname qn env)
+typeOfQName qn env          = instN (findQName qn env)
   where
-    instN (NVar sc _)       = instT (openFX sc)
+    instN (NVar sc _)       = instantiate env (openFX sc)
     instN (NSVar t)         = return t
-    instN (NClass q _ _)    = do ts <- newTVars (length q)
-                                 let s = tybound q `zip` ts
-                                 mapM constrB (subst s q)
-                                 return (tAt (TC qn ts))
+    instN (NClass q _ _)    = instantiate env $ TSchema NoLoc q $ tAt $ TC qn $ map tVar $ tybound q
     instN _                 = err1 qn "Unexpected name..."
 
-    instT (TSchema _ [] t)  = return t
-    instT (TSchema _ q t)   = do tvs <- newTVars (length q)
-                                 let s = tybound q `zip` tvs
-                                 mapM constrB (subst s q)
-                                 return (subst s t)
+instantiate env (TSchema _ [] t)    = instwild t
+instantiate env (TSchema _ q t)     = do tvs <- newTVars (length q)
+                                         let s = tybound q `zip` tvs
+                                         constrain $ constraintsOf (subst s q) env
+                                         instwild (subst s t)
 
-    constrB (TBind tv us)   = mapM (constrV tv) us
-    constrV v tc@(TC qn ts) = case findqname qn env of
-                                NClass{} -> constrain [Sub (tVar v) (tCon tc)]
-                                NProto{} -> constrain [Impl (tVar v) tc]
+constraintsOf q env         = [ constraint env t u | TBind v us <- q, let t = tVar v, u <- us ]
+
+constraint env t u@(TC n _) = case findQName n env of
+                                NClass{} -> Sub t (tCon u)
+                                NProto{} -> Impl t u
+
+class InstWild a where
+    instwild                    :: a -> TypeM a
+    instwild a                  = return a
+
+instance InstWild TSchema where
+    instwild (TSchema l q t)    = TSchema l <$> mapM instwild q <*> instwild t
+
+instance InstWild TBind where
+    instwild (TBind tv us)      = TBind tv <$> mapM instwild us
+
+instance InstWild TCon where
+    instwild (TC c ts)          = TC c <$> mapM instwild ts
+
+instance InstWild Type where
+    instwild (TWild _)          = newTVar
+    instwild (TCon l tc)        = TCon l <$> instwild tc
+    instwild (TAt l tc)         = TAt l <$> instwild tc
+    instwild (TFun l e p k t)   = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
+    instwild (TTuple l p)       = TTuple l <$> instwild p
+    instwild (TRecord l k)      = TRecord l <$> instwild k
+    instwild (TOpt l t)         = TOpt l <$> instwild t
+    instwild (TRow l n t r)     = TRow l n <$> instwild t <*> instwild r
+    instwild t                  = return t
 
 
 -- Environment unification ---------------------------------------------------------------
@@ -339,7 +385,7 @@ impModule ps env (Import _ ms)  = imp env ms
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp ps env m
-                                     let env2 = maybe (definemod m env1) (\n->define [(n, NMAlias m)] env1) as
+                                     let env2 = maybe (defineMod m env1) (\n->define [(n, NMAlias m)] env1) as
                                      imp env2 is
 impModule ps env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp ps env m
@@ -356,11 +402,11 @@ doImp (p,sysp) env m            = case lookup m (modules env) of
                                         found <- doesFileExist fpath
                                         if found
                                          then do te <- InterfaceFiles.readFile fpath
-                                                 return (addmod m te env, te)
+                                                 return (addMod m te env, te)
                                          else do found <- doesFileExist fpath2
                                                  unless found (fileNotFound m)
                                                  te <- InterfaceFiles.readFile fpath
-                                                 return (addmod m te env, te)
+                                                 return (addMod m te env, te)
   where fpath                   = joinPath (p : mpath m) ++ ".ty"
         fpath2                  = joinPath (sysp : mpath m) ++ ".ty"
         mpath (ModName ns)      = map nstr ns
