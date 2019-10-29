@@ -182,6 +182,14 @@ void free_remote_server_ptr(WORD ptr)
 
 // Comm fctns:
 
+/*
+ * error - wrapper for perror
+ */
+void error(char *msg) {
+    perror(msg);
+    exit(0);
+}
+
 int send_packet(void * buf, unsigned len, int sockfd)
 {
     int n = write(sockfd, buf, len);
@@ -248,7 +256,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -291,7 +299,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -328,7 +336,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clusteri
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -362,7 +370,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->quorum_size);
-		return -1;
+		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
@@ -378,7 +386,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     read_response_message * response;
-    success = deserialize_write_query(in_buf, n, &response);
+    success = deserialize_write_query(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -387,7 +395,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 #endif
 
     if(success != 0)
-    		return success;
+    		return NULL;
 
     return create_db_row_schemaless2((WORD *) response->cell->keys, response->cell->no_keys,
         									(WORD *) response->cell->columns, response->cell->no_columns, fastrandstate);
@@ -406,7 +414,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->quorum_size);
-		return -1;
+		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
@@ -422,7 +430,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     read_response_message * response;
-    success = deserialize_write_query(in_buf, n, &response);
+    success = deserialize_write_query(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -478,7 +486,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     range_read_response_message * response;
-    success = deserialize_range_read_response_message(in_buf, n, &response);
+    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -539,7 +547,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     range_read_response_message * response;
-    success = deserialize_range_read_response_message(in_buf, n, &response);
+    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -604,7 +612,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, lo
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -642,7 +650,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, lo
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -680,7 +688,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -693,8 +701,8 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
-		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
-		db_t * db, unsigned int * fastrandstate)
+		snode_t** start_row, snode_t** end_row, uuid_t * txnid, long nonce,
+		remote_db_t * db, unsigned int * fastrandstate)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -721,7 +729,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
 	queue_query_message * response;
-    success = deserialize_queue_message(in_buf, n, &response);
+    success = deserialize_queue_message(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -779,7 +787,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -819,7 +827,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -863,7 +871,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
     ack_message * ack;
-    success = deserialize_ack_message(in_buf, n, &ack);
+    success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -894,10 +902,74 @@ int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id
 	return 0;
 }
 
+// Subscription handling client-side:
+
+int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, short use_lock, remote_db_t * db, unsigned int * fastrandstate)
+{
+	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+	if(use_lock)
+		pthread_mutex_lock(db->subscribe_lock);
+
+	snode_t * subscription_node = skiplist_search(db->queue_subscriptions, (WORD) qca);
+
+	if(subscription_node != NULL)
+	{
+		if(use_lock)
+			pthread_mutex_unlock(db->subscribe_lock);
+
+		return CLIENT_ERR_SUBSCRIPTION_EXISTS; // Subscription already exists
+	}
+
+	int status = skiplist_insert(db->queue_subscriptions, (WORD) qca, (WORD) callback, fastrandstate);
+
+	if(use_lock)
+		pthread_mutex_unlock(db->subscribe_lock);
+
+	assert(status == 0);
+
+#if (VERBOSITY > 0)
+	printf("CLIENT: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
+					(long) app_id, (long) shard_id, (long) consumer_id,
+					(long) table_key, (long) queue_id, cs->callback);
+#endif
+
+	return status;
+}
+
+int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						short use_lock, remote_db_t * db)
+{
+	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+	if(use_lock)
+		pthread_mutex_lock(db->subscribe_lock);
+
+	queue_callback * callback = skiplist_delete(db->queue_subscriptions, (WORD) qca);
+
+	if(use_lock)
+		pthread_mutex_unlock(db->subscribe_lock);
+
+	assert(callback != NULL);
+
+	free_queue_callback(callback);
+
+#if (VERBOSITY > 0)
+	printf("CLIENT: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld with callback %p\n",
+					(long) app_id, (long) shard_id, (long) consumer_id,
+					(long) table_key, (long) queue_id, cs->callback);
+#endif
+
+	return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
+}
+
+
 // Txn mgmt:
 
 uuid_t * remote_new_txn(long nonce, remote_db_t * db, unsigned int * seedptr)
 {
+	uuid_t * txnid = NULL;
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 	int status = -2;
@@ -905,13 +977,13 @@ uuid_t * remote_new_txn(long nonce, remote_db_t * db, unsigned int * seedptr)
 	if(db->servers->no_items < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->quorum_size);
-		return -1;
+		return NULL;
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
 	while(status == -2) // txnid already exists on server
 	{
-		uuid_t * txnid = new_client_txn(db, seedptr);
+		txnid = new_client_txn(db, seedptr);
 		txn_message * q = build_new_txn(txnid, nonce);
 		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
 
@@ -927,7 +999,7 @@ uuid_t * remote_new_txn(long nonce, remote_db_t * db, unsigned int * seedptr)
 		success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
 		ack_message * ack;
-		success = deserialize_ack_message(in_buf, n, &ack);
+		success = deserialize_ack_message(rs->in_buf, n, &ack);
 	    assert(success == 0);
 		status = ack->status;
 
@@ -966,10 +1038,10 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, rem
 	// Send packet to server and wait for reply:
 
 	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) in_buf, BUFSIZE, &n);
+	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
 	ack_message * ack;
-	success = deserialize_ack_message(in_buf, n, &ack);
+	success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -982,7 +1054,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, rem
 
 int remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, remote_db_t * db)
 {
-	return _remote_validate_txn(txnid, version, nonce, -1, db);
+	return _remote_validate_txn(txnid, version, nonce, NULL, db);
 
 }
 
@@ -1010,10 +1082,10 @@ int _remote_abort_txn(uuid_t * txnid, long nonce, remote_server * rs_in, remote_
 	// Send packet to server and wait for reply:
 
 	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) in_buf, BUFSIZE, &n);
+	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
 	ack_message * ack;
-	success = deserialize_ack_message(in_buf, n, &ack);
+	success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -1026,7 +1098,7 @@ int _remote_abort_txn(uuid_t * txnid, long nonce, remote_server * rs_in, remote_
 
 int remote_abort_txn(uuid_t * txnid, long nonce, remote_db_t * db)
 {
-	return _remote_abort_txn(txnid, nonce, -1, db);
+	return _remote_abort_txn(txnid, nonce, NULL, db);
 }
 
 int _remote_persist_txn(uuid_t * txnid, vector_clock * version, long nonce, remote_server * rs_in, remote_db_t * db)
@@ -1053,10 +1125,10 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, long nonce, remo
 	// Send packet to server and wait for reply:
 
 	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) in_buf, BUFSIZE, &n);
+	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
 	ack_message * ack;
-	success = deserialize_ack_message(in_buf, n, &ack);
+	success = deserialize_ack_message(rs->in_buf, n, &ack);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
@@ -1126,6 +1198,48 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, remote
 
 	return 0;
 }
+
+// Txn state handling client-side:
+
+txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db)
+{
+	snode_t * txn_node = (snode_t *) skiplist_search(db->txn_state, (WORD) txnid);
+
+	return (txn_node != NULL)? (txn_state *) txn_node->value : NULL;
+}
+
+uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr)
+{
+	txn_state * ts = NULL, * previous = NULL;
+
+	while(ts == NULL)
+	{
+		ts = init_txn_state();
+		previous = get_client_txn_state(&(ts->txnid), db);
+		if(previous != NULL)
+		{
+			free_txn_state(ts);
+			ts = NULL;
+		}
+	}
+
+	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, seedptr);
+
+	return &(ts->txnid);
+}
+
+int close_client_txn(uuid_t * txnid, remote_db_t * db)
+{
+	txn_state * ts = get_client_txn_state(txnid, db);
+	if(ts == NULL)
+		return -2; // No such txn
+
+	skiplist_delete(db->txn_state, txnid);
+	free_txn_state(ts);
+
+	return 0;
+}
+
 
 
 

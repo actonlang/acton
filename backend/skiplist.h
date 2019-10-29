@@ -39,6 +39,7 @@ int skiplist_get_range(skiplist_t *list, WORD start_key, WORD end_key, WORD** re
 static void skiplist_node_free(snode_t *x);
 WORD skiplist_delete(skiplist_t *list, WORD key);
 void skiplist_free(skiplist_t *list);
+void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD));
 void skiplist_dump(skiplist_t *list);
 
 

@@ -4,13 +4,13 @@
  *      Author: aagapi
  */
 
+#ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
+#define BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
+
 #include "cells.h"
 #include "../db.h"
 #include "../txns.h"
 #include <uuid/uuid.h>
-
-#ifndef BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
-#define BACKEND_FAILURE_DETECTOR_DB_QUERIES_H_
 
 #define RPC_TYPE_WRITE 0
 #define RPC_TYPE_DELETE 1
@@ -183,13 +183,6 @@ int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message 
 char * to_string_queue_message(queue_query_message * ca, char * msg_buff);
 int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2);
 
-// Subscription handling client-side:
-
-int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					queue_callback * callback, short use_lock, remote_db_t * db, unsigned int * fastrandstate);
-int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						short use_lock, remote_db_t * db);
-
 typedef struct txn_message
 {
 	int type;
@@ -205,10 +198,6 @@ typedef struct txn_message
 	vector_clock * version;
 	long nonce;
 } txn_message;
-
-txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db);
-uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
-int close_client_txn(uuid_t * txnid, remote_db_t * db);
 
 txn_message * build_new_txn(uuid_t * txnid, long nonce);
 txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce);

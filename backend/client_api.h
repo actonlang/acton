@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <uuid/uuid.h>
@@ -73,7 +74,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 		unsigned int * fastrandstate);
 db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
 														WORD table_key, db_schema_t * schema, uuid_t * txnid, long nonce,
-														int sockfd, remote_db_t * db, unsigned int * fastrandstate);
+														remote_db_t * db, unsigned int * fastrandstate);
 db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 									WORD* col_keys, int no_columns, WORD table_key,
 									uuid_t * txnid, long nonce, remote_db_t * db);
@@ -98,8 +99,8 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, lo
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
-		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
-		db_t * db, unsigned int * fastrandstate);
+		snode_t** start_row, snode_t** end_row, uuid_t * txnid, long nonce,
+		remote_db_t * db, unsigned int * fastrandstate);
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					long new_consume_head, uuid_t * txnid, long nonce, remote_db_t * db);
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
@@ -113,11 +114,26 @@ int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, 
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 								uuid_t * txnid, long nonce, remote_db_t * db);
 
+// Subscription handling client-side:
+
+int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, short use_lock, remote_db_t * db, unsigned int * fastrandstate);
+int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+						short use_lock, remote_db_t * db);
+
+
 // Txn mgmt:
 
 uuid_t * remote_new_txn(long nonce, remote_db_t * db, unsigned int * seedptr);
 int remote_validate_txn(uuid_t * txnid, vector_clock * version, long nonce, remote_db_t * db);
 int remote_abort_txn(uuid_t * txnid, long nonce, remote_db_t * db);
 int remote_commit_txn(uuid_t * txnid, vector_clock * version, long nonce, remote_db_t * db);
+
+// Txn state handling client-side:
+
+txn_state * get_client_txn_state(uuid_t * txnid, remote_db_t * db);
+uuid_t * new_client_txn(remote_db_t * db, unsigned int * seedptr);
+int close_client_txn(uuid_t * txnid, remote_db_t * db);
+
 
 #endif /* BACKEND_CLIENT_API_H_ */

@@ -36,14 +36,6 @@ int no_collections = 2;
 int no_items = 2;
 
 
-/*
- * error - wrapper for perror
- */
-void error(char *msg) {
-    perror(msg);
-    exit(0);
-}
-
 db_schema_t * create_schema() {
 	int primary_key_idx = 0;
 	int clustering_key_idxs[2];
@@ -147,7 +139,7 @@ int main(int argc, char **argv) {
     hostname = argv[1];
     portno = atoi(argv[2]);
 
-    remote_db_t * db = get_remote_db();
+    remote_db_t * db = get_remote_db(1);
 
     add_server_to_membership(hostname, portno, db, &seed);
 
