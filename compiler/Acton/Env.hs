@@ -322,20 +322,25 @@ constraint env t u@(TC n _) = case findQName n env of
                                 NClass{} -> Sub t (tCon u)
                                 NProto{} -> Impl t u
 
-class InstWild a where
+class Wild a where
     instwild                    :: a -> TypeM a
     instwild a                  = return a
+    wildloc                     :: a -> [SrcLoc]
+    wildloc a                   = []
 
-instance InstWild TSchema where
+instance Wild TSchema where
     instwild (TSchema l q t)    = TSchema l <$> mapM instwild q <*> instwild t
+    wildloc (TSchema _ q t)     = concatMap wildloc q ++ wildloc t
 
-instance InstWild TBind where
+instance Wild TBind where
     instwild (TBind tv us)      = TBind tv <$> mapM instwild us
+    wildloc (TBind _ us)        = concatMap wildloc us
 
-instance InstWild TCon where
+instance Wild TCon where
     instwild (TC c ts)          = TC c <$> mapM instwild ts
+    wildloc (TC _ ts)           = concatMap wildloc ts
 
-instance InstWild Type where
+instance Wild Type where
     instwild (TWild _)          = newTVar
     instwild (TCon l tc)        = TCon l <$> instwild tc
     instwild (TAt l tc)         = TAt l <$> instwild tc
@@ -345,7 +350,21 @@ instance InstWild Type where
     instwild (TOpt l t)         = TOpt l <$> instwild t
     instwild (TRow l n t r)     = TRow l n <$> instwild t <*> instwild r
     instwild t                  = return t
+    
+    wildloc (TWild l)           = [l]
+    wildloc (TCon _ tc)         = wildloc tc
+    wildloc (TAt _ tc)          = wildloc tc
+    wildloc (TFun _ e p k t)    = wildloc e ++ wildloc p ++ wildloc k ++ wildloc t
+    wildloc (TTuple _ p)        = wildloc p
+    wildloc (TRecord _ k)       = wildloc k
+    wildloc (TOpt _ t)          = wildloc t
+    wildloc (TRow _ _ t r)      = wildloc t ++ wildloc r
+    wildloc t                   = []
 
+noWild x
+  | null ls                     = True
+  | otherwise                   = err1 (head ls) "Illegal wildcard type"
+  where ls                      = wildloc x
 
 -- Environment unification ---------------------------------------------------------------
 

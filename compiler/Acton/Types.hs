@@ -347,37 +347,84 @@ instance DeclEnv Decl where
                                              return $ nVar n t1
     declEnv env (Def _ n q p k t _ m)   = do t1 <- instantiate env $ extractSig q p k t m
                                              return $ nVar n t1
-    declEnv env (Class _ n q us b)      = do (us',te') <- closeBasesC env q us
-                                             te1 <- declEnv (reserve (bound b) env) b
+    declEnv env (Class _ n q us b)      = do let us' = mro env False q us
+                                             te1 <- declEnv env1 b
                                              return undefined
-    declEnv env (Protocol _ n q us b)   = do (us',te') <- closeBasesP env q us
-                                             te1 <- declEnv (reserve (bound b) env) b
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
+    declEnv env (Protocol _ n q us b)   = do let us' = mro env True q us
+                                             te1 <- declEnv env1 b
                                              return undefined
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     declEnv env (Extension _ n q us b)  = undefined
     declEnv env (Signature _ ns sc d)   = undefined
 
 
-closeBasesC env q0 []                   = return ([], [])
-closeBasesC env q0 (TC n ts : us0)
-  | proto                               = closeBasesP env q0 (TC n ts : us0)
-  | all (entail env q0) cs              = do (us1,te1) <- closeBasesP env q us0    -- TODO: mro order
-                                             return (subst s us  ++ us1, subst s te ++ te1)
-  where (proto, q, us, te)              = findType n env
-        cs                              = concat [ subst s cs | TBind v cs <- q ]
-        s                               = tybound q `zip` ts
+mro env proto q us
+  | proto                               = merge [] $ linearizationsP us ++ [us]
+  | not proto                           = merge [] $ linearizationsC us ++ [us]
+  where merge out lists
+          | null heads                  = reverse out
+          | h:_ <- good                 = merge (h:out) [ if match hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+          | otherwise                   = err2 heads "Inconsistent resolution order for"
+          where (heads,tails)           = unzip [ (hd,tl) | hd:tl <- lists ]
+                good                    = [ h | h <- heads, all (absent (tcname h)) tails]
 
-closeBasesP env q0 []                   = return ([], [])
-closeBasesP env q0 (TC n ts : us0)
-  | not proto                           = err1 n "Unexpected base class:"
-  | all (entail env q0) cs              = do (us1,te1) <- closeBasesP env q0 us0    -- TODO: mro order
-                                             return (subst s us ++ us1, subst s te ++ te1)
-  where (proto, q, us, te)              = findType n env
-        cs                              = [ constraint env t (subst s u) | TBind v us <- q, let t = subst s (tVar v), u <- us ]
-        s                               = tybound q `zip` ts
+        match u1 u2
+          | u1 == u2                    = True
+          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent instantiation of class/protocol"
+          | otherwise                   = False
+
+        absent n []                     = True
+        absent n (u:us)
+          | n == tcname u               = False
+          | otherwise                   = absent n us
+
+        linearizationsC []              = []
+        linearizationsC (u : us)        = (u:us') : linearizationsP us
+          where (proto, us', _)         = instCon env q u
+
+        linearizationsP []              = []
+        linearizationsP (u : us)
+          | not proto                   = err1 (tcname u) "Protocol expected, found class"
+          | otherwise                   = (u:us') : linearizationsP us
+          where (proto, us', _)         = instCon env q u
 
 
+instCon env q u
+  | all (entail env q) cs               = (proto, subst s us, subst s te)
+  | otherwise                           = err1 u ("Type variable context " ++ prstr q ++ " too weak to entail")
+  where (proto, q', us, te)             = findType (tcname u) env
+        cs                              = [ constraint env t (subst s u) | TBind v us <- q', let t = subst s (tVar v), u <- us ]
+        s                               = tybound q' `zip` tcargs u
+
+entail                                  :: Env -> [TBind] -> Constraint -> Bool
 entail env q c                          = True                                      -- TODO: implement this
 
+
+---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
+--  type Graph = Map ClassName [BaseClass]
+--
+--  mro                             :: Graph -> Graph -> IO ()
+--  mro lins []                     = return ()
+--  mro lins ((c,bases):graph)      = case merge [] (map lin bases ++ [bases]) of
+--                                      Right cs -> do
+--                                          putStrLn (showlin c cs)
+--                                          mro ((c,cs):lins) graph
+--                                      Left err -> putStrLn err
+--    where lin a                   = case lookup a lins of
+--                                      Just la -> a:la
+--                                      Nothing -> error ("Forward ref from " ++ c ++ " to " ++ a)
+--
+--          merge out lists
+--            | null heads          = Right $ reverse out
+--            | h:_ <- good         = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+--            | otherwise           = Left (">>>>>> " ++ showlin c (reverse out) ++ 
+--                                        " ++ merge(" ++ commasep (map showlist lists) ++ ") <<<<<<<")
+--            where (heads,tails)   = unzip [ (hd,tl) | hd:tl <- lists ]
+--                  good            = [ h | h <- heads, all (h `notElem`) tails ]
+---------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------
 
 extractSig q p k t m
   | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig

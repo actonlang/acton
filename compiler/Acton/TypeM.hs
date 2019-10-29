@@ -25,6 +25,12 @@ data Constraint                         = Equ       Type Type
                                         -- ...
                                         deriving (Eq,Show)
 
+instance HasLoc Constraint where
+    loc (Equ t _)                       = loc t
+    loc (Sub t _)                       = loc t
+    loc (Impl t _)                      = loc t
+    loc (Sel t _ _)                     = loc t         -- TODO: refine
+
 instance Pretty Constraint where
     pretty (Equ t1 t2)                  = pretty t1 <+> text "  =  " <+> pretty t2
     pretty (Sub t1 t2)                  = pretty t1 <+> text "  <  " <+> pretty t2

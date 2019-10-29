@@ -225,9 +225,9 @@ isRow _         = False
 
 data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show,Read,Generic)
 
-data TVar       = TV Name deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvname::Name } deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
-data TCon       = TC QName [Type] deriving (Eq,Show,Read,Generic)
+data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 

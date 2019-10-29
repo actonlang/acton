@@ -392,7 +392,7 @@ instance Pretty Aug where
 
 instance Pretty TSchema where
     pretty (TSchema _ [] t)         = pretty t
-    pretty (TSchema _ q t)          = brackets (commaList q) <+> text "=>" <+> pretty t
+    pretty (TSchema _ q t)          = pretty q <+> text "=>" <+> pretty t
 
 instance Pretty TVar where
     pretty (TV n)                   = pretty n
@@ -405,7 +405,10 @@ instance Pretty TCon where
     pretty (TC n [kt,vt])
       | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
-    
+
+instance Pretty [TBind] where
+    pretty q                        = brackets (commaList q)
+
 instance Pretty TBind where
     pretty (TBind v [])             = pretty v
     pretty (TBind v cs)             = pretty v <> parens (commaList cs)
