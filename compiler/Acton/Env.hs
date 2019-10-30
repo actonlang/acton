@@ -194,15 +194,36 @@ instance Unalias (Name,NameInfo) where
     
 -------------------------------------------------------------------------------------------------------------------
 
-envBuiltin                  = [ (nSequence, NProto [a] [] []),
-                                (nMapping,  NProto [a,b] [] []),
-                                (nSet,      NProto [a] [] []),
-                                (nInt,      NClass [] [] []),
-                                (nFloat,    NClass [] [] []),
-                                (nBool,     NClass [] [] []),
-                                (nStr,      NClass [] [] []) ]
-  where a:b:c:_             = [ TBind v [] | v <- tvarSupply ]
-        ta:tb:tc:_          = [ TVar NoLoc v | v <- tvarSupply ]
+envBuiltin                  = [ (nSequence,         NProto [a] [] []),
+                                (nMapping,          NProto [a,b] [] []),
+                                (nSet,              NProto [a] [] []),
+                                (nInt,              NClass [] [] []),
+                                (nFloat,            NClass [] [] []),
+                                (nBool,             NClass [] [] []),
+                                (nStr,              NClass [] [] []),
+                                (nRef,              NClass [] [] []),
+                                (nMsg,              NClass [a] [] []),
+                                (nException,        NClass [] [] []),
+                                (nBoolean,          NProto [] [] []),
+                                (nIndexed,          NProto [a,b] [] []),
+                                (nSliceable,        NProto [] [] []),
+                                (nPlus,             NProto [] [] []),
+                                (nMinus,            NProto [] [] []),
+                                (nNumber,           NProto [] [] []),
+                                (nReal,             NProto [] [] []),
+                                (nIntegral,         NProto [] [] []),
+                                (nLogical,          NProto [] [] []),
+                                (nMatrix,           NProto [] [] []),
+                                (nEq,               NProto [] [] []),
+                                (nOrd,              NProto [] [] []),
+                                (nIdentity,         NProto [] [] []),
+                                (nCollection,       NProto [a] [] []),
+                                (nContextManager,   NProto [] [] [])
+                              ]
+  where 
+    a:b:c:_                 = [ TBind v [] | v <- tvarSupply ]
+    bounded u (TBind v us)  = TBind v (u:us)
+    ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
 
 envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
 
@@ -253,7 +274,7 @@ findName n env              = case lookup n (names env) of
                                 Just NReserved -> nameReserved n
                                 Just NBlocked -> nameBlocked n
                                 Just info -> info
-                                Nothing -> nameNotFound n
+                                Nothing -> trace ("### names:\n" ++ render (vcat $ map pretty (names env))) $ nameNotFound n
 
 findQName                   :: QName -> Env -> NameInfo
 findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of

@@ -64,7 +64,7 @@ z3 : [A]                                                # sequence that also cou
 # @classattr                                            # uncomment and get *two* error messages
 x : int
 
-def elem [A (Eq), B (Boolish)] (x:A, xs:[A]) -> B:       # function with explicit quant/qualifiers
+def elem [A(Eq), B(Boolean)] (x:A, xs:[A]) -> B:        # function with explicit quant/qualifiers
     pass
 
 
