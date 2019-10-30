@@ -50,6 +50,9 @@ data NameInfo               = NVar    TSchema
 nVar                        :: Name -> Type -> TEnv
 nVar n t                    = [(n, NVar (tSchema t))]
 
+nVar'                       :: Name -> TSchema -> TEnv
+nVar' n sc                  = [(n, NVar sc)]
+
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
 

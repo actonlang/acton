@@ -82,6 +82,8 @@ assertNotData       = ifCtx [DATA]              [SEQ,LOOP]      (notIn "a data t
 
 ifActScope          = ifCtx [ACTOR]             [SEQ,LOOP,DEF]
 
+ifClassProtoExt     = ifCtx [CLASS,PROTO,EXT]   [SEQ,LOOP]
+
 ifData              = ifCtx [DATA]              [SEQ,LOOP]
 
 ifPar               = ifCtx [PAR]               []
@@ -597,9 +599,9 @@ funcdef =  addLoc $ do
          modifier m = return m
 
          fun_decoration = rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMeth
-                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMeth
+                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return (S.InstMeth True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
-                      <|> return S.NoMod
+                      <|> ifClassProtoExt (return (S.InstMeth False)) (return S.NoMod)
 
 
 optbinds :: Parser [S.TBind]

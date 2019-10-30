@@ -256,7 +256,8 @@ prettyMod Async                     = (text "async" <+>)
 prettyMod NoMod                     = id
 prettyMod StaticMeth                = (text "@staticmethod" $+$)
 prettyMod ClassMeth                 = (text "@classmethod" $+$)
-prettyMod InstMeth                  = (text "@instmethod" $+$)
+prettyMod (InstMeth True)           = (text "@instmethod" $+$)
+prettyMod (InstMeth False)          = id -- (text "(@instmethod)" $+$)
 
 
 instance Pretty SrcInfoTag where

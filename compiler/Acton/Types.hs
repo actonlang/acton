@@ -115,6 +115,10 @@ genTEnv env te                          = do cs <- collectConstraints
                                              dump [ GEN (loc v) t | (v, t) <- nVars te2 ]
                                              return te2
 
+gen1                                    :: Env -> Name -> Type -> TypeM TSchema
+gen1 env n t                            = do te <- genTEnv env (nVar n t)
+                                             return $ snd $ head $ nVars te
+
 commonTEnv env tenvs                    = unifyTEnv env tenvs (foldr intersect [] $ map dom tenvs)
 
 -- unionTEnv env tenvs                     = do te1 <- commonTEnv env tenvs
@@ -314,9 +318,10 @@ instance InfEnv Decl where
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
-            splitRow m (TRow _ n sc r)
-              | m == InstMeth           = constrain [Match sc (tSchema tSelf)] >> return r
-              | m == ClassMeth          = constrain [Match sc (tSchema (tAt (findSelf env)))] >> return r
+            splitRow (InstMeth _) (TRow _ n sc r)
+                                        = constrain [Match sc (tSchema tSelf)] >> return r
+            splitRow (ClassMeth) (TRow _ n sc r)
+                                        = constrain [Match sc (tSchema (tAt (findSelf env)))] >> return r
             splitRow m r                = return r
 
     infEnv env (Class l n _ _ b)        = do pushFX fxNil
@@ -324,7 +329,7 @@ instance InfEnv Decl where
                                              popFX
                                              te2 <- genTEnv env1 te1
                                              constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
-                                             return $ nClass n q us te          -- TODO: check no dangling sigs in te2 of any us
+                                             return $ nClass n q us te2         -- TODO: check no dangling sigs in te2 of any us
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             (_,q,us,te)                 = findType (NoQual n) env
 
@@ -333,7 +338,7 @@ instance InfEnv Decl where
                                              popFX
                                              te2 <- genTEnv env1 te1
                                              constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
-                                             return $ nProto n q us te
+                                             return $ nProto n q us te2
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             (_,q,us,te)                 = findType (NoQual n) env
     infEnv env (Extension l n q us b)   = return []
@@ -431,23 +436,27 @@ extractSig n q p k t m
     sig                                 = tFun (extractFX m) prow krow (maybe tWild id t)
     (prow,krow)                         = extractPars m p k
     extractPars m (PosPar n t _ p) k
-      | m `elem` [InstMeth,ClassMeth]   = (extractP p, extractK k)
+      | extraPar m                      = (extractP p, extractK k)
     extractPars m PosNIL (KwdPar n t _ k)
-      | m `elem` [InstMeth,ClassMeth]   = (extractP p, extractK k)
-    extractPars InstMeth p k            = err1 n "Missing 'self' parameter in definition of"
+      | extraPar m                      = (extractP p, extractK k)
+    extractPars (InstMeth _) p k        = err1 n "Missing 'self' parameter in definition of"
     extractPars ClassMeth p k           = err1 n "Missing 'class' parameter in definition of"
     extractPars _ p k                   = (extractP p, extractK k)
+    extraPar (InstMeth _)               = True
+    extraPar ClassMeth                  = True
+    extraPar _                          = False
     extractP (PosPar n t _ p)           = posRow (maybe (tSchema tWild) id t) (extractP p)
-    extractP (PosSTAR n t)              = posVar Nothing                            -- TODO: figure out how to handle *type* t
+    extractP (PosSTAR n t)              = posVar Nothing        -- safe to ignore type (not schema) annotation t here
     extractP PosNIL                     = posNil
     extractK (KwdPar n t _ k)           = kwdRow n (maybe (tSchema tWild) id t) (extractK k)
-    extractK (KwdSTAR n t)              = kwdVar Nothing                            -- TODO: figure out how to handle *type* t
+    extractK (KwdSTAR n t)              = kwdVar Nothing        -- safe to ignore type (not schema) annotation t here
     extractK KwdNIL                     = kwdNil
     extractFX (Sync _)                  = fxSync fxNil
     extractFX Async                     = fxAsync fxNil
     extractFX _                         = tWild
     extractDec StaticMeth               = StaticMethod
     extractDec ClassMeth                = ClassMethod
+    extractDec (InstMeth _)             = InstMethod
     extractDec _                        = NoDec
 
 
@@ -680,27 +689,34 @@ instance (Infer a) => Infer (Maybe a) where
     infer env (Just x)                  = infer env x
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n ann e p)      = do t <- newTVar                       -- TODO: use ann
-                                             t1 <- infer env e
-                                             (te,r) <- infEnvT (define (nVar n t) env) p
-                                             return (nVar n t ++ te, posRow (tSchema t) r)
-    infEnvT env (PosSTAR n ann)         = do r <- newTVar                       -- TODO: use ann
-                                             return (nVar n (tTuple r), r)
+    infEnvT env (PosPar n ann e p)      = do sc <- maybe (tSchema <$> newTVar) instwild ann
+                                             t <- infer env e
+                                             constrain [Match (tSchema t) sc]
+                                             (te,r) <- infEnvT (define (nVar' n sc) env) p
+                                             return (nVar' n sc ++ te, posRow sc r)
+    infEnvT env (PosSTAR n ann)         = do r <- newTVar
+                                             t <- maybe newTVar instwild ann
+                                             constrain [Sub t (tTuple r)]
+                                             return (nVar n t, r)
     infEnvT env PosNIL                  = return ([], posNil)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n ann e k)      = do t <- newTVar                       -- TODO: use ann
-                                             t1 <- infer env e
-                                             (te,r) <- infEnvT (define (nVar n t) env) k
-                                             return (nVar n t ++ te, kwdRow n (tSchema t) r)
-    infEnvT env (KwdSTAR n ann)         = do r <- newTVar                       -- TODO: use ann
-                                             return (nVar n (tRecord r), r)
+    infEnvT env (KwdPar n ann e k)      = do sc <- maybe (tSchema <$> newTVar) instwild ann
+                                             t <- infer env e
+                                             constrain [Match (tSchema t) sc]
+                                             (te,r) <- infEnvT (define (nVar' n sc) env) k
+                                             return (nVar' n sc ++ te, kwdRow n sc r)
+    infEnvT env (KwdSTAR n ann)         = do r <- newTVar
+                                             t <- maybe newTVar instwild ann
+                                             constrain [Sub t (tRecord r)]
+                                             return (nVar n t, r)
     infEnvT env KwdNIL                  = return ([], kwdNil)
 
 instance Infer PosArg where
     infer env (PosArg e p)              = do t <- infer env e
                                              prow <- infer env p
-                                             return (posRow (tSchema t) prow)
+                                             sc <- gen1 env (rPos $ rowDepth prow + 1) t
+                                             return (posRow sc prow)
     infer env (PosStar e)               = do t <- infer env e
                                              prow <- newTVar
                                              constrain [Sub t (tTuple prow)]
@@ -708,9 +724,10 @@ instance Infer PosArg where
     infer env PosNil                    = return posNil
     
 instance Infer KwdArg where
-    infer env (KwdArg n e k)            = do t <- infer env e                   -- TODO: generalize
+    infer env (KwdArg n e k)            = do t <- infer env e
+                                             sc <- gen1 env n t
                                              krow <- infer env k
-                                             return (kwdRow n (tSchema t) krow)
+                                             return (kwdRow n sc krow)
     infer env (KwdStar e)               = do t <- infer env e
                                              krow <- newTVar
                                              constrain [Sub t (tRecord krow)]
@@ -774,8 +791,8 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar _ n Nothing)                                                      -- TODO: utilize annot
-      | reserved env n                  = do t <- newTVar
+    infEnvT env (PVar _ n ann)
+      | reserved env n                  = do t <- maybe newTVar instwild ann
                                              return (nVar n t, t)
       | otherwise                       = return ([], assignableType n env)
     infEnvT env (PIndex l e [i])        = do t <- infer env e
@@ -815,21 +832,3 @@ instance Infer Pattern where
       where noenv ([], t)               = t
             noenv (te, _)               = nameNotFound (head (dom te))
                                              
-{-
-inferSuper env (Arg e : args)           = do t <- inferPure env e
-                                             r <- inferSuper env args
-                                             r':t':_ <- newOVars 2
-                                             o_constrain [QEqu (eloc e) 32 t (OFun ONil r' t')]    -- assumpt on base class
-                                             return (OStar2 t' r)
-inferSuper env (StarArg e : args)       = do t <- infer env e
-                                             r <- inferSuper env args
-                                             return (OStar1 t r)                -- Handle at all?
-inferSuper env (KwArg n e : args)       = inferSuper env (Arg e : args)
-inferSuper env (StarStarArg e:args)     = inferSuper env (StarArg e : args)
-inferSuper env []                       = return ONil
-
-getInit l tenv                          = case partition ((=="__init__") . nstr . fst) tenv of
-                                            ([],_) -> notYet l (text "Class declaration without an '__init__' method")
-                                            ([(n,t)],tenv1) -> (nloc n, t, tenv1)
-
--}
