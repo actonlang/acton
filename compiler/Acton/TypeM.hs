@@ -22,20 +22,23 @@ data Constraint                         = Equ       Type Type
                                         | Sub       Type Type
                                         | Impl      Type TCon
                                         | Sel       Type Name Type
+                                        | Match     TSchema TSchema
                                         -- ...
                                         deriving (Eq,Show)
 
-instance HasLoc Constraint where
+instance HasLoc Constraint where                 -- TODO: refine
     loc (Equ t _)                       = loc t
     loc (Sub t _)                       = loc t
     loc (Impl t _)                      = loc t
-    loc (Sel t _ _)                     = loc t         -- TODO: refine
+    loc (Sel t _ _)                     = loc t
+    loc (Match sc _)                    = loc sc
 
 instance Pretty Constraint where
     pretty (Equ t1 t2)                  = pretty t1 <+> text "  =  " <+> pretty t2
     pretty (Sub t1 t2)                  = pretty t1 <+> text "  <  " <+> pretty t2
     pretty (Impl t u)                   = pretty t <+> text "  impl  " <+> pretty u
     pretty (Sel t1 n t2)                = pretty t1 <+> text "  ." <> pretty n <> text "  " <+> pretty t2
+    pretty (Match sc1 sc2)              = pretty sc1 <+> text "  <:  " <+> pretty sc2
     
 type Constraints                        = [Constraint]
 
@@ -142,10 +145,12 @@ instance Subst Constraint where
     msubst (Sub t1 t2)              = Sub <$> msubst t1 <*> msubst t1
     msubst (Impl t c)               = Impl <$> msubst t <*> msubst c
     msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Match t1 t2)            = Match <$> msubst t1 <*> msubst t1
     tyfree (Equ t1 t2)              = tyfree t1 ++ tyfree t2
     tyfree (Sub t1 t2)              = tyfree t1 ++ tyfree t2
     tyfree (Impl t c)               = tyfree t ++ tyfree c
     tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Match t1 t2)            = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
