@@ -56,7 +56,10 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Signature _ vs t dec)   = pretty dec $+$ commaList vs <+> text ":" <+> pretty t
+    pretty (Signature _ vs sc)      = prettySig vs sc
+
+prettySig vs (TSchema _ [] t dec)   = pretty dec $+$ commaList vs <+> text ":" <+> pretty t
+prettySig vs (TSchema _ q t dec)    = pretty dec $+$ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
 
 instance Pretty Decoration where
     pretty ClassAttr                = text "@classattr"
@@ -64,7 +67,7 @@ instance Pretty Decoration where
     pretty StaticMethod             = text "@staticmethod"
     pretty ClassMethod              = text "@classmethod"
     pretty InstMethod               = text "@instmethod"
-    pretty NoDecoration             = empty
+    pretty NoDec                    = empty
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
@@ -391,8 +394,8 @@ instance Pretty Aug where
     pretty EuDivA                   = text "//="
 
 instance Pretty TSchema where
-    pretty (TSchema _ [] t)         = pretty t
-    pretty (TSchema _ q t)          = pretty q <+> text "=>" <+> pretty t
+    pretty (TSchema _ [] t NoDec)   = pretty t
+    pretty (TSchema _ q t NoDec)    = pretty q <+> text "=>" <+> pretty t
 
 instance Pretty TVar where
     pretty (TV n)                   = pretty n

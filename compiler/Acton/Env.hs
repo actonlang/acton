@@ -33,7 +33,7 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, selfbound :: Maybe TCon }
 
-data NameInfo               = NVar    TSchema Decoration
+data NameInfo               = NVar    TSchema
                             | NSVar   Type
                             | NClass  [TBind] [TCon] TEnv
                             | NProto  [TBind] [TCon] TEnv
@@ -48,7 +48,7 @@ data NameInfo               = NVar    TSchema Decoration
                             deriving (Eq,Show,Read,Generic)
 
 nVar                        :: Name -> Type -> TEnv
-nVar n t                    = [(n, NVar (tSchema t) NoDecoration)]
+nVar n t                    = [(n, NVar (tSchema t))]
 
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
@@ -57,11 +57,11 @@ nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto n q us te            = [(n, NProto q us te)]
 
 nVars                       :: TEnv -> [(Name, TSchema)]
-nVars te                    = [ (n,sc) | (n, NVar sc _) <- te ]
+nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
 mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
 mapVars f te                = map g te
-  where g (n, NVar sc d)    = (n, NVar (f sc) d)
+  where g (n, NVar sc)      = (n, NVar (f sc))
         g (n, i)            = (n, i)
 
 
@@ -74,7 +74,7 @@ instance Pretty Env where
     pretty env                  = vcat (map pretty (names env))
 
 instance Pretty (Name,NameInfo) where
-    pretty (n, NVar t dec)      = pretty dec $+$ pretty n <+> colon <+> pretty t
+    pretty (n, NVar t)          = prettySig [n] t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
@@ -96,7 +96,7 @@ instance Subst Env where
     tyfree env                  = tyfree (names env)
 
 instance Subst NameInfo where
-    msubst (NVar t dec)         = NVar <$> msubst t <*> return dec
+    msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
@@ -109,7 +109,7 @@ instance Subst NameInfo where
     msubst NReserved            = return NReserved
     msubst NBlocked             = return NBlocked
 
-    tyfree (NVar t dec)         = tyfree t
+    tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
@@ -161,7 +161,7 @@ instance Unalias QName where
     unalias env (NoQual n)          = QName (defaultmod env) n
                                     
 instance Unalias TSchema where
-    unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
+    unalias env (TSchema l q t d)   = TSchema l (unalias env q) (unalias env t) d
 
 instance Unalias TCon where
     unalias env (TC qn ts)          = TC (unalias env qn) (unalias env ts)
@@ -180,7 +180,7 @@ instance Unalias Type where
     unalias env t                   = t
 
 instance Unalias NameInfo where
-    unalias env (NVar t d)          = NVar (unalias env t) d
+    unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
@@ -228,7 +228,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
     bounded u (TBind v us)  = TBind v (u:us)
     ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
 
-envActorSelf                = [ (nSelf,     NVar (tSchema tRef) NoDecoration) ]
+envActorSelf                = [ (nSelf,     NVar (tSchema tRef)) ]
 
 --------------------------------------------------------------------------------------------------------------------
 
@@ -292,7 +292,7 @@ findSelf env                = case selfbound env of
 
 assignableType              :: Name -> Env -> Type
 assignableType n env        = case findName n env of
-                                NVar (TSchema _ [] t) d | d `notElem` mdec -> t
+                                NVar (TSchema _ [] t d) | d `notElem` mdec -> t
                                 NSVar t -> t
                                 _ -> err1 n "Not an assignable name:"
   where mdec                = [StaticMethod, ClassMethod, InstMethod]
@@ -317,7 +317,7 @@ findType n env              = case findQName n env of
 
 
 newTEnv vs                  = do ts <- newTVars (length vs)
-                                 return $ vs `zip` [ NVar (tSchema t) NoDecoration | t <- ts ]
+                                 return $ vs `zip` [ NVar (tSchema t) | t <- ts ]
 
 
 -- Instantiation -------------------------------------------------------------------------
@@ -325,13 +325,13 @@ newTEnv vs                  = do ts <- newTVars (length vs)
 schemaOfName n env          = schemaOfQName (NoQual n) env
 
 schemaOfQName qn env        = case findQName qn env of
-                                NVar sc _    -> sc
+                                NVar sc      -> sc
                                 NSVar t      -> tSchema t
-                                NClass q _ _ -> TSchema NoLoc q $ tAt $ TC qn $ map tVar $ tybound q
+                                NClass q _ _ -> TSchema NoLoc q (tAt $ TC qn $ map tVar $ tybound q) NoDec
                                 _            -> err1 qn "Unexpected name..."
 
-instantiate env (TSchema _ [] t)    = instwild t
-instantiate env (TSchema _ q t)     = do tvs <- newTVars (length q)
+instantiate env (TSchema _ [] t _)  = instwild t
+instantiate env (TSchema _ q t _)   = do tvs <- newTVars (length q)
                                          let s = tybound q `zip` tvs
                                          constrain $ constraintsOf (subst s q) env
                                          instwild (subst s t)
@@ -349,8 +349,8 @@ class Wild a where
     wildloc a                   = []
 
 instance Wild TSchema where
-    instwild (TSchema l q t)    = TSchema l <$> mapM instwild q <*> instwild t
-    wildloc (TSchema _ q t)     = concatMap wildloc q ++ wildloc t
+    instwild (TSchema l q t d)  = TSchema l <$> mapM instwild q <*> instwild t <*> return d
+    wildloc (TSchema _ q t d)   = concatMap wildloc q ++ wildloc t
 
 instance Wild TBind where
     instwild (TBind tv us)      = TBind tv <$> mapM instwild us
@@ -395,13 +395,13 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
                                             ni:nis -> do ni' <- unifN ni nis
                                                          ((v,ni'):) <$> unifyTEnv env tenvs vs
   where 
-    unifN (NVar (TSchema _ [] t) d) nis = do mapM (unifV t d) nis
-                                             return (NVar (tSchema t) d)
+    unifN (NVar (TSchema _ [] t d)) nis = do mapM (unifV t d) nis
+                                             return (NVar (TSchema NoLoc [] t d))
     unifN (NSVar t) nis                 = do mapM (unifSV t) nis
                                              return (NSVar t)
     unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
 
-    unifV t d (NVar (TSchema _ [] t') d')
+    unifV t d (NVar (TSchema _ [] t' d'))
       | d == d'                         = constrain [Equ t t']
       | otherwise                       = err1 v "Inconsistent decorations for"
     unifV t d ni                        = err1 v "Inconsistent bindings for"
@@ -466,7 +466,7 @@ importAll m te              = mapMaybe imp te
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _)     = Nothing                               -- <<<<<<<<<<<<<<<<<<<<<<<< to be returned to!
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
-    imp (n, NVar t dec)     = Just (n, NVar t dec)
+    imp (n, NVar t)         = Just (n, NVar t)
     imp _                   = Nothing                               -- cannot happen
 
 

@@ -90,7 +90,7 @@ splitGen tvs te cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
     ambig te vs                         = or [ not $ null (vs \\ tyfree t) | (n, t) <- nVars te ]
     q_new                               = mkBinds gen_cs
-    generalize (TSchema l q t)          = closeFX $ TSchema l (subst s (q_new++q)) (subst s t)
+    generalize (TSchema l q t dec)      = closeFX $ TSchema l (subst s (q_new++q)) (subst s t) dec
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
 
 mkBinds cs                              = collect [] $ catMaybes $ map bound cs
@@ -111,7 +111,7 @@ genTEnv env te                          = do cs <- collectConstraints
                                              tvs <- fmap tyfree $ mapM msubst $ map tVar $ tyfree env
                                              (cs2, te2) <- splitGen tvs te1 cs1
                                              constrain cs2
-                                             dump [ INS (loc v) t | (v, TSchema _ [] t) <- nVars te1 ]
+                                             dump [ INS (loc v) t | (v, TSchema _ [] t _) <- nVars te1 ]
                                              dump [ GEN (loc v) t | (v, t) <- nVars te2 ]
                                              return te2
 
@@ -337,7 +337,7 @@ instance InfEnv Decl where
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             (_,q,us,te)                 = findType (NoQual n) env
     infEnv env (Extension l n q us b)   = return []
-    infEnv env (Signature l ns sc dec)  = return []       -- undefined.....
+    infEnv env (Signature l ns sc)      = return []       -- undefined.....
 
 matchTEnv te1 te2                       = [ Match sc (find v) | (v,sc) <- nVars te1 ]
   where find v                          = fromJust $ lookup v schemas
@@ -376,7 +376,7 @@ instance DeclEnv Decl where
                                              return $ nProto n q (mro env True q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     declEnv env (Extension _ n q us b)  = return [] -- undefined
-    declEnv env (Signature _ ns sc d)   = return [] -- undefined
+    declEnv env (Signature _ ns sc)     = return [] -- undefined
 
 
 
@@ -423,8 +423,8 @@ entail env q c                          = True                                  
 
 
 extractSig n q p k t m
-  | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig
-  | all (`elem` tybound q) tvs          = TSchema NoLoc q sig
+  | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig (extractDec m)
+  | all (`elem` tybound q) tvs          = TSchema NoLoc q sig (extractDec m)
   | otherwise                           = err2 (tvs \\ tybound q) "Unbound type variable(s)in signature:"
   where
     tvs                                 = tyfree sig
@@ -446,6 +446,9 @@ extractSig n q p k t m
     extractFX (Sync _)                  = fxSync fxNil
     extractFX Async                     = fxAsync fxNil
     extractFX _                         = tWild
+    extractDec StaticMeth               = StaticMethod
+    extractDec ClassMeth                = ClassMethod
+    extractDec _                        = NoDec
 
 
 inferPure env e                         = do pushFX tNil
@@ -489,7 +492,7 @@ instance InfEnv Except where
                                              return $ nVar n t
 classSchema env qn
   | proto                               = err1 qn "Class name expected, found"
-  | otherwise                           = TSchema NoLoc q $ tCon $ TC qn $ map tVar $ tybound q
+  | otherwise                           = TSchema NoLoc q (tCon $ TC qn $ map tVar $ tybound q) NoDec
   where (proto,q,_,_)                   = findType qn env
 
 instance Infer Expr where

@@ -190,8 +190,8 @@ instance AddLoc S.Comp where
 
 instance AddLoc S.TSchema where
   addLoc p = do
-          (l, S.TSchema _ q t) <- withLoc p
-          return $ S.TSchema l q t
+          (l, S.TSchema _ q t d) <- withLoc p
+          return $ S.TSchema l q t d
 
 instance AddLoc S.Type where
   addLoc p = do
@@ -565,19 +565,21 @@ decorator1 decoration = do
          else return d
 
 signature :: Parser S.Decl
-signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns t dec)
+signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
    where sig_decoration = rword "@classattr" *> assertClassProtoExt *> newline1 *> return S.ClassAttr  
                       <|> rword "@instattr" *> assertClassProtoExt *> newline1 *> return S.InstAttr
                       <|> rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMethod
                       <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMethod
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
-                      <|> return S.NoDecoration
-                      
+                      <|> return S.NoDec
+
          tsig = do v <- name
                    vs <- commaList name
                    colon
                    t <- tschema
                    return (v:vs,t)
+
+         decorate dec (S.TSchema l q t S.NoDec) = S.TSchema l q t dec
  
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
@@ -1063,9 +1065,9 @@ tschema = addLoc $
                                    return (n:ns))
                 fatarrow
                 t <- ttype
-                return (S.TSchema NoLoc bs t))
+                return (S.TSchema NoLoc bs t S.NoDec))
             <|>
-            (S.TSchema NoLoc [] <$> ttype)
+            (S.TSchema NoLoc [] <$> ttype <*> return S.NoDec)
 
 ttype :: Parser S.Type
 ttype    =  addLoc (
