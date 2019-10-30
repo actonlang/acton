@@ -66,6 +66,7 @@ def elem [A(Eq), B(Boolean)] (x:A, xs:[A]) -> B:        # function with explicit
 
 def f24():
     pass
+    
 def f25(a):
     pass
     
@@ -95,6 +96,33 @@ def f33(a,*b,c,**d):
     
 def f34(a,*b,c,**d,):
     pass
+
+def f35(*a):
+    pass
+
+def f35(*a,):
+    pass
+
+def f36(*a,**b):
+    pass
+
+def f37(*a,**b,):
+    pass
+
+def f38(*a,b,**c):
+    pass
+
+def f39(*a,b,**c,):
+    pass
+
+def f40(**c):
+    pass
+
+def f40(**c,):
+    pass
+
+
+
 
 protocol Apa():
     def __init__(self):
