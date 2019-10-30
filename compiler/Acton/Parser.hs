@@ -985,9 +985,7 @@ kwdpar :: Bool -> Parser S.KwdPar
 kwdpar ann = kwdItems (\(n,t,e) par -> S.KwdPar n t e par) (uncurry S.KwdSTAR) S.KwdNIL (parm ann) (pstar ann)
 
 funpars :: Bool -> Parser (S.PosPar, S.KwdPar)
--- funpars ann =  funItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann) (kwdpar ann) S.KwdNIL
-
-funpars ann = try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> pstar ann))
+funpars ann =   try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> pstar ann <* optional comma))
             <|> do ps <- pospar ann
                    mbmbks <- optional (comma *> optional (kwdpar ann))
                    return (maybe (ps,S.KwdNIL) (maybe (ps,S.KwdNIL) (\ks -> (ps,ks))) mbmbks)
