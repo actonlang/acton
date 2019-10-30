@@ -50,8 +50,11 @@ data NameInfo               = NVar    TSchema Decoration
 nVar                        :: Name -> Type -> TEnv
 nVar n t                    = [(n, NVar (tSchema t) NoDecoration)]
 
-nVar'                       :: Name -> TSchema -> TEnv
-nVar' n sc                  = [(n, NVar sc NoDecoration)]
+nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
+nClass n q us te            = [(n, NClass q us te)]
+
+nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
+nProto n q us te            = [(n, NProto q us te)]
 
 nVars                       :: TEnv -> [(Name, TSchema)]
 nVars te                    = [ (n,sc) | (n, NVar sc _) <- te ]
@@ -283,6 +286,10 @@ findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
 
+findSelf env                = case selfbound env of
+                                Just u -> u
+                                Nothing -> error "(internal) Self not in scope"
+
 assignableType              :: Name -> Env -> Type
 assignableType n env        = case findName n env of
                                 NVar (TSchema _ [] t) d | d `notElem` mdec -> t
@@ -315,21 +322,13 @@ newTEnv vs                  = do ts <- newTVars (length vs)
 
 -- Instantiation -------------------------------------------------------------------------
 
-monotypeOfName n env        = monotypeOfQName (NoQual n) env
+schemaOfName n env          = schemaOfQName (NoQual n) env
 
-monotypeOfQName qn env      = case findQName qn env of
-                                NVar (TSchema _ [] t) _ -> t
-                                NSVar t -> t
-                                _ -> error ("(internal) Not a monotyped name:" ++ prstr qn)
-
-typeOfName n env            = typeOfQName (NoQual n) env
-
-typeOfQName qn env          = instN (findQName qn env)
-  where
-    instN (NVar sc _)       = instantiate env (openFX sc)
-    instN (NSVar t)         = return t
-    instN (NClass q _ _)    = instantiate env $ TSchema NoLoc q $ tAt $ TC qn $ map tVar $ tybound q
-    instN _                 = err1 qn "Unexpected name..."
+schemaOfQName qn env        = case findQName qn env of
+                                NVar sc _    -> sc
+                                NSVar t      -> tSchema t
+                                NClass q _ _ -> TSchema NoLoc q $ tAt $ TC qn $ map tVar $ tybound q
+                                _            -> err1 qn "Unexpected name..."
 
 instantiate env (TSchema _ [] t)    = instwild t
 instantiate env (TSchema _ q t)     = do tvs <- newTVars (length q)
