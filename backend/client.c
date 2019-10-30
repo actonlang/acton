@@ -92,6 +92,49 @@ int delete_test(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, NULL, db); //  &txnid
 }
 
+int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+{
+	char print_buff[1024];
+	uuid_t txnid;
+	uuid_generate(txnid);
+
+	for(long aid=0;aid<no_actors;aid++)
+	{
+		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, &txnid, db);
+
+		if((long) row->key != aid)
+		{
+			printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+{
+	char print_buff[1024];
+	uuid_t txnid;
+	uuid_generate(txnid);
+
+	for(long aid=0;aid<no_actors;aid++)
+	{
+		for(long cid=0;cid<no_collections;cid++)
+		{
+			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, &txnid, db);
+
+			if((long) row->key != cid)
+			{
+				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+				return -1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 {
 	char print_buff[1024];
