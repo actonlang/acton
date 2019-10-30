@@ -186,7 +186,7 @@ instance InfEnv Stmt where
                                              t2 <- infer env e
                                              _ <- infEnv (define te env) b
                                              _ <- infEnv env els
-                                             constrain [Impl t2 (cIterable t1)]
+                                             constrain [Impl t2 (cCollection t1)]
                                              return []
     infEnv env (Try _ b hs els fin)     = do te <- infLiveEnv env (b ++ els)
                                              tes <- mapM (infLiveEnv env) hs
@@ -337,15 +337,18 @@ instance DeclEnv a => DeclEnv [a] where
 
 instance DeclEnv Stmt where
     declEnv env (Decl _ ds)             = declEnv env ds
-    declEnv env (If _ bs els)           = do tes <- mapM (infLiveEnv env) bs
-                                             te <- infLiveEnv env els
-                                             commonTEnv env $ catMaybes (te:tes)
+    declEnv env (If _ bs els)           = do tes <- mapM (declEnv env) bs
+                                             te <- declEnv env els
+                                             commonTEnv env (te:tes)
     declEnv env s                       = infEnv env s
 
+instance DeclEnv Branch where
+    declEnv env (Branch e b)            = declEnv env b
+
 instance DeclEnv Decl where
-    declEnv env (Actor _ n q p k t _)   = do t1 <- instantiate env $ extractSig q p k t NoMod
+    declEnv env (Actor _ n q p k t _)   = do t1 <- instantiate env $ extractSig n q p k t NoMod
                                              return $ nVar n t1
-    declEnv env (Def _ n q p k t _ m)   = do t1 <- instantiate env $ extractSig q p k t m
+    declEnv env (Def _ n q p k t _ m)   = do t1 <- instantiate env $ extractSig n q p k t m
                                              return $ nVar n t1
     declEnv env (Class _ n q us b)      = do let us' = mro env False q us
                                              te1 <- declEnv env1 b
@@ -355,8 +358,9 @@ instance DeclEnv Decl where
                                              te1 <- declEnv env1 b
                                              return undefined
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-    declEnv env (Extension _ n q us b)  = undefined
-    declEnv env (Signature _ ns sc d)   = undefined
+    declEnv env (Extension _ n q us b)  = return [] -- undefined
+    declEnv env (Signature _ ns sc d)   = return [] -- undefined
+
 
 
 mro env proto q us
@@ -401,47 +405,30 @@ entail                                  :: Env -> [TBind] -> Constraint -> Bool
 entail env q c                          = True                                      -- TODO: implement this
 
 
----------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------
---  type Graph = Map ClassName [BaseClass]
---
---  mro                             :: Graph -> Graph -> IO ()
---  mro lins []                     = return ()
---  mro lins ((c,bases):graph)      = case merge [] (map lin bases ++ [bases]) of
---                                      Right cs -> do
---                                          putStrLn (showlin c cs)
---                                          mro ((c,cs):lins) graph
---                                      Left err -> putStrLn err
---    where lin a                   = case lookup a lins of
---                                      Just la -> a:la
---                                      Nothing -> error ("Forward ref from " ++ c ++ " to " ++ a)
---
---          merge out lists
---            | null heads          = Right $ reverse out
---            | h:_ <- good         = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
---            | otherwise           = Left (">>>>>> " ++ showlin c (reverse out) ++ 
---                                        " ++ merge(" ++ commasep (map showlist lists) ++ ") <<<<<<<")
---            where (heads,tails)   = unzip [ (hd,tl) | hd:tl <- lists ]
---                  good            = [ h | h <- heads, all (h `notElem`) tails ]
----------------------------------------------------------------------------------------
----------------------------------------------------------------------------------------
-
-extractSig q p k t m
+extractSig n q p k t m
   | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig
   | all (`elem` tybound q) tvs          = TSchema NoLoc q sig
   | otherwise                           = err2 (tvs \\ tybound q) "Unbound type variable(s)in signature:"
   where
-    sig                                 = tFun (extractModif m) (extractP p) (extractK k) (maybe tWild id t)
     tvs                                 = tyfree sig
+    sig                                 = tFun (extractFX m) prow krow (maybe tWild id t)
+    (prow,krow)                         = extractPars m p k
+    extractPars m (PosPar n t _ p) k
+      | m `elem` [InstMeth,ClassMeth]   = (extractP p, extractK k)
+    extractPars m PosNIL (KwdPar n t _ k)
+      | m `elem` [InstMeth,ClassMeth]   = (extractP p, extractK k)
+    extractPars InstMeth p k            = err1 n "Missing 'self' parameter in definition of"
+    extractPars ClassMeth p k           = err1 n "Missing 'class' parameter in definition of"
+    extractPars _ p k                   = (extractP p, extractK k)
     extractP (PosPar n t _ p)           = posRow (maybe (tSchema tWild) id t) (extractP p)
     extractP (PosSTAR n t)              = posVar Nothing                            -- TODO: figure out how to handle *type* t
     extractP PosNIL                     = posNil
     extractK (KwdPar n t _ k)           = kwdRow n (maybe (tSchema tWild) id t) (extractK k)
     extractK (KwdSTAR n t)              = kwdVar Nothing                            -- TODO: figure out how to handle *type* t
-    extract KwdNIL                      = kwdNil
-    extractModif (Sync _)               = fxSync fxNil
-    extractModif Async                  = fxAsync fxNil
-    extractModif NoMod                  = tWild
+    extractK KwdNIL                     = kwdNil
+    extractFX (Sync _)                  = fxSync fxNil
+    extractFX Async                     = fxAsync fxNil
+    extractFX _                         = tWild
 
 extractDec StaticMeth               = StaticMethod
 extractDec ClassMeth                = ClassMethod
@@ -534,7 +521,7 @@ instance Infer Expr where
     infer env (BinOp l e1 (Op _ op) e2)
       | op `elem` [Or,And]              = do t1 <- infer env e1
                                              t2 <- infer env e2
-                                             constrain [Impl t1 cTruth, Impl t2 cTruth]
+                                             constrain [Impl t1 cBoolean, Impl t2 cBoolean]
                                              return tBool
       | otherwise                       = do t1 <- infer env e1
                                              t2 <- infer env e2
@@ -556,7 +543,7 @@ instance Infer Expr where
             protocol MMult              = cMatrix
     infer env (UnOp l (Op _ op) e)
       | op == Not                       = do t <- infer env e
-                                             constrain [Impl t cTruth]
+                                             constrain [Impl t cBoolean]
                                              return tBool
       | otherwise                       = do t <- infer env e
                                              constrain [Impl t (protocol op)]
@@ -570,7 +557,7 @@ instance Infer Expr where
       where walk t0 []                     = return ()
             walk t0 (OpArg (Op l o) e:ops)
               | o `elem` [In,NotIn]     = do t1 <- infer env e
-                                             constrain [Impl t1 (cContainer t0)]
+                                             constrain [Impl t1 (cCollection t0), Impl t0 cEq]
                                              walk t1 ops
                                              return ()
               | otherwise               = do t1 <- infer env e
@@ -661,7 +648,7 @@ infAssocs env (StarStar e : as) tk tv   = do t <- infer env e
                                              infAssocs env as tk tv
 
 inferBool env e                         = do t <- infer env e
-                                             constrain [Impl t cTruth]
+                                             constrain [Impl t cBoolean]
                                              return ()
 
 inferSlice env (Sliz l e1 e2 e3)        = do ts <- mapM (infer env) es
@@ -719,7 +706,7 @@ instance InfEnv Comp where
     infEnv env (CompFor l p e c)        = do (te1, t1) <- infEnvT env p
                                              t2 <- infer env e
                                              te2 <- infEnv (define te1 env) c
-                                             constrain [Impl t2 (cIterable t1)]
+                                             constrain [Impl t2 (cCollection t1)]
                                              return (te2++te1)
 
 instance Infer Exception where
