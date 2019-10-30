@@ -104,7 +104,7 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastra
 
 		if((long) row->key != aid)
 		{
-			printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+			printf("Read back mismatched pk %ld ( != %ld) in cell!\n", (long) row->key, aid);
 			return -1;
 		}
 	}

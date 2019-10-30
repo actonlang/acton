@@ -384,21 +384,21 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 
 	skiplist_t * roots = create_skiplist_long();
 
-	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0]->keys, response->cells[0]->no_keys,
-			(WORD *) response->cells[0]->columns, response->cells[0]->no_columns, &(db->fastrandstate));
+	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0].keys, response->cells[0].no_keys,
+			(WORD *) response->cells[0].columns, response->cells[0].no_columns, &(db->fastrandstate));
 
 	for(int i=0;i<response->no_cells;i++) // We have a deeper result than 1
 	{
 		db_row_t* root_cell = NULL;
-		snode_t * root_cell_node = skiplist_search(roots, response->cells[i]->keys[0]);
+		snode_t * root_cell_node = skiplist_search(roots, (WORD) response->cells[i].keys[0]);
 
 		if(root_cell_node == NULL)
 		{
-			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i]->keys[0]);
+			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i].keys[0]);
 
-			root_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys, response->cells[i]->no_keys,
-					(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
-			skiplist_insert(roots, response->cells[i]->keys[0], (WORD) root_cell, &(db->fastrandstate));
+			root_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
+					(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
+			skiplist_insert(roots, (WORD) response->cells[i].keys[0], (WORD) root_cell, &(db->fastrandstate));
 			continue;
 		}
 		else
@@ -407,24 +407,24 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 		}
 
 		db_row_t * cell = root_cell, * new_cell = NULL;
-		for(int j=1;j<response->cells[i]->no_keys;j++, cell = new_cell)
+		for(int j=1;j<response->cells[i].no_keys;j++, cell = new_cell)
 		{
-			snode_t * new_cell_node = skiplist_search(cell->cells, response->cells[i]->keys[j]);
+			snode_t * new_cell_node = skiplist_search(cell->cells, (WORD) response->cells[i].keys[j]);
 
 			if(new_cell_node == NULL)
 			{
-				new_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys + j, response->cells[i]->no_keys - j,
-						(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
+				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
+						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
 
-				printf("Inserting cell %d (%d) into tree at level %d\n", i, response->cells[i]->keys[j], j);
+				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
-				skiplist_insert(cell->cells, response->cells[i]->keys[j], (WORD) new_cell, &(db->fastrandstate));
+				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 			}
 			else
 			{
 				new_cell = (db_row_t *) (new_cell_node->value);
 
-				assert(j < response->cells[i]->no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
+				assert(j < response->cells[i].no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
 			}
 		}
 	}
@@ -446,31 +446,31 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 	if(response->no_cells == 0) // No results
 		return NULL;
 
-	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0]->keys, response->cells[0]->no_keys,
-			(WORD *) response->cells[0]->columns, response->cells[0]->no_columns, &(db->fastrandstate));
+	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0].keys, response->cells[0].no_keys,
+			(WORD *) response->cells[0].columns, response->cells[0].no_columns, &(db->fastrandstate));
 
 	for(int i=1;i<response->no_cells;i++) // We have a deeper result than 1
 	{
 		db_row_t * cell = result, * new_cell = NULL;
 
-		for(int j=0;j<response->cells[i]->no_keys;j++, cell = new_cell)
+		for(int j=0;j<response->cells[i].no_keys;j++, cell = new_cell)
 		{
-			snode_t * new_cell_node = skiplist_search(cell->cells, response->cells[i]->keys[j]);
+			snode_t * new_cell_node = skiplist_search(cell->cells, (WORD) response->cells[i].keys[j]);
 
 			if(new_cell_node == NULL)
 			{
-				new_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys + j, response->cells[i]->no_keys - j,
-						(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
+				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
+						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
 
-				printf("Inserting cell %d into tree at level %d\n", i, j);
+				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
-				skiplist_insert(cell->cells, response->cells[i]->keys[j], (WORD) new_cell, &(db->fastrandstate));
+				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 			}
 			else
 			{
 				new_cell = (db_row_t *) (new_cell_node->value);
 
-				assert(j < response->cells[i]->no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
+				assert(j < response->cells[i].no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
 			}
 		}
 	}
