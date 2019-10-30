@@ -155,7 +155,7 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
+data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
 data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDec deriving (Eq,Show,Read,Generic)
     
 
