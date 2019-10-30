@@ -61,12 +61,11 @@ z2 : (x : (y : float,z : bool),**A,)
 z3 : [A]                                                # sequence that also could be the start of a qualified type
 
 
-# @classattr                                            # uncomment and get *two* error messages
-x : int
-
 def elem [A(Eq), B(Boolean)] (x:A, xs:[A]) -> B:        # function with explicit quant/qualifiers
     pass
 
+def fails_incorrectly(a, *b, c):
+    pass
 
 protocol Apa():
     def __init__(self):
