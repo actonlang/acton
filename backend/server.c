@@ -198,18 +198,11 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys;
 	int no_keys = schema_keys - q->cell_address->no_keys + 1;
 	int no_columns = schema->no_cols - schema_keys;
+	range_read_response_message * m = NULL;
 
 	if(result == NULL)
 	{
-		read_response_message * m = init_write_query(NULL, RPC_TYPE_WRITE, q->txnid, q->nonce);
-
-#if (VERBOSE_RPC > 0)
-		char print_buff[1024];
-		to_string_write_query(m, (char *) print_buff);
-		printf("Sending (NULL) read response message (write query): %s\n", print_buff);
-#endif
-
-		return serialize_write_query(m, snd_buf, snd_msg_len);
+		m = init_range_read_response_message(NULL, 0, q->txnid, q->nonce);
 	}
 	else if(result->cells == NULL || result->cells->no_items == 0)
 	// Return a single cell read result
@@ -222,15 +215,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 							(long *) result->column_array, no_columns,
 							result->version);
 
-		read_response_message * m = init_write_query(c, RPC_TYPE_WRITE, q->txnid, q->nonce);
-
-#if (VERBOSE_RPC > 0)
-		char print_buff[1024];
-		to_string_write_query(m, (char *) print_buff);
-		printf("Sending read response message (write query): %s\n", print_buff);
-#endif
-
-		return serialize_write_query(m, snd_buf, snd_msg_len);
+		m = init_range_read_response_message(c, 1, q->txnid, q->nonce);
 	}
 	else
 	// Return a multi-cell read result; traverse db_row downwards and get all child cells recursively:
@@ -247,14 +232,6 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 
 		range_read_response_message * m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
 
-#if (VERBOSE_RPC > 0)
-		char print_buff[1024];
-		to_string_range_read_response_message(m, (char *) print_buff);
-		printf("Sending range read response message: %s\n", print_buff);
-#endif
-
-		return serialize_range_read_response_message(m, snd_buf, snd_msg_len);
-
 /*
 		long keys = (long *) malloc(no_keys);
 		long columns = (long *) malloc(no_columns);
@@ -266,6 +243,14 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		cell * c = init_cell(q->cell_address->table_key, keys, no_keys, columns, no_columns, result->version);
 */
 	}
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_range_read_response_message(m, (char *) print_buff);
+	printf("Sending range read response message: %s\n", print_buff);
+#endif
+
+	return serialize_range_read_response_message(m, snd_buf, snd_msg_len);
 }
 
 db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, unsigned int * fastrandstate)

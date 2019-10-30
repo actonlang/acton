@@ -370,6 +370,114 @@ int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, u
 
 // Read ops:
 
+int get_db_rows_forest_from_read_response(range_read_response_message * response, snode_t** start_row, snode_t** end_row, remote_db_t * db)
+// If a DB query returned multiple cells, accumulate them all in a forest of trees rooted at
+// elements of the returned list start_row->end_row. Return the number of roots found. For forests with a single root
+// (which e.g. results from non-range queries will be), a list with a single element (located at start_row==end_row) will be returned:
+{
+	if(response->no_cells == 0) // No results
+	{
+		*start_row = NULL;
+		*end_row = NULL;
+		return 0;
+	}
+
+	skiplist_t * roots = create_skiplist_long();
+
+	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0]->keys, response->cells[0]->no_keys,
+			(WORD *) response->cells[0]->columns, response->cells[0]->no_columns, &(db->fastrandstate));
+
+	for(int i=0;i<response->no_cells;i++) // We have a deeper result than 1
+	{
+		db_row_t* root_cell = NULL;
+		snode_t * root_cell_node = skiplist_search(roots, response->cells[i]->keys[0]);
+
+		if(root_cell_node == NULL)
+		{
+			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i]->keys[0]);
+
+			root_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys, response->cells[i]->no_keys,
+					(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
+			skiplist_insert(roots, response->cells[i]->keys[0], (WORD) root_cell, &(db->fastrandstate));
+			continue;
+		}
+		else
+		{
+			root_cell = (db_row_t *) (root_cell_node->value);
+		}
+
+		db_row_t * cell = root_cell, * new_cell = NULL;
+		for(int j=1;j<response->cells[i]->no_keys;j++, cell = new_cell)
+		{
+			snode_t * new_cell_node = skiplist_search(cell->cells, response->cells[i]->keys[j]);
+
+			if(new_cell_node == NULL)
+			{
+				new_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys + j, response->cells[i]->no_keys - j,
+						(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
+
+				printf("Inserting cell %d (%d) into tree at level %d\n", i, response->cells[i]->keys[j], j);
+
+				skiplist_insert(cell->cells, response->cells[i]->keys[j], (WORD) new_cell, &(db->fastrandstate));
+			}
+			else
+			{
+				new_cell = (db_row_t *) (new_cell_node->value);
+
+				assert(j < response->cells[i]->no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
+			}
+		}
+	}
+
+	int no_roots = 1;
+	*start_row = HEAD(roots);
+	for(*end_row=*start_row;NEXT(*end_row) != NULL;*end_row=NEXT(*end_row), no_roots++);
+
+	assert(roots->no_items == no_roots);
+	assert(roots->no_items == *end_row - *start_row + 1);
+
+	return roots->no_items;
+}
+
+db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * response, remote_db_t * db)
+// If a DB query returned multiple cells, accumulate them all in a single tree rooted at "result"
+// (assumes this is a non-range query, i.e. all cells will have a common parent on the key path):
+{
+	if(response->no_cells == 0) // No results
+		return NULL;
+
+	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0]->keys, response->cells[0]->no_keys,
+			(WORD *) response->cells[0]->columns, response->cells[0]->no_columns, &(db->fastrandstate));
+
+	for(int i=1;i<response->no_cells;i++) // We have a deeper result than 1
+	{
+		db_row_t * cell = result, * new_cell = NULL;
+
+		for(int j=0;j<response->cells[i]->no_keys;j++, cell = new_cell)
+		{
+			snode_t * new_cell_node = skiplist_search(cell->cells, response->cells[i]->keys[j]);
+
+			if(new_cell_node == NULL)
+			{
+				new_cell = create_db_row_schemaless2((WORD *) response->cells[i]->keys + j, response->cells[i]->no_keys - j,
+						(WORD *) response->cells[i]->columns, response->cells[i]->no_columns, &(db->fastrandstate));
+
+				printf("Inserting cell %d into tree at level %d\n", i, j);
+
+				skiplist_insert(cell->cells, response->cells[i]->keys[j], (WORD) new_cell, &(db->fastrandstate));
+			}
+			else
+			{
+				new_cell = (db_row_t *) (new_cell_node->value);
+
+				assert(j < response->cells[i]->no_keys - 1); // there s'dn't be 2 cells returned with the exact same keypath
+			}
+		}
+	}
+
+	return result;
+}
+
 db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
 		uuid_t * txnid, remote_db_t * db)
 {
@@ -397,21 +505,19 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	int n = -1;
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
-    read_response_message * response;
-    success = deserialize_write_query(rs->in_buf, n, &response);
+    range_read_response_message * response;
+    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
-	to_string_write_query(response, (char *) print_buff);
+	to_string_range_read_response_message(response, (char *) print_buff);
 	printf("Got back response from server %s: %s\n", rs->id, print_buff);
 #endif
 
-    if(success != 0)
-    		return NULL;
-
-    return create_db_row_schemaless2((WORD *) response->cell->keys, response->cell->no_keys,
-        									(WORD *) response->cell->columns, response->cell->no_columns, &(db->fastrandstate));
+	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
+	return get_db_rows_tree_from_read_response(response, db);
 }
+
 
 db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
 														WORD table_key, db_schema_t * schema, uuid_t * txnid,
@@ -441,17 +547,17 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 	int n = -1;
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
-    read_response_message * response;
-    success = deserialize_write_query(rs->in_buf, n, &response);
+    range_read_response_message * response;
+    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
     assert(success == 0);
 
 #if CLIENT_VERBOSITY > 0
-	to_string_write_query(response, (char *) print_buff);
+	to_string_range_read_response_message(response, (char *) print_buff);
 	printf("Got back response from server %s: %s\n", rs->id, print_buff);
 #endif
 
-    return create_db_row_schemaless2((WORD *) response->cell->keys, response->cell->no_keys,
-        									(WORD *) response->cell->columns, response->cell->no_columns, &(db->fastrandstate));
+	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
+	return get_db_rows_tree_from_read_response(response, db);
 }
 
 db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
@@ -508,21 +614,8 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
     if(success < 0)
     		return success;
 
-    // Parse range_read_response_message to row list:
-
-    skiplist_t * rows = create_skiplist_long();
-    for(int i=0;i<response->no_cells;i++)
-    {
-    		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
-    													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
-													&(db->fastrandstate)); // Note that cell versions are only kept on the server, we don't return them to the client
-    		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, &(db->fastrandstate));
-    }
-
-    *start_row = HEAD(rows);
-    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
-
-	return success;
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 }
 
 int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys,
@@ -568,21 +661,8 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
     if(success < 0)
     		return success;
 
-    // Parse range_read_response_message to row list:
-
-    skiplist_t * rows = create_skiplist_long();
-    for(int i=0;i<response->no_cells;i++)
-    {
-    		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
-    													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
-													&(db->fastrandstate)); // Note that cell versions are only kept on the server, we don't return them to the client
-    		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, &(db->fastrandstate));
-    }
-
-    *start_row = HEAD(rows);
-    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
-
-	return success;
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 }
 
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
