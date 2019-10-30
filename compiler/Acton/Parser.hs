@@ -386,8 +386,8 @@ funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
            <|>
               try (do i <- positem; optional comma; return (posCons i posNil, kwdNil))
            <|>
-              try (do optional comma; return (posNil, kwdNil))
-
+               (do optional comma; return (posNil, kwdNil))
+ 
 tuple_or_single posItems headItems len tup =
       do pa <- posItems
          mbc <- optional comma
@@ -985,12 +985,18 @@ kwdpar :: Bool -> Parser S.KwdPar
 kwdpar ann = kwdItems (\(n,t,e) par -> S.KwdPar n t e par) (uncurry S.KwdSTAR) S.KwdNIL (parm ann) (pstar ann)
 
 funpars :: Bool -> Parser (S.PosPar, S.KwdPar)
-funpars ann =  funItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann) (kwdpar ann) S.KwdNIL
+-- funpars ann =  funItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann) (kwdpar ann) S.KwdNIL
 
+funpars ann = try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> pstar ann))
+            <|> do ps <- pospar ann
+                   mbmbks <- optional (comma *> optional (kwdpar ann))
+                   return (maybe (ps,S.KwdNIL) (maybe (ps,S.KwdNIL) (\ks -> (ps,ks))) mbmbks)
+            <|> return (S.PosNIL,S.KwdNIL)
+ 
 --- Args -----------------------------------------------------------------------
 
 -- Position/Keyword lists of expr's.
--- posarg is used in exprlist to bild the general form of comma-separated expressions 
+-- posarg is used in exprlist to build the general form of comma-separated expressions 
 
 kwdbind :: Parser (S.Name, S.Expr)
 kwdbind = do v <- escname

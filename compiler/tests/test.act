@@ -64,8 +64,37 @@ z3 : [A]                                                # sequence that also cou
 def elem [A(Eq), B(Boolean)] (x:A, xs:[A]) -> B:        # function with explicit quant/qualifiers
     pass
 
-#def fails_incorrectly(a, *b, c):
-#    pass
+def f24():
+    pass
+def f25(a):
+    pass
+    
+def f26(a,):
+    pass
+    
+def f27(a,*b):
+    pass
+    
+def f28(a,*b,):
+    pass
+    
+def f29(a,**b):
+    pass
+    
+def f30(a,**b,):
+    pass
+    
+def f31(a,*b,**c):
+    pass
+    
+def f32(a,*b,**c,):
+    pass
+    
+def f33(a,*b,c,**d):
+    pass
+    
+def f34(a,*b,c,**d,):
+    pass
 
 protocol Apa():
     def __init__(self):
