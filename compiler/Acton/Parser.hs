@@ -378,9 +378,9 @@ kwdItems fCons fStar fNil item staritem =
 -- Unfortunately, the parser below does not make use of posItems
 funItems :: (a1 -> t1 -> t1) -> (a -> t1) -> t1 -> Parser a1 -> Parser a -> Parser t -> t -> Parser (t1,t)
 funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
-              try (do i <- star *> posstaritem; comma; k <- kwdItems; return (posStar i, k))
+              try (do i <- singleStar *> posstaritem; comma; k <- kwdItems; return (posStar i, k))
            <|>
-              try (do i <- star *> posstaritem; optional comma; return (posStar i, kwdNil))
+              try (do i <- singleStar *> posstaritem; optional comma; return (posStar i, kwdNil))
            <|>
               try (do k <- kwdItems; return (posNil, k))
            <|>
