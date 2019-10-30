@@ -60,7 +60,7 @@ instance Relabel Decl where
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
+    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm
@@ -200,7 +200,7 @@ instance Relabel OType where
   relabel = undefined
 
 instance Relabel TSchema where
-    relabel (TSchema _ q t) = TSchema <$> newLoc <*> relabel q <*> relabel t
+    relabel (TSchema _ q t d) = TSchema <$> newLoc <*> relabel q <*> relabel t <*> return d
 
 instance Relabel TVar where
     relabel (TV n) = TV <$> relabel n
