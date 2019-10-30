@@ -40,6 +40,8 @@ f9 : (*) -> int
 f10 : (*,) -> int
 f11 : (*A) -> int
 f12 : (*A,) -> int
+f12 : (**A) -> bool
+f12 : (**A,) -> bool
 
 f13 : (x : float) -> int
 f14 : (x : float,) -> int
@@ -161,3 +163,4 @@ g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with 
 
 h : (f:[A]=>(A)->A, x:int, y:@dict[int,str]) -> str      # a rank-2 scheme with keyword arguments and an @ type
 
+f : (**A) -> bool
