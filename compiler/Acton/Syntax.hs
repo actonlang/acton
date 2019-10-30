@@ -45,7 +45,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
-                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema, dec::Decoration }
+                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::Name }
@@ -156,7 +156,7 @@ data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|Shif
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
 data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth deriving (Show,Eq)
-data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDecoration deriving (Eq,Show,Read,Generic)
+data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDec deriving (Eq,Show,Read,Generic)
     
 
 data OType      = OVar      OVar
@@ -223,7 +223,7 @@ isRow _         = False
 
 ---------------------------------------------------------------------------
 
-data TSchema    = TSchema SrcLoc [TBind] Type deriving (Show,Read,Generic)
+data TSchema    = TSchema SrcLoc [TBind] Type Decoration deriving (Show,Read,Generic)
 
 data TVar       = TV { tvname::Name } deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -254,7 +254,7 @@ type KwdRow     = Type
 type TRow       = Type
 
 
-tSchema t       = TSchema NoLoc [] t
+tSchema t       = TSchema NoLoc [] t NoDec
 
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
@@ -369,7 +369,7 @@ instance HasLoc Pattern where
     loc                 = ploc
 
 instance HasLoc TSchema where
-    loc (TSchema l _ _) = l
+    loc (TSchema l _ _ _) = l
 
 instance HasLoc TVar where
     loc (TV v)          = loc v
@@ -417,7 +417,7 @@ instance Eq Decl where
     Class _ n1 q1 a1 b1         ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1      ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1     ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Signature _ ns1 t1 d1       ==  Signature _ ns2 t2 d2       = ns1 == ns2 && t1 == t2 && d1 == d2
+    Signature _ ns1 t1          ==  Signature _ ns2 t2          = ns1 == ns2 && t1 == t2
     _                           == _                            = False
 
 instance Eq Expr where
@@ -502,7 +502,7 @@ instance Eq Pattern where
     _                   == _                    = False
 
 instance Eq TSchema where
-    TSchema _ q1 t1     == TSchema _ q2 t2      = q1 == q2 && t1 == t2
+    TSchema _ q1 t1 d1  == TSchema _ q2 t2 d2   = q1 == q2 && t1 == t2 && d1 == d2
 
 instance Eq Type where
     TVar _ v1           == TVar _ v2            = v1 == v2

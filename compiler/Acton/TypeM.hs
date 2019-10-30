@@ -22,20 +22,23 @@ data Constraint                         = Equ       Type Type
                                         | Sub       Type Type
                                         | Impl      Type TCon
                                         | Sel       Type Name Type
+                                        | Match     TSchema TSchema
                                         -- ...
                                         deriving (Eq,Show)
 
-instance HasLoc Constraint where
+instance HasLoc Constraint where                 -- TODO: refine
     loc (Equ t _)                       = loc t
     loc (Sub t _)                       = loc t
     loc (Impl t _)                      = loc t
-    loc (Sel t _ _)                     = loc t         -- TODO: refine
+    loc (Sel t _ _)                     = loc t
+    loc (Match sc _)                    = loc sc
 
 instance Pretty Constraint where
     pretty (Equ t1 t2)                  = pretty t1 <+> text "  =  " <+> pretty t2
     pretty (Sub t1 t2)                  = pretty t1 <+> text "  <  " <+> pretty t2
     pretty (Impl t u)                   = pretty t <+> text "  impl  " <+> pretty u
     pretty (Sel t1 n t2)                = pretty t1 <+> text "  ." <> pretty n <> text "  " <+> pretty t2
+    pretty (Match sc1 sc2)              = pretty sc1 <+> text "  <:  " <+> pretty sc2
     
 type Constraints                        = [Constraint]
 
@@ -142,16 +145,18 @@ instance Subst Constraint where
     msubst (Sub t1 t2)              = Sub <$> msubst t1 <*> msubst t1
     msubst (Impl t c)               = Impl <$> msubst t <*> msubst c
     msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Match t1 t2)            = Match <$> msubst t1 <*> msubst t1
     tyfree (Equ t1 t2)              = tyfree t1 ++ tyfree t2
     tyfree (Sub t1 t2)              = tyfree t1 ++ tyfree t2
     tyfree (Impl t c)               = tyfree t ++ tyfree c
     tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Match t1 t2)            = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
-    msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
+    msubst sc@(TSchema l q t dec)   = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
             vs0                     = tyfree sc
-            msubst' s               = TSchema l (subst s q') (subst s t')
+            msubst' s               = TSchema l (subst s q') (subst s t') dec
               where vs              = tybound q
                     newvars         = tyfree (rng s)
                     clashvars       = vs `intersect` newvars
@@ -161,8 +166,8 @@ instance Subst TSchema where
                     q'              = [ TBind (subst renaming_s v) (subst renaming_s cs) | TBind v cs <- q ]
                     t'              = subst renaming_s t
 
-    tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
-    tybound (TSchema _ q t)         = tybound q
+    tyfree (TSchema _ q t dec)      = (tyfree q ++ tyfree t) \\ tybound q
+    tybound (TSchema _ q t dec)     = tybound q
 
 testSchemaSubst = do
     putStrLn ("t:  " ++ render (pretty t))
@@ -172,9 +177,9 @@ testSchemaSubst = do
     putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
     putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
     putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
-  where t   = TSchema NoLoc [TBind (TV (name "A")) [TC (noQual "Eq") []]] 
+  where t   = TSchema NoLoc [TBind (TV (name "A")) [TC (noQual "Eq") []]]
                             (tCon (TC (noQual "apa") [tVar (TV (name "A")), 
-                                                      tVar (TV (name "B"))]))
+                                                      tVar (TV (name "B"))])) NoDec
         s1  = [(TV (name "B"), tSelf)]
         s2  = [(TV (name "A"), tSelf)]
         s3  = [(TV (name "B"), tVar (TV (name "A")))]
@@ -534,16 +539,16 @@ o_closeFX (OSchema vs cs (OFun fx r t))
         soletail _                  = []
 o_closeFX t                         = t
 
-openFX (TSchema l q (TFun l' fx p r t))
-  | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t)
+openFX (TSchema l q (TFun l' fx p r t) dec)
+  | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t) dec
   where open (TRow l n t fx)        = TRow l n t <$> open fx
         open (TNil l)               = Just (TVar l v)
         open (TVar _ _)             = Nothing
         v                           = head (tvarSupply \\ tybound q)
 openFX t                            = t
 
-closeFX (TSchema l q f@(TFun l' fx p r t))
-  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t)
+closeFX (TSchema l q f@(TFun l' fx p r t) dec)
+  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t) dec
   where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
 closeFX t                           = t
 

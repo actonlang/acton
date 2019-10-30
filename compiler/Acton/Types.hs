@@ -90,7 +90,7 @@ splitGen tvs te cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
     ambig te vs                         = or [ not $ null (vs \\ tyfree t) | (n, t) <- nVars te ]
     q_new                               = mkBinds gen_cs
-    generalize (TSchema l q t)          = closeFX $ TSchema l (subst s (q_new++q)) (subst s t)
+    generalize (TSchema l q t dec)      = closeFX $ TSchema l (subst s (q_new++q)) (subst s t) dec
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
 
 mkBinds cs                              = collect [] $ catMaybes $ map bound cs
@@ -111,7 +111,7 @@ genTEnv env te                          = do cs <- collectConstraints
                                              tvs <- fmap tyfree $ mapM msubst $ map tVar $ tyfree env
                                              (cs2, te2) <- splitGen tvs te1 cs1
                                              constrain cs2
-                                             dump [ INS (loc v) t | (v, TSchema _ [] t) <- nVars te1 ]
+                                             dump [ INS (loc v) t | (v, TSchema _ [] t _) <- nVars te1 ]
                                              dump [ GEN (loc v) t | (v, t) <- nVars te2 ]
                                              return te2
 
@@ -253,22 +253,22 @@ instance InfEnv [Decl] where
     infEnv env ds                       = concat <$> mapM (infEnv env) ds
 
 instance InfEnv Decl where
-    infEnv env (Actor l n q p k ann b)  -- TODO: schema [q] => (p,k) -> ann
-      | nodup (p,k) && noshadow svars p = do pushFX (fxAct tWild)
+    infEnv env (Actor l n q p k ann b)
+      | noshadow svars p                = do pushFX (fxAct tWild)
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
                                              te2 <- infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newTVar
                                              let tn = tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)    -- TODO: better actor interface type
-                                             constrain [Equ tn (monotypeOfName n env)]
+                                             constrain [Match (tSchema tn) (schemaOfName n env)]
                                              return $ nVar n tn
       where svars                       = statedefs b
             env0                        = define envActorSelf $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
             
-    infEnv env (Def l n q p k ann b (Sync _)) -- TODO: schema [q] => (p,k) -> ann
-      | nodup (p,k) && noshadow svars p = do t <- newTVar
+    infEnv env (Def l n q p k ann b (Sync _))
+      | noshadow svars p                = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
@@ -277,13 +277,13 @@ instance InfEnv Decl where
                                              popFX
                                              fx <- fxSync <$> newTVar
                                              let tn = tFun fx prow krow t
-                                             constrain [Equ tn (monotypeOfName n env)]
+                                             constrain [Match (tSchema tn) (schemaOfName n env)]
                                              return $ nVar n tn
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
-    infEnv env (Def l n q p k ann b Async)  -- TODO: schema [q] => (p,k) -> ann
-      | nodup (p,k) && noshadow svars p = do t <- newTVar
+    infEnv env (Def l n q p k ann b Async)
+      | noshadow svars p                = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
@@ -291,14 +291,14 @@ instance InfEnv Decl where
                                              _ <- infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
-                                             let tn = tFun fx prow krow ({-tMsg-}t)
-                                             constrain [Equ tn (monotypeOfName n env)]
+                                             let tn = tFun fx prow krow (tMsg t)
+                                             constrain [Match (tSchema tn) (schemaOfName n env)]
                                              return $ nVar n tn
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
-    infEnv env (Def l n q p k ann b modif)  -- TODO: schema [q] => (p) -> ann
-      | nodup (p,k)                     = do t <- newTVar
+    infEnv env (Def l n q p k ann b modif)
+                                        = do t <- newTVar
                                              fx <- newTVar
                                              pushFX (fxRet t fx)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
@@ -306,25 +306,42 @@ instance InfEnv Decl where
                                              (te1, krow) <- infEnvT (define te0 env1) k
                                              _ <- infEnv (define te1 (define te0 env1)) b
                                              popFX
-                                             let tn = tFun fx prow krow t       -- TODO: modif/NoDecoration
-                                             constrain [Equ tn (monotypeOfName n env)]
-                                             return $ nVar n tn
+                                             (prow',krow') <- splitRows modif prow krow
+                                             let tn = tFun fx prow' krow' t
+                                             constrain [Match (tSchema tn) (schemaOfName n env)]
+                                             return $ nVar n tn                 -- TODO: classattr decoration
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env
+            splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
+            splitRows m p k             = (,) <$> splitRow m p <*> return k
+            splitRow m (TRow _ n sc r)
+              | m == InstMeth           = constrain [Match sc (tSchema tSelf)] >> return r
+              | m == ClassMeth          = constrain [Match sc (tSchema (tAt (findSelf env)))] >> return r
+            splitRow m r                = return r
 
-    infEnv env (Class l n q us b)
-      | nodup us                        = do t0 <- newTVar
-                                             pushFX fxNil
-                                             te <- infEnv env1 b
-                                             r0 <- newTVar
+    infEnv env (Class l n _ _ b)        = do pushFX fxNil
+                                             te1 <- infEnv env1 b
                                              popFX
-                                             return undefined
+                                             te2 <- genTEnv env1 te1
+                                             constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
+                                             return $ nClass n q us te          -- TODO: check no dangling sigs in te2 of any us
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
+            (_,q,us,te)                 = findType (NoQual n) env
 
-    infEnv env (Protocol l n q us b)    = return []       -- undefined
-    infEnv env (Extension l n q us b)   = return []       -- undefined
-    infEnv env (Signature l ns sc dec)  = return []       -- undefined.....
+    infEnv env (Protocol l n q us b)    = do pushFX fxNil
+                                             te1 <- infEnv env1 b
+                                             popFX
+                                             te2 <- genTEnv env1 te1
+                                             constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
+                                             return $ nProto n q us te
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
+            (_,q,us,te)                 = findType (NoQual n) env
+    infEnv env (Extension l n q us b)   = return []
+    infEnv env (Signature l ns sc)      = return []       -- undefined.....
 
+matchTEnv te1 te2                       = [ Match sc (find v) | (v,sc) <- nVars te1 ]
+  where find v                          = fromJust $ lookup v schemas
+        schemas                         = nVars te2
 
 class DeclEnv a where
     declEnv                             :: Env -> a -> TypeM TEnv
@@ -346,20 +363,20 @@ instance DeclEnv Branch where
     declEnv env (Branch e b)            = declEnv env b
 
 instance DeclEnv Decl where
-    declEnv env (Actor _ n q p k t _)   = do t1 <- instantiate env $ extractSig n q p k t NoMod
+    declEnv env (Actor _ n q p k t _)
+      | nodup (p,k)                     = do t1 <- instantiate env $ extractSig n q p k t NoMod
                                              return $ nVar n t1
-    declEnv env (Def _ n q p k t _ m)   = do t1 <- instantiate env $ extractSig n q p k t m
+    declEnv env (Def _ n q p k t _ m)
+      | nodup (p,k)                     = do t1 <- instantiate env $ extractSig n q p k t m
                                              return $ nVar n t1
-    declEnv env (Class _ n q us b)      = do let us' = mro env False q us
-                                             te1 <- declEnv env1 b
-                                             return undefined
+    declEnv env (Class _ n q us b)      = do te <- declEnv env1 b
+                                             return $ nClass n q (mro env False q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-    declEnv env (Protocol _ n q us b)   = do let us' = mro env True q us
-                                             te1 <- declEnv env1 b
-                                             return undefined
+    declEnv env (Protocol _ n q us b)   = do te <- declEnv env1 b
+                                             return $ nProto n q (mro env True q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     declEnv env (Extension _ n q us b)  = return [] -- undefined
-    declEnv env (Signature _ ns sc d)   = return [] -- undefined
+    declEnv env (Signature _ ns sc)     = return [] -- undefined
 
 
 
@@ -406,8 +423,8 @@ entail env q c                          = True                                  
 
 
 extractSig n q p k t m
-  | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig
-  | all (`elem` tybound q) tvs          = TSchema NoLoc q sig
+  | null q                              = TSchema NoLoc [ TBind v [] | v <- tvs ] sig (extractDec m)
+  | all (`elem` tybound q) tvs          = TSchema NoLoc q sig (extractDec m)
   | otherwise                           = err2 (tvs \\ tybound q) "Unbound type variable(s)in signature:"
   where
     tvs                                 = tyfree sig
@@ -429,11 +446,9 @@ extractSig n q p k t m
     extractFX (Sync _)                  = fxSync fxNil
     extractFX Async                     = fxAsync fxNil
     extractFX _                         = tWild
-
-extractDec StaticMeth               = StaticMethod
-extractDec ClassMeth                = ClassMethod
-extractDec InstMeth                 = InstMethod
-extractDec _                        = NoDecoration
+    extractDec StaticMeth               = StaticMethod
+    extractDec ClassMeth                = ClassMethod
+    extractDec _                        = NoDec
 
 
 inferPure env e                         = do pushFX tNil
@@ -469,16 +484,19 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []
-    infEnv env (Except l x)             = do t <- typeOfQName x env
+    infEnv env (Except l x)             = do t <- instantiate env $ classSchema env x
                                              constrain [Sub t tException]
                                              return []
-    infEnv env (ExceptAs l x n)         = do t <- typeOfQName x env
+    infEnv env (ExceptAs l x n)         = do t <- instantiate env $ classSchema env x
                                              constrain [Sub t tException]
                                              return $ nVar n t
-
+classSchema env qn
+  | proto                               = err1 qn "Class name expected, found"
+  | otherwise                           = TSchema NoLoc q (tCon $ TC qn $ map tVar $ tybound q) NoDec
+  where (proto,q,_,_)                   = findType qn env
 
 instance Infer Expr where
-    infer env (Var _ n)                 = typeOfName n env
+    infer env (Var _ n)                 = instantiate env $ openFX $ schemaOfName n env
     infer env (Int _ val s)             = return tInt
     infer env (Float _ val s)           = return tFloat
     infer env e@Imaginary{}             = notYetExpr e

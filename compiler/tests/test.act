@@ -102,7 +102,7 @@ def f34(a,*b,c,**d,):
 def f35(*a):
     pass
 
-def f35(*a,):
+def f35b(*a,):
     pass
 
 def f36(*a,**b):
@@ -120,10 +120,8 @@ def f39(*a,b,**c,):
 def f40(**c):
     pass
 
-def f40(**c,):
+def f40b(**c,):
     pass
-
-
 
 
 protocol Apa():
