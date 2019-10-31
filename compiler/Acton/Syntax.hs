@@ -11,7 +11,7 @@ import Prelude hiding((<>))
 version :: [Int]
 version = [0,1]
 
-data Module     = Module        ModName [Import] [Stmt] deriving (Eq,Show)
+data Module     = Module        ModName [Import] Suite deriving (Eq,Show)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
@@ -254,7 +254,9 @@ type KwdRow     = Type
 type TRow       = Type
 
 
-tSchema t       = TSchema NoLoc [] t NoDec
+monotype t      = TSchema NoLoc [] t NoDec
+tSchema q t     = TSchema NoLoc q t NoDec
+tSchema' q t d  = TSchema NoLoc q t d
 
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
@@ -276,11 +278,11 @@ rAct            = Name NoLoc "actor"
 rMut            = Name NoLoc "mut"
 rRet            = Name NoLoc "ret"
 
-fxSync          = TRow NoLoc rSync (tSchema tNone)
-fxAsync         = TRow NoLoc rAsync (tSchema tNone)
-fxAct           = TRow NoLoc rAct (tSchema tNone)
-fxMut           = TRow NoLoc rMut (tSchema tNone)
-fxRet t         = TRow NoLoc rRet (tSchema t)
+fxSync          = TRow NoLoc rSync (monotype tNone)
+fxAsync         = TRow NoLoc rAsync (monotype tNone)
+fxAct           = TRow NoLoc rAct (monotype tNone)
+fxMut           = TRow NoLoc rMut (monotype tNone)
+fxRet t         = TRow NoLoc rRet (monotype t)
 fxVar v         = TVar NoLoc v
 fxNil           = TNil NoLoc
 

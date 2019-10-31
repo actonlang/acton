@@ -177,9 +177,9 @@ testSchemaSubst = do
     putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
     putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
     putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
-  where t   = TSchema NoLoc [TBind (TV (name "A")) [TC (noQual "Eq") []]]
+  where t   = tSchema [TBind (TV (name "A")) [TC (noQual "Eq") []]]
                             (tCon (TC (noQual "apa") [tVar (TV (name "A")), 
-                                                      tVar (TV (name "B"))])) NoDec
+                                                      tVar (TV (name "B"))]))
         s1  = [(TV (name "B"), tSelf)]
         s2  = [(TV (name "A"), tSelf)]
         s3  = [(TV (name "B"), tVar (TV (name "A")))]
