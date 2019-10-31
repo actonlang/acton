@@ -390,7 +390,12 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 										(WORD*) &start_index, (WORD*) new_replay_offset, 1,
 										start_row, end_row, table);
 
-	assert(no_results == (*new_replay_offset) - start_index);
+	if(no_results != (*new_replay_offset) - start_index)
+	{
+		printf("table_range_search_clustering(%ld-%ld) returned %ld entries!\n", start_index, *new_replay_offset, no_results);
+		print_long_db(db);
+		assert(0);
+	}
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld replayed %ld queue entries, new_replay_offset=%ld\n",
@@ -565,7 +570,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 
 	WORD * queue_column_values = (WORD *) malloc(schema->no_cols * sizeof(WORD));
 	queue_column_values[0]=queue_id;
-	queue_column_values[1]=(WORD) LONG_MAX;
+	queue_column_values[1]=(WORD) -2;
 	for(long i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 

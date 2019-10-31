@@ -359,6 +359,9 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 	return 0;
 }
 
+/*
+ * Outdated:
+ *
 int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsigned int * fastrandstate)
 {
 	db_schema_t * schema = table->schema;
@@ -419,7 +422,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 
 	return 0;
 }
-
+*/
 
 int table_update(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, db_table_t * table)
 {
@@ -598,7 +601,6 @@ int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clu
 int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, snode_t** start_row, snode_t** end_row, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
-	int no_results = 0;
 
 	assert(no_clustering_keys > 0 && "No clustering keys given");
 
@@ -606,7 +608,8 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 	db_row_t* row = table_search(primary_keys, table);
 
-	return 0;
+	if(row == NULL)
+		return 0;
 
 	for(int i=0;i<no_clustering_keys-1;i++)
 	{
@@ -626,6 +629,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 	*start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
 
+	int no_results = 0;
 	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
