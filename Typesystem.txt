@@ -131,7 +131,9 @@ N |- t ~ I                  Type t is defined as I in environment N
 
 N |- t impl u               Type t implements protocol u in environment N
 
-N |- t < u                  Type t is a subtype of u in environment N
+N |- t < t'                 Type t is a subtype of t' in environment N
+
+N |- T < T'                 Type schema T matches schema T' in environment N
 
 N |- C                      Constraint C holds in environment N
 
@@ -223,13 +225,13 @@ N |- t impl u'
 ***** N |- t < t' **************************************************************************************************************************************************
 
 
-phi = [o/dom(q)]     N,q' |- phi(q)     N,q' |- phi(t) < t'                         N |- u ~ protocol(u',U):n     N |- u' ~ protocol(U'):n'
------------------------------------------------------------ (SubScheme)             ------------------------------------------------------- (SubProto)
-N |- [q]=>t < [q']=>t'                                                              N |- u < u'
+N,t(u,U) |- u ~ class(U'):n                                                         N |- t1 < t2      N |- t2 < t3
+--------------------------- (SubHyp)                ---------- (SubRefl)            ------------------------------ (SubTrans)
+N |- u < u'                                         N |- t < t                      N |- t1 < t3
 
 
-N |- u ~ class(u',U):n      N |- u' ~ class(U'):n'                                  N,t(u,U) |- u ~ class(U'):n
--------------------------------------------------- (SubClass)                       --------------------------- (SubHyp)
+N |- u ~ class(u',U):n      N |- u' ~ class(U'):n'                                  N |- u ~ protocol(u',U):n     N |- u' ~ protocol(U'):n'
+-------------------------------------------------- (SubClass)                       ------------------------------------------------------- (SubProto)
 N |- u < u'                                                                         N,t(u,U) |- t < u
 
 
@@ -254,11 +256,6 @@ N |- . < ?t,p                                                                   
 N |- u ~ class(u',U):n      N |- u' ~ class(U'):n'
 -------------------------------------------------- (SubAt)                          ----------- (SubOpt)                -------------- (SubNone)
 N |- @u < @u'                                                                       N |- t < ?t                         N |- None < ?t
-
-
-N |- t1 < t2      N |- t2 < t3
------------------------------- (SubTrans)                                           ---------- (SubRefl)
-N |- t1 < t3                                                                        N |- t < t
 
 
 ***** N |- T < T' **************************************************************************************************************************************************
