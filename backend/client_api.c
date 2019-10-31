@@ -212,7 +212,7 @@ int send_packet(void * buf, unsigned len, int sockfd)
     }
     else
     {
-#if CLIENT_VERBOSITY > 0
+#if CLIENT_VERBOSITY > 2
 		printf("Wrote %d bytes to socket\n", n);
 #endif
     }
@@ -235,7 +235,11 @@ int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * 
 		if (*in_len < 0)
 			error("ERROR reading from socket");
 		else
+		{
+#if CLIENT_VERBOSITY > 2
 			printf("Read %d bytes from socket\n", *in_len);
+#endif
+		}
     }
 
     return 0;
@@ -526,7 +530,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
-	read_query * q = build_search_clustering_in_txn(primary_keys, schema->no_primary_keys, clustering_keys, schema->no_clustering_keys, table_key, txnid, get_nonce(db));
+	read_query * q = build_search_clustering_in_txn(primary_keys, schema->no_primary_keys, clustering_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
 	if(db->servers->no_items < db->quorum_size)

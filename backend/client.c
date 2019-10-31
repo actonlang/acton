@@ -59,6 +59,8 @@ db_schema_t * create_schema() {
 
 int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 {
+	printf("TEST: populate_db\n");
+
 	uuid_t txnid;
 	uuid_generate(txnid);
 	WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
@@ -86,6 +88,8 @@ int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 int delete_test(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 // Deletes row for last actor
 {
+	printf("TEST: delete_test\n");
+
 	uuid_t txnid;
 	uuid_generate(txnid);
 	WORD row_key = (WORD) no_actors - 1;
@@ -94,6 +98,8 @@ int delete_test(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 
 int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 {
+	printf("TEST: test_search_pk\n");
+
 	char print_buff[1024];
 	uuid_t txnid;
 	uuid_generate(txnid);
@@ -101,6 +107,12 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastra
 	for(long aid=0;aid<no_actors;aid++)
 	{
 		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, &txnid, db);
+
+		if(row == NULL)
+		{
+			printf("Read back wrong NULL row for cell (%ld)!\n", aid);
+			return -1;
+		}
 
 		if((long) row->key != aid)
 		{
@@ -114,6 +126,8 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastra
 
 int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 {
+	printf("TEST: test_search_pk_ck1\n");
+
 	char print_buff[1024];
 	uuid_t txnid;
 	uuid_generate(txnid);
@@ -123,6 +137,12 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fa
 		for(long cid=0;cid<no_collections;cid++)
 		{
 			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, &txnid, db);
+
+			if(row == NULL)
+			{
+				printf("Read back wrong NULL row for cell (%ld, %ld)!\n", aid, cid);
+				return -1;
+			}
 
 			if((long) row->key != cid)
 			{
@@ -137,6 +157,8 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fa
 
 int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
 {
+	printf("TEST: test_search_pk_ck1_ck2\n");
+
 	char print_buff[1024];
 	WORD * cks = (WORD *) malloc(2 * sizeof(WORD));
 
@@ -154,9 +176,9 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 
 				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, db);
 
-				if((long) row->key != cid)
+				if((long) row->key != iid)
 				{
-					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (long) row->key, iid, aid, cid, iid);
 					return -1;
 				}
 			}
@@ -168,7 +190,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 
 
 int main(int argc, char **argv) {
-    int portno, n;
+    int portno, n, status;
     char *hostname;
     unsigned int seed;
 
@@ -188,13 +210,23 @@ int main(int argc, char **argv) {
 
     db_schema_t * schema = create_schema();
 
-    populate_db(schema, db, &seed);
+    status = populate_db(schema, db, &seed);
+	printf("Test %s - %s (%d)\n", "populate_db", status==0?"OK":"FAILED", status);
 
-    test_search_pk_ck1_ck2(schema, db, &seed);
+	status = test_search_pk_ck1_ck2(schema, db, &seed);
+	printf("Test %s - %s (%d)\n", "test_search_pk_ck1_ck2", status==0?"OK":"FAILED", status);
 
-    delete_test(schema, db, &seed);
+	status = test_search_pk_ck1(schema, db, &seed);
+	printf("Test %s - %s (%d)\n", "test_search_pk_ck1", status==0?"OK":"FAILED", status);
 
-    close_remote_db(db);
+	status = test_search_pk(schema, db, &seed);
+	printf("Test %s - %s (%d)\n", "test_search_pk", status==0?"OK":"FAILED", status);
+
+	status = delete_test(schema, db, &seed);
+	printf("Test %s - %s (%d)\n", "delete_test", status==0?"OK":"FAILED", status);
+
+	status = close_remote_db(db);
+	printf("Test %s - %s (%d)\n", "close_remote_db", status==0?"OK":"FAILED", status);
 
     return 0;
 }
