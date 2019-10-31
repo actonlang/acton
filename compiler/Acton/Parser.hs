@@ -56,7 +56,7 @@ extractSrcSpan (Loc l r) file src = sp
 
 type Parser = St.StateT [CTX] (Parsec Void String)
 
-data CTX = PAR | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
+data CTX = PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
 withCtx ctx = between (St.modify (ctx:)) (St.modify tail)
 
@@ -70,23 +70,24 @@ onlyIn s            = fail ("statement only allowed inside " ++ s)
 notIn s             = fail ("statement not allowed inside " ++ s)
 success             = return ()
 
-assertActBody       = ifCtx [ACTOR]             []              success (onlyIn "an actor body")
-assertActScope      = ifCtx [ACTOR]             [SEQ,LOOP,DEF]  success (onlyIn "an actor")
-assertLoop          = ifCtx [LOOP]              [SEQ]           success (onlyIn "a loop")
-assertClass         = ifCtx [CLASS]             [SEQ,LOOP]      success (onlyIn "a class")
-assertClassProtoExt = ifCtx [CLASS,PROTO,EXT]   [SEQ,LOOP]      success (onlyIn "a class, protocol or extension")
-assertDef           = ifCtx [DEF]               [SEQ,LOOP]      success (onlyIn "a function")
-assertDefOrAct      = ifCtx [DEF,ACTOR]         [SEQ,LOOP]      success (onlyIn "a function or an actor")
-assertNotNested     = ifCtx [PROTO,EXT]         [SEQ,LOOP]      (notIn "a protocol or extension") success
-assertNotData       = ifCtx [DATA]              [SEQ,LOOP]      (notIn "a data tree") success
+assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
+assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "modifier only allowed inside an actor scope")
+assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
+assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
+assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class, protocol or extension")
+assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
+assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
+assertNotProtoExt   = ifCtx [PROTO,EXT]             [IF,SEQ,LOOP]       (fail "statement not allowed inside a protocol or extension") success
+assertNotDecl       = ifCtx [SEQ,LOOP]              [IF]                (fail "statement not allowed inside a class, protocol or extension") success
+assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
-ifActScope          = ifCtx [ACTOR]             [SEQ,LOOP,DEF]
+ifActScope          = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]
 
-ifClassProtoExt     = ifCtx [CLASS,PROTO,EXT]   [SEQ,LOOP]
+ifClassProtoExt     = ifCtx [CLASS,PROTO,EXT]       [IF]
 
-ifData              = ifCtx [DATA]              [SEQ,LOOP]
+ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
-ifPar               = ifCtx [PAR]               []
+ifPar               = ifCtx [PAR]                   []
 
 
 --- Whitespace consumers ----------------------------------------------------
@@ -402,37 +403,37 @@ tuple_or_single posItems headItems len tup =
 -- Patterns ------------------------------------------------------------------------------------
 
 pospat :: Bool -> Parser S.PosPat
-pospat lh = posItems S.PosPat S.PosPatStar S.PosPatNil (apat lh) (apat lh)
+pospat mut = posItems S.PosPat S.PosPatStar S.PosPatNil (apat mut) (apat mut)
 
 kwdpat :: Bool -> Parser S.KwdPat 
-kwdpat lh = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
+kwdpat mut = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
 
-target, lhs :: Parser S.Pattern
-target = pattern False
+pure_pattern, mut_pattern :: Parser S.Pattern
+pure_pattern = gen_pattern False
 
-lhs = pattern True
+mut_pattern = gen_pattern True
 
-pattern :: Bool -> Parser S.Pattern
-pattern lh = addLoc $ tuple_or_single (pospat lh) S.posPatHead S.posPatLen (S.PTuple NoLoc)
+gen_pattern :: Bool -> Parser S.Pattern
+gen_pattern mut = addLoc $ tuple_or_single (pospat mut) S.posPatHead S.posPatLen (S.PTuple NoLoc)
   
 pelems :: Bool -> Parser ([S.Pattern], Maybe S.Pattern)
-pelems lh = do
-    p <- apat lh
-    ps <- many (try (comma *> apat lh))
-    mbp <- optional (comma *> star *> apat lh)
+pelems mut = do
+    p <- apat mut
+    ps <- many (try (comma *> apat mut))
+    mbp <- optional (comma *> star *> apat mut)
     return (p:ps, mbp)
 
 apat :: Bool -> Parser S.Pattern
-apat lh = addLoc (
-            try (if lh then ifData datapat lvalue else lvalue)
+apat mut = addLoc (
+            try (if mut then ifData datapat lvalue else fail "no lvalue")
         <|>
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
             ((try . parens) $ return (S.PTuple NoLoc S.PosPatNil))
         <|>
-            ((try . parens) $ S.PParen NoLoc <$> pattern lh)
+            ((try . parens) $ S.PParen NoLoc <$> gen_pattern mut)
         <|>
-            (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional (pelems lh))
+            (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional (pelems mut))
         )
   where lvalue = do
             tmp <- atom_expr
@@ -460,7 +461,7 @@ small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
-            try (assertNotData *> (S.AugAssign NoLoc <$> lhs <*> augassign <*> rhs))
+            try (assertNotData *> (S.AugAssign NoLoc <$> mut_pattern <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
    where augassign :: Parser (S.Op S.Aug)
@@ -480,7 +481,7 @@ expr_stmt = addLoc $
                      <|> S.EuDivA  <$ symbol "//="
 
 assign :: Parser S.Pattern
-assign = lhs <* equals
+assign = mut_pattern <* equals
 
 rhs :: Parser S.Expr
 rhs = yield_expr <|> exprlist
@@ -495,7 +496,7 @@ var_stmt = addLoc $
 del_stmt = addLoc $ do
             assertNotData
             rword "del"
-            S.Delete NoLoc <$> target
+            S.Delete NoLoc <$> mut_pattern
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 
@@ -506,7 +507,7 @@ break_stmt =  S.Break <$> (assertLoop *> rwordLoc "break")
 continue_stmt =  S.Continue <$> (assertLoop *> rwordLoc "continue")
 
 return_stmt = addLoc $ do    -- the notFollowedBy colon here is to avoid confusion with data_stmt return case
-                assertDefOrAct
+                assertDefAct
                 rword "return" <* notFollowedBy colon
                 S.Return NoLoc <$> optional exprlist
  
@@ -568,10 +569,10 @@ decorator1 decoration = do
 
 signature :: Parser S.Decl
 signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
-   where sig_decoration = rword "@classattr" *> assertClassProtoExt *> newline1 *> return S.ClassAttr  
-                      <|> rword "@instattr" *> assertClassProtoExt *> newline1 *> return S.InstAttr
-                      <|> rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMethod
-                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return S.InstMethod
+   where sig_decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr  
+                      <|> rword "@instattr" *> assertDecl *> newline1 *> return S.InstAttr
+                      <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
+                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return S.InstMethod
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
                       <|> return S.NoDec
 
@@ -598,8 +599,8 @@ funcdef =  addLoc $ do
                             ifActScope (return (S.Sync False)) (return S.NoMod)
          modifier m = return m
 
-         fun_decoration = rword "@staticmethod" *> assertClassProtoExt *> newline1 *> return S.StaticMeth
-                      <|> rword "@instmethod" *> assertClassProtoExt *> newline1 *> return (S.InstMeth True)
+         fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
+                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
                       <|> ifClassProtoExt (return (S.InstMeth False)) (return S.NoMod)
 
@@ -629,7 +630,7 @@ extdef      = classdefGen "extension" qual_name EXT S.Extension
 
 classdefGen k pname ctx con = addLoc $ do
                 assertNotData
-                assertNotNested
+                assertNotProtoExt
                 (s,_) <- withPos (rword k)
                 nm <- pname
                 q <- optbinds
@@ -653,14 +654,16 @@ if_stmt = addLoc $ do
 branch p = S.Branch <$> expr <*> suite SEQ p
 
 while_stmt = addLoc $ do
+                 assertNotDecl
                  (p,_) <- withPos (rword "while")
                  e <- expr
                  ss1 <- suite LOOP p
                  S.While NoLoc e ss1 . maybe [] id <$>  optional (else_part p)
                  
 for_stmt = addLoc $ do
+                 assertNotDecl
                  (p,_) <- withPos (rword "for")
-                 pat <- target
+                 pat <- pure_pattern
                  rword "in"
                  e <- exprlist
                  ss <- suite LOOP p
@@ -675,6 +678,7 @@ except = addLoc $ do
             
 try_stmt = addLoc $ do
                 assertNotData
+                assertNotDecl
                 (p,_) <- withPos (rword "try")
                 ss <- suite SEQ p
                 do
@@ -693,16 +697,17 @@ try_stmt = addLoc $ do
                  
 with_stmt = addLoc $ do
                 assertNotData
+                assertNotDecl
                 (s,_) <- withPos (rword "with")
                 S.With NoLoc <$> (with_item `sepBy1` comma) <*> suite SEQ s
-  where with_item = S.WithItem <$> expr <*> optional (rword "as" *> target)
+  where with_item = S.WithItem <$> expr <*> optional (rword "as" *> pure_pattern)
                  
  
 data_stmt = addLoc $
-           do (s,pat) <- withPos lhs
+           do (s,pat) <- withPos mut_pattern
               S.Data NoLoc (Just pat) <$> suite DATA s
         <|>
-           do (s,_) <- withPos (assertDefOrAct *> rword "return")
+           do (s,_) <- withPos (assertDefAct *> rword "return")
               S.Data NoLoc Nothing <$> suite DATA s
 
 suite :: CTX -> Pos -> Parser S.Suite
@@ -952,7 +957,7 @@ comp_iter = comp_for <|> comp_if
 
 comp_for = addLoc (do
             rword "for"
-            pat <- target
+            pat <- pure_pattern
             rword "in"
             e <- or_expr
             S.CompFor NoLoc pat e . maybe S.NoComp id <$> optional comp_iter)
@@ -1067,9 +1072,9 @@ tschema = addLoc $
                                    return (n:ns))
                 fatarrow
                 t <- ttype
-                return (S.TSchema NoLoc bs t S.NoDec))
+                return (S.tSchema bs t))
             <|>
-            (S.TSchema NoLoc [] <$> ttype <*> return S.NoDec)
+            (S.monotype <$> ttype)
 
 ttype :: Parser S.Type
 ttype    =  addLoc (

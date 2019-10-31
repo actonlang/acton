@@ -34,7 +34,7 @@ type TEnv                   = [(Name, NameInfo)]
 data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, selfbound :: Maybe TCon }
 
 data NameInfo               = NVar    TSchema
-                            | NSVar   Type
+                            | NSVar   TSchema
                             | NClass  [TBind] [TCon] TEnv
                             | NProto  [TBind] [TCon] TEnv
                             | NExt    [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
@@ -48,10 +48,13 @@ data NameInfo               = NVar    TSchema
                             deriving (Eq,Show,Read,Generic)
 
 nVar                        :: Name -> Type -> TEnv
-nVar n t                    = [(n, NVar (tSchema t))]
+nVar n t                    = [(n, NVar (monotype t))]
 
 nVar'                       :: Name -> TSchema -> TEnv
 nVar' n sc                  = [(n, NVar sc)]
+
+nState                      :: TEnv -> TEnv
+nState te                   = [ (n, NSVar t) | (n, NVar t) <- te ]
 
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
@@ -59,8 +62,8 @@ nClass n q us te            = [(n, NClass q us te)]
 nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto n q us te            = [(n, NProto q us te)]
 
-nVars                       :: TEnv -> [(Name, TSchema)]
-nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
+nSignatures                 :: TEnv -> [(Name, TSchema)]
+nSignatures te              = [ (n,sc) | (n, NVar sc) <- te ]
 
 mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
 mapVars f te                = map g te
@@ -231,7 +234,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
     bounded u (TBind v us)  = TBind v (u:us)
     ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
 
-envActorSelf                = [ (nSelf,     NVar (tSchema tRef)) ]
+envActorSelf                = [ (nSelf,     NVar (monotype tRef)) ]
 
 --------------------------------------------------------------------------------------------------------------------
 
@@ -294,11 +297,9 @@ findSelf env                = case selfbound env of
                                 Nothing -> error "(internal) Self not in scope"
 
 assignableType              :: Name -> Env -> Type
-assignableType n env        = case findName n env of
-                                NVar (TSchema _ [] t d) | d `notElem` mdec -> t
-                                NSVar t -> t
-                                _ -> err1 n "Not an assignable name:"
-  where mdec                = [StaticMethod, ClassMethod, InstMethod]
+assignableType n env        = case findType n env of
+                                TSchema _ [] t _ -> t
+                                -- TODO: report error.......
 
 
 findMod                     :: ModName -> Env -> TEnv
@@ -312,26 +313,34 @@ addMod m te env             = env{ modules = (m,te) : modules env }
 dropNames                   :: Env -> Env
 dropNames env               = env{ names = names initEnv }
 
-findType                    :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)
-findType n env              = case findQName n env of
+findClassOrProto            :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)
+findClassOrProto n env      = case findQName n env of
                                 NClass q us te -> (False,q,us,te)
                                 NProto q us te -> (True,q,us,te)
-                                _ -> err1 n "Not a class or protocol name:"
+                                _ -> err1 n "Class or protocol name expected, got"
 
+findClass                   :: QName -> Env -> ([TBind],[TCon],TEnv)
+findClass n env             = case findQName n env of
+                                NClass q us te -> (q,us,te)
+                                _ -> err1 n "Class name expected, got"
+
+findProto                   :: QName -> Env -> ([TBind],[TCon],TEnv)
+findProto n env             = case findQName n env of
+                                NProto q us te -> (q,us,te)
+                                _ -> err1 n "Protocol name expected, got"
+
+findType                    :: Name -> Env -> TSchema
+findType n env              = case findName n env of
+                                NVar t       -> t
+                                NSVar t      -> t
+                                NClass q _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
+                                _            -> err1 n "Unexpected name..."
 
 newTEnv vs                  = do ts <- newTVars (length vs)
-                                 return $ vs `zip` [ NVar (tSchema t) | t <- ts ]
+                                 return $ vs `zip` [ NVar (monotype t) | t <- ts ]
 
 
 -- Instantiation -------------------------------------------------------------------------
-
-schemaOfName n env          = schemaOfQName (NoQual n) env
-
-schemaOfQName qn env        = case findQName qn env of
-                                NVar sc      -> sc
-                                NSVar t      -> tSchema t
-                                NClass q _ _ -> TSchema NoLoc q (tAt $ TC qn $ map tVar $ tybound q) NoDec
-                                _            -> err1 qn "Unexpected name..."
 
 instantiate env (TSchema _ [] t _)  = instwild t
 instantiate env (TSchema _ q t _)   = do tvs <- newTVars (length q)
@@ -392,26 +401,25 @@ noWild x
 -- Environment unification ---------------------------------------------------------------
 
 unifyTEnv env tenvs []                  = return []
-unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
+unifyTEnv env tenvs (v:vs)              = case [ i | Just i <- map (lookup v) tenvs] of
                                             [] -> unifyTEnv env tenvs vs
-                                            [ni] -> ((v,ni):) <$> unifyTEnv env tenvs vs
-                                            ni:nis -> do ni' <- unifN ni nis
-                                                         ((v,ni'):) <$> unifyTEnv env tenvs vs
+                                            [i] -> ((v,i):) <$> unifyTEnv env tenvs vs
+                                            i:is -> do i' <- unifN i is
+                                                       ((v,i'):) <$> unifyTEnv env tenvs vs
   where 
-    unifN (NVar (TSchema _ [] t d)) nis = do mapM (unifV t d) nis
-                                             return (NVar (TSchema NoLoc [] t d))
-    unifN (NSVar t) nis                 = do mapM (unifSV t) nis
-                                             return (NSVar t)
-    unifN ni nis                        = notYet (loc v) (text "Merging of declarations")
+    unifN (NVar (TSchema _ [] t d)) is  = do mapM (unifVar t d) is
+                                             return (NVar (tSchema' [] t d))
+    unifN (NSVar (TSchema _ [] t d)) is = do mapM (unifVar t d) is
+                                             return (NSVar (tSchema' [] t d))
+    unifN i is                          = notYet (loc v) (text "Merging of declarations")
 
-    unifV t d (NVar (TSchema _ [] t' d'))
+    unifVar t d (NVar (TSchema _ [] t' d'))
       | d == d'                         = constrain [Equ t t']
       | otherwise                       = err1 v "Inconsistent decorations for"
-    unifV t d ni                        = err1 v "Inconsistent bindings for"
-
-    unifSV t (NSVar t')                 = constrain [Equ t t']
-    unifSV t ni                         = err1 v "Inconsistent bindings for"
-
+    unifVar t d (NSVar (TSchema _ [] t' d'))
+      | d == d'                         = constrain [Equ t t']
+      | otherwise                       = err1 v "Inconsistent decorations for"
+    unifVar t d ni                      = err1 v "Inconsistent bindings for"
 
 
 -- Import handling -----------------------------------------------------------------------
