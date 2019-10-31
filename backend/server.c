@@ -226,11 +226,11 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 
 		long * key_path = (long *) malloc(no_keys * sizeof(long));
 
-		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, schema_keys);
+		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, no_keys);
 
 		assert(last_cell_ptr - cells == no_results);
 
-		range_read_response_message * m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
+		m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
 
 /*
 		long keys = (long *) malloc(no_keys);
