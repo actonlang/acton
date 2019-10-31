@@ -423,6 +423,8 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
+
+				break;
 			}
 			else
 			{
@@ -457,7 +459,9 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 	{
 		db_row_t * cell = result, * new_cell = NULL;
 
-		for(int j=0;j<response->cells[i].no_keys;j++, cell = new_cell)
+		assert(response->cells[i].keys[0] == (long) result->key);
+
+		for(int j=1;j<response->cells[i].no_keys;j++, cell = new_cell)
 		{
 			snode_t * new_cell_node = skiplist_search(cell->cells, (WORD) response->cells[i].keys[j]);
 
@@ -469,6 +473,8 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
+
+				break;
 			}
 			else
 			{
