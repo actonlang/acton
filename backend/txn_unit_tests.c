@@ -12,7 +12,7 @@
 #define COLLECTION_ID_0 0
 #define COLLECTION_ID_1 1
 
-int no_actors = 5;
+int no_actors = 2;
 int no_items = 20;
 
 int no_state_cols = 4;
@@ -458,9 +458,9 @@ void * actor(void * cargs)
 		else
 		{
 			if(debug)
-				printf("ACTOR %ld: Wait timed out, status=%d, re-blocking..\n", (long) ca->consumer_id, ret);
+				printf("ACTOR %ld: Wait timed out, status=%d, reading queue..\n", (long) ca->consumer_id, ret);
 
-			continue;
+//			continue;
 		}
 
 		// Received queue notification, reading:
@@ -508,6 +508,8 @@ void * actor(void * cargs)
 
 			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, successful_enqueues=%d, private_read_head=%ld, no_enqueues=%d\n",
 					(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->successful_enqueues, ca->read_head, ca->no_enqueues);
+
+//			print_long_db(ca->db);
 		}
 
 		if(rand_sleep)
