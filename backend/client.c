@@ -108,6 +108,8 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastra
 	{
 		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, &txnid, db);
 
+		print_long_row(row);
+
 		if(row == NULL)
 		{
 			printf("Read back wrong NULL row for cell (%ld)!\n", aid);
@@ -137,6 +139,8 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fa
 		for(long cid=0;cid<no_collections;cid++)
 		{
 			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, &txnid, db);
+
+			print_long_row(row);
 
 			if(row == NULL)
 			{
@@ -175,6 +179,8 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 				cks[1] = (WORD) iid;
 
 				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, db);
+
+				print_long_row(row);
 
 				if((long) row->key != iid)
 				{

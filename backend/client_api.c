@@ -398,7 +398,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 
 		if(root_cell_node == NULL)
 		{
-			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i].keys[0]);
+//			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i].keys[0]);
 
 			root_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
 					(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
@@ -420,7 +420,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
 
-				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -470,7 +470,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
 
-				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -484,6 +484,8 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 			}
 		}
 	}
+
+//	print_long_row(result);
 
 	return result;
 }
@@ -842,7 +844,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     if(success < 0)
     		return success;
 
-    // TO DO: Parse queue read response message to row list:
+    // Parse queue read response message to row list:
 
     skiplist_t * rows = create_skiplist_long();
     for(int i=0;i<response->no_cells;i++)

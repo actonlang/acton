@@ -70,9 +70,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 // Assumes key indexes are in order (partition keys, followed by clustering keys, followed by columns). Also assumes a single partition key:
 db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, unsigned int * fastrandstate)
 {
-	db_cell_t * row = create_empty_row(keys[0]); // single partition key
-
-	// Several clustering keys mean several levels of depth (a la super columns):
+	db_cell_t * row = create_empty_row(keys[0]);
 
 	db_cell_t * crt_cell = row, * new_cell = NULL;
 
@@ -82,17 +80,16 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 
 		new_cell = create_empty_row(keys[i]);
 
-		if(i == no_keys - 1)
-		{
-			new_cell->no_columns = no_cols;
-			new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
-			for(int j=0;j<new_cell->no_columns;j++)
-			{
-				new_cell->column_array[j] = cols[j];
-			}
-		}
-
 		skiplist_insert(crt_cell->cells, keys[i], (WORD) new_cell, fastrandstate);
+	}
+
+	assert(crt_cell != NULL && crt_cell->cells == NULL);
+
+	crt_cell->no_columns = no_cols;
+	crt_cell->column_array = (WORD *) malloc(crt_cell->no_columns);
+	for(int j=0;j<crt_cell->no_columns;j++)
+	{
+		crt_cell->column_array[j] = cols[j];
 	}
 
 	return row;
@@ -636,7 +633,7 @@ void print_long_row(db_row_t* row)
 
 	long_row_to_string(row, (char *) to_string, &len);
 
-	printf("DB_ROW [%d cells]: %s\n", row->cells->no_items, to_string);
+	printf("DB_ROW [%d cells]: %s\n", (row->cells != NULL)?(row->cells->no_items):(0), to_string);
 }
 
 void long_row_to_string(db_row_t* row, char * to_string, int * len)
