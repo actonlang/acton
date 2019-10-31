@@ -73,7 +73,6 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	db_cell_t * row = create_empty_row(keys[0]);
 
 	db_cell_t * crt_cell = row, * new_cell = NULL;
-
 	for(int i=1; i<no_keys; i++, crt_cell = new_cell)
 	{
 		crt_cell->cells = create_skiplist_long();
@@ -291,6 +290,7 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 			{
 				new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
 
+/*
 				// Populate columns and set version for newly created cell:
 				if(i == schema->no_clustering_keys - 1)
 				{
@@ -302,8 +302,11 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 					}
 
 					new_cell->version = (version != NULL)? copy_vc(version) : NULL;
+
 				}
 				else
+*/
+				if(i < schema->no_clustering_keys - 1)
 				{
 					new_cell->cells = create_skiplist_long();
 				}
@@ -316,6 +319,7 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 			{
 				new_cell = (db_row_t *) (new_cell_node->value);
 
+/*
 				// Update columns and version for previously existing last level cell:
 				if(i == schema->no_clustering_keys - 1)
 				{
@@ -328,8 +332,25 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 					if(version != NULL)
 						update_or_replace_vc(&(new_cell->version), version);
 				}
+*/
 			}
 		}
+
+		// Populate columns and set version for newly created cell:
+
+		assert(cell != NULL && cell->cells == NULL);
+
+		cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
+		cell->column_array = (WORD *) malloc(cell->no_columns);
+		for(int j=0;j<cell->no_columns;j++)
+		{
+			cell->column_array[j] =column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+		}
+
+		if(version != NULL)
+			update_or_replace_vc(&(cell->version), version);
+
+//		cell->version = (version != NULL)? copy_vc(version) : NULL;
 	}
 
 	for(int i=0;i<schema->no_index_keys;i++)
