@@ -350,7 +350,17 @@ int test_range_search_pk_ck1(db_t * db)
 	long end_key = no_collections - 1;
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_clustering((WORD*) &pk,(WORD*) &start_key, (WORD*) &end_key, 1, &start_row, &end_row, (WORD) 0, db) == no_collections);
+	int no_entries = db_range_search_clustering((WORD*) &pk,(WORD*) &start_key, (WORD*) &end_key, 1, &start_row, &end_row, (WORD) 0, db);
+
+	if(no_entries != no_collections)
+	{
+		printf("ERROR: db_range_search_clustering(%ld, %ld-%ld) returned %d entries!\n", pk, start_key, end_key, no_entries);
+		print_long_db(db);
+		assert(0);
+		return 1;
+	}
+
+	return 0;
 }
 
 // Range search by (PK, CK1, CK2):
@@ -370,7 +380,17 @@ int test_range_search_pk_ck1_ck2(db_t * db)
 
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_clustering((WORD*) &pk,(WORD*) start_keys, (WORD*) end_keys, 2, &start_row, &end_row, (WORD) 0, db) == no_collections);
+	int no_entries = db_range_search_clustering((WORD*) &pk,(WORD*) start_keys, (WORD*) end_keys, 2, &start_row, &end_row, (WORD) 0, db);
+
+	if(no_entries != no_items)
+	{
+		printf("ERROR: db_range_search_clustering(%ld, %ld, %ld-%ld) returned %d entries!\n", pk, start_keys[0], end_keys[0], end_keys[1], no_entries);
+		print_long_db(db);
+		assert(0);
+		return 1;
+	}
+
+	return 0;
 }
 
 // Range search by secondary index:
@@ -383,7 +403,7 @@ int test_range_search_index(db_t * db)
 	long end_key = no_items;
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_index(0, (WORD) start_key, (WORD) end_key, &start_row, &end_row, (WORD) 0, db) == no_items);
+	return (db_range_search_index(0, (WORD) start_key, (WORD) end_key, &start_row, &end_row, (WORD) 0, db) == (no_items - 1));
 }
 
 
