@@ -35,6 +35,7 @@ data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], 
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
+                            | NSig      TSchema
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
@@ -43,7 +44,6 @@ data NameInfo               = NVar      TSchema
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
-                            | NSig      TSchema
                             | NReserved
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
@@ -57,14 +57,14 @@ nVar' n sc                  = [(n, NVar sc)]
 nState                      :: TEnv -> TEnv
 nState te                   = [ (n, NSVar t) | (n, NVar t) <- te ]
 
+nSig                        :: [Name] -> TSchema -> TEnv
+nSig xs t                   = [ (x, NSig t) | x <- xs ]
+
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
 
 nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto n q us te            = [(n, NProto q us te)]
-
-nSig                        :: [Name] -> TSchema -> TEnv
-nSig xs t                   = [ (x, NSig t) | x <- xs ]
 
 
 nVars                       :: TEnv -> [(Name, TSchema)]
@@ -110,6 +110,7 @@ instance Subst Env where
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
+    msubst (NSig t)             = NSig <$> msubst t
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt q us te)       = NExt <$> msubst q <*> msubst us <*> msubst te
@@ -118,12 +119,12 @@ instance Subst NameInfo where
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
-    msubst (NSig t)             = NSig <$> msubst t
     msubst NReserved            = return NReserved
     msubst NBlocked             = return NBlocked
 
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
+    tyfree (NSig t)             = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt q us te)       = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
@@ -132,7 +133,6 @@ instance Subst NameInfo where
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
-    tyfree (NSig t)             = tyfree t
     tyfree NReserved            = []
     tyfree NBlocked             = []
 
@@ -196,6 +196,7 @@ instance Unalias Type where
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
+    unalias env (NSig t)            = NSig (unalias env t)
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt q us te)      = NExt (unalias env q) (unalias env us) (unalias env te)
@@ -203,7 +204,6 @@ instance Unalias NameInfo where
     unalias env (NPAttr qn)         = NPAttr (unalias env qn)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
-    unalias env (NSig t)            = NSig (unalias env t)
     unalias env NReserved           = NReserved
     unalias env NBlocked            = NBlocked
 
@@ -288,11 +288,11 @@ reserved n env              = case lookup n (names env) of
                                 Just NReserved -> True
                                 _ -> False
 
-reservedOrSig               :: Name -> Env -> (Bool, Maybe TSchema)
+reservedOrSig               :: Name -> Env -> Maybe (Maybe TSchema)
 reservedOrSig n env         = case lookup n (names env) of
-                                Just NReserved -> (True, Nothing)
-                                Just (NSig t)  -> (False, Just t)
-                                _              -> (False, Nothing)
+                                Just NReserved -> Just Nothing
+                                Just (NSig t)  -> Just (Just t)
+                                _              -> Nothing
 
 findName                    :: Name -> Env -> NameInfo
 findName n env              = case lookup n (names env) of
@@ -418,26 +418,32 @@ noWild x
 
 -- Environment unification ---------------------------------------------------------------
 
-unifyTEnv env tenvs []                  = return []
-unifyTEnv env tenvs (v:vs)              = case [ i | Just i <- map (lookup v) tenvs] of
-                                            [] -> unifyTEnv env tenvs vs
-                                            [i] -> ((v,i):) <$> unifyTEnv env tenvs vs
-                                            i:is -> do i' <- unifN i is
-                                                       ((v,i'):) <$> unifyTEnv env tenvs vs
-  where 
-    unifN (NVar (TSchema _ [] t d)) is  = do mapM (unifVar t d) is
-                                             return (NVar (tSchema' [] t d))
-    unifN (NSVar (TSchema _ [] t d)) is = do mapM (unifVar t d) is
-                                             return (NSVar (tSchema' [] t d))
-    unifN i is                          = notYet (loc v) (text "Merging of declarations")
+unifyTEnv                               :: Env -> [TEnv] -> [Name] -> TypeM ()
+unifyTEnv env tenvs []                  = return ()
+unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
+                                            ni:nis -> mapM (unif ni) nis >> unifyTEnv env tenvs vs
+  where
+    unif (NVar t) (NVar t')             = unifT t t'
+    unif (NSVar t) (NSVar t')           = unifT t t'
+    unif (NSig t) (NSig t')             = unifT t t'
+    unif (NClass q us te) (NClass q' us' te') 
+                                        = unifC q us te q' us' te'
+    unif (NProto q us te) (NProto q' us' te') 
+                                        = unifC q us te q' us' te'
+    unif (NExt q us te) (NExt q' us' te') 
+                                        = unifC q us te q' us' te'
+    unif _ _                            = err1 v "Inconsistent bindings for"
 
-    unifVar t d (NVar (TSchema _ [] t' d'))
+    unifT (TSchema _ [] t d) (TSchema _ [] t' d')
       | d == d'                         = constrain [Equ t t']
-      | otherwise                       = err1 v "Inconsistent decorations for"
-    unifVar t d (NSVar (TSchema _ [] t' d'))
-      | d == d'                         = constrain [Equ t t']
-      | otherwise                       = err1 v "Inconsistent decorations for"
-    unifVar t d ni                      = err1 v "Inconsistent bindings for"
+    unifT t t'                          = constrain [EquGen t t']
+    
+    unifC q us te q' us' te'
+      | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
+      | not $ null diff                 = err1 v "Inconsistent attribute sets for"
+      | otherwise                       = unifyTEnv env [te,te'] vs
+      where diff                        = (vs \\ vs') ++ (vs' \\ vs)
+            (vs, vs')                   = (dom te, dom te')
 
 
 -- Import handling -----------------------------------------------------------------------
