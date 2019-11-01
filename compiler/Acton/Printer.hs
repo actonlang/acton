@@ -397,6 +397,7 @@ instance Pretty Aug where
 instance Pretty TSchema where
     pretty (TSchema _ [] t NoDec)   = pretty t
     pretty (TSchema _ q t NoDec)    = pretty q <+> text "=>" <+> pretty t
+    pretty (TSchema l q t d)        = pretty d <+> pretty (TSchema l q t NoDec)
 
 instance Pretty TVar where
     pretty (TV n)                   = pretty n
@@ -428,6 +429,7 @@ prettyFXRow (TRow _ n t r)
   | n == mutKW                      = text "mut" <+> prettyFXRow r
   | n == retKW                      = text "ret" <> parens (pretty t) <+> prettyFXRow r
 prettyFXRow (TVar _ tv)             = pretty tv
+prettyFXRow (TWild _)               = text "_"
 prettyFXRow (TNil _)                = empty
 
 prettyPosRow (TRow _ _ t (TNil _))  = pretty t

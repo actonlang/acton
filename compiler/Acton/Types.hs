@@ -256,11 +256,9 @@ instance InfEnv Stmt where
 
 instance InfEnv Decl where
     infEnv env (Actor _ n q p k t _)
-      | nodup (p,k)                     = do t1 <- instantiate env $ extractSig n q p k t NoMod
-                                             return $ nVar n t1
+      | nodup (p,k)                     = nVar' n <$> instwild (extractSig n q p k t NoMod)
     infEnv env (Def _ n q p k t _ m)
-      | nodup (p,k)                     = do t1 <- instantiate env $ extractSig n q p k t m
-                                             return $ nVar n t1
+      | nodup (p,k)                     = nVar' n <$> instwild (extractSig n q p k t m)
     infEnv env (Class _ n q us b)       = do te <- infEnv env1 b
                                              return $ nClass n q (mro env False q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
@@ -358,7 +356,6 @@ matchHyp env n t d                      = case findType n env of
 
 matchDec NoDec d'                       = True
 matchDec d d'                           = d == d'
-  
 
 matchTEnv te1 te2                       = [ Match sc (find v) | (v,sc) <- nSignatures te1 ]
   where find v                          = fromJust $ lookup v schemas
