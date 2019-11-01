@@ -155,8 +155,8 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Modif      = Sync Bool | Async | NoMod | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
-data Decoration = ClassAttr | InstAttr | StaticMethod | ClassMethod | InstMethod | NoDec deriving (Eq,Show,Read,Generic)
+data Modif      = NoMod | Sync Bool | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
+data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
 
 data OType      = OVar      OVar
@@ -255,6 +255,7 @@ type TRow       = Type
 
 
 monotype t      = TSchema NoLoc [] t NoDec
+monotype' t d   = TSchema NoLoc [] t d
 tSchema q t     = TSchema NoLoc q t NoDec
 tSchema' q t d  = TSchema NoLoc q t d
 

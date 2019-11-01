@@ -570,11 +570,11 @@ decorator1 decoration = do
 signature :: Parser S.Decl
 signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
    where sig_decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr  
-                      <|> rword "@instattr" *> assertDecl *> newline1 *> return S.InstAttr
+                      <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
                       <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
-                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return S.InstMethod
+                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMethod True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
-                      <|> return S.NoDec
+                      <|> ifClassProtoExt (return $ S.InstMethod False) (return S.NoDec)    -- default in a class/protocol/extension
 
          tsig = do v <- name
                    vs <- commaList name
@@ -582,6 +582,9 @@ signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline
                    t <- tschema
                    return (v:vs,t)
 
+         decorate (S.InstMethod False) (S.TSchema l [] t S.NoDec)       -- make default decoration depend on the tsig arity
+           | S.TFun{} <- t  = S.TSchema l [] t (S.InstMethod False)
+           | otherwise      = S.TSchema l [] t (S.InstAttr False)
          decorate dec (S.TSchema l q t S.NoDec) = S.TSchema l q t dec
  
 funcdef :: Parser S.Decl
@@ -602,7 +605,7 @@ funcdef =  addLoc $ do
          fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
-                      <|> ifClassProtoExt (return (S.InstMeth False)) (return S.NoMod)
+                      <|> ifClassProtoExt (return $ S.InstMeth False) (return S.NoMod)
 
 
 optbinds :: Parser [S.TBind]

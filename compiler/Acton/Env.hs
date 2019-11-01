@@ -33,16 +33,17 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, selfbound :: Maybe TCon }
 
-data NameInfo               = NVar    TSchema
-                            | NSVar   TSchema
-                            | NClass  [TBind] [TCon] TEnv
-                            | NProto  [TBind] [TCon] TEnv
-                            | NExt    [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
-                            | NTVar   [TCon]
-                            | NPAttr  QName         -- protocol attribute (global), arg points to owning protocol
-                            | NAlias  QName
-                            | NMAlias ModName
-                            | NModule TEnv
+data NameInfo               = NVar      TSchema
+                            | NSVar     TSchema
+                            | NClass    [TBind] [TCon] TEnv
+                            | NProto    [TBind] [TCon] TEnv
+                            | NExt      [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
+                            | NTVar     [TCon]
+                            | NPAttr    QName         -- protocol attribute (global), arg points to owning protocol
+                            | NAlias    QName
+                            | NMAlias   ModName
+                            | NModule   TEnv
+                            | NSig      TSchema
                             | NReserved
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
@@ -62,8 +63,12 @@ nClass n q us te            = [(n, NClass q us te)]
 nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto n q us te            = [(n, NProto q us te)]
 
-nSignatures                 :: TEnv -> [(Name, TSchema)]
-nSignatures te              = [ (n,sc) | (n, NVar sc) <- te ]
+nSig                        :: [Name] -> TSchema -> TEnv
+nSig xs t                   = [ (x, NSig t) | x <- xs ]
+
+
+nVars                       :: TEnv -> [(Name, TSchema)]
+nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
 mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
 mapVars f te                = map g te
@@ -93,6 +98,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
+    pretty (n, NSig t)          = pretty n <+> text "(reserved)" <+> colon <+> pretty t
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
     pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
@@ -112,6 +118,7 @@ instance Subst NameInfo where
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
+    msubst (NSig t)             = NSig <$> msubst t
     msubst NReserved            = return NReserved
     msubst NBlocked             = return NBlocked
 
@@ -125,6 +132,7 @@ instance Subst NameInfo where
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
+    tyfree (NSig t)             = tyfree t
     tyfree NReserved            = []
     tyfree NBlocked             = []
 
@@ -195,6 +203,7 @@ instance Unalias NameInfo where
     unalias env (NPAttr qn)         = NPAttr (unalias env qn)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
+    unalias env (NSig t)            = NSig (unalias env t)
     unalias env NReserved           = NReserved
     unalias env NBlocked            = NBlocked
 
@@ -274,13 +283,22 @@ defineSelf n q env          = env{ selfbound = Just tc }
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just NBlocked
 
-reserved                    :: Env -> Name -> Bool
-reserved env n              = lookup n (names env) == Just NReserved
+reserved                    :: Name -> Env -> Bool
+reserved n env              = case lookup n (names env) of
+                                Just NReserved -> True
+                                _ -> False
+
+reservedOrSig               :: Name -> Env -> (Bool, Maybe TSchema)
+reservedOrSig n env         = case lookup n (names env) of
+                                Just NReserved -> (True, Nothing)
+                                Just (NSig t)  -> (False, Just t)
+                                _              -> (False, Nothing)
 
 findName                    :: Name -> Env -> NameInfo
 findName n env              = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just NReserved -> nameReserved n
+                                Just (NSig t) -> nameReserved n
                                 Just NBlocked -> nameBlocked n
                                 Just info -> info
                                 Nothing -> trace ("### names:\n" ++ render (vcat $ map pretty (names env))) $ nameNotFound n
@@ -487,6 +505,7 @@ data CheckerError                       = FileNotFound ModName
                                         | NameNotFound Name
                                         | NameReserved Name
                                         | NameBlocked Name
+                                        | IllegalRedef Name
                                         | IllegalImport SrcLoc
                                         | DuplicateImport Name
                                         | NoItem ModName Name
@@ -495,13 +514,14 @@ data CheckerError                       = FileNotFound ModName
 
 instance Control.Exception.Exception CheckerError
 
-checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ render (pretty n))
+checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ prstr n)
 checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
 checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
 checkerError (NameBlocked n)            = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
+checkerError (IllegalRedef n)           = (loc n, " Illegal redefinition of " ++ prstr n)
 checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
 checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
-checkerError (NoItem m n)               = (loc n, " Module " ++ render (pretty m) ++ " does not export " ++ nstr n)
+checkerError (NoItem m n)               = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
 checkerError (OtherError l str)         = (l,str)
 
 nameNotFound n                          = Control.Exception.throw $ NameNotFound n
@@ -509,6 +529,8 @@ nameNotFound n                          = Control.Exception.throw $ NameNotFound
 nameReserved n                          = Control.Exception.throw $ NameReserved n
 
 nameBlocked n                           = Control.Exception.throw $ NameBlocked n
+
+illegalRedef n                          = Control.Exception.throw $ IllegalRedef n
 
 fileNotFound n                          = Control.Exception.throw $ FileNotFound n
 
@@ -523,188 +545,4 @@ err l s                                 = Control.Exception.throw $ OtherError l
 err1 x s                                = err (loc x) (s ++ " " ++ prstr x)
 
 err2 (x:_) s                            = err1 x s
-
-
-
-
-
-
-
-
--- Old builtins --------------------------------------------------------------------------
-
-old_builtins                = [
-                                (nm "record", schema [a] []
-                                            (OFun ONil a (ORecord a))),
-                                (nm "merge", schema [a,b,c] []
-                                            (OFun ONil (OPos a (OPos b ONil)) c)),     -- very liberal type, for now!
-                                (nm "sorted", schema [a,b] [QIn l0 0 a b]               -- contract requirement (containment)
-                                            (OFun ONil (OPos b ONil) b)),
-                                (nm "filter", schema [a, b] [QIn l0 0 a b]              -- contract requirement (containment)
-                                            (OFun ONil (OPos (OFun ONil (OPos a ONil) OBool) (OPos b ONil)) b)),
-                                (nm "id", schema [a] []
-                                            (OFun ONil (OPos a ONil) OInt)),
-                                (nm "len", schema [a,b] [QIn l0 0 a b]                  -- contract requirement (containment)
-                                            (OFun ONil (OPos b ONil) OInt)),
-                                (nm "dict", schema [a,b] []
-                                            (OFun ONil (OPos (ODict a b) ONil) (ODict a b))),
-                                (nm "sorteddict", schema [a,b] []
-                                            (OFun ONil (OPos (ODict a b) ONil) (ODict a b))),
-                                (nm "defaultdict", schema [a,b] []
-                                            (OFun ONil (OPos (OFun ONil ONil b) ONil) (ODict a b))),
-                                (nm "list", schema [a] []                               -- contract requirement (containment)
-                                            (OFun ONil (OPos (OList a) ONil) (OList a))),
-                                (nm "set", schema [a] []                                -- contract requirement (containment)
-                                            (OFun ONil (OPos (OList a) ONil) (OSet a))),
-                                (nm "sortedset", schema [a] []                                -- contract requirement (containment)
-                                            (OFun ONil (OPos (OList a) ONil) (OSet a))),
-                                (nm "sum", schema [] []
-                                            (OFun ONil (OPos (OList OInt) ONil) OInt)),
-                                (nm "enumerate", schema [a] []
-                                            (OFun ONil (OPos (OList a) ONil) (OList (OTuple (OPos OInt (OPos a ONil)))))),
-                                (nm "reversed", schema [a] []
-                                            (OFun ONil (OPos (OList a) ONil) (OList a))),
-                                (nm "min", schema [a] []
-                                            (OFun ONil (OPos (OList a) ONil) a)),
-                                (nm "max", schema [a] []
-                                            (OFun ONil (OPos (OList a) ONil) a)),
-                                (nm "iter", schema [a,b] [QIn l0 0 a b]
-                                            (OFun ONil (OPos b ONil) (OList a))),
-                                (nm "next", schema [a] []
-                                            (OFun ONil (OPos (OList a) ONil) a)),
-                                (nm "IPv4Address", schema [] []
-                                            (OFun ONil (OPos OStr ONil) OInt)),
-                                (nm "IPv4Network", schema [] []
-                                            (OFun ONil (OPos OStr ONil) OInt)),
-                                (nm "IPv6Address", schema [] []
-                                            (OFun ONil (OPos OStr ONil) OInt)),
-                                (nm "IPv6Network", schema [] []
-                                            (OFun ONil (OPos OStr ONil) OInt)),
-                                (nm "Decimal", schema [a,b] []
-                                            (OFun ONil (OPos a ONil) b)),
-                                (nm "abs", schema [] []
-                                            (OFun ONil (OPos OInt ONil) OInt)),
-                                (nm "all",  schema [a] []
-                                            (OFun ONil a OBool)),
-                                (nm "any",  schema [a] []
-                                            (OFun ONil a OBool)),
-                                (nm "int",  schema [a] []
-                                            (OFun ONil a OInt)),
-                                (nm "str", schema [a] []
-                                            (OFun ONil a OStr)),
-                                (nm "print", schema [a] []
-                                            (OFun ONil a ONone)),
-                                (nm "postpone", schema [a,b] []
-                                            (OFun (syncFX ONil) (OPos OInt (OPos (OFun (asyncFX ONil) a (OMsg a)) a)) ONone)),
-                                (nm "weakref", schema [a] []
-                                            (OFun ONil (OPos a ONil) OInt)),
-                                (nm "weakref_subscribe", schema [a, b] []
-                                            (OFun ONil (OPos a (OPos b ONil)) ONone)),
-                                (nm "weakref_unsubscribe", schema [a] []
-                                            (OFun ONil (OPos a ONil) ONone)),
-                                (nm "range", schema [] []
-                                            (OFun ONil (OPos OInt (OPos OInt ONil)) (OList OInt))),
-                                (nm "zip", schema [a,b] []
-                                            (OFun ONil (OPos (OList a) (OPos (OList b) ONil)) (OList (OTuple (OPos a (OPos b ONil)))))),
-                                (nm "__env__", schema [a] []
-                                            (OFun ONil (OPos (ORecord a) ONil) (ORecord (
-                                                OKwd (nm "create_external_api_process") 
-                                                        (OSchema [[1],[2]] []
-                                                            (OFun (syncFX (OVar [2])) (
-                                                                OKwd (nm "executable_name") OStr (
-                                                                OKwd (nm "args") (OList OStr) (
-                                                                OKwd (nm "timeout") OInt (
-                                                                OKwd (nm "node") OStr ONil)))) (OVar [1]))) (
-                                                OKwd (nm "connect_external_api_process") (OFun (syncFX ONil) (
-                                                                OKwd (nm "token") OStr ONil) OInt) ONil))))),
-                                (nm "__get_current_placement__", schema [a] []
-                                            (OFun (syncFX ONil) (OPos a ONil) (OSet OStr))),
-                                (nm "__get_placement_constraints__", schema [a] []
-                                            (OFun (syncFX ONil) (OPos a ONil) (OSet OStr))),
-                                (nm "__set_placement_constraints__", schema [a] []
-                                            (OFun (syncFX ONil) (OPos a (OPos (OSet OStr) ONil)) ONil)),
-                                (nm "getattr", schema [a,b] []
-                                            (OFun ONil (OPos (ORecord a) (OPos OStr ONil)) b)),
-                                (nm "Exception", schema [a] []
-                                            a),
-                                (nm "ArithmeticError", schema [a] []
-                                            a),
-                                (nm "FloatingPointError", schema [a] []
-                                            a),
-                                (nm "OverflowError", schema [a] []
-                                            a),
-                                (nm "ZeroDivisionError", schema [a] []
-                                            a),
-                                (nm "AssertionError", schema [a] []
-                                            a),
-                                (nm "AttributeError", schema [a] []
-                                            a),
-                                (nm "LookupError", schema [a] []
-                                            a),
-                                (nm "IndexError", schema [a] []
-                                            a),
-                                (nm "KeyError", schema [a] []
-                                            a),
-                                (nm "ReferenceError", schema [a] []
-                                            a),
-                                (nm "TypeError", schema [a] []
-                                            a),
-                                (nm "ValueError", schema [a] []
-                                            a),
-                                (nm "StaleActorReferenceException", schema [a,b] []
-                                            (OFun ONil (OPos a (OPos OStr b)) (ORecord (OKwd (nm "actor_id") a ONil))))
-                              ]
-  where a:b:c:_             = schemaOVars
-        schema tvs cs t     = OSchema (unOVar tvs) cs t
-        nm s                = Name l0 s
-
-
---------------------------------------------
-
-type OTEnv                  = [(Name,OType)]
-
-data OEnv                   = OEnv { venv :: [(Name, Maybe OType)], stvars :: [Name], ret :: Maybe OType }
-                            deriving (Eq,Show)
-instance Pretty OTEnv where
-    pretty tenv             = vcat (map pr tenv)
-      where pr (n,t)        = pretty n <+> colon <+> pretty t
-
-instance MapSubst OEnv where
-    mapsubst env            = do venv' <- mapsubst (venv env)
-                                 ret' <- mapsubst (ret env)
-                                 return env{ venv = venv', ret = ret' }
-    oTyvars env             = oTyvars (venv env)++ oTyvars (ret env)
-
-
-o_prune                     :: [Name] -> OTEnv -> OTEnv
-o_prune vs                  = filter ((`notElem` vs) . fst)
-
-o_emptyEnv                  :: OEnv
-o_emptyEnv                  = OEnv { venv = [], stvars = [], ret = Nothing }
-
-o_reserve                   :: [Name] -> OEnv -> OEnv
-o_reserve vs env            = env { venv = [ (v, Nothing) | v <- vs ] ++ venv env }
-
-o_define                    :: OTEnv -> OEnv -> OEnv
-o_define te env             = env { venv = [ (v, Just t) | (v,t) <- te ] ++ venv env }
-
-o_newstate                  :: [Name] -> OEnv -> OEnv
-o_newstate vs env           = env { stvars = vs }
-
-o_reserved                  :: OEnv -> Name -> Bool
-o_reserved env v            = lookup v (venv env) == Just Nothing
-
-o_findVar                   :: Name -> OEnv -> OType
-o_findVar n env             = case lookup n (venv env) of
-                                Nothing       -> nameNotFound n
-                                Just Nothing  -> nameReserved n
-                                Just (Just t) -> t
-
-o_setReturn                 :: OType -> OEnv -> OEnv
-o_setReturn t env           = env { ret = Just t }
-
-o_getReturn                 :: OEnv -> OType
-o_getReturn env             = fromJust $ ret env
-
-
 
