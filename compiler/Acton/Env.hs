@@ -360,17 +360,19 @@ newTEnv vs                  = do ts <- newTVars (length vs)
 
 -- Instantiation -------------------------------------------------------------------------
 
-instantiate env (TSchema _ [] t _)  = instwild t
-instantiate env (TSchema _ q t _)   = do tvs <- newTVars (length q)
-                                         let s = tybound q `zip` tvs
-                                         constrain $ constraintsOf (subst s q) env
-                                         instwild (subst s t)
+instantiate env (TSchema _ [] t _)
+                                = instwild t
+instantiate env (TSchema _ q t _)
+                                = do tvs <- newTVars (length q)
+                                     let s = tybound q `zip` tvs
+                                     constrain $ constraintsOf (subst s q) env
+                                     instwild (subst s t)
 
-constraintsOf q env         = [ constraint env t u | TBind v us <- q, let t = tVar v, u <- us ]
+constraintsOf q env             = [ constraint env t u | TBind v us <- q, let t = tVar v, u <- us ]
 
-constraint env t u@(TC n _) = case findQName n env of
-                                NClass{} -> Sub t (tCon u)
-                                NProto{} -> Impl t u
+constraint env t u@(TC n _)     = case findQName n env of
+                                    NClass{} -> Sub t (tCon u)
+                                    NProto{} -> Impl t u
 
 class Wild a where
     instwild                    :: a -> TypeM a
@@ -378,17 +380,23 @@ class Wild a where
     wildloc                     :: a -> [SrcLoc]
     wildloc a                   = []
 
+instance (Wild a) => Wild [a] where
+    instwild                    = mapM instwild
+    wildloc                     = concatMap wildloc
+
 instance Wild TSchema where
-    instwild (TSchema l q t d)  = TSchema l <$> mapM instwild q <*> instwild t <*> return d
-    wildloc (TSchema _ q t d)   = concatMap wildloc q ++ wildloc t
+    instwild (TSchema l q t d)
+      | nowild q                = TSchema l q <$> instwild t <*> return d
+    wildloc (TSchema _ q t d)
+      | nowild q                = wildloc t
 
 instance Wild TBind where
-    instwild (TBind tv us)      = TBind tv <$> mapM instwild us
-    wildloc (TBind _ us)        = concatMap wildloc us
+    instwild (TBind tv us)      = TBind tv <$> instwild us
+    wildloc (TBind _ us)        = wildloc us
 
 instance Wild TCon where
-    instwild (TC c ts)          = TC c <$> mapM instwild ts
-    wildloc (TC _ ts)           = concatMap wildloc ts
+    instwild (TC c ts)          = TC c <$> instwild ts
+    wildloc (TC _ ts)           = wildloc ts
 
 instance Wild Type where
     instwild (TWild _)          = newTVar
@@ -411,10 +419,11 @@ instance Wild Type where
     wildloc (TRow _ _ t r)      = wildloc t ++ wildloc r
     wildloc t                   = []
 
-noWild x
+nowild x
   | null ls                     = True
   | otherwise                   = err1 (head ls) "Illegal wildcard type"
   where ls                      = wildloc x
+
 
 -- Environment unification ---------------------------------------------------------------
 
