@@ -144,7 +144,7 @@ instance Vars Decl where
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
     bound (Extension _ n _ _ _)     = []
-    bound (Signature _ ns t)        = []
+    bound (Signature _ ns t)        = ns
 
 instance Vars Branch where
     free (Branch e ss)              = free e ++ free ss

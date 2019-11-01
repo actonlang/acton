@@ -63,10 +63,12 @@ prettySig vs (TSchema _ q t dec)    = pretty dec $+$ commaList vs <+> text ":" <
 
 instance Pretty Decoration where
     pretty ClassAttr                = text "@classattr"
-    pretty InstAttr                 = text "@instattr"
+    pretty (InstAttr True)          = text "@instattr"
+    pretty (InstAttr False)         = empty -- text "(@instattr)"
     pretty StaticMethod             = text "@staticmethod"
     pretty ClassMethod              = text "@classmethod"
-    pretty InstMethod               = text "@instmethod"
+    pretty (InstMethod True)        = text "@instmethod"
+    pretty (InstMethod False)       = empty -- text "(@instmethod)"
     pretty NoDec                    = empty
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
