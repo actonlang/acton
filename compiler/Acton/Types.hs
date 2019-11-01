@@ -54,15 +54,15 @@ noshadow svs x
   | otherwise                           = True
   where vs                              = intersect (bound x) svs
 
-noEscape te
-  | not $ null sigs                     = err2 sigs "Dangling type signatures"
+noescape te                                                                                 -- TODO: check for escaping classes/protocols as well
+--  | not $ null sigs                     = err2 sigs "Dangling type signature for"         -- TODO: turn on again!
   | otherwise                           = te
   where sigs                            = nSigs te
 
 -- Infer -------------------------------
 
 infTop env ss                           = do pushFX fxNil
-                                             te <- noEscape <$> infEnv env ss
+                                             te <- noescape <$> infEnv env ss
                                              popFX
                                              cs <- collectConstraints
                                              solve cs
@@ -131,8 +131,8 @@ commonTEnv env tenvs                    = do unifyTEnv env tenvs vs
 
 
 infLiveEnv env x
-  | fallsthru x                         = (Just . noEscape) <$> infEnv env x
-  | otherwise                           = (const Nothing . noEscape) <$> infEnv env x
+  | fallsthru x                         = (Just . noescape) <$> infEnv env x
+  | otherwise                           = (const Nothing . noescape) <$> infEnv env x
 
 instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return []
@@ -186,24 +186,24 @@ instance InfEnv Stmt where
                                              te <- infLiveEnv env els
                                              commonTEnv env $ catMaybes (te:tes)
     infEnv env (While _ e b els)        = do inferBool env e
-                                             _ <- noEscape <$> infEnv env b
-                                             _ <- noEscape <$> infEnv env els
+                                             _ <- noescape <$> infEnv env b
+                                             _ <- noescape <$> infEnv env els
                                              return []
     infEnv env (For l p e b els)
       | nodup p                         = do (te, t1) <- infEnvT env p
                                              t2 <- infer env e
-                                             _ <- noEscape <$> infEnv (define te env) b
-                                             _ <- noEscape <$> infEnv env els
+                                             _ <- noescape <$> infEnv (define te env) b
+                                             _ <- noescape <$> infEnv env els
                                              constrain [Impl t2 (cCollection t1)]
                                              return []
     infEnv env (Try _ b hs els fin)     = do te <- infLiveEnv env (b ++ els)
                                              tes <- mapM (infLiveEnv env) hs
                                              te1 <- commonTEnv env $ catMaybes $ te:tes
-                                             te2 <- noEscape <$> infEnv (define te1 env) fin
+                                             te2 <- noescape <$> infEnv (define te1 env) fin
                                              return (nCombine te1 te2)
     infEnv env (With _ items b)
       | nodup items                     = do te <- infEnv env items
-                                             te1 <- noEscape <$> infEnv (define te env) b
+                                             te1 <- noescape <$> infEnv (define te env) b
                                              return $ prune (dom te) te1
 
     infEnv env (VarAssign _ pats e)
@@ -270,7 +270,7 @@ instance InfEnv Decl where
                                                 Nothing        -> illegalRedef n
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
-      | nowild q && nowild us           = do te <- noEscape <$> infEnv env1 b
+      | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
                                              return $ nClass n q (mro env False q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Protocol _ n q us b)
@@ -279,7 +279,7 @@ instance InfEnv Decl where
                                              return $ nProto n q (mro env True q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Extension _ n q us b)
-      | nowild q && nowild us           = do te <- noEscape <$> infEnv env1 b
+      | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
                                              return [] -- undefined
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Signature _ ns sc)
@@ -377,7 +377,7 @@ instance Check Decl where
       | noshadow svars p                = do pushFX (fxAct tWild)
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
-                                             te2 <- noEscape <$> infEnv (define te1 (define te0 env1)) b
+                                             te2 <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newTVar
                                              checkHyp env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
@@ -391,7 +391,7 @@ instance Check Decl where
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
-                                             _ <- noEscape <$> infEnv (define te1 (define te0 env1)) b
+                                             _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxSync <$> newTVar
                                              checkHyp env n (tFun fx prow krow t) NoDec
@@ -404,7 +404,7 @@ instance Check Decl where
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
-                                             _ <- noEscape <$> infEnv (define te1 (define te0 env1)) b
+                                             _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
                                              checkHyp env n (tFun fx prow krow (tMsg t)) NoDec
@@ -418,7 +418,7 @@ instance Check Decl where
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
                                              (te1, krow) <- infEnvT (define te0 env1) k
-                                             _ <- noEscape <$> infEnv (define te1 (define te0 env1)) b
+                                             _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (prow',krow') <- splitRows modif prow krow
                                              checkHyp env n (tFun fx prow' krow' t) (extractDecoration modif)
@@ -473,7 +473,7 @@ env2row                                 = foldl (\r (n,t) -> kwdRow n t r)      
 
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do inferBool env e
-                                             noEscape <$> infEnv env b
+                                             noescape <$> infEnv env b
 
 instance InfEnv WithItem where
     infEnv env (WithItem e Nothing)     = do t <- infer env e
@@ -486,7 +486,7 @@ instance InfEnv WithItem where
 
 instance InfEnv Handler where
     infEnv env (Handler ex b)           = do te <- infEnv env ex
-                                             te1 <- noEscape <$> infEnv (define te env) b
+                                             te1 <- noescape <$> infEnv (define te env) b
                                              return $ prune (dom te) te1
 
 instance InfEnv Except where
