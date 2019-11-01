@@ -266,15 +266,16 @@ instance InfEnv Decl where
                                                 Nothing        -> illegalRedef n
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
-      | otherwise                       = do te <- infEnv env1 b
+      | nowild q && nowild us           = do te <- infEnv env1 b
                                              return $ nClass n q (mro env False q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
-      | otherwise                       = do te <- infEnv env1 b
+      | nowild q && nowild us           = do te <- infEnv env1 b
                                              return $ nProto n q (mro env True q us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-    infEnv env (Extension _ n q us b)   = return [] -- undefined
+    infEnv env (Extension _ n q us b)
+      | nowild q && nowild us           = return [] -- undefined
     infEnv env (Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
       | otherwise                       = do t0 <- instwild sc
