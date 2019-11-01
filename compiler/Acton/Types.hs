@@ -119,11 +119,11 @@ gen1                                    :: Env -> Name -> Type -> Decoration -> 
 gen1 env n t d                          = do te <- genTEnv env (nVar' n (monotype' t d))
                                              return $ snd $ head $ nVars te
 
-commonTEnv env tenvs                    = unifyTEnv env tenvs (foldr intersect [] $ map dom tenvs)
-
--- unionTEnv env tenvs                     = do te1 <- commonTEnv env tenvs
---                                              te2 <- unifyTEnv env tenvs (concatMap dom tenvs \\ dom te1)
---                                              return (te1++te2)                      -- TODO: o_constrain opt te2...
+commonTEnv                              :: Env -> [TEnv] -> TypeM TEnv
+commonTEnv env []                       = return []
+commonTEnv env tenvs                    = do unifyTEnv env tenvs vs
+                                             return $ prune vs $ head tenvs
+  where vs                              = foldr intersect [] $ map dom tenvs
 
 
 infLiveEnv env x
@@ -255,15 +255,15 @@ instance InfEnv Decl where
     infEnv env (Actor _ n q p k t _)
       | nodup (p,k)                     = do t0 <- instwild (extractSig n q p k t NoMod)
                                              case reservedOrSig n env of
-                                                (True, _)        -> return (nVar' n t0)
-                                                (False, Just t1) -> constrain [Match t0 t1] >> return (nVar' n t1)
-                                                (False, Nothing) -> illegalRedef n
+                                                Just Nothing   -> return (nVar' n t0)
+                                                Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
+                                                Nothing        -> illegalRedef n
     infEnv env (Def _ n q p k t _ m)
       | nodup (p,k)                     = do t0 <- instwild (extractSig n q p k t m)
                                              case reservedOrSig n env of
-                                                (True, _)        -> return (nVar' n t0)
-                                                (False, Just t1) -> constrain [Match t0 t1] >> return (nVar' n t1)
-                                                (False, Nothing) -> illegalRedef n
+                                                Just Nothing   -> return (nVar' n t0)
+                                                Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
+                                                Nothing        -> illegalRedef n
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | otherwise                       = do te <- infEnv env1 b
@@ -358,24 +358,12 @@ extractDecoration ClassMeth             = ClassMethod
 extractDecoration (InstMeth f)          = InstMethod f
 extractDecoration _                     = NoDec
 
-matchHyp env n t d                      = case findType n env of
-                                            (TSchema _ [] t' d')
-                                              | d == NoDec || d == d' -> constrain [Sub t t']
-                                              | otherwise -> err1 n "Inconsistent decorations for"
-                                            sc' -> do
-                                              sc <- gen1 env n t d
-                                              constrain [Match sc sc']
-
-matchTEnv te1 te2                       = [ Match sc (find v) | (v,sc) <- nVars te1 ]
-  where find v                          = fromJust $ lookup v schemas
-        schemas                         = nVars te2
-
 
 class Check a where
     check                               :: Env -> a -> TypeM ()
 
 instance (Check a) => Check [a] where
-    check env ds                        = mapM (check env) ds >> return ()
+    check env ds                        = mapM_ (check env) ds
 
 instance Check Decl where
     check env (Actor l n q p k ann b)
@@ -385,7 +373,7 @@ instance Check Decl where
                                              te2 <- infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newTVar
-                                             matchHyp env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
+                                             checkHyp env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
       where svars                       = statedefs b
             env0                        = define envActorSelf $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
@@ -399,7 +387,7 @@ instance Check Decl where
                                              _ <- infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxSync <$> newTVar
-                                             matchHyp env n (tFun fx prow krow t) NoDec
+                                             checkHyp env n (tFun fx prow krow t) NoDec
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
@@ -412,7 +400,7 @@ instance Check Decl where
                                              _ <- infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
-                                             matchHyp env n (tFun fx prow krow (tMsg t)) NoDec
+                                             checkHyp env n (tFun fx prow krow (tMsg t)) NoDec
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
@@ -426,30 +414,30 @@ instance Check Decl where
                                              _ <- infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (prow',krow') <- splitRows modif prow krow
-                                             matchHyp env n (tFun fx prow' krow' t) (extractDecoration modif)
+                                             checkHyp env n (tFun fx prow' krow' t) (extractDecoration modif)
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
             splitRow (InstMeth _) (TRow _ n sc r)
-                                        = constrain [Match sc (monotype tSelf)] >> return r
+                                        = constrain [EquGen sc (monotype tSelf)] >> return r
             splitRow (ClassMeth) (TRow _ n sc r)
-                                        = constrain [Match sc (monotype (tAt (findSelf env)))] >> return r
+                                        = constrain [EquGen sc (monotype (tAt (findSelf env)))] >> return r
             splitRow m r                = return r
 
     check env (Class l n _ _ b)         = do pushFX fxNil
                                              check (define te env1) b
-                                             popFX
+                                             popFX                              -- TODO: check overrides in te2 against the us
                                              te2 <- genTEnv env1 te             -- TODO: check no dangling sigs in te2 of any us
-                                             constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
+                                             unifyTEnv env1 [te2,te] (dom te)
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findClass (NoQual n) env
 
     check env (Protocol l n q us b)     = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
-                                             te2 <- genTEnv env1 te
-                                             constrain $ matchTEnv te2 te       -- TODO: check overrides in te2 against the us
+                                             te2 <- genTEnv env1 te             -- TODO: check overrides in te2 against the us
+                                             unifyTEnv env1 [te2,te] (dom te)
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findProto (NoQual n) env
 
@@ -459,6 +447,14 @@ instance Check Decl where
 instance Check Stmt where
     check env (Decl _ ds)               = check env ds
     check env s                         = return ()
+
+checkHyp env n t d                      = case findType n env of
+                                            (TSchema _ [] t' d')
+                                               | d == NoDec || d == d' -> constrain [Sub t t']
+                                               | otherwise -> err1 n "Inconsistent decorations for"
+                                            sc' -> do
+                                               sc <- gen1 env n t d
+                                               constrain [EquGen sc sc']
 
 
 
@@ -685,7 +681,7 @@ instance (Infer a) => Infer (Maybe a) where
 instance InfEnvT PosPar where
     infEnvT env (PosPar n ann e p)      = do sc <- maybe (monotype <$> newTVar) instwild ann
                                              t <- infer env e
-                                             constrain [Match (monotype t) sc]
+                                             constrain [SubGen (monotype t) sc]
                                              (te,r) <- infEnvT (define (nVar' n sc) env) p
                                              return (nVar' n sc ++ te, posRow sc r)
     infEnvT env (PosSTAR n ann)         = do r <- newTVar
@@ -697,7 +693,7 @@ instance InfEnvT PosPar where
 instance InfEnvT KwdPar where
     infEnvT env (KwdPar n ann e k)      = do sc <- maybe (monotype <$> newTVar) instwild ann
                                              t <- infer env e
-                                             constrain [Match (monotype t) sc]
+                                             constrain [SubGen (monotype t) sc]
                                              (te,r) <- infEnvT (define (nVar' n sc) env) k
                                              return (nVar' n sc ++ te, kwdRow n sc r)
     infEnvT env (KwdSTAR n ann)         = do r <- newTVar
@@ -787,12 +783,12 @@ instance InfEnvT KwdPat where
 instance InfEnvT Pattern where
     infEnvT env (PVar _ n ann)          = do t0 <- maybe newTVar instwild ann
                                              case reservedOrSig n env of
-                                                 (True, _) ->
+                                                 Just Nothing ->
                                                      return (nVar n t0, t0)
-                                                 (False, Just t1) -> do
-                                                     constrain [Match (monotype t0) t1]
+                                                 Just (Just t1) -> do
+                                                     constrain [EquGen (monotype t0) t1]
                                                      return (nVar' n t1, t0)        -- TODO: return scheme t1 instead
-                                                 (False, Nothing) ->
+                                                 Nothing ->
                                                      case findType n env of
                                                          TSchema _ [] t _ -> return ([], t)
                                                          _ -> err1 n "Polymorphic variable not assignable:"
