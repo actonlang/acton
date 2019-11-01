@@ -70,6 +70,14 @@ nProto n q us te            = [(n, NProto q us te)]
 nVars                       :: TEnv -> [(Name, TSchema)]
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
+nSigs                       :: TEnv -> [Name]
+nSigs []                    = []
+nSigs ((n, NSig _):te)
+  | n `notElem` dom te      = n : nSigs te
+nSigs (_:te)                = nSigs te
+
+nCombine te1 te2            = te1 ++ te2
+
 mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
 mapVars f te                = map g te
   where g (n, NVar sc)      = (n, NVar (f sc))
@@ -277,8 +285,11 @@ defineTVars                 :: [TBind] -> Env -> Env
 defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] }
 
 defineSelf                  :: Name -> [TBind] -> Env -> Env
-defineSelf n q env          = env{ selfbound = Just tc }
-  where tc                  = TC (NoQual n) [ tVar tv | TBind tv _ <- q ]
+defineSelf n q env          = defineSelf' (NoQual n) q env
+
+defineSelf'                 :: QName -> [TBind] -> Env -> Env
+defineSelf' qn q env        = env{ selfbound = Just tc }
+  where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just NBlocked
