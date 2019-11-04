@@ -856,7 +856,10 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     }
 
     *start_row = HEAD(rows);
-    for(*end_row = *start_row;*end_row != NULL;*end_row = NEXT(*end_row));
+    for(*end_row = *start_row;NEXT(*end_row) != NULL;*end_row = NEXT(*end_row));
+
+    *entries_read = response->no_cells;
+	*new_read_head = response->queue_index;
 
 	return response->status;
 }

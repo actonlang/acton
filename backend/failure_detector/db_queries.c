@@ -965,7 +965,6 @@ queue_query_message * init_consume_queue_message(cell_address * cell_address, in
 	return ca;
 }
 
-
 queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, uuid_t * txnid, long nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
@@ -976,10 +975,10 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
 	ca->consumer_id = consumer_id;
 	ca->cells = cells;
 	ca->no_cells = no_cells;
+	ca->status = status;
 	return ca;
 
 }
-
 
 void free_queue_message(queue_query_message * ca)
 {
@@ -1017,6 +1016,7 @@ void init_queue_message_msg(QueueQueryMessage * msg, queue_query_message * ca, C
 	msg->shard_id = ca->shard_id;
 	msg->consumer_id = ca->consumer_id;
 	msg->queue_index = ca->queue_index;
+	msg->status = ca->status;
 
 	if(ca->no_cells > 0)
 	{
@@ -1191,7 +1191,7 @@ char * to_string_queue_message(queue_query_message * ca, char * msg_buff)
 		}
 		case QUERY_TYPE_READ_QUEUE_RESPONSE:
 		{
-			sprintf(crt_ptr, "ReadQueueResponse(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, no_entries=%d, new_read_head=%ld, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index);
+			sprintf(crt_ptr, "ReadQueueResponse(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, no_entries=%d, new_read_head=%ld, status=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index, ca->status);
 			break;
 		}
 	}

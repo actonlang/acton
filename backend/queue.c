@@ -496,6 +496,8 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	cs->private_consume_head = -1;
 	cs->callback = callback;
 	cs->notified=0;
+	cs->prh_version=NULL;
+	cs->pch_version=NULL;
 
 	int ret = skiplist_insert(db_row->consumer_state, consumer_id, cs, fastrandstate);
 

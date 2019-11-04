@@ -66,6 +66,21 @@ int create_schema(db_t * db, unsigned int * fastrandstate) {
 	return db_create_table((WORD) 0, db_schema, db, fastrandstate);;
 }
 
+int create_queue_schema(db_t * db, unsigned int * fastrandstate)
+{
+	int no_queue_cols = 2;
+
+	int * col_types = (int *) malloc(no_queue_cols * sizeof(int));
+	col_types[0] = DB_TYPE_INT64;
+	col_types[1] = DB_TYPE_INT32;
+
+	int ret = create_queue_table((WORD) 1, no_queue_cols, col_types, db,  fastrandstate);
+	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
+}
+
+
 db_schema_t * get_schema(db_t * db, WORD table_key)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
@@ -423,7 +438,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 						result->version);
 		}
 
-		m = init_read_queue_response(q->cell_address, cells, no_cells, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+		m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
 
 /*
 		int no_cells = 0, i=0;
@@ -453,11 +468,11 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 
 #if (VERBOSE_RPC > 0)
 		char print_buff[1024];
-		to_string_range_read_response_message(m, (char *) print_buff);
-		printf("Sending range read response message: %s\n", print_buff);
+		to_string_queue_message(m, (char *) print_buff);
+		printf("Sending read queue response message: %s\n", print_buff);
 #endif
 
-		return serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+		return serialize_queue_message(m, snd_buf, snd_msg_len);
 }
 
 
@@ -497,8 +512,7 @@ int handle_unsubscribe_queue(queue_query_message * q, db_t * db, unsigned int * 
 		return 1;
 	}
 	else
-		return unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
-								1, db, fastrandstate);
+		return unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db);
 }
 
 int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
@@ -515,13 +529,13 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 		for(;j<q->cells[i].no_keys;j++)
 			column_values[j] = q->cells[i].keys[j];
 		for(;j<total_cols;j++)
-			column_values[j] = q->cells[i].values[j-q->cells[i].no_keys];
+			column_values[j] = q->cells[i].columns[j-q->cells[i].no_keys];
 
 		// Below will automatically trigger remote consumer notifications on the queue, either immediately or upon txn commit:
 		if(q->txnid == NULL) // Enqueue out of txn
-			status = enqueue(column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db, fastrandstate);
+			status = enqueue((WORD *) column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db, fastrandstate);
 		else // Enqueue in txn
-			status = enqueue_in_txn(column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
+			status = enqueue_in_txn((WORD *) column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
 
 		if(status != 0)
 			break;
@@ -538,19 +552,27 @@ int handle_read_queue(queue_query_message * q,
 	*schema = get_schema(db, (WORD) q->cell_address->table_key);
 
 	if(q->txnid == NULL) // Read queue out of txn
-		return read_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index, entries_read, new_read_head, prh_version,
-				start_row, end_row, 1, db);
+		return read_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+							(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index,
+							entries_read, new_read_head, prh_version,
+							start_row, end_row, 1, db);
 	else // Read queue in txn
-		return read_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index, entries_read, new_read_head, prh_version,
-				start_row, end_row, 1, q->txnid, db);
+		return read_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+									(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+									(int) q->queue_index, entries_read, new_read_head,
+									start_row, end_row, q->txnid, db, fastrandstate);
 }
 
 int handle_consume_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
 {
 	if(q->txnid == NULL) // Consume queue out of txn
-		return consume_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index, db);
+		return consume_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+							(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+							q->queue_index, db);
 	else // Consume queue in txn
-		return consume_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index, q->txnid, db);
+		return consume_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+									(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+									q->queue_index, q->txnid, db, fastrandstate);
 }
 
 int main(int argc, char **argv) {
@@ -582,6 +604,9 @@ int main(int argc, char **argv) {
   // Create schema:
   ret = create_schema(db, &seed);
   printf("Test %s - %s\n", "create_schema", ret==0?"OK":"FAILED");
+
+  ret = create_queue_schema(db, &seed);
+  printf("Test %s - %s\n", "create_queue_schema", ret==0?"OK":"FAILED");
 
   parentfd = socket(AF_INET, SOCK_STREAM, 0);
   if (parentfd < 0)
@@ -644,7 +669,7 @@ int main(int argc, char **argv) {
     		case RPC_TYPE_WRITE:
     		{
     			status = handle_write_query((write_query *) q, db, &seed);
-    			assert(status);
+    			assert(status == 0);
     			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
     			break;
     		}
@@ -670,14 +695,14 @@ int main(int argc, char **argv) {
     				case QUERY_TYPE_CREATE_QUEUE:
     				{
     					status = handle_create_queue(qm, db, &seed);
-    					assert(status);
+    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}
     				case QUERY_TYPE_DELETE_QUEUE:
     				{
     					status = handle_delete_queue(qm, db, &seed);
-    					assert(status);
+    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}
@@ -685,21 +710,21 @@ int main(int argc, char **argv) {
     				{
     					long prev_read_head = -1, prev_consume_head = -1;
     					status = handle_subscribe_queue(qm, &prev_read_head, &prev_consume_head, db, &seed);
-    					assert(status);
+    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}
     				case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
     				{
     					status = handle_unsubscribe_queue(qm, db, &seed);
-    					assert(status);
+    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}
     				case QUERY_TYPE_ENQUEUE:
     				{
     					status = handle_enqueue(qm, db, &seed);
-    					assert(status);
+    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}
@@ -707,12 +732,12 @@ int main(int argc, char **argv) {
     				{
     					int entries_read = 0;
     					long new_read_head = -1;
-    					vector_clock * prh_version = NULL,
-    					snode_t* start_row = NULL, * end_row = NULL;
+    					vector_clock * prh_version = NULL;
+    					snode_t * start_row = NULL, * end_row = NULL;
     					db_schema_t * schema = NULL;
     					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
     													&start_row, &end_row, &schema, db, &seed);
-    					assert(status);
+    					assert(status == QUEUE_STATUS_READ_COMPLETE);
     					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len);
 
     					break;
@@ -720,7 +745,7 @@ int main(int argc, char **argv) {
     				case QUERY_TYPE_CONSUME_QUEUE:
     				{
     					status = handle_consume_queue(qm, db, &seed);
-    					assert(status);
+    					assert(status == (int) qm->queue_index);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}

@@ -31,6 +31,9 @@ int no_primary_keys = 1;
 int no_clustering_keys = 2;
 int no_index_keys = 1;
 
+int no_queue_cols = 2;
+int no_enqueues = 5;
+
 int no_actors = 2;
 int no_collections = 2;
 int no_items = 2;
@@ -194,6 +197,96 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 	return 0;
 }
 
+// Queue tests:
+
+void consumer_callback(queue_callback_args * qca)
+{
+	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
+			(long) qca->app_id, (long) qca->shard_id, (long) qca->consumer_id,
+			(long) qca->table_key, (long) qca->queue_id,
+			qca->status);
+}
+
+
+int test_create_queue(remote_db_t * db)
+{
+	printf("TEST: create_queue\n");
+
+	uuid_t txnid;
+	uuid_generate(txnid);
+
+	return remote_create_queue_in_txn((WORD) 1, (WORD) 1, NULL, db); // &txnid
+}
+
+int test_delete_queue(remote_db_t * db)
+{
+	printf("TEST: delete_queue\n");
+
+	uuid_t txnid;
+	uuid_generate(txnid);
+
+	return remote_delete_queue_in_txn((WORD) 1, (WORD) 1, NULL, db); // &txnid
+}
+
+int test_subscribe_queue(remote_db_t * db)
+{
+	printf("TEST: subscribe_queue\n");
+	long prev_read_head = -1, prev_consume_head = -1;
+	queue_callback * qc = get_queue_callback(consumer_callback);
+
+	return remote_subscribe_queue((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, qc, &prev_read_head, &prev_consume_head, db); // &txnid
+}
+
+int test_unsubscribe_queue(remote_db_t * db)
+{
+	printf("TEST: unsubscribe_queue\n");
+	return remote_unsubscribe_queue((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, db); // &txnid
+}
+
+int test_enqueue(remote_db_t * db)
+{
+	printf("TEST: enqueue\n");
+
+	uuid_t txnid;
+	uuid_generate(txnid);
+	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
+
+	for(long i=0;i<no_enqueues;i++)
+	{
+		column_values[0] = (WORD) i;
+		column_values[1] = (WORD) i + 1;
+
+		if(remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) 1, (WORD) 1, NULL, db) != 0) // &txnid
+			return -1;
+	}
+
+	return 0;
+}
+
+int test_read_queue(remote_db_t * db)
+{
+	printf("TEST: read_queue\n");
+	int max_entries = no_enqueues;
+	int entries_read;
+	long new_read_head;
+	snode_t* start_row, * end_row;
+	int ret = remote_read_queue_in_txn((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1,
+									max_entries, &entries_read, &new_read_head,
+									&start_row, &end_row, NULL, db); // &txnid
+
+	assert(ret == QUEUE_STATUS_READ_COMPLETE);
+	assert(entries_read == no_enqueues);
+	assert(new_read_head == no_enqueues - 1);
+	assert(end_row->key - start_row->key == (entries_read - 1));
+
+	return ret;
+}
+
+int test_consume_queue(remote_db_t * db)
+{
+	printf("TEST: consume_queue\n");
+	return (remote_consume_queue_in_txn((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, no_enqueues - 1, NULL, db) == (no_enqueues - 1)); // &txnid
+}
 
 int main(int argc, char **argv) {
     int portno, n, status;
@@ -230,6 +323,27 @@ int main(int argc, char **argv) {
 
 	status = delete_test(schema, db, &seed);
 	printf("Test %s - %s (%d)\n", "delete_test", status==0?"OK":"FAILED", status);
+
+	status = test_create_queue(db);
+	printf("Test %s - %s (%d)\n", "create_queue", status==0?"OK":"FAILED", status);
+
+	status = test_subscribe_queue(db);
+	printf("Test %s - %s (%d)\n", "subscribe_queue", status==0?"OK":"FAILED", status);
+
+	status = test_enqueue(db);
+	printf("Test %s - %s (%d)\n", "enqueue", status==0?"OK":"FAILED", status);
+
+	status = test_read_queue(db);
+	printf("Test %s - %s (%d)\n", "read_queue", status==0?"OK":"FAILED", status);
+
+	status = test_consume_queue(db);
+	printf("Test %s - %s (%d)\n", "consume_queue", status==0?"OK":"FAILED", status);
+
+	status = test_unsubscribe_queue(db);
+	printf("Test %s - %s (%d)\n", "unsubscribe_queue", status==0?"OK":"FAILED", status);
+
+	status = test_delete_queue(db);
+	printf("Test %s - %s (%d)\n", "delete_queue", status==0?"OK":"FAILED", status);
 
 	status = close_remote_db(db);
 	printf("Test %s - %s (%d)\n", "close_remote_db", status==0?"OK":"FAILED", status);
