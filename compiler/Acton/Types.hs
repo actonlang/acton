@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct,typeError) where
+module Acton.Types(reconstruct,solverError) where
 
 import Debug.Trace
 import Data.Typeable
@@ -27,8 +27,7 @@ reconstruct outname env modul           = do InterfaceFiles.writeFile (outname +
         env1                            = reserve (bound suite) env{ defaultmod = m }
         (te,info)                       = runTypeM $ (,) <$> infTop env1 suite <*> getDump
 
-typeError                               = solveError
-
+solverError                             = typeError
 
 chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
 chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
@@ -59,13 +58,14 @@ noescape te                                                                     
   | otherwise                           = te
   where sigs                            = nSigs te
 
+
 -- Infer -------------------------------
 
 infTop env ss                           = do pushFX fxNil
                                              te <- noescape <$> infEnv env ss
                                              popFX
                                              cs <- collectConstraints
-                                             solve cs
+                                             solve env cs
                                              msubst te
 
 class Infer a where
@@ -77,18 +77,18 @@ class InfEnv a where
 class InfEnvT a where
     infEnvT                             :: Env -> a -> TypeM (TEnv,Type)
 
--- class InfData a where
---     infData                             :: Env -> a -> TypeM TEnv
+class InfData a where
+    infData                             :: Env -> a -> TypeM TEnv
 
 
-splitGen                                :: [TVar] -> TEnv -> Constraints -> TypeM (Constraints, TEnv)
-splitGen tvs te cs
+splitGen                                :: Env -> [TVar] -> TEnv -> Constraints -> TypeM (Constraints, TEnv)
+splitGen env tvs te cs
   | null ambig_cs                       = return (fixed_cs, mapVars generalize te)
-  | otherwise                           = do solve ambig_cs
-                                             cs1 <- simplify (fixed_cs++gen_cs)
+  | otherwise                           = do solve env ambig_cs
+                                             cs1 <- simplify env (fixed_cs++gen_cs)
                                              te1 <- msubst te
                                              tvs1 <- fmap tyfree $ mapM msubst $ map tVar tvs
-                                             splitGen tvs1 te1 cs1
+                                             splitGen env tvs1 te1 cs1
   where 
     (fixed_cs, cs')                     = partition (null . (\\tvs) . tyfree) cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
@@ -110,10 +110,10 @@ mkBinds cs                              = collect [] $ catMaybes $ map bound cs
 
 genTEnv                                 :: Env -> TEnv -> TypeM TEnv
 genTEnv env te                          = do cs <- collectConstraints
-                                             cs1 <- simplify cs
+                                             cs1 <- simplify env cs
                                              te1 <- msubst te
                                              tvs <- fmap tyfree $ mapM msubst $ map tVar $ tyfree env
-                                             (cs2, te2) <- splitGen tvs te1 cs1
+                                             (cs2, te2) <- splitGen env tvs te1 cs1
                                              constrain cs2
                                              dump [ INS (loc v) t | (v, TSchema _ [] t _) <- nVars te1 ]
                                              dump [ GEN (loc v) t | (v, t) <- nVars te2 ]
@@ -128,6 +128,9 @@ commonTEnv env []                       = return []
 commonTEnv env tenvs                    = do unifyTEnv env tenvs vs
                                              return $ prune vs $ head tenvs
   where vs                              = foldr intersect [] $ map dom tenvs
+
+unionTEnv                               :: Env -> [TEnv] -> TypeM TEnv
+unionTEnv env tenvs                     = undefined                                 -- For data statements only. TODO: implement
 
 
 infLiveEnv env x
@@ -220,40 +223,41 @@ instance InfEnv Stmt where
       where vs                          = nub $ bound ds
 
     infEnv env (Data l _ _)             = notYet l (text "data syntax")
---    infEnv env (Data l Nothing b)       = do te <- infData env1 b
---                                             let te1 = filter (notemp . fst) te1
---                                             o_constrain [QEqu l 4 (ORecord $ env2row ONil te1) t]
---                                             return []
---      where t                           = o_getReturn env
---            env1                        = o_reserve (filter istemp $ bound b) env
+{-
+    infEnv env (Data l Nothing b)       = do te <- infData env1 b
+                                             let te1 = filter (notemp . fst) te1
+                                             constrain [Equ (tRecord $ env2row tNil $ nVars te1) t]
+                                             return []
+      where t                           = undefined   -- WAS: getReturn env
+            env1                        = reserve (filter istemp $ bound b) env
 
---    infEnv env (Data l (Just p) b)
---      | nodup p                         = do (te0, t) <- infEnvT env p
---                                             (te1,te2) <- partition (istemp . fst) <$> infData env b
---                                             o_constrain [QEqu l 13 (ORecord $ env2row ONil te2) t]
---                                             return (te0 ++ te1)
+    infEnv env (Data l (Just p) b)
+      | nodup p                         = do (te0, t) <- infEnvT env p
+                                             (te1,te2) <- partition (istemp . fst) <$> infData env b
+                                             constrain [Equ (tRecord $ env2row tNil $ nVars te2) t]
+                                             return (nCombine te0 te1)
 
--- instance InfData [Stmt] where
---     infData env []                      = return []
---     infData env (s : ss)                = do te1 <- infData env s
---                                              te2 <- infData (o_define (filter (istemp . fst) te1) env) ss
---                                              unionTEnv env [te1,te2]
+instance InfData [Stmt] where
+    infData env []                      = return []
+    infData env (s : ss)                = do te1 <- infData env s
+                                             te2 <- infData (define (filter (istemp . fst) te1) env) ss
+                                             unionTEnv env [te1,te2]
 
--- instance InfData Stmt where
---     infData env (While _ e b els)       = do inferBool env e
---                                              te1 <- infEnv env b
---                                              te2 <- infEnv env els
---                                              unionTEnv env [[], te1, te2]
---     infData env (For _ p e b els)       = undefined
---     infData env (If _ bs els)           = do tes <- mapM (infData env) bs
---                                              te <- infData env els
---                                              unionTEnv env (te:tes)
---     infData env s                       = infEnv env s
+instance InfData Stmt where
+    infData env (While _ e b els)       = do inferBool env e
+                                             te1 <- infEnv env b
+                                             te2 <- infEnv env els
+                                             unionTEnv env [[], te1, te2]
+    infData env (For _ p e b els)       = undefined
+    infData env (If _ bs els)           = do tes <- mapM (infData env) bs
+                                             te <- infData env els
+                                             unionTEnv env (te:tes)
+    infData env s                       = infEnv env s
 
--- instance InfData Branch where
---     infData env (Branch e b)            = do inferBool env e
---                                              infData env b
-
+instance InfData Branch where
+    infData env (Branch e b)            = do inferBool env e
+                                             infData env b
+-}
 
 instance InfEnv Decl where
     infEnv env (Actor _ n q p k t _)
@@ -516,9 +520,9 @@ instance Infer Expr where
     infer env (None _)                  = return tNone
     infer env e@(NotImplemented _)      = notYetExpr e
     infer env e@(Ellipsis _)            = notYetExpr e
-    infer env (Strings _ ss)            = return tStr
-    infer env (BStrings _ ss)           = return tStr
-    infer env (UStrings _ ss)           = return tStr
+    infer env (Strings _ ss)            = return $ tUnion [ULit $ concat ss]
+    infer env (UStrings _ ss)           = return $ tUnion [ULit $ concat ss]
+    infer env (BStrings _ ss)           = return tBytes
     infer env (Call l e ps ks)          = do t <- infer env e
                                              dump [INS (loc e) t]
                                              prow <- infer env ps
@@ -845,3 +849,18 @@ instance Infer Pattern where
       where noenv ([], t)               = t
             noenv (te, _)               = nameNotFound (head (dom te))
                                              
+
+-- FX presentation ---------------------
+
+openFX (TSchema l q (TFun l' fx p r t) dec)
+  | Just fx1 <- open fx                 = TSchema l (TBind v [] : q) (TFun l' fx1 p r t) dec
+  where open (TRow l n t fx)            = TRow l n t <$> open fx
+        open (TNil l)                   = Just (TVar l v)
+        open (TVar _ _)                 = Nothing
+        v                               = head (tvarSupply \\ tybound q)
+openFX t                                = t
+
+closeFX (TSchema l q f@(TFun l' fx p r t) dec)
+  | TVar _ v <- rowTail fx, sole v      = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t) dec
+  where sole v                          = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
+closeFX t                               = t

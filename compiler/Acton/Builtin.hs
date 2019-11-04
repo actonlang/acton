@@ -16,6 +16,7 @@ nInt                                = name "int"
 nFloat                              = name "float"
 nBool                               = name "bool"
 nStr                                = name "str"
+nBytes                              = name "bytes"
 nRef                                = name "Ref"
 nMsg                                = name "Msg"
 nException                          = name "Exception"
@@ -42,6 +43,7 @@ qnInt                               = qBuiltin nInt
 qnFloat                             = qBuiltin nFloat
 qnBool                              = qBuiltin nBool
 qnStr                               = qBuiltin nStr
+qnBytes                             = qBuiltin nBytes
 qnRef                               = qBuiltin nRef
 qnMsg                               = qBuiltin nMsg
 qnException                         = qBuiltin nException
@@ -68,6 +70,7 @@ cInt                                = TC qnInt []
 cFloat                              = TC qnFloat []
 cBool                               = TC qnBool []
 cStr                                = TC qnStr []
+cBytes                              = TC qnBytes []
 cRef                                = TC qnRef []
 cMsg a                              = TC qnMsg [a]
 cException                          = TC qnException []
@@ -94,6 +97,7 @@ tInt                                = tCon cInt
 tFloat                              = tCon cFloat
 tBool                               = tCon cBool
 tStr                                = tCon cStr
+tBytes                              = tCon cBytes
 tRef                                = tCon cRef
 tMsg a                              = tCon (cMsg a)
 tException                          = tCon cException
@@ -112,3 +116,14 @@ pOrd                                = tCon cOrd
 pIdentity                           = tCon cIdentity
 pCollection a                       = tCon (cCollection a)
 pContextManager                     = tCon cContextManager
+
+
+uniLit t (ULit l)                   = t == tStr
+uniLit t _                          = False
+
+uniElem us u@(ULit l)               = u `elem` us || UCon qnStr `elem` us
+uniElem us u                        = u `elem` us
+
+uniCon us qn                        = qn `elem` uniCons && UCon qn `elem` us
+
+uniCons                             = [qnInt, qnFloat, qnBool, qnStr]

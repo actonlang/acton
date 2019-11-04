@@ -196,9 +196,6 @@ instance Relabel Assoc where
 instance Relabel Slice where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
-instance Relabel OType where
-  relabel = undefined
-
 instance Relabel TSchema where
     relabel (TSchema _ q t d) = TSchema <$> newLoc <*> relabel q <*> relabel t <*> return d
 
