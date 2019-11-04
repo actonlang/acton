@@ -4,6 +4,7 @@ import qualified Acton.Parser
 import qualified Acton.Syntax as A
 
 import qualified Acton.Types
+import qualified Acton.Solver
 import qualified Acton.Env
 import qualified Acton.Relabel
 {-
@@ -102,8 +103,8 @@ treatOneFile args
                                `catch` handle (\exc -> (l0,displayException (exc :: IOException))) "" paths
                                `catch` handle (\exc -> (l0,displayException (exc :: ErrorCall))) "" paths
   where compTypesFile paths = do cont <- readFile (srcFile paths)
-                                 let t = read cont :: A.OType
-                                 InterfaceFiles.writeFile (joinPath (projSrcRoot paths: modpath paths)++".ty") t
+                                 let te = read cont :: Acton.Env.TEnv
+                                 InterfaceFiles.writeFile (joinPath (projSrcRoot paths: modpath paths)++".ty") te
 
         showTyFile paths    = do te <- InterfaceFiles.readFile (srcFile paths)
                                  putStrLn ("**** Type environment in " ++ (srcFile paths) ++ " ****")
@@ -190,7 +191,7 @@ runRestPasses args paths src env tree = (do
 -}
                           return (Acton.Env.dropNames env',sigs))
                              `catch` handle Acton.Env.checkerError src paths
-                             `catch` handle Acton.Types.typeError src paths
+                             `catch` handle Acton.Types.solverError src paths
 
 
 handle f src paths ex = do putStrLn "\n********************"

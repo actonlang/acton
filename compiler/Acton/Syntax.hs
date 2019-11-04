@@ -158,71 +158,6 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Modif      = NoMod | Sync Bool | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
 data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
-
-data OType      = OVar      OVar
-                -- Types
-                | OFun      OEffect ORow OType
-                | ORecord   ORow
-                | OTuple    ORow
-                | ODict     OType OType
-                | OList     OType
-                | OSet      OType
-                | OMsg      OType
-                | OStr
-                | OInt
-                | OFloat
-                | OBool
-                | ONone
-                -- Rows
-                | OPos      OType ORow
-                | OStar1    OType ORow
-                | OKwd      Name OType ORow
-                | OStar2    OType ORow
-                | ONil
-                -- Polymorphism
-                | OSchema   [OVar] [Qonstraint] OType
-                deriving (Eq,Show,Read,Generic)
-
-data Qonstraint = QEqu      { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
-                | QIn       { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
-                | QDot      { cloc::SrcLoc, vn::Int, t1::OType, cname::Name, t2::OType }
-                | QIx       { cloc::SrcLoc, vn::Int, t1::OType, t2::OType, t3::OType }
-                | QMod      { cloc::SrcLoc, vn::Int, t1::OType, t2::OType }
-                | QPlus     { cloc::SrcLoc, vn::Int, t1::OType }
-                | QNum      { cloc::SrcLoc, vn::Int, t1::OType }
-                | QBool     { cloc::SrcLoc, vn::Int, t1::OType }
-                deriving (Eq,Show,Read,Generic)
-
-type OVar       = [Int]
-
-type ORow       = OType
-
-type OEffect    = ORow
-
-type OSubstitution = [(OVar,OType)]
-
-wildOVar        = OVar []
-
-schemaOVars     = map schemaOVar [1..]
-
-schemaOVar i    = OVar [i]
-
-intOVar i       = OVar [1, i]
-    
-unOVar tvs      = [ v | OVar v <- tvs ]
-
-schemaVars      = unOVar schemaOVars
-
-isRow OPos{}    = True
-isRow OStar1{}  = True
-isRow OKwd{}    = True
-isRow OStar2{}  = True
-isRow ONil      = True
-isRow _         = False
-
-
----------------------------------------------------------------------------
-
 data TSchema    = TSchema SrcLoc [TBind] Type Decoration deriving (Show,Read,Generic)
 
 data TVar       = TV { tvname::Name } deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
@@ -308,8 +243,6 @@ tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "AB
 
 type Substitution = [(TVar,Type)]
 
-instance Data.Binary.Binary OType
-instance Data.Binary.Binary Qonstraint
 
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
@@ -554,12 +487,6 @@ cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
-asyncFX                             = OKwd asyncKW ONone
-syncFX                              = OKwd syncKW ONone
-actFX                               = OKwd actKW ONone
-mutFX                               = OKwd mutKW ONone
-retFX                               = OKwd retKW ONone
-
 asyncKW                             = Name NoLoc "async"
 syncKW                              = Name NoLoc "sync"
 actKW                               = Name NoLoc "actor"
@@ -584,24 +511,22 @@ istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
 
 notemp                              = not . istemp
 
-primitive t                         = t `elem` [OStr, OInt, OFloat, OBool, ONone]
- 
-posParLen PosNIL = 0
-posParLen (PosSTAR _ _) = 0
-posParLen (PosPar _ _ _ r) = 1 + posParLen r
+posParLen PosNIL                    = 0
+posParLen (PosSTAR _ _)             = 0
+posParLen (PosPar _ _ _ r)          = 1 + posParLen r
 
-posArgLen PosNil = 0
-posArgLen (PosStar _) = 0
-posArgLen (PosArg _ r) = 1 + posArgLen r
+posArgLen PosNil                    = 0
+posArgLen (PosStar _)               = 0
+posArgLen (PosArg _ r)              = 1 + posArgLen r
 
-posPatLen PosPatNil = 0
-posPatLen (PosPatStar _) = 0
-posPatLen (PosPat _ r) = 1 + posPatLen r
+posPatLen PosPatNil                 = 0
+posPatLen (PosPatStar _)            = 0
+posPatLen (PosPat _ r)              = 1 + posPatLen r
 
-posRowLen = rowDepth
+posRowLen                           = rowDepth
 
-posParHead (PosPar a b c _) = (a,b,c)
-posArgHead (PosArg a _) = a
-posPatHead (PosPat a _) = a
-posRowHead (TRow _ _ a _) = a
+posParHead (PosPar a b c _)         = (a,b,c)
+posArgHead (PosArg a _)             = a
+posPatHead (PosPat a _)             = a
+posRowHead (TRow _ _ a _)           = a
  
