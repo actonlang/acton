@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Constraints where
+module Acton.Solver where
 
 import Debug.Trace
 import Data.Maybe (maybeToList, fromJust)
