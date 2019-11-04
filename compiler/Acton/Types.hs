@@ -17,7 +17,7 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Env
 import Acton.TypeM
-import Acton.Constraints
+import Acton.Solver
 import qualified InterfaceFiles
 
 reconstruct                             :: String -> Env -> Module -> IO (TEnv, SrcInfo)
@@ -440,7 +440,7 @@ instance Check Decl where
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findClass (NoQual n) env
 
-    check env (Protocol l n q us b)     = do pushFX fxNil
+    check env (Protocol l n _ _ b)      = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
                                              te2 <- genTEnv env1 te             -- TODO: check overrides in te2 against the us
@@ -448,7 +448,13 @@ instance Check Decl where
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findProto (NoQual n) env
 
-    check env (Extension l n q us b)    = return ()                             -- TODO: implement this
+    check env (Extension l n _ _ b)     = do pushFX fxNil
+                                             -- check (define te env1) b
+                                             popFX
+                                             -- te2 <- genTEnv env1 te             -- TODO: check overrides in te2 against the us
+                                             -- unifyTEnv env1 [te2,te] (dom te)
+      where env1                        = defineSelf' n q $ defineTVars q env
+            (q,us,te)                   = undefined                             -- TODO: findExtension?? (NoQual n) env
     check env (Signature l ns sc)       = return ()
 
 instance Check Stmt where
@@ -491,13 +497,14 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []
-    infEnv env (Except l x)             = do t <- instantiate env $ classSchema env x
+    infEnv env (Except l x)             = do t <- instantiate env $ classConSchema env x
                                              constrain [Sub t tException]
                                              return []
-    infEnv env (ExceptAs l x n)         = do t <- instantiate env $ classSchema env x
+    infEnv env (ExceptAs l x n)         = do t <- instantiate env $ classConSchema env x
                                              constrain [Sub t tException]
                                              return $ nVar n t
-classSchema env qn                      = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
+
+classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
   where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
@@ -811,7 +818,7 @@ instance InfEnvT Pattern where
                                              return ([], t)
     infEnvT env (PDot l e n)            = do t <- infer env e
                                              t0 <- newTVar
-                                             constrain [Sel t n t0]                 -- TODO: ensure n is @instattr
+                                             constrain [Mut t n t0]
                                              equFX (fxMut tWild)
                                              return ([], t0)
     infEnvT env (PTuple _ ps)           = do (te, prow) <- infEnvT env ps

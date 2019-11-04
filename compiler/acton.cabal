@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7f4199ac1bec22ff37064ef278516482a3f9ca7805139ac80c98f0e7eb61de5c
+-- hash: 3cb937655354ace97387f10ca6f67a9c7af6f38a8a5e882f0d2eb911525aa814
 
 name:           acton
 version:        0.3.0
@@ -41,12 +41,12 @@ executable actonc
     , happy
   other-modules:
       Acton.Builtin
-      Acton.Constraints
       Acton.Env
       Acton.Names
       Acton.Parser
       Acton.Printer
       Acton.Relabel
+      Acton.Solver
       Acton.Syntax
       Acton.TypeM
       Acton.Types
