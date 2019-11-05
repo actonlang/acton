@@ -395,7 +395,7 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
 	to_string_ack_message(ack, (char *) print_buff);
-	printf("Sending ack message: %s\n", print_buff);
+	printf("Sending queue ack message: %s\n", print_buff);
 #endif
 
 	return serialize_ack_message(ack, snd_buf, snd_msg_len);
@@ -574,6 +574,66 @@ int handle_consume_queue(queue_query_message * q, db_t * db, unsigned int * fast
 									(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
 									q->queue_index, q->txnid, db, fastrandstate);
 }
+
+// Txn messages handlers:
+
+int get_txn_ack_packet(int status, txn_message * q,
+					void ** snd_buf, unsigned * snd_msg_len)
+{
+	ack_message * ack = init_ack_message(NULL, status, q->txnid, q->nonce);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Sending txn ack message: %s\n", print_buff);
+#endif
+
+	return serialize_ack_message(ack, snd_buf, snd_msg_len);
+}
+
+
+int handle_new_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	txn_state * ts = get_txn_state(q->txnid, db);
+
+	if(ts != NULL)
+		return -2; // txnid already exists on server
+
+	ts = init_txn_state();
+
+	memcpy(&ts->txnid, q->txnid, sizeof(uuid_t));
+
+	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, fastrandstate);
+
+	return 0;
+}
+
+int handle_validate_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+	assert(q->version != NULL);
+
+	return validate_txn(q->txnid, q->version, db);
+}
+
+int handle_commit_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	return persist_txn(q->txnid, db, fastrandstate);
+}
+
+int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	return abort_txn(q->txnid, db);
+}
+
+
+
 
 int main(int argc, char **argv) {
   int parentfd;
@@ -759,6 +819,46 @@ int main(int argc, char **argv) {
     		}
     		case RPC_TYPE_TXN:
     		{
+    			txn_message * tm = (txn_message *) q;
+
+    			switch(tm->type)
+    			{
+    				case DB_TXN_BEGIN:
+    				{
+    					status = handle_new_txn(tm, db, &seed);
+    					assert(status == 0 || status == -2);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_VALIDATION:
+    				{
+    					status = handle_validate_txn(tm, db, &seed);
+    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_COMMIT:
+    				{
+    					status = handle_commit_txn(tm, db, &seed);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_ABORT:
+    				{
+    					status = handle_abort_txn(tm, db, &seed);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    			}
+
+
+
     			break;
     		}
     		case RPC_TYPE_ACK:
