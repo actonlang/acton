@@ -380,11 +380,11 @@ instance Pretty Type where
       where spaceSep f              = hsep . punctuate space . map f      
     pretty (TTuple _ pos)           = parens (prettyPosRow pos)
     pretty (TRecord _ kw)           = parens (prettyKwdRow kw)
-    pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    pretty (TSelf _)                = text "Self"
+    pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
+    pretty (TSelf _)                = text "Self"
     pretty (TWild _)                = text "_"
     pretty row                      = prettyKwdRow row
 

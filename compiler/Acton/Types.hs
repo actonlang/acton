@@ -275,16 +275,16 @@ instance InfEnv Decl where
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
-                                             return $ nClass n q (mro env False q us) te
+                                             return $ nClass n q (mro env1 False us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | nowild q && nowild us           = do te <- infEnv env1 b
-                                             return $ nProto n q (mro env True q us) te
+                                             return $ nProto n q (mro env1 True us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Extension _ n q us b)
       | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
-                                             return [] -- undefined
+                                             return $ nExt n q (mro env1 True us) te
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
@@ -294,7 +294,7 @@ instance InfEnv Decl where
 
 
 
-mro env proto q us
+mro env proto us
   | proto                               = merge [] $ linearizationsP us ++ [us]
   | not proto                           = merge [] $ linearizationsC us ++ [us]
   where merge out lists
@@ -306,7 +306,7 @@ mro env proto q us
 
         match u1 u2
           | u1 == u2                    = True
-          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent instantiation of class/protocol"
+          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent instantiations of class/protocol"
           | otherwise                   = False
 
         absent n []                     = True
@@ -316,24 +316,13 @@ mro env proto q us
 
         linearizationsC []              = []
         linearizationsC (u : us)        = (u:us') : linearizationsP us
-          where (proto, us', _)         = instCon env q u
+          where (proto', us', _)        = instCon env u
 
         linearizationsP []              = []
         linearizationsP (u : us)
-          | not proto                   = err1 (tcname u) "Protocol expected, found class"
+          | not proto'                  = err1 (tcname u) "Protocol expected, found class"
           | otherwise                   = (u:us') : linearizationsP us
-          where (proto, us', _)         = instCon env q u
-
-
-instCon env q u
-  | all (entail env q) cs               = (proto, subst s us, subst s te)
-  | otherwise                           = err1 u ("Type variable context " ++ prstr q ++ " too weak to entail")
-  where (proto, q', us, te)             = findClassOrProto (tcname u) env
-        cs                              = [ constraint env t (subst s u) | TBind v us <- q', let t = subst s (tVar v), u <- us ]
-        s                               = tybound q' `zip` tcargs u
-
-entail                                  :: Env -> [TBind] -> Constraint -> Bool
-entail env q c                          = True                                      -- TODO: implement this
+          where (proto', us', _)        = instCon env u
 
 
 extractSig n q p k t m
@@ -512,7 +501,9 @@ classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ t
   where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ n)                 = instantiate env $ openFX $ findType n env
+    infer env (Var _ n)
+      | Just t <- findPAttr n env       = instantiate env $ openFX t
+      | otherwise                       = instantiate env $ openFX $ findType n env
     infer env (Int _ val s)             = return tInt
     infer env (Float _ val s)           = return tFloat
     infer env e@Imaginary{}             = notYetExpr e

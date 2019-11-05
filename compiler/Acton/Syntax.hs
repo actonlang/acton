@@ -158,7 +158,7 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Modif      = NoMod | Sync Bool | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
 data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
-data TSchema    = TSchema SrcLoc [TBind] Type Decoration deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type, scdec::Decoration } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvname::Name } deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -174,8 +174,8 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow }
                 | TRecord   { tloc::SrcLoc, kwdrow::KwdRow }
-                | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
+                | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TSelf     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
@@ -188,6 +188,9 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
+skolem (TV n)   = case n of
+                    Name _ _     -> True
+                    Internal _ _ -> False
 
 monotype t      = TSchema NoLoc [] t NoDec
 monotype' t d   = TSchema NoLoc [] t d
@@ -200,8 +203,8 @@ tAt c           = TAt NoLoc c
 tFun fx p r t   = TFun NoLoc fx p r t
 tTuple p        = TTuple NoLoc p
 tRecord r       = TRecord NoLoc r
-tOpt t          = TOpt NoLoc t
 tUnion ts       = TUnion NoLoc ts
+tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tSelf           = TSelf NoLoc
 tWild           = TWild NoLoc
@@ -447,8 +450,8 @@ instance Eq Type where
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1         == TTuple _ p2          = p1 == p2
     TRecord _ r1        == TRecord _ r2         = r1 == r2
-    TOpt _ t1           == TOpt _ t2            = t1 == t2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
+    TOpt _ t1           == TOpt _ t2            = t1 == t2
     TSelf _             == TSelf _              = True
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
