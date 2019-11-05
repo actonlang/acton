@@ -1082,7 +1082,7 @@ tschema = addLoc $
 ttype :: Parser S.Type
 ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
-        <|> rword "Self" *> return (S.TSelf NoLoc)
+        <|> (S.TVar NoLoc . S.TV) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)

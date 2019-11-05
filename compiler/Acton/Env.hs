@@ -31,7 +31,7 @@ mkEnv paths env modul       = getImps paths env imps
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, selfbound :: Maybe TCon }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName }
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
@@ -253,7 +253,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
     bounded u (TBind v us)  = TBind v (u:us)
     ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
 
-envActorSelf                = [ (nSelf,     NVar (monotype tRef)) ]
+envActorSelf                = [ (_nSelf_,   NVar (monotype tRef)) ]
 
 --------------------------------------------------------------------------------------------------------------------
 
@@ -262,7 +262,7 @@ prune xs                    = filter ((`notElem` xs) . fst)
 initEnv                     :: Env
 initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuiltin envBuiltin env0
   where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, selfbound = Nothing }
+        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin }
 
 stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
@@ -284,13 +284,13 @@ defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 defineTVars                 :: [TBind] -> Env -> Env
-defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] }
+defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] ++ names env }
 
 defineSelf                  :: Name -> [TBind] -> Env -> Env
 defineSelf n q env          = defineSelf' (NoQual n) q env
 
 defineSelf'                 :: QName -> [TBind] -> Env -> Env
-defineSelf' qn q env        = env{ selfbound = Just tc }
+defineSelf' qn q env        = defineTVars [TBind tvSelf [tc]] env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
@@ -323,9 +323,9 @@ findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
 
-findSelf env                = case selfbound env of
-                                Just u -> u
-                                Nothing -> error "(internal) Self not in scope"
+findSelf                    :: Env -> TCon
+findSelf env                = case findName nSelf env of
+                                NTVar [tc] -> tc
 
 findMod                     :: ModName -> Env -> TEnv
 findMod m env               = case lookup m (modules env) of

@@ -115,8 +115,6 @@ red' True env (TNone _) (TOpt _ t)          = return ()
 red' True env t1 (TOpt _ t2)                = red True env t1 t2
 red' sub env (TNone _) (TNone _)            = return ()
 
-red' sub env (TSelf _) (TSelf _)            = return ()
-
 red' sub env (TWild _) t2                   = return ()
 red' sub env t1 (TWild _)                   = return ()
 

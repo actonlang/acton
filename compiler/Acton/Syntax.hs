@@ -177,7 +177,6 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
-                | TSelf     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc }
                 | TRow      { tloc::SrcLoc, label::Name, rtype::TSchema, rtail::TRow }
@@ -206,9 +205,12 @@ tRecord r       = TRecord NoLoc r
 tUnion ts       = TUnion NoLoc ts
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
-tSelf           = TSelf NoLoc
 tWild           = TWild NoLoc
 tNil            = TNil NoLoc
+
+tSelf           = TVar NoLoc tvSelf
+tvSelf          = TV nSelf
+nSelf           = Name NoLoc "Self"
 
 rPos n          = Name NoLoc (show n)
 rSync           = Name NoLoc "sync"
@@ -452,7 +454,6 @@ instance Eq Type where
     TRecord _ r1        == TRecord _ r2         = r1 == r2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
-    TSelf _             == TSelf _              = True
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
     TNil _              == TNil _               = True

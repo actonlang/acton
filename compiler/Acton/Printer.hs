@@ -384,7 +384,6 @@ instance Pretty Type where
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
-    pretty (TSelf _)                = text "Self"
     pretty (TWild _)                = text "_"
     pretty row                      = prettyKwdRow row
 

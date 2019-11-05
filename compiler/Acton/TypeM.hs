@@ -228,7 +228,6 @@ instance Subst Type where
     msubst (TUnion l as)            = return $ TUnion l as
     msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TNone l)                = return $ TNone l
-    msubst (TSelf l)                = return $ TSelf l
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l)                 = return $ TNil l
     msubst (TRow l n t r)           = TRow l n <$> msubst t <*> msubst r
@@ -242,7 +241,6 @@ instance Subst Type where
     tyfree (TUnion _ as)            = []
     tyfree (TOpt _ t)               = tyfree t
     tyfree (TNone _)                = []
-    tyfree (TSelf _)                = []
     tyfree (TWild _)                = []
     tyfree (TNil _)                 = []
     tyfree (TRow _ _ t r)           = tyfree t ++ tyfree r
