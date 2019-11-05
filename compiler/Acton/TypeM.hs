@@ -225,8 +225,8 @@ instance Subst Type where
     msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
     msubst (TTuple l p)             = TTuple l <$> msubst p
     msubst (TRecord l k)            = TRecord l <$> msubst k
-    msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TUnion l as)            = return $ TUnion l as
+    msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TNone l)                = return $ TNone l
     msubst (TSelf l)                = return $ TSelf l
     msubst (TWild l)                = return $ TWild l
@@ -239,8 +239,8 @@ instance Subst Type where
     tyfree (TFun _ fx p k t)        = tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p)             = tyfree p
     tyfree (TRecord _ k)            = tyfree k
-    tyfree (TOpt _ t)               = tyfree t
     tyfree (TUnion _ as)            = []
+    tyfree (TOpt _ t)               = tyfree t
     tyfree (TNone _)                = []
     tyfree (TSelf _)                = []
     tyfree (TWild _)                = []
@@ -251,34 +251,48 @@ instance Subst Type where
 ----------------------------------------------------------------------------------
 
 data TypeError                      = TypeErrHmm            -- ...
+                                    | RigidVariable TVar
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
-                                    | NoSub Type Type
+                                    | DistinctDecorations Decoration Decoration
+                                    | EscapingVar [TVar] TSchema TSchema
+                                    | NoRed Constraint
                                     | NotYet SrcLoc Doc
                                     deriving (Eq,Show,Typeable)
 
 instance Control.Exception.Exception TypeError
 
 instance HasLoc TypeError where
+    loc (RigidVariable tv)          = loc tv
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
-    loc (NoSub t1 t2)               = loc t1
+    loc (DistinctDecorations _ _)   = NoLoc
+    loc (EscapingVar tvs t1 t2)     = loc tvs
+    loc (NoRed c)                   = loc c
     loc (NotYet l doc)              = l
 
 notYetExpr e                        = notYet (loc e) (pretty e)
 
+rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
 infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
 conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
 kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
-noSub t1 t2                         = Control.Exception.throw $ NoSub t1 t2
+distinctDecorations d1 d2           = Control.Exception.throw $ DistinctDecorations d1 d2
+escapingVar tvs t1 t2               = Control.Exception.throw $ EscapingVar tvs t1 t2
+noRed c                             = Control.Exception.throw $ NoRed c
 notYet loc doc                      = Control.Exception.throw $ NotYet loc doc
 
 typeError err                       = (loc err,render (expl err))
-  where expl (KwdNotFound n)        = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-        expl (InfiniteType tv)      = text "Type" <+> pretty tv <+> text "is infinite"
-        expl (ConflictingRow tv)    = text "Row" <+> pretty tv <+> text "has conflicting extensions"
-        expl (NoSub t1 t2)          = text "Cannot infer" <+> pretty (Sub t1 t2)
-        expl (NotYet _ doc)         = text "Not yet supported by type inference:" <+> doc
+  where
+    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
+    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
+    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
+    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
+    expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
+    expl (EscapingVar tvs t1 t2)    = text "Cannot infer" <+> pretty (SubGen t1 t2) <+> text "because type variable" <+>
+                                      pretty (head tvs) <+> text "escapes"
+    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+    expl (NotYet _ doc)             = text "Not yet supported by type inference:" <+> doc
 

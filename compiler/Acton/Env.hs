@@ -66,6 +66,8 @@ nClass n q us te            = [(n, NClass q us te)]
 nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto n q us te            = [(n, NProto q us te)]
 
+nExt                        :: QName -> [TBind] -> [TCon] -> TEnv -> TEnv
+nExt (NoQual n) q us te     = [(n, NExt q us te)]                                       -- TODO: handle the QName case
 
 nVars                       :: TEnv -> [(Name, TSchema)]
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
@@ -272,7 +274,7 @@ block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
+define te env               = env{ names = reverse te ++ prune (dom te) (names env) }               -- TODO: handle NClass,NProto,NExt in te
 
 defineMod                   :: ModName -> Env -> Env
 defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
@@ -312,7 +314,7 @@ findName n env              = case lookup n (names env) of
                                 Just (NSig t) -> nameReserved n
                                 Just NBlocked -> nameBlocked n
                                 Just info -> info
-                                Nothing -> trace ("### names:\n" ++ render (vcat $ map pretty (names env))) $ nameNotFound n
+                                Nothing -> nameNotFound n
 
 findQName                   :: QName -> Env -> NameInfo
 findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
@@ -324,12 +326,6 @@ findQName (NoQual n) env    = findName n env
 findSelf env                = case selfbound env of
                                 Just u -> u
                                 Nothing -> error "(internal) Self not in scope"
-
-assignableType              :: Name -> Env -> Type
-assignableType n env        = case findType n env of
-                                TSchema _ [] t _ -> t
-                                -- TODO: report error.......
-
 
 findMod                     :: ModName -> Env -> TEnv
 findMod m env               = case lookup m (modules env) of
@@ -348,6 +344,9 @@ findClassOrProto n env      = case findQName n env of
                                 NProto q us te -> (True,q,us,te)
                                 _ -> err1 n "Class or protocol name expected, got"
 
+isProto n env               = proto
+  where (proto,_,_,_)       = findClassOrProto n env
+
 findClass                   :: QName -> Env -> ([TBind],[TCon],TEnv)
 findClass n env             = case findQName n env of
                                 NClass q us te -> (q,us,te)
@@ -365,21 +364,57 @@ findType n env              = case findName n env of
                                 NClass q _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 _            -> err1 n "Unexpected name..."
 
-newTEnv vs                  = do ts <- newTVars (length vs)
-                                 return $ vs `zip` [ NVar (monotype t) | t <- ts ]
+findSubAxiom                    :: Env -> QName -> QName -> ([TBind], TCon)
+findSubAxiom env n n'
+  | isProto n' env || null hit  = err1 n' ("Not related: " ++ prstr n ++ " and")
+  | otherwise                   = (q, head hit)
+  where (q,us,_)                = findClass n env
+        hit                     = [ u | u <- us, tcname u == n' ]
+
+newTEnv vs                      = do ts <- newTVars (length vs)
+                                     return $ vs `zip` [ NVar (monotype t) | t <- ts ]
+
+findAttrs                       :: Env -> QName -> ([TBind], [(Name,TSchema)])
+findAttrs env n                 = (q, nVars $ te ++ concat [ te' | u <- us, let (proto',_,te') = instCon env u, proto==proto' ])
+  where (proto,q,us,te)         = findClassOrProto n env
+
+findPAttr                       :: Name -> Env -> Maybe TSchema
+findPAttr n env                 = case findName n env of
+                                    NPAttr qn -> let (q,te) = findAttrs env qn
+                                                 in case lookup n te of
+                                                     Just (TSchema l q' t d) -> Just $ TSchema l (q++q') t d    -- TODO: add actual `impl` qn constraint
+                                    _ -> Nothing
 
 
 -- Instantiation -------------------------------------------------------------------------
 
+instantiate                     :: Env -> TSchema -> TypeM Type
 instantiate env (TSchema _ [] t _)
                                 = instwild t
 instantiate env (TSchema _ q t _)
                                 = do tvs <- newTVars (length q)
                                      let s = tybound q `zip` tvs
-                                     constrain $ constraintsOf (subst s q) env
+                                     constrain $ constraintsOf env (subst s q)
                                      instwild (subst s t)
 
-constraintsOf q env             = [ constraint env t u | TBind v us <- q, let t = tVar v, u <- us ]
+
+instSubAxiom                    :: Env -> QName -> QName -> TypeM (Type, Type)
+instSubAxiom env n n'           = do ts <- newTVars (length q)
+                                     let s = tybound q `zip` ts
+                                     constrain $ constraintsOf env (subst s q)
+                                     return (tCon (TC n ts), tCon (subst s u))
+  where (q,u)                   = findSubAxiom env n n'
+
+
+instCon                         :: Env -> TCon -> (Bool, [TCon], TEnv)
+instCon env u
+  | all (entail env) cs         = (proto, subst s us, subst s te)
+  | otherwise                   = err1 u ("Type environment too weak to entail")
+  where (proto, q, us, te)      = findClassOrProto (tcname u) env
+        cs                      = [ constraint env t (subst s u) | TBind v us <- q, let t = subst s (tVar v), u <- us ]
+        s                       = tybound q `zip` tcargs u
+
+constraintsOf env q             = [ constraint env t u | TBind v us <- q, let t = tVar v, u <- us ]
 
 constraint env t u@(TC n _)     = case findQName n env of
                                     NClass{} -> Sub t (tCon u)
@@ -464,6 +499,12 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
       | otherwise                       = unifyTEnv env [te,te'] vs
       where diff                        = (vs \\ vs') ++ (vs' \\ vs)
             (vs, vs')                   = (dom te, dom te')
+
+
+-- Entailment ----------------------------------------------------------------------------
+
+entail                                  :: Env -> Constraint -> Bool
+entail env c                            = True                                              -- TODO: implement this
 
 
 -- Import handling -----------------------------------------------------------------------
