@@ -160,6 +160,9 @@ int deserialize_cell_address(void * buf, unsigned msg_len, cell_address ** ca)
 
 int equals_cell_address(cell_address * ca1, cell_address * ca2)
 {
+	if((ca1 != NULL && ca2 == NULL) || (ca1 == NULL && ca2 != NULL))
+		return 0;
+
 	if(ca1->table_key != ca2->table_key || ca1->no_keys != ca2->no_keys)
 		return 0;
 

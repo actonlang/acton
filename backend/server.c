@@ -622,7 +622,12 @@ int handle_commit_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 {
 	assert(q->txnid != NULL);
 
-	return persist_txn(q->txnid, db, fastrandstate);
+	txn_state * ts = get_txn_state(q->txnid, db);
+
+	if(ts == NULL)
+		return -2; // txnid doesn't exist on server
+
+	return persist_txn(ts, db, fastrandstate);
 }
 
 int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
@@ -797,7 +802,7 @@ int main(int argc, char **argv) {
     					db_schema_t * schema = NULL;
     					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
     													&start_row, &end_row, &schema, db, &seed);
-    					assert(status == QUEUE_STATUS_READ_COMPLETE);
+    					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
     					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len);
 
     					break;
@@ -805,7 +810,7 @@ int main(int argc, char **argv) {
     				case QUERY_TYPE_CONSUME_QUEUE:
     				{
     					status = handle_consume_queue(qm, db, &seed);
-    					assert(status == (int) qm->queue_index);
+//    					assert(status == (int) qm->queue_index);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
     					break;
     				}

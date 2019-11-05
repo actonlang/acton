@@ -337,8 +337,8 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	assert(no_results == (*new_read_head - start_index + 1));
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Subscriber %ld peeked %ld queue entries, new_read_head=%ld, private_read_head=%ld\n",
-					(long) cs->consumer_id, no_results, *new_read_head, cs->private_read_head);
+	printf("BACKEND: Subscriber %ld peeked %ld / %ld queue entries, new_read_head=%ld, private_read_head=%ld\n",
+					(long) cs->consumer_id, no_results, no_entries, *new_read_head, cs->private_read_head);
 #endif
 
 	*entries_read = (int) no_results;

@@ -529,7 +529,7 @@ ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t *
 ack_message * init_ack_message_copy(cell_address * cell_address, int status, uuid_t * txnid, long nonce)
 {
 	ack_message * ca = (ack_message *) malloc(sizeof(ack_message));
-	ca->cell_address = init_cell_address_copy(cell_address->table_key, cell_address->keys, cell_address->no_keys);
+	ca->cell_address = (cell_address != NULL)?(init_cell_address_copy(cell_address->table_key, cell_address->keys, cell_address->no_keys)):(NULL);
 	ca->status = status;
 	if(txnid != NULL)
 	{
@@ -546,7 +546,8 @@ ack_message * init_ack_message_copy(cell_address * cell_address, int status, uui
 
 void free_ack_message(ack_message * ca)
 {
-	free_cell_address(ca->cell_address);
+	if(ca->cell_address != NULL)
+		free_cell_address(ca->cell_address);
 	free(ca);
 }
 
@@ -570,14 +571,15 @@ void init_ack_message_msg(AckMessage * msg, ack_message * ca, CellAddressMessage
 
 ack_message * init_ack_message_from_msg(AckMessage * msg)
 {
-	cell_address * cell_address = init_cell_address_from_msg(msg->cell_address);
+	cell_address * cell_address = (msg->cell_address != NULL)?(init_cell_address_from_msg(msg->cell_address)):(NULL);
 	ack_message * c = init_ack_message_copy(cell_address, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
 	return c;
 }
 
 void free_ack_message_msg(AckMessage * msg)
 {
-	free_cell_address_msg(msg->cell_address);
+	if(msg->cell_address != NULL)
+		free_cell_address_msg(msg->cell_address);
 //	if(msg->txnid.data != NULL)
 //		free(msg->txnid.data);
 }
@@ -587,8 +589,9 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 	AckMessage msg = ACK_MESSAGE__INIT;
 	CellAddressMessage cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
 
-	init_cell_address_msg(&cell_address_msg, ca->cell_address);
-	init_ack_message_msg(&msg, ca, &cell_address_msg);
+	if(ca->cell_address != NULL)
+		init_cell_address_msg(&cell_address_msg, ca->cell_address);
+	init_ack_message_msg(&msg, ca, (ca->cell_address != NULL)?(&cell_address_msg):(NULL));
 	msg.mtype = RPC_TYPE_ACK;
 
 	*len = ack_message__get_packed_size (&msg);
@@ -633,8 +636,11 @@ char * to_string_ack_message(ack_message * ca, char * msg_buff)
 	sprintf(crt_ptr, "AckMessage(status=%d, txnid=%s, nonce=%ld, ", ca->status, uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
-	to_string_cell_address(ca->cell_address, crt_ptr);
-	crt_ptr += strlen(crt_ptr);
+	if(ca->cell_address != NULL)
+	{
+		to_string_cell_address(ca->cell_address, crt_ptr);
+		crt_ptr += strlen(crt_ptr);
+	}
 
 	sprintf(crt_ptr, ")");
 

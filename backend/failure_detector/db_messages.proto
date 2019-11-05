@@ -81,7 +81,7 @@ message ReadQueryMessage {
 // }
 
 message AckMessage {
-	required CellAddressMessage cell_address=1;
+	optional CellAddressMessage cell_address=1;
 	required int32 status=2; // 0 - ACK, 1 - NACK
 	required bytes txnid=3;
 	required int64 nonce=4;

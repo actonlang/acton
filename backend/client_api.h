@@ -126,7 +126,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 // Txn mgmt:
 
-uuid_t * remote_new_txn(remote_db_t * db, unsigned int * seedptr);
+uuid_t * remote_new_txn(remote_db_t * db);
 int remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db);
 int remote_abort_txn(uuid_t * txnid, remote_db_t * db);
 int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db);

@@ -1848,7 +1848,7 @@ static const ProtobufCFieldDescriptor ack_message__field_descriptors[5] =
   {
     "cell_address",
     1,
-    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
     offsetof(AckMessage, cell_address),

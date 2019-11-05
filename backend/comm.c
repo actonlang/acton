@@ -61,18 +61,6 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 			return 0;
 		}
 
-		status = deserialize_queue_message(rcv_buf, rcv_msg_len, &qq);
-		if(status == 0)
-		{
-#if (VERBOSE_RPC > 0)
-			to_string_queue_message(qq, (char *) print_buff);
-			printf("Received queue query: %s\n", print_buff);
-#endif
-			*out_msg = (void *) qq;
-			*out_msg_type = RPC_TYPE_QUEUE;
-			return 0;
-		}
-
 		status = deserialize_txn_message(rcv_buf, rcv_msg_len, &tm);
 		if(status == 0)
 		{
@@ -82,6 +70,18 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) tm;
 			*out_msg_type = RPC_TYPE_TXN;
+			return 0;
+		}
+
+		status = deserialize_queue_message(rcv_buf, rcv_msg_len, &qq);
+		if(status == 0)
+		{
+#if (VERBOSE_RPC > 0)
+			to_string_queue_message(qq, (char *) print_buff);
+			printf("Received queue query: %s\n", print_buff);
+#endif
+			*out_msg = (void *) qq;
+			*out_msg_type = RPC_TYPE_QUEUE;
 			return 0;
 		}
 

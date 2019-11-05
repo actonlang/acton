@@ -1072,7 +1072,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 // Txn mgmt:
 
-uuid_t * remote_new_txn(remote_db_t * db, unsigned int * seedptr)
+uuid_t * remote_new_txn(remote_db_t * db)
 {
 	uuid_t * txnid = NULL;
 	unsigned len = 0;
@@ -1088,7 +1088,7 @@ uuid_t * remote_new_txn(remote_db_t * db, unsigned int * seedptr)
 
 	while(status == -2) // txnid already exists on server
 	{
-		txnid = new_client_txn(db, seedptr);
+		txnid = new_client_txn(db, &(db->fastrandstate));
 		txn_message * q = build_new_txn(txnid, get_nonce(db));
 		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
 

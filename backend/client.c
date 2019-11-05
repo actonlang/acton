@@ -60,12 +60,10 @@ db_schema_t * create_schema() {
 
 // Tests:
 
-int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	printf("TEST: populate_db\n");
 
-	uuid_t txnid;
-	uuid_generate(txnid);
 	WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
 	for(long aid=0;aid<no_actors;aid++)
@@ -79,7 +77,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, NULL, db) != 0) // &txnid
+				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, txnid, db) != 0)
 					return -1;
 			}
 		}
@@ -88,28 +86,39 @@ int populate_db(db_schema_t * schema, remote_db_t * db, unsigned int * fastrands
 	return 0;
 }
 
-int delete_test(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+int delete_test(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
 // Deletes row for last actor
 {
 	printf("TEST: delete_test\n");
 
-	uuid_t txnid;
-	uuid_generate(txnid);
 	WORD row_key = (WORD) no_actors - 1;
-	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, NULL, db); //  &txnid
+	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, txnid, db);
 }
 
-int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
+// Deletes row for last actor
+{
+	printf("TEST: delete_test\n");
+
+	int ret = 0;
+	for(long aid = 0; aid<no_actors; aid++)
+		ret |= remote_delete_row_in_txn((WORD *) &aid, 1, (WORD) 0, schema, txnid, db);
+
+	return ret;
+}
+
+int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	printf("TEST: test_search_pk\n");
 
 	char print_buff[1024];
-	uuid_t txnid;
-	uuid_generate(txnid);
 
 	for(long aid=0;aid<no_actors;aid++)
 	{
-		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, &txnid, db);
+		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, txnid, db);
+
+		if(txnid != NULL && row == NULL)
+			continue;
 
 		print_long_row(row);
 
@@ -129,19 +138,20 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, unsigned int * fastra
 	return 0;
 }
 
-int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	printf("TEST: test_search_pk_ck1\n");
 
 	char print_buff[1024];
-	uuid_t txnid;
-	uuid_generate(txnid);
 
 	for(long aid=0;aid<no_actors;aid++)
 	{
 		for(long cid=0;cid<no_collections;cid++)
 		{
-			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, &txnid, db);
+			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, txnid, db);
+
+			if(txnid != NULL && row == NULL)
+				continue;
 
 			print_long_row(row);
 
@@ -162,15 +172,12 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, unsigned int * fa
 	return 0;
 }
 
-int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int * fastrandstate)
+int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	printf("TEST: test_search_pk_ck1_ck2\n");
 
 	char print_buff[1024];
 	WORD * cks = (WORD *) malloc(2 * sizeof(WORD));
-
-	uuid_t txnid;
-	uuid_generate(txnid);
 
 	for(long aid=0;aid<no_actors;aid++)
 	{
@@ -181,7 +188,10 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, unsigned int 
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, &txnid, db);
+				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, txnid, db);
+
+				if(txnid != NULL && row == NULL)
+					continue;
 
 				print_long_row(row);
 
@@ -208,47 +218,46 @@ void consumer_callback(queue_callback_args * qca)
 }
 
 
-int test_create_queue(remote_db_t * db)
+int test_create_queue(remote_db_t * db, uuid_t * txnid)
+// Creates 2 queues
 {
 	printf("TEST: create_queue\n");
 
-	uuid_t txnid;
-	uuid_generate(txnid);
+	int ret = remote_create_queue_in_txn((WORD) 1, (WORD) 1, txnid, db);
+	ret |= remote_create_queue_in_txn((WORD) 1, (WORD) 2, txnid, db);
 
-	return remote_create_queue_in_txn((WORD) 1, (WORD) 1, NULL, db); // &txnid
+	return ret;
 }
 
-int test_delete_queue(remote_db_t * db)
+int test_delete_queue(remote_db_t * db, uuid_t * txnid)
 {
 	printf("TEST: delete_queue\n");
 
-	uuid_t txnid;
-	uuid_generate(txnid);
+	int ret = remote_delete_queue_in_txn((WORD) 1, (WORD) 1, txnid, db);
+	ret |= remote_delete_queue_in_txn((WORD) 1, (WORD) 2, txnid, db);
 
-	return remote_delete_queue_in_txn((WORD) 1, (WORD) 1, NULL, db); // &txnid
+	return ret;
 }
 
-int test_subscribe_queue(remote_db_t * db)
+int test_subscribe_queue(remote_db_t * db, WORD consumer_id, WORD queue_id)
 {
 	printf("TEST: subscribe_queue\n");
 	long prev_read_head = -1, prev_consume_head = -1;
 	queue_callback * qc = get_queue_callback(consumer_callback);
 
-	return remote_subscribe_queue((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, qc, &prev_read_head, &prev_consume_head, db); // &txnid
+	return remote_subscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, qc, &prev_read_head, &prev_consume_head, db); // &txnid
 }
 
-int test_unsubscribe_queue(remote_db_t * db)
+int test_unsubscribe_queue(remote_db_t * db, WORD consumer_id, WORD queue_id)
 {
 	printf("TEST: unsubscribe_queue\n");
-	return remote_unsubscribe_queue((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, db); // &txnid
+	return remote_unsubscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, db); // &txnid
 }
 
-int test_enqueue(remote_db_t * db)
+int test_enqueue(remote_db_t * db, WORD queue_id, uuid_t * txnid)
 {
 	printf("TEST: enqueue\n");
 
-	uuid_t txnid;
-	uuid_generate(txnid);
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
 
 	for(long i=0;i<no_enqueues;i++)
@@ -256,23 +265,23 @@ int test_enqueue(remote_db_t * db)
 		column_values[0] = (WORD) i;
 		column_values[1] = (WORD) i + 1;
 
-		if(remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) 1, (WORD) 1, NULL, db) != 0) // &txnid
+		if(remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) 1, queue_id, txnid, db) != 0)
 			return -1;
 	}
 
 	return 0;
 }
 
-int test_read_queue(remote_db_t * db)
+int test_read_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * txnid)
 {
 	printf("TEST: read_queue\n");
 	int max_entries = no_enqueues;
 	int entries_read;
 	long new_read_head;
 	snode_t* start_row, * end_row;
-	int ret = remote_read_queue_in_txn((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1,
+	int ret = remote_read_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id,
 									max_entries, &entries_read, &new_read_head,
-									&start_row, &end_row, NULL, db); // &txnid
+									&start_row, &end_row, txnid, db);
 
 	assert(ret == QUEUE_STATUS_READ_COMPLETE);
 	assert(entries_read == no_enqueues);
@@ -282,10 +291,59 @@ int test_read_queue(remote_db_t * db)
 	return ret;
 }
 
-int test_consume_queue(remote_db_t * db)
+int test_consume_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * txnid)
 {
 	printf("TEST: consume_queue\n");
-	return (remote_consume_queue_in_txn((WORD) 0, (WORD) 1, (WORD) 2, (WORD) 1, (WORD) 1, no_enqueues - 1, NULL, db) == (no_enqueues - 1)); // &txnid
+	return (remote_consume_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, no_enqueues - 1, txnid, db) == (no_enqueues - 1)); // &txnid
+}
+
+int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
+{
+	printf("TEST: txn\n");
+
+	uuid_t * txnid = remote_new_txn(db);
+
+	assert(txnid != NULL);
+
+    int status = populate_db(schema, db, txnid, fastrandstate);
+	printf("Test %s - %s (%d)\n", "populate_db_txn", status==0?"OK":"FAILED", status);
+
+	status = test_search_pk_ck1_ck2(schema, db, txnid, fastrandstate);
+	printf("Test %s - %s (%d)\n", "test_search_pk_ck1_ck2_txn", status==0?"OK":"FAILED", status);
+
+	status = test_search_pk_ck1(schema, db, txnid, fastrandstate);
+	printf("Test %s - %s (%d)\n", "test_search_pk_ck1_txn", status==0?"OK":"FAILED", status);
+
+	status = test_search_pk(schema, db, txnid, fastrandstate);
+	printf("Test %s - %s (%d)\n", "test_search_pk_txn", status==0?"OK":"FAILED", status);
+
+	status = test_enqueue(db, (WORD) 2, txnid);
+	printf("Test %s - %s (%d)\n", "enqueue_txn", status==0?"OK":"FAILED", status);
+
+	status = test_subscribe_queue(db, (WORD) 1, (WORD) 1);
+	printf("Test %s - %s (%d)\n", "subscribe_queue_txn", status==0?"OK":"FAILED", status);
+
+	status = test_read_queue(db, (WORD) 1, (WORD) 1, txnid);
+	printf("Test %s - %s (%d)\n", "read_queue_txn", status==0?"OK":"FAILED", status);
+
+	status = test_consume_queue(db, (WORD) 1, (WORD) 1, txnid);
+	printf("Test %s - %s (%d)\n", "consume_queue_txn", status==0?"OK":"FAILED", status);
+
+	int node_ids[] = {0,1};
+	long counters[] = {0,0};
+
+	vector_clock * vc = init_vc(2, node_ids, counters, 1), * vc_r = NULL;
+	add_component_vc(vc, 2, 0);
+	increment_vc(vc, 0);
+	increment_vc(vc, 0);
+	increment_vc(vc, 1);
+	increment_vc(vc, 2);
+	increment_vc(vc, 2);
+
+	status = remote_commit_txn(txnid, vc, db);
+	printf("Test %s - %s (%d)\n", "commit_txn", status==0?"OK":"FAILED", status);
+
+	return 0;
 }
 
 int main(int argc, char **argv) {
@@ -309,40 +367,43 @@ int main(int argc, char **argv) {
 
     db_schema_t * schema = create_schema();
 
-    status = populate_db(schema, db, &seed);
+    status = populate_db(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "populate_db", status==0?"OK":"FAILED", status);
 
-	status = test_search_pk_ck1_ck2(schema, db, &seed);
+	status = test_search_pk_ck1_ck2(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "test_search_pk_ck1_ck2", status==0?"OK":"FAILED", status);
 
-	status = test_search_pk_ck1(schema, db, &seed);
+	status = test_search_pk_ck1(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "test_search_pk_ck1", status==0?"OK":"FAILED", status);
 
-	status = test_search_pk(schema, db, &seed);
+	status = test_search_pk(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "test_search_pk", status==0?"OK":"FAILED", status);
 
-	status = delete_test(schema, db, &seed);
-	printf("Test %s - %s (%d)\n", "delete_test", status==0?"OK":"FAILED", status);
+	status = delete_all(schema, db, NULL, &seed);
+	printf("Test %s - %s (%d)\n", "delete_all", status==0?"OK":"FAILED", status);
 
-	status = test_create_queue(db);
+	status = test_create_queue(db, NULL);
 	printf("Test %s - %s (%d)\n", "create_queue", status==0?"OK":"FAILED", status);
 
-	status = test_subscribe_queue(db);
+	status = test_subscribe_queue(db, (WORD) 0, (WORD) 1);
 	printf("Test %s - %s (%d)\n", "subscribe_queue", status==0?"OK":"FAILED", status);
 
-	status = test_enqueue(db);
+	status = test_enqueue(db, (WORD) 1, NULL);
 	printf("Test %s - %s (%d)\n", "enqueue", status==0?"OK":"FAILED", status);
 
-	status = test_read_queue(db);
+	status = test_read_queue(db, (WORD) 0, (WORD) 1, NULL);
 	printf("Test %s - %s (%d)\n", "read_queue", status==0?"OK":"FAILED", status);
 
-	status = test_consume_queue(db);
+	status = test_consume_queue(db, (WORD) 0, (WORD) 1, NULL);
 	printf("Test %s - %s (%d)\n", "consume_queue", status==0?"OK":"FAILED", status);
 
-	status = test_unsubscribe_queue(db);
+	status = test_unsubscribe_queue(db, (WORD) 0, (WORD) 1);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", status==0?"OK":"FAILED", status);
 
-	status = test_delete_queue(db);
+	status = test_txn(db, schema, &seed);
+	printf("Test %s - %s (%d)\n", "txn", status==0?"OK":"FAILED", status);
+
+	status = test_delete_queue(db, NULL);
 	printf("Test %s - %s (%d)\n", "delete_queue", status==0?"OK":"FAILED", status);
 
 	status = close_remote_db(db);

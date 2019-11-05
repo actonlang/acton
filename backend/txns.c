@@ -728,12 +728,14 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 
 	vector_clock * prh_version = NULL;
 
-	peek_queue(consumer_id, shard_id, app_id, table_key, queue_id,
+	int status = peek_queue(consumer_id, shard_id, app_id, table_key, queue_id,
 			max_entries, prev_read_head, entries_read, new_read_head, &prh_version,
 			start_row, end_row, db);
 
-	return add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
+	int ret = add_read_queue_to_txn(consumer_id, shard_id, app_id, table_key, queue_id,
 									*new_read_head, prh_version, ts, fastrandstate);
+
+	return (ret==0)?(status):(ret);
 }
 
 int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
