@@ -209,7 +209,6 @@ instance Relabel TBind where
     relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
 
 instance Relabel Type where
-    relabel (TSelf _) = TSelf <$> newLoc
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (TTuple _ p) = TTuple <$> newLoc <*> relabel p

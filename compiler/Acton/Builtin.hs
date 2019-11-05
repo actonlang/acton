@@ -3,7 +3,7 @@ module Acton.Builtin where
 import Utils
 import Acton.Syntax
     
-nSelf                               = name "__self__"
+_nSelf_                             = name "__self__"
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
