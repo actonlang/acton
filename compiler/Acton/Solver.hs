@@ -22,8 +22,7 @@ simplify env []                             = do cs0 <- collectDeferred
                                                      then return cs1
                                                      else simplify env cs1
   where simple cs                           = True                              -- TODO: add proper test
-simplify env (c:cs)                         = do c' <- msubst c
-                                                 reduce env c'
+simplify env (c:cs)                         = do reduce env c
                                                  simplify env cs
 
 -- Reduce aggressively or fail
@@ -33,32 +32,41 @@ solve env []                                = do cs0 <- collectDeferred
                                                  if cs1 == [] 
                                                      then return ()
                                                      else solve env cs1         -- TODO: termination...!
-solve env (c:cs)                            = do c' <- msubst c
-                                                 reduce env c'
+solve env (c:cs)                            = do reduce env c
                                                  solve env cs
 
-reduce env (Sub t1 t2)                      = red' True env t1 t2
-reduce env (Equ t1 t2)                      = red' False env t1 t2
-reduce env (SubGen t1 t2)                   = redGen True env t1 t2
-reduce env (EquGen t1 t2)                   = redGen False env t1 t2
+reduce env c                                = do c' <- msubst c
+                                                 reduce env c'
 
-reduce env (Impl t@(TVar _ tv) u)
+reduce' env (Sub t1 t2)                     = red' True env t1 t2
+reduce' env (Equ t1 t2)                     = red' False env t1 t2
+reduce' env (SubGen t1 t2)                  = redGen' True env t1 t2
+reduce' env (EquGen t1 t2)                  = redGen' False env t1 t2
+
+reduce' env (Impl t@(TVar _ tv) u)
   | not $ skolem tv                         = defer [Impl t u]
-reduce env (Impl t u)
+reduce' env (Impl t u)
   | entail env (Impl t u)                   = return ()
 
-reduce env (Sel t1@(TVar _ tv) n t2)
+reduce' env (Sel t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Sel t1 n t2]
-reduce env (Sel (TAt _ tc) n t2)            = return ()
-reduce env (Sel (TCon _ tc) n t2)           = return ()
+reduce' env (Sel (TCon _ tc) n t2)
+  | Just qn <- protoAttr n env              = do undefined
+  | otherwise                               = do undefined
+                                                 -- reduce env (Equ t t2)
 
-reduce env (Mut t1@(TVar _ tv) n t2)
+reduce' env (Sel (TAt _ tc) n t2)           = return ()
+
+reduce' env (Mut t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Mut t1 n t2]
-reduce env (Mut (TCon _ tc) n t2)           = return ()
-reduce env c                                = noRed c
+reduce' env (Mut (TCon _ tc) n t2)          = return ()
+reduce' env c                               = noRed c
 
-red sub env t1 t2                           = do -- traceM ("red sub env " ++ prstr (Sub t1 t2))
-                                                 red' sub env t1 t2
+
+
+red sub env t1 t2                           = do t1' <- msubst t1
+                                                 t2' <- msubst t2
+                                                 red' sub env t1' t2'
 
 red' sub env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
@@ -74,25 +82,19 @@ red' True env t1 t2@TVar{}
   | entail env (Sub t1 t2)                  = return ()
 
 red' False env (TVar _ tv) t2
-  | not $ skolem tv                         = do s <- getSubstitution
-                                                 case Map.lookup tv s of
-                                                   Just t1 -> red' False env t1 t2
-                                                   Nothing -> do t2' <- msubst t2
-                                                                 when (tv `elem` tyfree t2') (infiniteType tv)
-                                                                 substitute tv t2'
+  | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
+                                                 substitute tv t2
 red' False env t1 (TVar _ tv)
-  | not $ skolem tv                         = do s <- getSubstitution
-                                                 case Map.lookup tv s of
-                                                   Just t2 -> red' False env t1 t2
-                                                   Nothing -> do t1' <- msubst t1
-                                                                 when (tv `elem` tyfree t1') (infiniteType tv)
-                                                                 substitute tv t1'
+  | not $ skolem tv                         = do when (tv `elem` tyfree t1) (infiniteType tv)
+                                                 substitute tv t1
 
 red' sub env (TCon l1 c1) (TCon l2 c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
-  | otherwise                               = do (t1,t2) <- instSubAxiom env (tcname c1) (tcname c2)
+  | otherwise                               = do (cs,t1,t2) <- instSubAxiom env (tcname c1) (tcname c2)
+                                                 mapM_ (reduce env) cs
                                                  red sub env (TCon l1 c1) t1
                                                  red sub env t2 (TCon l2 c2)
+
 --           as declared           as called
 red' sub env (TFun _ fx1 p1 r1 t1) (TFun _ fx2 p2 r2 t2)
                                             = do red sub env fx1 fx2
@@ -142,16 +144,44 @@ red' sub env (TRow _ n t1 r1) r2            = do (t2,r2') <- findKwd tNil n r2 (
 red' False env t1 t2                        = noRed (Equ t1 t2)
 red' True env t1 t2                         = noRed (Sub t1 t2)
 
+redGen sub env sc1 sc2                      = do sc1' <- msubst sc1
+                                                 sc2' <- msubst sc2
+                                                 redGen' sub env sc1' sc2'
 
-redGen sub env (TSchema _ [] t1 d1) (TSchema _ [] t2 d2)
+redGen' sub env (TSchema _ [] t1 d1) (TSchema _ [] t2 d2)
   | d1 /= d2                                = distinctDecorations d1 d2
-  | otherwise                               = red sub env t1 t2
-redGen sub env sc1 sc2@(TSchema _ q2 t2 d2)
+  | otherwise                               = red' sub env t1 t2
+redGen' sub env sc1 sc2@(TSchema _ q2 t2 d2)
   | scdec sc1 /= d2                         = distinctDecorations (scdec sc1) d2
-  | otherwise                               = do t1 <- instantiate env1 sc1
+  | otherwise                               = do (cs,t1) <- instantiate env1 sc1
+                                                 mapM_ (reduce env) cs
                                                  red sub env1 t1 t2
                                                  tvs <- (intersect (tybound q2) . tyfree) <$> msubst [sc1,sc2]
                                                  when (any (`elem` tvs) (tybound q2)) (escapingVar tvs sc1 sc2)
   where env1                                = defineTVars q2 env
 
+
+-- Entailment ----------------------------------------------------------------------------
+
+entail                                  :: Env -> Constraint -> Bool
+entail env c                            = True                                              -- TODO: implement this
+
+
+
+-- Instantiation -------------------------------------------------------------------------
+
+instantiate                     :: Env -> TSchema -> TypeM (Constraints, Type)
+instantiate env (TSchema _ [] t _)
+                                = return ([], t)
+instantiate env (TSchema _ q t _)
+                                = do tvs <- newTVars (length q)
+                                     let s = tybound q `zip` tvs
+                                     return (constraintsOf env (subst s q), subst s t)
+
+
+instSubAxiom                    :: Env -> QName -> QName -> TypeM (Constraints, Type, Type)
+instSubAxiom env n n'           = do ts <- newTVars (length q)
+                                     let s = tybound q `zip` ts
+                                     return (constraintsOf env (subst s q), tCon (TC n ts), tCon (subst s u))
+  where (q,u)                   = findSubAxiom env n n'
 

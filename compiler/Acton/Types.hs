@@ -261,43 +261,36 @@ instance InfData Branch where
 
 instance InfEnv Decl where
     infEnv env (Actor _ n q p k t _)
-      | nodup (p,k)                     = do t0 <- instwild (extractSig env n q p k t NoMod)
+      | nodup (p,k)                     = do t0 <- wellFormed env (extractSig env n q p k t NoMod)
                                              case reservedOrSig n env of
                                                 Just Nothing   -> return (nVar' n t0)
                                                 Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
                                                 Nothing        -> illegalRedef n
     infEnv env (Def _ n q p k t _ m)
-      | nodup (p,k)                     = do t0 <- instwild (extractSig env n q p k t m)
+      | nodup (p,k)                     = do t0 <- wellFormed env (extractSig env n q p k t m)
                                              case reservedOrSig n env of
                                                 Just Nothing   -> return (nVar' n t0)
                                                 Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
                                                 Nothing        -> illegalRedef n
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
-      | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
+      | wf env q && wf env1 us          = do te <- noescape <$> infEnv env1 b
                                              return $ nClass n q (mro env1 False us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
-      | nowild q && nowild us           = do te <- infEnv env1 b
+      | wf env q && wf env1 us          = do te <- infEnv env1 b
                                              return $ nProto (defaultmod env) n q (mro env1 True us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Extension _ n q us b)
-      | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
+      | wf env q && wf env1 us          = do te <- noescape <$> infEnv env1 b
                                              return $ nExt n q (mro env1 True us) te
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do t0 <- instwild (completeSig env sc)
+      | otherwise                       = do t0 <- wellFormed env sc
                                              return $ nSig ns t0
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
-
-completeSig env (TSchema l [] t d)      = TSchema l q t d
-  where q                               = [ TBind tv [] | tv <- tyfree t \\ tvarScope env ]
-completeSig env sc@(TSchema _ q t _)
-  | not $ null tvs                      = err2 tvs "Unbound type variable"
-  | otherwise                           = sc
-  where tvs                             = tyfree t \\ (tybound q ++ tvarScope env)
 
 mro env proto us
   | proto                               = merge [] $ linearizationsP us ++ [us]
@@ -320,14 +313,17 @@ mro env proto us
           | otherwise                   = absent n us
 
         linearizationsC []              = []
-        linearizationsC (u : us)        = (u:us') : linearizationsP us
-          where (proto', us', _)        = instCon env u
+        linearizationsC (u : us)
+          | all (entail env) cs         = (u:us') : linearizationsP us
+          | otherwise                   = err1 u ("Type context too weak to entail")
+          where (proto', cs, us', _)    = findCon env u
 
         linearizationsP []              = []
         linearizationsP (u : us)
           | not proto'                  = err1 (tcname u) "Protocol expected, found class"
-          | otherwise                   = (u:us') : linearizationsP us
-          where (proto', us', _)        = instCon env u
+          | all (entail env) cs         = (u:us') : linearizationsP us
+          | otherwise                   = err1 u ("Type context too weak to entail")
+          where (proto', cs, us', _)    = findCon env u
 
 
 extractSig env n q p k t m
@@ -459,7 +455,7 @@ instance Check Stmt where
     check env (Decl _ ds)               = check env ds
     check env s                         = return ()
 
-checkHyp env n t d                      = case findType n env of
+checkHyp env n t d                      = case findVarType n env of
                                             (TSchema _ [] t' d')
                                                | d == NoDec || d == d' -> constrain [Sub t t']
                                                | otherwise -> err1 n "Inconsistent decorations for"
@@ -495,18 +491,20 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env (ExceptAll _)            = return []
-    infEnv env (Except l x)             = do t <- instantiate env $ classConSchema env x
-                                             constrain [Sub t tException]
+    infEnv env (Except l x)             = do (cs,t) <- instantiate env $ classConSchema env x
+                                             constrain (Sub t tException : cs)
                                              return []
-    infEnv env (ExceptAs l x n)         = do t <- instantiate env $ classConSchema env x
-                                             constrain [Sub t tException]
+    infEnv env (ExceptAs l x n)         = do (cs,t) <- instantiate env $ classConSchema env x
+                                             constrain (Sub t tException : cs)
                                              return $ nVar n t
 
 classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
   where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ n)                 = instantiate env $ openFX $ findType n env
+    infer env (Var _ n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType n env
+                                             constrain cs
+                                             return t
     infer env (Int _ val s)             = return tInt
     infer env (Float _ val s)           = return tFloat
     infer env e@Imaginary{}             = notYetExpr e
@@ -690,25 +688,25 @@ instance (Infer a) => Infer (Maybe a) where
     infer env (Just x)                  = infer env x
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n ann e p)      = do sc <- maybe (monotype <$> newTVar) instwild ann
+    infEnvT env (PosPar n ann e p)      = do sc <- maybe (monotype <$> newTVar) (wellFormed env) ann
                                              t <- infer env e
                                              constrain [SubGen (monotype t) sc]
                                              (te,r) <- infEnvT (define (nVar' n sc) env) p
                                              return (nVar' n sc ++ te, posRow sc r)
     infEnvT env (PosSTAR n ann)         = do r <- newTVar
-                                             t <- maybe newTVar instwild ann
+                                             t <- maybe newTVar (wellFormed env) ann
                                              constrain [Sub t (tTuple r)]
                                              return (nVar n t, r)
     infEnvT env PosNIL                  = return ([], posNil)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n ann e k)      = do sc <- maybe (monotype <$> newTVar) instwild ann
+    infEnvT env (KwdPar n ann e k)      = do sc <- maybe (monotype <$> newTVar) (wellFormed env) ann
                                              t <- infer env e
                                              constrain [SubGen (monotype t) sc]
                                              (te,r) <- infEnvT (define (nVar' n sc) env) k
                                              return (nVar' n sc ++ te, kwdRow n sc r)
     infEnvT env (KwdSTAR n ann)         = do r <- newTVar
-                                             t <- maybe newTVar instwild ann
+                                             t <- maybe newTVar (wellFormed env) ann
                                              constrain [Sub t (tRecord r)]
                                              return (nVar n t, r)
     infEnvT env KwdNIL                  = return ([], kwdNil)
@@ -792,7 +790,7 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar _ n ann)          = do t0 <- maybe newTVar instwild ann
+    infEnvT env (PVar _ n ann)          = do t0 <- maybe newTVar (wellFormed env) ann
                                              case reservedOrSig n env of
                                                  Just Nothing ->
                                                      return (nVar n t0, t0)
@@ -800,7 +798,7 @@ instance InfEnvT Pattern where
                                                      constrain [EquGen (monotype t0) t1]
                                                      return (nVar' n t1, t0)        -- TODO: return scheme t1 instead
                                                  Nothing ->
-                                                     case findType n env of
+                                                     case findVarType n env of
                                                          TSchema _ [] t _ -> return ([], t)
                                                          _ -> err1 n "Polymorphic variable not assignable:"
     infEnvT env (PIndex l e [i])        = do t <- infer env e
@@ -843,6 +841,68 @@ instance Infer Pattern where
       where noenv ([], t)               = t
             noenv (te, _)               = nameNotFound (head (dom te))
                                              
+
+-- Well-formed types ------------------------------------------------------
+
+wellFormed env t
+  | wfmd env True t                 = instwild t
+
+wf env t                            = wfmd env False t
+
+class WellFormed a where
+    wfmd                            :: Env -> Bool -> a -> Bool
+    instwild                        :: a -> TypeM a
+
+instance WellFormed [TBind] where
+    wfmd env w []                   = True
+    wfmd env w (b:bs)               = wfmd env w b && wfmd env1 w bs
+      where env1                    = defineTVars [b] env
+    instwild                        = mapM instwild
+
+instance WellFormed [TCon] where
+    wfmd env w                      = all (wfmd env w)
+    instwild                        = mapM instwild
+
+instance WellFormed TSchema where
+    wfmd env w (TSchema l [] t d)   = wfmd env1 w t
+      where q                       = [ TBind tv [] | tv <- tyfree t \\ tvarScope env ]
+            env1                    = defineTVars q env
+    wfmd env w (TSchema l q t d)    = wfmd env False q && wfmd env1 w t
+      where env1                    = defineTVars q env
+
+    instwild (TSchema l q t d)      = TSchema l q <$> instwild t <*> return d
+
+instance WellFormed TBind where
+    wfmd env w (TBind tv us)        = all (wfmd env w) us
+    instwild (TBind tv us)          = TBind tv <$> mapM instwild us
+
+instance WellFormed TCon where
+    wfmd env w (TC c ts)            = all (wfmd env w) ts
+    instwild (TC c ts)              = TC c <$> mapM instwild ts
+
+instance WellFormed Type where
+    wfmd env False (TWild l)        = err l "Illegal wildcard type"
+    wfmd env w (TVar _ tv)
+      | tv `notElem` tvarScope env  = err1 tv "Unbound type variable"
+    wfmd env w (TCon _ tc)          = wfmd env w tc
+    wfmd env w (TAt _ tc)           = wfmd env w tc
+    wfmd env w (TFun _ e p k t)     = wfmd env w e && wfmd env w p && wfmd env w k && wfmd env w t
+    wfmd env w (TTuple _ p)         = wfmd env w p
+    wfmd env w (TRecord _ k)        = wfmd env w k
+    wfmd env w (TOpt _ t)           = wfmd env w t
+    wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
+    wfmd env w t                    = True
+
+    instwild (TWild _)              = newTVar
+    instwild (TCon l tc)            = TCon l <$> instwild tc
+    instwild (TAt l tc)             = TAt l <$> instwild tc
+    instwild (TFun l e p k t)       = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
+    instwild (TTuple l p)           = TTuple l <$> instwild p
+    instwild (TRecord l k)          = TRecord l <$> instwild k
+    instwild (TOpt l t)             = TOpt l <$> instwild t
+    instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r
+    instwild t                      = return t
+
 
 -- FX presentation ---------------------
 
