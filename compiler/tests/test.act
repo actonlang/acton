@@ -136,7 +136,7 @@ protocol Apa():
         pass
 
 
-actor Test [T](v0:T):
+actor Test[T](v0:T):
     def m(x):
         pass
 
