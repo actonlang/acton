@@ -235,7 +235,7 @@ instance Subst Type where
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
     tyfree (TAt _ c)                = tyfree c
-    tyfree (TFun _ fx p k t)        = tyfree p ++ tyfree k ++ tyfree t
+    tyfree (TFun _ fx p k t)        = tyfree fx ++ tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p)             = tyfree p
     tyfree (TRecord _ k)            = tyfree k
     tyfree (TUnion _ as)            = []
@@ -255,6 +255,10 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | KwdNotFound Name
                                     | DistinctDecorations Decoration Decoration
                                     | EscapingVar [TVar] TSchema TSchema
+                                    | NoSelStatic Name TCon
+                                    | NoSelInstByClass Name TCon
+                                    | NoMutProto Name
+                                    | NoMutClass Name
                                     | NoRed Constraint
                                     | NotYet SrcLoc Doc
                                     deriving (Eq,Show,Typeable)
@@ -268,10 +272,14 @@ instance HasLoc TypeError where
     loc (KwdNotFound n)             = loc n
     loc (DistinctDecorations _ _)   = NoLoc
     loc (EscapingVar tvs t1 t2)     = loc tvs
+    loc (NoSelStatic n u)           = loc n
+    loc (NoSelInstByClass n u)      = loc n
+    loc (NoMutProto n)              = loc n
+    loc (NoMutClass n)              = loc n
     loc (NoRed c)                   = loc c
     loc (NotYet l doc)              = l
 
-notYetExpr e                        = notYet (loc e) (pretty e)
+notYetExpr e                        = notYet (loc e) e
 
 rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
 infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
@@ -279,8 +287,12 @@ conflictingRow tv                   = Control.Exception.throw $ ConflictingRow t
 kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
 distinctDecorations d1 d2           = Control.Exception.throw $ DistinctDecorations d1 d2
 escapingVar tvs t1 t2               = Control.Exception.throw $ EscapingVar tvs t1 t2
+noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
+noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
+noMutProto n                        = Control.Exception.throw $ NoMutProto n
+noMutClass n                        = Control.Exception.throw $ NoMutClass n
 noRed c                             = Control.Exception.throw $ NoRed c
-notYet loc doc                      = Control.Exception.throw $ NotYet loc doc
+notYet loc x                        = Control.Exception.throw $ NotYet loc (pretty x)
 
 typeError err                       = (loc err,render (expl err))
   where
@@ -291,6 +303,10 @@ typeError err                       = (loc err,render (expl err))
     expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
     expl (EscapingVar tvs t1 t2)    = text "Cannot infer" <+> pretty (SubGen t1 t2) <+> text "because type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
+    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
+    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
+    expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (NoMutClass n)             = text "Class attribute" <+> pretty n <+> text "cannot be mutated"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
     expl (NotYet _ doc)             = text "Not yet supported by type inference:" <+> doc
 

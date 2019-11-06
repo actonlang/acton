@@ -222,7 +222,7 @@ instance InfEnv Stmt where
                                              return te2
       where vs                          = nub $ bound ds
 
-    infEnv env (Data l _ _)             = notYet l (text "data syntax")
+    infEnv env (Data l _ _)             = notYet l "data syntax"
 {-
     infEnv env (Data l Nothing b)       = do te <- infData env1 b
                                              let te1 = filter (notemp . fst) te1
@@ -502,7 +502,15 @@ classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ t
   where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType n env
+    infer env (Var _ n)
+      | Just (qn,a) <- protoAttr n env  = do u <- TC qn <$> newTVars a
+                                             let (cs,sc) = findAttr env u n
+                                             when (scdec sc /= StaticMethod) (notYet (loc n) "Overloading of non-static methods")
+                                             (cs',t) <- instantiate env sc
+                                             t1 <- newTVar
+                                             constrain (Impl t1 u : cs ++ cs')
+                                             return $ subst [(tvSelf,t1)] t
+      | otherwise                       = do (cs,t) <- instantiate env $ openFX $ findVarType n env
                                              constrain cs
                                              return t
     infer env (Int _ val s)             = return tInt

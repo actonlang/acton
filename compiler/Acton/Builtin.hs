@@ -35,6 +35,7 @@ nOrd                                = name "Ord"
 nIdentity                           = name "Identity"
 nCollection                         = name "Collection"
 nContextManager                     = name "ContextManager"
+nObject                             = name "object"
 
 qnSequence                          = qBuiltin nSequence
 qnMapping                           = qBuiltin nMapping
@@ -62,6 +63,7 @@ qnOrd                               = qBuiltin nOrd
 qnIdentity                          = qBuiltin nIdentity
 qnCollection                        = qBuiltin nCollection
 qnContextManager                    = qBuiltin nContextManager
+qnObject                            = qBuiltin nObject
 
 cSequence a                         = TC qnSequence [a]
 cMapping a b                        = TC qnMapping [a,b]
@@ -89,6 +91,7 @@ cOrd                                = TC qnOrd []
 cIdentity                           = TC qnIdentity []
 cCollection a                       = TC qnCollection [a]
 cContextManager                     = TC qnContextManager []
+cObject                             = TC qnObject []
 
 pSequence a                         = tCon (cSequence a)
 pMapping a b                        = tCon (cMapping a b)
@@ -116,6 +119,7 @@ pOrd                                = tCon cOrd
 pIdentity                           = tCon cIdentity
 pCollection a                       = tCon (cCollection a)
 pContextManager                     = tCon cContextManager
+tObject                             = tCon cObject
 
 
 uniLit t (ULit l)                   = t == tStr
