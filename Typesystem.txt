@@ -19,6 +19,8 @@ TODO:
 NOTES:
     - Named structs are gone! Their equivalents are obtained by classes, either lacking __init__ or more explicitly decorated @immutable.
     - Static methods in protocols must mention Self, or else they would be ambiguous (see translation into classes)
+    - Methods that mention Self in a negative position *must* be static in order to preserve type soundness
+    - Static methods (or just methods that mention Self negatively) must only be selected by class.
     - The [q] part in class, protocol and extension is required, but can be left out (and inferred) in actor and def(s).
     - Unambiguity in type schemes: for each [q]=>t it must hold that ftv(q) <= ftv(t)  (not checked here)
     - Structs, classes and protocols have no ambiguity problems since q is always explicit there and the dom(q) are all in the resulting type.
