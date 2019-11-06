@@ -497,6 +497,8 @@ actKW                               = Name NoLoc "actor"
 mutKW                               = Name NoLoc "mut"
 retKW                               = Name NoLoc "ret"
 
+isInstAttr (InstAttr _)             = True
+isInstAttr _                        = False
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

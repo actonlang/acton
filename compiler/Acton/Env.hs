@@ -40,7 +40,7 @@ data NameInfo               = NVar      TSchema
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      [TBind] [TCon] TEnv           -- no support for qualified NExt names yet...
                             | NTVar     [TCon]
-                            | NPAttr    QName         -- protocol attribute (global), arg points to owning protocol
+                            | NPAttr    QName Int        -- protocol attribute (global), arg points to owning protocol + arity
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -67,7 +67,8 @@ nProto                      :: ModName -> Name -> [TBind] -> [TCon] -> TEnv -> T
 nProto m n q us te          = (n, NProto q us te) : nProtoAttrs m te
 
 nExt                        :: QName -> [TBind] -> [TCon] -> TEnv -> TEnv
-nExt (NoQual n) q us te     = [(n, NExt q us te)]                                       -- TODO: handle the QName case
+nExt (NoQual n) q us te     = [(n, NExt q us te)]
+nExt (QName m n) q us te    = [(n, NExt q us te)]                                       -- TODO: really handle the QName case!
 
 nVars                       :: TEnv -> [(Name, TSchema)]
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
@@ -79,7 +80,7 @@ nSigs ((n, NSig _):te)
 nSigs (_:te)                = nSigs te
 
 nProtoAttrs                 :: ModName -> TEnv -> TEnv
-nProtoAttrs m te            = [ (n', NPAttr (QName m n)) | (n,NProto _ _ te') <- te, n' <- dom te' ]
+nProtoAttrs m te            = [ (n', NPAttr (QName m n) (length q)) | (n,NProto q _ te') <- te, n' <- dom te' ]
 
 nCombine te1 te2            = te1 ++ te2
 
@@ -107,7 +108,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NExt q us te)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NTVar us)        = pretty n <> parens (commaList us)
-    pretty (n, NPAttr qn)       = dot <> pretty n <+> equals <+> pretty qn <> dot <> pretty n
+    pretty (n, NPAttr qn _)     = dot <> pretty n <+> equals <+> pretty qn <> dot <> pretty n
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -128,7 +129,7 @@ instance Subst NameInfo where
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt q us te)       = NExt <$> msubst q <*> msubst us <*> msubst te
     msubst (NTVar us)           = NTVar <$> msubst us
-    msubst (NPAttr qn)          = NPAttr <$> return qn
+    msubst (NPAttr qn i)        = NPAttr <$> return qn <*> return i
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -142,7 +143,7 @@ instance Subst NameInfo where
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt q us te)       = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NTVar us)           = tyfree us
-    tyfree (NPAttr qn)          = []
+    tyfree (NPAttr qn _)        = []
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -214,7 +215,7 @@ instance Unalias NameInfo where
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt q us te)      = NExt (unalias env q) (unalias env us) (unalias env te)
     unalias env (NTVar us)          = NTVar (unalias env us)
-    unalias env (NPAttr qn)         = NPAttr (unalias env qn)
+    unalias env (NPAttr qn i)       = NPAttr (unalias env qn) i
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -370,6 +371,10 @@ findProto n env             = case findQName n env of
                                 NProto q us te -> (q,us,te)
                                 _ -> err1 n "Protocol name expected, got"
 
+findBound                   :: TVar -> Env -> [TCon]
+findBound tv env            = case findName (tvname tv) env of
+                                NTVar us -> us
+
 findVarType                 :: Name -> Env -> TSchema
 findVarType n env           = case findName n env of
                                 NVar t       -> t
@@ -377,30 +382,7 @@ findVarType n env           = case findName n env of
                                 NClass q _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 NProto q _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 NModule _    -> tSchema [] (tAt $ TC (NoQual n) [])
-                                NPAttr qn    -> findProtoAttr qn n env
                                 _            -> err1 n "Unexpected name..."
-
-{-
-findAttrType qn n env       = case lookup n env of
-                                Just (NPAttr qn') ->
-                                    case findQName qn' env of
-                                        NProto q us te ->
-                                            case lookup n te of
-                                                
-                                
-                                                                                    let (q,te) = findAttrs env qn
-                                                                                        q0 = [TBind tvSelf [TC qn $ map tVar $ tybound q]]
-                                                                                    in case lookup n te of
-                                                                                         Just (TSchema l q1 t d) -> TSchema l (q0++q1) t d
-                                    case findQName qn' of
-                                        NProto q us te ->
-                                _ -> 
-                                    case findQName qn of
-                                        Module te ->
-                                            case lookup n te of
-                                                Just
-                                        NClass q us te
--}
 
 findInTEnv                  :: Name -> TEnv -> TSchema
 findInTEnv n te             = case lookup n te of
@@ -411,16 +393,10 @@ findInTEnv n te             = case lookup n te of
                                 Just (NModule _)    -> tSchema [] (tAt $ TC (NoQual n) [])
                                 Nothing             -> err1 n "Attribute not found:"
 
-findProtoAttr               :: QName -> Name -> Env -> TSchema
-findProtoAttr qn n env      = TSchema l (q0++q1) t d      -- TODO: check decorations...
-  where NProto q us te      = findQName qn env
-        q0                  = q ++ [TBind tvSelf [TC qn $ map tVar $ tybound q]]
-        TSchema l q1 t d    = fromJust $ lookup n $ nVars te
-
-protoAttr                   :: Name -> Env -> Maybe QName
+protoAttr                   :: Name -> Env -> Maybe (QName,Int)
 protoAttr n env             = case lookup n (names env) of
-                                Just (NPAttr qn) -> Just qn
-                                _                -> Nothing
+                                Just (NPAttr qn i) -> Just (qn,i)
+                                _                  -> Nothing
 
 findSubAxiom                    :: Env -> QName -> QName -> ([TBind], TCon)
 findSubAxiom env n n'
@@ -429,9 +405,9 @@ findSubAxiom env n n'
   where (q,us,_)                = findClass n env
         hit                     = [ u | u <- us, tcname u == n' ]
 
-findAttrs                       :: Env -> QName -> ([TBind], [(Name,TSchema)])
-findAttrs env n                 = (q, nVars $ te ++ concat [ te' | u <- us, let (proto',_,_,te') = findCon env u, proto==proto' ])
-  where (proto,q,us,te)         = findModClassOrProto n env
+findAttr                        :: Env -> TCon -> Name -> (Constraints, TSchema)
+findAttr env u n                = (cs, findInTEnv n te)
+  where (_,cs,us,te)            = findCon env u
 
 
 findCon                         :: Env -> TCon -> (Bool, Constraints, [TCon], TEnv)
