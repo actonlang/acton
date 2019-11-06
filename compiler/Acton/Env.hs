@@ -63,8 +63,8 @@ nSig xs t                   = [ (x, NSig t) | x <- xs ]
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
 
-nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
-nProto n q us te            = [(n, NProto q us te)]
+nProto                      :: ModName -> Name -> [TBind] -> [TCon] -> TEnv -> TEnv
+nProto m n q us te          = (n, NProto q us te) : nProtoAttrs m te
 
 nExt                        :: QName -> [TBind] -> [TCon] -> TEnv -> TEnv
 nExt (NoQual n) q us te     = [(n, NExt q us te)]                                       -- TODO: handle the QName case
@@ -77,6 +77,9 @@ nSigs []                    = []
 nSigs ((n, NSig _):te)
   | n `notElem` dom te      = n : nSigs te
 nSigs (_:te)                = nSigs te
+
+nProtoAttrs                 :: ModName -> TEnv -> TEnv
+nProtoAttrs m te            = [ (n', NPAttr (QName m n)) | (n,NProto _ _ te') <- te, n' <- dom te' ]
 
 nCombine te1 te2            = te1 ++ te2
 
@@ -286,6 +289,9 @@ defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
 defineTVars                 :: [TBind] -> Env -> Env
 defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] ++ names env }
 
+tvarScope                   :: Env -> [TVar]
+tvarScope env               = [ TV n | (n, NTVar _) <- names env ]
+
 defineSelf                  :: Name -> [TBind] -> Env -> Env
 defineSelf n q env          = defineSelf' (NoQual n) q env
 
@@ -338,6 +344,13 @@ addMod m te env             = env{ modules = (m,te) : modules env }
 dropNames                   :: Env -> Env
 dropNames env               = env{ names = names initEnv }
 
+findModClassOrProto         :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)
+findModClassOrProto n env   = case findQName n env of
+                                NModule te     -> (False,[],[],te)
+                                NClass q us te -> (False,q,us,te)
+                                NProto q us te -> (True,q,us,te)
+                                _ -> err1 n "Module, class or protocol name expected, got"
+
 findClassOrProto            :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)
 findClassOrProto n env      = case findQName n env of
                                 NClass q us te -> (False,q,us,te)
@@ -362,6 +375,10 @@ findType n env              = case findName n env of
                                 NVar t       -> t
                                 NSVar t      -> t
                                 NClass q _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
+                                NModule _    -> monotype (tAt $ TC (NoQual n) [])
+                                NPAttr qn    -> let (q,te) = findAttrs env qn
+                                                 in case lookup n te of
+                                                     Just (TSchema l q' t d) -> TSchema l (q++q') t d    -- TODO: add actual `impl` qn constraint
                                 _            -> err1 n "Unexpected name..."
 
 findSubAxiom                    :: Env -> QName -> QName -> ([TBind], TCon)
@@ -376,14 +393,7 @@ newTEnv vs                      = do ts <- newTVars (length vs)
 
 findAttrs                       :: Env -> QName -> ([TBind], [(Name,TSchema)])
 findAttrs env n                 = (q, nVars $ te ++ concat [ te' | u <- us, let (proto',_,te') = instCon env u, proto==proto' ])
-  where (proto,q,us,te)         = findClassOrProto n env
-
-findPAttr                       :: Name -> Env -> Maybe TSchema
-findPAttr n env                 = case findName n env of
-                                    NPAttr qn -> let (q,te) = findAttrs env qn
-                                                 in case lookup n te of
-                                                     Just (TSchema l q' t d) -> Just $ TSchema l (q++q') t d    -- TODO: add actual `impl` qn constraint
-                                    _ -> Nothing
+  where (proto,q,us,te)         = findModClassOrProto n env
 
 
 -- Instantiation -------------------------------------------------------------------------
@@ -521,13 +531,14 @@ impModule ps env (Import _ ms)  = imp env ms
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp ps env m
                                      let env2 = maybe (defineMod m env1) (\n->define [(n, NMAlias m)] env1) as
-                                     imp env2 is
+                                     imp (define (nProtoAttrs m te) env2) is
 impModule ps env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp ps env m
-                                     return $ define (importSome items m te) env1
+                                     let te1 = importSome items m te
+                                     return $ define (nProtoAttrs m te1) $ define te1 env1
 impModule ps env (FromImportAll _ (ModRef (0,Just m)))
                                 = do (env1,te) <- doImp ps env m
-                                     return $ define (importAll m te) env1
+                                     return $ define (nProtoAttrs m te) $ define (importAll m te) env1
 impModule _ _ i                 = illegalImport (loc i)
 
 

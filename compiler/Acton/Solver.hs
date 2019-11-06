@@ -49,6 +49,7 @@ reduce env (Impl t u)
 
 reduce env (Sel t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Sel t1 n t2]
+reduce env (Sel (TAt _ tc) n t2)            = return ()
 reduce env (Sel (TCon _ tc) n t2)           = return ()
 
 reduce env (Mut t1@(TVar _ tv) n t2)
