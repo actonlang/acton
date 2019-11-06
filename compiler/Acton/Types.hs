@@ -261,13 +261,13 @@ instance InfData Branch where
 
 instance InfEnv Decl where
     infEnv env (Actor _ n q p k t _)
-      | nodup (p,k)                     = do t0 <- instwild (extractSig n q p k t NoMod)
+      | nodup (p,k)                     = do t0 <- instwild (extractSig env n q p k t NoMod)
                                              case reservedOrSig n env of
                                                 Just Nothing   -> return (nVar' n t0)
                                                 Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
                                                 Nothing        -> illegalRedef n
     infEnv env (Def _ n q p k t _ m)
-      | nodup (p,k)                     = do t0 <- instwild (extractSig n q p k t m)
+      | nodup (p,k)                     = do t0 <- instwild (extractSig env n q p k t m)
                                              case reservedOrSig n env of
                                                 Just Nothing   -> return (nVar' n t0)
                                                 Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1)
@@ -280,7 +280,7 @@ instance InfEnv Decl where
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | nowild q && nowild us           = do te <- infEnv env1 b
-                                             return $ nProto n q (mro env1 True us) te
+                                             return $ nProto (defaultmod env) n q (mro env1 True us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Extension _ n q us b)
       | nowild q && nowild us           = do te <- noescape <$> infEnv env1 b
@@ -288,11 +288,16 @@ instance InfEnv Decl where
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
     infEnv env (Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do t0 <- instwild sc
+      | otherwise                       = do t0 <- instwild (completeSig env sc)
                                              return $ nSig ns t0
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
-
+completeSig env (TSchema l [] t d)      = TSchema l q t d
+  where q                               = [ TBind tv [] | tv <- tyfree t \\ tvarScope env ]
+completeSig env sc@(TSchema _ q t _)
+  | not $ null tvs                      = err2 tvs "Unbound type variable"
+  | otherwise                           = sc
+  where tvs                             = tyfree t \\ (tybound q ++ tvarScope env)
 
 mro env proto us
   | proto                               = merge [] $ linearizationsP us ++ [us]
@@ -325,12 +330,12 @@ mro env proto us
           where (proto', us', _)        = instCon env u
 
 
-extractSig n q p k t m
+extractSig env n q p k t m
   | null q                              = tSchema' [ TBind v [] | v <- tvs ] sig (extractDecoration m)
   | all (`elem` tybound q) tvs          = tSchema' q sig (extractDecoration m)
   | otherwise                           = err2 (tvs \\ tybound q) "Unbound type variable(s)in signature:"
   where
-    tvs                                 = tyfree sig
+    tvs                                 = tyfree sig \\ tvarScope env
     sig                                 = tFun (extractFX m) prow krow (maybe tWild id t)
     (prow,krow)                         = extractPars m p k
     extractPars m (PosPar n t _ p) k
@@ -501,9 +506,7 @@ classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ t
   where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ n)
-      | Just t <- findPAttr n env       = instantiate env $ openFX t
-      | otherwise                       = instantiate env $ openFX $ findType n env
+    infer env (Var _ n)                 = instantiate env $ openFX $ findType n env
     infer env (Int _ val s)             = return tInt
     infer env (Float _ val s)           = return tFloat
     infer env e@Imaginary{}             = notYetExpr e
