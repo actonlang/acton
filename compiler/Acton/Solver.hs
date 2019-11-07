@@ -16,17 +16,19 @@ import Acton.Env
 
 -- Reduce conservatively and remove entailed constraints
 simplify                                    :: Env -> [Constraint] -> TypeM [Constraint]
-simplify env cs                             = do reduceAll env cs
+simplify env cs                             = do --traceM ("### simplify: " ++ prstrs cs)
+                                                 reduceAll env cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if simple cs1
-                                                     then return cs1
+                                                     then return [] -- cs1
                                                      else simplify env cs1
   where simple cs                           = True                              -- TODO: add proper test
 
 -- Reduce aggressively or fail
 solve                                       :: Env -> [Constraint] -> TypeM ()
-solve env cs                                = do reduceAll env cs
+solve env cs                                = do --traceM ("### solve: " ++ prstrs cs)
+                                                 reduceAll env cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if done cs1
@@ -37,6 +39,7 @@ solve env cs                                = do reduceAll env cs
 reduceAll env cs                            = mapM_ (reduce env) cs
 
 reduce env c                                = do c' <- msubst c
+                                                 --traceM ("### reduce: " ++ prstr c')
                                                  reduce' env c'
 
 reduce' env (Sub t1 t2)                     = red' True env t1 t2
@@ -55,7 +58,7 @@ reduce' env c@(Sel (TVar _ tv) n t2)
 reduce' env (Sel t1@(TCon _ tc) n t2)
   | Just sc <- moduleAttr tc n env          = do (cs,t) <- instantiate env sc
                                                  reduceAll env (Equ t t2 : cs)
-  | Just (qn,a) <- protoAttr n env          = do u <- TC qn <$> newTVars a
+  | Just (qn,i) <- protoAttr n env          = do u <- TC qn <$> newTVars i
                                                  let (cs,sc) = findAttr env u n
                                                  when (scdec sc == StaticMethod) (noSelStatic n u)
                                                  (cs',t) <- instantiate env sc
@@ -66,9 +69,10 @@ reduce' env (Sel t1@(TCon _ tc) n t2)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduceAll env (Equ t' t2 : cs)
+reduce' env (Sel (TRecord _ r) n t2)        = reduce env (Equ r (kwdRow n (monotype t2) tWild))
 
 reduce' env (Sel (TAt _ tc) n t2) 
-  | Just (qn,a) <- protoAttr n env          = notYet (loc n) "Protocol attribute selection from class"
+  | Just (qn,i) <- protoAttr n env          = notYet (loc n) "Protocol attribute selection from class"
   | otherwise                               = do let (cs,sc) = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc)
@@ -86,7 +90,7 @@ reduce' env (Mut t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Mut t1 n t2]
   | Just u <- findSubBound tv env           = reduce' env (Mut (tCon u) n t2)
 reduce' env (Mut t1@(TCon _ tc) n t2)
-  | Just (qn,a) <- protoAttr n env          = noMutProto n
+  | Just (qn,i) <- protoAttr n env          = noMutProto n
   | otherwise                               = do let (cs,sc) = findAttr env tc n
                                                  when (not $ isInstAttr $ scdec sc) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
@@ -98,6 +102,7 @@ reduce' env c                               = noRed c
 
 red sub env t1 t2                           = do t1' <- msubst t1
                                                  t2' <- msubst t2
+                                                 --traceM ("### red: " ++ prstr (if sub then Sub t1' t2' else Equ t1' t2'))
                                                  red' sub env t1' t2'
 
 red' sub env (TVar _ tv1) (TVar _ tv2)
@@ -117,12 +122,11 @@ red' False env t1 (TVar _ tv)
   | not $ skolem tv                         = do when (tv `elem` tyfree t1) (infiniteType tv)
                                                  substitute tv t1
 
-red' sub env (TCon l1 c1) (TCon l2 c2)
+red' sub env (TCon _ c1) (TCon l c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
-  | otherwise                               = do (cs,t1,t2) <- instSubAxiom env (tcname c1) (tcname c2)
-                                                 mapM_ (reduce env) cs
-                                                 red sub env (TCon l1 c1) t1
-                                                 red sub env t2 (TCon l2 c2)
+  | otherwise                               = do reduceAll env cs
+                                                 red sub env t (TCon l c2)
+  where (cs,t)                              = findSubAxiom env c1 (tcname c2)
 
 --           as declared           as called
 red' sub env (TFun _ fx1 p1 r1 t1) (TFun _ fx2 p2 r2 t2)
@@ -207,10 +211,4 @@ instantiate env (TSchema _ q t _)
                                      let s = tybound q `zip` tvs
                                      return (constraintsOf env (subst s q), subst s t)
 
-
-instSubAxiom                    :: Env -> QName -> QName -> TypeM (Constraints, Type, Type)
-instSubAxiom env n n'           = do ts <- newTVars (length q)
-                                     let s = tybound q `zip` ts
-                                     return (constraintsOf env (subst s q), tCon (TC n ts), tCon (subst s u))
-  where (q,u)                   = findSubAxiom env n n'
 

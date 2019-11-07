@@ -124,16 +124,25 @@ def f40b(**c,):
     pass
 
 
-
-
-protocol Apa():
+class Apa:
     def __init__(self):
+        self.x = 1
+
+    @classmethod
+    def f(x):
         pass
-    # @classattr
-    # x : int
+
+protocol Bepa():
+        
+    @classattr
+    x : int
+    
     @staticmethod
-    def __eq__(x:Self, y:Self) -> bool:
-        pass
+    compare : (Self,Self) -> bool
+    
+    def compare(x:Self, y:Self) -> bool:
+        return True
+    
 
 
 actor Test[T](v0:T):
@@ -144,7 +153,7 @@ actor Test[T](v0:T):
 def f(z):
     pass
 
-extension Mapping[A,B(Eq)] (Eq):
+protocol Mapping[A,B(Eq)] (Eq):
     pass
 
 extension __builtin__.int (Eq):
