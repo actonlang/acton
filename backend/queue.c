@@ -570,9 +570,9 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 
 	// Create sentinel queue entry:
 
-	WORD * queue_column_values = (WORD *) malloc(schema->no_cols * sizeof(WORD));
+	WORD * queue_column_values = (WORD *) malloc((schema->no_cols) * sizeof(WORD));
 	queue_column_values[0]=queue_id;
-	queue_column_values[1]=(WORD) -2;
+	queue_column_values[1]=(WORD) - 2;
 	for(long i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 

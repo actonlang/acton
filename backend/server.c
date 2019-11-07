@@ -202,6 +202,9 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 		return cells + 1;
 	}
 
+//	printf("serialize_cells:\n");
+//	print_long_row(result);
+
 	cell * cells_ptr = cells;
 	for(snode_t * crt_cell = HEAD(result->cells); crt_cell != NULL; crt_cell = NEXT(crt_cell))
 	{
@@ -313,10 +316,11 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
 		{
 			db_row_t* result = (db_row_t* ) crt_row->value;
+//			print_long_row(result);
 			no_cells += count_cells(result);
 		}
 
-		cell * cells = malloc(no_results * sizeof(cell));
+		cell * cells = malloc(no_cells * sizeof(cell));
 
 		long * key_path = (long *) malloc(no_keys * sizeof(long));
 
