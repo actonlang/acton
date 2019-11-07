@@ -117,6 +117,8 @@ getDump                                 :: TypeM SrcInfo
 getDump                                 = state $ \st -> (dumped st, st)
 
 
+newName n                               = Internal (nstr n) <$> newUnique
+
 newTVar                                 = TVar NoLoc <$> TV <$> Internal "V" <$> newUnique
 
 newTVars n                              = mapM (const newTVar) [1..n]
@@ -259,6 +261,8 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | NoSelInstByClass Name TCon
                                     | NoMutProto Name
                                     | NoMutClass Name
+                                    | LackSig Name
+                                    | LackDef Name
                                     | NoRed Constraint
                                     | NotYet SrcLoc Doc
                                     deriving (Eq,Show,Typeable)
@@ -276,6 +280,8 @@ instance HasLoc TypeError where
     loc (NoSelInstByClass n u)      = loc n
     loc (NoMutProto n)              = loc n
     loc (NoMutClass n)              = loc n
+    loc (LackSig n)                 = loc n
+    loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
     loc (NotYet l doc)              = l
 
@@ -291,6 +297,8 @@ noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
 noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
 noMutProto n                        = Control.Exception.throw $ NoMutProto n
 noMutClass n                        = Control.Exception.throw $ NoMutClass n
+lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
+lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c
 notYet loc x                        = Control.Exception.throw $ NotYet loc (pretty x)
 
@@ -307,6 +315,8 @@ typeError err                       = (loc err,render (expl err))
     expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
     expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
     expl (NoMutClass n)             = text "Class attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (LackSig n)                = text "Declaration lacks accompanying signature"
+    expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
     expl (NotYet _ doc)             = text "Not yet supported by type inference:" <+> doc
 

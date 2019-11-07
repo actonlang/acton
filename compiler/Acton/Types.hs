@@ -54,9 +54,9 @@ noshadow svs x
   where vs                              = intersect (bound x) svs
 
 noescape te                                                                                 -- TODO: check for escaping classes/protocols as well
---  | not $ null sigs                     = err2 sigs "Dangling type signature for"         -- TODO: turn on again!
+--  | not $ null dangling                 = err2 dangling "Dangling type signature for"       -- TODO: turn on again!
   | otherwise                           = te
-  where sigs                            = nSigs te
+  where dangling                        = dom (nSigs te) \\ dom (nVars te)
 
 
 -- Infer -------------------------------
@@ -92,7 +92,7 @@ splitGen env tvs te cs
   where 
     (fixed_cs, cs')                     = partition (null . (\\tvs) . tyfree) cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
-    ambig te vs                         = or [ not $ null (vs \\ tyfree t) | (n, t) <- nVars te ]
+    ambig te vs                         = or [ not $ null (vs \\ tyfree info) | (n, info) <- te ]
     q_new                               = mkBinds gen_cs
     generalize (TSchema l q t dec)      = closeFX $ TSchema l (subst s (q_new++q)) (subst s t) dec
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
@@ -216,8 +216,9 @@ instance InfEnv Stmt where
                                              return (nState te)
     
     infEnv env (Decl _ ds)
-      | nodup vs                        = do te1 <- infEnv env ds
-                                             check (define te1 env) ds
+      | nodup vs                        = do te1 <- infEnv (enterDecl env) ds
+                                             when (not $ inDecl env) $
+                                                 check (define te1 env) ds
                                              te2 <- genTEnv env te1
                                              return te2
       where vs                          = nub $ bound ds
@@ -275,26 +276,37 @@ instance InfEnv Decl where
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do te <- noescape <$> infEnv env1 b
-                                             return $ nClass n q (mro env1 False us) te
+                                             return $ nClass n q (mro env1 us1) (mro env1 us2) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
+            (us1,us2)                   = splitBases env us
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do te <- infEnv env1 b
-                                             return $ nProto (defaultmod env) n q (mro env1 True us) te
-      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
+                                             return $ nProto (defaultmod env) n q (mro env1 (protoBases env us)) te
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env            
     infEnv env (Extension _ n q us b)
-      | wf env q && wf env1 us          = do te <- noescape <$> infEnv env1 b
-                                             return $ nExt n q (mro env1 True us) te
+      | isProto env n                   = notYet (loc n) "Extension of a protocol"
+      | wf env q && wf env1 us          = do w <- newName (item n)
+                                             return $ nExt w n q (mro env1 (protoBases env us))
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
+            u                           = TC n [ tVar tv | TBind tv _ <- q ]
     infEnv env (Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
       | otherwise                       = do t0 <- wellFormed env sc
                                              return $ nSig ns t0
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
-mro env proto us
-  | proto                               = merge [] $ linearizationsP us ++ [us]
-  | not proto                           = merge [] $ linearizationsC us ++ [us]
+splitBases env []                       = ([], [])
+splitBases env (u:us)
+  | isProto env (tcname u)              = ([], u : protoBases env us)
+  | otherwise                           = ([u], protoBases env us)
+
+protoBases env []                       = []
+protoBases env (u:us)
+  | isProto env (tcname u)              = u : protoBases env us
+  | otherwise                           = err1 u "Protocol expected"
+
+mro env us                              = merge [] $ linearizations us ++ [us]
   where merge out lists
           | null heads                  = reverse out
           | h:_ <- good                 = merge (h:out) [ if match hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
@@ -312,19 +324,11 @@ mro env proto us
           | n == tcname u               = False
           | otherwise                   = absent n us
 
-        linearizationsC []              = []
-        linearizationsC (u : us)
-          | all (entail env) cs         = (u:us') : linearizationsP us
+        linearizations []               = []
+        linearizations (u : us)
+          | all (entail env) cs         = (u:us') : linearizations us
           | otherwise                   = err1 u ("Type context too weak to entail")
-          where (proto', cs, us', _)    = findCon env u
-
-        linearizationsP []              = []
-        linearizationsP (u : us)
-          | not proto'                  = err1 (tcname u) "Protocol expected, found class"
-          | all (entail env) cs         = (u:us') : linearizationsP us
-          | otherwise                   = err1 u ("Type context too weak to entail")
-          where (proto', cs, us', _)    = findCon env u
-
+          where (cs, us', _)            = findCon env u
 
 extractSig env n q p k t m
   | null q                              = tSchema' [ TBind v [] | v <- tvs ] sig (extractDecoration m)
@@ -374,7 +378,7 @@ instance Check Decl where
                                              te2 <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newTVar
-                                             checkHyp env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
+                                             checkAssump env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
       where svars                       = statedefs b
             env0                        = define envActorSelf $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
@@ -388,7 +392,7 @@ instance Check Decl where
                                              _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxSync <$> newTVar
-                                             checkHyp env n (tFun fx prow krow t) NoDec
+                                             checkAssump env n (tFun fx prow krow t) NoDec
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
@@ -401,7 +405,7 @@ instance Check Decl where
                                              _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
-                                             checkHyp env n (tFun fx prow krow (tMsg t)) NoDec
+                                             checkAssump env n (tFun fx prow krow (tMsg t)) NoDec
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b) env
 
@@ -415,7 +419,7 @@ instance Check Decl where
                                              _ <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (prow',krow') <- splitRows modif prow krow
-                                             checkHyp env n (tFun fx prow' krow' t) (extractDecoration modif)
+                                             checkAssump env n (tFun fx prow' krow' t) (extractDecoration modif)
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
@@ -426,43 +430,55 @@ instance Check Decl where
                                         = constrain [EquGen sc (monotype (tAt (findSelf env)))] >> return r
             splitRow m r                = return r
 
-    check env (Class l n _ _ b)         = do pushFX fxNil
-                                             check (define te env1) b
-                                             popFX                              -- TODO: check overrides in te2 against the us
-                                             te2 <- genTEnv env1 te             -- TODO: check no dangling sigs in te2 of any us
-                                             unifyTEnv env1 [te2,te] (dom te)
-      where env1                        = defineSelf n q $ defineTVars q env
-            (q,us,te)                   = findClass (NoQual n) env
-
-    check env (Protocol l n _ _ b)      = do pushFX fxNil
+    check env (Class l n _ _ b)
+      | not $ null undefs               = lackDef undefs
+      | otherwise                       = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
-                                             te2 <- genTEnv env1 te             -- TODO: check overrides in te2 against the us
-                                             unifyTEnv env1 [te2,te] (dom te)
+                                             constrain refinements
+      where env1                        = defineSelf n q $ defineTVars q env
+            (q,us1,us2,te)              = findClass (NoQual n) env
+            tes                         = [ te' | u <- us1++us2, let (_,_,te') = findCon env u ]
+            inherited                   = concatMap nSigs tes ++ concatMap nVars tes
+            refinements                 = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
+            undefs                      = (dom $ nSigs te ++ concatMap nSigs tes) \\ (dom $ nVars te ++ concatMap nVars tes)
+
+    check env (Protocol l n _ _ b)
+      | not $ null unsigs               = lackSig unsigs
+      | otherwise                       = do pushFX fxNil
+                                             check (define te env1) b
+                                             popFX
+                                             constrain refinements
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findProto (NoQual n) env
+            tes                         = [ te' | u <- us, let (_,_,te') = findCon env u ]
+            inherited                   = concatMap nVars tes
+            refinements                 = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
+            unsigs                      = dom te \\ (dom (nSigs te) ++ dom inherited)
 
-    check env (Extension l n _ _ b)     = do pushFX fxNil
-                                             -- check (define te env1) b
+    check env (Extension l n q us b)
+--      | not $ null undefs               = lackDef undefs
+      | otherwise                       = do pushFX fxNil
+                                             te <- infEnv env1 b
                                              popFX
-                                             -- te2 <- genTEnv env1 te             -- TODO: check overrides in te2 against the us
-                                             -- unifyTEnv env1 [te2,te] (dom te)
       where env1                        = defineSelf' n q $ defineTVars q env
-            (q,us,te)                   = undefined                             -- TODO: findExtension?? (NoQual n) env
     check env (Signature l ns sc)       = return ()
 
 instance Check Stmt where
     check env (Decl _ ds)               = check env ds
     check env s                         = return ()
 
-checkHyp env n t d                      = case findVarType n env of
+checkAssump env n t d                   = case findVarType n env of
                                             (TSchema _ [] t' d')
-                                               | d == NoDec || d == d' -> constrain [Sub t t']
-                                               | otherwise -> err1 n "Inconsistent decorations for"
+                                               | matchDec d d' -> constrain [Sub t t']
+                                               | otherwise -> err1 n ("Inconsistent decorations, " ++ show d ++ " vs " ++ prstr d' ++ ", for")
                                             sc' -> do
-                                               sc <- gen1 env n t d
+                                               sc <- gen1 env n t d         -- TODO: verify that generalizing one decl at a time is ok...
                                                constrain [EquGen sc sc']
-
+  where matchDec NoDec _                = True
+        matchDec (InstMethod False) _   = True
+        matchDec (InstAttr False) _     = True
+        matchDec d d'                   = d == d'
 
 inferPure env e                         = do pushFX tNil
                                              t <- infer env e
@@ -499,11 +515,11 @@ instance InfEnv Except where
                                              return $ nVar n t
 
 classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
-  where (q,_,_)                         = findClass qn env
+  where (q,_,_,_)                       = findClass qn env
 
 instance Infer Expr where
     infer env (Var _ n)
-      | Just (qn,a) <- protoAttr n env  = do u <- TC qn <$> newTVars a
+      | Just (qn,i) <- protoAttr n env  = do u <- TC qn <$> newTVars i
                                              let (cs,sc) = findAttr env u n
                                              when (scdec sc /= StaticMethod) (notYet (loc n) "Overloading of non-static methods")
                                              (cs',t) <- instantiate env sc
