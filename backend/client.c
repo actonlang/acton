@@ -294,7 +294,7 @@ int test_read_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * 
 int test_consume_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * txnid)
 {
 	printf("TEST: consume_queue\n");
-	return (remote_consume_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, no_enqueues - 1, txnid, db) == (no_enqueues - 1)); // &txnid
+	return remote_consume_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, no_enqueues - 1, txnid, db); // &txnid
 }
 
 int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
@@ -324,7 +324,7 @@ int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
 	printf("Test %s - %s (%d)\n", "subscribe_queue_txn", status==0?"OK":"FAILED", status);
 
 	status = test_read_queue(db, (WORD) 1, (WORD) 1, txnid);
-	printf("Test %s - %s (%d)\n", "read_queue_txn", status==0?"OK":"FAILED", status);
+	printf("Test %s - %s (%d)\n", "read_queue_txn", status==QUEUE_STATUS_READ_COMPLETE?"OK":"FAILED", status);
 
 	status = test_consume_queue(db, (WORD) 1, (WORD) 1, txnid);
 	printf("Test %s - %s (%d)\n", "consume_queue_txn", status==0?"OK":"FAILED", status);
@@ -394,10 +394,10 @@ int main(int argc, char **argv) {
 	printf("Test %s - %s (%d)\n", "enqueue", status==0?"OK":"FAILED", status);
 
 	status = test_read_queue(db, (WORD) 0, (WORD) 1, NULL);
-	printf("Test %s - %s (%d)\n", "read_queue", status==0?"OK":"FAILED", status);
+	printf("Test %s - %s (%d)\n", "read_queue", status==QUEUE_STATUS_READ_COMPLETE?"OK":"FAILED", status);
 
 	status = test_consume_queue(db, (WORD) 0, (WORD) 1, NULL);
-	printf("Test %s - %s (%d)\n", "consume_queue", status==0?"OK":"FAILED", status);
+	printf("Test %s - %s (%d)\n", "consume_queue", status==(no_enqueues - 1)?"OK":"FAILED", status);
 
 	status = test_unsubscribe_queue(db, (WORD) 0, (WORD) 1);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", status==0?"OK":"FAILED", status);
