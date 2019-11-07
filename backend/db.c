@@ -27,6 +27,8 @@ db_row_t * create_empty_row(WORD key)
 
 	row->no_columns=0;
 
+	row->version = NULL;
+
 	row->_next = NULL;
 
 	return row;
@@ -502,6 +504,13 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 	}
 
 	*start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
+
+	if(*start_row == NULL)
+	{
+		*end_row = NULL;
+		return 0;
+	}
+
 	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
@@ -636,6 +645,12 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	}
 
 	*start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
+
+	if(*start_row == NULL)
+	{
+		*end_row = NULL;
+		return 0;
+	}
 
 	int no_results = 0;
 	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);

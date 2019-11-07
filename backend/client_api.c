@@ -440,7 +440,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 	for(*end_row=*start_row;NEXT(*end_row) != NULL;*end_row=NEXT(*end_row), no_roots++);
 
 	assert(roots->no_items == no_roots);
-	assert(roots->no_items == *end_row - *start_row + 1);
+//	assert(roots->no_items == *end_row - *start_row + 1);
 
 	return roots->no_items;
 }
