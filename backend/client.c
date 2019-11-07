@@ -379,6 +379,8 @@ int main(int argc, char **argv) {
 	status = test_search_pk(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "test_search_pk", status==0?"OK":"FAILED", status);
 
+	remote_print_long_table((WORD) 0, db);
+
 	status = delete_all(schema, db, NULL, &seed);
 	printf("Test %s - %s (%d)\n", "delete_all", status==0?"OK":"FAILED", status);
 
@@ -400,8 +402,14 @@ int main(int argc, char **argv) {
 	status = test_unsubscribe_queue(db, (WORD) 0, (WORD) 1);
 	printf("Test %s - %s (%d)\n", "unsubscribe_queue", status==0?"OK":"FAILED", status);
 
+	remote_print_long_table((WORD) 0, db);
+	remote_print_long_table((WORD) 1, db);
+
 	status = test_txn(db, schema, &seed);
 	printf("Test %s - %s (%d)\n", "txn", status==0?"OK":"FAILED", status);
+
+	remote_print_long_table((WORD) 0, db);
+	remote_print_long_table((WORD) 1, db);
 
 	status = test_delete_queue(db, NULL);
 	printf("Test %s - %s (%d)\n", "delete_queue", status==0?"OK":"FAILED", status);

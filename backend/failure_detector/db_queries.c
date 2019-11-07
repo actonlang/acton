@@ -368,6 +368,17 @@ range_read_query * build_range_search_index_in_txn(int idx_idx, WORD start_idx_k
 	return NULL;
 }
 
+range_read_query * build_wildcard_range_search_in_txn(WORD table_key, uuid_t * txnid, long nonce)
+{
+	long min_key = LONG_MIN;
+	long max_key = LONG_MAX - 1;
+
+	cell_address * start_c = init_cell_address_copy((long) table_key, &min_key, 1);
+	cell_address * end_c = init_cell_address_copy((long) table_key, &max_key, 1);
+
+	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
+}
+
 range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce)
 {
 	range_read_query * ca = (range_read_query *) malloc(sizeof(range_read_query));

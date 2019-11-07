@@ -586,6 +586,7 @@ db_row_t* remote_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key
 	return 0;
 }
 
+
 int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
 							snode_t** start_row, snode_t** end_row,
 							WORD table_key, uuid_t * txnid, remote_db_t * db)
@@ -684,6 +685,61 @@ int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_i
 	assert (0); // Not supported; TO DO
 	return 0;
 }
+
+int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
+									WORD table_key, uuid_t * txnid, remote_db_t * db)
+{
+	unsigned len = 0;
+	void * tmp_out_buf = NULL;
+
+	range_read_query * q = build_wildcard_range_search_in_txn(table_key, txnid, get_nonce(db));
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+
+	if(db->servers->no_items < db->quorum_size)
+	{
+		fprintf(stderr, "No quorum (%d/%d servers alive)\n", db->servers->no_items, db->quorum_size);
+		return -1;
+	}
+	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
+
+#if CLIENT_VERBOSITY > 0
+	char print_buff[1024];
+	to_string_range_read_query(q, (char *) print_buff);
+	printf("Sending full table read query to server %s: %s\n", rs->id, print_buff);
+#endif
+
+	// Send packet to server and wait for reply:
+
+	int n = -1;
+	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
+
+    range_read_response_message * response;
+    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
+    assert(success == 0);
+
+#if CLIENT_VERBOSITY > 0
+	to_string_range_read_response_message(response, (char *) print_buff);
+	printf("Got back response from server %s: %s\n", rs->id, print_buff);
+#endif
+
+    if(success < 0)
+    		return success;
+
+	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
+	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
+}
+
+void remote_print_long_table(WORD table_key, remote_db_t * db)
+{
+	snode_t* start_row = NULL, * end_row = NULL;
+	int no_items = remote_read_full_table_in_txn(&start_row, &end_row, table_key, NULL, db);
+
+	printf("DB_TABLE: %ld [%d rows]\n", (long) table_key, no_items);
+
+	for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
+		print_long_row((db_row_t*) node->value);
+}
+
 
 // Queue ops:
 

@@ -370,6 +370,16 @@ int handle_range_read_query(range_read_query * q,
 	assert(q->start_cell_address->no_keys == q->end_cell_address->no_keys);
 
 	*schema = get_schema(db, (WORD) q->start_cell_address->table_key);
+
+/*
+	if(q->start_cell_address->no_keys == 0)
+	// Query the full table:
+	{
+		assert(q->end_cell_address->no_keys == 0);
+		return db_range_search(NULL, NULL, start_row, end_row, (WORD) q->start_cell_address->table_key, db);
+	}
+*/
+
 	int no_clustering_keys = q->start_cell_address->no_keys - (*schema)->no_primary_keys;
 
 	if(no_clustering_keys == 0)

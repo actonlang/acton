@@ -492,9 +492,17 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	*start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
+	if(start_primary_keys == NULL)
+	{
+		assert(end_primary_keys == NULL);
+		*start_row = HEAD(table->rows);
+		for(*end_row=*start_row; NEXT(*end_row) != NULL; *end_row = NEXT(*end_row));
 
-	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
+		return table->rows->no_items;
+	}
+
+	*start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
+	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }
@@ -630,7 +638,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	*start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
 
 	int no_results = 0;
-	for(*end_row = *start_row; (*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }

@@ -93,6 +93,9 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 int remote_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key,
 								snode_t** start_row, snode_t** end_row,
 								WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
+									WORD table_key, uuid_t * txnid, remote_db_t * db);
+void remote_print_long_table(WORD table_key, remote_db_t * db);
 
 // Queue ops:
 
