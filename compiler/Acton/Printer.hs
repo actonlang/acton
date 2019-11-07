@@ -163,6 +163,7 @@ prettyTuple es                      = commaCat es
 
 instance Pretty Name where
     pretty nm
+      | nm == nSelf                 = text "Self"
       | isIdent str                 = text str
       | otherwise                   = quotes (text str)
       where str                     = nstr nm
