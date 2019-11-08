@@ -3,7 +3,11 @@ module Acton.Builtin where
 import Utils
 import Acton.Syntax
     
-_nSelf_                             = name "__self__"
+selfKW                              = name "__self__"
+enterKW                             = name "__enter__"
+exitKW                              = name "__exit__"
+iterKW                              = name "iter"
+nextKW                              = name "__next__"
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
@@ -36,6 +40,7 @@ nIdentity                           = name "Identity"
 nCollection                         = name "Collection"
 nContextManager                     = name "ContextManager"
 nObject                             = name "object"
+nStopIteration                      = name "StopIteration"
 
 qnSequence                          = qBuiltin nSequence
 qnMapping                           = qBuiltin nMapping
@@ -64,6 +69,7 @@ qnIdentity                          = qBuiltin nIdentity
 qnCollection                        = qBuiltin nCollection
 qnContextManager                    = qBuiltin nContextManager
 qnObject                            = qBuiltin nObject
+qnStopIteration                     = qBuiltin nStopIteration
 
 cSequence a                         = TC qnSequence [a]
 cMapping a b                        = TC qnMapping [a,b]
@@ -92,6 +98,7 @@ cIdentity                           = TC qnIdentity []
 cCollection a                       = TC qnCollection [a]
 cContextManager                     = TC qnContextManager []
 cObject                             = TC qnObject []
+cStopIteration                      = TC qnStopIteration []
 
 pSequence a                         = tCon (cSequence a)
 pMapping a b                        = tCon (cMapping a b)
@@ -120,6 +127,7 @@ pIdentity                           = tCon cIdentity
 pCollection a                       = tCon (cCollection a)
 pContextManager                     = tCon cContextManager
 tObject                             = tCon cObject
+tStopIteration                      = tCon cStopIteration
 
 
 uniLit t (ULit l)                   = t == tStr
