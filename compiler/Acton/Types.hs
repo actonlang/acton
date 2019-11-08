@@ -370,6 +370,10 @@ class Check a where
 instance (Check a) => Check [a] where
     check env ds                        = mapM_ (check env) ds
 
+instance Check Stmt where
+    check env (Decl _ ds)               = check env ds
+    check env s                         = return ()
+
 instance Check Decl where
     check env (Actor l n q p k ann b)
       | noshadow svars p                = do pushFX (fxAct tWild)
@@ -430,43 +434,38 @@ instance Check Decl where
                                         = constrain [EquGen sc (monotype (tAt (findSelf env)))] >> return r
             splitRow m r                = return r
 
-    check env (Class l n _ _ b)
-      | not $ null undefs               = lackDef undefs
-      | otherwise                       = do pushFX fxNil
+    check env (Class l n _ _ b)         = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
-                                             constrain refinements
+                                             checkBindings env False (us1++us2) te
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us1,us2,te)              = findClass (NoQual n) env
-            tes                         = [ te' | u <- us1++us2, let (_,_,te') = findCon env u ]
-            inherited                   = concatMap nSigs tes ++ concatMap nVars tes
-            refinements                 = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
-            undefs                      = (dom $ nSigs te ++ concatMap nSigs tes) \\ (dom $ nVars te ++ concatMap nVars tes)
 
-    check env (Protocol l n _ _ b)
-      | not $ null unsigs               = lackSig unsigs
-      | otherwise                       = do pushFX fxNil
+    check env (Protocol l n _ _ b)      = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
-                                             constrain refinements
+                                             checkBindings env True us te
       where env1                        = defineSelf n q $ defineTVars q env
             (q,us,te)                   = findProto (NoQual n) env
-            tes                         = [ te' | u <- us, let (_,_,te') = findCon env u ]
-            inherited                   = concatMap nVars tes
-            refinements                 = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
-            unsigs                      = dom te \\ (dom (nSigs te) ++ dom inherited)
 
-    check env (Extension l n q us b)
---      | not $ null undefs               = lackDef undefs
-      | otherwise                       = do pushFX fxNil
+    check env (Extension l n q us b)    = do pushFX fxNil
                                              te <- infEnv env1 b
                                              popFX
+                                             checkBindings env False us te
       where env1                        = defineSelf' n q $ defineTVars q env
     check env (Signature l ns sc)       = return ()
 
-instance Check Stmt where
-    check env (Decl _ ds)               = check env ds
-    check env s                         = return ()
+
+checkBindings env proto us te
+  | proto && (not $ null unsigs)        = lackSig unsigs
+  | not proto && (not $ null undefs)    = lackDef undefs
+  | otherwise                           = constrain refinements
+  where tes                             = [ te' | u <- us, let (_,_,te') = findCon env u ]
+        inherited                       = concatMap nSigs tes ++ concatMap nVars tes
+        refinements                     = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
+        undefs                          = (dom $ nSigs te ++ concatMap nSigs tes) \\ (dom $ nVars te ++ concatMap nVars tes)
+        unsigs                          = dom te \\ (dom (nSigs te) ++ dom inherited)
+
 
 checkAssump env n t d                   = case findVarType n env of
                                             (TSchema _ [] t' d')
