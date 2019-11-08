@@ -258,7 +258,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
     bounded u (TBind v us)  = TBind v (u:us)
     ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
 
-envActorSelf                = [ (_nSelf_,   NVar (monotype tRef)) ]
+envActorSelf                = [ (selfKW, NVar (monotype tRef)) ]
 
 --------------------------------------------------------------------------------------------------------------------
 

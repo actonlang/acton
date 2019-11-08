@@ -96,7 +96,9 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
                 
-data Name       = Name SrcLoc String | Internal String Int deriving (Generic)
+data Pass       = ParsePass | TypesPass | CPSPass | LLiftPass | CGenPass deriving (Eq,Ord,Show,Read,Generic)
+
+data Name       = Name SrcLoc String | Internal String Int Pass deriving (Generic)
 
 nloc (Name l _) = l
 nloc Internal{} = NoLoc
@@ -109,7 +111,12 @@ nstr (Name _ s) = shift s
           | otherwise       = replicate (n+1) '_' ++ shift rest
           where (xs,rest)   = span (=='_') str
                 n           = length xs
-nstr (Internal s i) = s ++ "___" ++ show i
+nstr (Internal s i p)       = s ++ "___" ++ show i ++ suffix p
+  where suffix ParsePass    = "P"
+        suffix TypesPass    = ""
+        suffix CPSPass      = "C"
+        suffix LLiftPass    = "L"
+        suffix CGenPass     = "c"
 
 name            = Name NoLoc
 
@@ -188,8 +195,8 @@ type KwdRow     = Type
 type TRow       = Type
 
 skolem (TV n)   = case n of
-                    Name _ _     -> True
-                    Internal _ _ -> False
+                    Name{}     -> True
+                    Internal{} -> False
 
 monotype t      = TSchema NoLoc [] t NoDec
 monotype' t d   = TSchema NoLoc [] t d
@@ -249,6 +256,7 @@ tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "AB
 type Substitution = [(TVar,Type)]
 
 
+instance Data.Binary.Binary Pass
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
 instance Data.Binary.Binary QName
@@ -402,13 +410,13 @@ instance Eq Expr where
 
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
-    Internal s1 i1      == Internal s2 i2       = s1 == s2 && i1 == i2
+    Internal s1 i1 p1   == Internal s2 i2 p2    = s1 == s2 && i1 == i2 && p1 == p2
     _                   == _                    = False
 
 instance Ord Name where
     Name _ s1           <= Name _ s2            = s1 <= s2
-    Internal s1 i1      <= Internal s2 i2       = (s1,i1) <= (s2,i2)
-    Name _ _            <= Internal _ _         = True
+    Internal s1 i1 p1   <= Internal s2 i2 p2    = (s1,i1,p1) <= (s2,i2,p2)
+    Name{}              <= Internal{}           = True
     _                   <= _                    = False
 
 instance Eq a => Eq (Op a) where
@@ -499,6 +507,12 @@ retKW                               = Name NoLoc "ret"
 
 isInstAttr (InstAttr _)             = True
 isInstAttr _                        = False
+
+isInstMeth (InstMeth _)             = True
+isInstMeth _                        = False
+
+isSync (Sync _)                     = True
+isSync _                            = False
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

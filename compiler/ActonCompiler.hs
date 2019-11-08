@@ -6,6 +6,7 @@ import qualified Acton.Syntax as A
 import qualified Acton.Types
 import qualified Acton.Solver
 import qualified Acton.Env
+import qualified Acton.CPS
 import qualified Acton.Relabel
 {-
 import qualified Acton.CPS
@@ -37,7 +38,7 @@ data Args       = Args {
                     imports :: Bool,
                     iface   :: Bool,
                     types   :: Bool,
---                    cps     :: Bool,
+                    cps     :: Bool,
 --                    python  :: Bool,
 --                    llift   :: Bool,
 --                    persist :: Bool,
@@ -57,7 +58,7 @@ getArgs         = Args
                     <*> switch (long "imports" <> help "Show the contents of imported modules")
                     <*> switch (long "iface"   <> help "Show the inferred type interface (Acton files only)")
                     <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
---                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
+                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
 --                    <*> switch (long "python"  <> help "Show the initial Python translation (Acton files only)")
 --                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
 --                    <*> switch (long "persist" <> help "Show persistable datatype replacements (Acton files only)")
@@ -172,10 +173,10 @@ runRestPasses args paths src env tree = (do
                           (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' tree
                           iff (types args) $ dump "types" (Pretty.vprint tyinfo)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
-{-    
+
                           cpsed <- Acton.CPS.convert [] tree
                           iff (cps args) $ dump "cps" (Pretty.print cpsed)
-                          
+{-                              
                           py1 <- Acton.Translator.translate (modpath paths) tyinfo (tracef args) tree
                           iff (python args) $ dump "python" (Pretty.vprint py1)
         

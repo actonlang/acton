@@ -105,7 +105,7 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = state $ \st -> (deferred st, st)
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv@(TV (Internal _ _)) t     = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+substitute tv@(TV Internal{}) t         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
@@ -117,9 +117,9 @@ getDump                                 :: TypeM SrcInfo
 getDump                                 = state $ \st -> (dumped st, st)
 
 
-newName n                               = Internal (nstr n) <$> newUnique
+newName n                               = Internal (nstr n) <$> newUnique <*> return TypesPass
 
-newTVar                                 = TVar NoLoc <$> TV <$> Internal "V" <$> newUnique
+newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return TypesPass)
 
 newTVars n                              = mapM (const newTVar) [1..n]
 
