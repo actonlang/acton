@@ -70,7 +70,7 @@ type TypeM a                            = ExceptT TypeError (State TypeState) a
 runTypeM                                :: TypeM a -> a
 runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
                                             Right x -> x
-                                            Left err -> error ("(internal) Unhandled TypeM error: " ++ show err)
+                                            Left err -> internal ("Unhandled TypeM error: " ++ show err)
 -}
 newUnique                               :: TypeM Int
 newUnique                               = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
@@ -264,7 +264,6 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
-                                    | NotYet SrcLoc Doc
                                     deriving (Eq,Show,Typeable)
 
 instance Control.Exception.Exception TypeError
@@ -283,7 +282,6 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
-    loc (NotYet l doc)              = l
 
 notYetExpr e                        = notYet (loc e) e
 
@@ -300,7 +298,7 @@ noMutClass n                        = Control.Exception.throw $ NoMutClass n
 lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
 lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c
-notYet loc x                        = Control.Exception.throw $ NotYet loc (pretty x)
+
 
 typeError err                       = (loc err,render (expl err))
   where
@@ -318,5 +316,4 @@ typeError err                       = (loc err,render (expl err))
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
-    expl (NotYet _ doc)             = text "Not yet supported by type inference:" <+> doc
 
