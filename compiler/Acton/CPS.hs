@@ -86,7 +86,7 @@ handler qn b                            = Handler (Except NoLoc qn) b
 
 eCall e es                              = Call NoLoc e (foldl (flip PosArg) PosNil es) KwdNil
 eCallVar c es                           = eCall (eVar c) es
-eVar n                                  = Var NoLoc n
+eVar n                                  = Var NoLoc (NoQual n)
 eDot e n                                = Dot NoLoc e n
 eNone                                   = None NoLoc
 eInt n                                  = Int NoLoc n (show n)
@@ -457,7 +457,7 @@ instance PreCPS Expr where
                                                     ks1 <- pre env ks
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] ps1 ks1 Nothing (stmts ++ [sReturn e1]) NoMod]]
-                                                    return (Var l0 f)
+                                                    return (Var l0 (NoQual f))
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es)                = Tuple l <$> pre env es

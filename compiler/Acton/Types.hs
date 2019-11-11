@@ -384,7 +384,7 @@ instance Check Decl where
                                              fx <- fxAct <$> newTVar
                                              checkAssump env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
       where svars                       = statedefs b
-            env0                        = define envActorSelf $ block (stateScope env) env
+            env0                        = define envActorSelf $ defineTVars q $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
             
     check env (Def l n q p k ann b (Sync _))
@@ -398,7 +398,7 @@ instance Check Decl where
                                              fx <- fxSync <$> newTVar
                                              checkAssump env n (tFun fx prow krow t) NoDec
       where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b) env
+            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
 
     check env (Def l n q p k ann b Async)
       | noshadow svars p                = do t <- newTVar
@@ -411,7 +411,7 @@ instance Check Decl where
                                              fx <- fxAsync <$> newTVar
                                              checkAssump env n (tFun fx prow krow (tMsg t)) NoDec
       where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b) env
+            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
 
     check env (Def l n q p k ann b modif)
                                         = do t <- newTVar
@@ -425,7 +425,7 @@ instance Check Decl where
                                              (prow',krow') <- splitRows modif prow krow
                                              checkAssump env n (tFun fx prow' krow' t) (extractDecoration modif)
       where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b ++ svars) env
+            env1                        = reserve (bound (p,k) ++ bound b ++ svars) $ defineTVars q env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
             splitRow (InstMeth _) (TRow _ n sc r)
@@ -517,7 +517,7 @@ classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ t
   where (q,_,_,_)                       = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ n)
+    infer env (Var _ (NoQual n))
       | Just (qn,i) <- protoAttr n env  = do u <- TC qn <$> newTVars i
                                              let (cs,sc) = findAttr env u n
                                              when (scdec sc /= StaticMethod) (notYet (loc n) "Overloading of non-static methods")
@@ -525,7 +525,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              constrain (Impl t1 u : cs ++ cs')
                                              return $ subst [(tvSelf,t1)] t
-      | otherwise                       = do (cs,t) <- instantiate env $ openFX $ findVarType n env
+    infer env (Var _ n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType' n env
                                              constrain cs
                                              return t
     infer env (Int _ val s)             = return tInt
@@ -654,7 +654,7 @@ instance Infer Expr where
     infer env (RecordComp l n expr co)
       | nodup co                        = do te <- infEnv env co
                                              let env1 = define te env
-                                             _ <- infer env1 (Var (nloc n) n)
+                                             _ <- infer env1 (Var (nloc n) (NoQual n))
                                              _ <- infer env1 expr
                                              krow <- newTVar
                                              return (tRecord krow)              -- !! Extreme short-cut, for now

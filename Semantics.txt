@@ -280,3 +280,20 @@ Recent decisions:
 - Base class expressions are *type* expressions
 - Local classes are supported but all references to their names must be absent from the return type or env when their scope ends
 
+
+=========================================================================================================
+
+Normalization:
+
+- All imported or built-in names are qualified by module
+- All parameters are positional
+- Parameter defaults are moved inside function definitions
+- Protocols and extensions are translated into classes
+- Overloaded names are explicitly qualified by class
+- Comprehensions are translated into loops
+- String literals are concatenated
+- Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
+- For loops are replaced by while over iterators
+- With statemenmts are replaced by enter/exit calls + exception handling
+- Actor state is made explicit in terms of parameter __self__
+- Communication and exception handling is made explicit by means of RTS calls (ACTOR, ASYNC, AWAIT, PUSH, POP)
