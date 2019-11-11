@@ -58,7 +58,6 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Ellipsis      { eloc::SrcLoc }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
-                | UStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::[Expr] }
@@ -381,7 +380,6 @@ instance Eq Expr where
     x@Ellipsis{}        ==  y@Ellipsis{}        = True
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
-    x@UStrings{}        ==  y@UStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = function x == function y && pargs x == pargs y && kargs x == kargs y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y

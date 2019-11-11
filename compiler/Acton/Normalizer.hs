@@ -2,11 +2,13 @@ module Acton.Normalizer where
 
 import Acton.Syntax
 import Acton.Env
+import Acton.Prim
 import Utils
 import Control.Monad.State.Lazy
 
 normalize                           :: Env -> Module -> IO Module
-normalize env m                     = return $ evalState (norm env m) 0
+normalize env0 m                    = return $ evalState (norm env m) 0
+  where env                         = normEnv env0
 
 -- Normalizing monad
 type NormM a                        = State Int a
@@ -16,8 +18,12 @@ newName s                           = do n <- get
                                          put (n+1)
                                          return $ Internal s n NormPass
 
+data NormEnv                        = NormEnv
+
+normEnv env                         = NormEnv
+
 class Norm a where
-    norm                            :: Env -> a -> NormM a
+    norm                            :: NormEnv -> a -> NormM a
 
 instance Norm a => Norm [a] where
     norm env []                     = return []
@@ -56,14 +62,16 @@ instance Norm Stmt where
     norm env (Decl l ds)            = Decl l <$> norm env ds
 
 instance Norm Decl where
-    norm env (Def l n q ps ks ann ss md) 
-                                    = Def l <$> norm env n <*> norm env q <*> norm env ps <*> norm env ks <*> norm env ann <*> norm env ss <*> return md
-    norm env (Actor l n q ps ks ann b) 
-                                    = Actor l <$> norm env n <*> norm env q <*> norm env ps <*> norm env ks <*> norm env ann <*> norm env b
-    norm env (Class l n q as ss)    = Class l <$> norm env n <*> norm env q <*> norm env as <*> norm env ss
-    norm env (Protocol l n q as ss) = Protocol l <$> norm env n <*> norm env q <*> norm env as <*> norm env ss
-    norm env (Extension l n q as ss)= Extension l <$> norm env n <*> norm env q <*> norm env as <*> norm env ss
-    norm env (Signature l ns t)     = Signature l <$> norm env ns <*> norm env t
+    norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm env k
+                                         b' <- norm env b
+                                         return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') m
+    norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm env k
+                                         b' <- norm env b
+                                         return $ Actor l n q (noDefaults p') KwdNIL t (defaults p' ++ b')
+    norm env (Class l n q as b)     = Class l n q as <$> norm env b
+    norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
+    norm env (Extension l n q as b) = Extension l n q as <$> norm env b
+    norm env (Signature l ns t)     = return $ Signature l ns t
 
 instance Norm Expr where
     norm env (Var l nm)             = Var l <$> norm env nm
@@ -74,9 +82,8 @@ instance Norm Expr where
     norm env (None l)               = return $ None l
     norm env (NotImplemented l)     = return $ NotImplemented l
     norm env (Ellipsis l)           = return $ Ellipsis l
-    norm env (Strings l ss)         = Strings l <$> return ss
-    norm env (BStrings l ss)        = BStrings l <$> return ss
-    norm env (UStrings l ss)        = UStrings l <$> return ss
+    norm env (Strings l ss)         = return $ Strings l [concat ss]
+    norm env (BStrings l ss)        = return $ BStrings l [concat ss]
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
     norm env (Index l e is)         = Index l <$> norm env e <*> norm env is
     norm env (Slice l e sl)         = Slice l <$> norm env e <*> norm env sl
@@ -92,7 +99,7 @@ instance Norm Expr where
     norm env (Tuple l es)           = Tuple l <$> norm env es
     norm env (TupleComp l e c)      = TupleComp l <$> norm env e <*> norm env c
     norm env (Record l fs)          = Record l <$> norm env fs
-    norm env (RecordComp l n e c)   = RecordComp l <$> norm env n <*> norm env e <*> norm env c
+    norm env (RecordComp l n e c)   = RecordComp l n <$> norm env e <*> norm env c
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env e <*> norm env c
     norm env (Dict l as)            = Dict l <$> norm env as
@@ -102,7 +109,7 @@ instance Norm Expr where
     norm env (Paren l e)            = Paren l <$> norm env e
 
 instance Norm Pattern where
-    norm env (PVar l n a)           = PVar l <$> norm env n <*> norm env a
+    norm env (PVar l n a)           = return $ PVar l n a
 --    norm env (PRecord l ps)         = PRecord l <$> norm env ps
     norm env (PTuple l ps)          = PTuple l <$> norm env ps
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
@@ -148,22 +155,40 @@ instance Norm Except where
     norm env (ExceptAs l x n)       = ExceptAs l <$> norm env x <*> norm env n
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar <$> norm env n <*> norm env t <*> norm env e <*> norm env p
-    norm env (PosSTAR n t)          = PosSTAR <$> norm env n <*> norm env t
+    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm env p
+    norm env (PosSTAR n t)          = return $ PosSTAR n t
     norm env PosNIL                 = return PosNIL
     
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar <$> norm env n <*> norm env t <*> norm env e <*> norm env k
-    norm env (KwdSTAR n t)          = KwdSTAR <$> norm env n <*> norm env t
+    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm env k
+    norm env (KwdSTAR n t)          = return $ KwdSTAR n t
     norm env KwdNIL                 = return KwdNIL
-    
+
+joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
+joinPar (PosSTAR n t) k             = PosPar n (fmap monotype t) Nothing (kwdToPos k)
+joinPar PosNIL k                    = kwdToPos k
+
+kwdToPos (KwdPar n t e k)           = PosPar n t e (kwdToPos k)
+kwdToPos (KwdSTAR n t)              = PosPar n (fmap monotype t) Nothing PosNIL
+kwdToPos KwdNIL                     = PosNIL
+
+defaults (PosPar n t (Just e) p)    = s : defaults p
+  where s                           = If NoLoc [Branch test [set]] []
+        test                        = Call NoLoc (Var NoLoc primIsNone) (PosArg (Var NoLoc (NoQual n)) PosNil) KwdNil
+        set                         = Assign NoLoc [PVar NoLoc n Nothing] e
+defaults (PosPar n t Nothing p)     = defaults p
+defaults _                          = []
+
+noDefaults (PosPar n t _ p)         = PosPar n t Nothing (noDefaults p)
+noDefaults p                        = p
+
 instance Norm PosArg where
     norm env (PosArg e p)           = PosArg <$> norm env e <*> norm env p
     norm env (PosStar e)            = PosStar <$> norm env e
     norm env PosNil                 = return PosNil
     
 instance Norm KwdArg where
-    norm env (KwdArg n e k)         = KwdArg <$> norm env n <*> norm env e <*> norm env k
+    norm env (KwdArg n e k)         = KwdArg n <$> norm env e <*> norm env k
     norm env (KwdStar e)            = KwdStar <$> norm env e
     norm env KwdNil                 = return KwdNil
     
@@ -173,7 +198,7 @@ instance Norm PosPat where
     norm env PosPatNil              = return PosPatNil
     
 instance Norm KwdPat where
-    norm env (KwdPat n p ps)        = KwdPat <$> norm env n <*> norm env p <*> norm env ps
+    norm env (KwdPat n p ps)        = KwdPat n <$> norm env p <*> norm env ps
     norm env (KwdPatStar p)         = KwdPatStar <$> norm env p
     norm env KwdPatNil              = return KwdPatNil
     
@@ -198,7 +223,7 @@ instance Norm Assoc where
   
 instance Norm Slice where
     norm env (Sliz l e1 e2 e3)      = Sliz l <$> norm env e1 <*> norm env e2 <*> norm env e3
-
+{-
 instance Norm TSchema where
     norm env (TSchema l q t d)      = TSchema l <$> norm env q <*> norm env t <*> return d
 
@@ -206,7 +231,7 @@ instance Norm TVar where
     norm env (TV n)                 = TV <$> norm env n
 
 instance Norm TCon where
-    norm env (TC n ts)              = TC <$> norm env n <*> norm env ts
+    norm env (TC n ts)              = TC n <$> norm env ts
 
 instance Norm TBind where
     norm env (TBind v cs)           = TBind <$> norm env v <*> norm env cs
@@ -223,4 +248,5 @@ instance Norm Type where
     norm env (TNone l)              = return $ TNone l
     norm env (TWild l)              = return $ TWild l
     norm env (TNil l)               = return $ TNil l
-    norm env (TRow l n t r)         = TRow l <$> norm env n <*> norm env t <*> norm env r
+    norm env (TRow l n t r)         = TRow l n <$> norm env t <*> norm env r
+-}
