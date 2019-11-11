@@ -919,7 +919,7 @@ atom_expr = do
                            (S.StarStar <$> (starstar *> arithexpr))
 
         var = do nm <- name
-                 return (S.Var (S.nloc nm) nm)
+                 return (S.Var (S.nloc nm) (S.NoQual nm))
 
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (

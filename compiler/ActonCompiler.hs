@@ -3,15 +3,16 @@ module Main where
 import qualified Acton.Parser
 import qualified Acton.Syntax as A
 
+import qualified Acton.Relabel
+import qualified Acton.Env
 import qualified Acton.Types
 import qualified Acton.Solver
-import qualified Acton.Env
+import qualified Acton.Normalizer
 import qualified Acton.CPS
-import qualified Acton.Relabel
+--import qualified Acton.LambdaLifter
 {-
 import qualified Acton.CPS
 import qualified Acton.Translator
-import qualified Backend.LambdaLifter
 import qualified Backend.Persistable
 import qualified Yang.Syntax as Y
 import qualified Yang.Parser
@@ -38,12 +39,12 @@ data Args       = Args {
                     imports :: Bool,
                     iface   :: Bool,
                     types   :: Bool,
+                    norm    :: Bool,
                     cps     :: Bool,
+                    llift   :: Bool,
 --                    python  :: Bool,
---                    llift   :: Bool,
 --                    persist :: Bool,
 --                    tracef  :: Bool,
---                    norm    :: Bool,
 --                    expand  :: Bool,
                     make    :: Bool,
                     verbose :: Bool,
@@ -58,12 +59,12 @@ getArgs         = Args
                     <*> switch (long "imports" <> help "Show the contents of imported modules")
                     <*> switch (long "iface"   <> help "Show the inferred type interface (Acton files only)")
                     <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
+                    <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
                     <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
+                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
 --                    <*> switch (long "python"  <> help "Show the initial Python translation (Acton files only)")
---                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
 --                    <*> switch (long "persist" <> help "Show persistable datatype replacements (Acton files only)")
 --                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
---                    <*> switch (long "norm"    <> help "Show the result after syntactic normalization (Yang files only)")
 --                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
                     <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
@@ -173,16 +174,20 @@ runRestPasses args paths src env tree = (do
                           (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' tree
                           iff (types args) $ dump "types" (Pretty.vprint tyinfo)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
+                              
+                          normtree <- Acton.Normalizer.normalize env' tree
+                          iff (norm args) $ dump "norm" (Pretty.print normtree)
 
-                          cpsed <- Acton.CPS.convert [] tree
+                          cpsed <- Acton.CPS.convert [] normtree
                           iff (cps args) $ dump "cps" (Pretty.print cpsed)
+
+--                          lifted <- Acton.LambdaLifter.liftPy cpsed
+--                          iff (llift args) $ dump "llift" (Pretty.vprint lifted)
+  
 {-                              
                           py1 <- Acton.Translator.translate (modpath paths) tyinfo (tracef args) tree
                           iff (python args) $ dump "python" (Pretty.vprint py1)
         
-                          py2 <- Backend.LambdaLifter.liftPy py1
-                          iff (llift args) $ dump "llift" (Pretty.vprint py2)
-  
                           py3 <- Backend.Persistable.replace py2
                           iff (persist args) $ dump "persist" (Pretty.vprint py3) 
     

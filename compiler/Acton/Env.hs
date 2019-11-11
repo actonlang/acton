@@ -377,12 +377,15 @@ findImplBound tv env        = case findName (tvname tv) env of
                                 NTVar u us -> us
 
 findVarType                 :: Name -> Env -> TSchema
-findVarType n env           = case findName n env of
+findVarType n env           = findVarType' (NoQual n) env
+
+findVarType'                :: QName -> Env -> TSchema
+findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
-                                NClass q _ _ _ -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
-                                NProto q _ _   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
-                                NModule _      -> tSchema [] (tAt $ TC (NoQual n) [])
+                                NClass q _ _ _ -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
+                                NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
+                                NModule _      -> tSchema [] (tAt $ TC n [])
                                 _              -> err1 n "Unexpected name..."
 
 findInTEnv                  :: Name -> TEnv -> TSchema

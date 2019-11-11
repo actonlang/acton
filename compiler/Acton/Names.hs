@@ -155,7 +155,9 @@ instance Vars Handler where
     bound (Handler ex ss)           = bound ss ++ bound ex
 
 instance Vars Expr where
-    free (Var _ n)                  = [n]
+    free (Var _ (NoQual n))         = [n]
+    free (Var _ (QName m n))        = [n]
+      where ModName (n:ns)          = m
     free (Int _ _ str)              = []
     free (Float _ _ str)            = []
     free (Imaginary _ _ str)        = []

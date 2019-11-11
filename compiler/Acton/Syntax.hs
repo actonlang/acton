@@ -48,7 +48,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos
                 | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema }
                 deriving (Show)
 
-data Expr       = Var           { eloc::SrcLoc, var::Name }
+data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Int           { eloc::SrcLoc, ival::Integer, lexeme::String }
                 | Float         { eloc::SrcLoc, dval::Double, lexeme::String }
                 | Imaginary     { eloc::SrcLoc, dval::Double, lexeme::String }
@@ -75,7 +75,7 @@ data Expr       = Var           { eloc::SrcLoc, var::Name }
                 | Tuple         { eloc::SrcLoc, parg::PosArg }
                 | TupleComp     { eloc::SrcLoc, exp1::Expr, comp::Comp }
                 | Record        { eloc::SrcLoc, kargs::KwdArg }
-                | RecordComp    { eloc::SrcLoc, var::Name, exp1::Expr, comp::Comp }
+                | RecordComp    { eloc::SrcLoc, cvar::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
@@ -96,7 +96,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
                 
-data Pass       = ParsePass | TypesPass | CPSPass | LLiftPass | CGenPass deriving (Eq,Ord,Show,Read,Generic)
+data Pass       = ParsePass | TypesPass | NormPass | CPSPass | LLiftPass | CGenPass deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Internal String Int Pass deriving (Generic)
 
@@ -112,11 +112,12 @@ nstr (Name _ s) = shift s
           where (xs,rest)   = span (=='_') str
                 n           = length xs
 nstr (Internal s i p)       = s ++ "___" ++ show i ++ suffix p
-  where suffix ParsePass    = "P"
+  where suffix ParsePass    = "p"
         suffix TypesPass    = ""
-        suffix CPSPass      = "C"
-        suffix LLiftPass    = "L"
-        suffix CGenPass     = "c"
+        suffix NormPass     = "n"
+        suffix CPSPass      = "c"
+        suffix LLiftPass    = "l"
+        suffix CGenPass     = "g"
 
 name            = Name NoLoc
 
