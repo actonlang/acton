@@ -191,6 +191,7 @@ runRestPasses args paths src env tree = (do
                              $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
                           return (Acton.Env.dropNames env',sigs))
+                             `catch` handle generalError src paths
                              `catch` handle Acton.Env.checkerError src paths
                              `catch` handle Acton.Types.solverError src paths
 

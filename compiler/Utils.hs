@@ -5,6 +5,8 @@ import Debug.Trace
 import Data.List hiding ((\\))
 import Data.Maybe
 import qualified Data.Binary
+import qualified Control.Exception
+import Data.Typeable
 import GHC.Generics (Generic)
 import SrcLocation
 import Pretty
@@ -30,6 +32,9 @@ instance HasLoc SrcLoc where
 
 instance HasLoc a => HasLoc [a] where
     loc                         = foldl (\l x -> l `upto` loc x) NoLoc
+
+instance HasLoc a => HasLoc (Maybe a) where
+    loc                         = maybe NoLoc loc
 
 xs \\ ys                        = [ x | x <- xs, x `notElem` ys ]       -- remove *all* occurrences of xs elements from ys
 
@@ -93,3 +98,22 @@ errReport (SpanPoint file row col,msg) src
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (col-1) ' '++"^"
 errReport (SpanEmpty,msg) _     = msg
 
+---------------------------------
+
+data GeneralError               = InternalErr SrcLoc Doc
+                                | NotYet SrcLoc Doc
+                                deriving (Eq,Show,Typeable)
+
+instance Control.Exception.Exception GeneralError
+
+instance HasLoc GeneralError where
+    loc (InternalErr l doc)     = l
+    loc (NotYet l doc)          = l
+
+internal loc x                  = Control.Exception.throw $ InternalErr loc (pretty x)
+notYet loc x                    = Control.Exception.throw $ NotYet loc (pretty x)
+
+generalError err                = (loc err,render (expl err))
+  where
+    expl (InternalErr _ doc)    = text "(internal)" <+> doc
+    expl (NotYet _ doc)         = text "Not yet supported:" <+> doc
