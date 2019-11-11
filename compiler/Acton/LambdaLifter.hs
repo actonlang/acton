@@ -197,7 +197,6 @@ instance Lift Expr where
         Ellipsis _              -> pure e
         Strings _ ss            -> pure e
         BStrings _ ss           -> pure e
-        UStrings _ ss           -> pure e
         Call l e@(Var _ n) as 
           | Just vs <- lookup n (freemap env)
                                 -> Call l (Var l0 (topname env n)) <$> ll env (extras vs ++ as)

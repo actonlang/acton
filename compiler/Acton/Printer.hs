@@ -125,7 +125,6 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
-    pretty (UStrings _ ss)          = hcat (map pretty ss)
     pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (commaList ix)

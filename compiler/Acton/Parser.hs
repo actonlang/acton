@@ -258,11 +258,10 @@ stringPPR prefix = longString prefix <|> shortStringR prefix
 
 strings :: Parser S.Expr
 strings = addLoc $ do
-     ss <- some (stringP <|> stringPP "u" <|> stringPP "b"
-                      <|> stringPPR  "r" <|> stringPPR  "br")
-     if all (\s -> head s == 'b') ss then return $ S.BStrings NoLoc ss
-      else if all (\s -> head s == 'u') ss then return $ S.UStrings NoLoc ss
-           else return $ S.Strings NoLoc ss
+     ss <- some (stringP <|> stringPP "b" <|> stringPPR  "r" <|> stringPPR  "br")
+     if all (\s -> head s == 'b') ss 
+        then return $ S.BStrings NoLoc ss
+        else return $ S.Strings NoLoc ss
       
 -- Reserved words, other symbols and names ----------------------------------------------------------
 

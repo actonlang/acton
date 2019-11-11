@@ -9,6 +9,7 @@ import Utils
 import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
+import Acton.Prim
 
 convert                                 :: TInfo -> Module -> IO Module
 convert inf (Module qn imps stmts)      = return $ Module qn imps $ runCpsM $ cps (env0 inf) stmts
@@ -37,14 +38,6 @@ withPrefixes m                          = do ss0 <- swapPrefixes []
                                              ss1 <- swapPrefixes ss0
                                              return (r, ss1)
 
-rtsREF s                                = eDot (eVar nRTS) (name s)
-
-rtsPUSH                                 = rtsREF "PUSH"
-rtsPOP                                  = rtsREF "POP"
-rtsRAISE                                = rtsREF "RAISE"
-
-nRTS                                    = name "___RTS___"
-contKW                                  = name "___cont___"
 
 nType                                   = name "type"                       -- TODO: de-pythonize these references
 nTraceback                              = name "__traceback__"
@@ -86,6 +79,7 @@ handler qn b                            = Handler (Except NoLoc qn) b
 
 eCall e es                              = Call NoLoc e (foldl (flip PosArg) PosNil es) KwdNil
 eCallVar c es                           = eCall (eVar c) es
+eCallV c es                             = eCall (Var NoLoc c) es
 eVar n                                  = Var NoLoc (NoQual n)
 eDot e n                                = Dot NoLoc e n
 eNone                                   = None NoLoc
@@ -99,10 +93,10 @@ param xs                                = foldr (\n p -> PosPar n Nothing Nothin
 pVar n t                                = PVar NoLoc n t
 pIndex e ix                             = PIndex NoLoc e [ix]
 
-pushH h                                 = sExpr (eCall rtsPUSH [eVar selfKW, h])            -- TODO: ensure selfKW is really in scope
+pushH h                                 = sExpr (eCallV primPUSH [eVar selfKW, h])        -- TODO: ensure selfKW is really in scope
 
 format (Int _ 0 _, cont)                = [sReturn cont]
-format (lvl, cont)                      = [sExpr (eCall rtsPOP [self,lvl]), sReturn cont]
+format (lvl, cont)                      = [sExpr (eCallV primPOP [self,lvl]), sReturn cont]
   where self                            = eVar selfKW                                       -- TODO: ensure selfKW is really in scope
 
 wrapC c f env                           = eCallVar c [level, eLambda [] cont]
@@ -319,8 +313,8 @@ addContParam kwd                        = KwdPar contKW Nothing Nothing kwd
 
 
 
-finalH x f                              = eLambda [x] (eCall (eVar f) [eInt 0, raiseH])
-  where raiseH                          = eLambda [] (eCall rtsRAISE [eVar x])
+finalH x f                              = eLambda [x] (eCallVar f [eInt 0, raiseH])
+  where raiseH                          = eLambda [] (eCallV primRAISE [eVar x])
 
 hbody env x hs                          = do hs' <- mapM (cps env) hs
                                              return $ sTry [sRaise (eVar x)] hs' [] [] :
@@ -476,7 +470,7 @@ instance PreCPS Expr where
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
                                                           preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCall (rtsREF "list") [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primList [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "append")) [e])
     pre env (Dict l es)                 = Dict l <$> pre env es
     pre env (DictComp l (Assoc k v) c)  = do (e1,stmts) <- withPrefixes $ liftM2 (DictComp l) (liftM2 Assoc (pre env k) (pre env v)) (pre env c)
@@ -484,7 +478,7 @@ instance PreCPS Expr where
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
                                                           preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCall (rtsREF "dict") [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primDict [])
             s1 acc                      = sAssign [pIndex (eVar acc) k] v
     pre env (Set l es)                  = Set l <$> pre env es
     pre env (SetComp l (Elem e) c)      = do (e1,stmts) <- withPrefixes $ liftM2 (SetComp l) (fmap Elem $ pre env e) (pre env c)
@@ -492,7 +486,7 @@ instance PreCPS Expr where
                                                 [] -> return e1
                                                 _  -> do acc <- newName "acc"
                                                          preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCall (rtsREF "set") [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primSet [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "add")) [e])
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e

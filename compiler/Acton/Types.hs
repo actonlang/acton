@@ -536,7 +536,6 @@ instance Infer Expr where
     infer env e@(NotImplemented _)      = notYetExpr e
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env (Strings _ ss)            = return $ tUnion [ULit $ concat ss]
-    infer env (UStrings _ ss)           = return $ tUnion [ULit $ concat ss]
     infer env (BStrings _ ss)           = return tBytes
     infer env (Call l e ps ks)          = do t <- infer env e
                                              dump [INS (loc e) t]
