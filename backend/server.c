@@ -735,8 +735,9 @@ int main(int argc, char **argv) {
     void * tmp_out_buf = NULL, * q = NULL;
     short msg_type;
 	db_schema_t * schema;
+	long nonce = -1;
 
-    int status = parse_message(in_buf, msg_len, &q, &msg_type, 1);
+    int status = parse_message(in_buf, msg_len, &q, &msg_type, &nonce, 1);
 
     if(status != 0)
     {

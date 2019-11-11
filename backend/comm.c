@@ -7,7 +7,7 @@
 #include "comm.h"
 #include <stdio.h>
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, short is_server)
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
 {
 	write_query * wq;
 	read_query * rq;
@@ -19,7 +19,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	range_read_response_message * rrr;
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[512];
+	char print_buff[4096];
 #endif
 	int status = 0;
 
@@ -34,6 +34,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) wq;
 			*out_msg_type = RPC_TYPE_WRITE;
+			*nonce = wq->nonce;
 			return 0;
 		}
 
@@ -46,6 +47,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) rq;
 			*out_msg_type = RPC_TYPE_READ;
+			*nonce = rq->nonce;
 			return 0;
 		}
 
@@ -58,6 +60,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) rrq;
 			*out_msg_type = RPC_TYPE_RANGE_READ;
+			*nonce = rrq->nonce;
 			return 0;
 		}
 
@@ -70,6 +73,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) tm;
 			*out_msg_type = RPC_TYPE_TXN;
+			*nonce = tm->nonce;
 			return 0;
 		}
 
@@ -82,6 +86,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) qq;
 			*out_msg_type = RPC_TYPE_QUEUE;
+			*nonce = qq->nonce;
 			return 0;
 		}
 
@@ -94,6 +99,8 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) am;
 			*out_msg_type = RPC_TYPE_ACK;
+			*nonce = am->nonce;
+
 			return 0;
 		}
 	}
@@ -108,6 +115,8 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) am;
 			*out_msg_type = RPC_TYPE_ACK;
+			*nonce = am->nonce;
+
 			return 0;
 		}
 
@@ -120,6 +129,8 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) wq;
 			*out_msg_type = RPC_TYPE_READ_RESPONSE;
+			*nonce = wq->nonce;
+
 			return 0;
 		}
 
@@ -132,6 +143,8 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) rrr;
 			*out_msg_type = RPC_TYPE_RANGE_READ_RESPONSE;
+			*nonce = rrr->nonce;
+
 			return 0;
 		}
 
@@ -144,12 +157,15 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 #endif
 			*out_msg = (void *) qq;
 			*out_msg_type = RPC_TYPE_QUEUE;
+			*nonce = qq->nonce;
+
 			return 0;
 		}
 	}
 
 	*out_msg = NULL;
 	*out_msg_type = -1;
+	*nonce = -1;
 
 	return 1;
 }

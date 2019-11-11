@@ -10,6 +10,7 @@
 #include "db.h"
 #include "failure_detector/db_queries.h"
 #include "fastrand.h"
+#include "comm.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,8 +20,12 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <uuid/uuid.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#include <errno.h>
 
 #define BUFSIZE 4096
 #define RANDOM_NONCES
@@ -29,20 +34,50 @@
 
 // Remote DB API:
 
+typedef struct msg_callback
+{
+	void (*callback)(void *);
+	WORD client_id;
+	long nonce;
+	pthread_mutex_t * lock;
+	pthread_cond_t * signal;
+
+	pthread_mutex_t * reply_lock;
+	void ** replies;
+	short * reply_types;
+	short no_replies;
+} msg_callback;
+
+msg_callback * get_msg_callback(long nonce, WORD client_id, void (*callback)(void *), int replication_factor);
+int add_reply_to_msg_callback(void * reply, short reply_type, msg_callback * mc);
+void free_msg_callback(msg_callback * mc);
+
 typedef struct remote_db {
     int db_id;
     skiplist_t * servers; // List of remote servers
     skiplist_t * txn_state; // Client cache of txn state
-    skiplist_t * queue_subscriptions; // Client cache of txn state
+    skiplist_t * queue_subscriptions; // Client queue subscriptions
+    skiplist_t * msg_callbacks; // Client msg callbacks
     pthread_mutex_t* subscribe_lock;
+
+	int replication_factor;
 	int quorum_size;
+	int rpc_timeout;
+
+	pthread_t comm_thread;
+	short stop_comm;
+	fd_set readfds;
 
 	long requests;
 	unsigned int fastrandstate;
 } remote_db_t;
 
-remote_db_t * get_remote_db(int quorum_size);
+remote_db_t * get_remote_db(int replication_factor);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
+msg_callback * add_msg_callback(long nonce, void (*callback)(void *), remote_db_t * db);
+int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
+int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t * db);
+int delete_msg_callback(long nonce, remote_db_t * db);
 long get_nonce(remote_db_t * db);
 int free_remote_db(remote_db_t * db);
 int close_remote_db(remote_db_t * db);
