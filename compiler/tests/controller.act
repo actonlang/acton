@@ -1,0 +1,48 @@
+import netconf
+
+actor Controller(env, address, port):
+    
+    var nc = None
+    var state = 'IDLE'                  # EMPTY | IDLE(nc) | GET(nc)
+    var setting = 0
+    
+    def restart(what):
+        if nc != None:
+            nc.abort()
+            nc = None
+        print('Controller', str(address) + ':' + str(port), what)
+        netconf.connect(env, address, port, established, error)
+        state = 'IDLE'
+
+    async def established(sess):
+        if sess != None:
+            nc = sess
+            postpone(10, tick)
+        else:
+            restart('connection failure')
+    
+    async def tick():
+        if state == 'IDLE':
+            nc.get('/oper/thevalue', reply)
+            state = 'GET'
+            postpone(10, tick)
+        else:
+            restart('timeout')
+    
+    async def reply(newval):
+        if state == 'GET':
+            setting = compute(setting, newval)
+            nc.edit_config('/config/settings/thesetting', setting)
+            state = 'IDLE'
+        else:
+            restart('stray reply')
+            
+    async def error(what):
+        restart('NETCONF error: ' + what)
+
+    restart('initial')
+
+
+def compute(setting, newval):
+    return (setting + newval) // 2
+
