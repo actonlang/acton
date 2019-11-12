@@ -177,6 +177,12 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 {
     remote_server * rs = get_remote_server(hostname, portno);
 
+    if(rs == NULL)
+    {
+		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		return 1;
+    }
+
     if(skiplist_search(db->servers, &rs->serveraddr) != NULL)
     {
 		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
@@ -1469,6 +1475,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	// Send packet to server and wait for reply:
 
+/*
 	int n = -1;
 	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
 
@@ -1485,6 +1492,32 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     if(success < 0)
     		return success;
+*/
+
+	msg_callback * mc = NULL;
+	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
+
+	if(mc->no_replies < db->quorum_size)
+	{
+		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
+		delete_msg_callback(mc->nonce, db);
+		return -1;
+	}
+
+	queue_query_message * response = NULL;
+
+	for(int i=0;i<mc->no_replies;i++)
+	{
+		assert(mc->reply_types[i] == RPC_TYPE_QUEUE);
+		response = (queue_query_message *) mc->replies[i];
+		assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
+
+#if CLIENT_VERBOSITY > 0
+		to_string_queue_message(response, (char *) print_buff);
+		printf("Got back response from server %s: %s\n", rs->id, print_buff);
+#endif
+		break;
+	}
 
     // Parse queue read response message to row list:
 
@@ -1502,6 +1535,8 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
     *entries_read = response->no_cells;
 	*new_read_head = response->queue_index;
+
+	delete_msg_callback(mc->nonce, db);
 
 	return response->status;
 }
