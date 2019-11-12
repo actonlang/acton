@@ -1,0 +1,90 @@
+import xml
+
+
+def connect(env, address, port, established_cb, error_cb):
+    env.open(address, port, lambda conn: established_cb(session(conn, error_cb)))
+    
+actor session(conn, error_cb):
+
+    var message_id = 1
+    var responder = None
+    
+    async def get(path, reply_cb):
+        conn.deliver(print_rpc(message_id, 'get', print_path(path, '')))
+        responder = lambda text: reply_cb(xml.parse(strip_path(path, strip_reply(message_id, 'data', text))))
+    
+    async def edit_config(path, value):
+        conn.deliver(print_rpc(message_id, 'edit-config', print_path(path, xml.print(value))))
+        responder = lambda text: xml.parse_empty(strip_reply(message_id, 'ok', text))
+
+    async def deliver(text):
+        try:
+            if responder:
+                responder(text)
+        except xml.ParseError as ex:
+            error_cb(str(ex))
+        except ValueError as ex:
+            error_cb(str(ex))
+        message_id += 1
+    
+    async def error(what):
+        error_cb()
+        responder = None
+    
+    async def abort():
+        conn.close()
+
+    conn.receive_on(deliver, error)
+
+
+def print_rpc(message_id, second_tag, inner):
+    strs = []
+    strs.append('<rpc xmlns="urn:ietf:params:xml:ns:netconf:base:1.1” message-id="' + str(message_id) + '">')
+    strs.append('<' + second_tag + '>')
+    strs.append('</' + second_tag + '>')
+    strs.append('</rpc>')
+    return ''.join(strs)
+
+def strip_reply(message_id, second_tag, text):
+    prefix = '<rpc-reply xmlns="urn:ietf:params:xml:ns:netconf:base:1.1" message-id="' + str(message_id) + '">'
+    suffix = '</rpc-reply>'
+    text = text.strip()
+    if text.startswith(prefix) and text.endswith(suffix):
+        text = text[len(prefix):-len(suffix)].strip()
+        prefix = '<' + second_tag + '>'
+        suffix = '</' + second_tag + '>'
+        if text.startswith(prefix) and text.endswith(suffix):
+            return text[len(prefix):-len(suffix)]
+        elif text == '<' + second_tag + '/>':
+            return ''
+    raise ParseError
+
+def print_path(path, inner):
+    elems = path.split('/')
+    if elems[0] != '':
+        raise ValueError
+    if elems[-1] == '':
+        elems.pop()
+    strs = []
+    for elem in elems[1:]:
+        strs.append('<' + elem + '>')
+    strs.append(inner)
+    for elem in elems[-1:0:-1]:
+        strs.append('</' + elem + '>')
+    return ''.join(strs)
+
+def strip_path(path, text):
+    elems = path.split('/')
+    if elems[0] != '':
+        raise ValueError
+    if elems[-1] == '':
+        elems.pop()
+    for elem in elems[1:]:
+        text = text.strip()
+        prefix = '<' + elem + '>'
+        suffix = '</' + elem + '>'
+        if text.startswith(prefix) and text.endswith(suffix):
+            text = text[len(prefix):-len(suffix)]
+        else:
+            raise ParseError
+    return text
