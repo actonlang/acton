@@ -364,6 +364,8 @@ int main(int argc, char **argv) {
     remote_db_t * db = get_remote_db(1);
 
     add_server_to_membership(hostname, portno, db, &seed);
+    add_server_to_membership(hostname, portno+1, db, &seed);
+    add_server_to_membership(hostname, portno+2, db, &seed);
 
     db_schema_t * schema = create_schema();
 

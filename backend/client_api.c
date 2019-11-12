@@ -210,7 +210,7 @@ msg_callback * add_msg_callback(long nonce, void (*callback)(void *), remote_db_
     {
 		fprintf(stderr, "ERROR: Found duplicate nonce %ld when trying to add msg callback!\n", nonce);
 //		assert(0);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return NULL;
     }
 
@@ -256,6 +256,8 @@ int delete_msg_callback(long nonce, remote_db_t * db)
 	msg_callback * mc = (msg_callback *) node->value;
 
     skiplist_delete(db->msg_callbacks, (WORD) nonce);
+
+    delete_msg_callback(mc->nonce, db);
 
     return 0;
 }
@@ -527,7 +529,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -535,7 +537,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 
 	for(int i=0;i<mc->no_replies;i++)
 	{
-		assert(mc->reply_types[i] == RPC_TYPE_ACK);
+//		assert(mc->reply_types[i] == RPC_TYPE_ACK);
 		ack_message * ack = (ack_message *) mc->replies[i];
 		if(ack->status == 0)
 			ok_status++;
@@ -546,7 +548,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -601,7 +603,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -620,7 +622,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -669,7 +671,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clusteri
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -688,7 +690,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clusteri
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -864,7 +866,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return NULL;
 	}
 
@@ -885,7 +887,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 		result = get_db_rows_tree_from_read_response(response, db);
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return result;
 }
@@ -939,7 +941,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return NULL;
 	}
 
@@ -960,7 +962,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 		result = get_db_rows_tree_from_read_response(response, db);
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return result;
 }
@@ -1031,7 +1033,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1052,7 +1054,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return result;
 }
@@ -1111,7 +1113,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1132,7 +1134,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return result;
 }
@@ -1195,7 +1197,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1216,7 +1218,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 		result = get_db_rows_forest_from_read_response(response, start_row, end_row, db);
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return result;
 }
@@ -1280,7 +1282,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1299,7 +1301,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -1349,7 +1351,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1368,7 +1370,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -1417,7 +1419,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1436,7 +1438,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -1550,7 +1552,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1569,7 +1571,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -1622,7 +1624,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1634,7 +1636,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 		ack_message * ack = (ack_message *) mc->replies[i];
 	    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
 	    {
-	    		free_msg_callback(mc);
+	    		delete_msg_callback(mc->nonce, db);
 	    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
 	    }
 
@@ -1644,7 +1646,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
     // Add local subscription on client:
 
@@ -1698,7 +1700,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1710,7 +1712,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 		ack_message * ack = (ack_message *) mc->replies[i];
 	    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
 	    {
-	    		free_msg_callback(mc);
+	    		delete_msg_callback(mc->nonce, db);
 	    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
 	    }
 
@@ -1720,7 +1722,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
     // Remove local subscription from client:
 
@@ -1855,7 +1857,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 		if(mc->no_replies < db->quorum_size)
 		{
 			fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-			free_msg_callback(mc);
+			delete_msg_callback(mc->nonce, db);
 			return NULL;
 		}
 
@@ -1874,7 +1876,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 	#endif
 		}
 
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 
 		status = !(ok_status >= db->quorum_size);
 	}
@@ -1929,7 +1931,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -1948,7 +1950,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -2004,7 +2006,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -2023,7 +2025,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -2078,7 +2080,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 	if(mc->no_replies < db->quorum_size)
 	{
 		fprintf(stderr, "No quorum (%d/%d replies received)\n", mc->no_replies, db->quorum_size);
-		free_msg_callback(mc);
+		delete_msg_callback(mc->nonce, db);
 		return -1;
 	}
 
@@ -2097,7 +2099,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 #endif
 	}
 
-	free_msg_callback(mc);
+	delete_msg_callback(mc->nonce, db);
 
 	return !(ok_status >= db->quorum_size);
 }
@@ -2221,9 +2223,11 @@ msg_callback * get_msg_callback(long nonce, WORD client_id, void (*callback)(voi
 	mc->no_replies = 0;
 	mc->reply_lock = (pthread_mutex_t *) ((char *)mc + sizeof(msg_callback) + sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
 	pthread_mutex_init(mc->reply_lock, NULL);
-	mc->replies = (void **) ((char *)mc + sizeof(msg_callback) + 2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
-	mc->reply_types = (short *) ((char *)mc + sizeof(msg_callback) + 2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t) +
-							replication_factor * sizeof(void *));
+//	mc->replies = (void **) ((char *)mc + sizeof(msg_callback) + 2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t));
+//	mc->reply_types = (short *) ((char *)mc + sizeof(msg_callback) + 2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t) + replication_factor * sizeof(void *));
+
+	mc->replies = (void **) malloc(replication_factor*sizeof(void *));
+	mc->reply_types = (short *) malloc(replication_factor*sizeof(short));
 
 	return mc;
 }
@@ -2245,6 +2249,8 @@ int add_reply_to_msg_callback(void * reply, short reply_type, msg_callback * mc)
 
 void free_msg_callback(msg_callback * mc)
 {
+	free(mc->replies);
+	free(mc->reply_types);
 	free(mc);
 }
 
