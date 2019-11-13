@@ -286,12 +286,12 @@ Recent decisions:
 Normalization:
 
 - All imported or built-in names are qualified by module
-- All parameters are positional
-- Parameter defaults are moved inside function definitions
+X All parameters are positional
+X Parameter defaults are moved inside function definitions
 - Protocols and extensions are translated into classes
 - Overloaded names are explicitly qualified by class
 - Comprehensions are translated into loops
-- String literals are concatenated
+X String literals are concatenated
 - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 - For loops are replaced by while over iterators
 - With statemenmts are replaced by enter/exit calls + exception handling

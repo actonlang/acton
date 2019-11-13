@@ -151,12 +151,15 @@ checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
 
 findPaths               :: Args -> IO Paths
 findPaths args          = do absfile <- canonicalizePath (head (files args))
-                             sysRoot <- canonicalizePath (syspath args)
                              (projRoot,dirsSrc,dirsTarget) <- findDirs absfile
+                             sysRoot <- canonicalizePath (ifExists (syspath args) projRoot)
                              checkDirs sysRoot (dirsTarget++dirsSrc)
                              let modpath = dirsSrc ++ [body]
                              return $ Paths projRoot (joinPath (sysRoot : dirsTarget)) modpath ext
   where (body,ext)      = splitExtension $ takeFileName $ head (files args)
+
+        ifExists "" p   = p
+        ifExists p _    = p
 
         findDirs path   = diff [] (takeDirectory path)
           where diff dirs "/"   = error "********************\nNo .acton file found in any ancestor directory"

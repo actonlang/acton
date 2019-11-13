@@ -424,8 +424,7 @@ instance Check Decl where
                                              popFX
                                              (prow',krow') <- splitRows modif prow krow
                                              checkAssump env n (tFun fx prow' krow' t) (extractDecoration modif)
-      where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b ++ svars) $ defineTVars q env
+      where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $ block (stateScope env) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
             splitRow (InstMeth _) (TRow _ n sc r)
@@ -438,21 +437,21 @@ instance Check Decl where
                                              check (define te env1) b
                                              popFX
                                              checkBindings env False (us1++us2) te
-      where env1                        = defineSelf n q $ defineTVars q env
+      where env1                        = defineSelf n q $ defineTVars q $ block (stateScope env) env
             (q,us1,us2,te)              = findClass (NoQual n) env
 
     check env (Protocol l n _ _ b)      = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
                                              checkBindings env True us te
-      where env1                        = defineSelf n q $ defineTVars q env
+      where env1                        = defineSelf n q $ defineTVars q $ block (stateScope env) env
             (q,us,te)                   = findProto (NoQual n) env
 
     check env (Extension l n q us b)    = do pushFX fxNil
                                              te <- infEnv env1 b
                                              popFX
                                              checkBindings env False us te
-      where env1                        = defineSelf' n q $ defineTVars q env
+      where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
     check env (Signature l ns sc)       = return ()
 
 
