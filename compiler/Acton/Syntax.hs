@@ -124,7 +124,7 @@ data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
 modName ss      = ModName (map name ss)
 
-data QName      = QName { mname::ModName, item::Name } | NoQual { item::Name } deriving (Show,Read,Eq,Generic)
+data QName      = QName { mname::ModName, noqual::Name } | NoQual { noqual::Name } deriving (Show,Read,Eq,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 

@@ -21,7 +21,7 @@ import Acton.Solver
 import qualified InterfaceFiles
 
 reconstruct                             :: String -> Env -> Module -> IO (TEnv, SrcInfo)
-reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env te)
+reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env1 te)
                                              return (te, info)
   where Module m _ suite                = modul
         env1                            = reserve (bound suite) env{ defaultmod = m }
@@ -286,7 +286,7 @@ instance InfEnv Decl where
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env            
     infEnv env (Extension _ n q us b)
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | wf env q && wf env1 us          = do w <- newName (item n)
+      | wf env q && wf env1 us          = do w <- newName (noqual n)
                                              return $ nExt w n q (mro env1 (protoBases env us))
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
@@ -516,14 +516,6 @@ classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ t
   where (q,_,_,_)                       = findClass qn env
 
 instance Infer Expr where
-    infer env (Var _ (NoQual n))
-      | Just (qn,i) <- protoAttr n env  = do u <- TC qn <$> newTVars i
-                                             let (cs,sc) = findAttr env u n
-                                             when (scdec sc /= StaticMethod) (notYet (loc n) "Overloading of non-static methods")
-                                             (cs',t) <- instantiate env sc
-                                             t1 <- newTVar
-                                             constrain (Impl t1 u : cs ++ cs')
-                                             return $ subst [(tvSelf,t1)] t
     infer env (Var _ n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType' n env
                                              constrain cs
                                              return t
@@ -620,7 +612,9 @@ instance Infer Expr where
             protocol GE                 = cOrd
             protocol Is                 = cIdentity
             protocol IsNot              = cIdentity
-    infer env (Dot l e n)               = do t <- infer env e
+    infer env (Dot l e n)
+      | Just m <- isModule env e        = infer env (Var l (QName m n))
+      | otherwise                       = do t <- infer env e
                                              t0 <- newTVar
                                              constrain [Sel t n t0]
                                              return t0
@@ -631,7 +625,7 @@ instance Infer Expr where
     infer env (Lambda l p k e)
       | nodup (p,k)                     = do fx <- newTVar
                                              pushFX fx
-                                             (te0, prow) <- infEnvT env1 k
+                                             (te0, prow) <- infEnvT env1 p
                                              (te1, krow) <- infEnvT (define te0 env1) k
                                              t <- infer (define te1 (define te0 env1)) e
                                              popFX
@@ -675,6 +669,12 @@ instance Infer Expr where
                                              tv <- newTVar
                                              infAssocs (define te env) [a1] tk tv
     infer env (Paren l e)               = infer env e
+
+
+isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
+  where dotChain (Var _ (NoQual n))     = Just [n]
+        dotChain (Dot _ e n)            = fmap (n:) (dotChain e)
+        dotChain _                      = Nothing
 
 
 infElems env [] tc t0                   = return (tc t0)
