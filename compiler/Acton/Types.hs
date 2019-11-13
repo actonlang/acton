@@ -388,7 +388,7 @@ instance Check Decl where
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
             
     check env (Def l n q p k ann b (Sync _))
-      | noshadow svars p                = do t <- newTVar
+      | noshadow svars (p,k)            = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
@@ -398,10 +398,10 @@ instance Check Decl where
                                              fx <- fxSync <$> newTVar
                                              checkAssump env n (tFun fx prow krow t) NoDec
       where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
+            env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
 
     check env (Def l n q p k ann b Async)
-      | noshadow svars p                = do t <- newTVar
+      | noshadow svars (p,k)            = do t <- newTVar
                                              pushFX (fxRet t tWild)
                                              when (fallsthru b) (subFX (fxRet tNone tWild))
                                              (te0, prow) <- infEnvT env p
@@ -411,7 +411,7 @@ instance Check Decl where
                                              fx <- fxAsync <$> newTVar
                                              checkAssump env n (tFun fx prow krow (tMsg t)) NoDec
       where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
+            env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
 
     check env (Def l n q p k ann b modif)
                                         = do t <- newTVar

@@ -73,7 +73,8 @@ reduce' env (Sel (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
     addself sc                              = sc
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
-    
+
+reduce' env (Sel (TUnion _ [ULit _]) n t2)  = reduce' env (Sel tStr n t2)
 
 reduce' env (Mut t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Mut t1 n t2]
