@@ -9,6 +9,7 @@ import qualified Acton.Types
 import qualified Acton.Solver
 import qualified Acton.Normalizer
 import qualified Acton.CPS
+import qualified Acton.Deactorizer
 --import qualified Acton.LambdaLifter
 {-
 import qualified Acton.CPS
@@ -41,6 +42,7 @@ data Args       = Args {
                     types   :: Bool,
                     norm    :: Bool,
                     cps     :: Bool,
+                    deact   :: Bool,
                     llift   :: Bool,
 --                    python  :: Bool,
 --                    persist :: Bool,
@@ -61,6 +63,7 @@ getArgs         = Args
                     <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
                     <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
                     <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
+                    <*> switch (long "deact"   <> help "Show the result after deactorization")
                     <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
 --                    <*> switch (long "python"  <> help "Show the initial Python translation (Acton files only)")
 --                    <*> switch (long "persist" <> help "Show persistable datatype replacements (Acton files only)")
@@ -184,7 +187,11 @@ runRestPasses args paths src env tree = (do
                           cpsed <- Acton.CPS.convert [] normtree
                           iff (cps args) $ dump "cps" (Pretty.print cpsed)
 
---                          lifted <- Acton.LambdaLifter.liftPy cpsed
+                          deacted <- Acton.Deactorizer.deactorize env' cpsed
+                          iff (deact args) $ dump "deact" (Pretty.print deacted)
+
+
+--                          lifted <- Acton.LambdaLifter.liftPy deacted
 --                          iff (llift args) $ dump "llift" (Pretty.vprint lifted)
   
 {-                              

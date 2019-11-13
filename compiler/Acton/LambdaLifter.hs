@@ -19,7 +19,7 @@ liftModule (Module n imp stmts) = return $ Module n imp (reverse lled ++ stmts')
 
 type LiftM a                    = State LiftState a
 
-type LiftState                  = ([Decl],[Int])        -- lifted defs, name supply
+type LiftState                  = ([Stmt],[Int])        -- lifted defs, name supply
 
 runL                            :: LiftM a -> (a, ([Decl],[Int]))
 runL m                          = runState m ([],[1..])
@@ -27,8 +27,8 @@ runL m                          = runState m ([],[1..])
 newName                         :: LiftM Name
 newName                         = state (\(defs,uniq:supply) -> (Name l0 ("lambda____"++show uniq), (defs,supply)))
 
-liftToTop                       :: Decl -> LiftM Stmt
-liftToTop def                   = state (\(defs,supply) -> (Pass l0, (def:defs,supply)))
+liftToTop                       :: Stmt -> LiftM Stmt
+liftToTop stmt                  = state (\(lifted,supply) -> (Pass l0, (stmt:lifted,supply)))
 
 -----------------
 

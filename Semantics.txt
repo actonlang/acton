@@ -295,5 +295,8 @@ X String literals are concatenated
 - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 - For loops are replaced by while over iterators
 - With statemenmts are replaced by enter/exit calls + exception handling
+
+Deactorization:
+
 - Actor state is made explicit in terms of parameter __self__
 - Communication and exception handling is made explicit by means of RTS calls (ACTOR, ASYNC, AWAIT, PUSH, POP)
