@@ -57,7 +57,7 @@ def strip_reply(message_id, second_tag, text):
             return text[len(prefix):-len(suffix)]
         elif text == '<' + second_tag + '/>':
             return ''
-    raise ParseError
+    raise xml.ParseError
 
 def print_path(path, inner):
     elems = path.split('/')
@@ -86,5 +86,5 @@ def strip_path(path, text):
         if text.startswith(prefix) and text.endswith(suffix):
             text = text[len(prefix):-len(suffix)]
         else:
-            raise ParseError
+            raise xml.ParseError
     return text

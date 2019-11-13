@@ -232,7 +232,10 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nInt,              NClass [] [] [] []),
                                 (nFloat,            NClass [] [] [] []),
                                 (nBool,             NClass [] [] [] []),
-                                (nStr,              NClass [] [] [] []),
+                                (nStr,              NClass [] [] [] [
+                                                        (name "join",   NVar (monotype $ tFun0 [tSeq tStr] tStr)),
+                                                        (name "strip",  NVar (monotype $ tFun0 [] tStr))
+                                                    ]),
                                 (nRef,              NClass [] [] [] []),
                                 (nMsg,              NClass [] [] [] []),
                                 (nException,        NClass [] [] [] []),
@@ -250,7 +253,14 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nOrd,              NProto [] [] []),
                                 (nIdentity,         NProto [] [] []),
                                 (nCollection,       NProto [a] [] []),
-                                (nContextManager,   NProto [] [] [])
+                                (nContextManager,   NProto [] [] []),
+                                (nObject,           NClass [] [] [] []),
+                                (nStopIteration,    NClass [] [] [] []),
+                                (nValueError,       NClass [] [] [] []),
+                                (nShow,             NProto [] [] []),
+                                (name "len",        NVar (monotype $ tFun0 [pCollection tWild] tInt)),
+                                (name "print",      NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
+                                (name "postpone",   NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone))
                               ]
   where 
     a:b:c:_                 = [ TBind v [] | v <- tvarSupply ]
@@ -421,10 +431,9 @@ findCon env u               = (constraintsOf env (subst s q), subst s us, subst 
 
 constraintsOf               :: Env -> [TBind] -> Constraints
 constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u <- us ]
-  where
-    constr t u@(TC n _)
-      | trace ("##### constraintsOf " ++ prstrs q) $ isProto env n       = Impl t u
-      | otherwise           = Sub t (tCon u)
+  where constr t u@(TC n _)
+          | isProto env n   = Impl t u
+          | otherwise       = Sub t (tCon u)
 
 
 -- Environment unification ---------------------------------------------------------------

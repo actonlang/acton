@@ -344,7 +344,7 @@ instance Pretty TBind where
     
 instance Pretty UType where
     pretty (UCon n)                 = pretty n
-    pretty (ULit str)               = text ('\'' : str ++"'")
+    pretty (ULit str)               = text str
 
 prettyFXRow (TRow _ n t r)
   | n == syncKW                     = text "sync" <+> prettyFXRow r

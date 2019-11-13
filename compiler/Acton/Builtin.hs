@@ -41,6 +41,8 @@ nCollection                         = name "Collection"
 nContextManager                     = name "ContextManager"
 nObject                             = name "object"
 nStopIteration                      = name "StopIteration"
+nValueError                         = name "ValueError"
+nShow                               = name "Show"
 
 qnSequence                          = qBuiltin nSequence
 qnMapping                           = qBuiltin nMapping
@@ -70,6 +72,8 @@ qnCollection                        = qBuiltin nCollection
 qnContextManager                    = qBuiltin nContextManager
 qnObject                            = qBuiltin nObject
 qnStopIteration                     = qBuiltin nStopIteration
+qnValueError                        = qBuiltin nValueError
+qnShow                              = qBuiltin nShow
 
 cSequence a                         = TC qnSequence [a]
 cMapping a b                        = TC qnMapping [a,b]
@@ -99,6 +103,8 @@ cCollection a                       = TC qnCollection [a]
 cContextManager                     = TC qnContextManager []
 cObject                             = TC qnObject []
 cStopIteration                      = TC qnStopIteration []
+cValueError                         = TC qnValueError []
+cShow                               = TC qnShow []
 
 pSequence a                         = tCon (cSequence a)
 pMapping a b                        = tCon (cMapping a b)
@@ -128,7 +134,12 @@ pCollection a                       = tCon (cCollection a)
 pContextManager                     = tCon cContextManager
 tObject                             = tCon cObject
 tStopIteration                      = tCon cStopIteration
+tValueError                         = tCon cValueError
+pShow                               = tCon cShow
 
+tSeq                                = pSequence
+tDict                               = pMapping
+tSet                                = pSet
 
 uniLit t (ULit l)                   = t == tStr
 uniLit t _                          = False

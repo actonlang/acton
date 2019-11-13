@@ -215,6 +215,9 @@ tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil            = TNil NoLoc
 
+tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
+tAsync ps t     = tFun (fxAsync fxNil) (foldr posRow posNil $ map monotype ps) kwdNil t
+
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV nSelf
 nSelf           = Name NoLoc "Self"
