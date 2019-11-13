@@ -128,6 +128,9 @@ red' sub env (TCon _ c1) (TCon l c2)
                                                  red sub env t (TCon l c2)
   where (cs,t)                              = findSubAxiom env c1 (tcname c2)
 
+red' sub env (TAt _ c1) (TAt l c2)
+  | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
+
 --           as declared           as called
 red' sub env (TFun _ fx1 p1 r1 t1) (TFun _ fx2 p2 r2 t2)
                                             = do red sub env fx1 fx2
