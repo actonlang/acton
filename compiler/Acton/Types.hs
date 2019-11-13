@@ -276,9 +276,9 @@ instance InfEnv Decl where
     infEnv env (Class _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do te <- noescape <$> infEnv env1 b
-                                             return $ nClass n q (mro env1 us1) (mro env1 us2) te
+                                             return $ nClass n q (mro env1 us) te
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            (us1,us2)                   = splitBases env us
+            us                          = classBases env us
     infEnv env (Protocol _ n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do te <- infEnv env1 b
@@ -296,10 +296,10 @@ instance InfEnv Decl where
                                              return $ nSig ns t0
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
-splitBases env []                       = ([], [])
-splitBases env (u:us)
-  | isProto env (tcname u)              = ([], u : protoBases env us)
-  | otherwise                           = ([u], protoBases env us)
+classBases env []                       = []
+classBases env (u:us)
+  | isProto env (tcname u)              = u : protoBases env us
+  | otherwise                           = u : protoBases env us
 
 protoBases env []                       = []
 protoBases env (u:us)
@@ -436,9 +436,9 @@ instance Check Decl where
     check env (Class l n _ _ b)         = do pushFX fxNil
                                              check (define te env1) b
                                              popFX
-                                             checkBindings env False (us1++us2) te
+                                             checkBindings env False us te
       where env1                        = defineSelf n q $ defineTVars q $ block (stateScope env) env
-            (q,us1,us2,te)              = findClass (NoQual n) env
+            (q,us,te)                   = findClass (NoQual n) env
 
     check env (Protocol l n _ _ b)      = do pushFX fxNil
                                              check (define te env1) b
@@ -513,7 +513,7 @@ instance InfEnv Except where
                                              return $ nVar n t
 
 classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
-  where (q,_,_,_)                       = findClass qn env
+  where (q,_,_)                         = findClass qn env
 
 instance Infer Expr where
     infer env (Var _ n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType' n env
