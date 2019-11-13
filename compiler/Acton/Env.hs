@@ -38,7 +38,7 @@ data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
                             | NSig      TSchema
-                            | NClass    [TBind] [TCon] [TCon] TEnv
+                            | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      QName [TBind] [TCon]
                             | NTVar     (Maybe TCon) [TCon]
@@ -61,8 +61,8 @@ nState te                   = [ (n, NSVar t) | (n, NVar t) <- te ]
 nSig                        :: [Name] -> TSchema -> TEnv
 nSig xs t                   = [ (x, NSig t) | x <- xs ]
 
-nClass                      :: Name -> [TBind] -> [TCon] -> [TCon] -> TEnv -> TEnv
-nClass n q us1 us2 te       = [(n, NClass q us1 us2 te)]
+nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
+nClass n q us te            = [(n, NClass q us te)]
 
 nProto                      :: ModName -> Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nProto m n q us te          = (n, NProto q us te) : te'
@@ -85,7 +85,7 @@ mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
 mapVars f te                = map g te
   where 
     g (n, NVar sc)          = (n, NVar (f sc))
-    g (n, NClass q u u' te) = (n, NClass q u u' (map g te))
+    g (n, NClass q u te)    = (n, NClass q u (map g te))
 --    g (n, NProto q u te)    = (n, NProto q u (map g te))
     g (n, i)                = (n, i)
 
@@ -101,10 +101,10 @@ instance Pretty Env where
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = prettySig [n] t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
-    pretty (n, NClass q c u []) = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList (c++u)
-    pretty (n, NClass q c u te) = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList (c++u) <> colon $+$ (nest 4 $ pretty te)
+    pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us
+    pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NProto q us [])  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -128,7 +128,7 @@ instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NSig t)             = NSig <$> msubst t
-    msubst (NClass q c u te)    = NClass <$> msubst q <*> msubst c <*> msubst u <*> msubst te
+    msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
     msubst (NTVar u us)         = NTVar <$> msubst u <*> msubst us
@@ -141,7 +141,7 @@ instance Subst NameInfo where
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
     tyfree (NSig t)             = tyfree t
-    tyfree (NClass q c u te)    = (tyfree q ++ tyfree c ++ tyfree u ++ tyfree te) \\ tybound q
+    tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
     tyfree (NTVar u us)         = tyfree u ++ tyfree us
@@ -212,7 +212,7 @@ instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NSig t)            = NSig (unalias env t)
-    unalias env (NClass q c u te)   = NClass (unalias env q) (unalias env c) (unalias env u) (unalias env te)
+    unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
     unalias env (NTVar u us)        = NTVar (unalias env u) (unalias env us)
@@ -229,16 +229,16 @@ instance Unalias (Name,NameInfo) where
 envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nMapping,          NProto [a,b] [] []),
                                 (nSet,              NProto [a] [] []),
-                                (nInt,              NClass [] [] [] []),
-                                (nFloat,            NClass [] [] [] []),
-                                (nBool,             NClass [] [] [] []),
-                                (nStr,              NClass [] [] [] [
+                                (nInt,              NClass [] [] []),
+                                (nFloat,            NClass [] [] []),
+                                (nBool,             NClass [] [] []),
+                                (nStr,              NClass [] [] [
                                                         (name "join",   NVar (monotype $ tFun0 [tSeq tStr] tStr)),
                                                         (name "strip",  NVar (monotype $ tFun0 [] tStr))
                                                     ]),
-                                (nRef,              NClass [] [] [] []),
-                                (nMsg,              NClass [] [] [] []),
-                                (nException,        NClass [] [] [] []),
+                                (nRef,              NClass [] [] []),
+                                (nMsg,              NClass [] [] []),
+                                (nException,        NClass [] [] []),
                                 (nBoolean,          NProto [] [] []),
                                 (nIndexed,          NProto [a,b] [] []),
                                 (nSliceable,        NProto [] [] []),
@@ -254,9 +254,9 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nIdentity,         NProto [] [] []),
                                 (nCollection,       NProto [a] [] []),
                                 (nContextManager,   NProto [] [] []),
-                                (nObject,           NClass [] [] [] []),
-                                (nStopIteration,    NClass [] [] [] []),
-                                (nValueError,       NClass [] [] [] []),
+                                (nObject,           NClass [] [] []),
+                                (nStopIteration,    NClass [] [] []),
+                                (nValueError,       NClass [] [] []),
                                 (nShow,             NProto [] [] []),
                                 (name "len",        NVar (monotype $ tFun0 [pCollection tWild] tInt)),
                                 (name "print",      NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
@@ -372,9 +372,9 @@ isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findClass                   :: QName -> Env -> ([TBind],[TCon],[TCon],TEnv)
+findClass                   :: QName -> Env -> ([TBind],[TCon],TEnv)
 findClass n env             = case findQName n env of
-                                NClass q c u te -> (q,c,u,te)
+                                NClass q us te -> (q,us,te)
                                 _ -> err1 n "Class name expected, got"
 
 findProto                   :: QName -> Env -> ([TBind],[TCon],TEnv)
@@ -398,7 +398,7 @@ findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
                                 NSig t         -> t
-                                NClass q _ _ _ -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
+                                NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 _              -> err1 n "Unexpected name..."
 
@@ -417,15 +417,15 @@ findAttr env u n            = (cs, findIn (te ++ concat tes))
                                 Just (NVar t)         -> t
                                 Just (NSVar t)        -> t
                                 Just (NSig t)         -> t
-                                Just (NClass q _ _ _) -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
+                                Just (NClass q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 Just (NProto q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> (Constraints, [TCon], TEnv)
 findCon env u               = (constraintsOf env (subst s q), subst s us, subst s te)
   where (_, q, us, te)      = case findQName (tcname u) env of
-                                NClass q us1 us2 te -> (False,q,us1,te)
-                                NProto q us te      -> (True,q,us,te)
+                                NClass q us te -> (False,q,us,te)
+                                NProto q us te -> (True,q,us,te)
                                 _ -> err1 (tcname u) "Class or protocol name expected, got"
         s                   = tybound q `zip` tcargs u
 
@@ -446,8 +446,8 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif (NVar t) (NVar t')             = unifT t t'
     unif (NSVar t) (NSVar t')           = unifT t t'
     unif (NSig t) (NSig t')             = unifT t t'
-    unif (NClass q c u te) (NClass q' c' u' te') 
-                                        = unifC q (c++u) te q' (c'++u') te'
+    unif (NClass q us te) (NClass q' us' te') 
+                                        = unifC q us te q' us' te'
     unif (NProto q us te) (NProto q' us' te') 
                                         = unifC q us te q' us' te'
     unif (NExt _ q us) (NExt _ q' us')  = unifC q us [] q' us' []
@@ -517,7 +517,7 @@ importAll                   :: ModName -> TEnv -> TEnv
 importAll m te              = mapMaybe imp te
   where 
     imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
-    imp (n, NClass _ _ _ _) = Just (n, NAlias (QName m n))
+    imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _)     = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NVar t)
