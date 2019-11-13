@@ -19,6 +19,8 @@ db_row_t * create_empty_row(WORD key)
 {
 	db_cell_t * row = (db_cell_t *) malloc(sizeof(db_cell_t));
 
+	memset(row, 0, sizeof(db_cell_t));
+
 	row->key = key;
 
 	row->cells = NULL;
@@ -30,6 +32,8 @@ db_row_t * create_empty_row(WORD key)
 	row->version = NULL;
 
 	row->_next = NULL;
+
+	row->no_entries = 0;
 
 	return row;
 }

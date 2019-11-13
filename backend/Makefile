@@ -29,7 +29,7 @@ subdirs: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@
 
-all: skiplist_test libdb libcomm db_unit_tests queue_unit_tests txn_unit_tests failure_detector client server
+all: skiplist_test libdb libcomm db_unit_tests queue_unit_tests txn_unit_tests failure_detector remote_txn_unit_tests client server
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -106,8 +106,14 @@ server: server.c libdb failure_detector
 	 -L $(LIBDIR) -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
 	 -o server
 
+remote_txn_unit_tests: remote_txn_unit_tests.c libdb libdbclient
+	cc remote_txn_unit_tests.c \
+	 $(CFLAGS) \
+	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lprotobuf-c -pthread -luuid \
+	 -o remote_txn_unit_tests
+
 $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests
+	rm -rf *.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests remote_txn_unit_tests server client

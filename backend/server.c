@@ -26,6 +26,7 @@
 char in_buf[BUFSIZE];
 char out_buf[BUFSIZE];
 
+/*
 int no_cols = 4;
 int no_primary_keys = 1;
 int no_clustering_keys = 2;
@@ -34,18 +35,32 @@ int no_index_keys = 1;
 int no_actors = 2;
 int no_collections = 2;
 int no_items = 2;
+*/
 
-typedef struct db_server
-{
-	db_t * db;
-} db_server;
+#define COLLECTION_ID_0 0
+#define COLLECTION_ID_1 1
+
+int no_actors = 2;
+int no_items = 20;
+
+int no_state_cols = 4;
+int no_state_primary_keys = 1;
+int no_state_clustering_keys = 2;
+int no_state_index_keys = 1;
+
+int no_queue_cols = 2;
+
+WORD state_table_key = (WORD) 0;
+WORD queue_table_key = (WORD) 1;
+
 
 void error(char *msg) {
   perror(msg);
   exit(1);
 }
 
-int create_schema(db_t * db, unsigned int * fastrandstate) {
+/*
+int create_state_schema(db_t * db, unsigned int * fastrandstate) {
 	int primary_key_idx = 0;
 	int clustering_key_idxs[2];
 	clustering_key_idxs[0]=1;
@@ -79,6 +94,56 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 
 	return ret;
 }
+*/
+
+int create_state_schema(db_t * db, unsigned int * fastrandstate)
+{
+	int primary_key_idx = 0;
+	int clustering_key_idxs[2];
+	clustering_key_idxs[0]=1;
+	clustering_key_idxs[1]=2;
+	int index_key_idx=3;
+
+	int * col_types = (int *) malloc(no_state_cols * sizeof(int));
+
+	for(int i=0;i<no_state_cols;i++)
+		col_types[i] = DB_TYPE_INT32;
+
+	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
+
+	assert(db_schema != NULL && "Schema creation failed");
+
+	// Create table:
+
+	int ret = db_create_table((WORD) 0, db_schema, db, fastrandstate);
+
+	printf("Test %s - %s (%d)\n", "create_state_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
+}
+
+int create_queue_schema(db_t * db, unsigned int * fastrandstate)
+{
+	assert(no_queue_cols == 2);
+
+	int * col_types = (int *) malloc(no_queue_cols * sizeof(int));
+	col_types[0] = DB_TYPE_INT64;
+	col_types[1] = DB_TYPE_INT32;
+
+	int ret = create_queue_table(queue_table_key, no_queue_cols, col_types, db,  fastrandstate);
+	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
+
+	// Create input queues for all actors:
+/*
+	for(long queue_id=0;queue_id<no_actors;queue_id++)
+	{
+		ret = create_queue(queue_table_key, (WORD) queue_id, NULL, 1, db, fastrandstate);
+		printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
+	}
+*/
+	return ret;
+}
+
 
 
 db_schema_t * get_schema(db_t * db, WORD table_key)
@@ -267,7 +332,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	}
 
 #if (VERBOSE_RPC > 0)
-	char print_buff[1024];
+	char print_buff[4096];
 	to_string_range_read_response_message(m, (char *) print_buff);
 	printf("Sending range read response message: %s\n", print_buff);
 #endif
@@ -356,7 +421,7 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 	}
 
 #if (VERBOSE_RPC > 0)
-		char print_buff[1024];
+		char print_buff[4096];
 		to_string_range_read_response_message(m, (char *) print_buff);
 		printf("Sending range read response message: %s\n", print_buff);
 #endif
@@ -638,6 +703,10 @@ int handle_commit_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 
 	txn_state * ts = get_txn_state(q->txnid, db);
 
+	// Make sure the txn has the right commit stamp (it c'd be that the current server missed the previous validation packet so the version was not set then):
+
+	set_version(ts, q->version);
+
 	if(ts == NULL)
 		return -2; // txnid doesn't exist on server
 
@@ -681,8 +750,8 @@ int main(int argc, char **argv) {
   db_t * db = get_db();
 
   // Create schema:
-  ret = create_schema(db, &seed);
-  printf("Test %s - %s\n", "create_schema", ret==0?"OK":"FAILED");
+  ret = create_state_schema(db, &seed);
+  printf("Test %s - %s\n", "create_state_schema", ret==0?"OK":"FAILED");
 
   ret = create_queue_schema(db, &seed);
   printf("Test %s - %s\n", "create_queue_schema", ret==0?"OK":"FAILED");
@@ -724,13 +793,38 @@ int main(int argc, char **argv) {
   {
     bzero(in_buf, BUFSIZE);
     msg_len = -1;
+
+/*
     while(msg_len < 0)
     {
 		msg_len = read(childfd, in_buf, BUFSIZE);
 		if (msg_len < 0)
 		  error("ERROR reading from socket");
     }
+*/
+    msg_len = read(childfd, in_buf, BUFSIZE);
+    if (msg_len < 0)
+    {
+    		fprintf(stderr, "ERROR reading from socket\n");
+		continue;
+    }
+
     printf("server received %d bytes\n", msg_len);
+
+    if(msg_len == 0) // client closed socket
+    {
+    		struct sockaddr_in address;
+    		int addrlen;
+        getpeername(childfd , (struct sockaddr*)&address,
+        				(socklen_t*)&addrlen);
+        printf("Host disconnected , ip %s , port %d \n" ,
+              inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+
+        //Close the socket and mark as 0 in list for reuse
+        close(childfd);
+        childfd = 0;
+        break;
+    }
 
     void * tmp_out_buf = NULL, * q = NULL;
     short msg_type;
@@ -741,7 +835,9 @@ int main(int argc, char **argv) {
 
     if(status != 0)
     {
-    		error("ERROR decoding client request");
+//    		error("ERROR decoding client request");
+    		fprintf(stderr, "ERROR decoding client request");
+    		continue;
     }
 
     switch(msg_type)
@@ -749,7 +845,11 @@ int main(int argc, char **argv) {
     		case RPC_TYPE_WRITE:
     		{
     			status = handle_write_query((write_query *) q, db, &seed);
-    			assert(status == 0);
+    			if(status != 0)
+    			{
+    				printf("ERROR: handle_write_query returned %d!", status);
+    				assert(0);
+    			}
     			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
     			break;
     		}

@@ -202,9 +202,9 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
-	assert(new_consume_head <= no_entries - 1);
+//	assert(new_consume_head <= no_entries - 1);
 
-	assert(cs->private_read_head >= new_consume_head);
+//	assert(cs->private_read_head >= new_consume_head);
 
 	assert(cs->private_consume_head <= new_consume_head);
 

@@ -110,8 +110,13 @@ void * comm_thread_loop(void * args)
 			remote_server * rs = (remote_server *) crt->value;
 			if(rs->sockfd > 0)
 			{
+//				printf("Listening to server socket %s..\n", rs->id);
 				FD_SET(rs->sockfd, &(db->readfds));
 				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("Not listening to disconnected server socket %s..\n", rs->id);
 			}
 		}
 
@@ -132,7 +137,10 @@ void * comm_thread_loop(void * args)
 			    bzero(in_buf, BUFSIZE);
 			    msg_len = read(rs->sockfd, in_buf, BUFSIZE);
 
-			    assert(msg_len >= 0);
+//			    assert(msg_len >= 0);
+
+			    if(msg_len < 0)
+			    		continue;
 
 			    if(msg_len == 0) // server closed socket
 			    {
@@ -146,6 +154,7 @@ void * comm_thread_loop(void * args)
                     //Close the socket and mark as 0 in list for reuse
                     close(rs->sockfd);
                     rs->sockfd = 0;
+                    continue;
 			    }
 
 //			    printf("client received %d bytes\n", msg_len);
@@ -160,6 +169,7 @@ void * comm_thread_loop(void * args)
 			    if(status != 0)
 			    {
 			    		fprintf(stderr, "ERROR decoding server response!\n");
+			    		continue;
 			    		assert(0);
 			    }
 
@@ -1531,7 +1541,11 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     }
 
     *start_row = HEAD(rows);
-    for(*end_row = *start_row;NEXT(*end_row) != NULL;*end_row = NEXT(*end_row));
+
+    if((*start_row) != NULL)
+    {
+    		for(*end_row = *start_row;NEXT(*end_row) != NULL;*end_row = NEXT(*end_row));
+    }
 
     *entries_read = response->no_cells;
 	*new_read_head = response->queue_index;
@@ -1864,11 +1878,11 @@ uuid_t * remote_new_txn(remote_db_t * db)
 		txn_message * q = build_new_txn(txnid, get_nonce(db));
 		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len);
 
-	#if CLIENT_VERBOSITY > 0
+#if CLIENT_VERBOSITY > 0
 		char print_buff[1024];
 		to_string_txn_message(q, (char *) print_buff);
 		printf("Sending new txn to server %s: %s\n", rs->id, print_buff);
-	#endif
+#endif
 
 		// Send packet to server and wait for reply:
 
@@ -1905,10 +1919,10 @@ uuid_t * remote_new_txn(remote_db_t * db)
 			if(ack->status == 0)
 				ok_status++;
 
-	#if CLIENT_VERBOSITY > 0
+#if CLIENT_VERBOSITY > 0
 			to_string_ack_message(ack, (char *) print_buff);
 			printf("Got back response from server %s: %s\n", rs->id, print_buff);
-	#endif
+#endif
 		}
 
 		delete_msg_callback(mc->nonce, db);
@@ -2159,13 +2173,13 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
-	int res = _remote_validate_txn(txnid, version, rs, db);
+	int val_res = _remote_validate_txn(txnid, version, rs, db);
 
 #if (CLIENT_VERBOSITY > 1)
 	printf("CLIENT: validate txn %s from server %s returned %d\n", uuid_str, rs->id, res);
 #endif
 
-	if(res == VAL_STATUS_COMMIT)
+	if(val_res == VAL_STATUS_COMMIT)
 	{
 		int persist_status = -2;
 		while(persist_status != 0)
@@ -2177,15 +2191,15 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 #endif
 		}
 
-		res = close_client_txn(txnid, db); // Clear local cached txn state on client
+		int res = close_client_txn(txnid, db); // Clear local cached txn state on client
 
 #if (CLIENT_VERBOSITY > 1)
 		printf("CLIENT: close txn %s returned %d\n", uuid_str, res);
 #endif
 	}
-	else if(res == VAL_STATUS_ABORT)
+	else if(val_res == VAL_STATUS_ABORT)
 	{
-		res = _remote_abort_txn(txnid, rs, db);
+		int res = _remote_abort_txn(txnid, rs, db);
 
 #if (CLIENT_VERBOSITY > 0)
 		printf("CLIENT: abort txn %s from server %s returned %d\n", uuid_str, rs->id, res);
@@ -2196,7 +2210,7 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 		assert(0);
 	}
 
-	return 0;
+	return val_res;
 }
 
 // Txn state handling client-side:

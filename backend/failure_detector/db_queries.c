@@ -13,6 +13,8 @@
 #include <limits.h>
 #include <assert.h>
 
+#define MAX_PRINT_BUFF 512
+
 // Write Query:
 
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce)
@@ -816,6 +818,13 @@ char * to_string_range_read_response_message(range_read_response_message * ca, c
 	crt_ptr += strlen(crt_ptr);
 	for(int i=0;i<ca->no_cells;i++)
 	{
+		if(crt_ptr - msg_buff > MAX_PRINT_BUFF - 10)
+		{
+			sprintf(crt_ptr, "..");
+			crt_ptr += strlen(crt_ptr);
+			break;
+		}
+
 		to_string_cell(ca->cells+i, crt_ptr);
 		crt_ptr += strlen(crt_ptr);
 		sprintf(crt_ptr, ", ");
@@ -1223,6 +1232,13 @@ char * to_string_queue_message(queue_query_message * ca, char * msg_buff)
 		crt_ptr += strlen(crt_ptr);
 		for(int i=0;i<ca->no_cells;i++)
 		{
+			if(crt_ptr - msg_buff > MAX_PRINT_BUFF - 5)
+			{
+				sprintf(crt_ptr, "..");
+				crt_ptr += strlen(crt_ptr);
+				break;
+			}
+
 			to_string_cell(ca->cells+i, crt_ptr);
 			crt_ptr += strlen(crt_ptr);
 			sprintf(crt_ptr, ", ");

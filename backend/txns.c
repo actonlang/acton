@@ -314,9 +314,14 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 //				if(ww_conflict(tw, tw2, 0))
 //				{
 #if (VERBOSE_TXNS > 0)
-						printf("Invalidating txn due to ww conflict\n");
+						printf("Invalidating txn due to ww conflict on table=%ld/%ld, write_type=%d/%d, key=%ld/%ld, txn=%ld/%ld\n",
+								(long) tw->table_key, (long) tw2->table_key,
+								tw->query_type, tw2->query_type,
+								((long *) tw->column_values)[0], ((long *) tw2->column_values)[0],
+								(long) rts->txnid, (long) ts->txnid);
+//						assert(0);
 #endif
-					return 1;
+					return 0; // 1;
 //				}
 			}
 		}
@@ -336,7 +341,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 
 				if(queue_op_conflict(tw, tw2))
 				{
-					return 1;
+					return 0; // 1;
 				}
 			}
 		}

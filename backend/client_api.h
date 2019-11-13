@@ -30,7 +30,7 @@
 #define BUFSIZE 4096
 #define RANDOM_NONCES
 
-#define CLIENT_VERBOSITY 1
+#define CLIENT_VERBOSITY 0
 
 // Remote DB API:
 
