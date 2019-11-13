@@ -55,25 +55,14 @@ reduce' env (Impl t u)
 reduce' env c@(Sel (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | Just u <- findSubBound tv env           = reduce' env (Sel (tCon u) n t2)
-reduce' env (Sel t1@(TCon _ tc) n t2)
-  | Just sc <- moduleAttr tc n env          = do (cs,t) <- instantiate env sc
-                                                 reduceAll env (Equ t t2 : cs)
-  | Just (qn,i) <- protoAttr n env          = do u <- TC qn <$> newTVars i
-                                                 let (cs,sc) = findAttr env u n
-                                                 when (scdec sc == StaticMethod) (noSelStatic n u)
-                                                 (cs',t) <- instantiate env sc
-                                                 let t' = subst [(tvSelf,t1)] t
-                                                 reduceAll env (Impl t1 u : Equ t' t2 : cs ++ cs')
-  | otherwise                               = do let (cs,sc) = findAttr env tc n
+reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  when (scdec sc == StaticMethod) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduceAll env (Equ t' t2 : cs)
 reduce' env (Sel (TRecord _ r) n t2)        = reduce env (Equ r (kwdRow n (monotype t2) tWild))
 
-reduce' env (Sel (TAt _ tc) n t2) 
-  | Just (qn,i) <- protoAttr n env          = notYet (loc n) "Protocol attribute selection from class"
-  | otherwise                               = do let (cs,sc) = findAttr env tc n
+reduce' env (Sel (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc)
                                                  let t' = subst [(tvSelf,tCon tc)] t
@@ -89,9 +78,7 @@ reduce' env (Sel (TAt _ tc) n t2)
 reduce' env (Mut t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = defer [Mut t1 n t2]
   | Just u <- findSubBound tv env           = reduce' env (Mut (tCon u) n t2)
-reduce' env (Mut t1@(TCon _ tc) n t2)
-  | Just (qn,i) <- protoAttr n env          = noMutProto n
-  | otherwise                               = do let (cs,sc) = findAttr env tc n
+reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  when (not $ isInstAttr $ scdec sc) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
