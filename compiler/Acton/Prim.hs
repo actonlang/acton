@@ -4,10 +4,11 @@ import Utils
 import Acton.Syntax
 
 
-contKW                              = name "___cont___"
+contKW                              = prim "___c___"
 
+prim s                              = Internal s 0 GenPass
 
-nPrim                               = name "___prim___"
+nPrim                               = prim "___prim"
 mPrim                               = ModName [nPrim]
 qPrim n                             = QName mPrim (name n)
 

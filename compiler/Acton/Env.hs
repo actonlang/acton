@@ -258,9 +258,9 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nStopIteration,    NClass [] [] []),
                                 (nValueError,       NClass [] [] []),
                                 (nShow,             NProto [] [] []),
-                                (name "len",        NVar (monotype $ tFun0 [pCollection tWild] tInt)),
-                                (name "print",      NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
-                                (name "postpone",   NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone))
+                                (nLen,              NVar (monotype $ tFun0 [pCollection tWild] tInt)),
+                                (nPrint,            NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
+                                (nPostpone,         NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone))
                               ]
   where 
     a:b:c:_                 = [ TBind v [] | v <- tvarSupply ]

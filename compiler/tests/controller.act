@@ -8,11 +8,11 @@ actor Controller(env, address, port):
     
     def restart(what):
         if nc != None:
-            nc.abort()
             nc = None
+            nc.abort()
+        state = 'IDLE'
         print('Controller', str(address) + ':' + str(port), what)
         netconf.connect(env, address, port, established, error)
-        state = 'IDLE'
 
     async def established(sess):
         if sess != None:
@@ -23,17 +23,17 @@ actor Controller(env, address, port):
     
     async def tick():
         if state == 'IDLE':
-            nc.get('/oper/thevalue', reply)
             state = 'GET'
             postpone(10, tick)
+            nc.get('/oper/thevalue', reply)
         else:
             restart('timeout')
     
     async def reply(newval):
         if state == 'GET':
+            state = 'IDLE'
             setting = compute(setting, newval)
             nc.edit_config('/config/settings/thesetting', setting)
-            state = 'IDLE'
         else:
             restart('stray reply')
             

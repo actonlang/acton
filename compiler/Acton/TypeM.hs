@@ -119,7 +119,7 @@ getDump                                 = state $ \st -> (dumped st, st)
 
 newName n                               = Internal (nstr n) <$> newUnique <*> return TypesPass
 
-newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return TypesPass)
+newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return GenPass)
 
 newTVars n                              = mapM (const newTVar) [1..n]
 

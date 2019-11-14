@@ -46,8 +46,8 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n q ps ks a b md) = prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
-                                      nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
+    pretty (Def _ n q ps ks a b md) = (prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
+                                      nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
     pretty (Actor _ n q ps ks a b)  = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>

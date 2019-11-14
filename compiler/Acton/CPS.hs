@@ -4,9 +4,9 @@ module Acton.CPS(convert) where
 import Debug.Trace
 import Control.Monad.State
 import Control.Monad.Writer
-import Pretty
 import Utils
 import Acton.Syntax
+import Acton.Printer
 import Acton.Names
 import Acton.Builtin
 import Acton.Prim
@@ -284,11 +284,11 @@ instance CPS Decl where
 
     cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env b
 
-    cps env (Actor l n q p k a b)       = Actor l n q p k a <$> cpsSuite env1 b
-      where env1                        = env { ctxt = [Act] }
+    cps env (Actor l n q p k a b)       = Actor l n q (addContParam p) k a <$> cpsSuite env1 b
+      where env1                        = Meth contKW +: env { ctxt = [Act] }
 
     cps env (Def l n q p k a b m)
-      | contDef (tinfo env) l n m       = Def l n q p (addContParam k) a <$> cpsSuite env1 b <*> return m
+      | contDef (tinfo env) l n m       = Def l n q (addContParam p) k a <$> cpsSuite env1 b <*> return m
       where env1                        = Meth contKW +: env { defd = bound p }
 
     cps env d                           = return d
@@ -307,9 +307,12 @@ instance CPS Handler where
 jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
 
 
-addContArg (Call l e pos kwd) c         = Call NoLoc e pos (KwdArg contKW c kwd)
+addContArg (Call l e pos KwdNil) c      = Call NoLoc e (add pos c) KwdNil
+  where add PosNil c                    = PosArg c PosNil
+        add (PosArg e p) c              = PosArg e (add p c)
 
-addContParam kwd                        = KwdPar contKW Nothing Nothing kwd
+addContParam PosNIL                     = PosPar contKW Nothing Nothing PosNIL
+addContParam (PosPar n t e p)           = PosPar n t e (addContParam p)
 
 
 
@@ -322,7 +325,10 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
 
 
 contCall env (Await l e)                = True
-contCall env (Call l e ps ks)           = True                      -- TODO: utilize type...
+contCall env (Call l (Var _ n) p k)
+  | n `elem` ns0                        = False                                         
+  where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]          -- *Quick* approx...
+contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 
 contDef env l n m
@@ -332,7 +338,7 @@ contDef env l n m
   | otherwise                           = False
   where impure l n                      = True                      -- TODO: utilize type...
 
-inCont env                              = length (ctxt env) > 1
+inCont env                              = length (ctxt env) > 0
 
 
 class NeedCont a where

@@ -43,6 +43,9 @@ nObject                             = name "object"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
 nShow                               = name "Show"
+nLen                                = name "len"
+nPrint                              = name "print"
+nPostpone                           = name "postpone"
 
 qnSequence                          = qBuiltin nSequence
 qnMapping                           = qBuiltin nMapping
@@ -74,6 +77,9 @@ qnObject                            = qBuiltin nObject
 qnStopIteration                     = qBuiltin nStopIteration
 qnValueError                        = qBuiltin nValueError
 qnShow                              = qBuiltin nShow
+qnLen                               = qBuiltin nLen
+qnPrint                             = qBuiltin nPrint
+qnPostpone                          = qBuiltin nPostpone
 
 cSequence a                         = TC qnSequence [a]
 cMapping a b                        = TC qnMapping [a,b]

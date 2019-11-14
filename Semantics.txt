@@ -283,13 +283,21 @@ Recent decisions:
 
 =========================================================================================================
 
+Type inference:
+
+- Function arities always match
+- Short-hand positional arguments are preceeded by explicit keywords
+- Keyword arguments are in type order
+- Extra arguments are converted to explicit tupes/records
+- Missing arguments are replaced by explicit None values
+- Protocols and extensions are translated into classes
+- Overloaded names (global or attributes) are explicitly qualified by class
+
 Normalization:
 
 - All imported or built-in names are qualified by module
 X All parameters are positional
 X Parameter defaults are moved inside function definitions
-- Protocols and extensions are translated into classes
-- Overloaded names are explicitly qualified by class
 - Comprehensions are translated into loops
 X String literals are concatenated
 - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
@@ -298,5 +306,60 @@ X String literals are concatenated
 
 Deactorization:
 
-- Actor state is made explicit in terms of parameter __self__
-- Communication and exception handling is made explicit by means of RTS calls (ACTOR, ASYNC, AWAIT, PUSH, POP)
+- Every actor definition 
+    
+    actor a(p): b
+
+  is translated into
+  
+    class _a():
+      def __init__(__self__,p):
+          b1                                deactorized b \\ bound b4
+      b2                                    deactorized b && bound b4
+    
+    class a():
+      def __init__(_this_,p):
+          _this_.__self__ = _a(p)           
+          b3                                bound(b) \\ decls \\ var
+      b4                                    stored b
+  
+  where
+  
+    - b1 contains all non-def statements in b, where each "var z = e" is replaced by "__self__.z = e"
+      and all local variables are referenced via __self__
+    
+    - b2 contains one 
+    
+          @staticmethod
+          def m(__self__,p):c1
+    
+      for each "sync/async def m(p):c" in b, where c1 is c with all state and local names referenced via __self__
+    
+    - b3 contains one assignment
+    
+          _this_.x = _this_.__self__.x
+        
+      for every constant variable "x" defined in b
+    
+    - b4 contains one
+    
+          def m(_this_,p): return ASYNC(_this_.__self__, lambda: _a.m(_this_.__self__,p))
+        
+      for each "async def m(p):c" in b, and one
+    
+          def m(_this_,p): return AWAIT(ASYNC(_this_.__self__, lambda: _a.m(_this_.__self__,p)))
+        
+      for each "sync m(p):c" in b
+
+CPS transformation:
+
+- All potentially blocking functions have continuations
+- All potentially blocking function calls are tail calls and receive continuation arguments
+- All calls to continuation parameter are represented as "return CONT(cont,value)"
+- Exception handlers are broken down into continuations and PUSH/POP calls
+
+Lambda-lifting:
+
+- All function definitions are moved either to the top level or to the closest class
+- Functions lifted to the top level are closed via additional parameters
+- Functions lifted to a class are closed via additional self attributes

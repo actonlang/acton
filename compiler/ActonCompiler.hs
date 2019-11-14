@@ -184,11 +184,11 @@ runRestPasses args paths src env tree = (do
                           normtree <- Acton.Normalizer.normalize env' tree
                           iff (norm args) $ dump "norm" (Pretty.print normtree)
 
-                          cpsed <- Acton.CPS.convert [] normtree
-                          iff (cps args) $ dump "cps" (Pretty.print cpsed)
-
-                          deacted <- Acton.Deactorizer.deactorize env' cpsed
+                          deacted <- Acton.Deactorizer.deactorize env' normtree
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
+
+                          cpsed <- Acton.CPS.convert [] deacted
+                          iff (cps args) $ dump "cps" (Pretty.print cpsed)
 
 
 --                          lifted <- Acton.LambdaLifter.liftPy deacted
