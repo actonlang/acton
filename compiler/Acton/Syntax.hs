@@ -94,7 +94,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
-                
+
 data Pass       = ParsePass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | GenPass 
                 deriving (Eq,Ord,Show,Read,Generic)
 
@@ -201,6 +201,38 @@ type TRow       = Type
 skolem (TV n)   = case n of
                     Name{}     -> True
                     Internal{} -> False
+
+dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoMod
+
+sDef n p b      = sDecl [dDef n p b]
+sReturn e       = Return NoLoc (Just e)
+sAssign ps e    = Assign NoLoc ps e
+sAugAsgn p o e  = AugAssign NoLoc p o e
+sRaise e        = Raise NoLoc (Just (Exception e Nothing))
+sExpr e         = Expr NoLoc e
+sDecl ds        = Decl NoLoc ds
+sTry b hs els f = Try NoLoc b hs els f
+sIf bs els      = If NoLoc bs els
+sIf1 e b els    = sIf [Branch e b] els
+
+handler qn b    = Handler (Except NoLoc qn) b
+
+eCall e es      = Call NoLoc e (foldl (flip PosArg) PosNil es) KwdNil
+eCallVar c es   = eCall (eVar c) es
+eCallV c es     = eCall (Var NoLoc c) es
+eQVar n         = Var NoLoc n
+eVar n          = Var NoLoc (NoQual n)
+eDot e n        = Dot NoLoc e n
+eNone           = None NoLoc
+eInt n          = Int NoLoc n (show n)
+eBool b         = Bool NoLoc b
+eBinOp e o e'   = BinOp NoLoc e (Op NoLoc o) e'
+eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e
+
+pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
+
+pVar n t        = PVar NoLoc n t
+pIndex e ix     = PIndex NoLoc e [ix]
 
 monotype t      = TSchema NoLoc [] t NoDec
 monotype' t d   = TSchema NoLoc [] t d
