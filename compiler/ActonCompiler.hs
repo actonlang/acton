@@ -10,7 +10,7 @@ import qualified Acton.Solver
 import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
---import qualified Acton.LambdaLifter
+import qualified Acton.LambdaLifter
 {-
 import qualified Acton.CPS
 import qualified Acton.Translator
@@ -173,26 +173,26 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
                                               return $ (pre, dirs, concat $ map splitPath $ lines $ contents)
                    where path    = joinPath [pre, ".acton"]
 
-runRestPasses args paths src env tree = (do
+runRestPasses args paths src env original = (do
                           let outbase = outBase paths
-                          env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env tree
+                          env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env original
                           
-                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' tree
+                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' original
                           iff (types args) $ dump "types" (Pretty.vprint tyinfo)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
                               
-                          normtree <- Acton.Normalizer.normalize env' tree
-                          iff (norm args) $ dump "norm" (Pretty.print normtree)
+                          normalized <- Acton.Normalizer.normalize env' original
+                          iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                          deacted <- Acton.Deactorizer.deactorize env' normtree
+                          deacted <- Acton.Deactorizer.deactorize env' normalized
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
 
-                          cpsed <- Acton.CPS.convert [] deacted
-                          iff (cps args) $ dump "cps" (Pretty.print cpsed)
+                          cpstyled <- Acton.CPS.convert [] deacted
+                          iff (cps args) $ dump "cps" (Pretty.print cpstyled)
 
 
---                          lifted <- Acton.LambdaLifter.liftPy deacted
---                          iff (llift args) $ dump "llift" (Pretty.vprint lifted)
+                          lifted <- Acton.LambdaLifter.liftModule cpstyled
+                          iff (llift args) $ dump "llift" (Pretty.print lifted)
   
 {-                              
                           py1 <- Acton.Translator.translate (modpath paths) tyinfo (tracef args) tree

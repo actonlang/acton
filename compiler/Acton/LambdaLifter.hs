@@ -1,27 +1,24 @@
 {-# LANGUAGE FlexibleInstances #-}
--- | Special purpose Lambda ller for Python
--- This is intended to work for CPS-transformed Acton code with no 
--- 'global' and very restricted use of 'nonlocal' declarations.
--- It will not work correctly for arbitrary Python code.
-module Acton.LambdaLifter(liftPy) where
+module Acton.LambdaLifter(liftModule) where
 
 import Control.Monad.State
 import Utils
 import Acton.Syntax
 import Acton.Names
+import Acton.Prim
 import Pretty
 import Prelude hiding((<>))
 
 liftModule (Module n imp stmts) = return $ Module n imp (reverse lled ++ stmts')
   where
-    (defs,(lled,_))             = runL (ll env0 stmts)
+    (stmts',(lled,_))           = runL (ll env0 stmts)
 
 
 type LiftM a                    = State LiftState a
 
 type LiftState                  = ([Stmt],[Int])        -- lifted defs, name supply
 
-runL                            :: LiftM a -> (a, ([Decl],[Int]))
+runL                            :: LiftM a -> (a, ([Stmt],[Int]))
 runL m                          = runState m ([],[1..])
 
 newName                         :: LiftM Name
@@ -125,7 +122,7 @@ inClass env                 = case prefix env of (InClass,_):_ -> True; _ -> Fal
 
 inDef env                   = case prefix env of (InDef,_):_ -> True; _ -> False
         
-newname env (Name l str)    = Name l (intercalate "_" (map snd (reverse (prefix env))) ++ "____" ++ str)
+newname env n               = Internal (intercalate "_" (map snd (reverse (prefix env))) ++ "___" ++ nstr n) 0 GenPass
 
 topname env n               = case lookup n (namemap env) of
                                 Just n -> n
@@ -163,30 +160,28 @@ instance Lift Stmt where
     ll env (Decl l ds)
       | onTop env                       = Decl l <$> ll env ds
       | inClass env                     = Decl l <$> ll env ds
-      | otherwise                       = 
+      | otherwise                       = Decl l <$> ll env ds >>= liftToTop
 
 instance Lift Decl where
-    ll env (Def l n q ps ks ann b m)
-      | onTop env                       = Def l n q <$> ll env ps <*> ll env ks <*> pure ann <*> llBody env1 b <*> pure m
-      | inClass env                     = Def l n q <$> ll env ps <*> ll env ks <*> pure ann <*> llBody env1 b <*> pure m
-      | otherwise                       = Def l (topname env n) q <$> ll env ps' <*> ll env ks <*> pure annot <*> llBody env1 b <*> pure m
-                                          >>= liftToTop
+    ll env (Def l n q ps _ks ann b m)
+      | onTop env                       = Def l n q ps _ks ann <$> llBody env1 b <*> pure m
+      | inClass env                     = Def l n q ps _ks ann <$> llBody env1 b <*> pure m
+      | otherwise                       = Def l (topname env n) q ps' _ks ann <$> llBody env1 b <*> pure m
       where env1                        = extLocals (bound ps) $ extPrefix InDef n env
             ps'                         = addParams vs ps
             vs                          = extraArgs env n
-    ll env (Class l n q cs b)           = Class l n q <$> ll env cs <*> ll env1 b
+    ll env (Class l n q cs b)           = Class l n q cs <$> ll env1 b
       where bvs                         = bound b
             env1                        = extPrefix InClass n $ extLocals bvs env
     
 
-closure l n vs                          = Paren l0 $ Tuple l (map (Elem . Var l0) (n : vs))
-                                        -- Our closures = TupleValues are callable!
+closure n vs                            = eCall (eQVar primCLOS) (map eVar $ n:vs)
 
 instance Lift Expr where
     ll env e =
       case e of
-        Var l n | Just vs <- lookup n (freemap env) 
-                                -> pure (closure l (topname env n) vs)
+        Var l (NoQual n) | Just vs <- lookup n (freemap env) 
+                                -> pure $ closure (topname env n) vs
         Var l n                 -> pure e
         Int _ _ str             -> pure e
         Float _ _ str           -> pure e
@@ -197,11 +192,11 @@ instance Lift Expr where
         Ellipsis _              -> pure e
         Strings _ ss            -> pure e
         BStrings _ ss           -> pure e
-        Call l e@(Var _ n) as 
+        Call l e@(Var _ (NoQual n)) p _k
           | Just vs <- lookup n (freemap env)
-                                -> Call l (Var l0 (topname env n)) <$> ll env (extras vs ++ as)
-          where extras vs       =  [ Arg (Var (nloc v) v) | v <- vs ]
-        Call l e as             -> Call l <$> ll env e <*> ll env as
+                                -> Call l (eVar (topname env n)) <$> ll env (extras vs p) <*> return _k
+          where extras vs p     =  foldr (PosArg . eVar) p vs
+        Call l e p _k           -> Call l <$> ll env e <*> ll env p <*> return _k
         Index l e ix            -> Index l <$> ll env e <*> ll env ix
         Slice l e sl            -> Slice l <$> ll env e <*> ll env sl
         Cond l e1 e e2          -> Cond l <$> ll env e1 <*> ll env e <*> ll env e2
@@ -209,14 +204,13 @@ instance Lift Expr where
         CompOp l e ops          -> CompOp l <$> ll env e <*> ll env ops
         UnOp l o e              -> UnOp l o <$> ll env e
         Dot l e n               -> Dot l <$> ll env e <*> pure n
-        Lambda l ps e           -> do nn <- newName
+        Lambda l ps _k e        -> do nn <- newName
                                       let env1 = extLocals (bound ps) $ extPrefix InDef nn env
                                       b <- llBody env1 [Return l0 (Just e)]
-                                      ps' <- ll env (addParams vs ps)
-                                      liftToTop $ Def l nn ps' Nothing b modif
-                                      return (closure l nn vs)
-          where vs              =  intersect (free e) (locals env) \\ bound ps
-                modif           =  NoMod                            -- TODO: utilize type...
+                                      liftToTop $ Decl l0 $ [Def l nn [] ps' _k Nothing b NoMod]
+                                      return (closure nn vs)
+          where ps'             =  addParams vs ps
+                vs              =  intersect (free e) (locals env) \\ bound ps
 
         Await l e               -> Await l <$> ll env e
         Yield l e               -> Yield l <$> ll env e
@@ -224,7 +218,7 @@ instance Lift Expr where
         Tuple l es              -> Tuple l <$> ll env es
         TupleComp l e co        -> TupleComp l <$> ll env1 e <*> ll env co
           where env1            =  extLocals (bound co) env
-        Record l fs             -> Record l <$> ll env es
+        Record l ks             -> Record l <$> ll env ks
         RecordComp l n e co     -> RecordComp l n <$> ll env1 e <*> ll env co
           where env1            =  extLocals (bound co) env
         List l es               -> List l <$> ll env es
@@ -245,14 +239,8 @@ instance Lift Branch where
     ll env (Branch e ss)            = Branch <$> ll env e <*> ll env ss
 
 instance Lift Handler where
-    ll env (Handler ex ss)          = Handler <$> ll env ex <*> ll env ss
+    ll env (Handler ex ss)          = Handler ex <$> ll env ss
     
-
-instance Lift Except where
-    ll env e@(ExceptAll _)          = pure e
-    ll env (Except l e)             = Except l <$> ll env e
-    ll env (ExceptAs l e n)         = ExceptAs l <$> ll env e <*> pure n
-
 instance Lift Elem where
     ll env (Elem e)                 = Elem <$> ll env e
     ll env (Star e)                 = Star <$> ll env e
@@ -267,12 +255,19 @@ instance Lift WithItem where
 instance Lift OpArg where
     ll env (OpArg o e)              = OpArg o <$> ll env e
 
+instance Lift PosArg where
+    ll env (PosArg e p)             = PosArg <$> ll env e <*> ll env p
+    ll env PosNil                   = pure PosNil
+
+instance Lift KwdArg where
+    ll env (KwdArg n e k)           = KwdArg n <$> ll env e <*> ll env k
+    ll env KwdNil                   = pure KwdNil
 
 instance Lift Slice where
     ll env (Sliz l e1 e2 e3)        = Sliz l <$> ll env e1 <*> ll env e2 <*> ll env e3
 
 instance Lift Comp where
-    ll env (CompFor l target e b c) = CompFor l <$> ll env1 target <*> ll env e <*> pure b <*> ll env1 c
+    ll env (CompFor l target e c)   = CompFor l <$> ll env1 target <*> ll env e <*> ll env1 c
       where env1                    = extLocals (bound target) env
     ll env (CompIf l e c)           = CompIf l <$> ll env e <*> ll env c
     ll env NoComp                   = pure NoComp
@@ -282,7 +277,4 @@ instance Lift Pattern where
     ll env (PIndex l e ix)          = PIndex l <$> ll env e <*> ll env ix
     ll env (PSlice l e sl)          = PSlice l <$> ll env e <*> ll env sl
     ll env (PDot l e n)             = PDot l <$> ll env e <*> return n
-    ll env (PTuple l ps)            = PTuple l <$> ll env ps
-    ll env (PList l ps p)           = PList l <$> ll env ps <*> ll env p
     ll env (PParen l p)             = PParen l <$> ll env p
-    ll env (PData l n ixs)          = PData l n <$> ll env ixs
