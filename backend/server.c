@@ -40,7 +40,7 @@ int no_items = 2;
 #define COLLECTION_ID_0 0
 #define COLLECTION_ID_1 1
 
-int no_actors = 2;
+int no_actors = 5;
 int no_items = 20;
 
 int no_state_cols = 4;

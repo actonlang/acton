@@ -32,6 +32,10 @@
 
 #define CLIENT_VERBOSITY 0
 
+#define NO_QUORUM_ERR -1
+#define NO_SUCH_MSG_CALLBACK -2
+
+
 // Remote DB API:
 
 typedef struct msg_callback
@@ -59,6 +63,7 @@ typedef struct remote_db {
     skiplist_t * queue_subscriptions; // Client queue subscriptions
     skiplist_t * msg_callbacks; // Client msg callbacks
     pthread_mutex_t* subscribe_lock;
+    pthread_mutex_t* msg_callbacks_lock;
 
 	int replication_factor;
 	int quorum_size;
