@@ -8,8 +8,8 @@ actor Controller(env, address, port):
     
     def restart(what):
         if nc != None:
-            nc = None
             nc.abort()
+            nc = None
         state = 'IDLE'
         print('Controller', str(address) + ':' + str(port), what)
         netconf.connect(env, address, port, established, error)
