@@ -6,6 +6,7 @@ import Utils
 import Acton.Syntax
 import Acton.Names
 import Acton.Prim
+import Acton.Printer
 import Pretty
 import Prelude hiding((<>))
 
