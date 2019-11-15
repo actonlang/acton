@@ -2,9 +2,10 @@
 module Acton.CPS(convert) where
 
 import Debug.Trace
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Writer
 import Utils
+import Pretty
 import Acton.Syntax
 import Acton.Printer
 import Acton.Names
@@ -36,7 +37,7 @@ withPrefixes                            :: CpsM a -> CpsM (a,[Stmt])
 withPrefixes m                          = do ss0 <- swapPrefixes []
                                              r <- m
                                              ss1 <- swapPrefixes ss0
-                                             return (r, ss1)
+                                             return (r, reverse ss1)
 
 
 nType                                   = name "type"                       -- TODO: de-pythonize these references
@@ -156,6 +157,11 @@ instance CPS [Stmt] where
     cps env (Return _ (Just e) : _)
       | inCont env                      = return $ format $ retcont e 0 (ctxt env)
 
+    cps env (Assign _ [PVar _ n _] e : 
+             Return _ (Just e') : _)
+      | contCall env e, e' == eVar n,
+        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg e c) : []
+
     cps env [Expr _ e]
       | contCall env e,
         Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg e c) : []
@@ -166,6 +172,11 @@ instance CPS [Stmt] where
                                              return $ sDef k (param [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
+    cps env (Assign _ [PVar _ x _] e : ss)
+      | contCall env e                  = do k <- newName "cont"
+                                             ss' <- cps env ss
+                                             return $ sDef k (param [x]) ss' :
+                                                      sReturn (addContArg e (eVar k)) : []
     cps env (Assign _ ps e : ss)
       | contCall env e                  = do [k,x] <- newNames ["cont","res"]
                                              ss' <- cps env (sAssign ps (eVar x) : ss)
@@ -326,8 +337,8 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
 
 contCall env (Await l e)                = True
 contCall env (Call l (Var _ n) p k)
-  | n `elem` ns0                        = False                                         
-  where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]          -- *Quick* approx...
+  | n `elem` primASYNC : ns0            = False                                         
+  where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]
 contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 

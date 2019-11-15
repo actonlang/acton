@@ -4,6 +4,7 @@ import Utils
 import Acton.Syntax
     
 selfKW                              = name "__self__"
+initKW                              = name "__init__"
 enterKW                             = name "__enter__"
 exitKW                              = name "__exit__"
 iterKW                              = name "iter"
