@@ -25,3 +25,5 @@ primAWAIT                           = qPrim "AWAIT"
 primPUSH                            = qPrim "PUSH"
 primPOP                             = qPrim "POP"
 primRAISE                           = qPrim "RAISE"
+
+primCLOS                            = qPrim "CLOS"
