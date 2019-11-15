@@ -173,9 +173,9 @@ kwdToPos (KwdSTAR n t)              = PosPar n (fmap monotype t) Nothing PosNIL
 kwdToPos KwdNIL                     = PosNIL
 
 defaults (PosPar n t (Just e) p)    = s : defaults p
-  where s                           = If NoLoc [Branch test [set]] []
-        test                        = Call NoLoc (Var NoLoc primIsNone) (PosArg (Var NoLoc (NoQual n)) PosNil) KwdNil
-        set                         = Assign NoLoc [PVar NoLoc n Nothing] e
+  where s                           = sIf1 test [set] []
+        test                        = eCall (eQVar primIsNone) [eVar n]
+        set                         = sAssign [pVar n Nothing] e
 defaults (PosPar n t Nothing p)     = defaults p
 defaults _                          = []
 
