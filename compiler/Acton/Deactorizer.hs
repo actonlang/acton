@@ -122,6 +122,8 @@ instance Deact Expr where
     deact env (Var l (NoQual n))
       | selfRef n env               = return $ Dot l (Var l (NoQual selfKW)) n
     deact env (Var l n)             = return $ Var l n
+    deact env (Await l e)           = do e' <- deact env e
+                                         return $ Call l (eQVar primAWAIT) (PosArg e' PosNil) KwdNil
     deact env (Int l i s)           = return $ Int l i s
     deact env (Float l f s)         = return $ Float l f s
     deact env (Imaginary l i s)     = return $ Imaginary l i s

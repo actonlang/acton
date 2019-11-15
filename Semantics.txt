@@ -351,6 +351,8 @@ Deactorization:
         
       for each "sync m(p):c" in b
 
+- Every "await e" expression is translated into AWAIT(e)
+
 CPS transformation:
 
 - All potentially blocking functions have continuations
