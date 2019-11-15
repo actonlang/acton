@@ -217,7 +217,7 @@ sIf1 e b els    = sIf [Branch e b] els
 
 handler qn b    = Handler (Except NoLoc qn) b
 
-eCall e es      = Call NoLoc e (foldl (flip PosArg) PosNil es) KwdNil
+eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
 eQVar n         = Var NoLoc n
