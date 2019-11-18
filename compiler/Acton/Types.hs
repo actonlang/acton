@@ -90,7 +90,7 @@ splitGen env tvs te cs
   | otherwise                           = do solve env ambig_cs
                                              cs1 <- simplify env (fixed_cs++gen_cs)
                                              te1 <- msubst te
-                                             tvs1 <- fmap tyfree $ mapM msubst $ map tVar tvs
+                                             tvs1 <- msubstTV tvs
                                              splitGen env tvs1 te1 cs1
   where 
     (fixed_cs, cs')                     = partition (null . (\\tvs) . tyfree) cs
@@ -109,13 +109,13 @@ mkBinds cs                              = collect [] $ catMaybes $ map bound cs
     collect vs (TBind v us : q)
       | v `elem` vs                     = collect vs q
       | otherwise                       = TBind v (us ++ concat [ us' | TBind v' us' <- q, v' == v ]) : collect (v:vs) q
-    
+
 
 genTEnv                                 :: Env -> TEnv -> TypeM TEnv
 genTEnv env te                          = do cs <- collectConstraints
                                              cs1 <- simplify env cs
                                              te1 <- msubst te
-                                             tvs <- fmap tyfree $ mapM msubst $ map tVar $ tyfree env
+                                             tvs <- msubstTV (tyfree env)
                                              (cs2, te2) <- splitGen env tvs te1 cs1
                                              constrain cs2
                                              dump [ INS (loc v) t | (v, TSchema _ [] t _) <- nVars te1 ]
@@ -228,11 +228,13 @@ instance InfEnv Stmt where
                                              return (nState te, VarAssign l pats' e')
     
     infEnv env (Decl l ds)
-      | nodup vs                        = do (te1,ds1) <- infEnv (enterDecl env) ds
-                                             ds2 <- if inDecl env then pure ds1 else check (define te1 env) ds1
+      | nodup ds && noCheck env         = do (te1,ds1) <- infEnv env ds
+                                             return (te1, Decl l ds1)
+      | otherwise                       = do (te1,ds1) <- infEnv (setNoCheck env) ds
+                                             ds2 <- check (define te1 env) ds1
                                              te2 <- genTEnv env te1
                                              return (te2, Decl l ds2)
-      where vs                          = nub $ bound ds
+            
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 {-
@@ -272,18 +274,16 @@ instance InfData Branch where
 -}
 
 instance InfEnv Decl where
-    infEnv env d@(Actor _ n q p k t _)
-      | nodup (p,k)                     = do t0 <- wellFormed env (extractSig env n q p k t NoMod)
-                                             case reservedOrSig n env of
-                                                Just Nothing   -> return (nVar' n t0, d)
-                                                Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1, d)
-                                                Nothing        -> illegalRedef n
-    infEnv env d@(Def _ n q p k t _ m)
-      | nodup (p,k)                     = do t0 <- wellFormed env (extractSig env n q p k t m)
-                                             case reservedOrSig n env of
-                                                Just Nothing   -> return (nVar' n t0, d)
-                                                Just (Just t1) -> constrain [EquGen t0 t1] >> return (nVar' n t1, d)
-                                                Nothing        -> illegalRedef n
+    infEnv env d@(Actor _ n _ p k _ _)
+      | not $ reserved n env            = illegalRedef n
+      | nodup (p,k)                     = do d' <- instwild d
+                                             sc <- instwild $ extractSchema env d'
+                                             return (nVar' n sc, d')
+    infEnv env d@(Def _ n _ p k _ _ _)
+      | not $ reserved n env            = illegalRedef n
+      | nodup (p,k)                     = do d' <- instwild d
+                                             sc <- instwild $ extractSchema env d'
+                                             return (nVar' n sc, d')
     infEnv env (Class l n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do (te,b') <- noescape <$> infEnv env1 b
@@ -301,10 +301,10 @@ instance InfEnv Decl where
                                              return (nExt w n q (mro env1 (protoBases env us)), d)
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
-    infEnv env d@(Signature _ ns sc)
+    infEnv env d@(Signature _ ns _)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do t0 <- wellFormed env sc
-                                             return (nSig ns t0, d)
+      | otherwise                       = do sc <- instwild $ extractSchema env d
+                                             return (nSig ns sc, d)
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
 classBases env []                       = []
@@ -341,39 +341,6 @@ mro env us                              = merge [] $ linearizations us ++ [us]
           | otherwise                   = err1 u ("Type context too weak to entail")
           where (cs, us', _)            = findCon env u
 
-extractSig env n q p k t m
-  | null q                              = tSchema' [ TBind v [] | v <- tvs ] sig (extractDecoration m)
-  | all (`elem` tybound q) tvs          = tSchema' q sig (extractDecoration m)
-  | otherwise                           = err2 (tvs \\ tybound q) "Unbound type variable(s)in signature:"
-  where
-    tvs                                 = tyfree sig \\ tvarScope env
-    sig                                 = tFun (extractFX m) prow krow (maybe tWild id t)
-    (prow,krow)                         = extractPars m p k
-    extractPars m (PosPar n t _ p) k
-      | needsExtraParam m               = (extractP p, extractK k)
-    extractPars m PosNIL (KwdPar n t _ k)
-      | needsExtraParam m               = (extractP p, extractK k)
-    extractPars (InstMeth _) p k        = err1 n "Missing 'self' parameter in definition of"
-    extractPars ClassMeth p k           = err1 n "Missing 'class' parameter in definition of"
-    extractPars _ p k                   = (extractP p, extractK k)
-    needsExtraParam (InstMeth _)        = True
-    needsExtraParam ClassMeth           = True
-    needsExtraParam _                   = False
-    extractP (PosPar n t _ p)           = posRow (maybe (monotype tWild) id t) (extractP p)
-    extractP (PosSTAR n t)              = posVar Nothing        -- safe to ignore type (not schema) annotation t here
-    extractP PosNIL                     = posNil
-    extractK (KwdPar n t _ k)           = kwdRow n (maybe (monotype tWild) id t) (extractK k)
-    extractK (KwdSTAR n t)              = kwdVar Nothing        -- safe to ignore type (not schema) annotation t here
-    extractK KwdNIL                     = kwdNil
-    extractFX (Sync _)                  = fxSync fxNil
-    extractFX Async                     = fxAsync fxNil
-    extractFX _                         = tWild
-
-extractDecoration StaticMeth            = StaticMethod
-extractDecoration ClassMeth             = ClassMethod
-extractDecoration (InstMeth f)          = InstMethod f
-extractDecoration _                     = NoDec
-
 
 class Check a where
     check                               :: Env -> a -> TypeM a
@@ -393,7 +360,7 @@ instance Check Decl where
                                              (te2,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newTVar
-                                             checkAssump env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3)) NoDec
+                                             checkAssump env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3))
                                              return $ Actor l n q p' k' ann b'
       where svars                       = statedefs b
             env0                        = define envActorSelf $ defineTVars q $ block (stateScope env) env
@@ -408,7 +375,7 @@ instance Check Decl where
                                              (_,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxSync <$> newTVar
-                                             checkAssump env n (tFun fx prow krow t) NoDec
+                                             checkAssump env n (tFun fx prow krow t)
                                              return $ Def l n q p' k' ann b' (Sync f)
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
@@ -422,7 +389,7 @@ instance Check Decl where
                                              (_,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAsync <$> newTVar
-                                             checkAssump env n (tFun fx prow krow (tMsg t)) NoDec
+                                             checkAssump env n (tFun fx prow krow (tMsg t))
                                              return $ Def l n q p' k' ann b' Async
       where svars                       = stateScope env
             env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
@@ -437,15 +404,15 @@ instance Check Decl where
                                              (_,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (prow',krow') <- splitRows modif prow krow
-                                             checkAssump env n (tFun fx prow' krow' t) (extractDecoration modif)
+                                             checkAssump env n (tFun fx prow' krow' t)
                                              return $ Def l n q p' k' ann b' modif
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $ block (stateScope env) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
             splitRow (InstMeth _) (TRow _ n sc r)
-                                        = constrain [EquGen sc (monotype tSelf)] >> return r
+                                        = constrain [Equ (monotypeOf sc) tSelf] >> return r
             splitRow (ClassMeth) (TRow _ n sc r)
-                                        = constrain [EquGen sc (monotype (tAt (findSelf env)))] >> return r
+                                        = constrain [Equ (monotypeOf sc) (tAt (findSelf env))] >> return r
             splitRow m r                = return r
 
     check env (Class l n q us b)        = do pushFX fxNil
@@ -479,22 +446,17 @@ checkBindings env proto us te
   | otherwise                           = constrain refinements
   where tes                             = [ te' | u <- us, let (_,_,te') = findCon env u ]
         inherited                       = concatMap nSigs tes ++ concatMap nVars tes
-        refinements                     = [ SubGen sc sc' | (n,sc) <- nVars te, Just sc' <- [lookup n inherited] ]
+        refinements                     = [ SubGen sc sc' | (n,sc) <- nSigs te, Just sc' <- [lookup n inherited] ]
         undefs                          = (dom $ nSigs te ++ concatMap nSigs tes) \\ (dom $ nVars te ++ concatMap nVars tes)
         unsigs                          = dom te \\ (dom (nSigs te) ++ dom inherited)
 
 
-checkAssump env n t d                   = case findVarType n env of
-                                            (TSchema _ [] t' d')
-                                               | matchDec d d' -> constrain [Sub t t']
-                                               | otherwise -> err1 n ("Inconsistent decorations, " ++ show d ++ " vs " ++ prstr d' ++ ", for")
-                                            sc' -> do
-                                               sc <- gen1 env n t d         -- TODO: verify that generalizing one decl at a time is ok...
-                                               constrain [EquGen sc sc']
-  where matchDec NoDec _                = True
-        matchDec (InstMethod False) _   = True
-        matchDec (InstAttr False) _     = True
-        matchDec d d'                   = d == d'
+checkAssump env n t                     = case findVarType n env of
+                                            (TSchema _ [] t' _) -> 
+                                               constrain [Equ t t']
+                                            sc -> do
+                                               sc' <- gen1 env n t (scdec sc)   -- TODO: verify that generalizing one decl at a time is ok
+                                               constrain [EquGen sc' sc]
 
 inferPure env e                         = do pushFX tNil
                                              t <- infer env e
@@ -739,6 +701,9 @@ inferSlice env (Sliz l e1 e2 e3)        = do (t1,e1') <- infer env e1
                                              return (Sliz l e1' e2' e3')
   where es                              = concat $ map maybeToList (e1:e1:maybeToList e3)
 
+inferGen env e                          = do (t,e') <- infer env e
+                                             sc <- gen1 env (name "_") t NoDec
+                                             return (sc,e')
 
 instance (Infer a) => Infer (Maybe a) where
     infer env Nothing                   = do t <- newTVar
@@ -747,48 +712,42 @@ instance (Infer a) => Infer (Maybe a) where
                                              return (t, Just e')
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n ann e p)      = do sc <- maybe (monotype <$> newTVar) (wellFormed env) ann
-                                             (t,e') <- infer env e
-                                             constrain [SubGen (monotype t) sc]
-                                             (te,r,p') <- infEnvT (define (nVar' n sc) env) p
-                                             return (nVar' n sc ++ te, posRow sc r, PosPar n ann e' p')
-    infEnvT env (PosSTAR n ann)         = do r <- newTVar
-                                             t <- maybe newTVar (wellFormed env) ann
-                                             constrain [Sub t (tTuple r)]
-                                             return (nVar n t, r, PosSTAR n ann)
+    infEnvT env (PosPar n (Just t) e p) = do (t',e') <- inferGen env e
+                                             constrain [SubGen t' t]
+                                             (te,r,p') <- infEnvT (define (nVar' n t) env) p
+                                             return (nVar' n t ++ te, posRow t r, PosPar n (Just t) e' p')
+    infEnvT env (PosSTAR n (Just t))    = do r <- newTVar
+                                             constrain [Equ t (tTuple r)]
+                                             return (nVar n t, r, PosSTAR n (Just t))
     infEnvT env PosNIL                  = return ([], posNil, PosNIL)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n ann e k)      = do sc <- maybe (monotype <$> newTVar) (wellFormed env) ann
-                                             (t,e') <- infer env e
-                                             constrain [SubGen (monotype t) sc]
-                                             (te,r,k') <- infEnvT (define (nVar' n sc) env) k
-                                             return (nVar' n sc ++ te, kwdRow n sc r, KwdPar n ann e' k')
-    infEnvT env (KwdSTAR n ann)         = do r <- newTVar
-                                             t <- maybe newTVar (wellFormed env) ann
-                                             constrain [Sub t (tRecord r)]
-                                             return (nVar n t, r, KwdSTAR n ann)
+    infEnvT env (KwdPar n (Just t) e k) = do (t',e') <- inferGen env e
+                                             constrain [SubGen t' t]
+                                             (te,r,k') <- infEnvT (define (nVar' n t) env) k
+                                             return (nVar' n t ++ te, kwdRow n t r, KwdPar n (Just t) e' k')
+    infEnvT env (KwdSTAR n (Just t))    = do r <- newTVar
+                                             constrain [Equ t (tRecord r)]
+                                             return (nVar n t, r, KwdSTAR n (Just t))
     infEnvT env KwdNIL                  = return ([], kwdNil, KwdNIL)
 
 instance Infer PosArg where
-    infer env (PosArg e p)              = do (t,e') <- infer env e
+    infer env (PosArg e p)              = do (sc,e') <- inferGen env e
                                              (prow,p') <- infer env p
-                                             sc <- gen1 env (rPos $ rowDepth prow + 1) t NoDec
                                              return (posRow sc prow, PosArg e' p')
     infer env (PosStar e)               = do (t,e') <- infer env e
                                              prow <- newTVar
-                                             constrain [Sub t (tTuple prow)]
+                                             constrain [Equ t (tTuple prow)]
                                              return (prow, PosStar e')
     infer env PosNil                    = return (posNil, PosNil)
     
 instance Infer KwdArg where
-    infer env (KwdArg n e k)            = do (t,e') <- infer env e
-                                             sc <- gen1 env n t NoDec
+    infer env (KwdArg n e k)            = do (sc,e') <- inferGen env e
                                              (krow,k') <- infer env k
                                              return (kwdRow n sc krow, KwdArg n e' k')
     infer env (KwdStar e)               = do (t,e') <- infer env e
                                              krow <- newTVar
-                                             constrain [Sub t (tRecord krow)]
+                                             constrain [Equ t (tRecord krow)]
                                              return (krow, KwdStar e')
     infer env KwdNil                    = return (kwdNil, KwdNil)
     
@@ -850,17 +809,23 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env p@(PVar _ n ann)        = do t0 <- maybe newTVar (wellFormed env) ann
-                                             case reservedOrSig n env of
-                                                 Just Nothing ->
-                                                     return (nVar n t0, t0, p)
-                                                 Just (Just t1) -> do
-                                                     constrain [EquGen (monotype t0) t1]
-                                                     return (nVar' n t1, t0, p)     -- TODO: return scheme t1 instead
-                                                 Nothing ->
-                                                     case findVarType n env of
-                                                         TSchema _ [] t _ -> return ([], t, p)
+    infEnvT env (PVar l n ann)          = do case reservedOrSig n env of
+                                                 Just Nothing -> do
+                                                     t0 <- instWF env ann
+                                                     return (nVar n t0, t0, PVar l n (Just t0))
+                                                 Just (Just (TSchema _ [] t1 _)) -> do
+                                                     t0 <- instWF env ann
+                                                     constrain [Equ t0 t1]
+                                                     return (nVar n t1, t0, PVar l n (Just t0)) -- TODO: return scheme t1 instead
+                                                 Just (Just sc) ->
+                                                     err1 sc "Polymorphic annotation on assignment variable"
+                                                 Nothing 
+                                                   | ann == Nothing ->
+                                                       case findVarType n env of
+                                                         TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
                                                          _ -> err1 n "Polymorphic variable not assignable:"
+                                                   | otherwise ->
+                                                       err1 ann "Type annotation on reassignment"
     infEnvT env (PIndex l e [i])        = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
@@ -906,23 +871,32 @@ instance Infer Pattern where
 
 -- Well-formed types ------------------------------------------------------
 
-wellFormed env t
-  | wfmd env True t                 = instwild t
-
 wf env t                            = wfmd env False t
+
+wfWild env t                        = wfmd env True t
+
+instWF env Nothing                  = newTVar
+instWF env (Just t)
+  | wfWild env t                    = instwild t
 
 class WellFormed a where
     wfmd                            :: Env -> Bool -> a -> Bool
+
+class Wild a where
     instwild                        :: a -> TypeM a
 
 instance WellFormed [TBind] where
     wfmd env w []                   = True
     wfmd env w (b:bs)               = wfmd env w b && wfmd env1 w bs
       where env1                    = defineTVars [b] env
+
+instance Wild [TBind] where
     instwild                        = mapM instwild
 
 instance WellFormed [TCon] where
     wfmd env w                      = all (wfmd env w)
+
+instance Wild [TCon] where
     instwild                        = mapM instwild
 
 instance WellFormed TSchema where
@@ -932,18 +906,23 @@ instance WellFormed TSchema where
     wfmd env w (TSchema l q t d)    = wfmd env False q && wfmd env1 w t
       where env1                    = defineTVars q env
 
+instance Wild TSchema where
     instwild (TSchema l q t d)      = TSchema l q <$> instwild t <*> return d
 
 instance WellFormed TBind where
     wfmd env w (TBind tv us)        = all (wfmd env w) us
+
+instance Wild TBind where
     instwild (TBind tv us)          = TBind tv <$> mapM instwild us
 
 instance WellFormed TCon where
     wfmd env w (TC c ts)            = all (wfmd env w) ts
+
+instance Wild TCon where
     instwild (TC c ts)              = TC c <$> mapM instwild ts
 
 instance WellFormed Type where
-    wfmd env False (TWild l)        = err l "Illegal wildcard type"
+    wfmd env False (TWild l)        = err1 l "Illegal wildcard type"
     wfmd env w (TVar _ tv)
       | tv `notElem` tvarScope env  = err1 tv "Unbound type variable"
     wfmd env w (TCon _ tc)          = wfmd env w tc
@@ -955,6 +934,7 @@ instance WellFormed Type where
     wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
     wfmd env w t                    = True
 
+instance Wild Type where
     instwild (TWild _)              = newTVar
     instwild (TCon l tc)            = TCon l <$> instwild tc
     instwild (TAt l tc)             = TAt l <$> instwild tc
@@ -965,18 +945,89 @@ instance WellFormed Type where
     instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r
     instwild t                      = return t
 
+instance Wild Decl where
+    instwild (Def l n q p k t b m)  = Def l n q <$> instwild p <*> instwild k <*> maybeT t <*> return b <*> return m
+    instwild (Actor l n q p k t b)  = Actor l n q <$> instwild p <*> instwild k <*> maybeT t <*> return b
+    instwild d                      = return d
+
+instance (Wild a) => Wild (Maybe a) where
+    instwild Nothing                = return Nothing
+    instwild (Just t)               = Just <$> instwild t
+
+instance Wild PosPar where
+    instwild (PosPar n t e p)       = PosPar n <$> maybeSC t <*> return e <*> instwild p
+    instwild (PosSTAR n t)          = PosSTAR n <$> maybeT t
+    instwild PosNIL                 = return PosNIL
+
+instance Wild KwdPar where
+    instwild (KwdPar n t e p)       = KwdPar n <$> maybeSC t <*> return e <*> instwild p
+    instwild (KwdSTAR n t)          = KwdSTAR n <$> maybeT t
+    instwild KwdNIL                 = return KwdNIL
+
+maybeT Nothing                      = Just <$> newTVar
+maybeT (Just t)                     = Just <$> instwild t
+
+maybeSC Nothing                     = (Just . monotype) <$> newTVar
+maybeSC (Just sc)                   = Just <$> instwild sc
+
+class ExtractT a where
+    extractT                        :: a -> Type
+
+instance ExtractT PosPar where
+    extractT (PosPar n t _ p)       = posRow (maybe (monotype tWild) id t) (extractT p)
+    extractT (PosSTAR n t)          = posVar Nothing        -- safe to ignore type (not schema) annotation t here
+    extractT PosNIL                 = posNil
+
+instance ExtractT KwdPar where
+    extractT (KwdPar n t _ k)       = kwdRow n (maybe (monotype tWild) id t) (extractT k)
+    extractT (KwdSTAR n t)          = kwdVar Nothing        -- safe to ignore type (not schema) annotation t here
+    extractT KwdNIL                 = kwdNil
+
+instance ExtractT Modif where
+    extractT (Sync _)               = fxSync fxNil
+    extractT Async                  = fxAsync fxNil
+    extractT _                      = tWild
+
+instance ExtractT Decl where
+    extractT d@Def{}                = tFun (extractT $ modif d) prow krow (maybe tWild id (ann d))
+      where 
+        (prow,krow)                 = chop (modif d) (extractT $ pos d) (extractT $ kwd d)
+        chop ClassMeth p k          = chop1 p k
+        chop (InstMeth _) p k       = chop1 p k
+        chop _ p k                  = (p, k)
+        chop1 (TRow _ n t p) k      = (p, k)
+        chop1 TVar{} k              = missingSelf (dname d)
+        chop1 p (TRow _ n t k)      = (p, k)
+        chop1 _ _                   = missingSelf (dname d)
+    extractT d@Actor{}              = tFun (fxAct fxNil) prow krow (maybe tWild id (ann d))
+      where (prow,krow)             = (extractT $ pos d, extractT $ kwd d)
+    extractT _                      = tWild
+
+extractSchema env d@Signature{}     = dtyp d
+extractSchema env d
+  | wfWild env schema               = schema
+  where
+    schema                          = tSchema' q sig (deco d)
+    sig                             = extractT d
+    q | null (qual d)               = [ TBind v [] | v <- tyfree sig \\ tvarScope env, skolem v ]
+      | otherwise                   = qual d
+    deco Def{modif=StaticMeth}      = StaticMethod
+    deco Def{modif=ClassMeth}       = ClassMethod
+    deco Def{modif=InstMeth f}      = InstMethod f
+    deco _                          = NoDec
+
 
 -- FX presentation ---------------------
 
 openFX (TSchema l q (TFun l' fx p r t) dec)
-  | Just fx1 <- open fx                 = TSchema l (TBind v [] : q) (TFun l' fx1 p r t) dec
-  where open (TRow l n t fx)            = TRow l n t <$> open fx
-        open (TNil l)                   = Just (TVar l v)
-        open (TVar _ _)                 = Nothing
-        v                               = head (tvarSupply \\ tybound q)
-openFX t                                = t
+  | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t) dec
+  where open (TRow l n t fx)        = TRow l n t <$> open fx
+        open (TNil l)               = Just (TVar l v)
+        open (TVar _ _)             = Nothing
+        v                           = head (tvarSupply \\ tybound q)
+openFX t                            = t
 
 closeFX (TSchema l q f@(TFun l' fx p r t) dec)
-  | TVar _ v <- rowTail fx, sole v      = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t) dec
-  where sole v                          = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
-closeFX t                               = t
+  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t) dec
+  where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
+closeFX t                           = t

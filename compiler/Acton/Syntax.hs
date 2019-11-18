@@ -147,8 +147,8 @@ data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
 -- data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
-data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
-data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
+data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe TVar) | PosNIL deriving (Show,Eq)
+data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe TVar) | KwdNIL deriving (Show,Eq)
 
 data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
 data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)

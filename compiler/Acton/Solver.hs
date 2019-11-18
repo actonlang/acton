@@ -33,7 +33,7 @@ solve env cs                                = do --traceM ("### solve: " ++ prst
                                                  cs1 <- msubst cs0
                                                  if done cs1
                                                      then return ()
-                                                     else solve env cs1         
+                                                     else solve env cs1
   where done cs                             = True                              -- TODO: ensure proper termination...!
 
 reduceAll env cs                            = mapM_ (reduce env) cs
@@ -178,11 +178,18 @@ redGen' sub env (TSchema _ [] t1 d1) (TSchema _ [] t2 d2)
 redGen' sub env sc1 sc2@(TSchema _ q2 t2 d2)
   | scdec sc1 /= d2                         = distinctDecorations (scdec sc1) d2
   | otherwise                               = do (cs,t1) <- instantiate env1 sc1
-                                                 mapM_ (reduce env) cs
                                                  red sub env1 t1 t2
-                                                 tvs <- (intersect (tybound q2) . tyfree) <$> msubst [sc1,sc2]
-                                                 when (any (`elem` tvs) (tybound q2)) (escapingVar tvs sc1 sc2)
+                                                 -- all the cs must be true in env + q2
+                                                 solve env1 cs
+                                                 -- tyvars not free in sc1,sc2 cannot be affected by above reductions
+                                                 tvs <- msubstTV $ tyfree [sc1,sc2]
+                                                 let esc = intersect (tybound q2) tvs
+                                                 when (not $ null esc) (escapingVar esc sc1 sc2)
   where env1                                = defineTVars q2 env
+
+
+monotypeOf (TSchema _ [] t _)               = t
+monotypeOf sc                               = err1 sc "Monomorphic type expected"
 
 
 -- Entailment ----------------------------------------------------------------------------
