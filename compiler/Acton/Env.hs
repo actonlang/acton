@@ -33,7 +33,7 @@ type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, indecl :: Bool }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool }
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
@@ -150,6 +150,8 @@ instance Subst NameInfo where
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
     tyfree NBlocked             = []
+
+msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
 instance Subst SrcInfoTag where
     msubst (GEN l t)                = GEN l <$> msubst t
@@ -276,13 +278,13 @@ prune xs                    = filter ((`notElem` xs) . fst)
 initEnv                     :: Env
 initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuiltin envBuiltin env0
   where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, indecl = False }
+        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, nocheck = False }
 
-enterDecl                   :: Env -> Env
-enterDecl env               = env{ indecl = True }
+setNoCheck                  :: Env -> Env
+setNoCheck env              = env{ nocheck = True }
 
-inDecl                      :: Env -> Bool
-inDecl env                  = indecl env
+noCheck                     :: Env -> Bool
+noCheck env                 = nocheck env
 
 stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
@@ -330,6 +332,11 @@ reservedOrSig               :: Name -> Env -> Maybe (Maybe TSchema)
 reservedOrSig n env         = case lookup n (names env) of
                                 Just NReserved -> Just Nothing
                                 Just (NSig t)  -> Just (Just t)
+                                _              -> Nothing
+
+findSig                     :: Name -> Env -> Maybe TSchema
+findSig n env               = case lookup n (names env) of
+                                Just (NSig t)  -> Just t
                                 _              -> Nothing
 
 findName                    :: Name -> Env -> NameInfo
@@ -455,7 +462,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
 
     unifT (TSchema _ [] t d) (TSchema _ [] t' d')
       | d == d'                         = constrain [Equ t t']
-    unifT t t'                          = constrain [EquGen t t']
+    unifT t t'                          = err1 v "Cannot merge bindings of polymorphic type"
     
     unifC q us te q' us' te'
       | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
@@ -531,6 +538,7 @@ data CheckerError                       = FileNotFound ModName
                                         | NameReserved Name
                                         | NameBlocked Name
                                         | IllegalRedef Name
+                                        | MissingSelf Name
                                         | IllegalImport SrcLoc
                                         | DuplicateImport Name
                                         | NoItem ModName Name
@@ -544,6 +552,7 @@ checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is no
 checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
 checkerError (NameBlocked n)            = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
 checkerError (IllegalRedef n)           = (loc n, " Illegal redefinition of " ++ prstr n)
+checkerError (MissingSelf n)            = (loc n, " Missing 'self' parameter in definition of")
 checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
 checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
 checkerError (NoItem m n)               = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
@@ -553,6 +562,7 @@ nameNotFound n                          = Control.Exception.throw $ NameNotFound
 nameReserved n                          = Control.Exception.throw $ NameReserved n
 nameBlocked n                           = Control.Exception.throw $ NameBlocked n
 illegalRedef n                          = Control.Exception.throw $ IllegalRedef n
+missingSelf n                           = Control.Exception.throw $ MissingSelf n
 fileNotFound n                          = Control.Exception.throw $ FileNotFound n
 illegalImport l                         = Control.Exception.throw $ IllegalImport l
 duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
