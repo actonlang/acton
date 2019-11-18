@@ -129,6 +129,7 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len)
 
 	*len = write_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	write_query_message__pack (&msg, *buf);
 
 	free_write_query_msg(&msg);
@@ -291,6 +292,7 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 
 	*len = read_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	read_query_message__pack (&msg, *buf);
 
 	free_read_query_msg(&msg);
@@ -463,6 +465,7 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 
 	*len = range_read_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	range_read_query_message__pack (&msg, *buf);
 
 	free_range_read_query_msg(&msg);
@@ -609,6 +612,7 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 
 	*len = ack_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	ack_message__pack (&msg, *buf);
 
 	free_ack_message_msg(&msg);
@@ -777,6 +781,7 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 
 	*len = range_read_response_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	range_read_response_message__pack (&msg, *buf);
 
 	free_range_read_response_message_msg(&msg);
@@ -1144,6 +1149,7 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 
 	*len = queue_query_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	queue_query_message__pack (&msg, *buf);
 
 	free_queue_message_msg(&msg);
@@ -1554,6 +1560,7 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len)
 
 	*len = txn_message__get_packed_size (&msg);
 	*buf = malloc (*len);
+	memset(*buf, 0 , *len);
 	txn_message__pack (&msg, *buf);
 
 	free_txn_message_msg(&msg);

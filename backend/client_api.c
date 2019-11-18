@@ -74,6 +74,7 @@ void * comm_thread_loop(void * args);
 remote_db_t * get_remote_db(int replication_factor)
 {
 	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
+	memset(db, 0, sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
 	db->txn_state = create_skiplist_uuid();
@@ -177,7 +178,7 @@ void * comm_thread_loop(void * args)
 
 			    status = add_reply_to_nonce(q, msg_type, nonce, db);
 
-			    assert(status > 0);
+//			    assert(status > 0);
 			}
 		}
 	}
@@ -252,7 +253,13 @@ int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t *
 	snode_t * node = skiplist_search(db->msg_callbacks, (WORD) nonce);
 
 	if(node == NULL)
-		return 1;
+	{
+		pthread_mutex_unlock(db->msg_callbacks_lock);
+
+//		printf("Nonce %ld not found!\n", nonce);
+
+		return -1;
+	}
 
 	msg_callback * mc = (msg_callback *) node->value;
 
@@ -293,7 +300,7 @@ int delete_msg_callback(long nonce, remote_db_t * db)
 
     skiplist_delete(db->msg_callbacks, (WORD) nonce);
 
-    delete_msg_callback(mc->nonce, db);
+    free_msg_callback(mc);
 
 	pthread_mutex_unlock(db->msg_callbacks_lock);
 
@@ -461,7 +468,11 @@ int send_packet_wait_reply(void * out_buf, unsigned out_len, int sockfd, void * 
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 {
 	if(mc == NULL)
+	{
+		assert(0);
+
 		return NO_SUCH_MSG_CALLBACK;
+	}
 
 	// Wait for signal from comm thread. It will come when 'db->quorum_size' replies have arrived on that nonce:
 
@@ -474,6 +485,8 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 
 	pthread_mutex_unlock(mc->lock);
 
+	assert(ret == 0);
+
 	return ret;
 }
 
@@ -483,7 +496,11 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce,
 	*mc = add_msg_callback(nonce, NULL, db);
 
 	if(*mc == NULL)
+	{
+		assert(0);
+
 		return -1;
+	}
 
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
@@ -491,6 +508,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce,
 		ret = send_packet(out_buf, out_len, rs->sockfd);
 		if(ret != 0)
 		{
+			assert(0);
 #if CLIENT_VERBOSITY > 0
 			printf("Server %s seems down.\n", rs->id);
 #endif

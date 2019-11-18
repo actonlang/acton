@@ -36,12 +36,11 @@ skiplist_t *create_skiplist(int (*cmp)(WORD, WORD)) {
 }
 
 skiplist_t *skiplist_init(skiplist_t *list, int (*cmp)(WORD, WORD)) {
-    int i;
     snode_t *header = (snode_t *) malloc(sizeof(struct snode));
     list->header = header;
     header->key = (WORD) LONG_MAX;
     header->forward = (snode_t **) malloc(sizeof(snode_t*) * (SKIPLIST_MAX_LEVEL));
-    for (i = 0; i < SKIPLIST_MAX_LEVEL; i++) {
+    for (int i = 0; i < SKIPLIST_MAX_LEVEL; i++) {
         header->forward[i] = NULL; // list->header;
     }
 
@@ -65,8 +64,8 @@ static int rand_level(unsigned int * seedptr) {
 int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedptr) {
     snode_t *update[SKIPLIST_MAX_LEVEL];
     snode_t *x = list->header;
-    int i, level;
-    for (i = list->level; i >= 0; i--) {
+    int i = list->level, level;
+    for (; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
 //		printf("Item %ld will update node %ld at level %d\n", key, x->key, i);
@@ -104,8 +103,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
 
 snode_t *skiplist_search(skiplist_t *list, WORD key) {
     snode_t *x = list->header;
-    int i;
-    for (i = list->level; i >= 0; i--) {
+    for (int i = list->level; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) <= 0) )
             x = x->forward[i];
     }
@@ -121,8 +119,7 @@ snode_t *skiplist_search(skiplist_t *list, WORD key) {
 
 snode_t *skiplist_search_higher(skiplist_t *list, WORD key) {
     snode_t *x = list->header;
-    int i;
-    for (i = list->level; i >= 0; i--) {
+    for (int i = list->level; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
     }
@@ -165,8 +162,7 @@ int skiplist_get_range(skiplist_t *list, WORD start_key, WORD end_key, WORD** re
 
 snode_t *skiplist_search_lower(skiplist_t *list, WORD key) {
     snode_t *x = list->header;
-    int i;
-    for (i = list->level; i >= 0; i--) {
+    for (int i = list->level; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) <= 0))
             x = x->forward[i];
     }
@@ -183,12 +179,11 @@ static void skiplist_node_free(snode_t *x) {
 }
 
 WORD skiplist_delete(skiplist_t *list, WORD key) {
-    int i;
     WORD value = NULL;
 
     snode_t *update[SKIPLIST_MAX_LEVEL];
     snode_t *x = list->header;
-    for (i = list->level; i >= 0; i--) {
+    for (int i = list->level; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
         	update[i] = x;
@@ -198,7 +193,7 @@ WORD skiplist_delete(skiplist_t *list, WORD key) {
     		x = x->forward[0];
 
     if (list->cmp(x->key, key) == 0) {
-        for (i = 0; i <= list->level; i++) {
+        for (int i = 0; i <= list->level; i++) {
             if (update[i]->forward[i] != x)
                 break;
             update[i]->forward[i] = x->forward[i];
