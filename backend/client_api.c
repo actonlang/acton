@@ -485,9 +485,9 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 
 	pthread_mutex_unlock(mc->lock);
 
-	assert(ret == 0);
+	assert(ret == 0 || errno == ETIMEDOUT);
 
-	return ret;
+	return 0;
 }
 
 int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce, msg_callback ** mc, remote_db_t * db)
