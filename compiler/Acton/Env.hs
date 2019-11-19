@@ -282,6 +282,9 @@ initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuil
   where autoImp             = importAll mBuiltin envBuiltin
         env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, nocheck = False }
 
+setDefaultMod               :: ModName -> Env -> Env
+setDefaultMod m env         = env{ defaultmod = m }
+
 setNoCheck                  :: Env -> Env
 setNoCheck env              = env{ nocheck = True }
 

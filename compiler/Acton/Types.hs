@@ -23,7 +23,7 @@ reconstruct                             :: String -> Env -> Module -> IO (TEnv, 
 reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env1 te)
                                              return (te, modul', info)
   where Module m imp suite              = modul
-        env1                            = reserve (bound suite) env{ defaultmod = m }
+        env1                            = reserve (bound suite) $ setDefaultMod m env
         ((te,suite'),info)              = runTypeM $ (,) <$> infTop env1 suite <*> getDump
         modul'                          = Module m imp suite'
 
@@ -447,8 +447,11 @@ checkBindings env proto us te
   where tes                             = [ te' | u <- us, let (_,_,te') = findCon env u ]
         inherited                       = concatMap nSigs tes ++ concatMap nVars tes
         refinements                     = [ SubGen env sc sc' | (n,sc) <- nSigs te, Just sc' <- [lookup n inherited] ]
-        undefs                          = (dom $ nSigs te ++ concatMap nSigs tes) \\ (dom $ nVars te ++ concatMap nVars tes)
+        undefs                          = (dom $ csigs) \\ (dom $ nVars te ++ concatMap nVars tes)
         unsigs                          = dom te \\ (dom (nSigs te) ++ dom inherited)
+        allsigs                         = nSigs te ++ concatMap nSigs tes
+        (isigs,csigs)                   = partition isInstAttr allsigs
+          where isInstAttr (n,sc)       = case sc of TSchema _ _ _ (InstAttr _) -> True; _ -> False
 
 
 checkAssump env n t                     = case findVarType n env of
