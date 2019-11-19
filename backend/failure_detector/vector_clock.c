@@ -176,12 +176,14 @@ int cmpfunc (const void * a, const void * b) {
 vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids)
 {
 	vector_clock * vc = (vector_clock *) malloc(sizeof(struct vector_clock));
+	memset(vc, 0, sizeof(struct vector_clock));
 
 	vc->no_nodes = (init_no_nodes > 0)? init_no_nodes:0;
 
 	vc->capacity = (int)(DEFAULT_SIZE * GROWTH_RATE);
 
 	vc->node_ids =  (versioned_id *) malloc (vc->capacity * sizeof(struct versioned_id));
+	memset(vc->node_ids, 0, vc->capacity * sizeof(struct versioned_id));
 
 	for(int i=0;i<vc->no_nodes;i++)
 	{
