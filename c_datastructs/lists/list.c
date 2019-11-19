@@ -1,9 +1,9 @@
-#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "list.h"
 #include "iterator.h"
+#include "acterror.h"
 
 typedef struct list_iterator_struct {
   list_t src;
@@ -28,7 +28,7 @@ static int expand(list_t lst) {
     int newcapacity = lst->capacity==0 ? 1 : lst->capacity << 1;
     WORD* newptr = lst->data==NULL ? malloc(newcapacity*sizeof(WORD)) : realloc(lst->data,newcapacity*sizeof(WORD));
     if (newptr == NULL) {
-       return -1;
+      return MEMORYERROR;
     }
     lst->data = newptr;
     lst->capacity = newcapacity;
@@ -38,17 +38,16 @@ static int expand(list_t lst) {
 
 list_t list_new(int capacity) {
   if (capacity < 0) {
-    errno = EINVAL;
-    return NULL;
+    return NULL; // VALUEERROR
   } 
   list_t lst = malloc(sizeof(struct list_struct));
   if (lst == NULL) {
-     return NULL;
+    return NULL; // MEMORYERROR
   }
   if (capacity>0) {
     lst->data = malloc(capacity*sizeof(WORD));
     if (lst->data == NULL) {
-      return NULL;
+      return NULL;  // MEMORYERROR
     }
   } else {
     lst->data = NULL;
@@ -78,8 +77,7 @@ int list_contains(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
 int list_iterator_next(iterator_t iter, WORD *res) {
   list_iterator_state_t state = iter->state;
   if(state->nxt >=list_len(state->src)) {
-    errno = EINVAL;
-    return -1;
+    return STOPITERATION;
   }
   *res = state->src->data[state->nxt++];
   return 0;
@@ -113,13 +111,13 @@ iterator_t list_reversed(list_t lst){
 }
 
 // Sequence methods
-WORD list_getitem(list_t lst, int ix) {
+int list_getitem(list_t lst, int ix, WORD *res) {
   int ix0 = ix < 0 ? lst->length + ix : ix;
   if (ix0 < 0 || ix0 >= lst->length) {
-    errno = EINVAL;
-    return NULL;
+    return INDEXERROR;
   }
-  return lst->data[ix0];
+  *res = lst->data[ix0];
+  return 0;
 }
 
 int list_index(list_t lst, WORD elem, int startix, int endix,int (*eq)(WORD,WORD)) {
@@ -129,8 +127,7 @@ int list_index(list_t lst, WORD elem, int startix, int endix,int (*eq)(WORD,WORD
     if (eq(lst->data[start++],elem))
       return start-1;
   }
-  errno = EINVAL;
-  return -1;
+  return VALUEERROR;
 }
 
 int list_count(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
@@ -144,8 +141,7 @@ int list_count(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
 int list_setitem(list_t lst, int ix, WORD elem) {
   int ix0 = ix < 0 ? lst->length + ix : ix;
   if (ix0 < 0 || ix0 >= lst->length) {
-    errno = EINVAL;
-    return -1;
+    return INDEXERROR;
   }
   lst->data[ix0] = elem;
   return 0;
@@ -184,20 +180,19 @@ int list_insert(list_t lst, int ix, WORD elem) {
   return err;
 }
 
-WORD list_pop(list_t lst, int ix) {
+int list_pop(list_t lst,int ix, WORD *res) {
   int ix0 = ix < 0 ? lst->length + ix : ix;
-  if (ix0 < 0 || ix0 >= lst->length) {
-    errno = EINVAL;
-    return NULL;
+  if(ix0 < 0 || ix0 >= lst->length) {
+    return INDEXERROR;
   }
-  WORD elem = lst->data[ix0];
+  *res = lst->data[ix0];
   memmove(lst->data + ix0,
           lst->data + (ix0 + 1),
           (lst->length-(ix0+1))*sizeof(WORD));
   lst->length--;
-  return elem;
+  return 0;
 }
-        
+
 int list_remove(list_t lst, WORD elem, int (*eq)(WORD,WORD)) {
   int ix = list_index(lst,elem,0,lst->length,eq);
   if (ix < 0) return ix;
@@ -232,40 +227,3 @@ list_t list_copy(list_t lst) {
 int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
   return heapsort(lst->data, lst->length, sizeof(WORD), cmp);
 }
-
-// Iterator methods
-/* WORD list_iterator_next(list_iterator_t iter) {
-  if(iter->nxt >= list_len(iter->src)) {
-    errno = EINVAL;
-    return NULL;
-  }
-  return iter->src->data[iter->nxt++];
-}
-*/
-
-// Variants for non-pointer elem type
-int list_getitem_p(list_t lst, int ix, WORD *res) {
-  int ix0 = ix < 0 ? lst->length + ix : ix;
-  if (ix0 < 0 || ix0 >= lst->length) {
-    errno = EINVAL;
-    return -1;
-  }
-  *res = lst->data[ix0];
-  return 0;
-}
-
-int list_pop_p(list_t lst,int ix, WORD *res) {
-  int ix0 = ix < 0 ? lst->length + ix : ix;
-  if(ix0 < 0 || ix0 >= lst->length) {
-    errno = EINVAL;
-    return -1;
-  }
-  *res = lst->data[ix0];
-  memmove(lst->data + ix0,
-          lst->data + (ix0 + 1),
-          (lst->length-(ix0+1))*sizeof(WORD));
-  lst->length--;
-  return 0;
-}
-
-  

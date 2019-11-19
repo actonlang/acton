@@ -5,46 +5,25 @@
 #include "dict.h"
 #include "iterator.h"
 #include "hash.h"
-
-/* 
-  If UNBOXED is defined, both keys and values are unboxed integers. 
-  If not, they are boxed.
-*/
-
-#define UNBOXED
-
-#ifdef UNBOXED
-
+#include "str.h"
+ 
 WORD toWord(long i) {
-  return (WORD)i;
+  char *s;
+  int n = asprintf(&s,"%lu",i);
+  str_t str = fromUTF8(s);
+  return (WORD)str;
 }
 
 long fromWord(WORD w) {
-  return (long) w;
+  char *str = toUTF8((str_t)w);
+  long x;
+  sscanf(str,"%lu",&x);
+  return x;
 }
-
-#else
-
-WORD toWord(long i) {
-  WORD res = malloc(sizeof(long));
-  *(long*)res = i;
-  return res;
-}
-
-long fromWord(WORD w) {
-  return *(long*) w;
-}
-
-#endif
 
 int main() {
-#ifdef UNBOXED
-  dict_t dict = dict_new(unboxed_Hashable);
-  dict_t other = dict_new(unboxed_Hashable);
-#else
-  dict_t dict = dict_new(long_Hashable);
-  dict_t other = dict_new(long_Hashable);
-#endif
+  dict_t dict = dict_new(str_Hashable);
+  dict_t other = dict_new(str_Hashable);
   int j;
   for (long i=1; i < 1000000; i++) {
     dict_setitem(dict,toWord(i),toWord(i+1));

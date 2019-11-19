@@ -17,6 +17,7 @@ int double_eq(WORD a, WORD b);
 size_t long_hash(WORD v);
 size_t double_hash(WORD v);
 size_t tuple_hash(WORD ht,WORD v);
+size_t bytes_hash(WORD src, int len);
 
 
 typedef struct Hashable_struct {
