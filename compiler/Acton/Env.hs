@@ -41,7 +41,7 @@ data NameInfo               = NVar      TSchema
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      QName [TBind] [TCon]
-                            | NTVar     (Maybe TCon) [TCon]
+                            | NTVar     [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -111,7 +111,7 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (w, NExt n q us)     = pretty w  <+> colon <+> text "extension" <+> pretty n <+>
                                   nonEmpty brackets commaList q <+> nonEmpty parens commaList us
-    pretty (n, NTVar u us)      = pretty n <> parens (commaList (maybeToList u ++ us))
+    pretty (n, NTVar us)        = pretty n <> parens (commaList us)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -131,7 +131,7 @@ instance Subst NameInfo where
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
-    msubst (NTVar u us)         = NTVar <$> msubst u <*> msubst us
+    msubst (NTVar us)           = NTVar <$> msubst us
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -144,7 +144,7 @@ instance Subst NameInfo where
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
-    tyfree (NTVar u us)         = tyfree u ++ tyfree us
+    tyfree (NTVar us)           = tyfree us
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -217,7 +217,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
-    unalias env (NTVar u us)        = NTVar (unalias env u) (unalias env us)
+    unalias env (NTVar us)          = NTVar (unalias env us)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -306,18 +306,16 @@ defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 defineTVars                 :: [TBind] -> Env -> Env
-defineTVars q env           = env{ names = [ (n, nTVar us) | TBind (TV n) us <- q ] ++ names env }
-  where nTVar us            = let (impl,sub) = partition (isProto env . tcname) us in NTVar (listToMaybe sub) impl
+defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] ++ names env }
 
 tvarScope                   :: Env -> [TVar]
-tvarScope env               = [ TV n | (n, NTVar _ _) <- names env ]
+tvarScope env               = [ TV n | (n, NTVar _) <- names env ]
 
 defineSelf                  :: Name -> [TBind] -> Env -> Env
 defineSelf n q env          = defineSelf' (NoQual n) q env
 
 defineSelf'                 :: QName -> [TBind] -> Env -> Env
---defineSelf' qn q env        = defineTVars [TBind tvSelf [tc]] env
-defineSelf' qn q env        = env{ names = (nSelf, NTVar (Just tc) []) : names env }
+defineSelf' qn q env        = env{ names = (nSelf, NTVar [tc]) : names env }
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
@@ -357,7 +355,7 @@ findQName (NoQual n) env    = findName n env
 
 findSelf                    :: Env -> TCon
 findSelf env                = case findName nSelf env of
-                                NTVar u us -> fromJust u
+                                NTVar (u:us) -> u
 
 findMod                     :: ModName -> Env -> TEnv
 findMod m env               = case lookup m (modules env) of
@@ -375,6 +373,7 @@ addMod m te env             = env{ modules = (m,te) : modules env }
 dropNames                   :: Env -> Env
 dropNames env               = env{ names = names initEnv }
 
+isProto                     :: Env -> QName -> Bool
 isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
@@ -391,11 +390,14 @@ findProto n env             = case findQName n env of
 
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
-                                NTVar u us -> u
+                                NTVar (u:us) | not $ isProto env (tcname u) -> Just u
+                                _ -> Nothing
 
 findImplBound               :: TVar -> Env -> [TCon]
 findImplBound tv env        = case findName (tvname tv) env of
-                                NTVar u us -> us
+                                NTVar (u:us) | isProto env (tcname u) -> u:us
+                                             | otherwise -> us
+                                _ -> []
 
 findVarType                 :: Name -> Env -> TSchema
 findVarType n env           = findVarType' (NoQual n) env

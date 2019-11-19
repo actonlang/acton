@@ -287,14 +287,15 @@ instance InfEnv Decl where
     infEnv env (Class l n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do (te,b') <- noescape <$> infEnv env1 b
-                                             return (nClass n q (mro env1 us) te, Class l n q us b')
+                                             return (nClass n q (mro env1 us1) te, Class l n q us1 b')
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            us                          = classBases env us
+            us1                         = classBases env us
     infEnv env (Protocol l n q us b)
       | not $ reserved n env            = illegalRedef n
       | wf env q && wf env1 us          = do (te,b') <- infEnv env1 b
-                                             return (nProto (defaultmod env) n q (mro env1 (protoBases env us)) te, Protocol l n q us b')
-      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env            
+                                             return (nProto (defaultmod env) n q (mro env1 us1) te, Protocol l n q us1 b')
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env  
+            us1                         = protoBases env us
     infEnv env d@(Extension _ n q us b)
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
       | wf env q && wf env1 us          = do w <- newName (noqual n)
@@ -354,7 +355,7 @@ instance Check Stmt where
 
 instance Check Decl where
     check env (Actor l n q p k ann b)
-      | noshadow svars p                = do pushFX (fxAct tWild)
+      | noshadow svars (p,k)            = do pushFX (fxAct tWild)
                                              (te0,prow,p') <- infEnvT env p
                                              (te1,krow,k') <- infEnvT (define te0 env1) k
                                              (te2,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
@@ -712,21 +713,25 @@ instance (Infer a) => Infer (Maybe a) where
                                              return (t, Just e')
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n (Just t) e p) = do (t',e') <- inferGen env e
+    infEnvT env (PosPar n ann e p)      = do t <- maybeInstSC ann
+                                             (t',e') <- inferGen env e
                                              constrain [SubGen t' t]
                                              (te,r,p') <- infEnvT (define (nVar' n t) env) p
                                              return (nVar' n t ++ te, posRow t r, PosPar n (Just t) e' p')
-    infEnvT env (PosSTAR n (Just t))    = do r <- newTVar
+    infEnvT env (PosSTAR n ann)         = do t <- maybeInstT ann
+                                             r <- newTVar
                                              constrain [Equ t (tTuple r)]
                                              return (nVar n t, r, PosSTAR n (Just t))
     infEnvT env PosNIL                  = return ([], posNil, PosNIL)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n (Just t) e k) = do (t',e') <- inferGen env e
+    infEnvT env (KwdPar n ann e k)      = do t <- maybeInstSC ann
+                                             (t',e') <- inferGen env e
                                              constrain [SubGen t' t]
                                              (te,r,k') <- infEnvT (define (nVar' n t) env) k
                                              return (nVar' n t ++ te, kwdRow n t r, KwdPar n (Just t) e' k')
-    infEnvT env (KwdSTAR n (Just t))    = do r <- newTVar
+    infEnvT env (KwdSTAR n ann)         = do t <- maybeInstT ann
+                                             r <- newTVar
                                              constrain [Equ t (tRecord r)]
                                              return (nVar n t, r, KwdSTAR n (Just t))
     infEnvT env KwdNIL                  = return ([], kwdNil, KwdNIL)
@@ -809,12 +814,13 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar l n ann)          = do case reservedOrSig n env of
+    infEnvT env (PVar l n ann)
+      | wfWild env ann                  = do case reservedOrSig n env of
                                                  Just Nothing -> do
-                                                     t0 <- instWF env ann
+                                                     t0 <- maybeInstT ann
                                                      return (nVar n t0, t0, PVar l n (Just t0))
                                                  Just (Just (TSchema _ [] t1 _)) -> do
-                                                     t0 <- instWF env ann
+                                                     t0 <- maybeInstT ann
                                                      constrain [Equ t0 t1]
                                                      return (nVar n t1, t0, PVar l n (Just t0)) -- TODO: return scheme t1 instead
                                                  Just (Just sc) ->
@@ -882,22 +888,16 @@ instWF env (Just t)
 class WellFormed a where
     wfmd                            :: Env -> Bool -> a -> Bool
 
-class Wild a where
-    instwild                        :: a -> TypeM a
+instance (WellFormed a) => WellFormed (Maybe a) where
+    wfmd env w                      = maybe True (wfmd env w)
 
 instance WellFormed [TBind] where
     wfmd env w []                   = True
     wfmd env w (b:bs)               = wfmd env w b && wfmd env1 w bs
       where env1                    = defineTVars [b] env
 
-instance Wild [TBind] where
-    instwild                        = mapM instwild
-
 instance WellFormed [TCon] where
-    wfmd env w                      = all (wfmd env w)
-
-instance Wild [TCon] where
-    instwild                        = mapM instwild
+    wfmd env w cs                   = all (wfmd env w) cs
 
 instance WellFormed TSchema where
     wfmd env w (TSchema l [] t d)   = wfmd env1 w t
@@ -906,20 +906,11 @@ instance WellFormed TSchema where
     wfmd env w (TSchema l q t d)    = wfmd env False q && wfmd env1 w t
       where env1                    = defineTVars q env
 
-instance Wild TSchema where
-    instwild (TSchema l q t d)      = TSchema l q <$> instwild t <*> return d
-
 instance WellFormed TBind where
     wfmd env w (TBind tv us)        = all (wfmd env w) us
 
-instance Wild TBind where
-    instwild (TBind tv us)          = TBind tv <$> mapM instwild us
-
 instance WellFormed TCon where
     wfmd env w (TC c ts)            = all (wfmd env w) ts
-
-instance Wild TCon where
-    instwild (TC c ts)              = TC c <$> mapM instwild ts
 
 instance WellFormed Type where
     wfmd env False (TWild l)        = err1 l "Illegal wildcard type"
@@ -934,6 +925,24 @@ instance WellFormed Type where
     wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
     wfmd env w t                    = True
 
+class Wild a where
+    instwild                        :: a -> TypeM a
+
+instance Wild [TBind] where
+    instwild                        = mapM instwild
+
+instance Wild [TCon] where
+    instwild                        = mapM instwild
+
+instance Wild TSchema where
+    instwild (TSchema l q t d)      = TSchema l q <$> instwild t <*> return d
+
+instance Wild TBind where
+    instwild (TBind tv us)          = TBind tv <$> mapM instwild us
+
+instance Wild TCon where
+    instwild (TC c ts)              = TC c <$> mapM instwild ts
+
 instance Wild Type where
     instwild (TWild _)              = newTVar
     instwild (TCon l tc)            = TCon l <$> instwild tc
@@ -946,8 +955,8 @@ instance Wild Type where
     instwild t                      = return t
 
 instance Wild Decl where
-    instwild (Def l n q p k t b m)  = Def l n q <$> instwild p <*> instwild k <*> maybeT t <*> return b <*> return m
-    instwild (Actor l n q p k t b)  = Actor l n q <$> instwild p <*> instwild k <*> maybeT t <*> return b
+    instwild (Def l n q p k t b m)  = Def l n q <$> instwild p <*> instwild k <*> justInstT t <*> return b <*> return m
+    instwild (Actor l n q p k t b)  = Actor l n q <$> instwild p <*> instwild k <*> justInstT t <*> return b
     instwild d                      = return d
 
 instance (Wild a) => Wild (Maybe a) where
@@ -955,20 +964,20 @@ instance (Wild a) => Wild (Maybe a) where
     instwild (Just t)               = Just <$> instwild t
 
 instance Wild PosPar where
-    instwild (PosPar n t e p)       = PosPar n <$> maybeSC t <*> return e <*> instwild p
-    instwild (PosSTAR n t)          = PosSTAR n <$> maybeT t
+    instwild (PosPar n t e p)       = PosPar n <$> justInstSC t <*> return e <*> instwild p
+    instwild (PosSTAR n t)          = PosSTAR n <$> justInstT t
     instwild PosNIL                 = return PosNIL
 
 instance Wild KwdPar where
-    instwild (KwdPar n t e p)       = KwdPar n <$> maybeSC t <*> return e <*> instwild p
-    instwild (KwdSTAR n t)          = KwdSTAR n <$> maybeT t
+    instwild (KwdPar n t e p)       = KwdPar n <$> justInstSC t <*> return e <*> instwild p
+    instwild (KwdSTAR n t)          = KwdSTAR n <$> justInstT t
     instwild KwdNIL                 = return KwdNIL
 
-maybeT Nothing                      = Just <$> newTVar
-maybeT (Just t)                     = Just <$> instwild t
+maybeInstT ann                      = maybe newTVar instwild ann
+maybeInstSC ann                     = maybe (monotype <$> newTVar) instwild ann
 
-maybeSC Nothing                     = (Just . monotype) <$> newTVar
-maybeSC (Just sc)                   = Just <$> instwild sc
+justInstT ann                       = Just <$> maybeInstT ann
+justInstSC ann                      = Just <$> maybeInstSC ann
 
 class ExtractT a where
     extractT                        :: a -> Type
