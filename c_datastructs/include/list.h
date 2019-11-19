@@ -1,5 +1,4 @@
-#ifndef LIST_H
-#define LIST_H
+#pragma once
 
 #include "iterator.h"
 
@@ -27,7 +26,7 @@ int list_len(list_t lst);
 iterator_t list_reversed(list_t lst);
 
 // Sequence methods 
-WORD list_getitem(list_t lst, int ix);
+int list_getitem(list_t lst, int ix, WORD *res);
 int list_index(list_t lst, WORD elem, int startix, int endix,int (*eq)(WORD,WORD));
 int list_count(list_t lst, WORD elem, int (*eq)(WORD,WORD));
 
@@ -36,7 +35,7 @@ int list_setitem(list_t lst, int ix, WORD elem);
 int list_append(list_t lst, WORD elem);
 int list_insert(list_t lst, int ix, WORD elem);
 int list_remove(list_t lst, WORD elem, int (*eq)(WORD,WORD));
-WORD list_pop(list_t lst,int ix);
+int list_pop(list_t lst,int ix, WORD *res);
 void list_clear(list_t lst);
 void list_reverse(list_t lst);
 int list_extend(list_t lst, list_t other); // 2nd par should be an Iterable
@@ -45,8 +44,3 @@ int list_extend(list_t lst, list_t other); // 2nd par should be an Iterable
 list_t list_copy(list_t lst);
 int list_sort(list_t lst, int (*cmp)(WORD,WORD)); // Python function has additional param bool reversed.
 
-// Variants when using non-pointer elems
-int list_getitem_p(list_t lst, int ix, WORD *res);
-int list_pop_p(list_t lst,int ix, WORD *res);
-
-#endif

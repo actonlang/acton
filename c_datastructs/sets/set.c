@@ -6,6 +6,7 @@
 #include "set.h"
 #include "hash.h"
 #include "iterator.h"
+#include "acterror.h"
 
 typedef struct {
     WORD key;
@@ -235,8 +236,7 @@ int set_remove(set_t s, WORD elem) {
   if(set_discard_entry(s,elem,hash))
     return 0;
   else {
-    errno = EINVAL;
-    return -1;
+    return KEYERROR;
   }
 }
 
@@ -247,8 +247,7 @@ int set_pop(set_t s, WORD *res) {
 
     if (s->numelements == 0) {
       *res = NULL;
-      errno = EINVAL;
-      return -1;
+      return KEYERROR;
     }
     while (entry->key == NULL || entry->key==dummy) {
         entry++;
@@ -320,7 +319,7 @@ static iterator_t set_iter_entry(set_t s) {
 }
 
 
-set_t set_copy(set_t s) {
+static set_t set_copy(set_t s) {
   set_t res = set_new(s->h);
   iterator_t iter = set_iter_entry(s);
   WORD w;

@@ -39,7 +39,8 @@ int main() {
   }
   printf("\nsum=%ld\n",sum);
   list_insert(t,5,(WORD)100);
-  list_pop(t,10);
+  WORD w;
+  list_pop(t,10,&w);
   printlist(t);
 
   iterator_t iter = range(1,5,1);
