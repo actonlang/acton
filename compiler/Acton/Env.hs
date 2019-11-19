@@ -5,6 +5,9 @@ import qualified Control.Exception
 import Debug.Trace
 import qualified Data.Binary
 import GHC.Generics (Generic)
+import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
+import Control.Monad.State.Strict
 import Data.Typeable
 import Data.Traversable
 import System.FilePath.Posix (joinPath)
@@ -15,7 +18,6 @@ import Acton.Syntax
 import Acton.Builtin
 import Acton.Printer
 import Acton.Names
-import Acton.TypeM
 import Utils
 import Pretty
 import InterfaceFiles
@@ -33,7 +35,7 @@ type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, indecl :: Bool }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool }
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
@@ -41,7 +43,7 @@ data NameInfo               = NVar      TSchema
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      QName [TBind] [TCon]
-                            | NTVar     (Maybe TCon) [TCon]
+                            | NTVar     [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -111,7 +113,7 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (w, NExt n q us)     = pretty w  <+> colon <+> text "extension" <+> pretty n <+>
                                   nonEmpty brackets commaList q <+> nonEmpty parens commaList us
-    pretty (n, NTVar u us)      = pretty n <> parens (commaList (maybeToList u ++ us))
+    pretty (n, NTVar us)        = pretty n <> parens (commaList us)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -131,7 +133,7 @@ instance Subst NameInfo where
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
-    msubst (NTVar u us)         = NTVar <$> msubst u <*> msubst us
+    msubst (NTVar us)           = NTVar <$> msubst us
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -144,12 +146,14 @@ instance Subst NameInfo where
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
-    tyfree (NTVar u us)         = tyfree u ++ tyfree us
+    tyfree (NTVar us)           = tyfree us
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
     tyfree NBlocked             = []
+
+msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
 instance Subst SrcInfoTag where
     msubst (GEN l t)                = GEN l <$> msubst t
@@ -215,7 +219,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
-    unalias env (NTVar u us)        = NTVar (unalias env u) (unalias env us)
+    unalias env (NTVar us)          = NTVar (unalias env us)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -276,13 +280,13 @@ prune xs                    = filter ((`notElem` xs) . fst)
 initEnv                     :: Env
 initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuiltin envBuiltin env0
   where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, indecl = False }
+        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, nocheck = False }
 
-enterDecl                   :: Env -> Env
-enterDecl env               = env{ indecl = True }
+setNoCheck                  :: Env -> Env
+setNoCheck env              = env{ nocheck = True }
 
-inDecl                      :: Env -> Bool
-inDecl env                  = indecl env
+noCheck                     :: Env -> Bool
+noCheck env                 = nocheck env
 
 stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
@@ -304,18 +308,16 @@ defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 defineTVars                 :: [TBind] -> Env -> Env
-defineTVars q env           = env{ names = [ (n, nTVar us) | TBind (TV n) us <- q ] ++ names env }
-  where nTVar us            = let (impl,sub) = partition (isProto env . tcname) us in NTVar (listToMaybe sub) impl
+defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] ++ names env }
 
 tvarScope                   :: Env -> [TVar]
-tvarScope env               = [ TV n | (n, NTVar _ _) <- names env ]
+tvarScope env               = [ TV n | (n, NTVar _) <- names env ]
 
 defineSelf                  :: Name -> [TBind] -> Env -> Env
 defineSelf n q env          = defineSelf' (NoQual n) q env
 
 defineSelf'                 :: QName -> [TBind] -> Env -> Env
---defineSelf' qn q env        = defineTVars [TBind tvSelf [tc]] env
-defineSelf' qn q env        = env{ names = (nSelf, NTVar (Just tc) []) : names env }
+defineSelf' qn q env        = env{ names = (nSelf, NTVar [tc]) : names env }
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
@@ -330,6 +332,11 @@ reservedOrSig               :: Name -> Env -> Maybe (Maybe TSchema)
 reservedOrSig n env         = case lookup n (names env) of
                                 Just NReserved -> Just Nothing
                                 Just (NSig t)  -> Just (Just t)
+                                _              -> Nothing
+
+findSig                     :: Name -> Env -> Maybe TSchema
+findSig n env               = case lookup n (names env) of
+                                Just (NSig t)  -> Just t
                                 _              -> Nothing
 
 findName                    :: Name -> Env -> NameInfo
@@ -350,7 +357,7 @@ findQName (NoQual n) env    = findName n env
 
 findSelf                    :: Env -> TCon
 findSelf env                = case findName nSelf env of
-                                NTVar u us -> fromJust u
+                                NTVar (u:us) -> u
 
 findMod                     :: ModName -> Env -> TEnv
 findMod m env               = case lookup m (modules env) of
@@ -368,6 +375,7 @@ addMod m te env             = env{ modules = (m,te) : modules env }
 dropNames                   :: Env -> Env
 dropNames env               = env{ names = names initEnv }
 
+isProto                     :: Env -> QName -> Bool
 isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
@@ -384,11 +392,14 @@ findProto n env             = case findQName n env of
 
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
-                                NTVar u us -> u
+                                NTVar (u:us) | not $ isProto env (tcname u) -> Just u
+                                _ -> Nothing
 
 findImplBound               :: TVar -> Env -> [TCon]
 findImplBound tv env        = case findName (tvname tv) env of
-                                NTVar u us -> us
+                                NTVar (u:us) | isProto env (tcname u) -> u:us
+                                             | otherwise -> us
+                                _ -> []
 
 findVarType                 :: Name -> Env -> TSchema
 findVarType n env           = findVarType' (NoQual n) env
@@ -432,8 +443,8 @@ findCon env u               = (constraintsOf env (subst s q), subst s us, subst 
 constraintsOf               :: Env -> [TBind] -> Constraints
 constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = Impl t u
-          | otherwise       = Sub t (tCon u)
+          | isProto env n   = Impl env t u
+          | otherwise       = Sub env t (tCon u)
 
 
 -- Environment unification ---------------------------------------------------------------
@@ -454,8 +465,8 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif _ _                            = err1 v "Inconsistent bindings for"
 
     unifT (TSchema _ [] t d) (TSchema _ [] t' d')
-      | d == d'                         = constrain [Equ t t']
-    unifT t t'                          = constrain [EquGen t t']
+      | d == d'                         = constrain [Equ env t t']
+    unifT t t'                          = err1 v "Cannot merge bindings of polymorphic type"
     
     unifC q us te q' us' te'
       | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
@@ -524,41 +535,345 @@ importAll m te              = mapMaybe imp te
     imp _                   = Nothing                               -- cannot happen
 
 
+-- Type inference monad ------------------------------------------------------------------
+
+
+data Constraint                         = Equ       Env Type Type
+                                        | Sub       Env Type Type
+                                        | EquGen    Env TSchema TSchema
+                                        | SubGen    Env TSchema TSchema
+                                        | Impl      Env Type TCon
+                                        | Sel       Env Type Name Type
+                                        | Mut       Env Type Name Type
+
+instance HasLoc Constraint where                 -- TODO: refine
+    loc (Equ _ t _)                     = loc t
+    loc (Sub _ t _)                     = loc t
+    loc (EquGen _ sc _)                 = loc sc
+    loc (SubGen _ sc _)                 = loc sc
+    loc (Impl _ t _)                    = loc t
+    loc (Sel _ t _ _)                   = loc t
+    loc (Mut _ t _ _)                   = loc t
+
+instance Pretty Constraint where
+    pretty (Equ _ t1 t2)                = pretty t1 <+> text "  =  " <+> pretty t2
+    pretty (Sub _ t1 t2)                = pretty t1 <+> text "  <  " <+> pretty t2
+    pretty (EquGen _ sc1 sc2)           = pretty sc1 <+> text "  =  " <+> pretty sc2
+    pretty (SubGen _ sc1 sc2)           = pretty sc1 <+> text "  <  " <+> pretty sc2
+    pretty (Impl _ t u)                 = pretty t <+> text "  impl  " <+> pretty u
+    pretty (Sel _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  =  " <+> pretty t2
+    pretty (Mut _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  :=  " <+> pretty t2
+
+instance Show Constraint where
+    show                                = render . pretty
+
+type Constraints                        = [Constraint]
+
+type TVarMap                            = Map TVar Type
+
+data TypeState                          = TypeState {
+                                                nextint         :: Int,
+                                                constraints     :: Constraints,
+                                                effectstack     :: [FXRow],
+                                                deferred        :: Constraints,
+                                                currsubst       :: TVarMap,
+                                                dumped          :: SrcInfo
+                                          }
+
+initTypeState s                         = TypeState { nextint = 1, constraints = [], effectstack = [], deferred = [], currsubst = s, dumped = [] }
+
+type TypeM a                            = State TypeState a
+
+runTypeM                                :: TypeM a -> a
+runTypeM m                              = evalState m (initTypeState Map.empty)
+{-
+type TypeM a                            = ExceptT TypeError (State TypeState) a
+
+runTypeM                                :: TypeM a -> a
+runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
+                                            Right x -> x
+                                            Left err -> internal ("Unhandled TypeM error: " ++ show err)
+-}
+newUnique                               :: TypeM Int
+newUnique                               = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
+
+constrain                               :: Constraints -> TypeM ()
+constrain cs                            = state $ \st -> ((), st{ constraints = cs ++ constraints st })
+
+collectConstraints                      :: TypeM Constraints
+collectConstraints                      = state $ \st -> (constraints st, st{ constraints = [] })
+
+pushFX                                  :: FXRow -> TypeM ()
+pushFX fx                               = state $ \st -> ((), st{ effectstack = fx : effectstack st })
+
+currFX                                  :: TypeM FXRow
+currFX                                  = state $ \st -> (head (effectstack st), st)
+
+equFX                                   :: Env -> FXRow -> TypeM ()
+equFX env fx                            = do fx0 <- currFX
+                                             constrain [Equ env fx fx0]
+
+subFX                                   :: Env -> FXRow -> TypeM ()
+subFX env fx                            = do fx0 <- currFX
+                                             constrain [Sub env fx fx0]
+
+popFX                                   :: TypeM ()
+popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
+
+defer                                   :: Constraints -> TypeM ()
+defer cs                                = state $ \st -> ((), st{ deferred = cs ++ deferred st })
+
+collectDeferred                         :: TypeM Constraints
+collectDeferred                         = state $ \st -> (deferred st, st)
+
+substitute                              :: TVar -> Type -> TypeM ()
+substitute tv@(TV Internal{}) t         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+
+getSubstitution                         :: TypeM (Map TVar Type)
+getSubstitution                         = state $ \st -> (currsubst st, st)
+
+dump                                    :: SrcInfo -> TypeM ()
+dump inf                                = state $ \st -> ((), st{ dumped = inf ++ dumped st })
+
+getDump                                 :: TypeM SrcInfo
+getDump                                 = state $ \st -> (dumped st, st)
+
+
+newName n                               = Internal (nstr n) <$> newUnique <*> return TypesPass
+
+newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return GenPass)
+
+newTVars n                              = mapM (const newTVar) [1..n]
+
+subst                                   :: Subst a => Substitution -> a -> a
+subst s x                               = evalState (msubst x) (initTypeState $ Map.fromList s)
+
+erase x                                 = subst s x
+  where s                               = [ (tv, tWild) | tv <- nub (tyfree x) ]
+
+
+class Subst t where
+    msubst                          :: t -> TypeM t
+    tyfree                          :: t -> [TVar]
+    tybound                         :: t -> [TVar]
+    tybound _                       = []
+
+instance Subst a => Subst (Name,a) where
+    msubst (n, t)                   = (,) <$> return n <*> msubst t
+    tyfree (n, t)                   = tyfree t
+    tybound (n, t)                  = tybound t
+
+instance Subst a => Subst [a] where
+    msubst                          = mapM msubst
+    tyfree                          = concat . map tyfree
+    tybound                         = concat . map tybound
+
+instance Subst a => Subst (Maybe a) where
+    msubst                          = maybe (return Nothing) (\x -> Just <$> msubst x)
+    tyfree                          = maybe [] tyfree
+    tybound                         = maybe [] tybound
+
+instance Subst Constraint where
+    msubst (Equ env t1 t2)          = Equ <$> msubst env <*> msubst t1 <*> msubst t2
+    msubst (Sub env t1 t2)          = Sub <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (EquGen env t1 t2)       = EquGen <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (SubGen env t1 t2)       = SubGen <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (Impl env t c)           = Impl <$> msubst env <*> msubst t <*> msubst c
+    msubst (Sel env t1 n t2)        = Sel <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
+    msubst (Mut env t1 n t2)        = Mut <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
+    tyfree (Equ _ t1 t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Sub _ t1 t2)            = tyfree t1 ++ tyfree t2
+    tyfree (EquGen _ t1 t2)         = tyfree t1 ++ tyfree t2
+    tyfree (SubGen _ t1 t2)         = tyfree t1 ++ tyfree t2
+    tyfree (Impl _ t c)             = tyfree t ++ tyfree c
+    tyfree (Sel _ t1 n t2)          = tyfree t1 ++ tyfree t2
+    tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
+
+instance Subst TSchema where
+    msubst sc@(TSchema l q t dec)   = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
+      where relevant k v            = k `elem` vs0
+            vs0                     = tyfree sc
+            msubst' s               = TSchema l (subst s q') (subst s t') dec
+              where vs              = tybound q
+                    newvars         = tyfree (rng s)
+                    clashvars       = vs `intersect` newvars
+                    avoidvars       = vs0 ++ vs ++ newvars
+                    freshvars       = tvarSupply \\ avoidvars
+                    renaming_s      = clashvars `zip` map (TVar NoLoc) freshvars
+                    q'              = [ TBind (subst renaming_s v) (subst renaming_s cs) | TBind v cs <- q ]
+                    t'              = subst renaming_s t
+
+    tyfree (TSchema _ q t dec)      = (tyfree q ++ tyfree t) \\ tybound q
+    tybound (TSchema _ q t dec)     = tybound q
+
+testSchemaSubst = do
+    putStrLn ("t:  " ++ render (pretty t))
+    putStrLn ("s1: " ++ render (pretty s1))
+    putStrLn ("s2: " ++ render (pretty s2))
+    putStrLn ("s3: " ++ render (pretty s3))
+    putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
+    putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
+    putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
+  where t   = tSchema [TBind (TV (name "A")) [TC (noQual "Eq") []]]
+                            (tCon (TC (noQual "apa") [tVar (TV (name "A")), 
+                                                      tVar (TV (name "B"))]))
+        s1  = [(TV (name "B"), tSelf)]
+        s2  = [(TV (name "A"), tSelf)]
+        s3  = [(TV (name "B"), tVar (TV (name "A")))]
+
+instance Subst TVar where
+    msubst v                        = do t <- msubst (TVar NoLoc v)
+                                         case t of
+                                            TVar _ v' -> return v'
+                                            _         -> return v
+    tyfree v                        = [v]
+        
+instance Subst TCon where
+    msubst (TC n ts)                = TC n <$> msubst ts
+    tyfree (TC n ts)                = tyfree ts
+
+instance Subst TBind where
+    msubst (TBind v cs)             = TBind <$> msubst v <*> msubst cs
+    tyfree (TBind v cs)             = tyfree cs
+    tybound (TBind v cs)            = [v]
+
+instance Subst Type where
+    msubst (TVar l v)               = do s <- getSubstitution
+                                         case Map.lookup v s of
+                                            Just t  -> msubst t
+                                            Nothing -> return (TVar l v)
+    msubst (TCon l c)               = TCon l <$> msubst c
+    msubst (TAt l c)                = TAt l <$> msubst c
+    msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
+    msubst (TTuple l p)             = TTuple l <$> msubst p
+    msubst (TRecord l k)            = TRecord l <$> msubst k
+    msubst (TUnion l as)            = return $ TUnion l as
+    msubst (TOpt l t)               = TOpt l <$> msubst t
+    msubst (TNone l)                = return $ TNone l
+    msubst (TWild l)                = return $ TWild l
+    msubst (TNil l)                 = return $ TNil l
+    msubst (TRow l n t r)           = TRow l n <$> msubst t <*> msubst r
+
+    tyfree (TVar _ v)               = [v]
+    tyfree (TCon _ c)               = tyfree c
+    tyfree (TAt _ c)                = tyfree c
+    tyfree (TFun _ fx p k t)        = tyfree fx ++ tyfree p ++ tyfree k ++ tyfree t
+    tyfree (TTuple _ p)             = tyfree p
+    tyfree (TRecord _ k)            = tyfree k
+    tyfree (TUnion _ as)            = []
+    tyfree (TOpt _ t)               = tyfree t
+    tyfree (TNone _)                = []
+    tyfree (TWild _)                = []
+    tyfree (TNil _)                 = []
+    tyfree (TRow _ _ t r)           = tyfree t ++ tyfree r
+
+
+
 -- Error handling ------------------------------------------------------------------------
 
-data CheckerError                       = FileNotFound ModName
-                                        | NameNotFound Name
-                                        | NameReserved Name
-                                        | NameBlocked Name
-                                        | IllegalRedef Name
-                                        | IllegalImport SrcLoc
-                                        | DuplicateImport Name
-                                        | NoItem ModName Name
-                                        | OtherError SrcLoc String
-                                        deriving (Show)
+data CheckerError                   = FileNotFound ModName
+                                    | NameNotFound Name
+                                    | NameReserved Name
+                                    | NameBlocked Name
+                                    | IllegalRedef Name
+                                    | MissingSelf Name
+                                    | IllegalImport SrcLoc
+                                    | DuplicateImport Name
+                                    | NoItem ModName Name
+                                    | OtherError SrcLoc String
+                                    deriving (Show)
 
+data TypeError                      = TypeErrHmm            -- ...
+                                    | RigidVariable TVar
+                                    | InfiniteType TVar
+                                    | ConflictingRow TVar
+                                    | KwdNotFound Name
+                                    | DistinctDecorations Decoration Decoration
+                                    | EscapingVar [TVar] TSchema TSchema
+                                    | NoSelStatic Name TCon
+                                    | NoSelInstByClass Name TCon
+                                    | NoMutProto Name
+                                    | NoMutClass Name
+                                    | LackSig Name
+                                    | LackDef Name
+                                    | NoRed Constraint
+                                    deriving (Show)
+
+instance Control.Exception.Exception TypeError
 instance Control.Exception.Exception CheckerError
 
-checkerError (FileNotFound n)           = (loc n, " Type interface file not found for " ++ prstr n)
-checkerError (NameNotFound n)           = (loc n, " Name " ++ prstr n ++ " is not in scope")
-checkerError (NameReserved n)           = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
-checkerError (NameBlocked n)            = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
-checkerError (IllegalRedef n)           = (loc n, " Illegal redefinition of " ++ prstr n)
-checkerError (IllegalImport l)          = (l,     " Relative import not yet supported")
-checkerError (DuplicateImport n)        = (loc n, " Duplicate import of name " ++ prstr n)
-checkerError (NoItem m n)               = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
-checkerError (OtherError l str)         = (l,str)
 
-nameNotFound n                          = Control.Exception.throw $ NameNotFound n
-nameReserved n                          = Control.Exception.throw $ NameReserved n
-nameBlocked n                           = Control.Exception.throw $ NameBlocked n
-illegalRedef n                          = Control.Exception.throw $ IllegalRedef n
-fileNotFound n                          = Control.Exception.throw $ FileNotFound n
-illegalImport l                         = Control.Exception.throw $ IllegalImport l
-duplicateImport n                       = Control.Exception.throw $ DuplicateImport n
-noItem m n                              = Control.Exception.throw $ NoItem m n
-err l s                                 = Control.Exception.throw $ OtherError l s
+instance HasLoc TypeError where
+    loc (RigidVariable tv)          = loc tv
+    loc (InfiniteType tv)           = loc tv
+    loc (ConflictingRow tv)         = loc tv
+    loc (KwdNotFound n)             = loc n
+    loc (DistinctDecorations _ _)   = NoLoc
+    loc (EscapingVar tvs t1 t2)     = loc tvs
+    loc (NoSelStatic n u)           = loc n
+    loc (NoSelInstByClass n u)      = loc n
+    loc (NoMutProto n)              = loc n
+    loc (NoMutClass n)              = loc n
+    loc (LackSig n)                 = loc n
+    loc (LackDef n)                 = loc n
+    loc (NoRed c)                   = loc c
 
-err1 x s                                = err (loc x) (s ++ " " ++ prstr x)
-err2 (x:_) s                            = err1 x s
+typeError err                       = (loc err,render (expl err))
+  where
+    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
+    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
+    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
+    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
+    expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
+    expl (EscapingVar tvs t1 t2)    = text "Cannot instantiate" <+> pretty t1 <+> text "to" <+> pretty t2 <+> 
+                                      text "because type variable" <+> pretty (head tvs) <+> text "escapes"
+    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
+    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
+    expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (NoMutClass n)             = text "Class attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (LackSig n)                = text "Declaration lacks accompanying signature"
+    expl (LackDef n)                = text "Signature lacks accompanying definition"
+    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+
+
+checkerError (FileNotFound n)       = (loc n, " Type interface file not found for " ++ prstr n)
+checkerError (NameNotFound n)       = (loc n, " Name " ++ prstr n ++ " is not in scope")
+checkerError (NameReserved n)       = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
+checkerError (NameBlocked n)        = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
+checkerError (IllegalRedef n)       = (loc n, " Illegal redefinition of " ++ prstr n)
+checkerError (MissingSelf n)        = (loc n, " Missing 'self' parameter in definition of")
+checkerError (IllegalImport l)      = (l,     " Relative import not yet supported")
+checkerError (DuplicateImport n)    = (loc n, " Duplicate import of name " ++ prstr n)
+checkerError (NoItem m n)           = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
+checkerError (OtherError l str)     = (l,str)
+
+nameNotFound n                      = Control.Exception.throw $ NameNotFound n
+nameReserved n                      = Control.Exception.throw $ NameReserved n
+nameBlocked n                       = Control.Exception.throw $ NameBlocked n
+illegalRedef n                      = Control.Exception.throw $ IllegalRedef n
+missingSelf n                       = Control.Exception.throw $ MissingSelf n
+fileNotFound n                      = Control.Exception.throw $ FileNotFound n
+illegalImport l                     = Control.Exception.throw $ IllegalImport l
+duplicateImport n                   = Control.Exception.throw $ DuplicateImport n
+noItem m n                          = Control.Exception.throw $ NoItem m n
+err l s                             = Control.Exception.throw $ OtherError l s
+
+err1 x s                            = err (loc x) (s ++ " " ++ prstr x)
+err2 (x:_) s                        = err1 x s
+
+notYetExpr e                        = notYet (loc e) e
+
+rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
+infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
+conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
+kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
+distinctDecorations d1 d2           = Control.Exception.throw $ DistinctDecorations d1 d2
+escapingVar tvs t1 t2               = Control.Exception.throw $ EscapingVar tvs t1 t2
+noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
+noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
+noMutProto n                        = Control.Exception.throw $ NoMutProto n
+noMutClass n                        = Control.Exception.throw $ NoMutClass n
+lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
+lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
+noRed c                             = Control.Exception.throw $ NoRed c
 

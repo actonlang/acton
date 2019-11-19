@@ -177,11 +177,11 @@ runRestPasses args paths src env original = (do
                           let outbase = outBase paths
                           env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env original
                           
-                          (sigs,tyinfo) <- Acton.Types.reconstruct outbase env' original
-                          iff (types args) $ dump "types" (Pretty.vprint tyinfo)
+                          (sigs,typed,tyinfo) <- Acton.Types.reconstruct outbase env' original
+                          iff (types args) $ dump "types" (Pretty.print typed)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
                               
-                          normalized <- Acton.Normalizer.normalize env' original
+                          normalized <- Acton.Normalizer.normalize env' typed
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
 
                           deacted <- Acton.Deactorizer.deactorize env' normalized
