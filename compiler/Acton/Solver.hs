@@ -8,7 +8,6 @@ import Utils
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Names
-import Acton.TypeM
 import Acton.Env
 
 

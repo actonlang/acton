@@ -16,7 +16,6 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Env
-import Acton.TypeM
 import Acton.Solver
 import qualified InterfaceFiles
 
