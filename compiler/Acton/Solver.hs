@@ -14,58 +14,58 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: Env -> [Constraint] -> TypeM [Constraint]
-simplify env cs                             = do --traceM ("### simplify: " ++ prstrs cs)
-                                                 reduceAll env cs
+simplify                                    :: [Constraint] -> TypeM [Constraint]
+simplify cs                                 = do --traceM ("### simplify: " ++ prstrs cs)
+                                                 reduceAll cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if simple cs1
                                                      then return [] -- cs1
-                                                     else simplify env cs1
+                                                     else simplify cs1
   where simple cs                           = True                              -- TODO: add proper test
 
 -- Reduce aggressively or fail
-solve                                       :: Env -> [Constraint] -> TypeM ()
-solve env cs                                = do --traceM ("### solve: " ++ prstrs cs)
-                                                 reduceAll env cs
+solve                                       :: [Constraint] -> TypeM ()
+solve cs                                    = do --traceM ("### solve: " ++ prstrs cs)
+                                                 reduceAll cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if done cs1
                                                      then return ()
-                                                     else solve env cs1
+                                                     else solve cs1
   where done cs                             = True                              -- TODO: ensure proper termination...!
 
-reduceAll env cs                            = mapM_ (reduce env) cs
+reduceAll cs                                = mapM_ reduce cs
 
-reduce env c                                = do c' <- msubst c
+reduce c                                    = do c' <- msubst c
                                                  --traceM ("### reduce: " ++ prstr c')
-                                                 reduce' env c'
+                                                 reduce' c'
 
-reduce' env (Sub t1 t2)                     = red' True env t1 t2
-reduce' env (Equ t1 t2)                     = red' False env t1 t2
-reduce' env (SubGen t1 t2)                  = redGen' True env t1 t2
-reduce' env (EquGen t1 t2)                  = redGen' False env t1 t2
+reduce' (Sub env t1 t2)                     = red' True env t1 t2
+reduce' (Equ env t1 t2)                     = red' False env t1 t2
+reduce' (SubGen env t1 t2)                  = redGen' True env t1 t2
+reduce' (EquGen env t1 t2)                  = redGen' False env t1 t2
 
-reduce' env c@(Impl (TVar _ tv) u)
+reduce' c@(Impl env (TVar _ tv) u)
   | not $ skolem tv                         = defer [c]
-reduce' env (Impl t u)
-  | entail env (Impl t u)                   = return ()
+reduce' (Impl env t u)
+  | entail (Impl env t u)                   = return ()
 
-reduce' env c@(Sel (TVar _ tv) n t2)
+reduce' c@(Sel env (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | Just u <- findSubBound tv env           = reduce' env (Sel (tCon u) n t2)
-reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
+  | Just u <- findSubBound tv env           = reduce' (Sel env (tCon u) n t2)
+reduce' (Sel env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  when (scdec sc == StaticMethod) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
-                                                 reduceAll env (Equ t' t2 : cs)
-reduce' env (Sel (TRecord _ r) n t2)        = reduce env (Equ r (kwdRow n (monotype t2) tWild))
+                                                 reduceAll (Equ env t' t2 : cs)
+reduce' (Sel env (TRecord _ r) n t2)        = reduce (Equ env r (kwdRow n (monotype t2) tWild))
 
-reduce' env (Sel (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
+reduce' (Sel env (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc)
                                                  let t' = subst [(tvSelf,tCon tc)] t
-                                                 reduceAll env (Equ t' t2 : cs)
+                                                 reduceAll (Equ env t' t2 : cs)
   where
     addself (TSchema l q t (InstMethod _))  = TSchema l q (addself' t) StaticMethod
     addself (TSchema l q t ClassAttr)       = TSchema l q (addself' t) StaticMethod
@@ -73,17 +73,17 @@ reduce' env (Sel (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
 
-reduce' env (Sel (TUnion _ [ULit _]) n t2)  = reduce' env (Sel tStr n t2)
+reduce' (Sel env (TUnion _ [ULit _]) n t2)  = reduce' (Sel env tStr n t2)
 
-reduce' env (Mut t1@(TVar _ tv) n t2)
-  | not $ skolem tv                         = defer [Mut t1 n t2]
-  | Just u <- findSubBound tv env           = reduce' env (Mut (tCon u) n t2)
-reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
+reduce' c@(Mut env (TVar _ tv) n t2)
+  | not $ skolem tv                         = defer [c]
+  | Just u <- findSubBound tv env           = reduce' (Mut env (tCon u) n t2)
+reduce' (Mut env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  when (not $ isInstAttr $ scdec sc) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
-                                                 reduceAll env (Sub t1 tObject : Equ t' t2 : cs)
-reduce' env c                               = noRed c
+                                                 reduceAll (Sub env t1 tObject : Equ env t' t2 : cs)
+reduce' c                                   = noRed c
 
 
 
@@ -96,11 +96,11 @@ red' sub env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 red' True env t1@(TVar _ tv) t2
-  | not $ skolem tv                         = defer [Sub t1 t2]
-  | entail env (Sub t1 t2)                  = return ()
+  | not $ skolem tv                         = defer [Sub env t1 t2]
+  | entail (Sub env t1 t2)                  = return ()
 red' True env t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = defer [Sub t1 t2]
-  | entail env (Sub t1 t2)                  = return ()
+  | not $ skolem tv                         = defer [Sub env t1 t2]
+  | entail (Sub env t1 t2)                  = return ()
 
 red' False env (TVar _ tv) t2
   | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
@@ -111,7 +111,7 @@ red' False env t1 (TVar _ tv)
 
 red' sub env (TCon _ c1) (TCon l c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
-  | otherwise                               = do reduceAll env cs
+  | otherwise                               = do reduceAll cs
                                                  red sub env t (TCon l c2)
   where (cs,t)                              = findSubAxiom env c1 (tcname c2)
 
@@ -164,8 +164,8 @@ red' sub env (TRow _ n t1 r1) r2            = do (t2,r2') <- findKwd tNil n r2 (
                                                  return (t, revApp r0 r)
         revApp (TRow l n t r1) r2           = revApp r1 (TRow l n t r2)
         revApp (TNil _) r2                  = r2
-red' False env t1 t2                        = noRed (Equ t1 t2)
-red' True env t1 t2                         = noRed (Sub t1 t2)
+red' False env t1 t2                        = noRed (Equ env t1 t2)
+red' True env t1 t2                         = noRed (Sub env t1 t2)
 
 redGen sub env sc1 sc2                      = do sc1' <- msubst sc1
                                                  sc2' <- msubst sc2
@@ -179,7 +179,7 @@ redGen' sub env sc1 sc2@(TSchema _ q2 t2 d2)
   | otherwise                               = do (cs,t1) <- instantiate env1 sc1
                                                  red sub env1 t1 t2
                                                  -- all the cs must be true in env + q2
-                                                 solve env1 cs
+                                                 solve cs
                                                  -- tyvars not free in sc1,sc2 cannot be affected by above reductions
                                                  tvs <- msubstTV $ tyfree [sc1,sc2]
                                                  let esc = intersect (tybound q2) tvs
@@ -193,8 +193,8 @@ monotypeOf sc                               = err1 sc "Monomorphic type expected
 
 -- Entailment ----------------------------------------------------------------------------
 
-entail                                  :: Env -> Constraint -> Bool
-entail env c                            = True                                              -- TODO: implement this
+entail                                  :: Constraint -> Bool
+entail c                                = True                                              -- TODO: implement this
 
 
 
