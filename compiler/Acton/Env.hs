@@ -443,8 +443,8 @@ findCon env u               = (constraintsOf env (subst s q), subst s us, subst 
 constraintsOf               :: Env -> [TBind] -> Constraints
 constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u <- us ]
   where constr t u@(TC n _)
-          | isProto env n   = Impl t u
-          | otherwise       = Sub t (tCon u)
+          | isProto env n   = Impl env t u
+          | otherwise       = Sub env t (tCon u)
 
 
 -- Environment unification ---------------------------------------------------------------
@@ -465,7 +465,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif _ _                            = err1 v "Inconsistent bindings for"
 
     unifT (TSchema _ [] t d) (TSchema _ [] t' d')
-      | d == d'                         = constrain [Equ t t']
+      | d == d'                         = constrain [Equ env t t']
     unifT t t'                          = err1 v "Cannot merge bindings of polymorphic type"
     
     unifC q us te q' us' te'
@@ -538,34 +538,35 @@ importAll m te              = mapMaybe imp te
 -- Type inference monad ------------------------------------------------------------------
 
 
-data Constraint                         = Equ       Type Type
-                                        | Sub       Type Type
-                                        | EquGen    TSchema TSchema
-                                        | SubGen    TSchema TSchema
-                                        | Impl      Type TCon
-                                        | Sel       Type Name Type
-                                        | Mut       Type Name Type
-                                        -- ...
-                                        deriving (Eq,Show)
+data Constraint                         = Equ       Env Type Type
+                                        | Sub       Env Type Type
+                                        | EquGen    Env TSchema TSchema
+                                        | SubGen    Env TSchema TSchema
+                                        | Impl      Env Type TCon
+                                        | Sel       Env Type Name Type
+                                        | Mut       Env Type Name Type
 
 instance HasLoc Constraint where                 -- TODO: refine
-    loc (Equ t _)                       = loc t
-    loc (Sub t _)                       = loc t
-    loc (EquGen sc _)                   = loc sc
-    loc (SubGen sc _)                   = loc sc
-    loc (Impl t _)                      = loc t
-    loc (Sel t _ _)                     = loc t
-    loc (Mut t _ _)                     = loc t
+    loc (Equ _ t _)                     = loc t
+    loc (Sub _ t _)                     = loc t
+    loc (EquGen _ sc _)                 = loc sc
+    loc (SubGen _ sc _)                 = loc sc
+    loc (Impl _ t _)                    = loc t
+    loc (Sel _ t _ _)                   = loc t
+    loc (Mut _ t _ _)                   = loc t
 
 instance Pretty Constraint where
-    pretty (Equ t1 t2)                  = pretty t1 <+> text "  =  " <+> pretty t2
-    pretty (Sub t1 t2)                  = pretty t1 <+> text "  <  " <+> pretty t2
-    pretty (EquGen sc1 sc2)             = pretty sc1 <+> text "  =  " <+> pretty sc2
-    pretty (SubGen sc1 sc2)             = pretty sc1 <+> text "  <  " <+> pretty sc2
-    pretty (Impl t u)                   = pretty t <+> text "  impl  " <+> pretty u
-    pretty (Sel t1 n t2)                = pretty t1 <+> text " ." <> pretty n <> text "  =  " <+> pretty t2
-    pretty (Mut t1 n t2)                = pretty t1 <+> text " ." <> pretty n <> text "  :=  " <+> pretty t2
-    
+    pretty (Equ _ t1 t2)                = pretty t1 <+> text "  =  " <+> pretty t2
+    pretty (Sub _ t1 t2)                = pretty t1 <+> text "  <  " <+> pretty t2
+    pretty (EquGen _ sc1 sc2)           = pretty sc1 <+> text "  =  " <+> pretty sc2
+    pretty (SubGen _ sc1 sc2)           = pretty sc1 <+> text "  <  " <+> pretty sc2
+    pretty (Impl _ t u)                 = pretty t <+> text "  impl  " <+> pretty u
+    pretty (Sel _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  =  " <+> pretty t2
+    pretty (Mut _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  :=  " <+> pretty t2
+
+instance Show Constraint where
+    show                                = render . pretty
+
 type Constraints                        = [Constraint]
 
 type TVarMap                            = Map TVar Type
@@ -608,13 +609,13 @@ pushFX fx                               = state $ \st -> ((), st{ effectstack = 
 currFX                                  :: TypeM FXRow
 currFX                                  = state $ \st -> (head (effectstack st), st)
 
-equFX                                   :: FXRow -> TypeM ()
-equFX fx                                = do fx0 <- currFX
-                                             constrain [Equ fx fx0]
+equFX                                   :: Env -> FXRow -> TypeM ()
+equFX env fx                            = do fx0 <- currFX
+                                             constrain [Equ env fx fx0]
 
-subFX                                   :: FXRow -> TypeM ()
-subFX fx                                = do fx0 <- currFX
-                                             constrain [Sub fx fx0]
+subFX                                   :: Env -> FXRow -> TypeM ()
+subFX env fx                            = do fx0 <- currFX
+                                             constrain [Sub env fx fx0]
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
@@ -673,20 +674,20 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst Constraint where
-    msubst (Equ t1 t2)              = Equ <$> msubst t1 <*> msubst t2
-    msubst (Sub t1 t2)              = Sub <$> msubst t1 <*> msubst t1
-    msubst (EquGen t1 t2)           = EquGen <$> msubst t1 <*> msubst t1
-    msubst (SubGen t1 t2)           = SubGen <$> msubst t1 <*> msubst t1
-    msubst (Impl t c)               = Impl <$> msubst t <*> msubst c
-    msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
-    msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
-    tyfree (Equ t1 t2)              = tyfree t1 ++ tyfree t2
-    tyfree (Sub t1 t2)              = tyfree t1 ++ tyfree t2
-    tyfree (EquGen t1 t2)           = tyfree t1 ++ tyfree t2
-    tyfree (SubGen t1 t2)           = tyfree t1 ++ tyfree t2
-    tyfree (Impl t c)               = tyfree t ++ tyfree c
-    tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
-    tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
+    msubst (Equ env t1 t2)          = Equ <$> msubst env <*> msubst t1 <*> msubst t2
+    msubst (Sub env t1 t2)          = Sub <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (EquGen env t1 t2)       = EquGen <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (SubGen env t1 t2)       = SubGen <$> msubst env <*> msubst t1 <*> msubst t1
+    msubst (Impl env t c)           = Impl <$> msubst env <*> msubst t <*> msubst c
+    msubst (Sel env t1 n t2)        = Sel <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
+    msubst (Mut env t1 n t2)        = Mut <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
+    tyfree (Equ _ t1 t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Sub _ t1 t2)            = tyfree t1 ++ tyfree t2
+    tyfree (EquGen _ t1 t2)         = tyfree t1 ++ tyfree t2
+    tyfree (SubGen _ t1 t2)         = tyfree t1 ++ tyfree t2
+    tyfree (Impl _ t c)             = tyfree t ++ tyfree c
+    tyfree (Sel _ t1 n t2)          = tyfree t1 ++ tyfree t2
+    tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
     msubst sc@(TSchema l q t dec)   = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
@@ -796,7 +797,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
-                                    deriving (Eq,Show,Typeable)
+                                    deriving (Show)
 
 instance Control.Exception.Exception TypeError
 instance Control.Exception.Exception CheckerError
@@ -824,8 +825,8 @@ typeError err                       = (loc err,render (expl err))
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
     expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
-    expl (EscapingVar tvs t1 t2)    = text "Cannot infer" <+> pretty (SubGen t1 t2) <+> text "because type variable" <+>
-                                      pretty (head tvs) <+> text "escapes"
+    expl (EscapingVar tvs t1 t2)    = text "Cannot instantiate" <+> pretty t1 <+> text "to" <+> pretty t2 <+> 
+                                      text "because type variable" <+> pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
     expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
     expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
