@@ -99,18 +99,18 @@ parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQual n)) (parToArg p)
 
 asyncCall env n p                   = Call l0 (Var l0 primASYNC) (PosArg selfSelf (PosArg clos PosNil)) KwdNil
   where selfSelf                    = Dot l0 (Var l0 (NoQual selfKW)) selfKW
-        meth                        = Dot l0 (Var l0 (NoQual (realActor env))) n
-        clos                        = Lambda l0 PosNIL KwdNIL $ Call l0 meth (PosArg selfSelf (parToArg p)) KwdNil
+        meth                        = Dot l0 selfSelf n
+        clos                        = Lambda l0 PosNIL KwdNIL $ Call l0 meth (parToArg p) KwdNil
 
 awaitCall env n p                   = Call l0 (Var l0 primAWAIT) (PosArg (asyncCall env n p) PosNil) KwdNil
 
 instance Deact Decl where
     deact env (Def l n q p k t b Async) 
                                     = do store [Decl l [Def l n q (addSelf p) k t [Return l0 $ Just $ asyncCall env n p] NoMod]]
-                                         Def l n q (addSelf p) k t <$> deact env b <*> return StaticMeth
+                                         Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b (Sync _)) 
                                     = do store [Decl l [Def l n q (addSelf p) k t [Return l0 $ Just $ awaitCall env n p] NoMod]]
-                                         Def l n q (addSelf p) k t <$> deact env b <*> return StaticMeth
+                                         Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b m) = Def l n q p k t <$> deact env1 b <*> return m
       where env1                    = hideLocals (bound (p,k) ++ bound b) env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
