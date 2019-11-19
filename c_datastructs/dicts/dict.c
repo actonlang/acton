@@ -3,11 +3,11 @@
 #include <stdio.h>
 #include <string.h> /*memset*/
 #include <assert.h>
-#include <errno.h>
 
 #include "dict.h"
 #include "hash.h"
 #include "iterator.h"
+#include "acterror.h"
 
 typedef struct entry_struct {
   size_t hash;
@@ -45,6 +45,7 @@ static void build_indices(table_t tbl, entry_t ep, size_t n) {
   size_t mask = (size_t)(tbl->tb_size - 1);
   for (int ix = 0; ix != n; ix++, ep++) {
     size_t hash = ep->hash;
+
     size_t i = hash & mask;
     for (size_t perturb = hash; tbl->tb_indices[i] != DKIX_EMPTY;) {
       perturb >>= PERTURB_SHIFT;
@@ -58,11 +59,6 @@ static void build_indices(table_t tbl, entry_t ep, size_t n) {
 Restructure the table by allocating a new table and reinserting all
 items again.  When entries have been deleted, the new table may
 actually be smaller than the old one.
-If a table is split (its keys and hashes are shared, its values are not),
-then the values are temporarily copied into the table, it is resized as
-a combined table, then the me_value slots in the old table are NULLed out.
-After resizing a table is always combined,
-but can be resplit by make_keys_shared().
 */
 
 static int dictresize(dict_t dict) {
@@ -158,7 +154,7 @@ static int lookdict(dict_t dict, size_t hash, WORD key, WORD *res) {
     if (ix >= 0) {
       entry_t entry = &TB_ENTRIES(table)[ix];
       if (entry->value != NULL && (entry->key == key || (entry->hash == hash && dict->h->eq(key,entry->key)))) {
-        // found an entry with the same or equal key 
+        // found an entry with the same or equal key
         *res = entry->value;
         return ix;
       }
@@ -177,6 +173,7 @@ static int lookdict(dict_t dict, size_t hash, WORD key, WORD *res) {
 
 static size_t find_empty_slot(table_t table, size_t hash) {
   const size_t mask = (table->tb_size)-1;
+
   size_t i = hash & mask;
   int ix = table->tb_indices[i];
     for (size_t perturb = hash; ix >= 0;) {
@@ -226,7 +223,7 @@ int dict_getitem(dict_t dict, WORD key, WORD *res) {
   //      table_t table = dict->table;
   //      entry_t entry = &TB_ENTRIES(table)[table->tb_indices[ix]];
   //  }
-  return ix >= 0 ? 0 : -1;
+  return ix >= 0 ? 0 : KEYERROR;
 }
 
 int dict_contains(dict_t dict, WORD key) {
@@ -258,8 +255,7 @@ int dict_iterator_next(iterator_t iter, WORD *res) {
     i++;
   }
   *res = NULL;
-  errno = EINVAL;
-  return -1;
+  return STOPITERATION;
 }
 
 int dict_values_iterator_next(iterator_t iter, WORD *res) {
@@ -277,8 +273,7 @@ int dict_values_iterator_next(iterator_t iter, WORD *res) {
     i++;
   }
   *res = NULL;
-  errno = EINVAL;
-  return -1;
+  return STOPITERATION;
 }
 
 int dict_items_iterator_next(iterator_t iter, WORD *res) {
@@ -298,8 +293,7 @@ int dict_items_iterator_next(iterator_t iter, WORD *res) {
     i++;
   }
   *res = NULL;
-  errno = EINVAL;
-  return -1;
+  return STOPITERATION;
 }
 
 int dict_iterator_reversed_next(iterator_t iter, WORD *res) {
@@ -316,8 +310,7 @@ int dict_iterator_reversed_next(iterator_t iter, WORD *res) {
     i--;
   }
   *res = NULL;
-  errno = EINVAL;
-  return -1;
+  return STOPITERATION;
 }
 
 iterator_t dict_keys(dict_t dict) {
@@ -391,8 +384,7 @@ int dict_pop(dict_t dict, WORD key, WORD *res) {
     return 0;
   } else {
     if (res == NULL) {
-      errno = EINVAL;
-      return -1;
+      return KEYERROR;
     } else { // *res already contains default value
       return 0;
     }
@@ -419,8 +411,7 @@ int dict_popitem(dict_t dict,WORD *res) {
     ix--;
   }
   *res = NULL;
-  errno = EINVAL;
-  return -1;
+  return KEYERROR;
 }
 
 void dict_update(dict_t dict, dict_t other) {

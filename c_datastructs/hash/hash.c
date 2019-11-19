@@ -14,8 +14,9 @@ https://github.com/python/cpython/blob/master/Python/pyhash.c
 One of the design criteria for the Python hash algorithms is that e.g. 15 and 15.0 should hash to the same value.
 This is not relevant in the typed context of Acton, but we still stick to this algorithm.
 
-Hash values may be negative, but -1 is used to signal an error. This seems to be a dubious design, 
-to be reconsidered. When can hash computations fail, for Hashable types?
+In Python, hash values may be negative, but -1 is used to signal an error. (When can hash computation fail in Acton?)
+However, CPython uses unsigned type size_t for hash values.
+
 
 */
 
@@ -110,8 +111,7 @@ size_t double_hash(WORD v) {
 }
 
 
-size_t pointer_hash(void *p)
-{
+size_t pointer_hash(void *p) {
     size_t x;
     size_t y = (size_t)p;
     /* bottom 3 or 4 bits are likely to be 0; rotate y by 4 to avoid
@@ -123,9 +123,6 @@ size_t pointer_hash(void *p)
     return x;
 }
 
-
-
-
 /* hash secret
  *
  * memory layout on 64 bit systems
@@ -134,16 +131,6 @@ size_t pointer_hash(void *p)
  *   k0k0k0k0 k1k1k1k1 ........  siphash -- two uint64_t
  *   ........ ........ ssssssss  djbx33a -- 16 bytes padding + one Py_hash_t
  *   ........ ........ eeeeeeee  pyexpat XML hash salt
- *
- * memory layout on 32 bit systems
- *   cccccccc cccccccc cccccccc  uc
- *   ppppssss ........ ........  fnv -- two Py_hash_t
- *   k0k0k0k0 k1k1k1k1 ........  siphash -- two uint64_t (*)
- *   ........ ........ ssss....  djbx33a -- 16 bytes padding + one Py_hash_t
- *   ........ ........ eeee....  pyexpat XML hash salt
- *
- * (*) The siphash member may not be available on 32 bit platforms without
- *     an unsigned int64 data type.
  */
 
 
@@ -167,13 +154,13 @@ _Py_HashSecret_t _Py_HashSecret = {{0}};
 #include "csiphash.c"
 
 static size_t
-pysiphash(const void *src, ssize_t src_sz) {
+pysiphash(void *src, ssize_t src_sz) {
     return (size_t)siphash24(
         _le64toh(_Py_HashSecret.siphash.k0), _le64toh(_Py_HashSecret.siphash.k1),
         src, src_sz);
 }
 
-size_t bytes_hash(const void *src, ssize_t len)
+size_t bytes_hash(WORD src, int len)
 {
     size_t x;
     /*
