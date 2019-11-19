@@ -61,6 +61,8 @@ env0 inf                                = Env { ctxt = [], defd = [], tinfo = in
 infixr +:
 frame +: env                            = env { ctxt = frame : ctxt env }
 
+emptyCtxt env                           = env{ ctxt = [] }
+
 define x env                            = env { defd = bound x ++ defd env }
 
 
@@ -126,6 +128,8 @@ instance CPS [Stmt] where
     cps env (Return _ Nothing : _)
       | inCont env                      = return $ format $ retcont eNone 0 (ctxt env)
     cps env (Return _ (Just e) : _)
+      | contCall env e,
+        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg e c) : []
       | inCont env                      = return $ format $ retcont e 0 (ctxt env)
 
     cps env (Assign _ [PVar _ n _] e : 
@@ -160,7 +164,7 @@ instance CPS [Stmt] where
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
-    cps env (Decl _ ds : ss)            = do ds' <- mapM (cps env1) ds
+    cps env (Decl l ds : ss)            = do ds' <- mapM (cps env1) ds
                                              ss' <- cps env1 ss
                                              return $ sDecl ds' : ss'
       where env1                        = define ds env
@@ -260,11 +264,14 @@ instance CPS [Stmt] where
     cps env []                          = return []
 
 instance CPS Decl where
-    cps env (Class l n q cs b)          = Class l n q cs <$> cpsSuite env b
+    cps env (Class l n q cs b)          = Class l n q cs <$> cpsSuite env1 b
+      where env1                        = emptyCtxt env
 
-    cps env (Protocol l n q cs b)       = Protocol l n q cs <$> cpsSuite env b
+    cps env (Protocol l n q cs b)       = Protocol l n q cs <$> cpsSuite env1 b
+      where env1                        = emptyCtxt env
 
-    cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env b
+    cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env1 b
+      where env1                        = emptyCtxt env
 
     cps env (Actor l n q p k a b)       = Actor l n q (addContParam p) k a <$> cpsSuite env1 b
       where env1                        = Meth contKW +: env { ctxt = [Act] }
@@ -275,8 +282,6 @@ instance CPS Decl where
 
     cps env d                           = return d
     
-
---prfree x                                = trace ("Free " ++ prstr (dname x) ++ ": " ++ show (nub (free (dbody x)))) $ x
 
 instance CPS Branch where
     cps env (Branch e ss)               = Branch e <$> cpsSuite env ss
@@ -306,9 +311,8 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
                                                       []
 
 
-contCall env (Await l e)                = True
 contCall env (Call l (Var _ n) p k)
-  | n `elem` primASYNC : ns0            = False                                         
+  | n `elem` primASYNC : ns0            = False
   where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]
 contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
@@ -355,6 +359,8 @@ instance NeedCont Stmt where
 
 class PreCPS a where
     pre                                 :: Env -> a -> CpsM a
+    preTop                              :: Env -> a -> CpsM a
+    preTop env                          = pre env
 
 instance PreCPS a => PreCPS [a] where
     pre env                             = mapM (pre env)
@@ -362,6 +368,9 @@ instance PreCPS a => PreCPS [a] where
 instance PreCPS a => PreCPS (Maybe a) where
     pre env Nothing                     = return Nothing
     pre env (Just a)                    = fmap Just (pre env a)
+    
+    preTop env Nothing                  = return Nothing
+    preTop env (Just a)                 = fmap Just (preTop env a)
 
 instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
@@ -369,7 +378,7 @@ instance PreCPS Stmt where
     pre env (AugAssign l p op e)        = AugAssign l <$> pre env p <*> return op <*> preTop env e
     pre env (Assert l es)               = Assert l <$> pre env es
     pre env (Delete l t)                = Delete l <$> pre env t
-    pre env (Return l e)                = Return l <$> pre env e
+    pre env (Return l e)                = Return l <$> preTop env e
     pre env (Raise l e)                 = Raise l <$> pre env e
     pre env (If l bs els)               = If l <$> pre env bs <*> return els
     pre env (While l e b els)           = While l <$> pre env e <*> return b <*> return els
@@ -386,11 +395,6 @@ instance PreCPS Decl where
     pre env (Def l n q ps ks ann b m)   = Def l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b <*> return m
     pre env d                           = return d
     
-preTop env (Await l e)                  = Await l <$> pre env e
-preTop env e0@(Call l e ps ks)
-  | contCall env e0                     = Call l e <$> pre env ps <*> pre env ks
-preTop env e                            = pre env e
-
 instance PreCPS Branch where
     pre env (Branch e ss)               = Branch  <$> pre env e <*> return ss
 
@@ -418,10 +422,6 @@ instance PreCPS Expr where
                                              prefix [sAssign [pVar v Nothing] (Call l e ps1 ks1)]
                                              return (eVar v)
     pre env (Call l e ps ks)            = Call l <$> pre env e <*> pre env ps <*> pre env ks
-    pre env (Await l e)                 = do e1 <- pre env e
-                                             v <- newName "await"
-                                             prefix [sAssign [pVar v Nothing] (Await l e1)]
-                                             return (eVar v)
     pre env (Index l e ix)              = Index l <$> pre env e <*> pre env ix
     pre env (Slice l e sl)              = Slice l <$> pre env e <*> pre env sl
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
@@ -478,6 +478,11 @@ instance PreCPS Expr where
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "add")) [e])
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e
+
+    preTop env e0@(Call l e ps ks)
+      | contCall env e0                 = Call l e <$> pre env ps <*> pre env ks
+    preTop env e                        = pre env e
+
 
 preComp env s0 s1 c                     = pre env (s0 : mkLoop c) >>= prefix
   where mkLoop NoComp                   = [s1]
