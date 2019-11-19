@@ -2,7 +2,7 @@ module Acton.Deactorizer where
 
 import Acton.Syntax
 import Acton.Names
-import Acton.Env
+import Acton.Env hiding (newName)
 import Acton.Prim
 import Acton.Builtin
 import Utils
