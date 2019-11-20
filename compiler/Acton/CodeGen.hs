@@ -62,7 +62,6 @@ instance Gen Stmt where
     gen env (Expr _ e)              = gen env e
     gen env (Assign _ ps e)         = hsep . punctuate (space <> equals) $ map (gen env) ps ++ [gen env e]
     gen env (AugAssign _ p o e)     = gen env p <+> gen env o <+> gen env e
-    gen env (Assert _ es)           = text "assert" <+> commaList es
     gen env (Pass _)                = text "pass"
     gen env (Delete _ t)            = text "del" <+> gen env t
     gen env (Return _ e)            = text "return" <+> gen env e

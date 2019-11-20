@@ -23,7 +23,7 @@ type Suite      = [Stmt]
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
-                | Assert        { sloc::SrcLoc, exprs::[Expr] }
+                | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, pattern::Pattern }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
@@ -380,7 +380,7 @@ instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
     x@AugAssign{}       ==  y@AugAssign{}       = pattern x == pattern y && aop x == aop y && expr x == expr y
-    x@Assert{}          ==  y@Assert{}          = exprs x == exprs y
+    x@Assert{}          ==  y@Assert{}          = expr x == expr y && optExpr x == optExpr y
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = pattern x == pattern y
     x@Return{}          ==  y@Return{}          = optExpr x == optExpr y

@@ -216,7 +216,7 @@ instance Lift Stmt where
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
     ll env (AugAssign l pat op e)       = AugAssign l <$> ll env pat <*> pure op <*> ll env e
-    ll env (Assert l es)                = Assert l <$> ll env es
+    ll env (Assert l e mbe)             = Assert l <$> ll env e <*> ll env mbe
     ll env s@(Pass _)                   = pure s
     ll env (Delete l target)            = Delete l <$> ll env target
     ll env (Return l e)                 = Return l <$> ll env e

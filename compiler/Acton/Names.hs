@@ -103,7 +103,7 @@ instance Vars Stmt where
     free (Expr _ e)                 = free e
     free (Assign _ ps e)            = free ps ++ free e
     free (AugAssign _ p op e)       = free p ++ bound p ++ free e
-    free (Assert _ es)              = free es
+    free (Assert _ e mbe)           = free e ++ free mbe
     free (Pass _)                   = []
     free (Delete _ p)               = free p ++ bound p
     free (Return _ e)               = free e

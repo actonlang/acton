@@ -27,3 +27,5 @@ primPOP                             = qPrim "POP"
 primRAISE                           = qPrim "RAISE"
 
 primCLOS                            = qPrim "CLOS"
+
+primASSERT                          = qPrim "ASSERT"

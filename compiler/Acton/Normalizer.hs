@@ -19,7 +19,8 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  X String literals are concatenated
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 --  - For loops are replaced by while over iterators
---  - With statemenmts are replaced by enter/exit calls + exception handling
+--  - With statemenmts are replaced by enter/exit prim calls + exception handling
+--  - The assert statement is replaced by a prim call
 
 
 -- Normalizing monad
@@ -57,7 +58,9 @@ instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (Assign l ts e)        = Assign l <$> norm env ts <*> norm env e
     norm env (AugAssign l p op e)   = AugAssign l <$> norm env p <*> norm env op <*> norm env e
-    norm env (Assert l es)          = Assert l <$> norm env es
+    norm env (Assert l e mbe)       = do e' <- norm env e
+                                         mbe' <- norm env mbe
+                                         return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
     norm env (Delete l p)           = Delete l <$> norm env p
     norm env (Return l mbe)         = Return l <$> norm env mbe
