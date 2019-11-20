@@ -33,6 +33,7 @@ dependencies:
 - scientific
 - deepseq
 - megaparsec >= 7
+- hashable
 
 executables:
   actonc:

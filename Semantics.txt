@@ -296,6 +296,7 @@ Type inference:
 Normalization:
 
 - All imported or built-in names are qualified by module
+- All module aliases are replaced by their original name
 X All parameters are positional
 X Parameter defaults are moved inside function definitions
 - Comprehensions are translated into loops
@@ -330,7 +331,6 @@ Deactorization:
     
     - b2 contains one 
     
-          @staticmethod
           def m(__self__,p):c1
     
       for each "sync/async def m(p):c" in b, where c1 is c with all state and local names referenced via __self__
@@ -343,11 +343,11 @@ Deactorization:
     
     - b4 contains one
     
-          def m(_this_,p): return ASYNC(_this_.__self__, lambda: _a.m(_this_.__self__,p))
+          def m(_this_,p): return ASYNC(_this_.__self__, lambda: _this_.__self__.m(p))
         
       for each "async def m(p):c" in b, and one
     
-          def m(_this_,p): return AWAIT(ASYNC(_this_.__self__, lambda: _a.m(_this_.__self__,p)))
+          def m(_this_,p): return AWAIT(ASYNC(_this_.__self__, lambda: _this_.__self__.m(p)))
         
       for each "sync m(p):c" in b
 
