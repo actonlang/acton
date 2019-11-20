@@ -20,7 +20,7 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 --  - For loops are replaced by while over iterators
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
---  - The assert statement is replaced by a prim call
+--  X The assert statement is replaced by a prim call
 
 
 -- Normalizing monad
@@ -37,10 +37,11 @@ normEnv env                         = NormEnv
 
 class Norm a where
     norm                            :: NormEnv -> a -> NormM a
+    norm'                           :: NormEnv -> a -> NormM [a]
+    norm' env x                     = (:[]) <$> norm env x
 
 instance Norm a => Norm [a] where
-    norm env []                     = return []
-    norm env (a:as)                 = (:) <$> norm env a <*> norm env as
+    norm env xs                     = concat <$> mapM (norm' env) xs
 
 instance Norm a => Norm (Maybe a) where
     norm env Nothing                = return Nothing
@@ -75,6 +76,8 @@ instance Norm Stmt where
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (Decl l ds)            = Decl l <$> norm env ds
+
+--    norm' env (Delete l p)          = 
 
 instance Norm Decl where
     norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm env k
@@ -125,12 +128,12 @@ instance Norm Expr where
 
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
---    norm env (PRecord l ps)         = PRecord l <$> norm env ps
-    norm env (PTuple l ps)          = PTuple l <$> norm env ps
-    norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
     norm env (PIndex l e ix)        = PIndex l <$> norm env e <*> norm env ix
     norm env (PSlice l e sl)        = PSlice l <$> norm env e <*> norm env sl
     norm env (PDot l e n)           = PDot l <$> norm env e <*> norm env n
+    norm env (PTuple l ps)          = PTuple l <$> norm env ps
+    norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
+--    norm env (PRecord l ps)         = PRecord l <$> norm env ps
     norm env (PParen l p)           = PParen l <$> norm env p
 
 instance Norm Exception where
