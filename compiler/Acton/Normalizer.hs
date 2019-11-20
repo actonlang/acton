@@ -11,8 +11,8 @@ normalize env0 m                    = return $ evalState (norm env m) 0
   where env                         = normEnv env0
 
 --  Normalization:
---  - All imported or built-in names are qualified by module
---  - All module aliases are replaced by their original name
+--  - All imported or built-in names are qualified by module, including those imported by 'from _ import'
+--  - All module aliases are replaced by their original module name
 --  X All parameters are positional
 --  X Parameter defaults are moved inside function definitions
 --  - Comprehensions are translated into loops
@@ -20,7 +20,13 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 --  - For loops are replaced by while over iterators
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
---  X The assert statement is replaced by a prim call
+--  X The assert statement is replaced by a prim call ASSERT
+--  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
+--  - The delete statement is replaced by (a sequence of) __delitem__ calls or None assignments
+--  - Return without argument is replaced by return None
+--  - Incremental assignments are replaced by the corresponding __iop__ calls
+--  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
+--  - Binary and unary operators are replaced by their corresponding __op__ calls
 
 
 -- Normalizing monad
@@ -65,7 +71,14 @@ instance Norm Stmt where
     norm env (Pass l)               = return $ Pass l
     norm env (Delete l p)           = Delete l <$> norm env p
     norm env (Return l mbe)         = Return l <$> norm env mbe
-    norm env (Raise l mbex)         = Raise l <$> norm env mbex
+    norm env (Raise l mbex)         = do mbex' <- norm env mbex
+                                         case mbex' of
+                                           Nothing ->
+                                               return $ Expr l $ eCall (eQVar primRERAISE) []
+                                           Just (Exception e Nothing) ->
+                                               return $ Expr l $ eCall (eQVar primRAISE) [e]
+                                           Just (Exception e (Just e')) -> 
+                                               return $ Expr l $ eCall (eQVar primRAISEFROM) [e,e']
     norm env (Break l)              = return $ Break l
     norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els

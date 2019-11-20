@@ -294,16 +294,22 @@ Type inference:
 - Overloaded names (global or attributes) are explicitly qualified by class
 
 Normalization:
-
-- All imported or built-in names are qualified by module
-- All module aliases are replaced by their original name
+- All imported or built-in names are qualified by module, including those imported by 'from _ import'
+- All module aliases are replaced by their original module name
 X All parameters are positional
 X Parameter defaults are moved inside function definitions
 - Comprehensions are translated into loops
 X String literals are concatenated
-- Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
+- Tuple (and list) patterns are replaced by a PVar pattern followed by explicit element assignments
 - For loops are replaced by while over iterators
-- With statemenmts are replaced by enter/exit calls + exception handling
+- With statemenmts are replaced by enter/exit prim calls + exception handling
+X The assert statement is replaced by a prim call ASSERT
+- The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
+- The delete statement is replaced by (a sequence of) __delitem__ calls or None assignments
+- Return without argument is replaced by return None
+- Incremental assignments are replaced by the corresponding __iop__ calls
+- The else branch of a while loop is replaced by an explicit if statement enclosing the loop
+- Binary and unary operators are replaced by their corresponding __op__ calls
 
 Deactorization:
 
@@ -355,9 +361,9 @@ Deactorization:
 
 CPS transformation:
 
-- All potentially blocking functions have continuations
-- All potentially blocking function calls are tail calls and receive continuation arguments
-- All calls to continuation parameter are represented as "return CONT(cont,value)"
+- All potentially blocking functions receive continuations
+- All potentially blocking function calls receive tail calls and receive continuation arguments
+- All calls to continuation parameters are written as "return CONT(cont,value)"
 - Exception handlers are broken down into continuations and PUSH/POP calls
 
 Lambda-lifting:
