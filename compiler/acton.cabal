@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 30057d426e5ed20d873fd09c19c2eba16a537dd84b11480aa7a53601b5737110
+-- hash: 8570237a66a955db50afb55d475a6586b7843a1ee3f72b2d753186db84cb6135
 
 name:           acton
 version:        0.3.0
@@ -27,6 +27,7 @@ executable actonc
     , deepseq
     , directory >=1.3.1
     , filepath
+    , hashable
     , megaparsec >=7
     , mtl
     , optparse-applicative
@@ -41,6 +42,7 @@ executable actonc
     , happy
   other-modules:
       Acton.Builtin
+      Acton.CodeGen
       Acton.CPS
       Acton.Deactorizer
       Acton.Env

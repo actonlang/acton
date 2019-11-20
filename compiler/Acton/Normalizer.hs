@@ -10,6 +10,18 @@ normalize                           :: Env -> Module -> IO Module
 normalize env0 m                    = return $ evalState (norm env m) 0
   where env                         = normEnv env0
 
+--  Normalization:
+--  - All imported or built-in names are qualified by module
+--  - All module aliases are replaced by their original name
+--  X All parameters are positional
+--  X Parameter defaults are moved inside function definitions
+--  - Comprehensions are translated into loops
+--  X String literals are concatenated
+--  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
+--  - For loops are replaced by while over iterators
+--  - With statemenmts are replaced by enter/exit calls + exception handling
+
+
 -- Normalizing monad
 type NormM a                        = State Int a
 

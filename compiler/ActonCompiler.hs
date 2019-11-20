@@ -11,10 +11,8 @@ import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
+import qualified Acton.CodeGen
 {-
-import qualified Acton.CPS
-import qualified Acton.Translator
-import qualified Backend.Persistable
 import qualified Yang.Syntax as Y
 import qualified Yang.Parser
 import qualified YangCompiler
@@ -44,8 +42,7 @@ data Args       = Args {
                     cps     :: Bool,
                     deact   :: Bool,
                     llift   :: Bool,
---                    python  :: Bool,
---                    persist :: Bool,
+                    cgen    :: Bool,
 --                    tracef  :: Bool,
 --                    expand  :: Bool,
                     make    :: Bool,
@@ -65,8 +62,7 @@ getArgs         = Args
                     <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
                     <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
---                    <*> switch (long "python"  <> help "Show the initial Python translation (Acton files only)")
---                    <*> switch (long "persist" <> help "Show persistable datatype replacements (Acton files only)")
+                    <*> switch (long "cgen"    <> help "Show the generated C code (Acton files only)")
 --                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
 --                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
                     <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
@@ -190,14 +186,12 @@ runRestPasses args paths src env original = (do
                           cpstyled <- Acton.CPS.convert [] deacted
                           iff (cps args) $ dump "cps" (Pretty.print cpstyled)
 
-
                           lifted <- Acton.LambdaLifter.liftModule cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
-  
-{-                              
-                          py1 <- Acton.Translator.translate (modpath paths) tyinfo (tracef args) tree
-                          iff (python args) $ dump "python" (Pretty.vprint py1)
-        
+                                
+                          c <- Acton.CodeGen.generate lifted
+                          iff (cgen args) $ dump "cgen" c
+{-        
                           py3 <- Backend.Persistable.replace py2
                           iff (persist args) $ dump "persist" (Pretty.vprint py3) 
     
