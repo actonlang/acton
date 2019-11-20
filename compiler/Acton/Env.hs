@@ -27,8 +27,8 @@ import InterfaceFiles
 
 
 mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env
-mkEnv paths env modul       = getImps paths env imps
-  where Module _ imps _     = modul
+mkEnv paths env modul       = getImps paths (setDefaultMod m env) imps
+  where Module m imps _     = modul
 
 
 type Schemas                = [(Name, TSchema)]
@@ -442,6 +442,11 @@ findCon env u               = (constraintsOf env (subst s q), subst s us, subst 
                                 NProto q us te -> (True,q,us,te)
                                 _ -> err1 (tcname u) "Class or protocol name expected, got"
         s                   = tybound q `zip` tcargs u
+
+findWitness                 :: Env -> QName -> [TBind] -> [TCon] -> Maybe Name
+findWitness env n q us      = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
+                                [w] -> Just w
+                                _   -> Nothing
 
 constraintsOf               :: Env -> [TBind] -> Constraints
 constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u <- us ]

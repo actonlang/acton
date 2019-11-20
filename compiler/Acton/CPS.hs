@@ -312,8 +312,12 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
 
 
 contCall env (Call l (Var _ n) p k)
-  | n `elem` primASYNC : ns0            = False
+  | n == primAWAIT                      = True
+  | isPrim n                            = False
+  | n `elem` ns0                        = False
   where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]
+        isPrim (QName m _)              = m == mPrim
+        isPrim _                        = False
 contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 

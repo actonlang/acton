@@ -8,7 +8,7 @@ contKW                              = prim "___c___"
 
 prim s                              = Internal s 0 GenPass
 
-nPrim                               = prim "___prim"
+nPrim                               = prim "___prim___"
 mPrim                               = ModName [nPrim]
 qPrim n                             = QName mPrim (name n)
 
@@ -18,7 +18,6 @@ primList                            = qPrim "list"
 primDict                            = qPrim "dict"
 primSet                             = qPrim "set"
 
-primACTOR                           = qPrim "ACTOR"
 primASYNC                           = qPrim "ASYNC"
 primAWAIT                           = qPrim "AWAIT"
 

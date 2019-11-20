@@ -189,7 +189,7 @@ runRestPasses args paths src env original = (do
                           lifted <- Acton.LambdaLifter.liftModule cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
                                 
-                          c <- Acton.CodeGen.generate lifted
+                          c <- Acton.CodeGen.generate env' lifted
                           iff (cgen args) $ dump "cgen" c
 {-        
                           py3 <- Backend.Persistable.replace py2

@@ -3,20 +3,23 @@ module Acton.CodeGen where
 
 import qualified Data.Set
 import qualified Data.Hashable
+import qualified Acton.Env
 import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Printer
 
-generate m                          = return $ render $ gen env0 m
+generate                            :: Acton.Env.Env -> Module -> IO String
+generate env m                      = return $ render $ gen (genEnv env) m
 
 class Gen a where
     gen                             :: Env -> a -> Doc
 
-data Env                            = Env { }
+data Env                            = Env { thismodule :: ModName }
 
-env0                                = Env { }
+genEnv env                          = Env { thismodule = Acton.Env.defaultmod env }
+
 
 instance (Gen a) => Gen (Maybe a) where
     gen env x                       = maybe empty (gen env) x
@@ -56,42 +59,34 @@ instance Gen Name where
                                         "volatile", "while"
                                       ]
 
+genQName env n                      = gen env (thismodule env) <> char '$' <> gen env n
+
+word                                = text "WORD"
+
 genSuite env ss                     = nest 4 $ vcat $ map (gen env) ss
 
 instance Gen Stmt where
-    gen env (Expr _ e)              = gen env e
-    gen env (Assign _ ps e)         = hsep . punctuate (space <> equals) $ map (gen env) ps ++ [gen env e]
-    gen env (AugAssign _ p o e)     = gen env p <+> gen env o <+> gen env e
+    gen env (Expr _ e)              = gen env e <> semi
+    gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
+    gen env (AugAssign _ p op e)    = gen env p <+> gen env op <+> gen env e <> semi                    -- TODO: remove
     gen env (Pass _)                = empty
-    gen env (Delete _ t)            = text "del" <+> gen env t
-    gen env (Return _ e)            = text "return" <+> gen env e
-    gen env (Raise _ e)             = text "raise" <+> gen env e
-    gen env (Break _)               = text "break"
-    gen env (Continue _)            = text "continue"
-    gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "elif") bs $+$ genEnd env "else" b2
-    gen env (While _ e b b2)        = text "while" <+> gen env e <> colon $+$ genSuite env b $+$ genEnd env "else" b2
-    gen env (For _ p e b b2)        = text "for" <+> gen env p <+> text "in" <+> gen env e <> colon $+$ 
-                                      genSuite env b $+$ genEnd env "else" b2
-    gen env (Try _ b hs b2 b3)      = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs $+$
+    gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
+    gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi
+    gen env (Raise _ e)             = text "raise" <+> gen env e                                        -- TODO: remove
+    gen env (Break _)               = text "break" <> semi
+    gen env (Continue _)            = text "continue" <> semi
+    gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genEnd env "else" b2
+    gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
+    gen env (Try _ b hs b2 b3)      = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs $+$  -- TODO: remove
                                       genEnd env "else" b2 $+$ genEnd env "finally" b3
-    gen env (With _ items b)        = text "with" <+> commaSep (gen env) items <> colon $+$ genSuite env b
-    gen env (Data _ (Just e) b)     = gen env e <> colon $+$ genSuite env b
-    gen env (Data _ Nothing b)      = text "return" <> colon $+$ genSuite env b
-    gen env (VarAssign _ ps e)      = text "var" <+> (hsep . punctuate (space <> equals) $ map (gen env) ps ++ [gen env e])
     gen env (Decl _ ds)             = vcat $ map (gen env) ds
 
 instance Gen Decl where
-    gen env (Def _ n q ps ks a b m) = (genMod m $ text "def" <+> gen env n <+> nonEmpty brackets commaList q <+> parens (gen env (ps,ks)) <>
-                                      nonEmpty (text " -> " <>) (gen env) a <> colon) $+$ genSuite env b
-    gen env (Actor _ n q ps ks a b) = text "actor" <+> gen env n <+> nonEmpty brackets commaList q <+> parens (gen env (ps,ks)) <>
-                                      nonEmpty (text " -> " <>) (gen env) a <> colon $+$ genSuite env b
+    gen env (Def _ n q ps ks a b m) = (word <+> genQName env n <+> parens (gen env ps) <+> char '{')
+                                      $+$ genSuite env b $+$ char '}'
     gen env (Class _ n q a b)       = text "class" <+> gen env n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
-    gen env (Protocol _ n q a b)    = text "protocol" <+> gen env n <+> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ genSuite env b
-    gen env (Extension _ n q a b)   = text "extension" <+> gen env n <+> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ genSuite env b
-    gen env (Signature _ vs sc)     = genSig env vs sc
+    gen env (Signature _ vs sc)     = empty
 
 genSig env vs (TSchema _ [] t dec)  = gen env dec $+$ commaList vs <+> text ":" <+> gen env t
 genSig env vs (TSchema _ q t dec)   = gen env dec $+$ commaList vs <+> text ":" <+> gen env q <+> text "=>" <+> gen env t
@@ -106,7 +101,7 @@ instance Gen Decoration where
     gen env (InstMethod False)      = empty -- text "(@instmethod)"
     gen env NoDec                   = empty
 
-genBranch env kw (Branch e b)       = text kw <+> gen env e <> colon $+$ genSuite env b
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b
 
 genEnd env kw []                    = empty
 genEnd env kw b                     = text kw <> colon $+$ genSuite env b
@@ -116,9 +111,8 @@ genOpt env sep (Just a)             = sep <+> gen env a
 
 
 instance Gen PosPar where
-    gen env (PosPar n t e PosNIL)   = gen env n <+> genOpt env colon t <+> genOpt env equals e
-    gen env (PosPar n t e p)        = gen env n <+> genOpt env colon t <+> genOpt env equals e <> comma <+> gen env p
-    gen env (PosSTAR n t)           = text "*" <> gen env n <+> genOpt env colon t
+    gen env (PosPar n t e PosNIL)   = word <+> gen env n
+    gen env (PosPar n t e p)        = word <+> gen env n <> comma <+> gen env p
     gen env PosNIL                  = empty
 
 instance Gen KwdPar where
@@ -158,34 +152,27 @@ instance Gen Expr where
     gen env (None _)                = text "None"
     gen env (NotImplemented _)      = text "NotImplemented"
     gen env (Ellipsis _)            = text "..."
-    gen env (Strings _ ss)          = hcat (map (gen env) ss)
-    gen env (BStrings _ ss)         = hcat (map (gen env) ss)
-    gen env (Call _ e ps ks)        = gen env e <> parens (gen env (ps,ks))
-    gen env (Await _ e)             = text "await" <+> gen env e
-    gen env (Index _ e ix)          = gen env e <> brackets (commaList ix)
-    gen env (Slice _ e sl)          = gen env e <> brackets (commaList sl)
+    gen env (Strings _ [s])         = doubleQuotes (text s)
+    gen env (BStrings _ [s])        = doubleQuotes (text s)
+    gen env (Call _ e ps ks)        = gen env e <> parens (gen env ps)
+    gen env (Index _ e ix)          = gen env e <> brackets (commaList ix)                  -- TODO: remove
+    gen env (Slice _ e sl)          = gen env e <> brackets (commaList sl)                  -- TODO: remove
     gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
-    gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2
-    gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)
-    gen env (UnOp _ o e)            = gen env o <> gen env e
-    gen env (Dot _ e n)             = gen env e <> dot <> gen env n
-    gen env (DotI _ e i)            = gen env e <> dot <> gen env i
-    gen env (Lambda _ ps ks e)      = text "lambda" <+> gen env (ps,ks) <> colon <+> gen env e
+    gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2               -- TODO: remove
+    gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove
+    gen env (UnOp _ o e)            = gen env o <> gen env e                                -- TODO: remove
+    gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
+    gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
     gen env (Yield _ e)             = text "yield" <+> gen env e
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs)         = gen env pargs
-    gen env (TupleComp _ e co)      = gen env e <+> gen env co
     gen env (Record _ KwdNil)       = text "record" <> parens empty
     gen env (Record _ kargs)        = parens (gen env kargs)
-    gen env (RecordComp _ n e co)   = parens (gen env n <+> equals <+> gen env e <+> gen env co)
     gen env (List _ es)             = brackets (commaList es)
-    gen env (ListComp _ e co)       = brackets (gen env e <+> gen env co)
     gen env (Dict _ es)             = braces (commaList es)
-    gen env (DictComp _ e co)       = braces (gen env e <+> gen env co)
     gen env (Set _ [])              = text "set" <> parens empty
     gen env (Set _ es)              = braces (commaList es)
-    gen env (SetComp _ e co)        = braces (gen env e <+> gen env co)
-    gen env (Paren _ e)             = parens (gen env e)
+    gen env (Paren _ e)             = gen env e
 
 instance Gen OpArg where
     gen env (OpArg op e)            = gen env op <+> gen env e
@@ -253,13 +240,14 @@ instance Gen KwdPat where
     gen env KwdPatNil               = empty
 
 instance Gen Pattern where
-    gen env (PVar _ n a)            = gen env n <> genAnn env a
+    gen env (PVar _ n Nothing)      = gen env n
+    gen env (PVar _ n (Just t))     = word <+> gen env n
     gen env (PTuple _ ps)           = gen env ps
 --    gen env (PRecord _ ps)          = parens (gen env ps)
     gen env (PList _ ps p)          = brackets (genPats env ps p)
     gen env (PIndex _ e ix)         = gen env e <> brackets (commaList ix)
     gen env (PSlice _ e sl)         = gen env e <> brackets (commaList sl)
-    gen env (PDot _ e n)            = gen env e <> dot <> gen env n
+    gen env (PDot _ e n)            = gen env e <> text "->" <> gen env n
     gen env (PParen _ p)            = parens (gen env p)
     gen env (PData _ n ixs)         = gen env n <> hcat (map (brackets . gen env) ixs)
 
