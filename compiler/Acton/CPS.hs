@@ -376,7 +376,7 @@ instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
     pre env (Assign l ps e)             = Assign l <$> pre env ps <*> preTop env e
     pre env (AugAssign l p op e)        = AugAssign l <$> pre env p <*> return op <*> preTop env e
-    pre env (Assert l es)               = Assert l <$> pre env es
+    pre env (Assert l e mbe)            = Assert l <$> pre env e <*> pre env mbe
     pre env (Delete l t)                = Delete l <$> pre env t
     pre env (Return l e)                = Return l <$> preTop env e
     pre env (Raise l e)                 = Raise l <$> pre env e

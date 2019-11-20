@@ -547,7 +547,7 @@ import_stmt = import_name <|> import_from
 -- nonlocal_stmt: 'nonlocal' NAME (',' NAME)*
 -- assert_stmt: 'assert' expr [',' expr]
 
-assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr `sepBy1` comma)
+assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr <*> optional (comma *> expr))
 
 -- Declaration groups ------------------------------------------------------------------
 

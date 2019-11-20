@@ -26,7 +26,7 @@ instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
     pretty (AugAssign _ p o e)      = pretty p <+> pretty o <+> pretty e
-    pretty (Assert _ es)            = text "assert" <+> commaList es
+    pretty (Assert _ e mbe)         = text "assert" <+> pretty e <> nonEmpty (comma <+>) pretty mbe
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t
     pretty (Return _ e)             = text "return" <+> pretty e

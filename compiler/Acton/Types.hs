@@ -178,8 +178,10 @@ instance InfEnv Stmt where
             protocol BXorA              = cLogical
             protocol BAndA              = cLogical
             protocol MMultA             = cMatrix
-    infEnv env (Assert l es)            = do es' <- mapM (inferBool env) es
-                                             return ([], Assert l es')
+    infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
+                                             (t,e2') <- infer env e2
+                                             constrain [Sub env t tStr]
+                                             return ([], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], s)
     infEnv env (Delete l pat)
       | nodup pat                       = do (_,pat') <- infer env pat                 -- TODO: constrain pat targets to opt type
