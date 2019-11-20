@@ -18,11 +18,13 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  - Comprehensions are translated into loops
 --  X String literals are concatenated
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
+--  - Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
+--  - Assignments to indexed and sliced patterns (PIndex/PSlice) are replaced by __setitem__/__setslice__ calls
 --  - For loops are replaced by while over iterators
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
 --  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
---  - The delete statement is replaced by (a sequence of) __delitem__ calls or None assignments
+--  - The delete statement is replaced by (a sequence of) __delitem__ calls (for PIndex) or None assignments
 --  - Return without argument is replaced by return None
 --  - Incremental assignments are replaced by the corresponding __iop__ calls
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop

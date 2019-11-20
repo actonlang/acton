@@ -23,7 +23,7 @@ reconstruct                             :: String -> Env -> Module -> IO (TEnv, 
 reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env1 te)
                                              return (te, modul', info)
   where Module m imp suite              = modul
-        env1                            = reserve (bound suite) $ setDefaultMod m env
+        env1                            = reserve (bound suite) env
         ((te,suite'),info)              = runTypeM $ (,) <$> infTop env1 suite <*> getDump
         modul'                          = Module m imp suite'
 
@@ -429,7 +429,7 @@ instance Check Decl where
                                              b' <- check (define te env1) b
                                              popFX
                                              checkBindings env True us te
-                                             return $ Protocol l n q us b'
+                                             return $ Class l n q us b'         -- TODO: add Self to q
       where env1                        = defineSelf n q $ defineTVars q $ block (stateScope env) env
             (q,us,te)                   = findProto (NoQual n) env
 
@@ -437,8 +437,9 @@ instance Check Decl where
                                              (te,b') <- infEnv env1 b
                                              popFX
                                              checkBindings env False us te
-                                             return $ Extension l n q us b'
+                                             return $ Class l w [] us b'        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
+            Just w                      = findWitness env n q us
     check env d@(Signature l ns sc)     = return d
 
 

@@ -70,7 +70,9 @@ instance Deact Stmt where
     deact env (Try l b hs els fin)  = Try l <$> deact env b <*> deact env hs <*> deact env els <*> deact env fin
     deact env (With l is b)         = With l <$> deact env is <*> deact env b
     deact env (Data l mbt ss)       = Data l <$> deact env mbt <*> deact env ss
-    deact env (VarAssign l ps e)    = Assign l <$> deact env ps <*> deact env e
+    deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
+                                         store [Decl l0 [Signature l0 [n] (monotype t)]]
+                                         Assign l <$> deact env ps <*> deact env e
     deact env (Decl l ds)           = Decl l <$> deactD env ds
 
 deactD env []                       = return []
