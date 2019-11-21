@@ -303,7 +303,7 @@ instance InfEnv Decl where
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
     infEnv env d@(Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
-      | wfWild env sc                   = do d' <- instwild d
+      | otherwise                       = do d' <- instwild d
                                              sc <- instwild $ extractSchema env d'
                                              return (nSig ns sc, d')
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
@@ -439,7 +439,8 @@ instance Check Decl where
                                              return $ Class l w [] us b'        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             Just w                      = findWitness env n q us
-    check env d@(Signature l ns sc)     = return d
+    check env d@(Signature l ns sc)
+      | wfWild env sc                   = return d
 
 
 checkBindings env proto us te
