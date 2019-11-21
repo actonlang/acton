@@ -158,11 +158,14 @@ instance InfEnv Stmt where
                                              (te,t2,pats') <- infEnvT env pats
                                              constrain [Sub env t1 t2]
                                              return (te, Assign l pats' e')
-    infEnv env (AugAssign l pat o@(Op _ op) e)
-                                        = do (t1,e') <- infer env e
-                                             (t2,pat') <- infer env pat
-                                             constrain [Sub env t1 t2, Impl env t2 (protocol op)]
-                                             return ([], AugAssign l pat' o e')
+    infEnv env (AugAssign l p@(PVar _ n ann) (Op _ op) e)
+      | reserved n env                  = nameReserved n
+      | ann /= Nothing                  = typedReassign p
+      | otherwise                       = do (t1,e1) <- infer env (Var (loc n) (NoQual n)) 
+                                             (t2,e2) <- infer env e
+                                             w <- newName "AugOp"
+                                             constrain [Sub env t2 t1, Impl env t1 (protocol op)]
+                                             return ([], Assign l [p] (eCall (eDot (eVar w) (method op)) [e1,e2]))
       where protocol PlusA              = cPlus
             protocol MinusA             = cMinus
             protocol MultA              = cNumber
@@ -176,6 +179,20 @@ instance InfEnv Stmt where
             protocol BXorA              = cLogical
             protocol BAndA              = cLogical
             protocol MMultA             = cMatrix
+            method PlusA                = iaddKW
+            method MinusA               = isubKW
+            method MultA                = imulKW
+            method PowA                 = ipowKW
+            method DivA                 = itruedivKW
+            method ModA                 = imodKW
+            method EuDivA               = ifloordivKW
+            method ShiftLA              = ilshiftKW
+            method ShiftRA              = irshiftKW
+            method BOrA                 = iorKW
+            method BXorA                = ixorKW
+            method BAndA                = iandKW
+            method MMultA               = imatmulKW
+    infEnv env (AugAssign l p o e)      = notYet l "Augmented assignments to non-variable targets"
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
                                              (t,e2') <- infer env e2
                                              constrain [Sub env t tStr]
@@ -297,7 +314,7 @@ instance InfEnv Decl where
             us1                         = protoBases env us
     infEnv env d@(Extension _ n q us b)
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | wf env q && wf env1 us          = do w <- newName (noqual n)
+      | wf env q && wf env1 us          = do w <- newName (nstr $ noqual n)
                                              return (nExt w n q (mro env1 (protoBases env us)), d)
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
@@ -532,16 +549,19 @@ instance Infer Expr where
     infer env (Index l e ixs)           = do (t,e') <- infer env e
                                              (ti,ix') <- infer env ix
                                              t0 <- newTVar
+                                             w <- newName "Indexed"
                                              constrain [Impl env t (cIndexed ti t0)]
-                                             return (t0, Index l e' [ix'])
+                                             return (t0, eCall (eDot (eVar w) getitemKW) [e',ix'])
       where ix | length ixs == 1        = head ixs
                | otherwise              = Tuple NoLoc (foldr PosArg PosNil ixs)
     infer env (Slice l e slz)           = do (t,e') <- infer env e
                                              sl' <- inferSlice env sl
+                                             w <- newName "Sliceable"
                                              constrain [Impl env t cSliceable]
-                                             return (t, Slice l e' [sl'])
+                                             return (t, eCall (eDot (eVar w) getsliceKW) (e' : toArgs sl'))
       where sl | length slz == 1        = head slz
                | otherwise              = notYet l "Multidimensional slicing"
+            toArgs (Sliz _ e1 e2 e3)    = map (maybe eNone id) [e1,e2,e3]
     infer env (Cond l e1 e e2)          = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
                                              e' <- inferBool env e
@@ -556,8 +576,9 @@ instance Infer Expr where
       | otherwise                       = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
                                              t <- newTVar
+                                             w <- newName "BinOp"
                                              constrain [Sub env t1 t, Sub env t2 t, Impl env t (protocol op)]
-                                             return (t, BinOp l e1' o e2')
+                                             return (t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = cPlus
             protocol Minus              = cMinus
             protocol Mult               = cNumber
@@ -571,31 +592,47 @@ instance Infer Expr where
             protocol BXor               = cLogical
             protocol BAnd               = cLogical
             protocol MMult              = cMatrix
+            method Plus                 = addKW
+            method Minus                = subKW
+            method Mult                 = mulKW
+            method Pow                  = powKW
+            method Div                  = truedivKW
+            method Mod                  = modKW
+            method EuDiv                = floordivKW
+            method ShiftL               = lshiftKW
+            method ShiftR               = rshiftKW
+            method BOr                  = orKW
+            method BXor                 = xorKW
+            method BAnd                 = andKW
+            method MMult                = matmulKW
     infer env (UnOp l o@(Op _ op) e)
       | op == Not                       = do (t,e') <- infer env e
                                              constrain [Impl env t cBoolean]
                                              return (tBool, UnOp l o e')
       | otherwise                       = do (t,e') <- infer env e
+                                             w <- newName "UnOp"
                                              constrain [Impl env t (protocol op)]
-                                             return (t, UnOp l o e')
+                                             return (t, eCall (eDot (eVar w) (method op)) [e'])
       where protocol UPlus              = cNumber
             protocol UMinus             = cNumber
             protocol BNot               = cIntegral
-    infer env (CompOp l e ops)          = do (t1,e') <- infer env e
-                                             ops' <- walk t1 ops
-                                             return (tBool, CompOp l e' ops')
-      where walk t0 []                     = return []
-            walk t0 (OpArg o@(Op l op) e:ops)
-              | op `elem` [In,NotIn]    = do (t1,e') <- infer env e
-                                             constrain [Impl env t1 (cCollection t0), Impl env t0 cEq]
-                                             ops' <- walk t1 ops
-                                             return (OpArg o e' : ops')
-              | otherwise               = do (t1,e') <- infer env e
+            method UPlus                = posKW
+            method UMinus               = negKW
+            method BNot                 = invertKW
+    infer env (CompOp l e1 [OpArg (Op _ op) e2])
+      | op `elem` [In,NotIn]            = do (t1,e1') <- infer env e1
+                                             (t2,e2') <- infer env e2
+                                             w1 <- newName "Collection"
+                                             w2 <- newName "Comp"
+                                             constrain [Impl env t2 (cCollection t1), Impl env t1 cEq]
+                                             return (tBool, eCall (eDot (eVar w1) (method op)) [eVar w2, e1', e2'])
+      | otherwise                       = do (t1,e1') <- infer env e1
+                                             (t2,e2') <- infer env e2
                                              t <- newTVar
-                                             constrain [Sub env t0 t, Sub env t1 t, Impl env t (protocol op)]
-                                             ops' <- walk t ops
-                                             return (OpArg o e' : ops')
-            protocol Eq                 = cEq
+                                             w <- newName "Comp"
+                                             constrain [Sub env t1 t, Sub env t2 t, Impl env t (protocol op)]
+                                             return (tBool, eCall (eDot (eVar w) (method op)) [e1',e2'])
+      where protocol Eq                 = cEq
             protocol NEq                = cEq
             protocol LtGt               = cEq
             protocol Lt                 = cOrd
@@ -604,6 +641,18 @@ instance Infer Expr where
             protocol GE                 = cOrd
             protocol Is                 = cIdentity
             protocol IsNot              = cIdentity
+            method Eq                   = eqKW
+            method NEq                  = neKW
+            method LtGt                 = neKW
+            method Lt                   = ltKW
+            method Gt                   = gtKW
+            method LE                   = leKW
+            method GE                   = geKW
+            method Is                   = isKW
+            method IsNot                = isnotKW
+            method In                   = containsKW
+            method NotIn                = containsnotKW
+    infer env (CompOp l e1 ops)         = notYet l "Comparison chaining"
     infer env (Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
       | otherwise                       = do (t,e') <- infer env e
@@ -829,7 +878,7 @@ instance InfEnvT Pattern where
     infEnvT env (PVar l n Nothing)      = case findVarType n env of
                                              TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
                                              _ -> err1 n "Polymorphic variable not assignable:"
-    infEnvT env (PVar l n ann)          = err1 ann "Type annotation on reassignment"
+    infEnvT env p@PVar{}                = typedReassign p
     infEnvT env (PIndex l e [i])        = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar

@@ -19,8 +19,6 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  - Comprehensions are translated into loops
 --  X String literals are concatenated and delimited by double quotes
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
---  X Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
---  - Assignments to indexed and sliced patterns (PIndex/PSlice) are replaced by __setitem__/__setslice__ calls
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
 --  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
@@ -28,7 +26,6 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  X Return without argument is replaced by return None
 --  - Incremental assignments are replaced by the corresponding __iop__ calls
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
---  - Binary and unary operators are replaced by their corresponding __op__ calls
 
 
 -- Normalizing monad
@@ -108,6 +105,15 @@ instance Norm Decl where
     norm env (Extension l n q as b) = Extension l n q as <$> norm env b
     norm env (Signature l ns t)     = return $ Signature l ns t
 
+catStrings ['"':s]                  = '"' : s
+catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']
+  where escape c []                 = []
+        escape c ('\\':x:xs)        = '\\' : x : escape c xs
+        escape c (x:xs)
+          | x == c                  = '\\' : x : escape c xs
+          | otherwise               = x : escape c xs
+        stripQuotes s               = init $ tail s
+
 instance Norm Expr where
     norm env (Var l nm)             = Var l <$> norm env nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
@@ -117,28 +123,12 @@ instance Norm Expr where
     norm env (None l)               = return $ None l
     norm env (NotImplemented l)     = return $ NotImplemented l
     norm env (Ellipsis l)           = return $ Ellipsis l
-    norm env (Strings l [s])
-      | head s == '"'               = return $ Strings l [s]
-    norm env (Strings l ss)         = return $ Strings l ['"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']]
-      where escape c []             = []
-            escape c ('\\':x:xs)    = '\\' : x : escape c xs
-            escape c (x:xs)
-              | x == c              = '\\' : x : escape c xs
-              | otherwise           = x : escape c xs
-            stripQuotes s           = init $ tail s
-    norm env (BStrings l ss)        = return $ BStrings l [concat ss]
+    norm env (Strings l ss)         = return $ Strings l [catStrings ss]
+    norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
-    norm env (Index l e [ix])       = do e' <- norm env e
-                                         ix' <- norm env ix
-                                         return $ Call l (eDot e' getitemKW) (PosArg ix' PosNil) KwdNil
-    norm env (Slice l e [sl])       = do e' <- norm env e
-                                         sl' <- norm env sl
-                                         return $ Call l (eDot e' getsliceKW) (toArg sl') KwdNil
-      where toArg (Sliz _ e1 e2 e3) = foldr PosArg PosNil (map (maybe (None NoLoc) id) [e1,e2,e3])
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
-    norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> norm env op <*> norm env e2
-    norm env (CompOp l e ops)       = CompOp l <$> norm env e <*> norm env ops
-    norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e 
+    norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> norm env op <*> norm env e2   -- only Or,And
+    norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e                     -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
     norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
     norm env (Lambda l ps ks e)     = Lambda l <$> norm env ps <*> norm env ks <*> norm env e
@@ -170,7 +160,8 @@ instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 
 instance Norm Name where
-    norm env (Name l s)             = Name l <$> return s
+    norm env (Name l s)             = return $ Name l s
+    norm env (Internal s i p)       = return $ Internal s i p
 
 instance Norm ModName where
     norm env (ModName ns)           = ModName <$> norm env ns
