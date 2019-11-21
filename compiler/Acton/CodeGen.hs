@@ -88,19 +88,6 @@ instance Gen Decl where
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
     gen env (Signature _ vs sc)     = empty
 
-genSig env vs (TSchema _ [] t dec)  = gen env dec $+$ commaList vs <+> text ":" <+> gen env t
-genSig env vs (TSchema _ q t dec)   = gen env dec $+$ commaList vs <+> text ":" <+> gen env q <+> text "=>" <+> gen env t
-
-instance Gen Decoration where
-    gen env ClassAttr               = text "@classattr"
-    gen env (InstAttr True)         = text "@instattr"
-    gen env (InstAttr False)        = empty -- text "(@instattr)"
-    gen env StaticMethod            = text "@staticmethod"
-    gen env ClassMethod             = text "@classmethod"
-    gen env (InstMethod True)       = text "@instmethod"
-    gen env (InstMethod False)      = empty -- text "(@instmethod)"
-    gen env NoDec                   = empty
-
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b
 
 genEnd env kw []                    = empty
@@ -233,37 +220,13 @@ instance Gen PosPat where
     gen env (PosPatStar p)          = text "*" <> gen env p
     gen env PosPatNil               = empty
 
-instance Gen KwdPat where
-    gen env (KwdPat n p KwdPatNil)  = gen env n <+> equals <+> gen env p
-    gen env (KwdPat n p ps)         = gen env n <+> equals <+> gen env p <> comma <+> gen env ps
-    gen env (KwdPatStar p)          = text "**" <> gen env p
-    gen env KwdPatNil               = empty
-
 instance Gen Pattern where
     gen env (PVar _ n Nothing)      = gen env n
     gen env (PVar _ n (Just t))     = word <+> gen env n
-    gen env (PTuple _ ps)           = gen env ps
---    gen env (PRecord _ ps)          = parens (gen env ps)
-    gen env (PList _ ps p)          = brackets (genPats env ps p)
     gen env (PIndex _ e ix)         = gen env e <> brackets (commaList ix)
     gen env (PSlice _ e sl)         = gen env e <> brackets (commaList sl)
     gen env (PDot _ e n)            = gen env e <> text "->" <> gen env n
-    gen env (PParen _ p)            = parens (gen env p)
-    gen env (PData _ n ixs)         = gen env n <> hcat (map (brackets . gen env) ixs)
-
-genPats env [] Nothing              = empty
-genPats env ps Nothing              = commaSep (gen env) ps
-genPats env [] (Just p)             = text "*" <> gen env p
-genPats env ps (Just p)             = commaSep (gen env) ps <> comma <+> text "*" <> gen env p
-
-genMod (Sync True)                  = (text "sync" <+>)
-genMod (Sync False)                 = id -- (text "(sync)" <+>)
-genMod Async                        = (text "async" <+>)
-genMod NoMod                        = id
-genMod StaticMeth                   = (text "@staticmethod" $+$)
-genMod ClassMeth                    = (text "@classmethod" $+$)
-genMod (InstMeth True)              = (text "@instmethod" $+$)
-genMod (InstMeth False)             = id -- (text "(@instmethod)" $+$)
+    gen env (PParen _ p)            = gen env p
 
 instance Gen Unary where
     gen env Not                     = text "not "
@@ -317,71 +280,33 @@ instance Gen Aug where
     gen env EuDivA                  = text "//="
 
 instance Gen TSchema where
-    gen env (TSchema _ [] t NoDec)  = gen env t
-    gen env (TSchema _ q t NoDec)   = gen env q <+> text "=>" <+> gen env t
-    gen env (TSchema l q t d)       = gen env d <+> gen env (TSchema l q t NoDec)
+    gen env (TSchema _ _ t _)       = gen env t
 
 instance Gen TVar where
-    gen env (TV n)                  = gen env n
+    gen env (TV n)                  = word
 
 instance Gen TCon where
-    gen env (TC n [])               = gen env n
-    gen env (TC n [t])
-      | n == qnSequence             = brackets (gen env t)
-      | n == qnSet                  = braces (gen env t)
-    gen env (TC n [kt,vt])
-      | n == qnMapping              = braces (gen env kt <> colon <+> gen env vt)
-    gen env (TC n ts)               = gen env n <> brackets (commaList ts)
+    gen env (TC n _)                = gen env n
 
-instance Gen [TBind] where
-    gen env q                       = brackets (commaList q)
-
-instance Gen TBind where
-    gen env (TBind v [])            = gen env v
-    gen env (TBind v cs)            = gen env v <> parens (commaList cs)
-    
 instance Gen UType where
     gen env (UCon n)                = gen env n
     gen env (ULit str)              = text str
 
-genFXRow env (TRow _ n t r)
-  | n == syncKW                     = text "sync" <+> genFXRow env r
-  | n == asyncKW                    = text "async" <+> genFXRow env r
-  | n == actKW                      = text "act" <+> genFXRow env r
-  | n == mutKW                      = text "mut" <+> genFXRow env r
-  | n == retKW                      = text "ret" <> parens (gen env t) <+> genFXRow env r
-genFXRow env (TVar _ tv)            = gen env tv
-genFXRow env (TWild _)              = text "_"
-genFXRow env (TNil _)               = empty
-
-genPosRow env (TRow _ _ t (TNil _)) = gen env t
-genPosRow env (TRow _ _ t p)        = gen env t <> comma <+> genPosRow env p
-genPosRow env (TVar _ v)            = text "*" <> gen env v
-genPosRow env (TWild _)             = text "*"
-genPosRow env (TNil _)              = empty
+genRow env (TRow _ _ t (TNil _))    = gen env t
+genRow env (TRow _ _ t p)           = gen env t <> comma <+> genRow env p
+genRow env (TNil _)                 = empty
     
-genKwdRow env (TRow _ n t (TNil _)) = gen env n <> colon <+> gen env t
-genKwdRow env (TRow _ n t k)        = gen env n <> colon <+> gen env t <> comma <+> genKwdRow env k
-genKwdRow env (TVar _ v)            = text "**" <> gen env v
-genKwdRow env (TWild _)             = text "**"
-genKwdRow env (TNil _)              = empty
-    
-genFunRow env (TNil _) k            = genKwdRow env k
-genFunRow env p (TNil _)            = genPosRow env p
-genFunRow env p k                   = genPosRow env p <> comma <+> genKwdRow env k
-
 instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
     gen env (TAt  _ c)              = text "@" <> gen env c
-    gen env (TFun _ e p k t)        = genFXRow env e <+> parens (genFunRow env p k) <+> text "->" <+> gen env t
-      where spaceSep f              = hsep . punctuate space . map f      
-    gen env (TTuple _ pos)          = parens (genPosRow env pos)
-    gen env (TRecord _ kw)          = parens (genKwdRow env kw)
+    gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
+    gen env (TTuple _ pos)          = parens (genRow env pos)
+    gen env (TRecord _ kw)          = parens (genRow env kw)
     gen env (TUnion _ as)           = parens (vbarSep (gen env) as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
-    gen env (TOpt _ t)              = text "?" <> gen env t
-    gen env (TNone _)               = text "None"
-    gen env (TWild _)               = text "_"
-    gen env row                     = genKwdRow env row
+    gen env (TOpt _ t)              = gen env t
+    gen env (TNone _)               = text "0"
+    gen env (TWild _)               = word
+    gen env row                     = genRow env row
 

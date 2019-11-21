@@ -56,7 +56,7 @@ extractSrcSpan (Loc l r) file src = sp
 
 type Parser = St.StateT [CTX] (Parsec Void String)
 
-data CTX = PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
+data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
 withCtx ctx = between (St.modify (ctx:)) (St.modify tail)
 
@@ -74,7 +74,8 @@ assertActBody       = ifCtx [ACTOR]                 []                  success 
 assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "modifier only allowed inside an actor scope")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
 assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
-assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class, protocol or extension")
+assertDecl          = ifCtx [CLASS,PROTO]           [IF]                success (fail "decoration only allowed inside a class or protocol")
+assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success (fail "decoration only allowed on the top level or inside a class or a protocol")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
 assertNotProtoExt   = ifCtx [PROTO,EXT]             [IF,SEQ,LOOP]       (fail "statement not allowed inside a protocol or extension") success
@@ -83,7 +84,7 @@ assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "s
 
 ifActScope          = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]
 
-ifClassProtoExt     = ifCtx [CLASS,PROTO,EXT]       [IF]
+ifDecl              = ifCtx [CLASS,PROTO]           [IF]
 
 ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
@@ -342,7 +343,7 @@ braces p = withCtx PAR (L.symbol sc2 "{" *> p <* char '}') <* currSC
 --- Top-level parsers ------------------------------------------------------------
  
 file_input :: Parser ([S.Import], S.Suite)
-file_input = sc2 *> ((,) <$> imports <*> top_suite <* eof)
+file_input = sc2 *> ((,) <$> imports <*> withCtx TOP top_suite <* eof)
 
 imports :: Parser [S.Import]
 imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2)
@@ -567,13 +568,13 @@ decorator1 decoration = do
          else return d
 
 signature :: Parser S.Decl
-signature = addLoc (do dec <- decorator1 sig_decoration; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
+signature = addLoc (do dec <- decorator1 sig_decoration; assertDeclOrTop; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
    where sig_decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr  
                       <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
                       <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMethod True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
-                      <|> ifClassProtoExt (return $ S.InstMethod False) (return S.NoDec)    -- default in a class/protocol/extension
+                      <|> ifDecl (return $ S.InstMethod False) (return S.NoDec)    -- default in a class/protocol/extension
 
          tsig = do v <- name
                    vs <- commaList name
@@ -604,7 +605,7 @@ funcdef =  addLoc $ do
          fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
                       <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
-                      <|> ifClassProtoExt (return $ S.InstMeth False) (return S.NoMod)
+                      <|> ifDecl (return $ S.InstMeth False) (return S.NoMod)
 
 
 optbinds :: Parser [S.TBind]

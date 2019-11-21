@@ -192,6 +192,7 @@ instance Unalias QName where
     unalias env (NoQual n)          = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
                                         Just _ -> QName (defaultmod env) n
+                                        _ -> error ("### unalias " ++ prstr n)
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t d)   = TSchema l (unalias env q) (unalias env t) d
@@ -246,6 +247,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nBoolean,          NProto [] [] []),
                                 (nIndexed,          NProto [a,b] [] []),
                                 (nSliceable,        NProto [] [] []),
+                                (nHashable,         NProto [] [] []),
                                 (nPlus,             NProto [] [] []),
                                 (nMinus,            NProto [] [] []),
                                 (nNumber,           NProto [] [] []),
@@ -262,9 +264,12 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nStopIteration,    NClass [] [] []),
                                 (nValueError,       NClass [] [] []),
                                 (nShow,             NProto [] [] []),
-                                (nLen,              NVar (monotype $ tFun0 [pCollection tWild] tInt)),
+                                (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
                                 (nPrint,            NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
-                                (nPostpone,         NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone))
+                                (nPostpone,         NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone)),
+                                (nDict,             NClass [a,b] [] []),
+                                (nList,             NClass [a] [] []),
+                                (nSet',             NClass [a] [] [])
                               ]
   where 
     a:b:c:_                 = [ TBind v [] | v <- tvarSupply ]
@@ -329,13 +334,13 @@ blocked env n               = lookup n (names env) == Just NBlocked
 reserved                    :: Name -> Env -> Bool
 reserved n env              = case lookup n (names env) of
                                 Just NReserved -> True
-                                _ -> False
+                                _              -> False
 
-reservedOrSig               :: Name -> Env -> Maybe (Maybe TSchema)
+reservedOrSig               :: Name -> Env -> Bool
 reservedOrSig n env         = case lookup n (names env) of
-                                Just NReserved -> Just Nothing
-                                Just (NSig t)  -> Just (Just t)
-                                _              -> Nothing
+                                Just NReserved -> True
+                                Just (NSig t)  -> True
+                                _              -> False
 
 findSig                     :: Name -> Env -> Maybe TSchema
 findSig n env               = case lookup n (names env) of
@@ -393,6 +398,12 @@ findProto n env             = case findQName n env of
                                 NProto q us te -> (q,us,te)
                                 _ -> err1 n "Protocol name expected, got"
 
+findArity                  :: QName -> Env -> Int
+findArity n env             = case findQName n env of
+                                NClass q us te -> length q
+                                NProto q us te -> length q
+                                _ -> err1 n "Class or protocol name expected, got"
+
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
                                 NTVar (u:us) | not $ isProto env (tcname u) -> Just u
@@ -411,7 +422,6 @@ findVarType'                :: QName -> Env -> TSchema
 findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
-                                NSig t         -> t
                                 NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 _              -> err1 n "Unexpected name..."

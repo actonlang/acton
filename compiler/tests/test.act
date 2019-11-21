@@ -7,10 +7,10 @@ x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
 x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
-x9 : sync X (int,*A,b : bool,**B) -> SomeClass[int]      # function with effects and all kinds of parameters
+x9 : sync X (int,*A,b : bool,**B) -> set[int]            # function with effects and all kinds of parameters
 
 a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
-a1 : (str,*,c : bool) -> None                            # function with * separation of pos and kwd parameters
+a1 : (str,*P,c : bool) -> None                           # function with * separation of pos and kwd parameters
 a2 : (int) -> (int) -> int                               # higher order function
 a3 : {int}                                               # set of ints (protocol)
 a4 : [(float,bool)]                                      # list of tuples (protocol)
@@ -18,7 +18,7 @@ a5 : {{[int]}}                                           # more complicated set 
 a6 : {[int]:(int) -> bool}                               # a dict (protocol)
 a7 : (set[int],list[float],dict[{int},bool])             # tuple of mutable data structures
 
-y1 : (x: float, y: A, **)                                # open struct
+y1 : (x: float, y: A, **B)                               # open struct
 y2 : (**)                                                # open struct
 y3 : (**A)                                               # open struct
 y4 : (int, bool, *A)                                     # open tuple
@@ -125,6 +125,8 @@ def f40b(**c,):
 
 
 class Apa:
+    x : int
+    
     def __init__(self):
         self.x = 1
 
@@ -153,14 +155,14 @@ actor Test[T](v0:T):
 def f(z):
     pass
 
-protocol Mapping[A,B(Eq)] (Eq):
+protocol MyProto[A,B(Eq)] (Eq):
     pass
 
 extension __builtin__.int (Eq):
     pass
 
-protocol Indexed[A,B]:                                   # just a protocol
-    __getitem__ : (A) -> B
+protocol MyIndexed[A,B]:                                 # just a protocol
+    __getit__ : (A) -> B
 
 g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
 
