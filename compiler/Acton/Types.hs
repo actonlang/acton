@@ -53,17 +53,15 @@ noshadow svs x
   | otherwise                           = True
   where vs                              = intersect (bound x) svs
 
-noescape (te,e)                                                                               -- TODO: check for escaping classes/protocols as well
---  | not $ null dangling                 = err2 dangling "Dangling type signature for"       -- TODO: turn on again!
+noescape (te,e)                                                                       -- TODO: check for escaping classes/protocols
   | otherwise                           = (te,e)
-  where dangling                        = dom (nSigs te) \\ dom (nVars te)
 
 
 -- Infer -------------------------------
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do pushFX fxNil
-                                             (te,ss') <- noescape <$> infEnv env ss
+                                             (te,ss') <- infEnv env ss
                                              popFX
                                              cs <- collectConstraints
                                              solve cs
@@ -276,12 +274,12 @@ instance InfData Branch where
 
 instance InfEnv Decl where
     infEnv env d@(Actor _ n _ p k _ _)
-      | not $ reserved n env            = illegalRedef n
+      | not $ reservedOrSig n env       = illegalRedef n
       | nodup (p,k)                     = do d' <- instwild d
                                              sc <- instwild $ extractSchema env d'
                                              return (nVar' n sc, d')
     infEnv env d@(Def _ n _ p k _ _ _)
-      | not $ reserved n env            = illegalRedef n
+      | not $ reservedOrSig n env       = illegalRedef n
       | nodup (p,k)                     = do d' <- instwild d
                                              sc <- instwild $ extractSchema env d'
                                              return (nVar' n sc, d')
@@ -303,10 +301,11 @@ instance InfEnv Decl where
                                              return (nExt w n q (mro env1 (protoBases env us)), d)
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
-    infEnv env d@(Signature _ ns _)
+    infEnv env d@(Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do sc <- instwild $ extractSchema env d
-                                             return (nSig ns sc, d)
+      | wfWild env sc                   = do d' <- instwild d
+                                             sc <- instwild $ extractSchema env d'
+                                             return (nSig ns sc, d')
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
 classBases env []                       = []
@@ -820,23 +819,13 @@ instance InfEnvT KwdPat where
 
 instance InfEnvT Pattern where
     infEnvT env (PVar l n ann)
-      | wfWild env ann                  = do case reservedOrSig n env of
-                                                 Just Nothing -> do
-                                                     t0 <- maybeInstT ann
-                                                     return (nVar n t0, t0, PVar l n (Just t0))
-                                                 Just (Just (TSchema _ [] t1 _)) -> do
-                                                     t0 <- maybeInstT ann
-                                                     constrain [Equ env t0 t1]
-                                                     return (nVar n t1, t0, PVar l n (Just t0)) -- TODO: return scheme t1 instead
-                                                 Just (Just sc) ->
-                                                     err1 sc "Polymorphic annotation on assignment variable"
-                                                 Nothing 
-                                                   | ann == Nothing ->
-                                                       case findVarType n env of
-                                                         TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
-                                                         _ -> err1 n "Polymorphic variable not assignable:"
-                                                   | otherwise ->
-                                                       err1 ann "Type annotation on reassignment"
+      | reservedOrSig n env,
+        wfWild env ann                  = do t0 <- maybeInstT ann
+                                             return (nVar n t0, t0, PVar l n (Just t0))
+    infEnvT env (PVar l n Nothing)      = case findVarType n env of
+                                             TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
+                                             _ -> err1 n "Polymorphic variable not assignable:"
+    infEnvT env (PVar l n ann)          = err1 ann "Type annotation on reassignment"
     infEnvT env (PIndex l e [i])        = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
@@ -882,6 +871,9 @@ instance Infer Pattern where
 
 -- Well-formed types ------------------------------------------------------
 
+instance Pretty [TCon] where
+    pretty us                       = commaSep pretty us
+
 wf env t                            = wfmd env False t
 
 wfWild env t                        = wfmd env True t
@@ -915,11 +907,13 @@ instance WellFormed TBind where
     wfmd env w (TBind tv us)        = all (wfmd env w) us
 
 instance WellFormed TCon where
-    wfmd env w (TC c ts)            = all (wfmd env w) ts
+    wfmd env w (TC c ts)
+      | findArity c env==length ts  = all (wfmd env w) ts
 
 instance WellFormed Type where
     wfmd env False (TWild l)        = err1 l "Illegal wildcard type"
     wfmd env w (TVar _ tv)
+      | not $ skolem tv             = True
       | tv `notElem` tvarScope env  = err1 tv "Unbound type variable"
     wfmd env w (TCon _ tc)          = wfmd env w tc
     wfmd env w (TAt _ tc)           = wfmd env w tc
@@ -1017,7 +1011,7 @@ instance ExtractT Decl where
       where (prow,krow)             = (extractT $ pos d, extractT $ kwd d)
     extractT _                      = tWild
 
-extractSchema env d@Signature{}     = dtyp d
+extractSchema env (Signature _ _ t) = t
 extractSchema env d
   | wfWild env schema               = schema
   where
