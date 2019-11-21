@@ -3,6 +3,7 @@ module Acton.Normalizer where
 import Acton.Syntax
 import Acton.Env
 import Acton.Prim
+import Acton.Builtin
 import Utils
 import Control.Monad.State.Lazy
 
@@ -16,16 +17,15 @@ normalize env0 m                    = return $ evalState (norm env m) 0
 --  X All parameters are positional
 --  X Parameter defaults are moved inside function definitions
 --  - Comprehensions are translated into loops
---  X String literals are concatenated
+--  X String literals are concatenated and delimited by double quotes
 --  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
---  - Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
+--  X Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
 --  - Assignments to indexed and sliced patterns (PIndex/PSlice) are replaced by __setitem__/__setslice__ calls
---  - For loops are replaced by while over iterators
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
 --  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
 --  - The delete statement is replaced by (a sequence of) __delitem__ calls (for PIndex) or None assignments
---  - Return without argument is replaced by return None
+--  X Return without argument is replaced by return None
 --  - Incremental assignments are replaced by the corresponding __iop__ calls
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
 --  - Binary and unary operators are replaced by their corresponding __op__ calls
@@ -72,7 +72,9 @@ instance Norm Stmt where
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
     norm env (Delete l p)           = Delete l <$> norm env p
-    norm env (Return l mbe)         = Return l <$> norm env mbe
+    norm env (Return l Nothing)     = return $ Return l $ Just $ None l0
+    norm env (Return l (Just e))    = do e' <- norm env e
+                                         return $ Return l $ Just e'
     norm env (Raise l mbex)         = do mbex' <- norm env mbex
                                          case mbex' of
                                            Nothing ->
@@ -115,11 +117,24 @@ instance Norm Expr where
     norm env (None l)               = return $ None l
     norm env (NotImplemented l)     = return $ NotImplemented l
     norm env (Ellipsis l)           = return $ Ellipsis l
-    norm env (Strings l ss)         = return $ Strings l [concat ss]
+    norm env (Strings l [s])
+      | head s == '"'               = return $ Strings l [s]
+    norm env (Strings l ss)         = return $ Strings l ['"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']]
+      where escape c []             = []
+            escape c ('\\':x:xs)    = '\\' : x : escape c xs
+            escape c (x:xs)
+              | x == c              = '\\' : x : escape c xs
+              | otherwise           = x : escape c xs
+            stripQuotes s           = init $ tail s
     norm env (BStrings l ss)        = return $ BStrings l [concat ss]
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
-    norm env (Index l e is)         = Index l <$> norm env e <*> norm env is
-    norm env (Slice l e sl)         = Slice l <$> norm env e <*> norm env sl
+    norm env (Index l e [ix])       = do e' <- norm env e
+                                         ix' <- norm env ix
+                                         return $ Call l (eDot e' getitemKW) (PosArg ix' PosNil) KwdNil
+    norm env (Slice l e [sl])       = do e' <- norm env e
+                                         sl' <- norm env sl
+                                         return $ Call l (eDot e' getsliceKW) (toArg sl') KwdNil
+      where toArg (Sliz _ e1 e2 e3) = foldr PosArg PosNil (map (maybe (None NoLoc) id) [e1,e2,e3])
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> norm env op <*> norm env e2
     norm env (CompOp l e ops)       = CompOp l <$> norm env e <*> norm env ops

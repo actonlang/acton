@@ -75,11 +75,15 @@ instance Gen Stmt where
     gen env (Raise _ e)             = text "raise" <+> gen env e                                        -- TODO: remove
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
-    gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genEnd env "else" b2
+    gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
     gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
-    gen env (Try _ b hs b2 b3)      = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs $+$  -- TODO: remove
-                                      genEnd env "else" b2 $+$ genEnd env "finally" b3
+    gen env (Try _ b hs _ _)        = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs      -- TODO: remove
     gen env (Decl _ ds)             = vcat $ map (gen env) ds
+
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
+
+genElse env []                      = empty
+genElse env b                       = (text "else" <+> char '{') $+$ genSuite env b $+$ char '}'
 
 instance Gen Decl where
     gen env (Def _ n q ps ks a b m) = (word <+> genQName env n <+> parens (gen env ps) <+> char '{')
@@ -88,30 +92,12 @@ instance Gen Decl where
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
     gen env (Signature _ vs sc)     = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b
-
-genEnd env kw []                    = empty
-genEnd env kw b                     = text kw <> colon $+$ genSuite env b
-
-genOpt env sep Nothing              = empty
-genOpt env sep (Just a)             = sep <+> gen env a
 
 
 instance Gen PosPar where
     gen env (PosPar n t e PosNIL)   = word <+> gen env n
     gen env (PosPar n t e p)        = word <+> gen env n <> comma <+> gen env p
     gen env PosNIL                  = empty
-
-instance Gen KwdPar where
-    gen env (KwdPar n t e KwdNIL)   = gen env n <+> genOpt env colon t <+> genOpt env equals e
-    gen env (KwdPar n t e k)        = gen env n <+> genOpt env colon t <+> genOpt env equals e <> comma <+> gen env k
-    gen env (KwdSTAR n t)           = text "**" <> gen env n <+> genOpt env colon t
-    gen env KwdNIL                  = empty
-
-instance Gen (PosPar,KwdPar) where
-    gen env (PosNIL, ks)            = gen env ks
-    gen env (ps, KwdNIL)            = gen env ps
-    gen env (ps, ks)                = gen env ps <> comma <+> gen env ks    
 
 instance Gen PosArg where
     gen env (PosArg e PosNil)       = gen env e
@@ -139,8 +125,8 @@ instance Gen Expr where
     gen env (None _)                = text "None"
     gen env (NotImplemented _)      = text "NotImplemented"
     gen env (Ellipsis _)            = text "..."
-    gen env (Strings _ [s])         = doubleQuotes (text s)
-    gen env (BStrings _ [s])        = doubleQuotes (text s)
+    gen env (Strings _ [s])         = text s
+    gen env (BStrings _ [s])        = text s
     gen env (Call _ e ps ks)        = gen env e <> parens (gen env ps)
     gen env (Index _ e ix)          = gen env e <> brackets (commaList ix)                  -- TODO: remove
     gen env (Slice _ e sl)          = gen env e <> brackets (commaList sl)                  -- TODO: remove
@@ -202,11 +188,7 @@ instance Gen WithItem where
     gen env (WithItem e p)          = gen env e <+> nonEmpty (text "as" <+>) (gen env) p
 
 instance Gen Slice where
-    gen env (Sliz _ a b c)          = gen env a <> colon <> gen env b <> genSlice env c
-
-genSlice env (Nothing)              = empty
-genSlice env (Just (Nothing))       = colon
-genSlice env (Just (Just b))        = colon <> gen env b
+    gen env (Sliz _ a b c)          = gen env a <> colon <> gen env b <> gen env c
 
 instance Gen Comp where
     gen env (CompFor _ p e c)       = text "for" <+> gen env p <+> text "in" <+> gen env e <+> gen env c

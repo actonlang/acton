@@ -367,6 +367,7 @@ CPS transformation:
 - All potentially blocking function calls are converted to tail calls that receive continuation arguments
 - All calls to continuation parameters are written as "return CONT(cont,value)"
 - Exception handlers are broken down into continuations and PUSH/POP calls
+- For loops are replaced by while over iterators
 
 Lambda-lifting:
 

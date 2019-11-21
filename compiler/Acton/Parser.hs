@@ -952,7 +952,7 @@ atom_expr = do
                  slicelist = (:) <$> slice <*> commaList slice
                  slice = addLoc (do 
                         mbt <- optional expr
-                        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> optional (colon *> optional expr))
+                        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)))
                      
  
 comp_iter, comp_for, comp_if :: Parser S.Comp
