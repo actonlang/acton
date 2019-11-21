@@ -422,9 +422,10 @@ findVarType'                :: QName -> Env -> TSchema
 findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
+                                NSig t         -> t
                                 NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
-                                _              -> err1 n "Unexpected name..."
+                                _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
 
 findSubAxiom                :: Env -> TCon -> QName -> (Constraints, Type)
 findSubAxiom env c n
