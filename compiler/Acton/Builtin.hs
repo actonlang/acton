@@ -9,6 +9,10 @@ enterKW                             = name "__enter__"
 exitKW                              = name "__exit__"
 iterKW                              = name "iter"
 nextKW                              = name "__next__"
+getitemKW                           = name "__getitem__"
+setitemKW                           = name "__setitem__"
+getsliceKW                          = name "__getslice__"
+setsliceKW                          = name "__setslice__"
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]

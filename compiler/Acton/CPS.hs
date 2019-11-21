@@ -318,6 +318,9 @@ contCall env (Call l (Var _ n) p k)
   where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]
         isPrim (QName m _)              = m == mPrim
         isPrim _                        = False
+contCall env (Call l (Dot _ _ n) p k)
+  | n `elem` ns0                        = False
+  where ns0                             = [getitemKW,setitemKW,getsliceKW,setsliceKW,enterKW,exitKW,nextKW]
 contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 

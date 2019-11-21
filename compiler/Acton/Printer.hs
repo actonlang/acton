@@ -212,11 +212,7 @@ instance Pretty ImportItem where
     pretty (ImportItem n1 n2)       = pretty n1 <+> nonEmpty (text "as" <+>) pretty n2
 
 instance Pretty Slice where
-    pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> prettySlice c
-
-prettySlice (Nothing)               = empty
-prettySlice (Just (Nothing))        = colon
-prettySlice (Just (Just b))         = colon <> pretty b
+    pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> nonEmpty (colon <>) pretty c
 
 instance Pretty Comp where
     pretty (CompFor _ p e c)        = text "for" <+> pretty p <+> text "in" <+> pretty e <+> pretty c

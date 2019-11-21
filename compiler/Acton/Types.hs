@@ -529,15 +529,19 @@ instance Infer Expr where
                                              equFX env fx
                                              constrain [Sub env t (tMsg t0)]
                                              return (t0, Await l e')
-    infer env (Index l e [i])           = do (t,e') <- infer env e
-                                             (ti,i') <- infer env i
+    infer env (Index l e ixs)           = do (t,e') <- infer env e
+                                             (ti,ix') <- infer env ix
                                              t0 <- newTVar
                                              constrain [Impl env t (cIndexed ti t0)]
-                                             return (t0, Index l e' [i'])
-    infer env (Slice l e [s])           = do (t,e') <- infer env e
-                                             s' <- inferSlice env s
+                                             return (t0, Index l e' [ix'])
+      where ix | length ixs == 1        = head ixs
+               | otherwise              = Tuple NoLoc (foldr PosArg PosNil ixs)
+    infer env (Slice l e slz)           = do (t,e') <- infer env e
+                                             sl' <- inferSlice env sl
                                              constrain [Impl env t cSliceable]
-                                             return (t, Slice l e' [s'])
+                                             return (t, Slice l e' [sl'])
+      where sl | length slz == 1        = head slz
+               | otherwise              = notYet l "Multidimensional slicing"
     infer env (Cond l e1 e e2)          = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
                                              e' <- inferBool env e
@@ -705,7 +709,6 @@ inferSlice env (Sliz l e1 e2 e3)        = do (t1,e1') <- infer env e1
                                              (t3,e3') <- infer env e3
                                              constrain [ Equ env t tInt | t <- [t1,t2,t3] ]
                                              return (Sliz l e1' e2' e3')
-  where es                              = concat $ map maybeToList (e1:e1:maybeToList e3)
 
 inferGen env e                          = do (t,e') <- infer env e
                                              sc <- gen1 env (name "_") t NoDec
