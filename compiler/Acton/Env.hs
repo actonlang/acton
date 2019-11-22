@@ -35,7 +35,7 @@ type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool }
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool } deriving Show
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
@@ -362,6 +362,12 @@ findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 Just i -> i
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
+
+invertTEnv (m,te)           = map (inv m) te
+  where inv m (n,ni)        = (n,(m,ni))
+
+invertEnv env               = concatMap invertTEnv (reverse (init ms) ++ [last ms]) -- last ms is builtin
+  where ms                  = modules env
 
 findSelf                    :: Env -> TCon
 findSelf env                = case findName nSelf env of

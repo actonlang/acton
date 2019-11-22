@@ -177,7 +177,7 @@ runRestPasses args paths src env original = (do
                           iff (types args) $ dump "types" (Pretty.print typed)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
                               
-                          normalized <- Acton.Normalizer.normalize env' typed
+                          normalized <- Acton.Normalizer.normalize (sigs,env') typed
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
 
                           deacted <- Acton.Deactorizer.deactorize env' normalized
