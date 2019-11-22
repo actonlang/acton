@@ -1,15 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 module Acton.Types(reconstruct,solverError) where
 
-import Debug.Trace
-import Data.Typeable
-import qualified Control.Exception
-import System.FilePath.Posix (joinPath)
-import System.Directory (doesFileExist)
 import Control.Monad
---import Control.Monad.State
-import Data.Maybe (maybeToList)
-import Data.Graph (SCC(..), stronglyConnComp)
 import Pretty
 import Utils
 import Acton.Syntax
@@ -29,19 +21,6 @@ reconstruct outname env modul           = do InterfaceFiles.writeFile (outname +
 
 solverError                             = typeError
 
-chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
-chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
-chkCycles (d : ds)                      = chkCycles ds
-chkCycles []                            = True
-
-chkDecl d ds s@Decl{}                   = chkCycles (decls s ++ ds)
-chkDecl d ds s                          = noforward s d ds
-
-
-noforward x d ds
-  | not $ null vs                       = err2 vs "Illegal forward reference:"
-  | otherwise                           = True
-  where vs                              = free x `intersect` declnames (d:ds)
 
 nodup x
   | not $ null vs                       = err2 vs "Duplicate names:"
@@ -61,12 +40,12 @@ noescape (te,e)                                                                 
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do pushFX fxNil
-                                             (te,ss') <- infEnv env ss
+                                             (te,ss1) <- infEnv env ss
                                              popFX
                                              cs <- collectConstraints
                                              solve cs
-                                             te' <- msubst te
-                                             return (te', ss')
+                                             te1 <- msubst te
+                                             return (te1, ss1)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Type,a)
