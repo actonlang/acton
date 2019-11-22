@@ -111,9 +111,10 @@ red' False env t1 (TVar _ tv)
 
 red' sub env (TCon _ c1) (TCon l c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
-  | otherwise                               = do reduceAll cs
-                                                 red sub env t (TCon l c2)
-  where (cs,t)                              = findSubAxiom env c1 (tcname c2)
+  | Just (_,t) <- findSubAxiom env c1 n2    = red sub env t (TCon l c2)                                         -- TODO: handle proto
+  | otherwise                               = err1 n2 ("Not related: " ++ prstr c1 ++ " and")
+  where n2                                  = tcname c2
+
 
 red' sub env (TAt _ c1) (TAt l c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
@@ -196,16 +197,5 @@ monotypeOf sc                               = err1 sc "Monomorphic type expected
 entail                                  :: Constraint -> Bool
 entail c                                = True                                              -- TODO: implement this
 
-
-
--- Instantiation -------------------------------------------------------------------------
-
-instantiate                     :: Env -> TSchema -> TypeM (Constraints, Type)
-instantiate env (TSchema _ [] t _)
-                                = return ([], t)
-instantiate env (TSchema _ q t _)
-                                = do tvs <- newTVars (length q)
-                                     let s = tybound q `zip` tvs
-                                     return (constraintsOf env (subst s q), subst s t)
 
 
