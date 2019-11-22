@@ -366,7 +366,7 @@ findQName (NoQual n) env    = findName n env
 invertTEnv (m,te)           = map (inv m) te
   where inv m (n,ni)        = (n,(m,ni))
 
-invertEnv env               = concatMap invertTEnv (reverse (init ms) ++ [last ms]) -- last ms is builtin
+invertEnv env               = concatMap invertTEnv ms -- last ms is builtin
   where ms                  = modules env
 
 findSelf                    :: Env -> TCon
