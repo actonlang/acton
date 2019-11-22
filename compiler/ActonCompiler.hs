@@ -5,6 +5,7 @@ import qualified Acton.Syntax as A
 
 import qualified Acton.Relabel
 import qualified Acton.Env
+import qualified Acton.Kinds
 import qualified Acton.Types
 import qualified Acton.Solver
 import qualified Acton.Normalizer
@@ -36,11 +37,12 @@ data Args       = Args {
                     tokens  :: Bool,
                     parse   :: Bool,
                     imports :: Bool,
-                    iface   :: Bool,
+                    kinds   :: Bool,
                     types   :: Bool,
+                    iface   :: Bool,
                     norm    :: Bool,
-                    cps     :: Bool,
                     deact   :: Bool,
+                    cps     :: Bool,
                     llift   :: Bool,
                     cgen    :: Bool,
 --                    tracef  :: Bool,
@@ -56,11 +58,12 @@ getArgs         = Args
                     <$> switch (long "tokens"  <> help "Show the result of lexing (Yang files only)")
                     <*> switch (long "parse"   <> help "Show the result of parsing")
                     <*> switch (long "imports" <> help "Show the contents of imported modules")
-                    <*> switch (long "iface"   <> help "Show the inferred type interface (Acton files only)")
+                    <*> switch (long "kinds"   <> help "Show all the result after kind-checking (Acton files only)")
                     <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
+                    <*> switch (long "iface"   <> help "Show the inferred type interface (Acton files only)")
                     <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
-                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
+                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
                     <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
                     <*> switch (long "cgen"    <> help "Show the generated C code (Acton files only)")
 --                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
@@ -173,11 +176,14 @@ runRestPasses args paths src env original = (do
                           let outbase = outBase paths
                           env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env original
                           
-                          (sigs,typed,tyinfo) <- Acton.Types.reconstruct outbase env' original
-                          iff (types args) $ dump "types" (Pretty.print typed)
+                          kchecked <- Acton.Kinds.check env' original
+                          iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
+                          
+                          (sigs,tchecked,tyinfo) <- Acton.Types.reconstruct outbase env' kchecked
+                          iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
                               
-                          normalized <- Acton.Normalizer.normalize (sigs,env') typed
+                          normalized <- Acton.Normalizer.normalize (sigs,env') tchecked
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
 
                           deacted <- Acton.Deactorizer.deactorize env' normalized
