@@ -95,7 +95,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
 
-data Pass       = ParsePass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | GenPass 
+data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | GenPass 
                 deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Internal String Int Pass deriving (Generic)
@@ -114,6 +114,7 @@ nstr (Name _ s) = shift s
 nstr (Internal s 0 GenPass) = s
 nstr (Internal s i p)       = s ++ "___" ++ show i ++ suffix p
   where suffix ParsePass    = "p"
+        suffix KindPass     = "k"
         suffix TypesPass    = "t"
         suffix NormPass     = "n"
         suffix CPSPass      = "c"
