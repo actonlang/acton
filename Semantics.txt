@@ -292,6 +292,9 @@ Type inference:
 - Missing arguments are replaced by explicit None values
 - Protocols and extensions are translated into classes
 - Overloaded names (global or attributes) are explicitly qualified by class
+- Binary and unary operators are replaced by their corresponding __op__ calls
+- Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
+- Assignments to indexed and sliced patterns (PIndex/PSlice) are replaced by __setitem__/__setslice__ calls
 
 Normalization:
 - All imported or built-in names are qualified by module, including those imported by 'from _ import'
@@ -301,17 +304,14 @@ X Parameter defaults are moved inside function definitions
 - Comprehensions are translated into loops
 X String literals are concatenated
 - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
-- Indexed and sliced expressions (Index/Slice) are replaced by __getitem__/__getslice__ calls
-- Assignments to indexed and sliced patterns (PIndex/PSlice) are replaced by __setitem__/__setslice__ calls
 - For loops are replaced by while over iterators
 - With statemenmts are replaced by enter/exit prim calls + exception handling
 X The assert statement is replaced by a prim call ASSERT
 X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
 - The delete statement is replaced by (a sequence of) __delitem__ calls (for PIndex) or None assignments
-- Return without argument is replaced by return None
+X Return without argument is replaced by return None
 - Incremental assignments are replaced by the corresponding __iop__ calls
 - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
-- Binary and unary operators are replaced by their corresponding __op__ calls
 
 Deactorization:
 

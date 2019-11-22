@@ -86,7 +86,7 @@ genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ genSuite env b $+$ char '}'
 
 instance Gen Decl where
-    gen env (Def _ n q ps ks a b m) = (word <+> genQName env n <+> parens (gen env ps) <+> char '{')
+    gen env (Def _ n q ps ks a b m) = (gen env a <+> genQName env n <+> parens (gen env ps) <+> char '{')
                                       $+$ genSuite env b $+$ char '}'
     gen env (Class _ n q a b)       = text "class" <+> gen env n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
@@ -95,26 +95,19 @@ instance Gen Decl where
 
 
 instance Gen PosPar where
-    gen env (PosPar n t e PosNIL)   = word <+> gen env n
-    gen env (PosPar n t e p)        = word <+> gen env n <> comma <+> gen env p
+    gen env (PosPar n t e PosNIL)   = gen env t <+> gen env n
+    gen env (PosPar n t e p)        = gen env t <+> gen env n <> comma <+> gen env p
     gen env PosNIL                  = empty
 
 instance Gen PosArg where
     gen env (PosArg e PosNil)       = gen env e
     gen env (PosArg e p)            = gen env e <> comma <+> gen env p
-    gen env (PosStar e)             = text "*" <> gen env e
     gen env PosNil                  = empty
 
 instance Gen KwdArg where
     gen env (KwdArg n e KwdNil)     = gen env n <+> equals <+> gen env e
     gen env (KwdArg n e k)          = gen env n <+> equals <+> gen env e <> comma <+> gen env k
-    gen env (KwdStar e)             = text "**" <> gen env e
     gen env KwdNil                  = empty
-
-instance Gen (PosArg,KwdArg) where
-    gen env (PosNil, ks)            = gen env ks
-    gen env (ps, KwdNil)            = gen env ps
-    gen env (ps, ks)                = gen env ps <> comma <+> gen env ks
 
 instance Gen Expr where
     gen env (Var _ n)               = gen env n
@@ -127,9 +120,7 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env (Call _ e ps ks)        = gen env e <> parens (gen env ps)
-    gen env (Index _ e ix)          = gen env e <> brackets (commaList ix)                  -- TODO: remove
-    gen env (Slice _ e sl)          = gen env e <> brackets (commaList sl)                  -- TODO: remove
+    gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
     gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
     gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2               -- TODO: remove
     gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove
@@ -204,7 +195,7 @@ instance Gen PosPat where
 
 instance Gen Pattern where
     gen env (PVar _ n Nothing)      = gen env n
-    gen env (PVar _ n (Just t))     = word <+> gen env n
+    gen env (PVar _ n (Just t))     = gen env t <+> gen env n
     gen env (PIndex _ e ix)         = gen env e <> brackets (commaList ix)
     gen env (PSlice _ e sl)         = gen env e <> brackets (commaList sl)
     gen env (PDot _ e n)            = gen env e <> text "->" <> gen env n

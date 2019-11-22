@@ -664,7 +664,7 @@ getDump                                 :: TypeM SrcInfo
 getDump                                 = state $ \st -> (dumped st, st)
 
 
-newName n                               = Internal (nstr n) <$> newUnique <*> return TypesPass
+newName s                               = Internal s <$> newUnique <*> return TypesPass
 
 newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return GenPass)
 
@@ -800,6 +800,7 @@ data CheckerError                   = FileNotFound ModName
                                     | NameNotFound Name
                                     | NameReserved Name
                                     | NameBlocked Name
+                                    | TypedReassign Pattern
                                     | IllegalRedef Name
                                     | MissingSelf Name
                                     | IllegalImport SrcLoc
@@ -865,6 +866,7 @@ checkerError (FileNotFound n)       = (loc n, " Type interface file not found fo
 checkerError (NameNotFound n)       = (loc n, " Name " ++ prstr n ++ " is not in scope")
 checkerError (NameReserved n)       = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
 checkerError (NameBlocked n)        = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
+checkerError (TypedReassign p)      = (loc p, " Type annotation on reassignment: " ++ prstr p)
 checkerError (IllegalRedef n)       = (loc n, " Illegal redefinition of " ++ prstr n)
 checkerError (MissingSelf n)        = (loc n, " Missing 'self' parameter in definition of")
 checkerError (IllegalImport l)      = (l,     " Relative import not yet supported")
@@ -875,6 +877,7 @@ checkerError (OtherError l str)     = (l,str)
 nameNotFound n                      = Control.Exception.throw $ NameNotFound n
 nameReserved n                      = Control.Exception.throw $ NameReserved n
 nameBlocked n                       = Control.Exception.throw $ NameBlocked n
+typedReassign p                     = Control.Exception.throw $ TypedReassign p
 illegalRedef n                      = Control.Exception.throw $ IllegalRedef n
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
