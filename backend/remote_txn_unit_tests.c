@@ -179,7 +179,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 {
 	int ret = 0;
 
-	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(long));
+	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(WORD));
 
 	for(snode_t * node = HEAD(ca->rcv_counters);node != NULL;node = NEXT(node))
 	{

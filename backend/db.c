@@ -60,7 +60,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 		if(i == no_clustering_keys - 1)
 		{
 			new_cell->no_columns = no_cols - no_primary_keys - no_clustering_keys;
-			new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
+			new_cell->column_array = (WORD *) malloc(new_cell->no_columns * sizeof(WORD));
 			for(int j=0;j<new_cell->no_columns;j++)
 			{
 				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
@@ -91,7 +91,7 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	assert(crt_cell != NULL && crt_cell->cells == NULL);
 
 	crt_cell->no_columns = no_cols;
-	crt_cell->column_array = (WORD *) malloc(crt_cell->no_columns);
+	crt_cell->column_array = (WORD *) malloc(crt_cell->no_columns * sizeof(WORD));
 	for(int j=0;j<crt_cell->no_columns;j++)
 	{
 		crt_cell->column_array[j] = cols[j];
@@ -301,7 +301,7 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 				if(i == schema->no_clustering_keys - 1)
 				{
 					new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
-					new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
+					new_cell->column_array = (WORD *) malloc(new_cell->no_columns * sizeof(WORD));
 					for(int j=0;j<new_cell->no_columns;j++)
 					{
 						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
@@ -347,7 +347,7 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 		assert(cell != NULL && cell->cells == NULL);
 
 		cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
-		cell->column_array = (WORD *) malloc(cell->no_columns);
+		cell->column_array = (WORD *) malloc(cell->no_columns * sizeof(WORD));
 		for(int j=0;j<cell->no_columns;j++)
 		{
 			cell->column_array[j] =column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
@@ -401,7 +401,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 				if(i == schema->no_clustering_keys - 1)
 				{
 					new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
-					new_cell->column_array = (WORD *) malloc(new_cell->no_columns);
+					new_cell->column_array = (WORD *) malloc(new_cell->no_columns * sizeof(WORD));
 					for(int j=0;j<new_cell->no_columns;j++)
 					{
 						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];

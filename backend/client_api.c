@@ -485,7 +485,11 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 
 	pthread_mutex_unlock(mc->lock);
 
-	assert(ret == 0 || errno == ETIMEDOUT);
+	if(ret != 0 && ret != ETIMEDOUT)
+	{
+		printf("pthread_cond_timedwait returned %d/%d\n", ret, errno);
+		assert(0);
+	}
 
 	return 0;
 }
