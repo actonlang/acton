@@ -1,15 +1,17 @@
 module Acton.Normalizer where
 
 import Acton.Syntax
+import Acton.Names
 import Acton.Env
 import Acton.Prim
 import Acton.Builtin
 import Utils
 import Control.Monad.State.Lazy
+import Debug.Trace
 
-normalize                           :: Env -> Module -> IO Module
-normalize env0 m                    = return $ evalState (norm env m) 0
-  where env                         = normEnv env0
+normalize                           :: (TEnv,Env) -> Module -> IO Module
+normalize (te,env0) m               = return $ evalState (norm env m) 0
+  where env                         = normEnv (te,env0)
 
 --  Normalization:
 --  - All imported or built-in names are qualified by module, including those imported by 'from _ import'
@@ -36,9 +38,10 @@ newName s                           = do n <- get
                                          put (n+1)
                                          return $ Internal s n NormPass
 
-data NormEnv                        = NormEnv
+                                    -- builtin names are last in global; local names are first in enclosing
+data NormEnv                        = NormEnv {global :: [(Name,(ModName,NameInfo))], enclosing :: [Name]} deriving Show
 
-normEnv env                         = NormEnv
+normEnv (te,env)                    = NormEnv (invertTEnv (defaultmod env,te) ++ invertEnv env) []
 
 class Norm a where
     norm                            :: NormEnv -> a -> NormM a
@@ -95,7 +98,7 @@ instance Norm Stmt where
 
 instance Norm Decl where
     norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm env k
-                                         b' <- norm env b
+                                         b' <- norm (env {enclosing = bound b ++ bound p ++ bound k ++ enclosing env}) b
                                          return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') m
     norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm env k
                                          b' <- norm env b
@@ -168,7 +171,12 @@ instance Norm ModName where
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQual n)             = NoQual <$> norm env n
+    norm env (NoQual n)             = case elem n (enclosing env) of
+                                         True-> return $ NoQual n
+                                         False ->  case lookup n (global env) of
+                                                      Just (m,NAlias qn) -> return qn
+                                                      Just (m,_) -> return $ QName m n
+                                                      Nothing -> return $ NoQual n
 
 instance Norm ModRef where
     norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn
