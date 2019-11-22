@@ -75,6 +75,9 @@ nProto m n q us te          = (n, NProto q us te) : te'
 nExt                        :: Name -> QName -> [TBind] -> [TCon] -> TEnv
 nExt w n q us               = [(w, NExt n q us)]
 
+nTVars                      :: [TBind] -> TEnv
+nTVars q                    = [ (n, NTVar us) | TBind (TV n) us <- q ]
+
 nVars                       :: TEnv -> Schemas
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
@@ -261,8 +264,8 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nCollection,       NProto [a] [] []),
                                 (nContextManager,   NProto [] [] []),
                                 (nObject,           NClass [] [] []),
-                                (nStopIteration,    NClass [] [] []),
-                                (nValueError,       NClass [] [] []),
+                                (nStopIteration,    NClass [] [cException] []),
+                                (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
                                 (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
                                 (nPrint,            NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
@@ -316,7 +319,7 @@ defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
           where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
 
 defineTVars                 :: [TBind] -> Env -> Env
-defineTVars q env           = env{ names = [ (n, NTVar us) | TBind (TV n) us <- q ] ++ names env }
+defineTVars q env           = env{ names = nTVars q ++ names env }
 
 tvarScope                   :: Env -> [TVar]
 tvarScope env               = [ TV n | (n, NTVar _) <- names env ]
@@ -433,17 +436,17 @@ findVarType' n env          = case findQName n env of
                                 NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
 
-findSubAxiom                :: Env -> TCon -> QName -> (Constraints, Type)
+findSubAxiom                :: Env -> TCon -> QName -> Maybe (Bool,Type)
 findSubAxiom env c n
-  | null hits               = err1 n ("Not related: " ++ prstr c ++ " and")
-  | otherwise               = (cs, tCon $ head hits)
-  where (cs,us,_)           = findCon env c
+  | null hits               = Nothing 
+  | otherwise               = Just (proto, tCon $ head hits)
+  where (proto,cs,us,_)     = findCon env c
         hits                = [ u | u <- us, tcname u == n ]
 
 findAttr                    :: Env -> TCon -> Name -> (Constraints, TSchema)
 findAttr env u n            = (cs, findIn (te ++ concat tes))
-  where (cs,us,te)          = findCon env u
-        tes                 = [ te' | u' <- us, let (_,_,te') = findCon env u' ]
+  where (_,cs,us,te)        = findCon env u
+        tes                 = [ te' | u' <- us, let (_,_,_,te') = findCon env u' ]
         findIn te1          = case lookup n te1 of
                                 Just (NVar t)         -> t
                                 Just (NSVar t)        -> t
@@ -452,13 +455,20 @@ findAttr env u n            = (cs, findIn (te ++ concat tes))
                                 Just (NProto q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> (Constraints, [TCon], TEnv)
-findCon env u               = (constraintsOf env (subst s q), subst s us, subst s te)
-  where (_, q, us, te)      = case findQName (tcname u) env of
+findCon                     :: Env -> TCon -> (Bool,Constraints,[TCon],TEnv)
+findCon env u               = (proto, constraintsOf env (subst s q), subst s us, subst s te)
+  where (proto,q,us,te)     = findCon0 env (tcname u)
+        s                   = tybound q `zip` tcargs u
+
+findCon0                    :: Env -> QName -> (Bool,[TBind],[TCon],TEnv)
+findCon0 env n              = case findQName n env of
                                 NClass q us te -> (False,q,us,te)
                                 NProto q us te -> (True,q,us,te)
-                                _ -> err1 (tcname u) "Class or protocol name expected, got"
-        s                   = tybound q `zip` tcargs u
+                                _ -> err1 n "Class or protocol name expected, got"
+
+findSkolemizedCon           :: Env -> QName -> (Bool,[TBind],TCon)
+findSkolemizedCon env n     = (proto, q, TC n $ map tVar $ tybound q)
+  where (proto,q,us,te)     = findCon0 env n
 
 findWitness                 :: Env -> QName -> [TBind] -> [TCon] -> Maybe Name
 findWitness env n q us      = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
@@ -470,6 +480,19 @@ constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u 
   where constr t u@(TC n _)
           | isProto env n   = Impl env t u
           | otherwise       = Sub env t (tCon u)
+
+
+-- Instantiation -------------------------------------------------------------------------
+
+instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
+instantiate env (TSchema _ [] t _)
+                            = return ([], t)
+instantiate env (TSchema _ q t _)
+                            = do tvs <- newTVars (length q)
+                                 let s = tybound q `zip` tvs
+                                 return (constraintsOf env (subst s q), subst s t)
+
+
 
 
 -- Environment unification ---------------------------------------------------------------
