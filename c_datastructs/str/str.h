@@ -36,7 +36,7 @@ int str_center(str_t s, int width, str_t fill, str_t *res);  // returns TYPEERRO
 int str_count(str_t s, str_t sub, int start, int end);
 void str_encode(str_t s, bytes_t *res);                      // only utf-8 encoding and strict error handling
 int str_endswith(str_t s, str_t suffix, int start, int end);
-int str_expandtabs(str_t s, int tabsize, str_t *res);        // NOT IMPLEMENTED
+void str_expandtabs(str_t s, int tabsize, str_t *res);        // NOT IMPLEMENTED
 int str_find(str_t s, str_t sub, int start, int end);        // returns -1 when not found
 //format and format_map will be replace by other methods
 int str_index(str_t s, str_t sub, int start, int end);        // like find but returns VALUEERROR when not found
@@ -62,13 +62,13 @@ void str_replace(str_t s, str_t old, str_t new, int count, str_t *res);
 int str_rfind(str_t s, str_t sub, int start, int end);           // returns -1 when not found
 int str_rindex(str_t s, str_t sub, int start, int end);          // like rfind but returns VALUEERROR when not found
 int str_rjust(str_t s, int width, str_t fill, str_t *res);       // returns TYPEERROR if fill is not a single char
-int str_rpartition(str_t s, str_t sep, str_t *ls, str_t *ssep, str_t *rs); // NOT IMPLEMENTED
+void str_rpartition(str_t s, str_t sep, str_t *ls, str_t *ssep, str_t *rs); 
 int str_rsplit(str_t s, str_t sep, int maxsplit, list_t *res);    // NOT IMPLEMENTED sep may be NULL; then separation is indicated by a whitespace string
-int str_rstrip(str_t s,str_t cs, str_t *res);                     // NOT IMPLEMENTED
+void str_rstrip(str_t s,str_t cs, str_t *res);                     //  cs may be NULL, then defaulting to whitespace removal.
 int str_split(str_t s, str_t sep, int maxsplit, list_t *res);    // returns VALUEERROR when separator is empty string
 int str_splitlines(str_t s, list_t *res);                          // keepends parameter absent; only \n recognized as line separator
 int str_startswith(str_t s, str_t prefix, int start, int end); 
-int str_strip(str_t s,str_t cs, str_t *res);                     // NOT IMPLEMENTED
+void str_strip(str_t s,str_t cs, str_t *res);                     // cs may be NULL, then defaulting to whitespace removal.
 // translate not implenented
 int str_upper(str_t s, str_t *res);
 str_t str_zfill(str_t s, int width);

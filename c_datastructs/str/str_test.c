@@ -77,14 +77,20 @@ int main() {
   printf("testing zfill. Should get '-00042', got '%s'\n",toUTF8(str_zfill(fromUTF8("-42"),6)));
   printf("testing zfill. Should get 000042', got '%s'\n",toUTF8(str_zfill(fromUTF8("42"),6)));
   str_t s1,t,u;
-  str_partition(text2,fromUTF8("för"),&s1,&t,&u);
-  printf("Partition: '%s','%s','%s'\n",toUTF8(s1),toUTF8(t),toUTF8(u));
+  str_partition(text2,fromUTF8("är"),&s1,&t,&u);
+  printf("partition: '%s','%s','%s'\n",toUTF8(s1),toUTF8(t),toUTF8(u));
+  str_rpartition(text2,fromUTF8("är"),&s1,&t,&u);
+  printf("rpartition: '%s','%s','%s'\n",toUTF8(s1),toUTF8(t),toUTF8(u));
   str_capitalize(text5,&s1);
   printf("Capitalize: '%s'\n",toUTF8(s1));
   printf("endswith. Should return 1, returns %d\n",str_endswith(text2,pattern3,0,-1));
   printf("startswith. Should return 1, returns %d\n",str_startswith(fromUTF8("abcdefghijk"),fromUTF8("bcdefghij"),1,1000));
   str_lstrip(fromUTF8("www.example.com"),fromUTF8("wcmo."),&s);
   printf("lstrip: %s\n",toUTF8(s));
+  str_rstrip(fromUTF8("www.example.com"),fromUTF8("wcmo."),&s);
+  printf("rstrip: %s\n",toUTF8(s));
+  str_strip(fromUTF8("www.example.com"),fromUTF8("wcmo."),&s);
+  printf("strip: %s\n",toUTF8(s));
   list_t lst;
   //str_split(fromUTF8("df dg hn hn  f    hhn"),NULL,4,&lst);
   str_splitlines(fromUTF8("df\ndg\nhn\nhn  f    \nhhn  "),&lst);
@@ -105,4 +111,6 @@ int main() {
   printf("hash test %lu\n",str_hash(text));
   printf("hash test %lu\n",str_hash(text2));
   printf("hash test %lu\n",str_hash(text3));
+  str_expandtabs(fromUTF8("abcd\tf\tklmnre\t\na\tbcd"),8,&s);
+  printf("expandtabs 'abcd\tf\tklmnre\t\na\tbcd' gives '%s'\n",toUTF8(s));
 }
