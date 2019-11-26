@@ -6,6 +6,7 @@
 #include "utf8proc.h"
 #include "acterror.h"
 #include "hash.h"
+#include "slice.h"
 
 struct str_struct {
   int nbytes;              // length of str in bytes
@@ -162,39 +163,7 @@ static int get_index(int i, int nchars) {
     return i >= -nchars ? nchars+i : INDEXERROR;
 }
 
-/* Normalize slice notation, so that
-- if step == 0, VALUEERROR is returned
-
-- Otherwise, 
-   - on input, nchars must be the # of elements in the sequence being sliced-
-   - on output 
-       - 0 <= start < nchars is the starting position
-       - 0 <= stop < nchars is the ending position (*non-inclusive*!)
-       - step is the step size
-       - nchars is the # of elements in *the slice*. 
-*/
-static int normalize_slice(slice_t slc, int *nchars, int *start, int *stop, int *step) {
-  *step = slc->step;
-  if (slc->has & HAS_STEP) {
-    if (*step == 0)
-      return VALUEERROR;
-  } else
-    *step = 1;
-  *start = slc->start;
-  *start = slc->has & HAS_START ? (*start >=0 ? (*start < *nchars  ? *start : *nchars-1 + (*step > 0))
-                                              : (*start > -*nchars ? *nchars+*start : 0))
-                                : (*step > 0 ? 0 : *nchars-1);
-  *stop = slc->stop;
-  *stop = slc->has & HAS_STOP ? (*stop >= 0 ? (*stop < *nchars  ? *stop : *nchars-1 + (*step > 0)) 
-                                            : (*stop > -*nchars ? *nchars+*stop : 0))
-                              : (*step > 0 ? *nchars : -1);
-  if ((*step > 0 && *start >= *stop) || (*step < 0 && *start <= *stop))
-    *nchars = 0;
-  else
-    *nchars = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
-  return 0;
-}
-
+ 
 // Eliminates slice notation in find, index, count and other methods
 // with optional start and end. Assumes that if no start value was given,
 // *start = 0 and that if no end value was given, *end >= s->nchars.
