@@ -43,7 +43,7 @@ data NameInfo               = NVar      TSchema
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      QName [TBind] [TCon]
-                            | NTVar     [TCon]
+                            | NTVar     Kind [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -66,17 +66,17 @@ nSig xs t                   = [ (x, NSig t) | x <- xs ]
 nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
 
-nProto                      :: ModName -> Name -> [TBind] -> [TCon] -> TEnv -> TEnv
-nProto m n q us te          = (n, NProto q us te) : te'
+nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
+nProto n q us te            = (n, NProto q us te) : te'
   where
     te'                     = [ (n', NSig (f sc)) | (n',NSig sc) <- te, scdec sc == StaticMethod ]
-    f (TSchema l q' t d)    = TSchema l (q ++ (TBind tvSelf [TC (NoQual n) $ map (tVar . TV) $ bound q]) : q') t d
+    f (TSchema l q' t d)    = TSchema l (q ++ (TBind tvSelf [TC (NoQual n) $ map tVar $ tybound q]) : q') t d
 
 nExt                        :: Name -> QName -> [TBind] -> [TCon] -> TEnv
 nExt w n q us               = [(w, NExt n q us)]
 
 nTVars                      :: [TBind] -> TEnv
-nTVars q                    = [ (n, NTVar us) | TBind (TV n) us <- q ]
+nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
 nVars                       :: TEnv -> Schemas
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
@@ -84,6 +84,10 @@ nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 nSigs                       :: TEnv -> Schemas
 nSigs te                    = [ (n,sc) | (n, NSig sc) <- te ]
 
+nEmpty                      :: TEnv
+nEmpty                      = []
+
+nCombine                    :: TEnv -> TEnv -> TEnv
 nCombine te1 te2            = te1 ++ te2
 
 mapVars                     :: (TSchema -> TSchema) -> TEnv -> TEnv
@@ -116,7 +120,7 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (w, NExt n q us)     = pretty w  <+> colon <+> text "extension" <+> pretty n <+>
                                   nonEmpty brackets commaList q <+> nonEmpty parens commaList us
-    pretty (n, NTVar us)        = pretty n <> parens (commaList us)
+    pretty (n, NTVar k us)      = pretty n <> parens (commaList us)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -136,7 +140,7 @@ instance Subst NameInfo where
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
-    msubst (NTVar us)           = NTVar <$> msubst us
+    msubst (NTVar k us)         = NTVar k <$> msubst us
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -149,7 +153,7 @@ instance Subst NameInfo where
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
-    tyfree (NTVar us)           = tyfree us
+    tyfree (NTVar k us)         = tyfree us
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -224,7 +228,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
-    unalias env (NTVar us)          = NTVar (unalias env us)
+    unalias env (NTVar k us)        = NTVar k (unalias env us)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -269,16 +273,20 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
                                 (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
-                                (nPrint,            NVar (tSchema [bounded cShow a] $ tFun fxNil ta kwdNil tNone)),
+                                (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
                                 (nPostpone,         NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
                                 (nSet',             NClass [a] [] [])
                               ]
   where 
-    a:b:c:_                 = [ TBind v [] | v <- tvarSupply ]
+    a:b:c:_                 = map tBind tvarSupply
+    ta:tb:tc:_              = map tVar tvarSupply
+    r:_                     = map tBind rowSupply
+    tr:_                    = map tVar rowSupply
     bounded u (TBind v us)  = TBind v (u:us)
-    ta:tb:tc:_              = [ TVar NoLoc v | v <- tvarSupply ]
+    
+    
 
 envActorSelf                = [ (selfKW, NVar (monotype tRef)) ]
 
@@ -323,13 +331,13 @@ defineTVars                 :: [TBind] -> Env -> Env
 defineTVars q env           = env{ names = nTVars q ++ names env }
 
 tvarScope                   :: Env -> [TVar]
-tvarScope env               = [ TV n | (n, NTVar _) <- names env ]
+tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 defineSelf                  :: Name -> [TBind] -> Env -> Env
 defineSelf n q env          = defineSelf' (NoQual n) q env
 
 defineSelf'                 :: QName -> [TBind] -> Env -> Env
-defineSelf' qn q env        = env{ names = (nSelf, NTVar [tc]) : names env }
+defineSelf' qn q env        = define (nTVars [TBind tvSelf [tc]]) env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 blocked                     :: Env -> Name -> Bool
@@ -376,9 +384,24 @@ findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
 
+
+definedName                 :: Name -> Env -> Bool
+definedName n env           = case findName n env of
+                                _ -> True
+
+definedQName                :: QName -> Env -> Bool
+definedQName n env          = case findQName n env of
+                                _ -> True
+
+invertTEnv (m,te)           = map (inv m) te
+  where inv m (n,ni)        = (n,(m,ni))
+
+invertEnv env               = concatMap invertTEnv ms -- last ms is builtin
+  where ms                  = modules env
+
 findSelf                    :: Env -> TCon
 findSelf env                = case findName nSelf env of
-                                NTVar (u:us) -> u
+                                NTVar _ (u:us) -> u
 
 findMod                     :: ModName -> Env -> TEnv
 findMod m env               = fromJust (maybeFindMod m env)
@@ -433,13 +456,13 @@ findArity n env             = case findQName n env of
 
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
-                                NTVar (u:us) | not $ isProto env (tcname u) -> Just u
+                                NTVar _ (u:us) | not $ isProto env (tcname u) -> Just u
                                 _ -> Nothing
 
 findImplBound               :: TVar -> Env -> [TCon]
 findImplBound tv env        = case findName (tvname tv) env of
-                                NTVar (u:us) | isProto env (tcname u) -> u:us
-                                             | otherwise -> us
+                                NTVar _ (u:us) | isProto env (tcname u) -> u:us
+                                               | otherwise -> us
                                 _ -> []
 
 findVarType                 :: Name -> Env -> TSchema
@@ -506,7 +529,7 @@ instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
 instantiate env (TSchema _ [] t _)
                             = return ([], t)
 instantiate env (TSchema _ q t _)
-                            = do tvs <- newTVars (length q)
+                            = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
                                  let s = tybound q `zip` tvs
                                  return (constraintsOf env (subst s q), subst s t)
 
@@ -693,7 +716,7 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = state $ \st -> (deferred st, st)
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv@(TV Internal{}) t         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+substitute tv@(TV _ Internal{}) t       = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
@@ -707,9 +730,16 @@ getDump                                 = state $ \st -> (dumped st, st)
 
 newName s                               = Internal s <$> newUnique <*> return TypesPass
 
-newTVar                                 = TVar NoLoc <$> TV <$> (Internal "V" <$> newUnique <*> return GenPass)
+newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return GenPass)
+  where str KType                       = "V"
+        str KRow                        = "R"
+        str _                           = "C"
 
-newTVars n                              = mapM (const newTVar) [1..n]
+newTVars ks                             = mapM newTVarOfKind ks
+
+newTVar                                 = newTVarOfKind KType
+
+newRowVar                               = newTVarOfKind KRow
 
 subst                                   :: Subst a => Substitution -> a -> a
 subst s x                               = evalState (msubst x) (initTypeState $ Map.fromList s)
@@ -780,12 +810,12 @@ testSchemaSubst = do
     putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
     putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
     putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
-  where t   = tSchema [TBind (TV (name "A")) [TC (noQual "Eq") []]]
-                            (tCon (TC (noQual "apa") [tVar (TV (name "A")), 
-                                                      tVar (TV (name "B"))]))
-        s1  = [(TV (name "B"), tSelf)]
-        s2  = [(TV (name "A"), tSelf)]
-        s3  = [(TV (name "B"), tVar (TV (name "A")))]
+  where t   = tSchema [TBind (TV KType (name "A")) [TC (noQual "Eq") []]]
+                            (tCon (TC (noQual "apa") [tVar (TV KType (name "A")), 
+                                                      tVar (TV KType (name "B"))]))
+        s1  = [(TV KType (name "B"), tSelf)]
+        s2  = [(TV KType (name "A"), tSelf)]
+        s3  = [(TV KType (name "B"), tVar (TV KType (name "A")))]
 
 instance Subst TVar where
     msubst v                        = do t <- msubst (TVar NoLoc v)
@@ -833,6 +863,28 @@ instance Subst Type where
     tyfree (TNil _)                 = []
     tyfree (TRow _ _ t r)           = tyfree t ++ tyfree r
 
+instance Subst PosPar where
+    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
+    msubst PosNIL                   = return PosNIL
+    
+    tyfree (PosPar n t e p)         = tyfree t ++ tyfree p
+    tyfree (PosSTAR n t)            = tyfree t
+    tyfree PosNIL                   = []
+
+instance Subst KwdPar where
+    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (KwdSTAR n t)            = KwdSTAR n <$> msubst t
+    msubst KwdNIL                   = return KwdNIL
+    
+    tyfree (KwdPar n t e p)         = tyfree t ++ tyfree p
+    tyfree (KwdSTAR n t)            = tyfree t
+    tyfree KwdNIL                   = []
+
+instance Subst Expr where
+    msubst e                        = return e
+    
+    tyfree e                        = []
 
 
 -- Error handling ------------------------------------------------------------------------

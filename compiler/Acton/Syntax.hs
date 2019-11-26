@@ -170,9 +170,11 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 data Modif      = NoMod | Sync Bool | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
 data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
+data Kind       = KType | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+
 data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type, scdec::Decoration } deriving (Show,Read,Generic)
 
-data TVar       = TV { tvname::Name } deriving (Eq,Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
+data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
@@ -199,7 +201,7 @@ type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
 
-skolem (TV n)   = case n of
+skolem (TV k n) = case n of
                     Name{}     -> True
                     Internal{} -> False
 
@@ -240,6 +242,8 @@ monotype' t d   = TSchema NoLoc [] t d
 tSchema q t     = TSchema NoLoc q t NoDec
 tSchema' q t d  = TSchema NoLoc q t d
 
+tBind v         = TBind v []
+
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
 tAt c           = TAt NoLoc c
@@ -256,7 +260,7 @@ tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
 tAsync ps t     = tFun (fxAsync fxNil) (foldr posRow posNil $ map monotype ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
-tvSelf          = TV nSelf
+tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
 rPos n          = Name NoLoc (show n)
@@ -290,7 +294,9 @@ rowTail (TRow _ _ _ r)  = rowTail r
 rowTail r               = r
 
 
-tvarSupply      = [ TV $ Name NoLoc (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUWXY"  ]
+tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQ" ]
+
+rowSupply       = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RSTUWXY" ]
 
 
 type Substitution = [(TVar,Type)]
@@ -307,6 +313,7 @@ instance Data.Binary.Binary TCon
 instance Data.Binary.Binary UType
 instance Data.Binary.Binary TBind
 instance Data.Binary.Binary Type
+instance Data.Binary.Binary Kind
 
 
 -- SrcInfo ------------------
@@ -361,7 +368,7 @@ instance HasLoc TSchema where
     loc (TSchema l _ _ _) = l
 
 instance HasLoc TVar where
-    loc (TV v)          = loc v
+    loc (TV _ v)        = loc v
 
 instance HasLoc TCon where
     loc (TC c ts)       = loc c `upto` loc ts
@@ -491,6 +498,9 @@ instance Eq Pattern where
 
 instance Eq TSchema where
     TSchema _ q1 t1 d1  == TSchema _ q2 t2 d2   = q1 == q2 && t1 == t2 && d1 == d2
+
+instance Eq TVar where
+    TV k1 v1            == TV k2 v2             = v1 == v2
 
 instance Eq Type where
     TVar _ v1           == TVar _ v2            = v1 == v2
