@@ -186,9 +186,10 @@ instance Unalias ModName where
     unalias env (ModName ns)        = norm (names env) [] ns
       where
         norm te pre []              = ModName (reverse pre)
-        norm te pre (n:ns)          = case lookup n te of
+        norm te pre (n:ns)          = case lookupM n te of
                                         Just (NModule te') -> norm te' (n:pre) ns
                                         Just (NMAlias m) -> norm (findMod m env) [] ns
+                                        t -> trace ("looking for "++show n++", found "++show t) undefined
 
 instance Unalias QName where
     unalias env (QName m n)         = case lookup m' (modules env) of
@@ -294,9 +295,9 @@ envActorSelf                = [ (selfKW, NVar (monotype tRef)) ]
 prune xs                    = filter ((`notElem` xs) . fst)
 
 initEnv                     :: Env
-initEnv                     = define autoImp $ defineMod mBuiltin $ addMod mBuiltin envBuiltin env0
+initEnv                     = define autoImp env0
   where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [], modules = [], defaultmod = mBuiltin, nocheck = False }
+        env0                = Env{ names = [(nBuiltin,NModule envBuiltin)], modules = [(mBuiltin,envBuiltin)], defaultmod = mBuiltin, nocheck = False }
 
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
@@ -319,12 +320,12 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
-defineMod                   :: ModName -> Env -> Env
-defineMod (ModName ns) env  = define [(head ns, defmod (tail ns) $ te1)] env
+defineMod                   :: ModName -> TEnv -> Env -> Env
+defineMod m@(ModName ns) te env  = define [(head ns, defmod (tail ns) $ te1)] env
   where te1                 = case lookup (head ns) (names env) of Just (NModule te1) -> te1; _ -> []
-        defmod [] te        = NModule $ findMod (ModName ns) env
-        defmod (n:ns) te    = NModule $ (n, defmod ns te2) : prune [n] te
-          where te2         = case lookup n te of Just (NModule te2) -> te2; _ -> []
+        defmod [] te1        = NModule $ te -- findMod (ModName ns) env
+        defmod (n:ns) te1    = NModule $ (n, defmod ns te2) : prune [n] te1
+          where te2         = case lookup n te1 of Just (NModule te2) -> te2; _ -> []
 
 defineTVars                 :: [TBind] -> Env -> Env
 defineTVars q env           = env{ names = nTVars q ++ names env }
@@ -367,13 +368,21 @@ findName n env              = case lookup n (names env) of
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
+lookupM                     :: Name -> TEnv -> Maybe NameInfo
+lookupM m []                = Nothing
+lookupM  m ((n,ni) : te)
+                  |n==m     = case ni of
+                                 NMAlias _ -> Just ni
+                                 NModule _ -> Just ni
+                                 _ -> lookupM m te
+lookupM m (_:te)            = lookupM m te
+                                
 findQName                   :: QName -> Env -> NameInfo
 findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just i -> i
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
-
 
 definedName                 :: Name -> Env -> Bool
 definedName n env           = case findName n env of
@@ -394,14 +403,28 @@ findSelf env                = case findName nSelf env of
                                 NTVar _ (u:us) -> u
 
 findMod                     :: ModName -> Env -> TEnv
+findMod m env               = fromJust (maybeFindMod m env)
+
+{-
 findMod m env               = case lookup m (modules env) of
                                 Just te -> te
+-}
 
-isMod                       :: Env -> [Name] -> Bool
+maybeFindMod                :: ModName -> Env -> Maybe TEnv
+maybeFindMod (ModName ns) env = f ns (names env)
+  where f [] te             = Just te
+        f (n:ns) te         = case lookupM n te of
+                                Just (NModule te') -> f ns te'
+                                Just (NMAlias m) -> maybeFindMod m env
+                                Nothing -> Nothing                         
+
+isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)
+
+{-
 isMod env ns                = case lookup (ModName ns) (modules env) of
                                 Just te -> True
                                 _       -> False
-
+-}
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
 
@@ -554,7 +577,7 @@ impModule ps env (Import _ ms)  = imp env ms
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp ps env m
-                                     let env2 = maybe (defineMod m env1) (\n->define [(n, NMAlias m)] env1) as
+                                     let env2 = maybe (defineMod m te env1) (\n->define [(n, NMAlias m)] env1) as
                                      imp env2 is
 impModule ps env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp ps env m
@@ -571,11 +594,11 @@ doImp (p,sysp) env m            = case lookup m (modules env) of
                                         found <- doesFileExist fpath
                                         if found
                                          then do te <- InterfaceFiles.readFile fpath
-                                                 return (addMod m te env, te)
+                                                 return (defineMod m te (addMod m te env), te)
                                          else do found <- doesFileExist fpath2
                                                  unless found (fileNotFound m)
-                                                 te <- InterfaceFiles.readFile fpath
-                                                 return (addMod m te env, te)
+                                                 te <- InterfaceFiles.readFile fpath2
+                                                 return (defineMod m te (addMod m te env), te)
   where fpath                   = joinPath (p : mpath m) ++ ".ty"
         fpath2                  = joinPath (sysp : mpath m) ++ ".ty"
         mpath (ModName ns)      = map nstr ns
@@ -596,7 +619,7 @@ importAll m te              = mapMaybe imp te
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _)     = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
-    imp (n, NVar t)         = Just (n, NVar t)
+    imp (n, NVar t)         = Just (n, NAlias (QName m n))
     imp _                   = Nothing                               -- cannot happen
 
 

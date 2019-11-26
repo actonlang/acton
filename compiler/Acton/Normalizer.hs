@@ -39,9 +39,9 @@ newName s                           = do n <- get
                                          return $ Internal s n NormPass
 
                                     -- builtin names are last in global; local names are first in enclosing
-data NormEnv                        = NormEnv {global :: [(Name,(ModName,NameInfo))], enclosing :: [Name]} deriving Show
+data NormEnv                        = NormEnv {global :: TEnv, enclosing :: [Name], currentmod :: ModName} deriving Show
 
-normEnv (te,env)                    = NormEnv (invertTEnv (defaultmod env,te) ++ invertEnv env) []
+normEnv (te,env)                    = NormEnv (te ++ names env) [] (defaultmod env)
 
 class Norm a where
     norm                            :: NormEnv -> a -> NormM a
@@ -174,8 +174,8 @@ instance Norm QName where
     norm env (NoQual n)             = case elem n (enclosing env) of
                                          True-> return $ NoQual n
                                          False ->  case lookup n (global env) of
-                                                      Just (m,NAlias qn) -> return qn
-                                                      Just (m,_) -> return $ QName m n
+                                                      Just (NAlias qn) -> return qn
+                                                      Just _  -> return $ QName (currentmod env) n
                                                       Nothing -> return $ NoQual n
 
 instance Norm ModRef where
