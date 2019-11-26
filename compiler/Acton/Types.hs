@@ -1,15 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
 module Acton.Types(reconstruct,solverError) where
 
-import Debug.Trace
-import Data.Typeable
-import qualified Control.Exception
-import System.FilePath.Posix (joinPath)
-import System.Directory (doesFileExist)
 import Control.Monad
---import Control.Monad.State
-import Data.Maybe (maybeToList)
-import Data.Graph (SCC(..), stronglyConnComp)
 import Pretty
 import Utils
 import Acton.Syntax
@@ -29,19 +21,6 @@ reconstruct outname env modul           = do InterfaceFiles.writeFile (outname +
 
 solverError                             = typeError
 
-chkCycles (d@Class{} : ds)              = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
-chkCycles (d@Protocol{} : ds)           = noforward (qual d) d ds && all (chkDecl d ds) (dbody d) && chkCycles ds
-chkCycles (d : ds)                      = chkCycles ds
-chkCycles []                            = True
-
-chkDecl d ds s@Decl{}                   = chkCycles (decls s ++ ds)
-chkDecl d ds s                          = noforward s d ds
-
-
-noforward x d ds
-  | not $ null vs                       = err2 vs "Illegal forward reference:"
-  | otherwise                           = True
-  where vs                              = free x `intersect` declnames (d:ds)
 
 nodup x
   | not $ null vs                       = err2 vs "Duplicate names:"
@@ -61,12 +40,12 @@ noescape (te,e)                                                                 
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do pushFX fxNil
-                                             (te,ss') <- infEnv env ss
+                                             (te,ss1) <- infEnv env ss
                                              popFX
                                              cs <- collectConstraints
                                              solve cs
-                                             te' <- msubst te
-                                             return (te', ss')
+                                             te1 <- msubst te
+                                             return (te1, ss1)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Type,a)
@@ -224,7 +203,7 @@ instance InfEnv Stmt where
                                              (t2,e') <- infer env e
                                              (_,b') <- noescape <$> infEnv (define te env) b
                                              (_,els') <- noescape <$> infEnv env els
-                                             constrain [Impl env t2 (cCollection t1)]
+                                             constrain [Impl env t2 (cIterable t1)]
                                              return ([], For l p' e' b' els')
     infEnv env (Try l b hs els fin)     = do (te,b') <- infLiveEnv env b
                                              (te',els') <- infLiveEnv (maybe id define te $ env) els
@@ -357,7 +336,7 @@ mro env us                              = merge [] $ linearizations us ++ [us]
         linearizations (u : us)
           | all entail cs               = (u:us') : linearizations us
           | otherwise                   = err1 u ("Type context too weak to entail")
-          where (cs, us', _)            = findCon env u
+          where (_,cs,us',_)            = findCon env u
 
 
 class Check a where
@@ -464,7 +443,7 @@ checkBindings env proto us te
   | proto && (not $ null unsigs)        = lackSig unsigs
   | not proto && (not $ null undefs)    = lackDef undefs
   | otherwise                           = constrain refinements
-  where tes                             = [ te' | u <- us, let (_,_,te') = findCon env u ]
+  where tes                             = [ te' | u <- us, let (_,_,_,te') = findCon env u ]
         inherited                       = concatMap nSigs tes ++ concatMap nVars tes
         refinements                     = [ SubGen env sc sc' | (n,sc) <- nSigs te, Just sc' <- [lookup n inherited] ]
         undefs                          = (dom $ csigs) \\ (dom $ nVars te ++ concatMap nVars tes)
@@ -509,15 +488,16 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env ex@(ExceptAll l)         = return ([], ex)
-    infEnv env ex@(Except l x)          = do (cs,t) <- instantiate env $ classConSchema env x
-                                             constrain (Sub env t tException : cs)
+    infEnv env ex@(Except l x)          = do (q,tc) <- infException env x
                                              return ([], ex)
-    infEnv env ex@(ExceptAs l x n)      = do (cs,t) <- instantiate env $ classConSchema env x
-                                             constrain (Sub env t tException : cs)
-                                             return (nVar n t, ex)
+    infEnv env ex@(ExceptAs l x n)      = do (q,tc) <- infException env x
+                                             return (nVar n (tCon tc) `nCombine` nTVars q, ex)
 
-classConSchema env qn                   = tSchema q (tCon $ TC qn $ map tVar $ tybound q)
-  where (q,_,_)                         = findClass qn env
+infException env x
+  | Just (_,t) <- sub                   = return (q,tc)
+  | otherwise                           = err1 x "Not an Exception sub-class:"
+  where (_,q,tc)                        = findSkolemizedCon env x
+        sub                             = findSubAxiom env tc qnException
 
 instance Infer Expr where
     infer env (Var l n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType' n env
@@ -569,9 +549,8 @@ instance Infer Expr where
                                              constrain [Sub env t1 t0, Sub env t2 t0]
                                              return (t0, Cond l e1' e' e2')
     infer env (BinOp l e1 o@(Op _ op) e2)
-      | op `elem` [Or,And]              = do (t1,e1') <- infer env e1
-                                             (t2,e2') <- infer env e2
-                                             constrain [Impl env t1 cBoolean, Impl env t2 cBoolean]
+      | op `elem` [Or,And]              = do e1' <- inferBool env e1
+                                             e2' <- inferBool env e2
                                              return (tBool, BinOp l e1' o e2')
       | otherwise                       = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
@@ -606,8 +585,7 @@ instance Infer Expr where
             method BAnd                 = andKW
             method MMult                = matmulKW
     infer env (UnOp l o@(Op _ op) e)
-      | op == Not                       = do (t,e') <- infer env e
-                                             constrain [Impl env t cBoolean]
+      | op == Not                       = do e' <- inferBool env e
                                              return (tBool, UnOp l o e')
       | otherwise                       = do (t,e') <- infer env e
                                              w <- newName "UnOp"
@@ -622,9 +600,9 @@ instance Infer Expr where
     infer env (CompOp l e1 [OpArg (Op _ op) e2])
       | op `elem` [In,NotIn]            = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
-                                             w1 <- newName "Collection"
+                                             w1 <- newName "Container"
                                              w2 <- newName "Comp"
-                                             constrain [Impl env t2 (cCollection t1), Impl env t1 cEq]
+                                             constrain [Impl env t2 (cContainer t1), Impl env t1 cEq]
                                              return (tBool, eCall (eDot (eVar w1) (method op)) [eVar w2, e1', e2'])
       | otherwise                       = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
@@ -750,8 +728,9 @@ infAssocs env (StarStar e : as) tk tv   = do (t,e') <- infer env e
                                              return (StarStar e' : as')
 
 inferBool env e                         = do (t,e') <- infer env e
+                                             w <- newName "Boolean"
                                              constrain [Impl env t cBoolean]
-                                             return e'
+                                             return $ eCall (eDot (eVar w) boolKW) [e']
 
 inferSlice env (Sliz l e1 e2 e3)        = do (t1,e1') <- infer env e1
                                              (t2,e2') <- infer env e2
@@ -821,7 +800,7 @@ instance InfEnv Comp where
     infEnv env (CompFor l p e c)        = do (te1,t1,p') <- infEnvT env p
                                              (t2,e') <- infer env e
                                              (te2,c') <- infEnv (define te1 env) c
-                                             constrain [Impl env t2 (cCollection t1)]
+                                             constrain [Impl env t2 (cIterable t1)]
                                              return (nCombine te1 te2, CompFor l p' e' c')
 
 instance Infer Exception where
@@ -882,12 +861,12 @@ instance InfEnvT Pattern where
     infEnvT env (PIndex l e [i])        = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
-                                             constrain [Impl env t (cIndexed ti t0)]    -- TODO: ensure MutableIndexed
+                                             constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
                                              equFX env (fxMut tWild)
                                              return ([], t0, PIndex l e' [i'])
     infEnvT env (PSlice l e [s])        = do (t,e') <- infer env e
                                              s' <- inferSlice env s
-                                             constrain [Impl env t cSliceable]          -- TODO: ensure MutableSliceable
+                                             constrain [Impl env t cSliceable, Sub env t tObject]
                                              equFX env (fxMut tWild)
                                              return ([], t, PSlice l e' [s'])
     infEnvT env (PDot l e n)            = do (t,e') <- infer env e
