@@ -448,7 +448,37 @@ int str_endswith(str_t s, str_t sub, int start, int end) {
       return 0;
     }
   }
-  return 1;
+   return 1;
+}
+
+void str_expandtabs(str_t s, int tabsize, str_t *res){
+  int pos = 0;
+  int expanded = 0;
+  tabsize = tabsize <= 0 ? 1 : tabsize;
+  unsigned char buffer[tabsize * s->nchars];
+  unsigned char *p = s->str;
+  unsigned char *q = buffer;
+  for (int i=0; i<s->nchars; i++) {
+    if (*p == '\t') {
+      int n = tabsize - pos % tabsize;
+      for (int j=0; j < n; j++) {
+        *q++ = ' ';
+      }
+      p++;
+      expanded += n-1;
+      pos+=n;
+    } else if (*p=='\n' || *p == '\r') {
+      *q++ = *p++;
+      pos = 0;
+    } else {
+      for (int j=0; j< byte_length2(*p); j++) {
+        *q++ = *p++;
+        pos++;
+      }
+    }
+  }
+  NEW_STR(*res,s->nchars+expanded,s->nbytes+expanded);
+  memcpy((*res)->str,buffer,s->nbytes+expanded);
 }
 
 int str_find(str_t s, str_t sub, int start, int end) {
@@ -757,6 +787,21 @@ int str_rjust(str_t s, int width, str_t fill, str_t *res) {
   return 0;
 }
                                  
+void str_rpartition(str_t s, str_t sep, str_t *ls, str_t *ssep, str_t *rs) {
+  int n = str_rfind(s,sep,0,s->nchars);
+  if (n<0) {
+    *ls = null_str; *ssep = null_str; *rs = s;
+  } else {
+    int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    NEW_STR(*ls,n,nb);
+    memcpy((*ls)->str,s->str,nb);
+    int nbr = s->nbytes - sep->nbytes - nb;
+    NEW_STR(*rs,s->nchars-n-sep->nchars,nbr);
+    memcpy((*rs)->str,s->str+nb+sep->nbytes,nbr);
+    *ssep = sep;
+  }
+}
+
 int str_split(str_t s, str_t sep, int maxsplit, list_t *res) {
   *res = list_new(5);
   if (maxsplit < 0) maxsplit = INT_MAX; 
@@ -872,6 +917,21 @@ int str_splitlines(str_t s, list_t *res) {
 } 
 
 
+void str_rstrip(str_t s, str_t cs, str_t *res) {
+  unsigned char *p = s->str + s->nbytes;
+  int i, nbytes;
+  for (i=0; i<s->nchars; i++) {
+    p = skip_chars(p,-1,0);
+    str_t c = mk_char(p);
+    if (cs == NULL ?  !str_isspace(c) :
+      rbmh(cs->str,p,cs->nbytes,byte_length2(*p)) < 0) 
+      break;
+  }
+  nbytes = p + byte_length2(*p) - s->str;
+  NEW_STR(*res,s->nchars-i,nbytes);
+  memcpy((*res)->str,s->str,nbytes);
+}
+
 int str_startswith(str_t s, str_t sub, int start, int end) {
   if (fix_start_end(s,&start,&end) < 0) return 0;
   int isascii = s->nchars==s->nbytes;
@@ -885,6 +945,12 @@ int str_startswith(str_t s, str_t sub, int start, int end) {
   return 1;
 }
  
+void str_strip(str_t s, str_t cs, str_t *res) {
+  str_t r1;
+  str_rstrip(s,cs,&r1);
+  str_lstrip(r1,cs,res);
+}
+
 int str_upper(str_t s, str_t *res) {
   return str_transform(s,utf8proc_toupper,res);
 }
