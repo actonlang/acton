@@ -199,7 +199,7 @@ instance Relabel TSchema where
     relabel (TSchema _ q t d) = TSchema <$> newLoc <*> relabel q <*> relabel t <*> return d
 
 instance Relabel TVar where
-    relabel (TV n) = TV <$> relabel n
+    relabel (TV k n) = TV k <$> relabel n
 
 instance Relabel TCon where
     relabel (TC n ts) = TC <$> relabel n <*> relabel ts

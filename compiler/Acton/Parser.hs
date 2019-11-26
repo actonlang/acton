@@ -1058,7 +1058,7 @@ tcon =  do n <- qual_name
            return $ S.TC n (maybe [] id args)
 
 tvar :: Parser S.TVar
-tvar = S.TV <$> tvarname
+tvar = S.TV S.KWild <$> tvarname
 
 tbind :: Parser S.TBind
 tbind = S.TBind <$> tvar <*> optbounds
@@ -1082,7 +1082,7 @@ tschema = addLoc $
 ttype :: Parser S.Type
 ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
-        <|> (S.TVar NoLoc . S.TV) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
+        <|> (S.TVar NoLoc . S.TV S.KWild) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)

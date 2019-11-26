@@ -160,7 +160,7 @@ red' sub env (TRow _ n t1 r1) r2            = do (t2,r2') <- findKwd tNil n r2 (
         findKwd' r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
           | otherwise                       = do t <- monotype <$> newTVar
-                                                 r <- newTVar
+                                                 r <- newRowVar
                                                  substitute tv (kwdRow n t r)
                                                  return (t, revApp r0 r)
         revApp (TRow l n t r1) r2           = revApp r1 (TRow l n t r2)

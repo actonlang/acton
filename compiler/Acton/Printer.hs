@@ -320,7 +320,7 @@ instance Pretty TSchema where
     pretty (TSchema l q t d)        = pretty d <+> pretty (TSchema l q t NoDec)
 
 instance Pretty TVar where
-    pretty (TV n)                   = pretty n
+    pretty (TV n k)                 = pretty n
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
@@ -382,6 +382,14 @@ instance Pretty Type where
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
     pretty row                      = prettyKwdRow row
+
+instance Pretty Kind where
+    pretty KType                    = text "type"
+    pretty KRow                     = text "row"
+    pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> pretty k
+    pretty (KVar v)                 = pretty v
+    pretty KWild                    = text "_"
+
 
 instance Pretty Substitution where
     pretty s                        = vcat (map pr s)

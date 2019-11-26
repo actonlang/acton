@@ -256,7 +256,7 @@ instance Gen TSchema where
     gen env (TSchema _ _ t _)       = gen env t
 
 instance Gen TVar where
-    gen env (TV n)                  = word
+    gen env (TV k n)                = word
 
 instance Gen TCon where
     gen env (TC n _)                = gen env n

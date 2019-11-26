@@ -335,7 +335,7 @@ instance Vars TSchema where
     free (TSchema _ q t d)          = free q ++ free t
 
 instance Vars TVar where
-    free (TV v)                     = []
+    free (TV k v)                   = []
 
 instance Vars TCon where
     free (TC n ts)                  = free n ++ free ts
