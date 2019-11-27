@@ -188,8 +188,8 @@ instance Unalias ModName where
         norm te pre []              = ModName (reverse pre)
         norm te pre (n:ns)          = case lookupM n te of
                                         Just (NModule te') -> norm te' (n:pre) ns
-                                        Just (NMAlias m) -> norm (findMod m env) [] ns
-                                        t -> trace ("looking for "++show n++", found "++show t) undefined
+                                        Just (NMAlias m) -> m -- norm (findMod m env) [] ns
+                                        _ -> error ("### unalias " ++ show (ModName ns))
 
 instance Unalias QName where
     unalias env (QName m n)         = case lookup m' (modules env) of
