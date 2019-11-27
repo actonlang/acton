@@ -384,13 +384,14 @@ findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
                                 _ -> noItem m n
 findQName (NoQual n) env    = findName n env
 
-definedName                 :: Name -> Env -> Bool
-definedName n env           = case findName n env of
-                                _ -> True
-
-definedQName                :: QName -> Env -> Bool
-definedQName n env          = case findQName n env of
-                                _ -> True
+tconKind                    :: QName -> Env -> Kind
+tconKind n env              = case findQName n env of
+                                NClass q _ _ -> kind q
+                                NProto q _ _ -> kind q
+                                _            -> notClassOrProto n
+  where kind []             = KType
+        kind q              = KFun [ tvkind v | TBind v _ <- q ] KType
+                                
 
 invertTEnv (m,te)           = map (inv m) te
   where inv m (n,ni)        = (n,(m,ni))
@@ -451,7 +452,7 @@ findArity                  :: QName -> Env -> Int
 findArity n env             = case findQName n env of
                                 NClass q us te -> length q
                                 NProto q us te -> length q
-                                _ -> err1 n "Class or protocol name expected, got"
+                                _ -> notClassOrProto n
 
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
@@ -898,6 +899,7 @@ data CheckerError                   = FileNotFound ModName
                                     | IllegalImport SrcLoc
                                     | DuplicateImport Name
                                     | NoItem ModName Name
+                                    | NoClassOrProto QName
                                     | OtherError SrcLoc String
                                     deriving (Show)
 
@@ -964,6 +966,7 @@ checkerError (MissingSelf n)        = (loc n, " Missing 'self' parameter in defi
 checkerError (IllegalImport l)      = (l,     " Relative import not yet supported")
 checkerError (DuplicateImport n)    = (loc n, " Duplicate import of name " ++ prstr n)
 checkerError (NoItem m n)           = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
+checkerError (NoClassOrProto n)     = (loc n, " Class or protocol name expected, got " ++ prstr n)
 checkerError (OtherError l str)     = (l,str)
 
 nameNotFound n                      = Control.Exception.throw $ NameNotFound n
@@ -976,6 +979,7 @@ fileNotFound n                      = Control.Exception.throw $ FileNotFound n
 illegalImport l                     = Control.Exception.throw $ IllegalImport l
 duplicateImport n                   = Control.Exception.throw $ DuplicateImport n
 noItem m n                          = Control.Exception.throw $ NoItem m n
+notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
 err l s                             = Control.Exception.throw $ OtherError l s
 
 err1 x s                            = err (loc x) (s ++ " " ++ prstr x)
