@@ -4,6 +4,7 @@
 #include "list.h"
 #include "iterator.h"
 #include "acterror.h"
+#include "slice.h"
 
 typedef struct list_iterator_struct {
   list_t src;
@@ -23,17 +24,19 @@ static inline int max(int a, int b) {
 }
 
 // For now, expansion doubles capacity. 
-static int expand(list_t lst) {
-  if (lst->capacity == lst->length) {
-    int newcapacity = lst->capacity==0 ? 1 : lst->capacity << 1;
-    WORD* newptr = lst->data==NULL ? malloc(newcapacity*sizeof(WORD)) : realloc(lst->data,newcapacity*sizeof(WORD));
-    if (newptr == NULL) {
-      return MEMORYERROR;
-    }
-    lst->data = newptr;
-    lst->capacity = newcapacity;
-  }
-  return 0;
+static int expand(list_t lst,int n) {
+   if (lst->capacity >= lst->length + n)
+     return 0;
+   int newcapacity = lst->capacity==0 ? 1 : lst->capacity;
+   while (newcapacity < lst->length+n)
+     newcapacity <<= 1;
+   WORD* newptr = lst->data==NULL ? malloc(newcapacity*sizeof(WORD)) : realloc(lst->data,newcapacity*sizeof(WORD));
+   if (newptr == NULL) {
+     return MEMORYERROR;
+   }
+   lst->data = newptr;
+   lst->capacity = newcapacity;
+   return 0;
 }  
 
 list_t list_new(int capacity) {
@@ -120,6 +123,26 @@ int list_getitem(list_t lst, int ix, WORD *res) {
   return 0;
 }
 
+int list_getslice(list_t lst, slice_t slc, WORD *res) {
+  int len = lst->length;
+  int start, stop, step;
+  int r = normalize_slice(slc, &len, &start, &stop, &step);
+  if (r<0) return r;
+  //slice notation have been eliminated and default values applied.
+  // len now is the length of the slice
+  list_t rlst = list_new(len);
+  int t = start;
+  for (int i=0; i<len; i++) {
+    WORD w;
+    list_getitem(lst,t,&w);
+    list_append(rlst,w);
+    t += step;
+  }
+  *res = (WORD)rlst;
+  return 0;
+}
+
+      
 int list_index(list_t lst, WORD elem, int startix, int endix,int (*eq)(WORD,WORD)) {
   int start = startix < 0 ? lst->length + startix : startix;
   int end = endix < 0 ? lst->length + endix : (endix < lst->length ? endix : lst->length);
@@ -147,8 +170,59 @@ int list_setitem(list_t lst, int ix, WORD elem) {
   return 0;
 }
 
+int list_setslice(list_t lst, slice_t slc, list_t other) {
+  int len = lst->length;
+  int start, stop, step;
+  int r = normalize_slice(slc, &len, &start, &stop, &step);
+  if (r<0) return r;
+  if (step != 1 && other->length != len)
+    return VALUEERROR;
+  int copy = other->length <= len ? other->length : len;
+  int t = start;
+  for (int i= 0; i<copy; i++) {
+    lst->data[t] = other->data[i];
+    t += step;
+  }
+  if (other->length == len)
+    return 0;
+  if (other->length < len) {
+    memmove(lst->data + start + copy,
+            lst->data + start + len,
+            (lst->length-(start+len))*sizeof(WORD));
+     lst->length-=len-other->length;
+     return 0;
+  } else {
+    expand(lst,other->length-len);
+    int rest = lst->length -(start+copy);
+    int incr = other->length - len;
+    memmove(lst->data + start + copy + incr,
+            lst->data + start + copy,
+            rest*sizeof(WORD));
+    for (int i = copy; i < other->length; i++)
+      lst->data[start+i] = other->data[i];
+    lst->length = lst->length+incr;
+    return 0;
+  }
+}
+
+int list_delitem(list_t lst,int ix) {
+  WORD dummy;
+  return list_pop(lst,ix,&dummy);
+}
+
+int list_delslice(list_t lst, slice_t slc) {
+  int len = lst->length;
+  int start, stop, step;
+  int r = normalize_slice(slc, &len, &start, &stop, &step);
+  if (r<0) return r;
+  if (len==0) return 0;
+  for (int ix = start+step*(len-1); ix>= start; ix -= step)
+    list_delitem(lst,ix);
+  return 0;
+}
+
 int list_append(list_t lst, WORD elem) {
-  int err = expand(lst);
+  int err = expand(lst,1);
   if (err == 0)
     lst->data[lst->length++] = elem;
   return err;
@@ -168,7 +242,7 @@ int list_extend(list_t lst, list_t other) {
  
 // Any int is acceptable as ix.
 int list_insert(list_t lst, int ix, WORD elem) {
-  int err = expand(lst);
+  int err = expand(lst,1);
   int ix0 = ix < 0 ? max(lst->length+ix,0) : min(ix,lst->length);
   if (err == 0) {
     memmove(lst->data + (ix0 + 1),

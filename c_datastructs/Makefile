@@ -4,6 +4,7 @@ all:
 	cd iterator && $(MAKE)
 	cd dicts && $(MAKE)
 	cd sets && $(MAKE)
+	cd slices && $(MAKE)
 	cd str && $(MAKE)
 
 clean:
@@ -12,5 +13,6 @@ clean:
 	cd iterator && $(MAKE) clean
 	cd dicts && $(MAKE) clean
 	cd sets && $(MAKE) clean
+	cd slices && $(MAKE) clean
 	cd str && $(MAKE) clean
 
