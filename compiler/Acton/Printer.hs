@@ -320,7 +320,7 @@ instance Pretty TSchema where
     pretty (TSchema l q t d)        = pretty d <+> pretty (TSchema l q t NoDec)
 
 instance Pretty TVar where
-    pretty (TV n k)                 = pretty n
+    pretty (TV k n)                 = pretty n
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
