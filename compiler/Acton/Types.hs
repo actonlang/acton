@@ -797,7 +797,7 @@ instance InfEnv Comp where
     infEnv env (CompIf l e c)           = do e' <- inferBool env e
                                              (te,c') <- infEnv env c
                                              return (te, CompIf l e' c')
-    infEnv env (CompFor l p e c)        = do (te1,t1,p') <- infEnvT env p
+    infEnv env (CompFor l p e c)        = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p
                                              (t2,e') <- infer env e
                                              (te2,c') <- infEnv (define te1 env) c
                                              constrain [Impl env t2 (cIterable t1)]
