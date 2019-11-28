@@ -17,6 +17,12 @@ typedef struct cpu_set {
   uint32_t    count;
 } cpu_set_t;
 
+static inline void
+CPU_ZERO(cpu_set_t *cs) { cs->count = 0; }
+
+static inline void
+CPU_SET(int num, cpu_set_t *cs) { cs->count |= (1 << num); }
+
 static inline int
 CPU_ISSET(int num, cpu_set_t *cs) { return (cs->count & (1 << num)); }
 
@@ -199,29 +205,33 @@ WORD bootstrap(Clos c) {
 #define ROOT Pingpong
 
 int main(int argc, char **argv) {
-    long num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     if (argc > 1) {
         int n = atoi(argv[1]);
         if (n > 0) {
-            num_threads = n;
+            num_cores = n;
         }
     }
 
-    Actor roots[num_threads];
-    for (int i = 0; i<num_threads; i++)
-        roots[i] = bootstrap(CLOS1(ROOT, (WORD)(i+1)));
-
-    printf("%ld worker threads\n", num_threads);
+    printf("%ld worker threads\n", num_cores);
 
     // start worker threads, one per CPU
-    pthread_t threads[num_threads];
-    for(int idx = 0; idx < num_threads; ++idx) {
+    pthread_t threads[num_cores];
+    cpu_set_t cpu_set;
+    for(int idx = 0; idx < num_cores; ++idx) {
         pthread_create(&threads[idx], NULL, main_loop, (void*)idx);
+        CPU_ZERO(&cpu_set);
+        CPU_SET(idx, &cpu_set);
+        pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
+    Actor roots[num_cores];
+    for (int i = 0; i<num_cores; i++)
+        roots[i] = bootstrap(CLOS1(ROOT, (WORD)(i+1)));
+
     // TODO: run I/O polling thread
 
-    for(int idx = 0; idx < num_threads; ++idx) {
+    for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);
     }
 }
