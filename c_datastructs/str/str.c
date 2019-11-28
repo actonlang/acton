@@ -838,7 +838,7 @@ int str_split(str_t s, str_t sep, int maxsplit, list_t *res) {
      str_partition(rs,sep,&ls,&ssep,&rs);
      list_append(*res,ls);
     }
-    if (rs->nchars>0)
+    if (ssep->nchars>0)
       list_append(*res,rs);
     return 0;
   }
