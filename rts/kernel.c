@@ -4,8 +4,21 @@
 #include <unistd.h>  // sysconf()
 #include <pthread.h>
 #include <stdio.h>
+#include <stdatomic.h>
 
-////////////////////////////////////////////////////////////////
+
+#include "kernel.h"
+
+#ifdef __gnu_linux__
+    #define IS_GNU_LINUX
+    #define USE_EPOLL
+#elif  __APPLE__ && __MACH__
+    #define IS_MACOS
+    #define USE_KQUEUE
+#endif
+
+#if defined(IS_MACOS)
+///////////////////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <mach/mach_init.h>
@@ -63,8 +76,144 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
     return 0;
 }
 ////////////////////////////////////////////////////////////////
+#endif
 
-#include "kernelops.h"
+
+
+static inline void spinlock_lock(volatile atomic_flag *f) {
+    while (atomic_flag_test_and_set(f) == true) {
+        // spin until we could set the flag
+    }
+}
+static inline void spinlock_unlock(volatile atomic_flag *f) {
+    atomic_flag_clear(f);
+}
+
+
+// Allocate a Clos node with space for n var words.
+Clos CLOS(R (*code)(Clos, WORD), int n) {
+    Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
+    c->code = code;
+    c->nvar = n;
+    for(int x = 0; x < n; ++x) {
+        c->var[x] = (WORD)0xbadf00d; // "bad food"
+    }
+    return c;
+}
+
+// Allocate a Msg node.
+Msg MSG(Clos clos) {
+    Msg m = malloc(sizeof(struct Msg));
+    m->next = NULL;
+    m->waiting = NULL;
+    m->clos = clos;
+    atomic_flag_clear(&m->wait_lock);
+    return m;
+}
+
+// Allocate an Actor node with space for n state words.
+Actor ACTOR(int n) {
+    Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
+    a->next = NULL;
+    a->msg = NULL;
+    atomic_flag_clear(&a->msg_lock);
+    return a;
+}
+
+
+Actor readyQ = NULL;
+volatile atomic_flag readyQ_lock;
+
+
+// Atomically enqueue actor "a" onto the global ready-queue.
+void ENQ_ready(Actor a) {
+    spinlock_lock(&readyQ_lock);
+    if (readyQ) {
+        Actor x = readyQ;
+        while (x->next)
+            x = x->next;
+        x->next = a;
+    } else {
+        readyQ = a;
+    }
+    a->next = NULL;
+    spinlock_unlock(&readyQ_lock);
+}
+
+// Atomically dequeue and return the first actor from the global ready-queue, 
+// or return NULL.
+Actor DEQ_ready() {
+    Actor res = NULL;
+    spinlock_lock(&readyQ_lock);
+    if (readyQ) {
+        Actor x = readyQ;
+        readyQ = x->next;
+        x->next = NULL;
+        res = x;
+    }
+    spinlock_unlock(&readyQ_lock);
+    return res;
+}
+
+// Atomically enqueue message "m" onto the queue of actor "a", 
+// return true if the queue was previously empty.
+bool ENQ_msg(Msg m, Actor a) {
+    bool did_enq = true;
+    spinlock_lock(&a->msg_lock);
+    m->next = NULL;
+    if (a->msg) {
+        Msg x = a->msg;
+        while (x->next)
+            x = x->next;
+        x->next = m;
+        did_enq = false;
+    } else {
+        a->msg = m;
+    }
+    spinlock_unlock(&a->msg_lock);
+    return did_enq;
+}
+
+// Atomically dequeue the first message from the queue of actor "a",
+// return true if the queue still holds messages.
+bool DEQ_msg(Actor a) {
+    bool has_more = false;
+    spinlock_lock(&a->msg_lock);
+    if (a->msg) {
+        Msg x = a->msg;
+        a->msg = x->next;
+        x->next = NULL;
+        has_more = a->msg != NULL;
+    }
+    spinlock_unlock(&a->msg_lock);
+    return has_more;
+}
+
+// Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen (and return true),
+// else immediately return false.
+bool ADD_waiting(Actor a, Msg m) {
+    bool did_add = false;
+    spinlock_lock(&m->wait_lock);
+    if (m->clos) {
+        a->next = m->waiting;
+        m->waiting = a;
+        did_add = true;
+    }
+    spinlock_unlock(&m->wait_lock);
+    return did_add;
+}
+
+// Atomically freeze message "m" and return its list of waiting actors. 
+Actor FREEZE_waiting(Msg m) {
+    spinlock_lock(&m->wait_lock);
+    m->clos = NULL;
+    spinlock_unlock(&m->wait_lock);
+    Actor res = m->waiting;
+    m->waiting = NULL;
+    return res;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
 
 char *RTAG_name(RTAG tag) {
     switch (tag) {
@@ -174,7 +323,7 @@ void *main_loop(void *arg) {
                 }
             }
         } else {
-            printf("OUT OF WORK!   (%d)\n", idx);
+            //printf("OUT OF WORK!   (%d)\n", idx);
             //getchar();
             static struct timespec idle_wait = { 0, 50000000 };  // 500ms
             nanosleep(&idle_wait, NULL);
@@ -192,7 +341,6 @@ WORD bootstrap(Clos c) {
         c = r.cont;
         v = r.value;
     }
-    printf("< bootstrap\n");
 }
 
 
