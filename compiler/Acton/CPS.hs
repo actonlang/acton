@@ -66,29 +66,29 @@ emptyCtxt env                           = env{ ctxt = [] }
 define x env                            = env { defd = bound x ++ defd env }
 
 
+eCallCont c args                        = eCallV primCONT (eVar c : args)
 
-pushH h                                 = sExpr (eCallV primPUSH [eVar selfKW, h])        -- TODO: ensure selfKW is really in scope
+pushH h                                 = sExpr (eCallV primPUSH [h])
 
 format (Int _ 0 _, cont)                = [sReturn cont]
-format (lvl, cont)                      = [sExpr (eCallV primPOP [self,lvl]), sReturn cont]
-  where self                            = eVar selfKW                                       -- TODO: ensure selfKW is really in scope
+format (lvl, cont)                      = [sExpr (eCallV primPOP [lvl]), sReturn cont]
 
-wrapC c f env                           = eCallVar c [level, eLambda [] cont]
+wrapC c f env                           = eCallCont c [level, eLambda [] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
 unwrapL n lvl                           = eBinOp (eInt n) Plus (unwrapL 0 lvl)
 
 seqcont n (Pop : env)                   = seqcont (n+1) env
-seqcont n (Seq c : _)                   = (eInt n, eCallVar c [eNone])
-seqcont n (Loop c : _)                  = (eInt n, eCallVar c [eNone])
-seqcont n (Meth c : _)                  = (eInt n, eCallVar c [eNone])
+seqcont n (Seq c : _)                   = (eInt n, eCallCont c [eNone])
+seqcont n (Loop c : _)                  = (eInt n, eCallCont c [eNone])
+seqcont n (Meth c : _)                  = (eInt n, eCallCont c [eNone])
 seqcont n (Wrap c : env)                = (eInt n, wrapC c seqcont env)
-seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallVar cnt [])
+seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont cnt [])
 
 cntcont n (Pop : env)                   = cntcont (n+1) env
 cntcont n (Seq c : env)                 = cntcont n env
-cntcont n (Loop c : _)                  = (eInt n, eCallVar c [eNone])
+cntcont n (Loop c : _)                  = (eInt n, eCallCont c [eNone])
 cntcont n (Wrap c : env)                = (eInt n, wrapC c cntcont env)
 cntcont n (Unwrap lvl cnt : env)        = cntcont n env
 
@@ -101,7 +101,7 @@ brkcont n (Unwrap lvl cnt : env)        = brkcont n env
 retcont e n (Pop : env)                 = retcont e (n+1) env
 retcont e n (Seq c : env)               = retcont e n env
 retcont e n (Loop c : env)              = retcont e n env
-retcont e n (Meth c : _)                = (eInt n, eCallVar c [e])
+retcont e n (Meth c : _)                = (eInt n, eCallCont c [e])
 retcont e n (Wrap c : env)              = (eInt n, wrapC c (retcont e) env)
 retcont e n (Unwrap lvl cnt : env)      = retcont e n env
 
@@ -315,12 +315,12 @@ contCall env (Call l (Var _ n) p k)
   | n == primAWAIT                      = True
   | isPrim n                            = False
   | n `elem` ns0                        = False
-  where ns0                             = map NoQual [nStr,nInt,nLen,nPrint,nPostpone]
+  where ns0                             = [qnStr,qnInt,qnLen,qnPrint,qnPostpone]
         isPrim (QName m _)              = m == mPrim
         isPrim _                        = False
 contCall env (Call l (Dot _ _ n) p k)
   | n `elem` ns0                        = False
-  where ns0                             = [getitemKW,setitemKW,getsliceKW,setsliceKW,enterKW,exitKW,nextKW]
+  where ns0                             = attrKWs
 contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 
@@ -465,7 +465,7 @@ instance PreCPS Expr where
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
                                                           preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primList [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnList [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "append")) [e])
     pre env (Dict l es)                 = Dict l <$> pre env es
     pre env (DictComp l (Assoc k v) c)  = do (e1,stmts) <- withPrefixes $ liftM2 (DictComp l) (liftM2 Assoc (pre env k) (pre env v)) (pre env c)
@@ -473,7 +473,7 @@ instance PreCPS Expr where
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
                                                           preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primDict [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnDict [])
             s1 acc                      = sAssign [pIndex (eVar acc) k] v
     pre env (Set l es)                  = Set l <$> pre env es
     pre env (SetComp l (Elem e) c)      = do (e1,stmts) <- withPrefixes $ liftM2 (SetComp l) (fmap Elem $ pre env e) (pre env c)
@@ -481,7 +481,7 @@ instance PreCPS Expr where
                                                 [] -> return e1
                                                 _  -> do acc <- newName "acc"
                                                          preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV primSet [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnSet' [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "add")) [e])
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e
