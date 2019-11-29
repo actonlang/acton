@@ -149,7 +149,7 @@ instance KCheck Expr where
     kchk env (CompOp l e ops)       = kchk env e >> kchk env ops
     kchk env (UnOp l op e)          = kchk env e 
     kchk env (Dot l e n)            = kchk env e
-    kchk env (DotI l e i)           = kchk env e
+    kchk env (DotI l e i t)         = kchk env e
     kchk env (Lambda l ps ks e)     = kchk env ps >> kchk env ks >> kchk env e
     kchk env (Yield l e)            = kchk env e
     kchk env (YieldFrom l e)        = kchk env e
@@ -434,7 +434,7 @@ instance KWalk Expr where
     kwalk w (CompOp l e ops)        = CompOp l <$> kwalk w e <*> kwalk w ops
     kwalk w (UnOp l op e)           = UnOp l op <$> kwalk w e 
     kwalk w (Dot l e n)             = Dot l <$> kwalk w e <*> return n
-    kwalk w (DotI l e i)            = DotI l <$> kwalk w e <*> return i
+    kwalk w (DotI l e i t)          = DotI l <$> kwalk w e <*> return i <*> return t
     kwalk w (Lambda l ps ks e)      = Lambda l <$> kwalk w ps <*> kwalk w ks <*> kwalk w e
     kwalk w (Yield l e)             = Yield l <$> kwalk w e
     kwalk w (YieldFrom l e)         = YieldFrom l <$> kwalk w e

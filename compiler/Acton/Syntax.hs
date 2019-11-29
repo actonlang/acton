@@ -67,7 +67,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
                 | UnOp          { eloc::SrcLoc, uop::Op Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
-                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer }
+                | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer, tl :: Bool }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }

@@ -142,7 +142,7 @@ instance Deact Expr where
     deact env (CompOp l e ops)      = CompOp l <$> deact env e <*> deact env ops
     deact env (UnOp l op e)         = UnOp l op <$> deact env e 
     deact env (Dot l e nm)          = Dot l <$> deact env e <*> return nm
-    deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
+    deact env (DotI l e i t)        = DotI l <$> deact env e <*> return i <*> return t
     deact env (Lambda l ps ks e)    = Lambda l ps ks <$> deact env e
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
