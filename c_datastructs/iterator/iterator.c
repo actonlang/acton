@@ -1,13 +1,15 @@
-#include <errno.h>
 #include <stdlib.h>
-
+#include "acterror.h"
 #include "iterator.h"
 
-int range_iterator_next(iterator_t iter, WORD *res) {
+typedef struct range_iterator_struct {
+  int nxt,stop,step;
+} *range_iterator_state_t; 
+
+static int range_iterator_next(iterator_t iter, WORD *res) {
   range_iterator_state_t state = iter->state;
   if((state->step>0 && state->nxt>state->stop) || (state->step<0 && state->nxt<state->stop)) {
-    errno = EINVAL;
-    return -1;
+    return STOPITERATION;
   }
   *res = (WORD)(long)state->nxt;
   state->nxt += state->step;
@@ -15,18 +17,17 @@ int range_iterator_next(iterator_t iter, WORD *res) {
 }
 
 // Fast version when step=1
-int range_iterator_next_fast(iterator_t iter, WORD *res) {
+static int range_iterator_next_fast(iterator_t iter, WORD *res) {
   range_iterator_state_t state = iter->state;
-  if(state->nxt>state->stop) {
-    errno = EINVAL;
-    return -1;
+  if(state->nxt > state->stop) {
+    return STOPITERATION;
   }
   *res = (WORD)(long)state->nxt++;
   return 0;
 }
 
 // Creating a range iterator
-iterator_t range(int start, int stop, int step) {
+static iterator_t range_iter(int start, int stop, int step) {
   range_iterator_state_t state = malloc(sizeof(struct range_iterator_struct));
   state->nxt = start;
   state->stop = stop;
@@ -40,6 +41,20 @@ iterator_t range(int start, int stop, int step) {
   return iter;
 }
 
+iterator_t iterable_iter(iterable_t it) {
+  return it->itr;
+}
+
 int iterator_next(iterator_t iter, WORD *res) {
   return iter->next(iter,res);
 }
+
+
+iterable_t range(int start, int stop, int step) {
+  iterable_t r = malloc(sizeof(struct iterable_struct));
+  r->itr = range_iter(start,stop,step);
+  r->iter = iterable_iter;
+  return r;
+}
+
+                      
