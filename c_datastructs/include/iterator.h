@@ -1,23 +1,23 @@
-#ifndef ITERATOR_H
-#define ITERATOR_H
+#pragma once
 
 typedef void *WORD;
 
 typedef struct iterator_struct *iterator_t;
+
+typedef struct iterable_struct *iterable_t;
 
 struct iterator_struct {
   WORD state;
   int (*next) (iterator_t iter,WORD *res);
 };
 
-typedef struct range_iterator_struct {
-  int nxt,stop,step;
-} *range_iterator_state_t; 
+struct iterable_struct {
+  iterator_t itr;
+  iterator_t (*iter) (iterable_t it);
+};
+ 
+iterable_t range(int start, int stop, int step);
 
-// Creating a range iterator
-iterator_t range(int start, int stop, int step);
-
-// Iterator methods
+iterator_t iterable_iter(iterable_t it);
+ 
 int iterator_next(iterator_t iter, WORD *res);
-
-#endif

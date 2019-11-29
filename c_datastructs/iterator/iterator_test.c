@@ -15,7 +15,7 @@ void printlist(list_t lst) {
 }
 
 list_t list_range(int start, int stop) {
-  iterator_t iter = range(start,stop,1);
+  iterator_t iter = iterable_iter(range(start,stop,1));
   WORD i;
   list_t res = list_new(0);
   while(!iterator_next(iter,&i))
@@ -43,10 +43,10 @@ int main() {
   list_pop(t,10,&w);
   printlist(t);
 
-  iterator_t iter = range(1,5,1);
+  iterable_t itble = range(1,5,1);
   list_t lst = list_new(5);
   WORD n;
-  while(!iterator_next(iter,&n))
+  while(!iterator_next(iterable_iter(itble),&n))
     list_append(lst,list_range(1,(int)n));
   // lst2 = [[1],[1,2],[1,2,3],[1,2,3,4],[1,2,3,4,5]]
   
