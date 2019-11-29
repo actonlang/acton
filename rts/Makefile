@@ -1,12 +1,14 @@
-all:
+all: pingpong
+
+pingpong: rts.c rts.h pingpong.c
 	cc -std=c11 \
 		-Wall -Werror -pedantic -pedantic-errors \
 		-Wno-int-to-void-pointer-cast \
-		kernel.c \
 		-pthread \
-		-lpthread \
-		-lm \
-		-o kernel
+		pingpong.c \
+		-DROOT=Pingpong \
+		rts.c \
+		-o Pingpong
 
 clean:
-	rm -f kernel
+	rm -f Pingpong

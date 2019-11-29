@@ -9,6 +9,7 @@ import Pretty
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Printer
+import Acton.Prim
 
 generate                            :: Acton.Env.Env -> Module -> IO String
 generate env m                      = return $ render $ gen (genEnv env) m
@@ -37,7 +38,9 @@ instance Gen ModName where
     gen env (ModName ns)            = hcat $ punctuate (char '$') $ map (gen env) ns
 
 instance Gen QName where
-    gen env (QName m n)             = gen env m <> char '$' <> gen env n
+    gen env (QName m n)
+      | m == mPrim                  = genPrimName n
+      | otherwise                   = gen env m <> char '$' <> gen env n
     gen env (NoQual n)              = gen env n
 
 instance Gen Name where

@@ -13,22 +13,22 @@ deactorize env0 m                   = return $ evalState (deact env m) ([1..], [
   where env                         = deactEnv env0
 
 -- Deactorizing monad
-type DeactM a                       = State ([Int],[Stmt]) a
+type DeactM a                       = State ([Int],[Decl]) a
 
 newName                             :: String -> DeactM Name
 newName s                           = state (\(uniq:supply, stmts) -> (Internal s uniq DeactPass, (supply, stmts)))
 
-store                               :: [Stmt] -> DeactM ()
-store ss                            = state (\(supply, stmts) -> ((), (supply, reverse ss ++ stmts)))
+store                               :: [Decl] -> DeactM ()
+store ds                            = state (\(supply, decls) -> ((), (supply, reverse ds ++ decls)))
 
-swapStore                           :: [Stmt] -> DeactM [Stmt]
-swapStore ss                        = state (\(supply, stmts) -> (stmts, (supply, ss)))
+swapStore                           :: [Decl] -> DeactM [Decl]
+swapStore ds                        = state (\(supply, decls) -> (decls, (supply, ds)))
 
-withStore                           :: DeactM a -> DeactM (a,[Stmt])
-withStore m                         = do ss0 <- swapStore []
+withStore                           :: DeactM a -> DeactM (a,[Decl])
+withStore m                         = do ds0 <- swapStore []
                                          r <- m
-                                         ss1 <- swapStore ss0
-                                         return (r, ss1)
+                                         ds1 <- swapStore ds0
+                                         return (r, ds1)
 
 data DeactEnv                       = DeactEnv { actor :: Maybe Name, locals :: [Name] }
 
@@ -71,7 +71,7 @@ instance Deact Stmt where
     deact env (With l is b)         = With l <$> deact env is <*> deact env b
     deact env (Data l mbt ss)       = Data l <$> deact env mbt <*> deact env ss
     deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
-                                         store [Decl l0 [Signature l0 [n] (monotype t)]]
+                                         store [Signature l0 [n] (monotype t)]
                                          Assign l <$> deact env ps <*> deact env e
     deact env (Decl l ds)           = Decl l <$> deactD env ds
 
@@ -80,18 +80,23 @@ deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds
 deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 
 deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
-                                         (bint,bext) <- withStore (deact (env1 n') b)
-                                         let _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoMod
+                                         (bint,dext) <- withStore (deact (env1 n') b)
+                                         let (dsigs,dext') = partition isSig dext
+                                             _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoMod
                                              create = Assign l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
                                              copies = [ Assign l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
                                              _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoMod
-                                             (ds,ss) = partition (\s -> case s of Decl{} -> True; _ -> False) bint
-                                             extern = Class l n q [] (Decl l0 [_init_] : reverse bext)
-                                             intern = Class l n' q [] (Decl l0 [_init'] : ds)
+                                             (ds,ss) = partition isDecl bint
+                                             extern = Class l n q [] [Decl l0 (_init_ : reverse dext')]
+                                             intern = Class l n' q [] (Decl l0 (dsigs ++[_init']) : ds)
                                          return [intern, extern]
   where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
         selfPat n                   = PDot l0 (Var l0 (NoQual selfKW)) n
+        isSig Signature{}           = True
+        isSig _                     = False
+        isDecl Decl{}               = True
+        isDecl _                    = False
 
 addSelf p                           = PosPar selfKW Nothing Nothing p
 
@@ -107,10 +112,10 @@ awaitCall env n p                   = Call l0 (Var l0 primAWAIT) (PosArg (asyncC
 
 instance Deact Decl where
     deact env (Def l n q p k t b Async) 
-                                    = do store [Decl l [Def l n q (addSelf p) k t [Return l0 $ Just $ asyncCall env n p] NoMod]]
+                                    = do store [Def l n q (addSelf p) k t [Return l0 $ Just $ asyncCall env n p] NoMod]
                                          Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b (Sync _)) 
-                                    = do store [Decl l [Def l n q (addSelf p) k t [Return l0 $ Just $ awaitCall env n p] NoMod]]
+                                    = do store [Def l n q (addSelf p) k t [Return l0 $ Just $ awaitCall env n p] NoMod]
                                          Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b m) = Def l n q p k t <$> deact env1 b <*> return m
       where env1                    = hideLocals (bound (p,k) ++ bound b) env
