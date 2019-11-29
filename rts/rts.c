@@ -364,8 +364,8 @@ R AWAIT(Msg m, Clos th) {
 }
 
 void *main_loop(void *arg) {
-    int idx = (int)arg;
-    printf("Worker thread %d\n", idx);
+    //int idx = (int)arg;
+    //printf("Worker thread %d\n", idx);
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
@@ -439,19 +439,10 @@ void *main_loop(void *arg) {
 ///////////////////////////////////////////////////////////////////////
 
 
-//#include "pingpong.c"
-
 R ROOT(Clos,WORD);
 
 int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    if (argc > 1) {
-        int n = atoi(argv[1]);
-        if (n > 0) {
-            num_cores = n;
-        }
-    }
-
     printf("%ld worker threads\n", num_cores);
 
     pthread_key_create(&self_key, NULL);
@@ -465,11 +456,7 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-//    Actor roots[num_cores];
-//    for (int i = 0; i<num_cores; i++)
-//        roots[i] = bootstrap(CLOS1(ROOT, (WORD)(i+1)));
-//    roots[0] = bootstrap(CLOS1(ROOT, (WORD)1));
-    BOOTSTRAP(CLOS1(ROOT, (WORD)1));
+    BOOTSTRAP(CLOS1(ROOT, (WORD)2));
 
     // TODO: run I/O polling thread
 

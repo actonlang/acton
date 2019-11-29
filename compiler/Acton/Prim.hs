@@ -1,6 +1,7 @@
 module Acton.Prim where
 
 import Utils
+import Pretty
 import Acton.Syntax
 
 
@@ -10,23 +11,31 @@ prim s                              = Internal s 0 GenPass
 
 nPrim                               = prim "___prim___"
 mPrim                               = ModName [nPrim]
-qPrim n                             = QName mPrim (name n)
+qPrim n                             = QName mPrim n
 
-primIsNone                          = qPrim "IsNone"
+nIsNone                             = name "IsNone"
+nASYNC                              = name "ASYNC"
+nAWAIT                              = name "AWAIT"
+nPUSH                               = name "PUSH"
+nPOP                                = name "POP"
+nRERAISE                            = name "RERAISE"
+nRAISE                              = name "RAISE"
+nRAISEFROM                          = name "RAISEFROM"
+nCLOS                               = name "CLOS"
+nCONT                               = name "_CONT"
+nASSERT                             = name "ASSERT"
+nPOSTPONE                           = name "POSTPONE"
 
-primList                            = qPrim "list"
-primDict                            = qPrim "dict"
-primSet                             = qPrim "set"
+primIsNone                          = qPrim nIsNone
+primASYNC                           = qPrim nASYNC
+primAWAIT                           = qPrim nAWAIT
+primPUSH                            = qPrim nPUSH
+primPOP                             = qPrim nPOP
+primRERAISE                         = qPrim nRERAISE
+primRAISE                           = qPrim nRAISE
+primRAISEFROM                       = qPrim nRAISEFROM
+primCLOS                            = qPrim nCLOS
+primCONT                            = qPrim nCONT
+primASSERT                          = qPrim nASSERT
 
-primASYNC                           = qPrim "ASYNC"
-primAWAIT                           = qPrim "AWAIT"
-
-primPUSH                            = qPrim "PUSH"
-primPOP                             = qPrim "POP"
-primRERAISE                         = qPrim "RERAISE"
-primRAISE                           = qPrim "RAISE"
-primRAISEFROM                       = qPrim "RAISEFROM"
-
-primCLOS                            = qPrim "CLOS"
-
-primASSERT                          = qPrim "ASSERT"
+genPrimName n                       = text (nstr n)

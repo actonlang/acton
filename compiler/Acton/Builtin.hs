@@ -17,6 +17,8 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 boolKW                              = name "__bool__"
 
+methKWs                             = [enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
+
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"
 imulKW                              = name "__imul__"
@@ -30,6 +32,8 @@ iorKW                               = name "__ior__"
 ixorKW                              = name "__ixor__"
 iandKW                              = name "__iand__"
 imatmulKW                           = name "__imatmul__"
+
+iopKWs                              = [iaddKW,isubKW,imulKW,ipowKW,itruedivKW,imodKW,ifloordivKW,ilshiftKW,irshiftKW,iorKW,ixorKW,iandKW,imatmulKW]
 
 addKW                               = name "__add__"
 subKW                               = name "__sub__"
@@ -45,9 +49,13 @@ xorKW                               = name "__xor__"
 andKW                               = name "__and__"
 matmulKW                            = name "__matmul__"
 
+binopKWs                            = [addKW,subKW,mulKW,powKW,truedivKW,modKW,floordivKW,lshiftKW,rshiftKW,orKW,xorKW,andKW,matmulKW]
+
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"
 invertKW                            = name "__invert__"
+
+unopKWs                             = [posKW,negKW,invertKW]
 
 eqKW                                = name "__eq__"
 neKW                                = name "__ne__"
@@ -57,6 +65,10 @@ gtKW                                = name "__gt__"
 geKW                                = name "__ge__"
 isKW                                = name "__is__"
 isnotKW                             = name "__isnot__"
+
+compopKWs                           = [eqKW,neKW,ltKW,leKW,gtKW,geKW,isKW,isnotKW]
+
+attrKWs                             = methKWs ++ iopKWs ++ binopKWs ++ unopKWs ++ compopKWs
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
