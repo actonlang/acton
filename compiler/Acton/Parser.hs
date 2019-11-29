@@ -944,7 +944,8 @@ atom_expr = do
                      return (\a -> S.Dot NoLoc a nm)
                  intdot  = do 
                         i <- lexeme L.decimal
-                        return (\a -> S.DotI NoLoc a i)
+                        mbt <- optional star
+                        return (\a -> S.DotI NoLoc a i (maybe False (const True) mbt))
                  strdot = do
                         (p,str) <- withPos stringP 
                         return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?

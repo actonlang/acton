@@ -2,7 +2,7 @@ module Acton.Normalizer where
 
 import Acton.Syntax
 import Acton.Names
-import Acton.Env
+import Acton.Env hiding (newName)
 import Acton.Prim
 import Acton.Builtin
 import Utils
@@ -43,6 +43,32 @@ data NormEnv                        = NormEnv {global :: TEnv, enclosing :: [Nam
 
 normEnv (te,env)                    = NormEnv (te ++ names env) [] (defaultmod env)
 
+
+simplifyPat                         :: NormEnv -> Pattern -> NormM (Pattern,Suite)
+simplifyPat _ p@(PVar _ _ _)        = return (p,[])
+simplifyPat env (PParen _ p)        = simplifyPat env p
+simplifyPat env (PTuple _ pp)       = do v <- newName "tup"
+                                         return (pVar v Nothing,simpPP v 0 pp)
+  where simpPP v n (PosPat p pp)    = s : simpPP v (n+1) pp
+          where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n False)
+        simpPP v n (PosPatStar p)   = [Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n True)]
+        simpPP _ _ PosPatNil        = []
+simplifyPat env (PList _ ps pt)     = do v <- newName "lst"
+                                         return (pVar v Nothing, simpList v 0 ps pt)
+  where simpList v n (p:ps) pt      = s : simpList v (n+1) ps pt
+          where s                   = Assign NoLoc [p] (eCall (eDot (eVar (name "Indexed__??")) getitemKW)
+                                        [eQVar (QName (currentmod env) v), Int NoLoc n (show n)])
+        simpList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eVar (name "Sliceable__??")) getsliceKW)
+                                        [eQVar (QName (currentmod env) v), Int NoLoc n (show n), None NoLoc, None NoLoc])]
+        simpList v n [] Nothing     = [] 
+
+simplifyWI env (WithItem e Nothing) = do e' <- norm env e
+                                         return (WithItem e' Nothing,[])
+simplifyWI env (WithItem e (Just p))= do e' <- norm env e
+                                         (p',ss) <- simplifyPat env p
+                                         return (WithItem e' (Just p'),ss)
+
+
 class Norm a where
     norm                            :: NormEnv -> a -> NormM a
     norm'                           :: NormEnv -> a -> NormM [a]
@@ -65,7 +91,6 @@ instance Norm Import where
 
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
-    norm env (Assign l ts e)        = Assign l <$> norm env ts <*> norm env e
     norm env (AugAssign l p op e)   = AugAssign l <$> norm env p <*> norm env op <*> norm env e
     norm env (Assert l e mbe)       = do e' <- norm env e
                                          mbe' <- norm env mbe
@@ -77,25 +102,43 @@ instance Norm Stmt where
                                          return $ Return l $ Just e'
     norm env (Raise l mbex)         = do mbex' <- norm env mbex
                                          case mbex' of
-                                           Nothing ->
+                                            Nothing ->
                                                return $ Expr l $ eCall (eQVar primRERAISE) []
-                                           Just (Exception e Nothing) ->
+                                            Just (Exception e Nothing) ->
                                                return $ Expr l $ eCall (eQVar primRAISE) [e]
-                                           Just (Exception e (Just e')) -> 
+                                            Just (Exception e (Just e')) -> 
                                                return $ Expr l $ eCall (eQVar primRAISEFROM) [e,e']
     norm env (Break l)              = return $ Break l
     norm env (Continue l)           = return $ Continue l
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
     norm env (While l e b els)      = While l <$> norm env e <*> norm env b <*> norm env els
-    norm env (For l p e b els)      = For l <$> norm env p <*> norm env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
     norm env (With l is b)          = With l <$> norm env is <*> norm env b
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (Decl l ds)            = Decl l <$> norm env ds
 
---    norm' env (Delete l p)          = 
+--    norm' env (Delete l p)          =
 
+    norm' env (Assign l ts e)       = do e' <- norm env e
+                                         ps <- mapM (simplifyPat env) ts
+                                         let (vs,sss) = unzip ps
+                                         ss' <- norm env (concat sss)
+                                         return $ Assign l vs e' : ss'
+    norm' env (For l p e b els)     = do (v,ss) <- simplifyPat env p
+                                         e' <- norm env e
+                                         b' <- norm env (ss ++ b)
+                                         els' <- norm env els
+                                         return $ [For l v e' b' els']
+    norm' env (With l is b)         = do ps <- mapM (simplifyWI env) is
+                                         let (is',sss) = unzip ps
+                                         b' <- norm env (concat sss ++ b)
+                                         return [With l is' b']
+    norm' env s                     = do s' <- norm env s
+                                         return [s']
+                                         
+                                         
+                                       
 instance Norm Decl where
     norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm env k
                                          b' <- norm (env {enclosing = bound b ++ bound p ++ bound k ++ enclosing env}) b
@@ -133,7 +176,7 @@ instance Norm Expr where
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> norm env op <*> norm env e2   -- only Or,And
     norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e                     -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
-    norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
+    norm env (DotI l e i t)         = DotI l <$> norm env e <*> return i <*> return t
     norm env (Lambda l ps ks e)     = Lambda l <$> norm env ps <*> norm env ks <*> norm env e
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
@@ -148,7 +191,7 @@ instance Norm Expr where
     norm env (Set l es)             = Set l <$> norm env es
     norm env (SetComp l e c)        = SetComp l <$> norm env e <*> norm env c
     norm env (Paren l e)            = Paren l <$> norm env e
-
+    norm env e                      = error ("trying to normalize " ++ show e)
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
     norm env (PIndex l e ix)        = PIndex l <$> norm env e <*> norm env ix

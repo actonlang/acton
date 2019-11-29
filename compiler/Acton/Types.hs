@@ -637,10 +637,11 @@ instance Infer Expr where
                                              t0 <- newTVar
                                              constrain [Sel env t n t0]
                                              return (t0, Dot l e' n)
-    infer env (DotI l e i)              = do (t,e') <- infer env e
+    infer env (DotI l e i False)        = do (t,e') <- infer env e
                                              t0 <- newTVar
                                              constrain [Sel env t (rPos i) t0]
-                                             return (t0, DotI l e' i)
+                                             return (t0, DotI l e' i False)
+    infer env (DotI l e i True)         = undefined                                             
     infer env (Lambda l p k e)
       | nodup (p,k)                     = do fx <- newRowVar
                                              pushFX fx
