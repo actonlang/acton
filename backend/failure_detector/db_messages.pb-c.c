@@ -367,6 +367,96 @@ void   versioned_cell_message__free_unpacked
   assert(message->base.descriptor == &versioned_cell_message__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   server_message__init
+                     (ServerMessage         *message)
+{
+  static const ServerMessage init_value = SERVER_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t server_message__get_packed_size
+                     (const ServerMessage *message)
+{
+  assert(message->base.descriptor == &server_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t server_message__pack
+                     (const ServerMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &server_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t server_message__pack_to_buffer
+                     (const ServerMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &server_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ServerMessage *
+       server_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ServerMessage *)
+     protobuf_c_message_unpack (&server_message__descriptor,
+                                allocator, len, data);
+}
+void   server_message__free_unpacked
+                     (ServerMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &server_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
+void   client_message__init
+                     (ClientMessage         *message)
+{
+  static const ClientMessage init_value = CLIENT_MESSAGE__INIT;
+  *message = init_value;
+}
+size_t client_message__get_packed_size
+                     (const ClientMessage *message)
+{
+  assert(message->base.descriptor == &client_message__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t client_message__pack
+                     (const ClientMessage *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &client_message__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t client_message__pack_to_buffer
+                     (const ClientMessage *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &client_message__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+ClientMessage *
+       client_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (ClientMessage *)
+     protobuf_c_message_unpack (&client_message__descriptor,
+                                allocator, len, data);
+}
+void   client_message__free_unpacked
+                     (ClientMessage *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &client_message__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   write_query_message__init
                      (WriteQueryMessage         *message)
 {
@@ -1674,6 +1764,212 @@ const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
   versioned_cell_message__field_indices_by_name,
   1,  versioned_cell_message__number_ranges,
   (ProtobufCMessageInit) versioned_cell_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor server_message__field_descriptors[6] =
+{
+  {
+    "mtype",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "wm",
+    2,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, wm),
+    &write_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rm",
+    3,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, rm),
+    &read_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rrm",
+    4,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, rrm),
+    &range_read_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "qm",
+    5,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, qm),
+    &queue_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "tm",
+    6,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, tm),
+    &txn_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned server_message__field_indices_by_name[] = {
+  0,   /* field[0] = mtype */
+  4,   /* field[4] = qm */
+  2,   /* field[2] = rm */
+  3,   /* field[3] = rrm */
+  5,   /* field[5] = tm */
+  1,   /* field[1] = wm */
+};
+static const ProtobufCIntRange server_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 6 }
+};
+const ProtobufCMessageDescriptor server_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ServerMessage",
+  "ServerMessage",
+  "ServerMessage",
+  "",
+  sizeof(ServerMessage),
+  6,
+  server_message__field_descriptors,
+  server_message__field_indices_by_name,
+  1,  server_message__number_ranges,
+  (ProtobufCMessageInit) server_message__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
+static const ProtobufCFieldDescriptor client_message__field_descriptors[6] =
+{
+  {
+    "mtype",
+    1,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, mtype),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "am",
+    2,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, am),
+    &ack_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "wm",
+    3,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, wm),
+    &write_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rrrm",
+    4,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, rrrm),
+    &range_read_response_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "qm",
+    5,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, qm),
+    &queue_query_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "tm",
+    6,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, tm),
+    &txn_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned client_message__field_indices_by_name[] = {
+  1,   /* field[1] = am */
+  0,   /* field[0] = mtype */
+  4,   /* field[4] = qm */
+  3,   /* field[3] = rrrm */
+  5,   /* field[5] = tm */
+  2,   /* field[2] = wm */
+};
+static const ProtobufCIntRange client_message__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 6 }
+};
+const ProtobufCMessageDescriptor client_message__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "ClientMessage",
+  "ClientMessage",
+  "ClientMessage",
+  "",
+  sizeof(ClientMessage),
+  6,
+  client_message__field_descriptors,
+  client_message__field_indices_by_name,
+  1,  client_message__number_ranges,
+  (ProtobufCMessageInit) client_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor write_query_message__field_descriptors[5] =

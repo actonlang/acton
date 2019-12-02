@@ -15,6 +15,9 @@
 
 #define MAX_PRINT_BUFF 512
 
+void free_server_msg(ServerMessage * m);
+void free_client_msg(ClientMessage * m);
+
 // Write Query:
 
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce)
@@ -131,7 +134,7 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 	{
 		ServerMessage sm = SERVER_MESSAGE__INIT;
 		sm.mtype = RPC_TYPE_WRITE;
-		sm.wm = msg;
+		sm.wm = &msg;
 		sm.rm = NULL;
 		sm.rrm = NULL;
 		sm.qm = NULL;
@@ -149,7 +152,7 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		ClientMessage cm = CLIENT_MESSAGE__INIT;
 		cm.mtype = RPC_TYPE_WRITE;
 		cm.am = NULL;
-		cm.wm = msg;
+		cm.wm = &msg;
 		cm.rrrm = NULL;
 		cm.qm = NULL;
 		cm.tm = NULL;
@@ -309,56 +312,6 @@ void free_read_query_msg(ReadQueryMessage * msg)
 //		free(msg->txnid.data);
 }
 
-int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server)
-{
-	WriteQueryMessage msg = WRITE_QUERY_MESSAGE__INIT;
-	VersionedCellMessage vcell_msg = VERSIONED_CELL_MESSAGE__INIT;
-	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
-
-	if(ca->cell != NULL)
-		init_cell_msg(&vcell_msg, ca->cell, &vc_msg);
-	init_write_query_msg(&msg, ca, (ca->cell != NULL)?(&vcell_msg):(NULL));
-	msg.mtype = RPC_TYPE_WRITE;
-
-	if(for_server)
-	{
-		ServerMessage sm = SERVER_MESSAGE__INIT;
-		sm.mtype = RPC_TYPE_WRITE;
-		sm.wm = msg;
-		sm.rm = NULL;
-		sm.rrm = NULL;
-		sm.qm = NULL;
-		sm.tm = NULL;
-
-		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len);
-		memset(*buf, 0 , *len);
-		server_message__pack (&sm, *buf);
-
-		free_server_msg(&sm);
-	}
-	else
-	{
-		ClientMessage cm = CLIENT_MESSAGE__INIT;
-		cm.mtype = RPC_TYPE_WRITE;
-		cm.am = NULL;
-		cm.wm = msg;
-		cm.rrrm = NULL;
-		cm.qm = NULL;
-		cm.tm = NULL;
-
-		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len);
-		memset(*buf, 0 , *len);
-		client_message__pack (&cm, *buf);
-
-		free_client_msg(&cm);
-	}
-
-	return 0;
-}
-
-
 int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 {
 	ReadQueryMessage msg = READ_QUERY_MESSAGE__INIT;
@@ -371,7 +324,7 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 	ServerMessage sm = SERVER_MESSAGE__INIT;
 	sm.mtype = RPC_TYPE_READ;
 	sm.wm = NULL;
-	sm.rm = msg;
+	sm.rm = &msg;
 	sm.rrm = NULL;
 	sm.qm = NULL;
 	sm.tm = NULL;
@@ -553,7 +506,7 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	sm.mtype = RPC_TYPE_RANGE_READ;
 	sm.wm = NULL;
 	sm.rm = NULL;
-	sm.rrm = msg;
+	sm.rrm = &msg;
 	sm.qm = NULL;
 	sm.tm = NULL;
 
@@ -706,7 +659,7 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 
 	ClientMessage cm = CLIENT_MESSAGE__INIT;
 	cm.mtype = RPC_TYPE_ACK;
-	cm.am = msg;
+	cm.am = &msg;
 	cm.wm = NULL;
 	cm.rrrm = NULL;
 	cm.qm = NULL;
@@ -885,7 +838,7 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 	cm.mtype = RPC_TYPE_RANGE_READ_RESPONSE;
 	cm.am = NULL;
 	cm.wm = NULL;
-	cm.rrrm = msg;
+	cm.rrrm = &msg;
 	cm.qm = NULL;
 	cm.tm = NULL;
 
@@ -1264,7 +1217,7 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		sm.wm = NULL;
 		sm.rm = NULL;
 		sm.rrm = NULL;
-		sm.qm = msg;
+		sm.qm = &msg;
 		sm.tm = NULL;
 
 		*len = server_message__get_packed_size (&sm);
@@ -1281,7 +1234,7 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		cm.am = NULL;
 		cm.wm = NULL;
 		cm.rrrm = NULL;
-		cm.qm = msg;
+		cm.qm = &msg;
 		cm.tm = NULL;
 
 		*len = client_message__get_packed_size (&cm);
@@ -1700,11 +1653,11 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 	{
 		ServerMessage sm = SERVER_MESSAGE__INIT;
 		sm.mtype = RPC_TYPE_TXN;
-		sm.wm = null;
+		sm.wm = NULL;
 		sm.rm = NULL;
 		sm.rrm = NULL;
 		sm.qm = NULL;
-		sm.tm = msg;
+		sm.tm = &msg;
 
 		*len = server_message__get_packed_size (&sm);
 		*buf = malloc (*len);
@@ -1718,10 +1671,10 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		ClientMessage cm = CLIENT_MESSAGE__INIT;
 		cm.mtype = RPC_TYPE_TXN;
 		cm.am = NULL;
-		cm.wm = msg;
+		cm.wm = NULL;
 		cm.rrrm = NULL;
 		cm.qm = NULL;
-		cm.tm = msg;
+		cm.tm = &msg;
 
 		*len = client_message__get_packed_size (&cm);
 		*buf = malloc (*len);
@@ -1851,35 +1804,44 @@ int equals_txn_message(txn_message * ca1, txn_message * ca2)
 	return 1;
 }
 
-
-free_server_msg(ServerMessage * sm)
+void free_server_msg(ServerMessage * sm)
 {
 	switch(sm->mtype)
 	{
 		case RPC_TYPE_WRITE:
 		{
-			free_write_query_msg(&(sm->wm));
+			assert(sm->wm != NULL);
+			free_write_query_msg(sm->wm);
 			break;
 		}
 		case RPC_TYPE_READ:
 		{
-			free_read_query_msg(&(sm->rm));
+			assert(sm->rm != NULL);
+			free_read_query_msg(sm->rm);
 			break;
 		}
 		case RPC_TYPE_RANGE_READ:
 		{
-			free_range_read_query_msg(&(sm->rrm));
+			assert(sm->rrm != NULL);
+			free_range_read_query_msg(sm->rrm);
 			break;
 		}
 		case RPC_TYPE_QUEUE:
 		{
-			free_queue_message_msg(&(sm->qm));
+			assert(sm->qm != NULL);
+			free_queue_message_msg(sm->qm);
 			break;
 		}
 		case RPC_TYPE_TXN:
 		{
-			free_txn_message_msg(&(sm->tm));
+			assert(sm->tm != NULL);
+			free_txn_message_msg(sm->tm);
 			break;
+		}
+		default:
+		{
+			fprintf(stderr, "Wrong server message type %d\n", sm->mtype);
+			assert(0);
 		}
 	}
 }
@@ -1899,31 +1861,31 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		case RPC_TYPE_WRITE:
 		{
 			assert(sm->wm != NULL);
-			*dest_buf = (write_query *) init_write_query_from_msg(&(sm->wm));
+			*dest_buf = (write_query *) init_write_query_from_msg(sm->wm);
 			break;
 		}
 		case RPC_TYPE_READ:
 		{
 			assert(sm->rm != NULL);
-			*dest_buf = (read_query *) init_read_query_from_msg(&(sm->rm));
+			*dest_buf = (read_query *) init_read_query_from_msg(sm->rm);
 			break;
 		}
 		case RPC_TYPE_RANGE_READ:
 		{
 			assert(sm->rrm != NULL);
-			*dest_buf = (range_read_query *) init_range_read_query_from_msg(&(sm->rrm));
+			*dest_buf = (range_read_query *) init_range_read_query_from_msg(sm->rrm);
 			break;
 		}
 		case RPC_TYPE_QUEUE:
 		{
 			assert(sm->qm != NULL);
-			*dest_buf = (queue_query_message *) init_queue_message_from_msg(&(sm->qm));
+			*dest_buf = (queue_query_message *) init_queue_message_from_msg(sm->qm);
 			break;
 		}
 		case RPC_TYPE_TXN:
 		{
 			assert(sm->tm != NULL);
-			*dest_buf = (txn_message *) init_txn_message_from_msg(&(sm->tm));
+			*dest_buf = (txn_message *) init_txn_message_from_msg(sm->tm);
 			break;
 		}
 		default:
@@ -1941,41 +1903,51 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 	return 0;
 }
 
-free_client_msg(ClientMessage * cm)
+void free_client_msg(ClientMessage * cm)
 {
 	switch(cm->mtype)
 	{
 		case RPC_TYPE_ACK:
 		{
-			free_ack_message_msg(&(cm->am));
+			assert(cm->am != NULL);
+			free_ack_message_msg(cm->am);
 			break;
 		}
 		case RPC_TYPE_WRITE:
 		{
-			free_write_query_msg(&(cm->wm));
+			assert(cm->wm != NULL);
+			free_write_query_msg(cm->wm);
 			break;
 		}
 		case RPC_TYPE_RANGE_READ_RESPONSE:
 		{
-			free_range_read_response_message_msg(&(cm->rrrm));
+			assert(cm->rrrm != NULL);
+			free_range_read_response_message_msg(cm->rrrm);
 			break;
 		}
 		case RPC_TYPE_QUEUE:
 		{
-			free_queue_message_msg(&(cm->qm));
+			assert(cm->qm != NULL);
+			free_queue_message_msg(cm->qm);
 			break;
 		}
 		case RPC_TYPE_TXN:
 		{
-			free_txn_message_msg(&(cm->tm));
+			assert(cm->tm != NULL);
+			free_txn_message_msg(cm->tm);
 			break;
+		}
+		default:
+		{
+			fprintf(stderr, "Wrong client message type %d\n", cm->mtype);
+			assert(0);
 		}
 	}
 }
 
 int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype)
 {
-	ClientMessage * cm = server_message__unpack (NULL, msg_len, buf);
+	ClientMessage * cm = client_message__unpack (NULL, msg_len, buf);
 
 	if (cm == NULL)
 	{
@@ -1988,31 +1960,31 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		case RPC_TYPE_ACK:
 		{
 			assert(cm->am != NULL);
-			*dest_buf = (ack_message *) init_ack_message_from_msg(&(cm->am));
+			*dest_buf = (ack_message *) init_ack_message_from_msg(cm->am);
 			break;
 		}
 		case RPC_TYPE_WRITE:
 		{
 			assert(cm->wm != NULL);
-			*dest_buf = (write_query *) init_write_query_from_msg(&(cm->wm));
+			*dest_buf = (write_query *) init_write_query_from_msg(cm->wm);
 			break;
 		}
 		case RPC_TYPE_RANGE_READ_RESPONSE:
 		{
-			assert(cm->rrm != NULL);
-			*dest_buf = (range_read_response_message *) init_range_read_response_message_from_msg(&(cm->rrrm));
+			assert(cm->rrrm != NULL);
+			*dest_buf = (range_read_response_message *) init_range_read_response_message_from_msg(cm->rrrm);
 			break;
 		}
 		case RPC_TYPE_QUEUE:
 		{
 			assert(cm->qm != NULL);
-			*dest_buf = (queue_query_message *) init_queue_message_from_msg(&(cm->qm));
+			*dest_buf = (queue_query_message *) init_queue_message_from_msg(cm->qm);
 			break;
 		}
 		case RPC_TYPE_TXN:
 		{
 			assert(cm->tm != NULL);
-			*dest_buf = (txn_message *) init_txn_message_from_msg(&(cm->tm));
+			*dest_buf = (txn_message *) init_txn_message_from_msg(cm->tm);
 			break;
 		}
 		default:
@@ -2025,7 +1997,7 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
 	*mtype = cm->mtype;
 
-	server_message__free_unpacked(cm, NULL);
+	client_message__free_unpacked(cm, NULL);
 
 	return 0;
 }

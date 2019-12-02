@@ -23,6 +23,8 @@ typedef struct _MembershipAgreementMessage MembershipAgreementMessage;
 typedef struct _CellAddressMessage CellAddressMessage;
 typedef struct _CellMessage CellMessage;
 typedef struct _VersionedCellMessage VersionedCellMessage;
+typedef struct _ServerMessage ServerMessage;
+typedef struct _ClientMessage ClientMessage;
 typedef struct _WriteQueryMessage WriteQueryMessage;
 typedef struct _ReadQueryMessage ReadQueryMessage;
 typedef struct _AckMessage AckMessage;
@@ -161,6 +163,42 @@ struct  _VersionedCellMessage
 #define VERSIONED_CELL_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&versioned_cell_message__descriptor) \
     , 0, 0,NULL, 0,NULL, NULL }
+
+
+struct  _ServerMessage
+{
+  ProtobufCMessage base;
+  /*
+   * {RPC_TYPE_WRITE, RPC_TYPE_READ, RPC_TYPE_RANGE_READ, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+   */
+  int32_t mtype;
+  WriteQueryMessage *wm;
+  ReadQueryMessage *rm;
+  RangeReadQueryMessage *rrm;
+  QueueQueryMessage *qm;
+  TxnMessage *tm;
+};
+#define SERVER_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&server_message__descriptor) \
+    , 0, NULL, NULL, NULL, NULL, NULL }
+
+
+struct  _ClientMessage
+{
+  ProtobufCMessage base;
+  /*
+   * {RPC_TYPE_ACK, RPC_TYPE_WRITE, RPC_TYPE_RANGE_READ_RESPONSE, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+   */
+  int32_t mtype;
+  AckMessage *am;
+  WriteQueryMessage *wm;
+  RangeReadResponseMessage *rrrm;
+  QueueQueryMessage *qm;
+  TxnMessage *tm;
+};
+#define CLIENT_MESSAGE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&client_message__descriptor) \
+    , 0, NULL, NULL, NULL, NULL, NULL }
 
 
 struct  _WriteQueryMessage
@@ -590,6 +628,44 @@ VersionedCellMessage *
 void   versioned_cell_message__free_unpacked
                      (VersionedCellMessage *message,
                       ProtobufCAllocator *allocator);
+/* ServerMessage methods */
+void   server_message__init
+                     (ServerMessage         *message);
+size_t server_message__get_packed_size
+                     (const ServerMessage   *message);
+size_t server_message__pack
+                     (const ServerMessage   *message,
+                      uint8_t             *out);
+size_t server_message__pack_to_buffer
+                     (const ServerMessage   *message,
+                      ProtobufCBuffer     *buffer);
+ServerMessage *
+       server_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   server_message__free_unpacked
+                     (ServerMessage *message,
+                      ProtobufCAllocator *allocator);
+/* ClientMessage methods */
+void   client_message__init
+                     (ClientMessage         *message);
+size_t client_message__get_packed_size
+                     (const ClientMessage   *message);
+size_t client_message__pack
+                     (const ClientMessage   *message,
+                      uint8_t             *out);
+size_t client_message__pack_to_buffer
+                     (const ClientMessage   *message,
+                      ProtobufCBuffer     *buffer);
+ClientMessage *
+       client_message__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   client_message__free_unpacked
+                     (ClientMessage *message,
+                      ProtobufCAllocator *allocator);
 /* WriteQueryMessage methods */
 void   write_query_message__init
                      (WriteQueryMessage         *message);
@@ -958,6 +1034,12 @@ typedef void (*CellMessage_Closure)
 typedef void (*VersionedCellMessage_Closure)
                  (const VersionedCellMessage *message,
                   void *closure_data);
+typedef void (*ServerMessage_Closure)
+                 (const ServerMessage *message,
+                  void *closure_data);
+typedef void (*ClientMessage_Closure)
+                 (const ClientMessage *message,
+                  void *closure_data);
 typedef void (*WriteQueryMessage_Closure)
                  (const WriteQueryMessage *message,
                   void *closure_data);
@@ -1026,6 +1108,8 @@ extern const ProtobufCMessageDescriptor membership_agreement_message__descriptor
 extern const ProtobufCMessageDescriptor cell_address_message__descriptor;
 extern const ProtobufCMessageDescriptor cell_message__descriptor;
 extern const ProtobufCMessageDescriptor versioned_cell_message__descriptor;
+extern const ProtobufCMessageDescriptor server_message__descriptor;
+extern const ProtobufCMessageDescriptor client_message__descriptor;
 extern const ProtobufCMessageDescriptor write_query_message__descriptor;
 extern const ProtobufCMessageDescriptor read_query_message__descriptor;
 extern const ProtobufCMessageDescriptor ack_message__descriptor;
