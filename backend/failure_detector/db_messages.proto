@@ -55,6 +55,26 @@ message VersionedCellMessage {
 
 // DB queries:
 
+message ServerMessage {
+	required int32 mtype=1; // {RPC_TYPE_WRITE, RPC_TYPE_READ, RPC_TYPE_RANGE_READ, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+	
+	optional WriteQueryMessage wm=2;
+	optional ReadQueryMessage rm=3;
+	optional RangeReadQueryMessage rrm=4;
+	optional QueueQueryMessage qm=5;
+	optional TxnMessage tm=6;
+}
+
+message ClientMessage {
+	required int32 mtype=1; // {RPC_TYPE_ACK, RPC_TYPE_WRITE, RPC_TYPE_RANGE_READ_RESPONSE, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+	
+	optional AckMessage am=2;
+	optional WriteQueryMessage wm=3;
+	optional RangeReadResponseMessage rrrm=4;
+	optional QueueQueryMessage qm=5;
+	optional TxnMessage tm=6;
+}
+
 message WriteQueryMessage {
 	optional VersionedCellMessage cell=1; // CellMessage
 	required bytes txnid=2;
@@ -72,13 +92,6 @@ message ReadQueryMessage {
 	
 	required int32 mtype=4;
 }
-
-// message ReadResponseMessage {
-// 	required VersionedCellMessage cell=1;
-// 	required bytes txnid=2;
-// 	required int64 nonce=3;
-//	required int32 mtype=4;
-// }
 
 message AckMessage {
 	optional CellAddressMessage cell_address=1;

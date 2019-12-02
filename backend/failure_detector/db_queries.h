@@ -33,6 +33,10 @@
 #define CLIENT_ERR_SUBSCRIPTION_EXISTS 1
 #define CLIENT_ERR_NO_SUBSCRIPTION_EXISTS 2
 
+int deserialize_server_message(void * buf, unsigned msg_len, void ** sm, short * mtype);
+// char * to_string_server_message(void * sm, char * msg_buff);
+int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short * mtype);
+// char * to_string_client_message(void * cm, char * msg_buff);
 
 typedef struct write_query
 {
@@ -53,7 +57,7 @@ write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_val
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 void free_write_query(write_query * ca);
-int serialize_write_query(write_query * ca, void ** buf, unsigned * len);
+int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server);
 int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca);
 char * to_string_write_query(write_query * ca, char * msg_buff);
 int equals_write_query(write_query * ca1, write_query * ca2);
@@ -179,7 +183,7 @@ queue_query_message * init_read_queue_message(cell_address * cell_address, int a
 queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long new_consume_head, uuid_t * txnid, long nonce);
 queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, uuid_t * txnid, long nonce);
 void free_queue_message(queue_query_message * ca);
-int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len);
+int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server);
 int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca);
 char * to_string_queue_message(queue_query_message * ca, char * msg_buff);
 int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2);
@@ -218,7 +222,7 @@ txn_message * init_txn_message_copy(int type,
 		cell * complete_write_set, int no_complete_write_set,
 		uuid_t * txnid, vector_clock * version, long nonce);
 void free_txn_message(txn_message * ca);
-int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len);
+int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server);
 int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca);
 char * to_string_txn_message(txn_message * ca, char * msg_buff);
 int equals_txn_message(txn_message * ca1, txn_message * ca2);

@@ -22,7 +22,7 @@
 #define COLLECTION_ID_0 0
 #define COLLECTION_ID_1 1
 
-int no_actors = 5;
+int no_actors = 2;
 int no_items = 20;
 
 int no_state_cols = 4;
@@ -379,10 +379,12 @@ void * actor(void * cargs)
 
 	if((long) ca->consumer_id == 0)
 	{
-		send_seed_msgs(ca, &msgs_sent, &seed);
+		ret = send_seed_msgs(ca, &msgs_sent, &seed);
 		ca->successful_enqueues += msgs_sent;
 		if(debug)
-			printf("ACTOR %ld: sent %d seed outgoing msgs.\n", (long) ca->consumer_id, msgs_sent);
+			printf("ACTOR %ld: sent %d seed outgoing msgs (status = %d).\n", (long) ca->consumer_id, msgs_sent, ret);
+		remote_print_long_table(state_table_key, ca->db);
+		remote_print_long_table(queue_table_key, ca->db);
 	}
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -423,8 +425,8 @@ void * actor(void * cargs)
 			checkpoint_success = (ret == VAL_STATUS_COMMIT);
 		}
 
-//		remote_print_long_table(state_table_key, ca->db);
-//		remote_print_long_table(queue_table_key, ca->db);
+		remote_print_long_table(state_table_key, ca->db);
+		remote_print_long_table(queue_table_key, ca->db);
 
 		increment_vc(ca->vc, (int) ca->consumer_id);
 
@@ -504,8 +506,8 @@ void * actor(void * cargs)
 				checkpoint_success = (ret == VAL_STATUS_COMMIT);
 			}
 
-//			remote_print_long_table(state_table_key, ca->db);
-//			remote_print_long_table(queue_table_key, ca->db);
+			remote_print_long_table(state_table_key, ca->db);
+			remote_print_long_table(queue_table_key, ca->db);
 
 			increment_vc(ca->vc, (int) ca->consumer_id);
 

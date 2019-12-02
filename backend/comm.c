@@ -7,7 +7,7 @@
 #include "comm.h"
 #include <stdio.h>
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
+int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
 {
 	write_query * wq;
 	read_query * rq;
@@ -160,6 +160,159 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 			*nonce = qq->nonce;
 
 			return 0;
+		}
+	}
+
+	*out_msg = NULL;
+	*out_msg_type = -1;
+	*nonce = -1;
+
+	return 1;
+}
+
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
+{
+	read_query * rq;
+	range_read_query * rrq;
+	queue_query_message * qq;
+	ack_message * am;
+	txn_message * tm;
+
+	range_read_response_message * rrr;
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[4096];
+#endif
+	int status = 0;
+
+	if(is_server) // RPCs received by server
+	{
+		status = deserialize_server_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type);
+
+		if(status == 0)
+		{
+			switch(*out_msg_type)
+			{
+				case RPC_TYPE_WRITE:
+				{
+					write_query * wq = (write_query *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_write_query(wq, (char *) print_buff);
+					printf("Received write query: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_READ:
+				{
+					read_query * wq = (read_query *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_read_query(wq, (char *) print_buff);
+					printf("Received read query: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_RANGE_READ:
+				{
+					range_read_query * wq = (range_read_query *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_range_read_query(wq, (char *) print_buff);
+					printf("Received range read query: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_QUEUE:
+				{
+					queue_query_message * wq = (queue_query_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_queue_message(wq, (char *) print_buff);
+					printf("Received queue message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_TXN:
+				{
+					txn_message * wq = (txn_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_txn_message(wq, (char *) print_buff);
+					printf("Received txn message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				default:
+				{
+					assert(0);
+				}
+			}
+		}
+	}
+	else // RPCs received by client
+	{
+		status = deserialize_client_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type);
+
+		if(status == 0)
+		{
+			switch(*out_msg_type)
+			{
+				case RPC_TYPE_ACK:
+				{
+					ack_message * wq = (ack_message *) *(out_msg);
+	#if (VERBOSE_RPC > 0)
+					to_string_ack_message(wq, (char *) print_buff);
+					printf("Received ack message: %s\n", print_buff);
+	#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_WRITE:
+				{
+					write_query * wq = (write_query *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_write_query(wq, (char *) print_buff);
+					printf("Received write query: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_RANGE_READ_RESPONSE:
+				{
+					range_read_response_message * wq = (range_read_response_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_range_read_response_message(wq, (char *) print_buff);
+					printf("Received range read response message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_QUEUE:
+				{
+					queue_query_message * wq = (queue_query_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_queue_message(wq, (char *) print_buff);
+					printf("Received queue message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				case RPC_TYPE_TXN:
+				{
+					txn_message * wq = (txn_message *) *(out_msg);
+#if (VERBOSE_RPC > 0)
+					to_string_txn_message(wq, (char *) print_buff);
+					printf("Received txn message: %s\n", print_buff);
+#endif
+					*nonce = wq->nonce;
+					return 0;
+				}
+				default:
+				{
+					assert(0);
+				}
+			}
 		}
 	}
 

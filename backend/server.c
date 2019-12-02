@@ -551,7 +551,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		printf("Sending read queue response message: %s\n", print_buff);
 #endif
 
-		return serialize_queue_message(m, snd_buf, snd_msg_len);
+		return serialize_queue_message(m, snd_buf, snd_msg_len, 0);
 }
 
 

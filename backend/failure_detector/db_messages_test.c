@@ -127,10 +127,12 @@ int main (int argc, const char * argv[])
 
 	// Generate dummy Write Query:
 
+	short mtype = -1;
 	write_query * wquery = init_write_query(cll, RPC_TYPE_WRITE, &txnid, 3), * wquery_r = NULL;
-	serialize_write_query(wquery, &buf_w, &len_w);
+	serialize_write_query(wquery, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_write_query(buf_r, len_r, &wquery_r);
+	deserialize_server_message(buf_r, len_r, (void *) &wquery_r, &mtype);
+	assert(mtype == RPC_TYPE_WRITE);
 
 	printf("Write query: %s\n", to_string_write_query(wquery, err_msg));
 	if(!equals_write_query(wquery, wquery_r))
@@ -144,7 +146,8 @@ int main (int argc, const char * argv[])
 	read_query * rquery = init_read_query(cell_address, &txnid, 3), * rquery_r = NULL;
 	serialize_read_query(rquery, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_read_query(buf_r, len_r, &rquery_r);
+	deserialize_server_message(buf_r, len_r, (void *) &rquery_r, &mtype);
+	assert(mtype == RPC_TYPE_READ);
 
 	printf("Read query: %s\n", to_string_read_query(rquery, err_msg));
 	if(!equals_read_query(rquery, rquery_r))
@@ -158,7 +161,8 @@ int main (int argc, const char * argv[])
 	ack_message * am = init_ack_message(cell_address, 1, &txnid, 3), * am_r = NULL;
 	serialize_ack_message(am, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_ack_message(buf_r, len_r, &am_r);
+	deserialize_client_message(buf_r, len_r, (void *) &am_r, &mtype);
+	assert(mtype == RPC_TYPE_ACK);
 
 	printf("Ack message: %s\n", to_string_ack_message(am, err_msg));
 	if(!equals_ack_message(am, am_r))
@@ -172,7 +176,8 @@ int main (int argc, const char * argv[])
 	range_read_query * rrq = init_range_read_query(cell_address, end_cell_address, &txnid, 3), * rrq_r = NULL;
 	serialize_range_read_query(rrq, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_range_read_query(buf_r, len_r, &rrq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &rrq_r, &mtype);
+	assert(mtype == RPC_TYPE_RANGE_READ);
 
 	printf("Range Read Query: %s\n", to_string_range_read_query(rrq, err_msg));
 	if(!equals_range_read_query(rrq, rrq_r))
@@ -186,7 +191,8 @@ int main (int argc, const char * argv[])
 	range_read_response_message * rrm = init_range_read_response_message(cll, no_cells, &txnid, 3), * rrm_r = NULL;
 	serialize_range_read_response_message(rrm, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_range_read_response_message(buf_r, len_r, &rrm_r);
+	deserialize_client_message(buf_r, len_r, (void *) &rrm_r, &mtype);
+	assert(mtype == RPC_TYPE_RANGE_READ_RESPONSE);
 
 	printf("Range Read Response: %s\n", to_string_range_read_response_message(rrm, err_msg));
 	if(!equals_range_read_response_message(rrm, rrm_r))
@@ -198,9 +204,10 @@ int main (int argc, const char * argv[])
 	// Create queue message:
 
 	queue_query_message * cq = init_create_queue_message(cell_address, &txnid, 3), * cq_r = NULL;
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Create Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -212,9 +219,10 @@ int main (int argc, const char * argv[])
 	// Delete queue message:
 
 	cq = init_delete_queue_message(cell_address, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Delete Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -226,9 +234,10 @@ int main (int argc, const char * argv[])
 	// Subscribe queue message:
 
 	cq = init_subscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Subscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -240,9 +249,10 @@ int main (int argc, const char * argv[])
 	// Unsubscribe queue message:
 
 	cq = init_unsubscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Unsubscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -254,9 +264,10 @@ int main (int argc, const char * argv[])
 	// Enqueue message:
 
 	cq = init_enqueue_message(cell_address, cll, no_cells, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Enqueue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -268,9 +279,10 @@ int main (int argc, const char * argv[])
 	// Read queue message:
 
 	cq = init_read_queue_message(cell_address, 1, 2, 3, 2, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Read Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -282,9 +294,10 @@ int main (int argc, const char * argv[])
 	// Consume queue message:
 
 	cq = init_consume_queue_message(cell_address, 1, 2, 3, 1, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_server_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Consume Queue: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -296,9 +309,10 @@ int main (int argc, const char * argv[])
 	// Read queue response message:
 
 	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w);
+	serialize_queue_message(cq, &buf_w, &len_w, 0);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_queue_message(buf_r, len_r, &cq_r);
+	deserialize_client_message(buf_r, len_r, (void *) &cq_r, &mtype);
+	assert(mtype == RPC_TYPE_QUEUE);
 
 	printf("Read Queue Response: %s\n", to_string_queue_message(cq, err_msg));
 	if(!equals_queue_message(cq, cq_r))
@@ -315,9 +329,10 @@ int main (int argc, const char * argv[])
 									cll, 2,
 									cll, 2,
 									&txnid, vc, 3), * tm_r = NULL;
-	serialize_txn_message(tm, &buf_w, &len_w);
+	serialize_txn_message(tm, &buf_w, &len_w, 1);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_txn_message(buf_r, len_r, &tm_r);
+	deserialize_server_message(buf_r, len_r, (void *) &tm_r, &mtype);
+	assert(mtype == RPC_TYPE_TXN);
 
 	printf("Txn Message: %s\n", to_string_txn_message(tm, err_msg));
 	if(!equals_txn_message(tm, tm_r))
