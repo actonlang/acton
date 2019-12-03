@@ -58,7 +58,7 @@ instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l ps e)       = Assign l <$> deact env ps <*> deact env e
     deact env (Update l ts e)       = Update l <$> deact env ts <*> deact env e
-    deact env (AugAssign l t op e)  = AugAssign l <$> deact env t <*> return op <*> deact env e
+    deact env (IUpdate l t op e)    = IUpdate l <$> deact env t <*> return op <*> deact env e
     deact env (Pass l)              = return $ Pass l
     deact env (Delete l t)          = Delete l <$> deact env t
     deact env (Return l mbe)        = Return l <$> deact env mbe

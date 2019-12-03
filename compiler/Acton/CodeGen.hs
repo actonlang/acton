@@ -72,7 +72,7 @@ instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
     gen env (Update _ [t] e)        = gen env t <+> equals <+> gen env e <> semi
-    gen env (AugAssign _ t op e)    = gen env t <+> gen env op <+> gen env e <> semi                    -- TODO: remove
+    gen env (IUpdate _ t op e)      = gen env t <+> gen env op <+> gen env e <> semi                    -- TODO: remove
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi

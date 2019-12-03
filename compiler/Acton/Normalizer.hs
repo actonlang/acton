@@ -92,7 +92,7 @@ instance Norm Import where
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (Update l ts e)        = Update l <$> norm env ts <*> norm env e
-    norm env (AugAssign l t op e)   = AugAssign l <$> norm env t <*> norm env op <*> norm env e
+    norm env (IUpdate l t op e)     = IUpdate l <$> norm env t <*> norm env op <*> norm env e
     norm env (Assert l e mbe)       = do e' <- norm env e
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']

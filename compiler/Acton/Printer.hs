@@ -25,7 +25,8 @@ prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
-    pretty (AugAssign _ p o e)      = pretty p <+> pretty o <+> pretty e
+    pretty (Update _ ts e)          = hsep . punctuate (space <> equals) $ map pretty ts ++ [pretty e]
+    pretty (IUpdate _ t o e)        = pretty t <+> pretty o <+> pretty e
     pretty (Assert _ e mbe)         = text "assert" <+> pretty e <> nonEmpty (comma <+>) pretty mbe
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t

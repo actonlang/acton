@@ -99,7 +99,7 @@ instance KCheck Stmt where
     kchk env (Expr l e)             = kchk env e
     kchk env (Assign l ts e)        = kchk env ts >> kchk env e
     kchk env (Update l ts e)        = kchk env ts >> kchk env e
-    kchk env (AugAssign l p op e)   = kchk env p >> kchk env e
+    kchk env (IUpdate l t op e)     = kchk env t >> kchk env e
     kchk env (Assert l e mbe)       = kchk env e >> kchk env mbe
     kchk env (Pass l)               = return ()
     kchk env (Delete l p)           = kchk env p
@@ -397,7 +397,7 @@ instance KWalk Stmt where
     kwalk w (Expr l e)              = Expr l <$> kwalk w e
     kwalk w (Assign l ts e)         = Assign l <$> kwalk w ts <*> kwalk w e
     kwalk w (Update l ts e)         = Update l <$> kwalk w ts <*> kwalk w e
-    kwalk w (AugAssign l t op e)    = AugAssign l <$> kwalk w t <*> return op <*> kwalk w e
+    kwalk w (IUpdate l t op e)      = IUpdate l <$> kwalk w t <*> return op <*> kwalk w e
     kwalk w (Assert l e mbe)        = Assert l <$> kwalk w e <*> kwalk w mbe
     kwalk w (Pass l)                = return $ Pass l
     kwalk w (Delete l p)            = Delete l <$> kwalk w p

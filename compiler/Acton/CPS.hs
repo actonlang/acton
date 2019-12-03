@@ -158,11 +158,15 @@ instance CPS [Stmt] where
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
-    cps env (Update _ _ _ : _)          = undefined
-
-    cps env (AugAssign _ p op e : ss)
+    cps env (Update _ ts e : ss)
       | contCall env e                  = do [k,x] <- newNames ["cont","res"]
-                                             ss' <- cps env (sAugAsgn p op (eVar x) : ss)
+                                             ss' <- cps env (sUpdate ts (eVar x) : ss)
+                                             return $ sDef k (pospar [x]) ss' :
+                                                      sReturn (addContArg e (eVar k)) : []
+
+    cps env (IUpdate _ t op e : ss)
+      | contCall env e                  = do [k,x] <- newNames ["cont","res"]
+                                             ss' <- cps env (sIUpdate t op (eVar x) : ss)
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
@@ -351,7 +355,8 @@ instance NeedCont Handler where
 instance NeedCont Stmt where
     needCont env (Expr _ e)             = contCall env e
     needCont env (Assign _ _ e)         = contCall env e
-    needCont env (AugAssign _ _ _ e)    = contCall env e
+    needCont env (Update _ _ e)         = contCall env e
+    needCont env (IUpdate _ _ _ e)      = contCall env e
     needCont env (If _ bs els)          = needCont env bs || needCont env els
     needCont env (While _ _ b els)      = needCont env b || needCont env els
     needCont env (For _ _ _ b els)      = needCont env b || needCont env els
@@ -385,7 +390,7 @@ instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
     pre env (Assign l ps e)             = Assign l <$> pre env ps <*> preTop env e
     pre env (Update l ts e)             = Update l <$> pre env ts <*> preTop env e
-    pre env (AugAssign l t op e)        = AugAssign l <$> pre env t <*> return op <*> preTop env e
+    pre env (IUpdate l t op e)          = IUpdate l <$> pre env t <*> return op <*> preTop env e
     pre env (Assert l e mbe)            = Assert l <$> pre env e <*> pre env mbe
     pre env (Delete l t)                = Delete l <$> pre env t
     pre env (Return l e)                = Return l <$> preTop env e
