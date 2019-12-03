@@ -79,7 +79,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 Actor readyQ = NULL;
 volatile atomic_flag readyQ_lock;
 
-TimedMsg timerQ = NULL;
+Msg timerQ = NULL;
 volatile atomic_flag timerQ_lock;
 
 pthread_key_t self_key;
@@ -108,12 +108,14 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
 }
 
 // Allocate a Msg node.
-Msg MSG(Clos clos) {
+Msg MSG(Actor to, Clos clos, time_t baseline, WORD value) {
     Msg m = malloc(sizeof(struct Msg));
     m->next = NULL;
-    m->waiting = NULL;
+    m->to = to;
     m->clos = clos;
-    m->baseline = 0;
+    m->waiting = NULL;
+    m->baseline = baseline;
+    m->value = value;
     atomic_flag_clear(&m->wait_lock);
     return m;
 }
@@ -123,20 +125,10 @@ Actor ACTOR(int n) {
     Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
     a->next = NULL;
     a->msg = NULL;
+    a->outgoing = NULL;
     atomic_flag_clear(&a->msg_lock);
     return a;
 }
-
-// Allocate a TimedMsg node.
-TimedMsg TIMED_MSG(Actor to, Clos clos, time_t baseline) {
-    TimedMsg m = malloc(sizeof(struct TimedMsg));
-    m->next = NULL;
-    m->to = to;
-    m->clos = clos;
-    m->baseline = baseline;
-    return m;
-}
-
 
 // Atomically enqueue actor "a" onto the global ready-queue.
 void ENQ_ready(Actor a) {
@@ -226,12 +218,12 @@ Actor FREEZE_waiting(Msg m) {
 
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
-void ENQ_timed(TimedMsg m) {
+void ENQ_timed(Msg m) {
     time_t m_baseline = m->baseline;
     spinlock_lock(&timerQ_lock);
-    TimedMsg x = timerQ;
+    Msg x = timerQ;
     if (x && x->baseline <= m_baseline) {
-        TimedMsg next = x->next;
+        Msg next = x->next;
         while (next && next->baseline <= m_baseline) {
             x = next;
             next = x->next;
@@ -247,9 +239,9 @@ void ENQ_timed(TimedMsg m) {
 
 // Atomically dequeue and return the first message from the global timer-queue if 
 // its baseline is less or equal to "now", else return NULL.
-TimedMsg DEQ_timed(time_t now) {
+Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
-    TimedMsg res = timerQ;
+    Msg res = timerQ;
     if (res) {
         if (res->baseline <= now) {
             timerQ = res->next;
@@ -267,6 +259,7 @@ TimedMsg DEQ_timed(time_t now) {
 char *RTAG_name(RTAG tag) {
     switch (tag) {
         case RDONE: return "RDONE"; break;
+        case RFAIL: return "RFAIL"; break;
         case RCONT: return "RCONT"; break;
         case RWAIT: return "RWAIT"; break;
         case REXIT: return "REXIT"; break;
@@ -309,67 +302,82 @@ Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2) {
 }
 
 R DONE(Clos this, WORD val) {
-    return _DONE(NULL, val);
+    return _DONE(val);
 }
 
 struct Clos doneC = { DONE };
 
 R WRITE_ROOT(Clos this, WORD val) {
-    //printf("Writing root = %p\n", val);
     root_actor = (Actor)val;
-    return _DONE(NULL, 0);
+    return _DONE(0);
 }
 
 struct Clos write_rootC = { WRITE_ROOT };
 
 void BOOTSTRAP(Clos c) {
-    //printf("> bootstrap\n");
-    Actor ancestor0 = ACTOR(0);
-    Msg boot = MSG(c);
-    boot->value = &write_rootC;
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    boot->baseline = now.tv_sec;
-    //printf("Ancestor baseline: %ld\n", boot->baseline);
-    if (ENQ_msg(boot, ancestor0)) {
+    Actor ancestor0 = ACTOR(0);
+    Msg m = MSG(ancestor0, c, now.tv_sec, &write_rootC);
+    if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
-    //printf("bootstrap <\n");
+}
+
+void ADD_outgoing(Actor a, Msg m) {
+    m->next = a->outgoing;
+    a->outgoing = m;
 }
 
 Msg ASYNC(Actor to, Clos c) {
-    //printf("+ ASYNC to:%p\n", (void *)to);
-    Msg m = MSG(c);
-    m->value = &doneC;
-    m->baseline = ((Actor)pthread_getspecific(self_key))->msg->baseline;
-    //printf(">>> ENQ_msg -> %p\n", (void *)to);
-    if (ENQ_msg(m, to)) {
-        //printf(">>> ENQ_ready %p\n", (void *)to);
-        ENQ_ready(to);
-    }
+    Actor self = (Actor)pthread_getspecific(self_key);
+    time_t baseline = self->msg->baseline;
+    Msg m = MSG(to, c, baseline, &doneC);
+    ADD_outgoing(self, m);
     return m;
 }
 
-TimedMsg POSTPONE(Actor to, time_t sec, Clos c) {
-    //printf("+ POSTPONE to:%p\n", (void *)to);
-    time_t baseline = ((Actor)pthread_getspecific(self_key))->msg->baseline + sec;
-    TimedMsg m = TIMED_MSG(to, c, baseline);
-    ENQ_timed(m);
+Msg POSTPONE(Actor to, time_t sec, Clos c) {
+    Actor self = (Actor)pthread_getspecific(self_key);
+    time_t baseline = self->msg->baseline + sec;
+    Msg m = MSG(to, c, baseline, &doneC);
+    ADD_outgoing(self, m);
     return m;
 }
 
 R AWAIT(Msg m, Clos th) {
-    //printf("+ AWAIT\n");
     return _WAIT(th, m);
 }
 
+Msg GET_outgoing(Actor a) {
+    Msg m = a->outgoing;
+    if (m) {
+        a->outgoing = m->next;
+    }
+    return m;
+}
+
+void FLUSH_outgoing(Actor a) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    Msg m = GET_outgoing(a);
+    while (m) {
+        if (m->baseline <= now.tv_sec) {
+            Actor to = m->to;
+            if (ENQ_msg(m, to)) {
+                ENQ_ready(to);
+            }
+        } else {
+            ENQ_timed(m);
+        }
+        m = GET_outgoing(a);
+    }
+}
+
 void *main_loop(void *arg) {
-    //int idx = (int)arg;
-    //printf("Worker thread %d\n", idx);
     while (1) {
         Actor current = DEQ_ready();
         if (current) {
-            //printf("<<< DEQ_ready %d %p\n", idx, (void *)current);
             pthread_setspecific(self_key, current);
             Msg m = current->msg;
 
@@ -377,7 +385,6 @@ void *main_loop(void *arg) {
 
             switch (r.tag) {
                 case RDONE: {
-                    //printf("RDONE %d %d\n", idx, (int)r.value);
                     m->value = r.value;
                     Actor b = FREEZE_waiting(m);
                     while (b) {
@@ -385,47 +392,41 @@ void *main_loop(void *arg) {
                         ENQ_ready(b);
                         b = b->next;
                     }
-                    //printf("<<< DEQ_msg %p\n", (void *)current);
+                    FLUSH_outgoing(current);
                     if (DEQ_msg(current)) {
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
                 }
+                case RFAIL: {
+                    break;
+                }
                 case RCONT: {
-                    //printf("RCONT %d %d\n", idx, (int)r.value);
                     m->clos = r.cont;
                     m->value = r.value;
-                    //printf(">>> ENQ_ready %p\n", (void *)current);
                     ENQ_ready(current);
                     break;
                 }
                 case RWAIT: {
-                    //printf("RWAIT %d %lx\n", idx, (long)r.value);
+                    FLUSH_outgoing(current);
                     m->clos = r.cont;
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
                         m->value = x->value;
-                        //printf(">>> ENQ_ready %p\n", (void *)current);
                         ENQ_ready(current);
                     }
                     break;
                 case REXIT:
-                    //fprintf(stderr, "[thread exit; %ld]\n", (long)pthread_self());
-                    exit((int)r.value);
+                exit((int)r.value);
                 }
             }
         } else {
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
-            TimedMsg tm = DEQ_timed(now.tv_sec);
-            if (tm) {
-                //printf(">>> DEQ_timed %p\n", (void *)tm->to);
-                Msg m = MSG(tm->clos);
-                m->value = &doneC;
-                m->baseline = tm->baseline;
-                if (ENQ_msg(m, tm->to)) {
-                    ENQ_ready(tm->to);
+            Msg m = DEQ_timed(now.tv_sec);
+            if (m) {
+                if (ENQ_msg(m, m->to)) {
+                    ENQ_ready(m->to);
                 }
             } else {
                 static struct timespec idle_wait = { 0, 500000000 };  // 500ms

@@ -20,7 +20,7 @@ typedef struct Msg *Msg;
 typedef struct Actor *Actor;
 typedef struct TimedMsg *TimedMsg;
 
-enum RTAG { RDONE, RCONT, RWAIT, REXIT };
+enum RTAG { RDONE, RFAIL, RCONT, RWAIT, REXIT };
 typedef enum RTAG RTAG;
 
 struct R {
@@ -31,10 +31,11 @@ struct R {
 
 #define None (WORD)0
 
-#define _DONE(cont, value) (R){RDONE, (cont), (value)}
+#define _DONE(value)       (R){RDONE, NULL,   (value)}
+#define _FAIL(value)       (R){RFAIL, NULL,   (value)}
 #define _CONT(cont, value) (R){RCONT, (cont), (value)}
 #define _WAIT(cont, value) (R){RWAIT, (cont), (value)}
-#define _EXIT(cont, value) (R){REXIT, (cont), (value)}
+#define _EXIT(value)       (R){REXIT, NULL,   (value)}
 
 struct Clos {
     R (*code)(Clos, WORD);
@@ -44,8 +45,9 @@ struct Clos {
 
 struct Msg {
     Msg next;
-    Actor waiting;
+    Actor to;
     Clos clos;
+    Actor waiting;
     time_t baseline;
     volatile atomic_flag wait_lock;
     WORD value;
@@ -54,18 +56,12 @@ struct Msg {
 struct Actor {
     Actor next;
     Msg msg;
+    Msg outgoing;
     volatile atomic_flag msg_lock;
     WORD state[];
 };
 
-struct TimedMsg {
-    TimedMsg next;
-    Actor to;
-    Clos clos;
-    time_t baseline;  
-};
-
-Msg MSG(Clos clos);
+Msg MSG(Actor to, Clos clos, time_t baseline, WORD value);
 Actor ACTOR(int n);
 Clos CLOS(R (*code)(Clos, WORD), int n);
 Clos CLOS1(R (*code)(Clos,WORD), WORD v0);
@@ -74,6 +70,6 @@ Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2);
 
 Msg ASYNC(Actor to, Clos c);
 
-TimedMsg POSTPONE(Actor to, time_t sec, Clos c);
+Msg POSTPONE(Actor to, time_t sec, Clos c);
 
 R AWAIT(Msg m, Clos th);
