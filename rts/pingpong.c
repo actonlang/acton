@@ -232,7 +232,7 @@ R ping(Actor self, WORD q, Clos then) {
     self->state[0] = (WORD)((int)self->state[0] + 1);
     int j = (int)self->state[0]*(int)q;
     printf("Ping %8d\n", j);
-    POSTPONE(self, 1, CLOS3(pong1, self, self->state[0], q));
+    POSTPONE(self, 1, CLOS3(pong1, self, self->state[0], (WORD)(-(int)(q))));
     return _CONT(then, (WORD)j);
     //return _CONT(CLOS3(lam1, self, q, then), None);
 }
@@ -244,7 +244,7 @@ R ping1(Clos this, WORD th) {
 R pong(Actor self, WORD n, WORD q, Clos then) {
     int j = (int)n*(int)q;
     printf("     %8d Pong\n", j);
-    POSTPONE(self, 2, CLOS2(ping1, self, q));
+    POSTPONE(self, 2, CLOS2(ping1, self, (WORD)(-(int)(q))));
     return _CONT(then, None);
 }
 
