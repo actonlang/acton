@@ -37,10 +37,11 @@ instance Relabel Import where
 instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
     relabel (Assign _ ts e) = Assign <$> newLoc <*> relabel ts <*> relabel e
-    relabel (AugAssign _ p op e) = AugAssign <$> newLoc <*> relabel p <*> relabel op <*> relabel e
+    relabel (Update _ ts e) = Update <$> newLoc <*> relabel ts <*> relabel e
+    relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> relabel op <*> relabel e
     relabel (Assert _ e mbe) = Assert <$> newLoc <*> relabel e <*> relabel mbe
     relabel (Pass _) = Pass <$> newLoc
-    relabel (Delete _ p) = Delete <$> newLoc <*> relabel p
+    relabel (Delete _ t) = Delete <$> newLoc <*> relabel t
     relabel (Return _ mbe) = Return <$> newLoc <*> relabel mbe
     relabel (Raise _ mbex) = Raise <$> newLoc <*> relabel mbex
     relabel (Break _) = Break <$> newLoc
@@ -102,10 +103,16 @@ instance Relabel Pattern where
 --    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
     relabel (PTuple _ ps) = PTuple <$> newLoc <*> relabel ps
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
-    relabel (PIndex _ e ix) = PIndex <$> newLoc <*> relabel e <*> relabel ix
-    relabel (PSlice _ e sl) = PSlice <$> newLoc <*> relabel e <*> relabel sl
-    relabel (PDot _ e n) = PDot <$> newLoc <*> relabel e <*> relabel n
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
+
+instance Relabel Target where
+    relabel (TaVar _ n) = TaVar <$> newLoc <*> relabel n
+--    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
+    relabel (TaTuple _ ps) = TaTuple <$> newLoc <*> relabel ps
+    relabel (TIndex _ e ix) = TIndex <$> newLoc <*> relabel e <*> relabel ix
+    relabel (TSlice _ e sl) = TSlice <$> newLoc <*> relabel e <*> relabel sl
+    relabel (TDot _ e n) = TDot <$> newLoc <*> relabel e <*> relabel n
+    relabel (TParen _ t) = TParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where
   relabel (Exception e mbe) = Exception <$> relabel e <*> relabel mbe

@@ -298,9 +298,6 @@ instance Vars KwdPat where
     
 instance Vars Pattern where
     free (PVar _ n a)               = []
-    free (PIndex _ e ix)            = free e ++ free ix
-    free (PSlice _ e sl)            = free e ++ free sl
-    free (PDot _ e n)               = free e
 --    free (PRecord _ ps)             = free ps
     free (PTuple _ ps)              = free ps
     free (PList _ ps p)             = free ps ++ free p
@@ -308,14 +305,21 @@ instance Vars Pattern where
     free (PData _ n ixs)            = free ixs
 
     bound (PVar _ n a)              = [n]
-    bound (PIndex _ e ix)           = []
-    bound (PSlice _ e sl)           = []
-    bound (PDot _ e n)              = []
 --    bound (PRecord _ ps)            = bound ps
     bound (PTuple _ ps)             = bound ps
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
+    
+instance Vars Target where
+    free (TaVar _ n)                = []
+    free (TIndex _ e ix)            = free e ++ free ix
+    free (TSlice _ e sl)            = free e ++ free sl
+    free (TDot _ e n)               = free e
+    free (TaTuple _ ts)             = free ts
+    free (TParen _ t)               = free t
+
+    bound _                         = []
 
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn

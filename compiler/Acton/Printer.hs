@@ -238,11 +238,16 @@ instance Pretty Pattern where
     pretty (PTuple _ ps)            = pretty ps
 --    pretty (PRecord _ ps)           = parens (pretty ps)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
-    pretty (PIndex _ e ix)          = pretty e <> brackets (commaList ix)
-    pretty (PSlice _ e sl)          = pretty e <> brackets (commaList sl)
-    pretty (PDot _ e n)             = pretty e <> dot <> pretty n
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
+
+instance Pretty Target where
+    pretty (TaVar _ n)              = pretty n
+    pretty (TaTuple _ ts)           = commaList ts
+    pretty (TIndex _ e ix)          = pretty e <> brackets (commaList ix)
+    pretty (TSlice _ e sl)          = pretty e <> brackets (commaList sl)
+    pretty (TDot _ e n)             = pretty e <> dot <> pretty n
+    pretty (TParen _ t)             = parens (pretty t)
 
 prettyPats [] Nothing               = empty
 prettyPats ps Nothing               = commaSep pretty ps

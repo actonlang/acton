@@ -91,7 +91,8 @@ instance Norm Import where
 
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
-    norm env (AugAssign l p op e)   = AugAssign l <$> norm env p <*> norm env op <*> norm env e
+    norm env (Update l ts e)        = Update l <$> norm env ts <*> norm env e
+    norm env (AugAssign l t op e)   = AugAssign l <$> norm env t <*> norm env op <*> norm env e
     norm env (Assert l e mbe)       = do e' <- norm env e
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
@@ -192,15 +193,21 @@ instance Norm Expr where
     norm env (SetComp l e c)        = SetComp l <$> norm env e <*> norm env c
     norm env (Paren l e)            = Paren l <$> norm env e
     norm env e                      = error ("trying to normalize " ++ show e)
+
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
-    norm env (PIndex l e ix)        = PIndex l <$> norm env e <*> norm env ix
-    norm env (PSlice l e sl)        = PSlice l <$> norm env e <*> norm env sl
-    norm env (PDot l e n)           = PDot l <$> norm env e <*> norm env n
     norm env (PTuple l ps)          = PTuple l <$> norm env ps
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
 --    norm env (PRecord l ps)         = PRecord l <$> norm env ps
     norm env (PParen l p)           = PParen l <$> norm env p
+
+instance Norm Target where
+    norm env (TaVar l n)            = return $ TaVar l n
+    norm env (TIndex l e ix)        = TIndex l <$> norm env e <*> norm env ix
+    norm env (TSlice l e sl)        = TSlice l <$> norm env e <*> norm env sl
+    norm env (TDot l e n)           = TDot l <$> norm env e <*> norm env n
+    norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
+    norm env (TParen l p)           = TParen l <$> norm env p
 
 instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe

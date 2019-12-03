@@ -137,6 +137,9 @@ instance InfEnv Stmt where
                                              (te,t2,pats') <- infEnvT env pats
                                              constrain [Sub env t1 t2]
                                              return (te, Assign l pats' e')
+    infEnv env (Update _ _ _)           = undefined
+    infEnv env (AugAssign _ _ _ _)      = undefined
+    {-
     infEnv env (AugAssign l p@(PVar _ n ann) (Op _ op) e)
       | reserved n env                  = nameReserved n
       | ann /= Nothing                  = typedReassign p
@@ -172,14 +175,15 @@ instance InfEnv Stmt where
             method BAndA                = iandKW
             method MMultA               = imatmulKW
     infEnv env (AugAssign l p o e)      = notYet l "Augmented assignments to non-variable targets"
+    -}
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
                                              (t,e2') <- infer env e2
                                              constrain [Sub env t tStr]
                                              return (nEmpty, Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], s)
-    infEnv env (Delete l pat)
-      | nodup pat                       = do (_,pat') <- infer env pat                 -- TODO: constrain pat targets to opt type
-                                             return (nEmpty, Delete l pat')
+    infEnv env (Delete l pat)           = undefined
+--      | nodup pat                       = do (_,pat') <- infer env pat                 -- TODO: constrain pat targets to opt type
+--                                            return (nEmpty, Delete l pat')
     infEnv env s@(Return l Nothing)     = do subFX env (fxRet tNone tWild)
                                              return (nEmpty, s)
     infEnv env (Return l (Just e))      = do (t,e') <- infer env e
@@ -859,22 +863,6 @@ instance InfEnvT Pattern where
                                              TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
                                              _ -> err1 n "Polymorphic variable not assignable:"
     infEnvT env p@PVar{}                = typedReassign p
-    infEnvT env (PIndex l e [i])        = do (t,e') <- infer env e
-                                             (ti,i') <- infer env i
-                                             t0 <- newTVar
-                                             constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
-                                             equFX env (fxMut tWild)
-                                             return (nEmpty, t0, PIndex l e' [i'])
-    infEnvT env (PSlice l e [s])        = do (t,e') <- infer env e
-                                             s' <- inferSlice env s
-                                             constrain [Impl env t cSliceable, Sub env t tObject]
-                                             equFX env (fxMut tWild)
-                                             return (nEmpty, t, PSlice l e' [s'])
-    infEnvT env (PDot l e n)            = do (t,e') <- infer env e
-                                             t0 <- newTVar
-                                             constrain [Mut env t n t0]
-                                             equFX env (fxMut tWild)
-                                             return (nEmpty, t0, PDot l e' n)
     infEnvT env (PTuple l ps)           = do (te,prow,ps') <- infEnvT env ps
                                              return (te, tTuple prow, PTuple l ps')
 --    infEnvT env (PRecord _ ps)          = do (te, krow) <- infEnvT env ps
@@ -889,6 +877,41 @@ instance InfEnvT Pattern where
                                              (t,es') <- inferIxs env t0 es
                                              return (nVar n t0, t, PData l n es')
 
+
+instance InfEnvT [Target] where
+    infEnvT                             = undefined
+instance InfEnvT Target where
+{-
+   infEnvT env (TaVar l n)
+      | reservedOrSig n env,
+        wfWild env ann                  = do t0 <- maybeInstT KType ann
+                                             return (nVar n t0, t0, PVar l n (Just t0))
+    infEnvT env (PVar l n Nothing)      = case findVarType n env of
+                                             TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
+                                             _ -> err1 n "Polymorphic variable not assignable:"
+    infEnvT env p@PVar{}                = typedReassign p
+-}
+
+    infEnvT env (TaVar _ _)             = undefined
+    infEnvT env (TIndex l e [i])        = do (t,e') <- infer env e
+                                             (ti,i') <- infer env i
+                                             t0 <- newTVar
+                                             constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
+                                             equFX env (fxMut tWild)
+                                             return (nEmpty, t0, TIndex l e' [i'])
+    infEnvT env (TSlice l e [s])        = do (t,e') <- infer env e
+                                             s' <- inferSlice env s
+                                             constrain [Impl env t cSliceable, Sub env t tObject]
+                                             equFX env (fxMut tWild)
+                                             return (nEmpty, t, TSlice l e' [s'])
+    infEnvT env (TDot l e n)            = do (t,e') <- infer env e
+                                             t0 <- newTVar
+                                             constrain [Mut env t n t0]
+                                             equFX env (fxMut tWild)
+                                             return (nEmpty, t0, TDot l e' n)
+    infEnvT env (TaTuple l ps)           = do (te,prow,ps') <- infEnvT env ps
+                                              return (te, tTuple prow, TaTuple l ps')
+ 
 inferIxs env t0 []                      = return (t0, [])
 inferIxs env t0 (i:is)                  = do t1 <- newTVar
                                              (ti,i') <- infer env i

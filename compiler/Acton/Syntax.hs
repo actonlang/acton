@@ -22,10 +22,11 @@ type Suite      = [Stmt]
 
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
-                | AugAssign     { sloc::SrcLoc, pattern::Pattern, aop::Op Aug, expr::Expr }
+                | Update        { sloc::SrcLoc, targets::[Target], expr::Expr }
+                | AugAssign     { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
-                | Delete        { sloc::SrcLoc, pattern::Pattern }
+                | Delete        { sloc::SrcLoc, target::Target}
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
                 | Raise         { sloc::SrcLoc, except::Maybe Exception }
                 | Break         { sloc::SrcLoc }
@@ -85,14 +86,20 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 deriving (Show)
 
 data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
-                | PIndex        { ploc::SrcLoc, pexp::Expr, pindex::[Expr] }
-                | PSlice        { ploc::SrcLoc, pexp::Expr, pslice::[Slice] }
-                | PDot          { ploc::SrcLoc, pexp::Expr, pn::Name }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
 --                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat }
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
+                deriving (Show)
+
+data Target     = TaVar         { taloc::SrcLoc, tn::Name}
+                | TIndex        { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
+                | TSlice        { taloc::SrcLoc, texp::Expr, tslice::[Slice] }
+                | TDot          { taloc::SrcLoc, texp::Expr, tn::Name }
+                | TParen        { taloc::SrcLoc, targ::Target }
+                | TaTuple       { taloc::SrcLoc, targs::[Target]}
+
                 deriving (Show)
 
 data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | GenPass 
@@ -235,7 +242,9 @@ eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e
 pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
 
 pVar n t        = PVar NoLoc n t
-pIndex e ix     = PIndex NoLoc e [ix]
+
+taVar n         = TaVar NoLoc n
+tIndex e ix     = TIndex NoLoc e [ix]
 
 monotype t      = TSchema NoLoc [] t NoDec
 monotype' t d   = TSchema NoLoc [] t d
@@ -387,10 +396,11 @@ instance Eq Import where
 instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
-    x@AugAssign{}       ==  y@AugAssign{}       = pattern x == pattern y && aop x == aop y && expr x == expr y
+    x@Update{}          ==  y@Update{}          = targets x == targets y && expr x == expr y
+    x@AugAssign{}       ==  y@AugAssign{}       = target x == target y && aop x == aop y && expr x == expr y
     x@Assert{}          ==  y@Assert{}          = expr x == expr y && optExpr x == optExpr y
     x@Pass{}            ==  y@Pass{}            = True
-    x@Delete{}          ==  y@Delete{}          = pattern x == pattern y
+    x@Delete{}          ==  y@Delete{}          = target x == target y
     x@Return{}          ==  y@Return{}          = optExpr x == optExpr y
     x@Raise{}           ==  y@Raise{}           = except x == except y
     x@Break{}           ==  y@Break{}           = True
@@ -488,13 +498,21 @@ instance Eq Pattern where
 --    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
     PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
-    PIndex _ e1 ix1     == PIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
-    PSlice _ e1 sl1     == PSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
-    PDot _ e1 n1        == PDot _ e2 n2         = e1 == e2 && n1 == n2
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
     PParen _ p1         == p2                   = p1 == p2
     p1                  == PParen _ p2          = p1 == p2
     _                   == _                    = False
+instance Eq Target where
+    TaVar _ n1          == TaVar _ n2           = n1 == n2
+--    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
+    TaTuple _ ts1       == TaTuple _ ts2        = ts1 == ts2
+    TIndex _ e1 ix1     == TIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
+    TSlice _ e1 sl1     == TSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
+    TDot _ e1 n1        == TDot _ e2 n2         = e1 == e2 && n1 == n2
+    TParen _ t1         == t2                   = t1 == t2
+    t1                  == TParen _ t2          = t1 == t2
+    _                   == _                    = False
+
 
 instance Eq TSchema where
     TSchema _ q1 t1 d1  == TSchema _ q2 t2 d2   = q1 == q2 && t1 == t2 && d1 == d2

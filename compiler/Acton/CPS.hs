@@ -158,6 +158,8 @@ instance CPS [Stmt] where
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
+    cps env (Update _ _ _ : _)          = undefined
+
     cps env (AugAssign _ p op e : ss)
       | contCall env e                  = do [k,x] <- newNames ["cont","res"]
                                              ss' <- cps env (sAugAsgn p op (eVar x) : ss)
@@ -382,7 +384,8 @@ instance PreCPS a => PreCPS (Maybe a) where
 instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
     pre env (Assign l ps e)             = Assign l <$> pre env ps <*> preTop env e
-    pre env (AugAssign l p op e)        = AugAssign l <$> pre env p <*> return op <*> preTop env e
+    pre env (Update l ts e)             = Update l <$> pre env ts <*> preTop env e
+    pre env (AugAssign l t op e)        = AugAssign l <$> pre env t <*> return op <*> preTop env e
     pre env (Assert l e mbe)            = Assert l <$> pre env e <*> pre env mbe
     pre env (Delete l t)                = Delete l <$> pre env t
     pre env (Return l e)                = Return l <$> preTop env e
@@ -474,7 +477,7 @@ instance PreCPS Expr where
                                                  _  -> do acc <- newName "acc"
                                                           preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
       where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnDict [])
-            s1 acc                      = sAssign [pIndex (eVar acc) k] v
+            s1 acc                      = undefined -- sAssign [tIndex (eVar acc) k] v
     pre env (Set l es)                  = Set l <$> pre env es
     pre env (SetComp l (Elem e) c)      = do (e1,stmts) <- withPrefixes $ liftM2 (SetComp l) (fmap Elem $ pre env e) (pre env c)
                                              case stmts of
@@ -543,10 +546,15 @@ instance PreCPS Comp where
 
 instance PreCPS Pattern where
     pre env (PVar l n a)                = return (PVar l n a)
-    pre env (PIndex l e ix)             = PIndex l <$> pre env e <*> pre env ix
-    pre env (PSlice l e sl)             = PSlice l <$> pre env e <*> pre env sl
-    pre env (PDot l e n)                = PDot l <$> pre env e <*> return n
     pre env (PTuple l ps)               = PTuple l <$> pre env ps
     pre env (PList l ps p)              = PList l <$> pre env ps <*> pre env p
     pre env (PParen l p)                = PParen l <$> pre env p
     pre env (PData l n ixs)             = PData l n <$> pre env ixs
+
+instance PreCPS Target where
+    pre env (TaVar l n)                 = return (TaVar l n)
+    pre env (TIndex l e ix)             = TIndex l <$> pre env e <*> pre env ix
+    pre env (TSlice l e sl)             = TSlice l <$> pre env e <*> pre env sl
+    pre env (TDot l e n)                = TDot l <$> pre env e <*> return n
+    pre env (TaTuple l ps)              = TaTuple l <$> pre env ps
+    pre env (TParen l p)                = TParen l <$> pre env p

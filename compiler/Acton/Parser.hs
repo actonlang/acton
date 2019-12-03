@@ -86,7 +86,7 @@ ifActScope          = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]
 
 ifDecl              = ifCtx [CLASS,PROTO]           [IF]
 
-ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
+--ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
 ifPar               = ifCtx [PAR]                   []
 
@@ -206,6 +206,11 @@ instance AddLoc S.Pattern where
   addLoc p = do
          (l,pat) <- withLoc p
          return pat{S.ploc = l}
+
+instance AddLoc S.Target where
+  addLoc t = do
+         (l,targ) <- withLoc t
+         return targ{S.taloc = l}
 
 
 rwordLoc :: String -> Parser SrcLoc
@@ -402,48 +407,61 @@ tuple_or_single posItems headItems len tup =
  
 -- Patterns ------------------------------------------------------------------------------------
 
-pospat :: Bool -> Parser S.PosPat
-pospat mut = posItems S.PosPat S.PosPatStar S.PosPatNil (apat mut) (apat mut)
+pospat :: Parser S.PosPat
+pospat = posItems S.PosPat S.PosPatStar S.PosPatNil apat apat
 
-kwdpat :: Bool -> Parser S.KwdPat 
-kwdpat mut = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
+kwdpat :: Parser S.KwdPat 
+kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
 
-pure_pattern, mut_pattern :: Parser S.Pattern
-pure_pattern = gen_pattern False
-
-mut_pattern = gen_pattern True
-
-gen_pattern :: Bool -> Parser S.Pattern
-gen_pattern mut = addLoc $ tuple_or_single (pospat mut) S.posPatHead S.posPatLen (S.PTuple NoLoc)
+gen_pattern :: Parser S.Pattern
+gen_pattern = addLoc $ tuple_or_single pospat S.posPatHead S.posPatLen (S.PTuple NoLoc)
   
-pelems :: Bool -> Parser ([S.Pattern], Maybe S.Pattern)
-pelems mut = do
-    p <- apat mut
-    ps <- many (try (comma *> apat mut))
-    mbp <- optional (comma *> star *> apat mut)
+pelems ::Parser ([S.Pattern], Maybe S.Pattern)
+pelems = do
+    p <- apat
+    ps <- many (try (comma *> apat))
+    mbp <- optional (comma *> star *> apat)
     return (p:ps, mbp)
 
-apat :: Bool -> Parser S.Pattern
-apat mut = addLoc (
-            try (if mut then ifData datapat lvalue else fail "no lvalue")
-        <|>
+apat :: Parser S.Pattern
+apat = addLoc (
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
             ((try . parens) $ return (S.PTuple NoLoc S.PosPatNil))
         <|>
-            ((try . parens) $ S.PParen NoLoc <$> gen_pattern mut)
+            ((try . parens) $ S.PParen NoLoc <$> gen_pattern)
         <|>
-            (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional (pelems mut))
+            (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional pelems)
         )
+  where  -- datapat = S.PData NoLoc <$> escname <*> many (brackets exprlist)
+        optannot = try (Just <$> (colon *> ttype)) <|> return Nothing
+
+-- Targets -------------------------------------------------------------------------------------
+
+-- gen_target = addLoc $ tuple_or_single (commaList atarget) head length (S.TaTuple NoLoc)
+
+gen_target = addLoc $ do
+               t  <- atarget
+               ts <- commaList atarget
+               case ts of
+                 [] -> return t
+                 _  -> return $ S.TaTuple NoLoc (t:ts)
+
+atarget :: Parser S.Target
+atarget = addLoc (
+            try lvalue
+        <|>
+            (try $ S.TaVar NoLoc <$> name)
+        <|>
+            (parens $ S.TParen NoLoc <$> gen_target)
+         )
   where lvalue = do
             tmp <- atom_expr
             case tmp of
-                S.Dot _ e n    -> return $ S.PDot NoLoc e n
-                S.Index _ e ix -> return $ S.PIndex NoLoc e ix
-                S.Slice _ e sl -> return $ S.PSlice NoLoc e sl
-                _              -> locate (loc tmp) >> fail ("illegal assignment target: " ++ show tmp)
-        datapat = S.PData NoLoc <$> escname <*> many (brackets exprlist)
-        optannot = try (Just <$> (colon *> ttype)) <|> return Nothing
+                S.Dot _ e n    -> return $ S.TDot NoLoc e n
+                S.Index _ e ix -> return $ S.TIndex NoLoc e ix
+                S.Slice _ e sl -> return $ S.TSlice NoLoc e sl
+                _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
 
 ------------------------------------------------------------------------------------------------
 -- Statements ----------------------------------------------------------------------------------
@@ -461,8 +479,9 @@ small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
-            try (assertNotData *> (S.AugAssign NoLoc <$> mut_pattern <*> augassign <*> rhs))
+            try (assertNotData *> (S.AugAssign NoLoc <$> gen_target <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
+        <|> try (S.Update NoLoc <$> trysome update <*> rhs)
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
    where augassign :: Parser (S.Op S.Aug)
          augassign = addLoc (S.Op NoLoc <$> (assertNotData *> augops))
@@ -481,7 +500,10 @@ expr_stmt = addLoc $
                      <|> S.EuDivA  <$ symbol "//="
 
 assign :: Parser S.Pattern
-assign = mut_pattern <* equals
+assign = gen_pattern <* equals
+
+update :: Parser S.Target
+update = gen_target <* equals
 
 rhs :: Parser S.Expr
 rhs = yield_expr <|> exprlist
@@ -496,7 +518,7 @@ var_stmt = addLoc $
 del_stmt = addLoc $ do
             assertNotData
             rword "del"
-            S.Delete NoLoc <$> mut_pattern
+            S.Delete NoLoc <$> gen_target
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 
@@ -666,7 +688,7 @@ while_stmt = addLoc $ do
 for_stmt = addLoc $ do
                  assertNotDecl
                  (p,_) <- withPos (rword "for")
-                 pat <- pure_pattern
+                 pat <- gen_pattern
                  rword "in"
                  e <- exprlist
                  ss <- suite LOOP p
@@ -703,11 +725,11 @@ with_stmt = addLoc $ do
                 assertNotDecl
                 (s,_) <- withPos (rword "with")
                 S.With NoLoc <$> (with_item `sepBy1` comma) <*> suite SEQ s
-  where with_item = S.WithItem <$> expr <*> optional (rword "as" *> pure_pattern)
+  where with_item = S.WithItem <$> expr <*> optional (rword "as" *> gen_pattern)
                  
  
 data_stmt = addLoc $
-           do (s,pat) <- withPos mut_pattern
+           do (s,pat) <- withPos gen_pattern
               S.Data NoLoc (Just pat) <$> suite DATA s
         <|>
            do (s,_) <- withPos (assertDefAct *> rword "return")
@@ -961,7 +983,7 @@ comp_iter = comp_for <|> comp_if
 
 comp_for = addLoc (do
             rword "for"
-            pat <- pure_pattern
+            pat <- gen_pattern
             rword "in"
             e <- or_expr
             S.CompFor NoLoc pat e . maybe S.NoComp id <$> optional comp_iter)
