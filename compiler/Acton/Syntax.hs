@@ -23,7 +23,7 @@ type Suite      = [Stmt]
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | Update        { sloc::SrcLoc, targets::[Target], expr::Expr }
-                | AugAssign     { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
+                | IUpdate       { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, target::Target}
@@ -217,7 +217,8 @@ dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoMod
 sDef n p b      = sDecl [dDef n p b]
 sReturn e       = Return NoLoc (Just e)
 sAssign ps e    = Assign NoLoc ps e
-sAugAsgn p o e  = AugAssign NoLoc p o e
+sUpdate ts e    = Update NoLoc ts e
+sIUpdate t o e  = IUpdate NoLoc t o e
 sRaise e        = Raise NoLoc (Just (Exception e Nothing))
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
@@ -289,10 +290,13 @@ fxNil           = TNil NoLoc
 
 posRow sc r     = TRow NoLoc (rPos n) sc r
   where n       = rowDepth r + 1
+posRow' t r     = posRow (monotype t) r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil
 
-kwdRow n sc     = TRow NoLoc n sc
+
+kwdRow n sc r   = TRow NoLoc n sc r
+kwdRow' n t r   = kwdRow n (monotype t) r
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil
 
@@ -397,7 +401,7 @@ instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
     x@Update{}          ==  y@Update{}          = targets x == targets y && expr x == expr y
-    x@AugAssign{}       ==  y@AugAssign{}       = target x == target y && aop x == aop y && expr x == expr y
+    x@IUpdate{}         ==  y@IUpdate{}         = target x == target y && aop x == aop y && expr x == expr y
     x@Assert{}          ==  y@Assert{}          = expr x == expr y && optExpr x == optExpr y
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = target x == target y

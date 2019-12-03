@@ -479,7 +479,7 @@ small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
-            try (assertNotData *> (S.AugAssign NoLoc <$> gen_target <*> augassign <*> rhs))
+            try (assertNotData *> (S.IUpdate NoLoc <$> gen_target <*> augassign <*> rhs))
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
         <|> try (S.Update NoLoc <$> trysome update <*> rhs)
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)

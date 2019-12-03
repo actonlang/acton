@@ -137,17 +137,15 @@ instance InfEnv Stmt where
                                              (te,t2,pats') <- infEnvT env pats
                                              constrain [Sub env t1 t2]
                                              return (te, Assign l pats' e')
-    infEnv env (Update _ _ _)           = undefined
-    infEnv env (AugAssign _ _ _ _)      = undefined
-    {-
-    infEnv env (AugAssign l p@(PVar _ n ann) (Op _ op) e)
-      | reserved n env                  = nameReserved n
-      | ann /= Nothing                  = typedReassign p
-      | otherwise                       = do (t1,e1) <- infer env (Var (loc n) (NoQual n)) 
-                                             (t2,e2) <- infer env e
+    infEnv env (Update l ts e)          = do (t1,e') <- infer env e
+                                             (t2,ts') <- infer env ts
+                                             constrain [Sub env t1 t2]
+                                             return (nEmpty, Update l ts' e')
+    infEnv env (IUpdate l t (Op _ o) e) = do (t1,t') <- infer env t
+                                             (t2,e') <- infer env e
                                              w <- newName "AugOp"
-                                             constrain [Sub env t2 t1, Impl env t1 (protocol op)]
-                                             return ([], Assign l [p] (eCall (eDot (eVar w) (method op)) [e1,e2]))
+                                             constrain [Sub env t2 t1, Impl env t1 (protocol o)]
+                                             return ([], Update l [t'] (eCall (eDot (eVar w) (method o)) [t2e t',e']))
       where protocol PlusA              = cPlus
             protocol MinusA             = cMinus
             protocol MultA              = cNumber
@@ -174,8 +172,12 @@ instance InfEnv Stmt where
             method BXorA                = ixorKW
             method BAndA                = iandKW
             method MMultA               = imatmulKW
-    infEnv env (AugAssign l p o e)      = notYet l "Augmented assignments to non-variable targets"
-    -}
+            t2e (TaVar l n)             = Var l (NoQual n)
+            t2e (TIndex l e ix)         = Index l e ix
+            t2e (TSlice l e sl)         = Slice l e sl
+            t2e (TDot l e n)            = Dot l e n
+            t2e (TParen l tg)           = Paren l (t2e tg)
+            t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs)
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
                                              (t,e2') <- infer env e2
                                              constrain [Sub env t tStr]
@@ -818,23 +820,9 @@ instance Infer Exception where
                                              constrain [Sub env t2 (tOpt tException)]
                                              return (t1, Exception e1' (Just e2'))
 
-instance InfEnvT [Pattern] where
-    infEnvT env []                      = do t <- newTVar
-                                             return (nEmpty, t, [])
-    infEnvT env (p:ps)                  = do (te1,t1,p') <- infEnvT env p
-                                             (te2,t2,ps') <- infEnvT (define te1 env) ps
-                                             constrain [Equ env t1 t2]
-                                             return (nCombine te1 te2, t1, p':ps')
-
-instance InfEnvT (Maybe Pattern) where
-    infEnvT env Nothing                 = do t <- newTVar
-                                             return (nEmpty, pSequence t, Nothing)
-    infEnvT env (Just p)                = do (te,t,p') <- infEnvT env p
-                                             return (te, pSequence t, Just p')
-
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (te1,t,p') <- infEnvT env p
-                                             (te2,r,ps') <- infEnvT (define te1 env) ps
+                                             (te2,r,ps') <- infEnvT env ps
                                              return (nCombine te1 te2, posRow (monotype t) r, PosPat p' ps')
     infEnvT env (PosPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newRowVar
@@ -845,7 +833,7 @@ instance InfEnvT PosPat where
 
 instance InfEnvT KwdPat where
     infEnvT env (KwdPat n p ps)         = do (te1,t,p') <- infEnvT env p
-                                             (te2,r,ps') <- infEnvT (define te1 env) ps
+                                             (te2,r,ps') <- infEnvT env ps
                                              return (nCombine te1 te2, kwdRow n (monotype t) r, KwdPat n p' ps')
     infEnvT env (KwdPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newRowVar
@@ -860,7 +848,7 @@ instance InfEnvT Pattern where
         wfWild env ann                  = do t0 <- maybeInstT KType ann
                                              return (nVar n t0, t0, PVar l n (Just t0))
     infEnvT env (PVar l n Nothing)      = case findVarType n env of
-                                             TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
+                                             TSchema _ [] t _ -> return (nEmpty, t, PVar l n Nothing)
                                              _ -> err1 n "Polymorphic variable not assignable:"
     infEnvT env p@PVar{}                = typedReassign p
     infEnvT env (PTuple l ps)           = do (te,prow,ps') <- infEnvT env ps
@@ -877,41 +865,52 @@ instance InfEnvT Pattern where
                                              (t,es') <- inferIxs env t0 es
                                              return (nVar n t0, t, PData l n es')
 
+instance InfEnvT (Maybe Pattern) where
+    infEnvT env Nothing                 = do t <- newTVar
+                                             return (nEmpty, pSequence t, Nothing)
+    infEnvT env (Just p)                = do (te,t,p') <- infEnvT env p
+                                             return (te, pSequence t, Just p')
 
-instance InfEnvT [Target] where
-    infEnvT                             = undefined
-instance InfEnvT Target where
-{-
-   infEnvT env (TaVar l n)
-      | reservedOrSig n env,
-        wfWild env ann                  = do t0 <- maybeInstT KType ann
-                                             return (nVar n t0, t0, PVar l n (Just t0))
-    infEnvT env (PVar l n Nothing)      = case findVarType n env of
-                                             TSchema _ [] t _ -> return ([], t, PVar l n Nothing)
+instance InfEnvT [Pattern] where
+    infEnvT env [p]                     = do (te,t,p') <- infEnvT env p
+                                             return (te, t, [p'])
+    infEnvT env (p:ps)                  = do (te1,t1,p') <- infEnvT env p
+                                             (te2,t2,ps') <- infEnvT env ps
+                                             constrain [Equ env t1 t2]
+                                             return (nCombine te1 te2, t1, p':ps')
+
+instance Infer [Target] where
+    infer env [t]                       = do (t1,t') <- infer env t
+                                             return (t1, [t'])
+    infer env (t:ts)                    = do (t1,t') <- infer env t
+                                             (t2,ts') <- infer env ts
+                                             constrain [Equ env t1 t2]
+                                             return (t1, t':ts')
+
+instance Infer Target where
+    infer env (TaVar l n)               = case findVarType n env of
+                                             TSchema _ [] t _ -> return (t, TaVar l n)
                                              _ -> err1 n "Polymorphic variable not assignable:"
-    infEnvT env p@PVar{}                = typedReassign p
--}
 
-    infEnvT env (TaVar _ _)             = undefined
-    infEnvT env (TIndex l e [i])        = do (t,e') <- infer env e
+    infer env (TIndex l e [i])          = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
                                              constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
                                              equFX env (fxMut tWild)
-                                             return (nEmpty, t0, TIndex l e' [i'])
-    infEnvT env (TSlice l e [s])        = do (t,e') <- infer env e
+                                             return (t0, TIndex l e' [i'])
+    infer env (TSlice l e [s])          = do (t,e') <- infer env e
                                              s' <- inferSlice env s
                                              constrain [Impl env t cSliceable, Sub env t tObject]
                                              equFX env (fxMut tWild)
-                                             return (nEmpty, t, TSlice l e' [s'])
-    infEnvT env (TDot l e n)            = do (t,e') <- infer env e
+                                             return (t, TSlice l e' [s'])
+    infer env (TDot l e n)              = do (t,e') <- infer env e
                                              t0 <- newTVar
                                              constrain [Mut env t n t0]
                                              equFX env (fxMut tWild)
-                                             return (nEmpty, t0, TDot l e' n)
-    infEnvT env (TaTuple l ps)           = do (te,prow,ps') <- infEnvT env ps
-                                              return (te, tTuple prow, TaTuple l ps')
- 
+                                             return (t0, TDot l e' n)
+    infer env (TaTuple l targs)         = do (ts,targs') <- unzip <$> mapM (infer env) targs
+                                             return (tTuple (foldr posRow' posNil ts), TaTuple l targs')
+
 inferIxs env t0 []                      = return (t0, [])
 inferIxs env t0 (i:is)                  = do t1 <- newTVar
                                              (ti,i') <- infer env i
@@ -919,11 +918,6 @@ inferIxs env t0 (i:is)                  = do t1 <- newTVar
                                              (t, is') <- inferIxs env t1 is
                                              return (t, i':is')
 
-instance Infer Pattern where
-    infer env p                         = noenv <$> infEnvT env p
-      where noenv ([],t,e)              = (t,e)
-            noenv (te,_,_)              = nameNotFound (head (dom te))
-                                             
 
 -- Well-formed types ------------------------------------------------------
 

@@ -38,7 +38,7 @@ instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
     relabel (Assign _ ts e) = Assign <$> newLoc <*> relabel ts <*> relabel e
     relabel (Update _ ts e) = Update <$> newLoc <*> relabel ts <*> relabel e
-    relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> relabel op <*> relabel e
+    relabel (IUpdate _ t op e) = IUpdate <$> newLoc <*> relabel t <*> relabel op <*> relabel e
     relabel (Assert _ e mbe) = Assert <$> newLoc <*> relabel e <*> relabel mbe
     relabel (Pass _) = Pass <$> newLoc
     relabel (Delete _ t) = Delete <$> newLoc <*> relabel t

@@ -102,7 +102,8 @@ instance Vars a => Vars (Maybe a) where
 instance Vars Stmt where
     free (Expr _ e)                 = free e
     free (Assign _ ps e)            = free ps ++ free e
-    free (AugAssign _ p op e)       = free p ++ bound p ++ free e
+    free (Update _ ts e)            = free ts ++ free e
+    free (IUpdate _ t op e)         = free t ++ free e
     free (Assert _ e mbe)           = free e ++ free mbe
     free (Pass _)                   = []
     free (Delete _ p)               = free p ++ bound p
@@ -312,7 +313,7 @@ instance Vars Pattern where
     bound (PData _ n ixs)           = [n]
     
 instance Vars Target where
-    free (TaVar _ n)                = []
+    free (TaVar _ n)                = [n]
     free (TIndex _ e ix)            = free e ++ free ix
     free (TSlice _ e sl)            = free e ++ free sl
     free (TDot _ e n)               = free e
