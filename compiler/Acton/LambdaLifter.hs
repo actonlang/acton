@@ -215,7 +215,8 @@ instance Lift a => Lift (Maybe a) where
 instance Lift Stmt where
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
-    ll env (AugAssign l pat op e)       = AugAssign l <$> ll env pat <*> pure op <*> ll env e
+    ll env (Update l ts e)              = Update l <$> ll env ts <*> ll env e
+    ll env (AugAssign l targ op e)      = AugAssign l <$> ll env targ <*> pure op <*> ll env e
     ll env (Assert l e mbe)             = Assert l <$> ll env e <*> ll env mbe
     ll env s@(Pass _)                   = pure s
     ll env (Delete l target)            = Delete l <$> ll env target
@@ -357,7 +358,11 @@ instance Lift Comp where
     
 instance Lift Pattern where
     ll env (PVar l n a)                 = return (PVar l n a)
-    ll env (PIndex l e ix)              = PIndex l <$> ll env e <*> ll env ix
-    ll env (PSlice l e sl)              = PSlice l <$> ll env e <*> ll env sl
-    ll env (PDot l e n)                 = PDot l <$> ll env e <*> return n
     ll env (PParen l p)                 = PParen l <$> ll env p
+
+instance Lift Target where
+    ll env (TaVar l n)                  = return (TaVar l n)
+    ll env (TIndex l e ix)              = TIndex l <$> ll env e <*> ll env ix
+    ll env (TSlice l e sl)              = TSlice l <$> ll env e <*> ll env sl
+    ll env (TDot l e n)                 = TDot l <$> ll env e <*> return n
+    ll env (TParen l p)                 = TParen l <$> ll env p

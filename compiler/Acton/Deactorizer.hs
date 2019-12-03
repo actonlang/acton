@@ -57,9 +57,10 @@ instance Deact Module where
 instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e
     deact env (Assign l ps e)       = Assign l <$> deact env ps <*> deact env e
-    deact env (AugAssign l p op e)  = AugAssign l <$> deact env p <*> return op <*> deact env e
+    deact env (Update l ts e)       = Update l <$> deact env ts <*> deact env e
+    deact env (AugAssign l t op e)  = AugAssign l <$> deact env t <*> return op <*> deact env e
     deact env (Pass l)              = return $ Pass l
-    deact env (Delete l p)          = Delete l <$> deact env p
+    deact env (Delete l t)          = Delete l <$> deact env t
     deact env (Return l mbe)        = Return l <$> deact env mbe
     deact env (Raise l mbex)        = Raise l <$> deact env mbex
     deact env (Break l)             = return $ Break l
@@ -83,8 +84,8 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                          (bint,dext) <- withStore (deact (env1 n') b)
                                          let (dsigs,dext') = partition isSig dext
                                              _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoMod
-                                             create = Assign l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
-                                             copies = [ Assign l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
+                                             create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
+                                             copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
                                              _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoMod
                                              (ds,ss) = partition isDecl bint
@@ -92,7 +93,7 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                              intern = Class l n' q [] (Decl l0 (dsigs ++[_init']) : ds)
                                          return [intern, extern]
   where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
-        selfPat n                   = PDot l0 (Var l0 (NoQual selfKW)) n
+        selfPat n                   = TDot l0 (Var l0 (NoQual selfKW)) n
         isSig Signature{}           = True
         isSig _                     = False
         isDecl Decl{}               = True
@@ -164,12 +165,15 @@ instance Deact Expr where
     deact env (Paren l e)           = Paren l <$> deact env e
 
 instance Deact Pattern where
-    deact env (PVar l n a)
-      | selfRef n env               = return $ PDot l (Var l (NoQual selfKW)) n
     deact env (PVar l n a)          = return $ PVar l n a
-    deact env (PIndex l e ix)       = PIndex l <$> deact env e <*> deact env ix
-    deact env (PSlice l e sl)       = PSlice l <$> deact env e <*> deact env sl
-    deact env (PDot l e n)          = PDot l <$> deact env e <*> return n
+
+instance Deact Target where
+    deact env (TaVar l n)
+      | selfRef n env               = return $ TDot l (Var l (NoQual selfKW)) n
+    deact env (TaVar l n)           = return $ TaVar l n
+    deact env (TIndex l e ix)       = TIndex l <$> deact env e <*> deact env ix
+    deact env (TSlice l e sl)       = TSlice l <$> deact env e <*> deact env sl
+    deact env (TDot l e n)          = TDot l <$> deact env e <*> return n
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe

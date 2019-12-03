@@ -98,6 +98,7 @@ kchkSuite env (s : ss)              = kchk env s >> kchkSuite env ss
 instance KCheck Stmt where
     kchk env (Expr l e)             = kchk env e
     kchk env (Assign l ts e)        = kchk env ts >> kchk env e
+    kchk env (Update l ts e)        = kchk env ts >> kchk env e
     kchk env (AugAssign l p op e)   = kchk env p >> kchk env e
     kchk env (Assert l e mbe)       = kchk env e >> kchk env mbe
     kchk env (Pass l)               = return ()
@@ -169,10 +170,15 @@ instance KCheck Pattern where
     kchk env (PVar l n t)           = kexpect env KType t
     kchk env (PTuple l ps)          = kchk env ps
     kchk env (PList l ps p)         = kchk env ps >> kchk env p
-    kchk env (PIndex l e ix)        = kchk env e >> kchk env ix
-    kchk env (PSlice l e sl)        = kchk env e >> kchk env sl
-    kchk env (PDot l e n)           = kchk env e
     kchk env (PParen l p)           = kchk env p
+
+instance KCheck Target where
+    kchk env (TaVar l n)            = return ()
+    kchk env (TaTuple l ps)         = kchk env ps
+    kchk env (TIndex l e ix)        = kchk env e >> kchk env ix
+    kchk env (TSlice l e sl)        = kchk env e >> kchk env sl
+    kchk env (TDot l e n)           = kchk env e
+    kchk env (TParen l p)           = kchk env p
 
 instance KCheck Exception where
     kchk env (Exception e mbe)      = kchk env e >> kchk env mbe
@@ -390,7 +396,8 @@ instance KWalk Type where
 instance KWalk Stmt where
     kwalk w (Expr l e)              = Expr l <$> kwalk w e
     kwalk w (Assign l ts e)         = Assign l <$> kwalk w ts <*> kwalk w e
-    kwalk w (AugAssign l p op e)    = AugAssign l <$> kwalk w p <*> return op <*> kwalk w e
+    kwalk w (Update l ts e)         = Update l <$> kwalk w ts <*> kwalk w e
+    kwalk w (AugAssign l t op e)    = AugAssign l <$> kwalk w t <*> return op <*> kwalk w e
     kwalk w (Assert l e mbe)        = Assert l <$> kwalk w e <*> kwalk w mbe
     kwalk w (Pass l)                = return $ Pass l
     kwalk w (Delete l p)            = Delete l <$> kwalk w p
@@ -455,10 +462,15 @@ instance KWalk Pattern where
 --    kwalk w (PRecord l ps)          = PRecord l <$> kwalk w ps
     kwalk w (PTuple l ps)           = PTuple l <$> kwalk w ps
     kwalk w (PList l ps p)          = PList l <$> kwalk w ps <*> kwalk w p
-    kwalk w (PIndex l e ix)         = PIndex l <$> kwalk w e <*> kwalk w ix
-    kwalk w (PSlice l e sl)         = PSlice l <$> kwalk w e <*> kwalk w sl
-    kwalk w (PDot l e n)            = PDot l <$> kwalk w e <*> return n
     kwalk w (PParen l p)            = PParen l <$> kwalk w p
+
+instance KWalk Target where
+    kwalk w (TaVar l n)             = return $ TaVar l n
+    kwalk w (TaTuple l ts)          = TaTuple l <$> kwalk w ts
+    kwalk w (TIndex l e ix)         = TIndex l <$> kwalk w e <*> kwalk w ix
+    kwalk w (TSlice l e sl)         = TSlice l <$> kwalk w e <*> kwalk w sl
+    kwalk w (TDot l e n)            = TDot l <$> kwalk w e <*> return n
+    kwalk w (TParen l p)            = TParen l <$> kwalk w p
 
 instance KWalk Exception where
     kwalk w (Exception e mbe)       = Exception <$> kwalk w e <*> kwalk w mbe
