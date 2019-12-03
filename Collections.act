@@ -1,0 +1,99 @@
+protocol Eq:
+  @staticmethod
+  __eq__       : (Self,Self) -> bool
+  @staticmethod
+  __ne__       : (Self,Self) -> bool            # has default defn
+
+protocol Ord (Eq):
+  @staticmethod
+  __lt__       : (Self,Self) -> bool
+  @staticmethod
+  __le__       : (Self,Self) -> bool            # has default defn
+  @staticmethod
+  __gt__       : (Self,Self) -> bool            # has default defn
+  @staticmethod
+  __ge__       : (Self,Self) -> bool            # has default defn
+
+protocol Logical:
+  @staticmethod
+  __and__     : (Self,Self) -> Self
+  @staticmethod
+  __or__      : (Self,Self) -> Self
+  @staticmethod
+  __xor__     : (Self,Self) -> Self
+
+protocol Plus:
+  @staticmethod
+  __add__      : (Self,Self) -> Self
+
+protocol Minus:
+  @staticmethod
+  __sub__      : (Self,Self) -> Self
+
+protocol Iterable[A]:
+  __iter__     : () -> Iterator[A]
+  
+protocol Iterator[A]:                           
+  __next__     : () -> A
+ 
+protocol Collection[A] (Iterable[A]):
+  __fromiter__ : (Iterable[A]) -> Self 
+  __len__      : () -> int
+  
+protocol Container [A (Eq)] (Collection):
+  __contains__    : (A) -> bool  
+  __containsnot__ : (A) -> bool  
+
+protocol Indexed[A,B]:
+  __getitem__  : (A) -> B
+  __setitem__ : !(A,B) -> None 
+  __delitem__ : !(A) -> None
+
+protocol Sliceable[A] (Indexed[int,A]):
+  __getslice__ : (int?,int?,int?) -> Sequence[A]
+ 
+protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
+  __reversed__ : () -> Iterable[A] 
+  insert      : !(int,A) -> None
+  append      : !(A) -> None   
+  reverse     : !() -> None       
+
+protocol Mapping[A,B] (Collection[A], Indexed[A,B]):
+  get         : (A) -> B?
+  keys        : () -> Iterable[A]
+  values      : () -> Iterable[B]
+  items       : () -> Iterable[(A,B)]
+  update      : !(Mapping[A,B]) -> None  
+  popitem     : !() -> (A,B)
+  setdefault  : !(A,B) -> None
+
+protocol Set[A (Eq)] (Collection[A], Ord, Logical, Minus):
+  isdisjoint  : (Set[A]) -> bool
+  add         : !(A) -> None  
+  discard     : !(A) -> None  
+  pop         : !() -> A 
+
+
+# --------------- Mutable collections and auxiliary protocols ---------------------
+
+protocol IncrementalPlus[A] (Plus):
+  __iadd__     : !(A) -> None
+
+protocol IncrementalMinus[A] (Minus):
+  __isub__     : !(A) -> None
+
+protocol IncrementalLogical[A] (Logical):
+  @staticmethod
+  __iand__     : !(Self,Self) -> Self
+  @staticmethod
+  __ior__      : !(Self,Self) -> Self
+  @staticmethod
+  __ixor__     : !(Self,Self) -> Self
+
+ 
+protocol Identity:
+  @staticmethod
+  __is__      : (Self,Self) -> bool 
+  @staticmethod
+  __isnot__   : (Self,Self) -> bool 
+ 
