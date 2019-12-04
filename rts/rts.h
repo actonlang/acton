@@ -36,13 +36,20 @@ struct R {
 #define _CONT(cont, value) (R){RCONT, (cont), (value)}
 #define _WAIT(cont, value) (R){RWAIT, (cont), (value)}
 
+#define CLOS_HEADER     "Clos"
+#define MSG_HEADER      "Msg"
+#define ACTOR_HEADER    "Actor"
+#define CATCHER_HEADER  "Catcher"
+
 struct Clos {
+    char *header;
     R (*code)(Clos, WORD);
     int nvar;
     WORD var[];
 };
 
 struct Msg {
+    char *header;
     Msg next;
     Actor to;
     Clos clos;
@@ -53,14 +60,17 @@ struct Msg {
 };
 
 struct Actor {
+    char *header;
     Actor next;
     Msg msg;
     Catcher catcher;
     volatile atomic_flag msg_lock;
+    int nstate;
     WORD state[];
 };
 
 struct Catcher {
+    char *header;
     Catcher next;
     Clos clos;
 };
