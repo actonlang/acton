@@ -38,35 +38,40 @@ newName s                           = do n <- get
                                          put (n+1)
                                          return $ Internal s n NormPass
 
-                                    -- builtin names are last in global; local names are first in enclosing
-data NormEnv                        = NormEnv {global :: TEnv, enclosing :: [Name], currentmod :: ModName} deriving Show
+                                    -- builtin names are last in global; local names are first in local
+data NormEnv                        = NormEnv {global :: TEnv, local :: [Name], currentmod :: ModName} deriving Show
 
 normEnv (te,env)                    = NormEnv (te ++ names env) [] (defaultmod env)
 
+extLocal vs env                     = env{ local = vs ++ local env }
 
-simplifyPat                         :: NormEnv -> Pattern -> NormM (Pattern,Suite)
-simplifyPat _ p@(PVar _ _ _)        = return (p,[])
-simplifyPat env (PParen _ p)        = simplifyPat env p
-simplifyPat env (PTuple _ pp)       = do v <- newName "tup"
-                                         return (pVar v Nothing,simpPP v 0 pp)
-  where simpPP v n (PosPat p pp)    = s : simpPP v (n+1) pp
+normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
+normPat _ p@(PVar _ _ _)            = return (p,[])
+normPat env (PParen _ p)            = normPat env p
+normPat env (PTuple _ pp)           = do v <- newName "tup"
+                                         return (pVar v Nothing,normPP v 0 pp)
+  where normPP v n (PosPat p pp)    = s : normPP v (n+1) pp
           where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n False)
-        simpPP v n (PosPatStar p)   = [Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n True)]
-        simpPP _ _ PosPatNil        = []
-simplifyPat env (PList _ ps pt)     = do v <- newName "lst"
-                                         return (pVar v Nothing, simpList v 0 ps pt)
-  where simpList v n (p:ps) pt      = s : simpList v (n+1) ps pt
+        normPP v n (PosPatStar p)   = [Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n True)]
+        normPP _ _ PosPatNil        = []
+normPat env (PList _ ps pt)         = do v <- newName "lst"
+                                         return (pVar v Nothing, normList v 0 ps pt)
+  where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eVar (name "Indexed__??")) getitemKW)
                                         [eQVar (QName (currentmod env) v), Int NoLoc n (show n)])
-        simpList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eVar (name "Sliceable__??")) getsliceKW)
+        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eVar (name "Sliceable__??")) getsliceKW)
                                         [eQVar (QName (currentmod env) v), Int NoLoc n (show n), None NoLoc, None NoLoc])]
-        simpList v n [] Nothing     = [] 
+        normList v n [] Nothing     = [] 
 
-simplifyWI env (WithItem e Nothing) = do e' <- norm env e
-                                         return (WithItem e' Nothing,[])
-simplifyWI env (WithItem e (Just p))= do e' <- norm env e
-                                         (p',ss) <- simplifyPat env p
-                                         return (WithItem e' (Just p'),ss)
+normPat' env Nothing                = return (Nothing, [])
+normPat' env (Just p)               = do (p',ss) <- normPat env p
+                                         return (Just p', ss)
+
+normItems env []                    = return ([], [])
+normItems env (WithItem e p : is)   = do e' <- norm env e
+                                         (p',ss) <- normPat' env p
+                                         (is',ss') <- normItems (extLocal (bound p) env) is
+                                         return (WithItem e' p' : is', ss++ss')
 
 
 class Norm a where
@@ -114,7 +119,16 @@ instance Norm Stmt where
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
     norm env (While l e b els)      = While l <$> norm env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
-    norm env (With l is b)          = With l <$> norm env is <*> norm env b
+    norm env (For l p e b els)      = do (v,ss) <- normPat env p
+                                         e' <- norm env e
+                                         b' <- norm env1 (ss ++ b)
+                                         els' <- norm env els
+                                         return $ For l v e' b' els'
+      where env1                    = extLocal (bound p) env
+    norm env (With l is b)          = do (is',ss) <- normItems env is
+                                         b' <- norm env1 (ss ++ b)
+                                         return $ With l is' b'
+      where env1                    = extLocal (bound is) env
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (Decl l ds)            = Decl l <$> norm env ds
@@ -122,31 +136,24 @@ instance Norm Stmt where
 --    norm' env (Delete l p)          =
 
     norm' env (Assign l ts e)       = do e' <- norm env e
-                                         ps <- mapM (simplifyPat env) ts
+                                         ps <- mapM (normPat env) ts
                                          let (vs,sss) = unzip ps
                                          ss' <- norm env (concat sss)
                                          return $ Assign l vs e' : ss'
-    norm' env (For l p e b els)     = do (v,ss) <- simplifyPat env p
-                                         e' <- norm env e
-                                         b' <- norm env (ss ++ b)
-                                         els' <- norm env els
-                                         return $ [For l v e' b' els']
-    norm' env (With l is b)         = do ps <- mapM (simplifyWI env) is
-                                         let (is',sss) = unzip ps
-                                         b' <- norm env (concat sss ++ b)
-                                         return [With l is' b']
     norm' env s                     = do s' <- norm env s
                                          return [s']
                                          
                                          
                                        
 instance Norm Decl where
-    norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm env k
-                                         b' <- norm (env {enclosing = bound b ++ bound p ++ bound k ++ enclosing env}) b
+    norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+                                         b' <- norm env1 b
                                          return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') m
-    norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm env k
-                                         b' <- norm env b
+      where env1                    = extLocal (bound b ++ bound p ++ bound k) env
+    norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+                                         b' <- norm env1 b
                                          return $ Actor l n q (noDefaults p') KwdNIL t (defaults p' ++ b')
+      where env1                    = extLocal (bound b ++ bound p ++ bound k) env
     norm env (Class l n q as b)     = Class l n q as <$> norm env b
     norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
     norm env (Extension l n q as b) = Extension l n q as <$> norm env b
@@ -178,19 +185,25 @@ instance Norm Expr where
     norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e                     -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
     norm env (DotI l e i t)         = DotI l <$> norm env e <*> return i <*> return t
-    norm env (Lambda l ps ks e)     = Lambda l <$> norm env ps <*> norm env ks <*> norm env e
+    norm env (Lambda l ps ks e)     = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e
+      where env1                    = extLocal (bound ps ++ bound ks) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es)           = Tuple l <$> norm env es
-    norm env (TupleComp l e c)      = TupleComp l <$> norm env e <*> norm env c
+    norm env (TupleComp l e c)      = TupleComp l <$> norm env1 e <*> norm env c
+      where env1                    = extLocal (bound c) env
     norm env (Record l fs)          = Record l <$> norm env fs
-    norm env (RecordComp l n e c)   = RecordComp l n <$> norm env e <*> norm env c
+    norm env (RecordComp l n e c)   = RecordComp l n <$> norm env1 e <*> norm env c
+      where env1                    = extLocal (bound c) env
     norm env (List l es)            = List l <$> norm env es
-    norm env (ListComp l e c)       = ListComp l <$> norm env e <*> norm env c
+    norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
+      where env1                    = extLocal (bound c) env
     norm env (Dict l as)            = Dict l <$> norm env as
-    norm env (DictComp l a c)       = DictComp l <$> norm env a <*> norm env c
+    norm env (DictComp l a c)       = DictComp l <$> norm env1 a <*> norm env c
+      where env1                    = extLocal (bound c) env
     norm env (Set l es)             = Set l <$> norm env es
-    norm env (SetComp l e c)        = SetComp l <$> norm env e <*> norm env c
+    norm env (SetComp l e c)        = SetComp l <$> norm env1 e <*> norm env c
+      where env1                    = extLocal (bound c) env
     norm env (Paren l e)            = Paren l <$> norm env e
     norm env e                      = error ("trying to normalize " ++ show e)
 
@@ -224,7 +237,7 @@ instance Norm ModName where
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQual n)             = case elem n (enclosing env) of
+    norm env (NoQual n)             = case elem n (local env) of
                                          True-> return $ NoQual n
                                          False ->  case lookup n (global env) of
                                                       Just (NAlias qn) -> return qn
@@ -247,7 +260,8 @@ instance Norm Branch where
     norm env (Branch e ss)          = Branch <$> norm env e <*> norm env ss
 
 instance Norm Handler where
-    norm env (Handler ex b)         = Handler <$> norm env ex <*> norm env b
+    norm env (Handler ex b)         = Handler <$> norm env ex <*> norm env1 b
+      where env1                    = extLocal (bound ex) env
 
 instance Norm Except where
     norm env (ExceptAll l)          = return $ ExceptAll l
@@ -255,12 +269,12 @@ instance Norm Except where
     norm env (ExceptAs l x n)       = ExceptAs l <$> norm env x <*> norm env n
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm env p
+    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm (extLocal [n] env) p
     norm env (PosSTAR n t)          = return $ PosSTAR n t
     norm env PosNIL                 = return PosNIL
     
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm env k
+    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm (extLocal [n] env) k
     norm env (KwdSTAR n t)          = return $ KwdSTAR n t
     norm env KwdNIL                 = return KwdNIL
 
@@ -306,7 +320,7 @@ instance Norm OpArg where
     norm env (OpArg op e)           = OpArg <$> norm env op <*> norm env e
 
 instance Norm Comp where
-    norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm env c
+    norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (extLocal (bound p) env) c
     norm env (CompIf l e c)         = CompIf l <$> norm env e <*> norm env c
     norm env NoComp                 = return NoComp
 
