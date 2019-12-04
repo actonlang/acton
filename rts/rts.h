@@ -55,7 +55,6 @@ struct Msg {
 struct Actor {
     Actor next;
     Msg msg;
-    Msg outgoing;
     Catcher catcher;
     volatile atomic_flag msg_lock;
     WORD state[];
