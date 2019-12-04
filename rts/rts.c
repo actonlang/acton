@@ -126,8 +126,16 @@ Actor ACTOR(int n) {
     a->next = NULL;
     a->msg = NULL;
     a->outgoing = NULL;
+    a->catcher = NULL;
     atomic_flag_clear(&a->msg_lock);
     return a;
+}
+
+Catcher CATCHER(Clos clos) {
+    Catcher c = malloc(sizeof(struct Catcher));
+    c->next = NULL;
+    c->clos = clos;
+    return c;
 }
 
 // Atomically enqueue actor "a" onto the global ready-queue.
@@ -262,7 +270,6 @@ char *RTAG_name(RTAG tag) {
         case RFAIL: return "RFAIL"; break;
         case RCONT: return "RCONT"; break;
         case RWAIT: return "RWAIT"; break;
-        case REXIT: return "REXIT"; break;
     }
 }
 
@@ -324,9 +331,47 @@ void BOOTSTRAP(Clos c) {
     }
 }
 
+void ADD_catcher(Actor a, Catcher c) {
+    c->next = a->catcher;
+    a->catcher = c;
+}
+
+Catcher NEXT_catcher(Actor a) {
+    Catcher c = a->catcher;
+    a->catcher = c->next;
+    c->next = NULL;
+    return c;
+}
+
 void ADD_outgoing(Actor a, Msg m) {
     m->next = a->outgoing;
     a->outgoing = m;
+}
+
+Msg NEXT_outgoing(Actor a) {
+    Msg m = a->outgoing;
+    if (m) {
+        a->outgoing = m->next;
+        m->next = NULL;
+    }
+    return m;
+}
+
+void FLUSH_outgoing(Actor a) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    Msg m = NEXT_outgoing(a);
+    while (m) {
+        if (m->baseline <= now.tv_sec) {
+            Actor to = m->to;
+            if (ENQ_msg(m, to)) {
+                ENQ_ready(to);
+            }
+        } else {
+            ENQ_timed(m);
+        }
+        m = NEXT_outgoing(a);
+    }
 }
 
 Msg ASYNC(Actor to, Clos c) {
@@ -349,29 +394,15 @@ R AWAIT(Msg m, Clos th) {
     return _WAIT(th, m);
 }
 
-Msg GET_outgoing(Actor a) {
-    Msg m = a->outgoing;
-    if (m) {
-        a->outgoing = m->next;
-    }
-    return m;
+void PUSH(Clos clos) {
+    Actor self = (Actor)pthread_getspecific(self_key);
+    Catcher c = CATCHER(clos);
+    ADD_catcher(self, c);
 }
 
-void FLUSH_outgoing(Actor a) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    Msg m = GET_outgoing(a);
-    while (m) {
-        if (m->baseline <= now.tv_sec) {
-            Actor to = m->to;
-            if (ENQ_msg(m, to)) {
-                ENQ_ready(to);
-            }
-        } else {
-            ENQ_timed(m);
-        }
-        m = GET_outgoing(a);
-    }
+void POP() {
+    Actor self = (Actor)pthread_getspecific(self_key);
+    NEXT_catcher(self);
 }
 
 void *main_loop(void *arg) {
@@ -385,24 +416,28 @@ void *main_loop(void *arg) {
 
             switch (r.tag) {
                 case RDONE: {
+                    FLUSH_outgoing(current);
                     m->value = r.value;
-                    Actor b = FREEZE_waiting(m);
+                    Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
                     while (b) {
                         b->msg->value = r.value;
                         ENQ_ready(b);
                         b = b->next;
                     }
-                    FLUSH_outgoing(current);
                     if (DEQ_msg(current)) {
                         ENQ_ready(current);
                     }
                     break;
                 }
-                case RFAIL: {
-                    break;
-                }
                 case RCONT: {
                     m->clos = r.cont;
+                    m->value = r.value;
+                    ENQ_ready(current);
+                    break;
+                }
+                case RFAIL: {
+                    Catcher c = NEXT_catcher(current);
+                    m->clos = c->clos;
                     m->value = r.value;
                     ENQ_ready(current);
                     break;
@@ -416,8 +451,6 @@ void *main_loop(void *arg) {
                         ENQ_ready(current);
                     }
                     break;
-                case REXIT:
-                exit((int)r.value);
                 }
             }
         } else {
