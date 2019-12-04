@@ -331,24 +331,24 @@ void BOOTSTRAP(Clos c) {
     }
 }
 
-void ADD_catcher(Actor a, Catcher c) {
+void PUSH_catcher(Actor a, Catcher c) {
     c->next = a->catcher;
     a->catcher = c;
 }
 
-Catcher NEXT_catcher(Actor a) {
+Catcher POP_catcher(Actor a) {
     Catcher c = a->catcher;
     a->catcher = c->next;
     c->next = NULL;
     return c;
 }
 
-void ADD_outgoing(Actor a, Msg m) {
+void PUSH_outgoing(Actor a, Msg m) {
     m->next = a->outgoing;
     a->outgoing = m;
 }
 
-Msg NEXT_outgoing(Actor a) {
+Msg POP_outgoing(Actor a) {
     Msg m = a->outgoing;
     if (m) {
         a->outgoing = m->next;
@@ -360,7 +360,7 @@ Msg NEXT_outgoing(Actor a) {
 void FLUSH_outgoing(Actor a) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    Msg m = NEXT_outgoing(a);
+    Msg m = POP_outgoing(a);
     while (m) {
         if (m->baseline <= now.tv_sec) {
             Actor to = m->to;
@@ -370,7 +370,7 @@ void FLUSH_outgoing(Actor a) {
         } else {
             ENQ_timed(m);
         }
-        m = NEXT_outgoing(a);
+        m = POP_outgoing(a);
     }
 }
 
@@ -378,7 +378,7 @@ Msg ASYNC(Actor to, Clos c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
     Msg m = MSG(to, c, baseline, &doneC);
-    ADD_outgoing(self, m);
+    PUSH_outgoing(self, m);
     return m;
 }
 
@@ -386,7 +386,7 @@ Msg POSTPONE(Actor to, time_t sec, Clos c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
     Msg m = MSG(to, c, baseline, &doneC);
-    ADD_outgoing(self, m);
+    PUSH_outgoing(self, m);
     return m;
 }
 
@@ -397,12 +397,12 @@ R AWAIT(Msg m, Clos th) {
 void PUSH(Clos clos) {
     Actor self = (Actor)pthread_getspecific(self_key);
     Catcher c = CATCHER(clos);
-    ADD_catcher(self, c);
+    PUSH_catcher(self, c);
 }
 
 void POP() {
     Actor self = (Actor)pthread_getspecific(self_key);
-    NEXT_catcher(self);
+    POP_catcher(self);
 }
 
 void *main_loop(void *arg) {
@@ -436,7 +436,7 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case RFAIL: {
-                    Catcher c = NEXT_catcher(current);
+                    Catcher c = POP_catcher(current);
                     m->clos = c->clos;
                     m->value = r.value;
                     ENQ_ready(current);
@@ -490,7 +490,7 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    BOOTSTRAP(CLOS1(ROOT, (WORD)2));
+    BOOTSTRAP(CLOS1(ROOT, (WORD)1));
 
     // TODO: run I/O polling thread
 

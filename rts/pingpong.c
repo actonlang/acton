@@ -7,12 +7,10 @@ actor Pingpong(i):
     async def ping(q):
         count += 1
         print('Ping %d', count*q)
-        _ = pong(count, q)
-        return None
+        postpone(1, pong, count, -q)
     def pong(n,q):
         print('     %d Pong', n*q)
-        ping(q)
-        return None
+        postpone(2, ping, -q)
     ping(i)
 
 -------------------------------- explicit ASYNC
