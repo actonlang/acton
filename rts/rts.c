@@ -99,6 +99,7 @@ static inline void spinlock_unlock(volatile atomic_flag *f) {
 // Allocate a Clos node with space for n var words.
 Clos CLOS(R (*code)(Clos, WORD), int n) {
     Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
+    c->header = CLOS_HEADER;
     c->code = code;
     c->nvar = n;
     for(int x = 0; x < n; ++x) {
@@ -110,6 +111,7 @@ Clos CLOS(R (*code)(Clos, WORD), int n) {
 // Allocate a Msg node.
 Msg MSG(Actor to, Clos clos, time_t baseline, WORD value) {
     Msg m = malloc(sizeof(struct Msg));
+    m->header = MSG_HEADER;
     m->next = NULL;
     m->to = to;
     m->clos = clos;
@@ -123,15 +125,18 @@ Msg MSG(Actor to, Clos clos, time_t baseline, WORD value) {
 // Allocate an Actor node with space for n state words.
 Actor ACTOR(int n) {
     Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
+    a->header = ACTOR_HEADER;
     a->next = NULL;
     a->msg = NULL;
     a->catcher = NULL;
+    a->nstate = n;
     atomic_flag_clear(&a->msg_lock);
     return a;
 }
 
 Catcher CATCHER(Clos clos) {
     Catcher c = malloc(sizeof(struct Catcher));
+    c->header = CATCHER_HEADER;
     c->next = NULL;
     c->clos = clos;
     return c;
@@ -311,14 +316,14 @@ R DONE(Clos this, WORD val) {
     return _DONE(val);
 }
 
-struct Clos doneC = { DONE };
+struct Clos doneC = { CLOS_HEADER, DONE, 0 };
 
 R WRITE_ROOT(Clos this, WORD val) {
     root_actor = (Actor)val;
     return _DONE(0);
 }
 
-struct Clos write_rootC = { WRITE_ROOT };
+struct Clos write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
 
 void BOOTSTRAP(Clos c) {
     struct timespec now;
