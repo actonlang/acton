@@ -125,7 +125,6 @@ Actor ACTOR(int n) {
     Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
     a->next = NULL;
     a->msg = NULL;
-    a->outgoing = NULL;
     a->catcher = NULL;
     atomic_flag_clear(&a->msg_lock);
     return a;
@@ -343,42 +342,13 @@ Catcher POP_catcher(Actor a) {
     return c;
 }
 
-void PUSH_outgoing(Actor a, Msg m) {
-    m->next = a->outgoing;
-    a->outgoing = m;
-}
-
-Msg POP_outgoing(Actor a) {
-    Msg m = a->outgoing;
-    if (m) {
-        a->outgoing = m->next;
-        m->next = NULL;
-    }
-    return m;
-}
-
-void FLUSH_outgoing(Actor a) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    Msg m = POP_outgoing(a);
-    while (m) {
-        if (m->baseline <= now.tv_sec) {
-            Actor to = m->to;
-            if (ENQ_msg(m, to)) {
-                ENQ_ready(to);
-            }
-        } else {
-            ENQ_timed(m);
-        }
-        m = POP_outgoing(a);
-    }
-}
-
 Msg ASYNC(Actor to, Clos c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
     Msg m = MSG(to, c, baseline, &doneC);
-    PUSH_outgoing(self, m);
+    if (ENQ_msg(m, to)) {
+        ENQ_ready(to);
+    }
     return m;
 }
 
@@ -386,7 +356,7 @@ Msg POSTPONE(Actor to, time_t sec, Clos c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
     Msg m = MSG(to, c, baseline, &doneC);
-    PUSH_outgoing(self, m);
+    ENQ_timed(m);
     return m;
 }
 
@@ -416,7 +386,6 @@ void *main_loop(void *arg) {
 
             switch (r.tag) {
                 case RDONE: {
-                    FLUSH_outgoing(current);
                     m->value = r.value;
                     Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
                     while (b) {
@@ -443,7 +412,6 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case RWAIT: {
-                    FLUSH_outgoing(current);
                     m->clos = r.cont;
                     Msg x = (Msg)r.value;
                     if (!ADD_waiting(current, x)) {
