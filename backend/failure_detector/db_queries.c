@@ -141,9 +141,10 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		sm.tm = NULL;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		server_message__pack (&sm, *buf);
+		*((int *)(*buf)) = *len;
+		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
 	}
@@ -158,9 +159,10 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		cm.tm = NULL;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		client_message__pack (&cm, *buf);
+		*((int *)(*buf)) = *len;
+		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
 	}
@@ -330,9 +332,11 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 	sm.tm = NULL;
 
 	*len = server_message__get_packed_size (&sm);
-	*buf = malloc (*len);
+
+	*buf = malloc (*len + sizeof(int));
 	memset(*buf, 0 , *len);
-	server_message__pack (&sm, *buf);
+	*((int *)(*buf)) = *len;
+	server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 	free_server_msg(&sm);
 
@@ -511,9 +515,10 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	sm.tm = NULL;
 
 	*len = server_message__get_packed_size (&sm);
-	*buf = malloc (*len);
+	*buf = malloc (*len + sizeof(int));
 	memset(*buf, 0 , *len);
-	server_message__pack (&sm, *buf);
+	*((int *)(*buf)) = *len;
+	server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 	free_server_msg(&sm);
 
@@ -666,9 +671,10 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 	cm.tm = NULL;
 
 	*len = client_message__get_packed_size (&cm);
-	*buf = malloc (*len);
+	*buf = malloc (*len + sizeof(int));
 	memset(*buf, 0 , *len);
-	client_message__pack (&cm, *buf);
+	*((int *)(*buf)) = *len;
+	client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 	free_client_msg(&cm);
 
@@ -843,9 +849,10 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 	cm.tm = NULL;
 
 	*len = client_message__get_packed_size (&cm);
-	*buf = malloc (*len);
+	*buf = malloc (*len + sizeof(int));
 	memset(*buf, 0 , *len);
-	client_message__pack (&cm, *buf);
+	*((int *)(*buf)) = *len;
+	client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 	free_client_msg(&cm);
 
@@ -1221,9 +1228,10 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		sm.tm = NULL;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		server_message__pack (&sm, *buf);
+		*((int *)(*buf)) = *len;
+		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
 	}
@@ -1238,9 +1246,10 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		cm.tm = NULL;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		client_message__pack (&cm, *buf);
+		*((int *)(*buf)) = *len;
+		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
 	}
@@ -1660,9 +1669,10 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		sm.tm = &msg;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		server_message__pack (&sm, *buf);
+		*((int *)(*buf)) = *len;
+		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
 	}
@@ -1677,9 +1687,10 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		cm.tm = &msg;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len);
+		*buf = malloc (*len + sizeof(int));
 		memset(*buf, 0 , *len);
-		client_message__pack (&cm, *buf);
+		*((int *)(*buf)) = *len;
+		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
 	}

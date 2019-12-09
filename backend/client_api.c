@@ -94,6 +94,23 @@ remote_db_t * get_remote_db(int replication_factor)
 	return db;
 }
 
+int handle_socket_close(int * childfd)
+{
+	struct sockaddr_in address;
+	int addrlen;
+	getpeername(*childfd , (struct sockaddr*)&address,
+				(socklen_t*)&addrlen);
+	printf("Host disconnected , ip %s , port %d \n" ,
+		  inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+
+	//Close the socket and mark as 0 in list for reuse
+	close(*childfd);
+	*childfd = 0;
+
+	return 0;
+}
+
+
 void * comm_thread_loop(void * args)
 {
 	remote_db_t * db = (remote_db_t *) args;
@@ -102,6 +119,8 @@ void * comm_thread_loop(void * args)
 	timeout.tv_usec = 0;
 	char in_buf[BUFSIZE];
 	int msg_len = -1;
+	int announced_msg_len = -1;
+	int read_buf_offset = 0;
 
 	while(!db->stop_comm)
 	{
@@ -137,30 +156,63 @@ void * comm_thread_loop(void * args)
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &(db->readfds)))
 			// Received a msg from this server:
 			{
-			    bzero(in_buf, BUFSIZE);
-			    msg_len = read(rs->sockfd, in_buf, BUFSIZE);
+				int skip_parsing = 0;
 
-//			    assert(msg_len >= 0);
+				while(1) // Loop until reading complete packet:
+				{
+					assert(read_buf_offset < BUFSIZE - sizeof(int));
 
-			    if(msg_len < 0)
-			    		continue;
+					if(read_buf_offset == 0)
+					{
+						// Read msg len header from packet:
 
-			    if(msg_len == 0) // server closed socket
-			    {
-			    		struct sockaddr_in address;
-			    		int addrlen;
-                    getpeername(rs->sockfd , (struct sockaddr*)&address,
-                    				(socklen_t*)&addrlen);
-                    printf("Host disconnected , ip %s , port %d \n" ,
-                          inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+						bzero(in_buf, BUFSIZE);
+						msg_len = -1;
 
-                    //Close the socket and mark as 0 in list for reuse
-                    close(rs->sockfd);
-                    rs->sockfd = 0;
-                    continue;
-			    }
+						int size_len = read(rs->sockfd, in_buf, sizeof(int));
 
-//			    printf("client received %d bytes\n", msg_len);
+						if (size_len < 0)
+						{
+							fprintf(stderr, "ERROR reading from socket\n");
+							continue;
+						}
+						else if (size_len < 0)
+						{
+							handle_socket_close(&(rs->sockfd));
+							skip_parsing = 1;
+							break;
+						}
+
+						announced_msg_len = *((int *)in_buf);
+
+						*((int *)in_buf) = 0; // 0 back buffer
+					}
+
+				    msg_len = read(rs->sockfd, in_buf + read_buf_offset, (announced_msg_len - read_buf_offset));
+
+				    if (msg_len < 0)
+				    {
+				    		fprintf(stderr, "ERROR reading from socket\n");
+						continue;
+				    }
+					else if(msg_len == 0) // client closed socket
+				    {
+						handle_socket_close(&(rs->sockfd));
+						skip_parsing = 1;
+				        break;
+				    }
+					else if(msg_len < announced_msg_len)
+					{
+						read_buf_offset = msg_len;
+						continue; // Continue reading socket until full packet length
+					}
+				}
+
+			    assert(announced_msg_len == msg_len);
+
+			    read_buf_offset = 0; // Reset
+
+			    printf("client received %d / %d bytes\n", announced_msg_len, msg_len);
 
 			    void * tmp_out_buf = NULL, * q = NULL;
 			    short msg_type;

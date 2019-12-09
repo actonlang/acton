@@ -720,8 +720,21 @@ int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 	return abort_txn(q->txnid, db);
 }
 
+int handle_socket_close(int * childfd)
+{
+	struct sockaddr_in address;
+	int addrlen;
+	getpeername(*childfd, (struct sockaddr*)&address,
+				(socklen_t*)&addrlen);
+	printf("Host disconnected , ip %s , port %d \n" ,
+      inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
 
+	//Close the socket and mark as 0 for reuse:
+	close(*childfd);
+	*childfd = 0;
 
+	return 0;
+}
 
 int main(int argc, char **argv) {
   int parentfd;
@@ -789,42 +802,61 @@ int main(int argc, char **argv) {
     error("ERROR on inet_ntoa\n");
   printf("server established connection with %s (%s)\n", hostp->h_name, hostaddrp);
 
+  int read_buf_offset = 0;
+  int announced_msg_len = -1;
+
   while (1)
   {
-    bzero(in_buf, BUFSIZE);
-    msg_len = -1;
+	assert(read_buf_offset < BUFSIZE - sizeof(int));
 
-/*
-    while(msg_len < 0)
-    {
-		msg_len = read(childfd, in_buf, BUFSIZE);
-		if (msg_len < 0)
-		  error("ERROR reading from socket");
-    }
-*/
-    msg_len = read(childfd, in_buf, BUFSIZE);
+	if(read_buf_offset == 0)
+	{
+		// Read msg len header from packet:
+
+		bzero(in_buf, BUFSIZE);
+		msg_len = -1;
+
+		int size_len = read(childfd, in_buf, sizeof(int));
+
+		if (size_len < 0)
+		{
+			fprintf(stderr, "ERROR reading from socket\n");
+			continue;
+		}
+		else if (size_len < 0)
+		{
+				handle_socket_close(&childfd);
+				break;
+		}
+
+		announced_msg_len = *((int *)in_buf);
+
+		*((int *)in_buf) = 0; // 0 back buffer
+	}
+
+    msg_len = read(childfd, in_buf + read_buf_offset, (announced_msg_len - read_buf_offset));
+
     if (msg_len < 0)
     {
     		fprintf(stderr, "ERROR reading from socket\n");
 		continue;
     }
-
-    printf("server received %d bytes\n", msg_len);
-
-    if(msg_len == 0) // client closed socket
+	else if(msg_len == 0) // client closed socket
     {
-    		struct sockaddr_in address;
-    		int addrlen;
-        getpeername(childfd , (struct sockaddr*)&address,
-        				(socklen_t*)&addrlen);
-        printf("Host disconnected , ip %s , port %d \n" ,
-              inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
-
-        //Close the socket and mark as 0 in list for reuse
-        close(childfd);
-        childfd = 0;
+		handle_socket_close(&childfd);
         break;
     }
+	else if(msg_len < announced_msg_len)
+	{
+		read_buf_offset = msg_len;
+		continue; // Continue reading socket until full packet length
+	}
+
+    assert(announced_msg_len == msg_len);
+
+    read_buf_offset = 0; // Reset
+
+    printf("server received %d / %d bytes\n", announced_msg_len, msg_len);
 
     void * tmp_out_buf = NULL, * q = NULL;
     short msg_type;
