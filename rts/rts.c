@@ -1,6 +1,7 @@
 #include <unistd.h>  // sysconf()
 #include <pthread.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "rts.h"
 
@@ -95,21 +96,31 @@ static inline void spinlock_unlock(volatile atomic_flag *f) {
     atomic_flag_clear(f);
 }
 
-
-// Allocate a Clos node with space for n var words.
-Clos CLOS(R (*code)(Clos, WORD), int n) {
-    Clos c = malloc(sizeof(struct Clos) + n * sizeof(WORD));
+$CLOS $close(R (*code)(WORD), int nvar, ...) {
+    $CLOS c = malloc(sizeof(struct $CLOS) + nvar * sizeof(WORD));
     c->header = CLOS_HEADER;
     c->code = code;
-    c->nvar = n;
-    for(int x = 0; x < n; ++x) {
-        c->var[x] = (WORD)0xbadf00d; // "bad food"
+    c->nvar = nvar;
+    va_list ap;
+    va_start (ap, nvar);
+    for (int x = 0; x < nvar; ++x) {
+        c->var[x] = va_arg(ap, WORD);
     }
     return c;
 }
 
+
+R $enter($CLOS c, WORD arg) {
+    switch (c->nvar) {
+        case 3:  return (*(($fun4)c->code))(c->var[0], c->var[1], c->var[2], arg);
+        case 2:  return (*(($fun3)c->code))(c->var[0], c->var[1], arg);
+        case 1:  return (*(($fun2)c->code))(c->var[0], arg);
+        default: return (*(($fun1)c->code))(arg);
+    }
+}
+
 // Allocate a Msg node.
-Msg MSG(Actor to, Clos clos, time_t baseline, WORD value) {
+Msg MSG(Actor to, $CLOS clos, time_t baseline, WORD value) {
     Msg m = malloc(sizeof(struct Msg));
     m->header = MSG_HEADER;
     m->next = NULL;
@@ -134,7 +145,7 @@ Actor ACTOR(int n) {
     return a;
 }
 
-Catcher CATCHER(Clos clos) {
+Catcher CATCHER($CLOS clos) {
     Catcher c = malloc(sizeof(struct Catcher));
     c->header = CATCHER_HEADER;
     c->next = NULL;
@@ -277,55 +288,35 @@ char *RTAG_name(RTAG tag) {
     }
 }
 
-void dump_clos(Clos c) {
+void dump_clos($CLOS c) {
     if (c == NULL) {
         printf("<NULL cont>");
     } else {
-        printf("[");
+        printf("$CLOS(%p", c->code);
+        if (c->nvar > 0) printf(", ");
         for (int idx = 0; idx < c->nvar; ++idx) {
             if (idx > 0) printf(", ");
             printf("%p", c->var[idx]);
         }
-        printf("]");
+        printf(")");
     }
     printf("\n");
 }
 
-Clos CLOS1(R (*code)(Clos,WORD), WORD v0) {
-    Clos c = CLOS(code, 1);
-    c->var[0] = v0;
-    return c;
-}
-
-Clos CLOS2(R (*code)(Clos,WORD), WORD v0, WORD v1) {
-    Clos c = CLOS(code, 2);
-    c->var[0] = v0;
-    c->var[1] = v1;
-    return c;
-}
-    
-Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2) {
-    Clos c = CLOS(code, 3);
-    c->var[0] = v0;
-    c->var[1] = v1;
-    c->var[2] = v2;
-    return c;
-}
-
-R DONE(Clos this, WORD val) {
+R DONE(WORD val) {
     return _DONE(val);
 }
 
-struct Clos doneC = { CLOS_HEADER, DONE, 0 };
+struct $CLOS doneC = { CLOS_HEADER, DONE, 0 };
 
-R WRITE_ROOT(Clos this, WORD val) {
+R WRITE_ROOT(WORD val) {
     root_actor = (Actor)val;
     return _DONE(0);
 }
 
-struct Clos write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
+struct $CLOS write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
 
-void BOOTSTRAP(Clos c) {
+void BOOTSTRAP($CLOS c) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     Actor ancestor0 = ACTOR(0);
@@ -347,7 +338,7 @@ Catcher POP_catcher(Actor a) {
     return c;
 }
 
-Msg ASYNC(Actor to, Clos c) {
+Msg ASYNC(Actor to, $CLOS c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
     Msg m = MSG(to, c, baseline, &doneC);
@@ -357,7 +348,7 @@ Msg ASYNC(Actor to, Clos c) {
     return m;
 }
 
-Msg POSTPONE(Actor to, time_t sec, Clos c) {
+Msg POSTPONE(Actor to, time_t sec, $CLOS c) {
     Actor self = (Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
     Msg m = MSG(to, c, baseline, &doneC);
@@ -365,11 +356,11 @@ Msg POSTPONE(Actor to, time_t sec, Clos c) {
     return m;
 }
 
-R AWAIT(Msg m, Clos th) {
+R AWAIT(Msg m, $CLOS th) {
     return _WAIT(th, m);
 }
 
-void PUSH(Clos clos) {
+void PUSH($CLOS clos) {
     Actor self = (Actor)pthread_getspecific(self_key);
     Catcher c = CATCHER(clos);
     PUSH_catcher(self, c);
@@ -387,7 +378,7 @@ void *main_loop(void *arg) {
             pthread_setspecific(self_key, current);
             Msg m = current->msg;
 
-            R r = m->clos->code(m->clos, m->value);
+            R r = $ENTER(m->clos, m->value);
 
             switch (r.tag) {
                 case RDONE: {
@@ -446,7 +437,7 @@ void *main_loop(void *arg) {
 ///////////////////////////////////////////////////////////////////////
 
 
-R ROOT(Clos,WORD);
+R ROOT($CLOS,WORD);
 
 int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -463,7 +454,7 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    BOOTSTRAP(CLOS1(ROOT, (WORD)1));
+    BOOTSTRAP($CLOSE(ROOT, 1, (WORD)1));
 
     // TODO: run I/O polling thread
 
