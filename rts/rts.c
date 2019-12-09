@@ -77,15 +77,15 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 #endif
 
 
-Actor readyQ = NULL;
+$Actor readyQ = NULL;
 volatile atomic_flag readyQ_lock;
 
-Msg timerQ = NULL;
+$Msg timerQ = NULL;
 volatile atomic_flag timerQ_lock;
 
 pthread_key_t self_key;
 
-Actor root_actor = NULL;
+$Actor root_actor = NULL;
 
 static inline void spinlock_lock(volatile atomic_flag *f) {
     while (atomic_flag_test_and_set(f) == true) {
@@ -96,8 +96,8 @@ static inline void spinlock_unlock(volatile atomic_flag *f) {
     atomic_flag_clear(f);
 }
 
-$CLOS $close(R (*code)(WORD), int nvar, ...) {
-    $CLOS c = malloc(sizeof(struct $CLOS) + nvar * sizeof(WORD));
+$Clos $close($Fun1 code, int nvar, ...) {
+    $Clos c = malloc(sizeof(struct $Clos) + nvar * sizeof(WORD));
     c->header = CLOS_HEADER;
     c->code = code;
     c->nvar = nvar;
@@ -110,22 +110,47 @@ $CLOS $close(R (*code)(WORD), int nvar, ...) {
 }
 
 
-R $enter($CLOS c, WORD arg) {
+WORD $enter($Clos c, WORD arg) {
     switch (c->nvar) {
-        case 3:  return (*(($fun4)c->code))(c->var[0], c->var[1], c->var[2], arg);
-        case 2:  return (*(($fun3)c->code))(c->var[0], c->var[1], arg);
-        case 1:  return (*(($fun2)c->code))(c->var[0], arg);
-        default: return (*(($fun1)c->code))(arg);
+        case 3:  return (*(($Fun4)c->code))(c->var[0], c->var[1], c->var[2], arg);
+        case 2:  return (*(($Fun3)c->code))(c->var[0], c->var[1], arg);
+        case 1:  return (*(($Fun2)c->code))(c->var[0], arg);
+        case 0:  return (*(($Fun1)c->code))(arg);
+        default: return (*(($Fun0)c->code))();
+    }
+}
+
+$Cont $continuation($Cont1 code, int nvar, ...) {
+    $Cont c = malloc(sizeof(struct $Cont) + nvar * sizeof(WORD));
+    c->header = CLOS_HEADER;
+    c->code = code;
+    c->nvar = nvar;
+    va_list ap;
+    va_start (ap, nvar);
+    for (int x = 0; x < nvar; ++x) {
+        c->var[x] = va_arg(ap, WORD);
+    }
+    return c;
+}
+
+
+$R $continue($Cont c, WORD arg) {
+    switch (c->nvar) {
+        case 3:  return (*(($Cont4)c->code))(c->var[0], c->var[1], c->var[2], arg);
+        case 2:  return (*(($Cont3)c->code))(c->var[0], c->var[1], arg);
+        case 1:  return (*(($Cont2)c->code))(c->var[0], arg);
+        case 0:  return (*(($Cont1)c->code))(arg);
+        default: return (*(($Cont0)c->code))();
     }
 }
 
 // Allocate a Msg node.
-Msg MSG(Actor to, $CLOS clos, time_t baseline, WORD value) {
-    Msg m = malloc(sizeof(struct Msg));
+$Msg MSG($Actor to, $Cont cont, time_t baseline, WORD value) {
+    $Msg m = malloc(sizeof(struct $Msg));
     m->header = MSG_HEADER;
     m->next = NULL;
     m->to = to;
-    m->clos = clos;
+    m->cont = cont;
     m->waiting = NULL;
     m->baseline = baseline;
     m->value = value;
@@ -134,8 +159,8 @@ Msg MSG(Actor to, $CLOS clos, time_t baseline, WORD value) {
 }
 
 // Allocate an Actor node with space for n state words.
-Actor ACTOR(int n) {
-    Actor a = malloc(sizeof(struct Actor) + n * sizeof(WORD));
+$Actor ACTOR(int n) {
+    $Actor a = malloc(sizeof(struct $Actor) + n * sizeof(WORD));
     a->header = ACTOR_HEADER;
     a->next = NULL;
     a->msg = NULL;
@@ -145,19 +170,19 @@ Actor ACTOR(int n) {
     return a;
 }
 
-Catcher CATCHER($CLOS clos) {
-    Catcher c = malloc(sizeof(struct Catcher));
+$Catcher CATCHER($Cont cont) {
+    $Catcher c = malloc(sizeof(struct $Catcher));
     c->header = CATCHER_HEADER;
     c->next = NULL;
-    c->clos = clos;
+    c->cont = cont;
     return c;
 }
 
 // Atomically enqueue actor "a" onto the global ready-queue.
-void ENQ_ready(Actor a) {
+void ENQ_ready($Actor a) {
     spinlock_lock(&readyQ_lock);
     if (readyQ) {
-        Actor x = readyQ;
+        $Actor x = readyQ;
         while (x->next)
             x = x->next;
         x->next = a;
@@ -170,9 +195,9 @@ void ENQ_ready(Actor a) {
 
 // Atomically dequeue and return the first actor from the global ready-queue, 
 // or return NULL.
-Actor DEQ_ready() {
+$Actor DEQ_ready() {
     spinlock_lock(&readyQ_lock);
-    Actor res = readyQ;
+    $Actor res = readyQ;
     if (res) {
         readyQ = res->next;
         res->next = NULL;
@@ -183,12 +208,12 @@ Actor DEQ_ready() {
 
 // Atomically enqueue message "m" onto the queue of actor "a", 
 // return true if the queue was previously empty.
-bool ENQ_msg(Msg m, Actor a) {
+bool ENQ_msg($Msg m, $Actor a) {
     bool did_enq = true;
     spinlock_lock(&a->msg_lock);
     m->next = NULL;
     if (a->msg) {
-        Msg x = a->msg;
+        $Msg x = a->msg;
         while (x->next)
             x = x->next;
         x->next = m;
@@ -202,11 +227,11 @@ bool ENQ_msg(Msg m, Actor a) {
 
 // Atomically dequeue the first message from the queue of actor "a",
 // return true if the queue still holds messages.
-bool DEQ_msg(Actor a) {
+bool DEQ_msg($Actor a) {
     bool has_more = false;
     spinlock_lock(&a->msg_lock);
     if (a->msg) {
-        Msg x = a->msg;
+        $Msg x = a->msg;
         a->msg = x->next;
         x->next = NULL;
         has_more = a->msg != NULL;
@@ -217,10 +242,10 @@ bool DEQ_msg(Actor a) {
 
 // Atomically add actor "a" to the waiting list of messasge "m" if it is not frozen (and return true),
 // else immediately return false.
-bool ADD_waiting(Actor a, Msg m) {
+bool ADD_waiting($Actor a, $Msg m) {
     bool did_add = false;
     spinlock_lock(&m->wait_lock);
-    if (m->clos) {
+    if (m->cont) {
         a->next = m->waiting;
         m->waiting = a;
         did_add = true;
@@ -230,23 +255,23 @@ bool ADD_waiting(Actor a, Msg m) {
 }
 
 // Atomically freeze message "m" and return its list of waiting actors. 
-Actor FREEZE_waiting(Msg m) {
+$Actor FREEZE_waiting($Msg m) {
     spinlock_lock(&m->wait_lock);
-    m->clos = NULL;
+    m->cont = NULL;
     spinlock_unlock(&m->wait_lock);
-    Actor res = m->waiting;
+    $Actor res = m->waiting;
     m->waiting = NULL;
     return res;
 }
 
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
-void ENQ_timed(Msg m) {
+void ENQ_timed($Msg m) {
     time_t m_baseline = m->baseline;
     spinlock_lock(&timerQ_lock);
-    Msg x = timerQ;
+    $Msg x = timerQ;
     if (x && x->baseline <= m_baseline) {
-        Msg next = x->next;
+        $Msg next = x->next;
         while (next && next->baseline <= m_baseline) {
             x = next;
             next = x->next;
@@ -262,9 +287,9 @@ void ENQ_timed(Msg m) {
 
 // Atomically dequeue and return the first message from the global timer-queue if 
 // its baseline is less or equal to "now", else return NULL.
-Msg DEQ_timed(time_t now) {
+$Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
-    Msg res = timerQ;
+    $Msg res = timerQ;
     if (res) {
         if (res->baseline <= now) {
             timerQ = res->next;
@@ -288,11 +313,11 @@ char *RTAG_name(RTAG tag) {
     }
 }
 
-void dump_clos($CLOS c) {
+void dump_clos($Clos c) {
     if (c == NULL) {
         printf("<NULL cont>");
     } else {
-        printf("$CLOS(%p", c->code);
+        printf("$Clos(%p", c->code);
         if (c->nvar > 0) printf(", ");
         for (int idx = 0; idx < c->nvar; ++idx) {
             if (idx > 0) printf(", ");
@@ -303,87 +328,87 @@ void dump_clos($CLOS c) {
     printf("\n");
 }
 
-R DONE(WORD val) {
+$R DONE(WORD val) {
     return _DONE(val);
 }
 
-struct $CLOS doneC = { CLOS_HEADER, DONE, 0 };
+struct $Cont doneC = { CLOS_HEADER, DONE, 0 };
 
-R WRITE_ROOT(WORD val) {
-    root_actor = (Actor)val;
+$R WRITE_ROOT(WORD val) {
+    root_actor = ($Actor)val;
     return _DONE(0);
 }
 
-struct $CLOS write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
+struct $Cont write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
 
-void BOOTSTRAP($CLOS c) {
+void BOOTSTRAP($Cont c) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    Actor ancestor0 = ACTOR(0);
-    Msg m = MSG(ancestor0, c, now.tv_sec, &write_rootC);
+    $Actor ancestor0 = ACTOR(0);
+    $Msg m = MSG(ancestor0, c, now.tv_sec, &write_rootC);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
 }
 
-void PUSH_catcher(Actor a, Catcher c) {
+void PUSH_catcher($Actor a, $Catcher c) {
     c->next = a->catcher;
     a->catcher = c;
 }
 
-Catcher POP_catcher(Actor a) {
-    Catcher c = a->catcher;
+$Catcher POP_catcher($Actor a) {
+    $Catcher c = a->catcher;
     a->catcher = c->next;
     c->next = NULL;
     return c;
 }
 
-Msg ASYNC(Actor to, $CLOS c) {
-    Actor self = (Actor)pthread_getspecific(self_key);
+$Msg ASYNC($Actor to, $Cont c) {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
-    Msg m = MSG(to, c, baseline, &doneC);
+    $Msg m = MSG(to, c, baseline, &doneC);
     if (ENQ_msg(m, to)) {
         ENQ_ready(to);
     }
     return m;
 }
 
-Msg POSTPONE(Actor to, time_t sec, $CLOS c) {
-    Actor self = (Actor)pthread_getspecific(self_key);
+$Msg POSTPONE($Actor to, time_t sec, $Cont c) {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
-    Msg m = MSG(to, c, baseline, &doneC);
+    $Msg m = MSG(to, c, baseline, &doneC);
     ENQ_timed(m);
     return m;
 }
 
-R AWAIT(Msg m, $CLOS th) {
+$R AWAIT($Msg m, $Cont th) {
     return _WAIT(th, m);
 }
 
-void PUSH($CLOS clos) {
-    Actor self = (Actor)pthread_getspecific(self_key);
-    Catcher c = CATCHER(clos);
+void PUSH($Cont cont) {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    $Catcher c = CATCHER(cont);
     PUSH_catcher(self, c);
 }
 
 void POP() {
-    Actor self = (Actor)pthread_getspecific(self_key);
+    $Actor self = ($Actor)pthread_getspecific(self_key);
     POP_catcher(self);
 }
 
 void *main_loop(void *arg) {
     while (1) {
-        Actor current = DEQ_ready();
+        $Actor current = DEQ_ready();
         if (current) {
             pthread_setspecific(self_key, current);
-            Msg m = current->msg;
+            $Msg m = current->msg;
 
-            R r = $ENTER(m->clos, m->value);
+            $R r = $CONTINUE(m->cont, m->value);
 
             switch (r.tag) {
                 case RDONE: {
                     m->value = r.value;
-                    Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
+                    $Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
                     while (b) {
                         b->msg->value = r.value;
                         ENQ_ready(b);
@@ -395,21 +420,21 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case RCONT: {
-                    m->clos = r.cont;
+                    m->cont = r.cont;
                     m->value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case RFAIL: {
-                    Catcher c = POP_catcher(current);
-                    m->clos = c->clos;
+                    $Catcher c = POP_catcher(current);
+                    m->cont = c->cont;
                     m->value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case RWAIT: {
-                    m->clos = r.cont;
-                    Msg x = (Msg)r.value;
+                    m->cont = r.cont;
+                    $Msg x = ($Msg)r.value;
                     if (!ADD_waiting(current, x)) {
                         m->value = x->value;
                         ENQ_ready(current);
@@ -420,7 +445,7 @@ void *main_loop(void *arg) {
         } else {
             struct timespec now;
             clock_gettime(CLOCK_MONOTONIC, &now);
-            Msg m = DEQ_timed(now.tv_sec);
+            $Msg m = DEQ_timed(now.tv_sec);
             if (m) {
                 if (ENQ_msg(m, m->to)) {
                     ENQ_ready(m->to);
@@ -437,7 +462,7 @@ void *main_loop(void *arg) {
 ///////////////////////////////////////////////////////////////////////
 
 
-R ROOT($CLOS,WORD);
+$R ROOT($Clos,WORD);
 
 int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -454,7 +479,7 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    BOOTSTRAP($CLOSE(ROOT, 1, (WORD)1));
+    BOOTSTRAP($CONTINUATION(ROOT, 1, (WORD)1));
 
     // TODO: run I/O polling thread
 
