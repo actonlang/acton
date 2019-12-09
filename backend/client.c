@@ -361,7 +361,7 @@ int main(int argc, char **argv) {
     hostname = argv[1];
     portno = atoi(argv[2]);
 
-    remote_db_t * db = get_remote_db(1);
+    remote_db_t * db = get_remote_db(3);
 
     add_server_to_membership(hostname, portno, db, &seed);
     add_server_to_membership(hostname, portno+1, db, &seed);

@@ -173,7 +173,7 @@ void * comm_thread_loop(void * args)
 
 						if (size_len < 0)
 						{
-							fprintf(stderr, "ERROR reading from socket\n");
+//							fprintf(stderr, "ERROR reading from socket\n");
 							continue;
 						}
 						else if (size_len < 0)
@@ -186,9 +186,19 @@ void * comm_thread_loop(void * args)
 						announced_msg_len = *((int *)in_buf);
 
 						*((int *)in_buf) = 0; // 0 back buffer
+
+						read_buf_offset = 0;
 					}
 
-				    msg_len = read(rs->sockfd, in_buf + read_buf_offset, (announced_msg_len - read_buf_offset));
+					if(announced_msg_len <= 0)
+					{
+						read_buf_offset = 0;
+						continue;
+					}
+
+				    msg_len = read(rs->sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
+
+					printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
 
 				    if (msg_len < 0)
 				    {
@@ -201,11 +211,13 @@ void * comm_thread_loop(void * args)
 						skip_parsing = 1;
 				        break;
 				    }
-					else if(msg_len < announced_msg_len)
+					else if(msg_len < announced_msg_len - read_buf_offset)
 					{
-						read_buf_offset = msg_len;
+						read_buf_offset += msg_len;
 						continue; // Continue reading socket until full packet length
 					}
+
+				    break;
 				}
 
 			    assert(announced_msg_len == msg_len);
@@ -219,7 +231,7 @@ void * comm_thread_loop(void * args)
 				db_schema_t * schema;
 				long nonce = -1;
 
-			    int status = parse_message(in_buf, msg_len, &q, &msg_type, &nonce, 0);
+			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0);
 
 			    if(status != 0)
 			    {
@@ -2273,7 +2285,7 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 	int val_res = _remote_validate_txn(txnid, version, rs, db);
 
 #if (CLIENT_VERBOSITY > 1)
-	printf("CLIENT: validate txn %s from server %s returned %d\n", uuid_str, rs->id, res);
+	printf("CLIENT: validate txn %s from server %s returned %d\n", uuid_str, rs->id, val_res);
 #endif
 
 	if(val_res == VAL_STATUS_COMMIT)

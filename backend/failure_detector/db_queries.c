@@ -141,9 +141,10 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		sm.tm = NULL;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
@@ -159,9 +160,10 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		cm.tm = NULL;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
@@ -332,10 +334,10 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 	sm.tm = NULL;
 
 	*len = server_message__get_packed_size (&sm);
-
-	*buf = malloc (*len + sizeof(int));
+	*len = (*len) + sizeof(int);
+	*buf = malloc (*len);
 	memset(*buf, 0 , *len);
-	*((int *)(*buf)) = *len;
+	*((int *)(*buf)) = (*len) - sizeof(int);
 	server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 	free_server_msg(&sm);
@@ -515,9 +517,10 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	sm.tm = NULL;
 
 	*len = server_message__get_packed_size (&sm);
-	*buf = malloc (*len + sizeof(int));
+	*len = (*len) + sizeof(int);
+	*buf = malloc (*len);
 	memset(*buf, 0 , *len);
-	*((int *)(*buf)) = *len;
+	*((int *)(*buf)) = (*len) - sizeof(int);
 	server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 	free_server_msg(&sm);
@@ -671,9 +674,10 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 	cm.tm = NULL;
 
 	*len = client_message__get_packed_size (&cm);
-	*buf = malloc (*len + sizeof(int));
+	*len = (*len) + sizeof(int);
+	*buf = malloc (*len);
 	memset(*buf, 0 , *len);
-	*((int *)(*buf)) = *len;
+	*((int *)(*buf)) = (*len) - sizeof(int);
 	client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 	free_client_msg(&cm);
@@ -849,9 +853,10 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 	cm.tm = NULL;
 
 	*len = client_message__get_packed_size (&cm);
-	*buf = malloc (*len + sizeof(int));
+	*len = (*len) + sizeof(int);
+	*buf = malloc (*len);
 	memset(*buf, 0 , *len);
-	*((int *)(*buf)) = *len;
+	*((int *)(*buf)) = (*len) - sizeof(int);
 	client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 	free_client_msg(&cm);
@@ -1228,9 +1233,10 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		sm.tm = NULL;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
@@ -1246,9 +1252,10 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		cm.tm = NULL;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
@@ -1669,9 +1676,10 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		sm.tm = &msg;
 
 		*len = server_message__get_packed_size (&sm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		server_message__pack (&sm, (void *) ((int *)(*buf) + 1));
 
 		free_server_msg(&sm);
@@ -1687,9 +1695,10 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		cm.tm = &msg;
 
 		*len = client_message__get_packed_size (&cm);
-		*buf = malloc (*len + sizeof(int));
+		*len = (*len) + sizeof(int);
+		*buf = malloc (*len);
 		memset(*buf, 0 , *len);
-		*((int *)(*buf)) = *len;
+		*((int *)(*buf)) = (*len) - sizeof(int);
 		client_message__pack (&cm, (void *) ((int *)(*buf) + 1));
 
 		free_client_msg(&cm);
@@ -1863,6 +1872,7 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
 	if (sm == NULL)
 	{
+		*mtype = -1;
 		fprintf(stderr, "error unpacking server message\n");
 	    return 1;
 	}
@@ -1908,6 +1918,8 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 	}
 
 	*mtype = sm->mtype;
+
+	printf("Deserialized message of type %d\n", sm->mtype);
 
 	server_message__free_unpacked(sm, NULL);
 

@@ -832,9 +832,13 @@ int main(int argc, char **argv) {
 		announced_msg_len = *((int *)in_buf);
 
 		*((int *)in_buf) = 0; // 0 back buffer
+
+		read_buf_offset = 0;
 	}
 
-    msg_len = read(childfd, in_buf + read_buf_offset, (announced_msg_len - read_buf_offset));
+    msg_len = read(childfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
+
+	printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
 
     if (msg_len < 0)
     {
@@ -846,9 +850,9 @@ int main(int argc, char **argv) {
 		handle_socket_close(&childfd);
         break;
     }
-	else if(msg_len < announced_msg_len)
+	else if(msg_len < announced_msg_len - read_buf_offset)
 	{
-		read_buf_offset = msg_len;
+		read_buf_offset += msg_len;
 		continue; // Continue reading socket until full packet length
 	}
 
@@ -863,7 +867,7 @@ int main(int argc, char **argv) {
 	db_schema_t * schema;
 	long nonce = -1;
 
-    int status = parse_message(in_buf, msg_len, &q, &msg_type, &nonce, 1);
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1);
 
     if(status != 0)
     {

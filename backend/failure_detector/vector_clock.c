@@ -180,7 +180,7 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 
 	vc->no_nodes = (init_no_nodes > 0)? init_no_nodes:0;
 
-	vc->capacity = (int)(DEFAULT_SIZE * GROWTH_RATE);
+	vc->capacity = (int)(((init_no_nodes > DEFAULT_SIZE)?init_no_nodes:DEFAULT_SIZE) * GROWTH_RATE);
 
 	vc->node_ids =  (versioned_id *) malloc (vc->capacity * sizeof(struct versioned_id));
 	memset(vc->node_ids, 0, vc->capacity * sizeof(struct versioned_id));
@@ -259,9 +259,9 @@ void free_vc(vector_clock * vc)
 void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc)
 {
 	 msg_ptr->n_ids = vc->no_nodes;
-	 msg_ptr->ids = malloc (msg_ptr->n_ids * sizeof (int));
+	 msg_ptr->ids = malloc (msg_ptr->n_ids * sizeof(int));
 	 msg_ptr->n_counters = vc->no_nodes;
-	 msg_ptr->counters = malloc (msg_ptr->n_counters * sizeof (int));
+	 msg_ptr->counters = malloc (msg_ptr->n_counters * sizeof(long));
 	 for (int i = 0; i < msg_ptr->n_ids; i++)
 	 {
 		 msg_ptr->ids[i] = vc->node_ids[i].node_id;
