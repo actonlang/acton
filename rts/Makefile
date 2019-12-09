@@ -2,8 +2,7 @@ all: pingpong
 
 pingpong: rts.c rts.h pingpong.c
 	cc -std=c11 \
-		-Wall -Werror -pedantic -pedantic-errors \
-		-Wno-int-to-void-pointer-cast \
+		-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-pthread \
 		pingpong.c \
 		-DROOT=Pingpong \

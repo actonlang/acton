@@ -9,13 +9,13 @@
 typedef void *WORD;
 
 struct R;
-struct Clos;
+struct $CLOS;
 struct Msg;
 struct Actor;
 struct Catcher;
 
 typedef struct R R;
-typedef struct Clos *Clos;
+typedef struct $CLOS *$CLOS;
 typedef struct Msg *Msg;
 typedef struct Actor *Actor;
 typedef struct Catcher *Catcher;
@@ -24,9 +24,9 @@ enum RTAG { RDONE, RFAIL, RCONT, RWAIT };
 typedef enum RTAG RTAG;
 
 struct R {
-    RTAG tag;
-    Clos cont;
-    WORD value;
+    RTAG  tag;
+    $CLOS cont;
+    WORD  value;
 };
 
 #define None (WORD)0
@@ -36,14 +36,14 @@ struct R {
 #define _CONT(cont, value) (R){RCONT, (cont), (value)}
 #define _WAIT(cont, value) (R){RWAIT, (cont), (value)}
 
-#define CLOS_HEADER     "Clos"
+#define CLOS_HEADER     "CLOS"
 #define MSG_HEADER      "Msg"
 #define ACTOR_HEADER    "Actor"
 #define CATCHER_HEADER  "Catcher"
 
-struct Clos {
+struct $CLOS {
     char *header;
-    R (*code)(Clos, WORD);
+    R (*code)(WORD);
     int nvar;
     WORD var[];
 };
@@ -52,7 +52,7 @@ struct Msg {
     char *header;
     Msg next;
     Actor to;
-    Clos clos;
+    $CLOS clos;
     Actor waiting;
     time_t baseline;
     volatile atomic_flag wait_lock;
@@ -72,24 +72,30 @@ struct Actor {
 struct Catcher {
     char *header;
     Catcher next;
-    Clos clos;
+    $CLOS clos;
 };
 
-Msg MSG(Actor to, Clos clos, time_t baseline, WORD value);
+Msg MSG(Actor to, $CLOS clos, time_t baseline, WORD value);
 Actor ACTOR(int n);
-Catcher CATCHER(Clos clos);
+Catcher CATCHER($CLOS clos);
 
-Clos CLOS(R (*code)(Clos, WORD), int n);
-Clos CLOS1(R (*code)(Clos,WORD), WORD v0);
-Clos CLOS2(R (*code)(Clos,WORD), WORD v0, WORD v1);    
-Clos CLOS3(R (*code)(Clos,WORD), WORD v0, WORD v1, WORD v2);
+typedef R (*$fun1)(WORD);
+typedef R (*$fun2)(WORD,WORD);
+typedef R (*$fun3)(WORD,WORD,WORD);
+typedef R (*$fun4)(WORD,WORD,WORD,WORD);
 
-Msg ASYNC(Actor to, Clos c);
+#define $CLOSE(code, nvar, ...)         $close((R(*)(WORD))code, nvar, __VA_ARGS__)
+#define $ENTER(clos, arg)               $enter(clos, (WORD)arg)
 
-Msg POSTPONE(Actor to, time_t sec, Clos c);
+$CLOS $close(R (*code)(WORD), int nvar, ...);
+R $enter($CLOS, WORD);
 
-R AWAIT(Msg m, Clos th);
+Msg ASYNC(Actor to, $CLOS c);
 
-void PUSH(Clos clos);
+Msg POSTPONE(Actor to, time_t sec, $CLOS c);
+
+R AWAIT(Msg m, $CLOS th);
+
+void PUSH($CLOS clos);
 
 void POP();
