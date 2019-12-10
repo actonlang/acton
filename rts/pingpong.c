@@ -217,28 +217,27 @@ def Pingpong(this, then):
 
 #include "rts.h"
 
-const int PRINT_INTERVAL = 100000;
 
-$R pong($Actor self, WORD n, WORD q, $Cont then);
+$R pong($Actor self, int n, int q, $Cont then);
 
-$R ping($Actor self, WORD q, $Cont then) {
-    self->state[0] = (WORD)((int)self->state[0] + 1);
-    int j = (int)self->state[0]*(int)q;
+$R ping($Actor self, int q, $Cont then) {
+    self->state[0] = ($WORD)((int)self->state[0] + 1);
+    int j = (int)self->state[0]*q;
     printf("Ping %8d\n", j);
-    POSTPONE(self, 1, $CONTINUATION(pong, 3, self, self->state[0], (WORD)(-(int)(q))));
-    return _CONT(then, (WORD)j);
+    $AFTER(1, $CONTINUATION(pong, 3, self, self->state[0], -q));
+    return $CONTINUE_(then, j);
 }
 
-$R pong($Actor self, WORD n, WORD q, $Cont then) {
-    int j = (int)n*(int)q;
+$R pong($Actor self, int n, int q, $Cont then) {
+    int j = n*q;
     printf("     %8d Pong\n", j);
-    POSTPONE(self, 2, $CONTINUATION(ping, 2, self, (WORD)(-(int)(q))));
-    return _CONT(then, None);
+    $AFTER(2, $CONTINUATION(ping, 2, self, -q));
+    return $CONTINUE_(then, $None);
 }
 
-$R Pingpong(int i, WORD then) {
-    $Actor self = ACTOR(1);
+$R Pingpong(int i, $Cont then) {
+    $Actor self = $ACTOR(1);
     self->state[0] = 0;
-    ASYNC(self, $CONTINUATION(ping, 2, self, i));
-    return _CONT(then, self);
+    $ASYNC(self, $CONTINUATION(ping, 2, self, i));
+    return $CONTINUE_(then, self);
 }
