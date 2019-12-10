@@ -218,20 +218,20 @@ def Pingpong(this, then):
 #include "rts.h"
 
 
-$R pong($Actor self, int n, int q, $Cont then);
+$R pong($Actor self, $int n, $int q, $Cont then);
 
-$R ping($Actor self, int q, $Cont then) {
-    self->state[0] = ($WORD)((int)self->state[0] + 1);
-    int j = (int)self->state[0]*q;
+$R ping($Actor self, $int q, $Cont then) {
+    self->state[0] = ($WORD)$int_add(self->state[0], 1);
+    $int j = $int_mul(self->state[0], q);
     printf("Ping %8d\n", j);
-    $AFTER(1, $CONTINUATION(pong, 3, self, self->state[0], -q));
+    $AFTER(1, $CONTINUATION(pong, 3, self, self->state[0], $int_neg(q)));
     return $CONTINUE_(then, j);
 }
 
-$R pong($Actor self, int n, int q, $Cont then) {
-    int j = n*q;
+$R pong($Actor self, $int n, $int q, $Cont then) {
+    $int j = $int_mul(n, q);
     printf("     %8d Pong\n", j);
-    $AFTER(2, $CONTINUATION(ping, 2, self, -q));
+    $AFTER(2, $CONTINUATION(ping, 2, self, $int_neg(q)));
     return $CONTINUE_(then, $None);
 }
 

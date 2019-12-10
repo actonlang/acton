@@ -401,7 +401,7 @@ void *main_loop(void *arg) {
             switch (r.tag) {
                 case $RDONE: {
                     m->value = r.value;
-                    $Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
+                    $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL
                     while (b) {
                         b->msg->value = r.value;
                         ENQ_ready(b);

@@ -89,3 +89,11 @@ $R $AWAIT($Msg m, $Cont th);
 
 void $PUSH($Cont Cont);
 void $POP();
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef int $int;
+
+#define $int_add(a,b)       ((int)a + (int)b)
+#define $int_mul(a,b)       ((int)a * (int)b)
+#define $int_neg(a)         (-(int)a)
