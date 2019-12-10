@@ -14,7 +14,6 @@
 #endif
 
 
-
 #if defined(IS_MACOS)
 ///////////////////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
@@ -96,45 +95,30 @@ static inline void spinlock_unlock(volatile atomic_flag *f) {
     atomic_flag_clear(f);
 }
 
-$Clos $close($Fun1 code, int nvar, ...) {
-    $Clos c = malloc(sizeof(struct $Clos) + nvar * sizeof(WORD));
-    c->header = CLOS_HEADER;
+////////////////////////////////////////////////////////////////////////////////////////
+
+// Allocate a Cont node.
+$Cont $continuation($R (*code)(), int nvar, ...) {
+    $Cont c = malloc(sizeof(struct $Cont) + nvar * sizeof($WORD));
+    c->header = CONT_HEADER;
     c->code = code;
     c->nvar = nvar;
     va_list ap;
     va_start (ap, nvar);
     for (int x = 0; x < nvar; ++x) {
-        c->var[x] = va_arg(ap, WORD);
+        c->var[x] = va_arg(ap, $WORD);
     }
     return c;
 }
 
+typedef $R (*$Cont0)();
+typedef $R (*$Cont1)($WORD);
+typedef $R (*$Cont2)($WORD,$WORD);
+typedef $R (*$Cont3)($WORD,$WORD,$WORD);
+typedef $R (*$Cont4)($WORD,$WORD,$WORD,$WORD);
 
-WORD $enter($Clos c, WORD arg) {
-    switch (c->nvar) {
-        case 3:  return (*(($Fun4)c->code))(c->var[0], c->var[1], c->var[2], arg);
-        case 2:  return (*(($Fun3)c->code))(c->var[0], c->var[1], arg);
-        case 1:  return (*(($Fun2)c->code))(c->var[0], arg);
-        case 0:  return (*(($Fun1)c->code))(arg);
-        default: return (*(($Fun0)c->code))();
-    }
-}
-
-$Cont $continuation($Cont1 code, int nvar, ...) {
-    $Cont c = malloc(sizeof(struct $Cont) + nvar * sizeof(WORD));
-    c->header = CLOS_HEADER;
-    c->code = code;
-    c->nvar = nvar;
-    va_list ap;
-    va_start (ap, nvar);
-    for (int x = 0; x < nvar; ++x) {
-        c->var[x] = va_arg(ap, WORD);
-    }
-    return c;
-}
-
-
-$R $continue($Cont c, WORD arg) {
+// Apply a Cont node.
+$R $continue($Cont c, $WORD arg) {
     switch (c->nvar) {
         case 3:  return (*(($Cont4)c->code))(c->var[0], c->var[1], c->var[2], arg);
         case 2:  return (*(($Cont3)c->code))(c->var[0], c->var[1], arg);
@@ -145,7 +129,7 @@ $R $continue($Cont c, WORD arg) {
 }
 
 // Allocate a Msg node.
-$Msg MSG($Actor to, $Cont cont, time_t baseline, WORD value) {
+$Msg $MSG($Actor to, $Cont cont, time_t baseline, $WORD value) {
     $Msg m = malloc(sizeof(struct $Msg));
     m->header = MSG_HEADER;
     m->next = NULL;
@@ -159,8 +143,8 @@ $Msg MSG($Actor to, $Cont cont, time_t baseline, WORD value) {
 }
 
 // Allocate an Actor node with space for n state words.
-$Actor ACTOR(int n) {
-    $Actor a = malloc(sizeof(struct $Actor) + n * sizeof(WORD));
+$Actor $ACTOR(int n) {
+    $Actor a = malloc(sizeof(struct $Actor) + n * sizeof($WORD));
     a->header = ACTOR_HEADER;
     a->next = NULL;
     a->msg = NULL;
@@ -170,13 +154,15 @@ $Actor ACTOR(int n) {
     return a;
 }
 
-$Catcher CATCHER($Cont cont) {
+$Catcher $CATCHER($Cont cont) {
     $Catcher c = malloc(sizeof(struct $Catcher));
     c->header = CATCHER_HEADER;
     c->next = NULL;
     c->cont = cont;
     return c;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////
 
 // Atomically enqueue actor "a" onto the global ready-queue.
 void ENQ_ready($Actor a) {
@@ -304,20 +290,20 @@ $Msg DEQ_timed(time_t now) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-char *RTAG_name(RTAG tag) {
+char *RTAG_name($RTAG tag) {
     switch (tag) {
-        case RDONE: return "RDONE"; break;
-        case RFAIL: return "RFAIL"; break;
-        case RCONT: return "RCONT"; break;
-        case RWAIT: return "RWAIT"; break;
+        case $RDONE: return "RDONE"; break;
+        case $RFAIL: return "RFAIL"; break;
+        case $RCONT: return "RCONT"; break;
+        case $RWAIT: return "RWAIT"; break;
     }
 }
 
-void dump_clos($Clos c) {
+void dump_cont($Cont c) {
     if (c == NULL) {
         printf("<NULL cont>");
     } else {
-        printf("$Clos(%p", c->code);
+        printf("$Cont(%p", c->code);
         if (c->nvar > 0) printf(", ");
         for (int idx = 0; idx < c->nvar; ++idx) {
             if (idx > 0) printf(", ");
@@ -328,24 +314,29 @@ void dump_clos($Clos c) {
     printf("\n");
 }
 
-$R DONE(WORD val) {
+#define _DONE(value)       ($R){$RDONE, NULL,   (value)}
+#define _FAIL(value)       ($R){$RFAIL, NULL,   (value)}
+#define _CONT(cont, value) ($R){$RCONT, (cont), (value)}
+#define _WAIT(cont, value) ($R){$RWAIT, (cont), (value)}
+
+$R DONE($WORD val) {
     return _DONE(val);
 }
 
-struct $Cont doneC = { CLOS_HEADER, DONE, 0 };
+struct $Cont doneC = { CONT_HEADER, DONE, 0 };
 
-$R WRITE_ROOT(WORD val) {
+$R WRITE_ROOT($WORD val) {
     root_actor = ($Actor)val;
-    return _DONE(0);
+    return _DONE($None);
 }
 
-struct $Cont write_rootC = { CLOS_HEADER, WRITE_ROOT, 0 };
+struct $Cont write_rootC = { CONT_HEADER, WRITE_ROOT, 0 };
 
 void BOOTSTRAP($Cont c) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    $Actor ancestor0 = ACTOR(0);
-    $Msg m = MSG(ancestor0, c, now.tv_sec, &write_rootC);
+    $Actor ancestor0 = $ACTOR(0);
+    $Msg m = $MSG(ancestor0, c, now.tv_sec, &write_rootC);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
@@ -363,38 +354,40 @@ $Catcher POP_catcher($Actor a) {
     return c;
 }
 
-$Msg ASYNC($Actor to, $Cont c) {
+$Msg $ASYNC($Actor to, $Cont c) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
-    $Msg m = MSG(to, c, baseline, &doneC);
+    $Msg m = $MSG(to, c, baseline, &doneC);
     if (ENQ_msg(m, to)) {
         ENQ_ready(to);
     }
     return m;
 }
 
-$Msg POSTPONE($Actor to, time_t sec, $Cont c) {
+$Msg $AFTER(time_t sec, $Cont c) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
-    $Msg m = MSG(to, c, baseline, &doneC);
+    $Msg m = $MSG(self, c, baseline, &doneC);
     ENQ_timed(m);
     return m;
 }
 
-$R AWAIT($Msg m, $Cont th) {
+$R $AWAIT($Msg m, $Cont th) {
     return _WAIT(th, m);
 }
 
-void PUSH($Cont cont) {
+void $PUSH($Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    $Catcher c = CATCHER(cont);
+    $Catcher c = $CATCHER(cont);
     PUSH_catcher(self, c);
 }
 
-void POP() {
+void $POP() {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     POP_catcher(self);
 }
+
+////////////////////////////////////////////////////////////////////////////////////////
 
 void *main_loop(void *arg) {
     while (1) {
@@ -406,7 +399,7 @@ void *main_loop(void *arg) {
             $R r = $CONTINUE(m->cont, m->value);
 
             switch (r.tag) {
-                case RDONE: {
+                case $RDONE: {
                     m->value = r.value;
                     $Actor b = FREEZE_waiting(m);        // Sets m->clos = NULL
                     while (b) {
@@ -419,20 +412,20 @@ void *main_loop(void *arg) {
                     }
                     break;
                 }
-                case RCONT: {
+                case $RCONT: {
                     m->cont = r.cont;
                     m->value = r.value;
                     ENQ_ready(current);
                     break;
                 }
-                case RFAIL: {
+                case $RFAIL: {
                     $Catcher c = POP_catcher(current);
                     m->cont = c->cont;
                     m->value = r.value;
                     ENQ_ready(current);
                     break;
                 }
-                case RWAIT: {
+                case $RWAIT: {
                     m->cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (!ADD_waiting(current, x)) {
@@ -451,6 +444,9 @@ void *main_loop(void *arg) {
                     ENQ_ready(m->to);
                 }
             } else {
+
+                // TODO: do I/O polling
+
                 static struct timespec idle_wait = { 0, 500000000 };  // 500ms
                 nanosleep(&idle_wait, NULL);
             }
@@ -459,10 +455,10 @@ void *main_loop(void *arg) {
 }
 
 
-///////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
 
 
-$R ROOT($Clos,WORD);
+$R ROOT($WORD arg, $Cont then);
 
 int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
@@ -479,9 +475,7 @@ int main(int argc, char **argv) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    BOOTSTRAP($CONTINUATION(ROOT, 1, (WORD)1));
-
-    // TODO: run I/O polling thread
+    BOOTSTRAP($CONTINUATION(ROOT, 1, ($WORD)1));
 
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);
