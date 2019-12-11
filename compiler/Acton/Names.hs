@@ -118,6 +118,7 @@ instance Vars Stmt where
     free (With _ items b)           = free items ++ (free b \\ bound items)
     free (Data _ p b)               = free p ++ free b
     free (VarAssign _ ps e)         = free ps ++ free e
+    free (After _ e n ps ks)        = n : free e ++ free ps ++ free ks
     free (Decl _ ds)                = free ds
 
     bound (Assign _ ps _)           = bound ps

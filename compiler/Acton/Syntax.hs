@@ -38,6 +38,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | With          { sloc::SrcLoc, context::[WithItem], body::Suite }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
+                | After         { sloc::SrcLoc, expr::Expr, meth::Name, argp::PosArg, argk::KwdArg }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
@@ -174,7 +175,7 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Modif      = NoMod | Sync Bool | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
+data Modif      = NoMod | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
 data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
@@ -274,13 +275,13 @@ tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
 rPos n          = Name NoLoc (show n)
-rSync           = Name NoLoc "sync"
+rAwait          = Name NoLoc "await"
 rAsync          = Name NoLoc "async"
 rAct            = Name NoLoc "actor"
 rMut            = Name NoLoc "mut"
 rRet            = Name NoLoc "ret"
 
-fxSync          = TRow NoLoc rSync (monotype tNone)
+fxAwait         = TRow NoLoc rAwait (monotype tNone)
 fxAsync         = TRow NoLoc rAsync (monotype tNone)
 fxAct           = TRow NoLoc rAct (monotype tNone)
 fxMut           = TRow NoLoc rMut (monotype tNone)
@@ -418,6 +419,7 @@ instance Eq Stmt where
     x@With{}            ==  y@With{}            = context x == context y && body x == body y
     x@Data{}            ==  y@Data{}            = mbpat x == mbpat y && dsuite x == dsuite y
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
+    x@After{}           ==  y@After{}           = expr x == expr y && meth x == meth y && argp x == argp y && argk x == argk y
     x@Decl{}            ==  y@Decl{}            = decls x == decls y
     _                   ==  _                   = False
 
@@ -582,19 +584,16 @@ isInstAttr _                        = False
 isInstMeth (InstMeth _)             = True
 isInstMeth _                        = False
 
-isSync (Sync _)                     = True
-isSync _                            = False
-
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","actor","and","as","assert",
-                                        "async","await","break","class","continue","def","del","elif","else",
-                                        "except","finally","for","from","global","if","import","in",
-                                        "is","lambda","nonlocal","not","or","pass","raise","return","sync",
+                                        "False","None","NotImplemented","Self","True","actor","after","and","as",
+                                        "assert","async","await","break","class","continue","def","del","elif","else",
+                                        "except","extension","finally","for","from","if","import","in",
+                                        "is","lambda","not","protocol","or","pass","raise","return","sync",
                                         "try","var","while","with","yield"
                                       ]
 
