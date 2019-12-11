@@ -25,7 +25,7 @@ Keywords:           K       ::=     x,K  |  x=E,K  |  **x  |  .
 Values:             V,W     ::=     True  |  False  |  None  |  (O)  |  (B)  |  c  |
                                     ---- Only intangible constructs below
                                     CLOS(B;F,K):S  |  l  |  a  |  a.m  |
-                                    ACTOR V  |  ASYNC(a) V  |  SYNC(a) V  |  
+                                    ACTOR V  |  ASYNC(a) V  |
                                     CLASS(c):B  |  (c):B
 
 Orderings:          O       ::=     O,V    |  .                                     associative
@@ -39,7 +39,6 @@ Statements:         S       ::=     E  |  P = E  |  D  |  return E  |  pass  |
 
 Declarations:       D       ::=     def x(F,K): S  |
                                     async def x(F,K): S  |  
-                                    sync def x(F,K): S  |
                                     actor x(F,K): S  |  
                                     class c(d): M  |
                                     D; D                                            associative & commutative & disjoint
@@ -176,7 +175,6 @@ B  |-  D                    -->     B'                                          
 
 B  |-  def x(F,K): S        ==>     x = CLOS(B;F,K): S
 B  |-  async def x(F,K): S  ==>     x = ASYNC(a) (CLOS(B;F,K):S)                if  (B)._self_ --> a
-B  |-  sync def x(F,K): S   ==>     x = SYNC(a) (CLOS(B;F,K):S)                 if  (B)._self_ --> a
 B  |-  actor x(F,K): S      ==>     x = ACTOR (CLOS(B;_self_,F,K):S)
 B  |-  class c(d): M        ==>     c = CLASS(d): B'                            if  B |- M ==> B'
 B  |-  D1; D2               ==>     B1; B2                                      if  B |- D1 ==> B1 and B |- D2 ==> B2
@@ -247,11 +245,9 @@ B  |-  G                    -->     G'                                          
 
 ***** G --> G' *********************
 
-a:<L | QE[ (SYNC(a) V)(O,B) ]>                          -->     a:<L | QE[ V(O,B) ]>
 a:<L | QE[ (ASYNC(a) V)(O,B) ]>                         -->     a:<L | QE[ a.m ],m=V(O,B)>
-a:<L | QE[ (ACTOR V)(O,B) ]>                            -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,O,B)>
-a:<L | QE[ (SYNC(b) V)(O,B) ]>,     b:<L' | Q>          -->     a:<L | QE[ await b.m ]>,     b:<L' | Q,m=V(O,B)>
 a:<L | QE[ (ASYNC(b) V)(O,B) ]>,    b:<L' | Q>          -->     a:<L | QE[ b.m ]>,           b:<L' | Q,m=V(O,B)>
+a:<L | QE[ (ACTOR V)(O,B) ]>                            -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,O,B)>
 a:<L | QE[ await b.m ]>,            b:<L' | H,m=V,Q>    -->     a:<L | QE[ V ]>,             b:<L' | H,m=V,Q>
 
 a:<L | QE[ await b.m ]>,   b:<L' | H,m=do raise V,Q>    -->     a:<L | QE[ do raise V ]>,    b:<L' | H,m=do raise V,Q>
@@ -341,7 +337,7 @@ Deactorization:
     
           def m(__self__,p):c1
     
-      for each "sync/async def m(p):c" in b, where c1 is c with all state and local names referenced via __self__
+      for each "async def m(p):c" in b, where c1 is c with all state and local names referenced via __self__
     
     - b3 contains one assignment
     
@@ -353,11 +349,7 @@ Deactorization:
     
           def m(_this_,p): return ASYNC(_this_.__self__, lambda: _this_.__self__.m(p))
         
-      for each "async def m(p):c" in b, and one
-    
-          def m(_this_,p): return AWAIT(ASYNC(_this_.__self__, lambda: _this_.__self__.m(p)))
-        
-      for each "sync m(p):c" in b
+      for each "async def m(p):c" in b
 
 - Every "await e" expression is translated into AWAIT(e)
 

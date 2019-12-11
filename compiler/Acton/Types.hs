@@ -228,6 +228,18 @@ instance InfEnv Stmt where
                                              constrain [Sub env t1 t2]
                                              return (nState te, VarAssign l pats' e')
     
+    infEnv env (After l e n ps ks)      = do (t1,e') <- infer env e
+                                             constrain [Equ env t1 tInt]
+                                             (cs,t2) <- instantiate env $ openFX $ findVarType n env
+                                             constrain cs
+                                             dump [INS (loc n) t2]
+                                             (prow,ps') <- infer env ps
+                                             (krow,ks') <- infer env ks
+                                             t0 <- newTVar
+                                             fx <- currFX                                       -- ..............
+                                             constrain [Sub env t2 (tFun fx prow krow t0)]
+                                             return (nEmpty, After l e' n ps' ks')
+    
     infEnv env (Decl l ds)
       | nodup ds && noCheck env         = do (te1,ds1) <- infEnv env ds
                                              return (te1, Decl l ds1)
@@ -369,20 +381,6 @@ instance Check Decl where
             env0                        = define envActorSelf $ defineTVars q $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
             
-    check env (Def l n q p k ann b (Sync f))
-      | noshadow svars (p,k)            = do t <- newTVar
-                                             pushFX (fxRet t tWild)
-                                             when (fallsthru b) (subFX env (fxRet tNone tWild))
-                                             (te0,prow,p') <- infEnvT env p
-                                             (te1,krow,k') <- infEnvT (define te0 env1) k
-                                             (_,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
-                                             popFX
-                                             fx <- fxSync <$> newRowVar
-                                             checkAssump env n (tFun fx prow krow t)
-                                             return $ Def l n q p' k' ann b' (Sync f)
-      where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
-
     check env (Def l n q p k ann b Async)
       | noshadow svars (p,k)            = do t <- newTVar
                                              pushFX (fxRet t tWild)
@@ -430,7 +428,7 @@ instance Check Decl where
                                              b' <- check (define te env1) b
                                              popFX
                                              checkBindings env True us te
-                                             return $ Class l n q us b'         -- TODO: add Self to q
+                                             return $ Protocol l n q us b'         -- TODO: add Self to q
       where env1                        = defineSelf n q $ defineTVars q $ block (stateScope env) env
             (q,us,te)                   = findProto (NoQual n) env
 
@@ -528,7 +526,7 @@ instance Infer Expr where
                                              return (t0, Call l e' ps' ks')
     infer env (Await l e)               = do (t,e') <- infer env e
                                              t0 <- newTVar
-                                             fx <- fxSync <$> newRowVar
+                                             fx <- fxAwait <$> newRowVar
                                              equFX env fx
                                              constrain [Sub env t (tMsg t0)]
                                              return (t0, Await l e')
@@ -1042,7 +1040,6 @@ instance ExtractT KwdPar where
     extractT KwdNIL                 = kwdNil
 
 instance ExtractT Modif where
-    extractT (Sync _)               = fxSync fxNil
     extractT Async                  = fxAsync fxNil
     extractT _                      = tWild
 

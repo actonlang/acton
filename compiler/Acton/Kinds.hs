@@ -114,6 +114,7 @@ instance KCheck Stmt where
     kchk env (With l is b)          = kchk env is >> kchkSuite env b
     kchk env (Data l mbt ss)        = kchk env mbt >> kchkSuite env ss
     kchk env (VarAssign l ps e)     = kchk env ps >> kchk env e
+    kchk env (After l e n ps ks)    = kchk env e >> kchk env ps >> kchk env ks
     kchk env (Decl l ds)            = kchk env ds
 
 instance KCheck Decl where
@@ -412,6 +413,7 @@ instance KWalk Stmt where
     kwalk w (With l is b)           = With l <$> kwalk w is <*> kwalk w b
     kwalk w (Data l mbt ss)         = Data l <$> kwalk w mbt <*> kwalk w ss
     kwalk w (VarAssign l ps e)      = VarAssign l <$> kwalk w ps <*> kwalk w e
+    kwalk w (After l e n ps ks)     = After l <$> kwalk w e <*> return n <*> kwalk w ps <*> kwalk w ks
     kwalk w (Decl l ds)             = Decl l <$> kwalk w ds
 
 instance KWalk Decl where

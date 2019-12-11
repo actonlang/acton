@@ -321,7 +321,7 @@ contCall env (Call l (Var _ n) p k)
   | n == primAWAIT                      = True
   | isPrim n                            = False
   | n `elem` ns0                        = False
-  where ns0                             = [qnStr,qnInt,qnLen,qnPrint,qnPostpone]
+  where ns0                             = [qnStr,qnInt,qnLen,qnPrint]
         isPrim (QName m _)              = m == mPrim
         isPrim _                        = False
 contCall env (Call l (Dot _ _ n) p k)
@@ -332,7 +332,6 @@ contCall env _                          = False
 
 contDef env l n m
   | m == Async                          = True
-  | isSync m                            = True
   | impure l n                          = True
   | otherwise                           = False
   where impure l n                      = True                      -- TODO: utilize type...

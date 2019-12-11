@@ -9,12 +9,13 @@ contKW                              = prim "___c___"
 
 prim s                              = Internal s 0 GenPass
 
-nPrim                               = prim "___prim___"
+nPrim                               = prim "___"
 mPrim                               = ModName [nPrim]
 qPrim n                             = QName mPrim n
 
 nIsNone                             = name "IsNone"
 nASYNC                              = name "ASYNC"
+nAFTER                              = name "AFTER"
 nAWAIT                              = name "AWAIT"
 nPUSH                               = name "PUSH"
 nPOP                                = name "POP"
@@ -28,6 +29,7 @@ nPOSTPONE                           = name "POSTPONE"
 
 primIsNone                          = qPrim nIsNone
 primASYNC                           = qPrim nASYNC
+primAFTER                           = qPrim nAFTER
 primAWAIT                           = qPrim nAWAIT
 primPUSH                            = qPrim nPUSH
 primPOP                             = qPrim nPOP

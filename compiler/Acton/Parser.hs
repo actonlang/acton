@@ -82,8 +82,6 @@ assertNotProtoExt   = ifCtx [PROTO,EXT]             [IF,SEQ,LOOP]       (fail "s
 assertNotDecl       = ifCtx [SEQ,LOOP]              [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
-ifActScope          = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]
-
 ifDecl              = ifCtx [CLASS,PROTO]           [IF]
 
 --ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
@@ -475,7 +473,7 @@ simple_stmt = ((small_stmt `sepEndBy1` semicolon)) <* newline1
 --- Small statements ---------------------------------------------------------------------------------
 
 small_stmt :: Parser S.Stmt
-small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt
+small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
@@ -510,6 +508,16 @@ rhs = yield_expr <|> exprlist
 
 trysome p = do x <- p; rest [x]
   where rest xs = (try p >>= \x -> rest (x:xs)) <|> return (reverse xs)
+
+after_stmt :: Parser S.Stmt
+after_stmt = addLoc $ do
+                assertActScope
+                rword "after"
+                e <- expr
+                colon
+                n <- name
+                (ps,ks) <- parens funargs
+                return $ S.After NoLoc e n ps ks
 
 var_stmt :: Parser S.Stmt
 var_stmt = addLoc $ 
@@ -619,9 +627,7 @@ funcdef =  addLoc $ do
               (ppar,kpar) <- parens (funpars True)
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
    where modifier :: S.Modif -> Parser S.Modif
-         modifier S.NoMod = assertActScope *> rword "sync" *> return (S.Sync True) <|> 
-                            assertActScope *> rword "async" *> return S.Async <|>
-                            ifActScope (return (S.Sync False)) (return S.NoMod)
+         modifier S.NoMod = assertActScope *> rword "async" *> return S.Async <|> return S.NoMod
          modifier m = return m
 
          fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
@@ -1049,7 +1055,7 @@ funargs = funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 --- Types ----------------------------------------------------------------------
 
 fx      :: Parser (S.FXRow -> S.FXRow)
-fx      =   rword "sync" *> return S.fxSync
+fx      =   rword "await" *> return S.fxAwait
         <|> rword "async" *> return S.fxAsync
         <|> rword "act" *> return S.fxAct
         <|> rword "mut" *> return S.fxMut

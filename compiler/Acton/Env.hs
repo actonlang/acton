@@ -274,7 +274,6 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                 (nShow,             NProto [] [] []),
                                 (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
                                 (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
-                                (nPostpone,         NVar (monotype $ tFun0 [tInt, tAsync [] tNone] tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
                                 (nSet',             NClass [a] [] [])

@@ -44,6 +44,7 @@ instance Pretty Stmt where
     pretty (Data _ (Just e) b)      = pretty e <> colon $+$ prettySuite b
     pretty (Data _ Nothing b)       = text "return" <> colon $+$ prettySuite b
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
+    pretty (After _ e n ps ks)      = text "after" <+> pretty e <> colon <+> pretty n <> parens (pretty (ps,ks))
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
@@ -255,8 +256,6 @@ prettyPats ps Nothing               = commaSep pretty ps
 prettyPats [] (Just p)              = text "*" <> pretty p
 prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <> pretty p
 
-prettyMod (Sync True)               = (text "sync" <+>)
-prettyMod (Sync False)              = id -- (text "(sync)" <+>)
 prettyMod Async                     = (text "async" <+>)
 prettyMod NoMod                     = id
 prettyMod StaticMeth                = (text "@staticmethod" $+$)

@@ -74,6 +74,10 @@ instance Deact Stmt where
     deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
                                          store [Signature l0 [n] (monotype t)]
                                          Assign l <$> deact env ps <*> deact env e
+    deact env (After l e n ps _)    = do e' <- deact env e
+                                         ps' <- deact env ps
+                                         let lambda = Lambda l0 PosNIL KwdNIL (Call l0 (Dot l0 (Var l0 (NoQual selfKW)) n) ps' KwdNil)
+                                         return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e' $ PosArg lambda PosNil) KwdNil
     deact env (Decl l ds)           = Decl l <$> deactD env ds
 
 deactD env []                       = return []
@@ -114,9 +118,6 @@ awaitCall env n p                   = Call l0 (Var l0 primAWAIT) (PosArg (asyncC
 instance Deact Decl where
     deact env (Def l n q p k t b Async) 
                                     = do store [Def l n q (addSelf p) k t [Return l0 $ Just $ asyncCall env n p] NoMod]
-                                         Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
-    deact env (Def l n q p k t b (Sync _)) 
-                                    = do store [Def l n q (addSelf p) k t [Return l0 $ Just $ awaitCall env n p] NoMod]
                                          Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b m) = Def l n q p k t <$> deact env1 b <*> return m
       where env1                    = hideLocals (bound (p,k) ++ bound b) env

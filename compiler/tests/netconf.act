@@ -17,7 +17,10 @@ actor session(conn, error_cb):
         conn.deliver(print_rpc(message_id, 'edit-config', print_path(path, xml.print(value))))
         responder = lambda text: xml.parse_empty(strip_reply(message_id, 'ok', text))
 
-    async def deliver(text):
+    async def abort():
+        conn.close()
+
+    async def _receive(text):
         try:
             if responder:
                 responder(text)
@@ -27,14 +30,11 @@ actor session(conn, error_cb):
             error_cb(str(ex))
         message_id += 1
     
-    async def error(what):
-        error_cb()
+    async def _error(what):
+        error_cb(what)
         responder = None
     
-    async def abort():
-        conn.close()
-
-    conn.receive_on(deliver, error)
+    conn.receive_on(_receive, _error)
 
 
 def print_rpc(message_id, second_tag, inner):

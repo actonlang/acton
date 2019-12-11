@@ -131,6 +131,7 @@ instance Norm Stmt where
       where env1                    = extLocal (bound is) env
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
+    norm env (After l e n ps ks)    = After l <$> norm env e <*> return n <*> norm env ps <*> norm env ks
     norm env (Decl l ds)            = Decl l <$> norm env ds
 
 --    norm' env (Delete l p)          =

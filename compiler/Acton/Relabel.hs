@@ -53,6 +53,7 @@ instance Relabel Stmt where
     relabel (With _ is b) = With <$> newLoc <*> relabel is <*> relabel b
     relabel (Data _ mbt ss) = Data <$> newLoc <*> relabel mbt <*> relabel ss
     relabel (VarAssign _ ps e) = VarAssign <$> newLoc <*> relabel ps <*> relabel e
+    relabel (After _ e n ps ks) = After <$> newLoc <*> relabel e <*> relabel n <*> relabel ps <*> relabel ks
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
 
 instance Relabel Decl where

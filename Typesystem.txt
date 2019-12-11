@@ -141,9 +141,9 @@ N |- C                      Constraint C holds in environment N
 
 N |- E : T | e              Expression E has type (scheme) T in environment N and effect context e
 
-N |- F : p | N' | e         Formal parameter F has type p in environment N (if updated with N') and effect context e
+N |- F : p | N' | e         Formal parameter F list has type p in environment N (if updated with N') and effect context e
 
-N |- K : r | N' | e         Keyword parameter K has type r in environment N (if updated with N')and effect context e
+N |- K : r | N' | e         Keyword parameter list K has type r in environment N (if updated with N') and effect context e
 
 N |- x : t | N'             Variable x has type t in environment N (if updated with N')
 
@@ -173,13 +173,13 @@ N' = N,q,Self(c[q])     N' |- c[q] ~ class(U):n     N' |- ui ~ protocol(Ui):ni  
 N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
 
 
-N' = N,q,bv(F,K,S):#,dzv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
----------------------------------------------------------------------------------------------------------------------- (Actor)
+N' = N,q,bv(F,K,S):#,zv(N,S):#,_self_:Ref    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e
+--------------------------------------------------------------------------------------------------------------------- (Actor)
 N |- actor x[q](F,K):S  :  x: [q] => e',act(p,r)->t
 
 N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
--------------------------------------------------------------------------------------------------- (SyncMeth)
-N |- sync def x[q](F,K):S  :  x: [q] => e',sync(p,r)->t
+-------------------------------------------------------------------------------------------------- (InternalMeth....)
+N |- def x[q](F,K):S  :  x: [q] => e',sync(p,r)->t
 
 N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 -------------------------------------------------------------------------------------------------- (AsyncMeth)
@@ -339,8 +339,8 @@ N |- E : T | e     N |- (A) : (p) | e                                           
 ------------------------------------- (Tup)                                         ------------------- (Star1)
 N |- (E,A) : (p,T) | e                                                              N |- (*E) : (r) | e
 
-C,C' | N |- E : T | e     N |- (M) : (r) | e                                        N |- E : (r) | e
--------------------------------------------- (Rec)                                  -------------------- (Star2)            ------------------ (Null)
+N |- E : T | e     N |- (M) : (r) | e                                               N |- E : (r) | e
+------------------------------------- (Rec)                                         -------------------- (Star2)            ------------------ (Null)
 N |- (x=E,M) : (x:T,r) | e                                                          N |- (**E) : (r) | e                    N |- (.) : (.) | e
 
 
