@@ -59,6 +59,8 @@ void error(char *msg) {
   exit(1);
 }
 
+#define SERVER_VERBOSITY 1
+
 /*
 int create_state_schema(db_t * db, unsigned int * fastrandstate) {
 	int primary_key_idx = 0;
@@ -823,7 +825,7 @@ int main(int argc, char **argv) {
 			fprintf(stderr, "ERROR reading from socket\n");
 			continue;
 		}
-		else if (size_len < 0)
+		else if (size_len == 0)
 		{
 				handle_socket_close(&childfd);
 				break;
@@ -838,7 +840,9 @@ int main(int argc, char **argv) {
 
     msg_len = read(childfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
 
+#if SERVER_VERBOSITY > 1
 	printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
+#endif
 
     if (msg_len < 0)
     {
@@ -860,7 +864,9 @@ int main(int argc, char **argv) {
 
     read_buf_offset = 0; // Reset
 
+#if SERVER_VERBOSITY > 1
     printf("server received %d / %d bytes\n", announced_msg_len, msg_len);
+#endif
 
     void * tmp_out_buf = NULL, * q = NULL;
     short msg_type;
@@ -1012,8 +1018,6 @@ int main(int argc, char **argv) {
     					break;
     				}
     			}
-
-
 
     			break;
     		}

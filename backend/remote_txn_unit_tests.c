@@ -40,9 +40,6 @@ int rand_sleep = 1;
 int debug = 1;
 int debug_lock = 0;
 
-#define TEST_VERBOSITY 1
-
-
 typedef struct actor_collection_item {
 	int actor_id;
 	int collection_id;
@@ -383,8 +380,8 @@ void * actor(void * cargs)
 		ca->successful_enqueues += msgs_sent;
 		if(debug)
 			printf("ACTOR %ld: sent %d seed outgoing msgs (status = %d).\n", (long) ca->consumer_id, msgs_sent, ret);
-		remote_print_long_table(state_table_key, ca->db);
-		remote_print_long_table(queue_table_key, ca->db);
+//		remote_print_long_table(state_table_key, ca->db);
+//		remote_print_long_table(queue_table_key, ca->db);
 	}
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -425,8 +422,8 @@ void * actor(void * cargs)
 			checkpoint_success = (ret == VAL_STATUS_COMMIT);
 		}
 
-		remote_print_long_table(state_table_key, ca->db);
-		remote_print_long_table(queue_table_key, ca->db);
+//		remote_print_long_table(state_table_key, ca->db);
+//		remote_print_long_table(queue_table_key, ca->db);
 
 		increment_vc(ca->vc, (int) ca->consumer_id);
 

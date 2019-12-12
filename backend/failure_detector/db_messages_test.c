@@ -72,8 +72,8 @@ int main (int argc, const char * argv[])
 	FILE *fptr_w = NULL, * fptr_r = NULL;
 	void * buf_w;
 	unsigned len_w;
-//	unsigned char buf_r[MAX_MSG_SIZE_VC];
-	void * buf_r = malloc(MAX_MSG_SIZE_VC);
+	unsigned char buf_r[MAX_MSG_SIZE_VC];
+//	void * buf_r = malloc(MAX_MSG_SIZE_VC);
 	unsigned len_r;
 	char err_msg [100];
 

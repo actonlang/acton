@@ -9,7 +9,7 @@
 
 #include "failure_detector/db_queries.h"
 
-#define VERBOSE_RPC 1
+#define VERBOSE_RPC 0
 
 int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server);
 

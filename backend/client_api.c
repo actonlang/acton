@@ -176,7 +176,7 @@ void * comm_thread_loop(void * args)
 //							fprintf(stderr, "ERROR reading from socket\n");
 							continue;
 						}
-						else if (size_len < 0)
+						else if (size_len == 0)
 						{
 							handle_socket_close(&(rs->sockfd));
 							skip_parsing = 1;
@@ -198,7 +198,9 @@ void * comm_thread_loop(void * args)
 
 				    msg_len = read(rs->sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
 
+#if CLIENT_VERBOSITY > 1
 					printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
+#endif
 
 				    if (msg_len < 0)
 				    {
@@ -224,7 +226,9 @@ void * comm_thread_loop(void * args)
 
 			    read_buf_offset = 0; // Reset
 
+#if CLIENT_VERBOSITY > 1
 			    printf("client received %d / %d bytes\n", announced_msg_len, msg_len);
+#endif
 
 			    void * tmp_out_buf = NULL, * q = NULL;
 			    short msg_type;

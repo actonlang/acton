@@ -259,13 +259,13 @@ void free_vc(vector_clock * vc)
 void init_vc_msg(VectorClockMessage * msg_ptr, vector_clock * vc)
 {
 	 msg_ptr->n_ids = vc->no_nodes;
-	 msg_ptr->ids = malloc (msg_ptr->n_ids * sizeof(int));
+	 msg_ptr->ids = (int32_t *) malloc (msg_ptr->n_ids * sizeof(int32_t));
 	 msg_ptr->n_counters = vc->no_nodes;
-	 msg_ptr->counters = malloc (msg_ptr->n_counters * sizeof(long));
+	 msg_ptr->counters = (int64_t *) malloc (msg_ptr->n_counters * sizeof(int64_t));
 	 for (int i = 0; i < msg_ptr->n_ids; i++)
 	 {
-		 msg_ptr->ids[i] = vc->node_ids[i].node_id;
-		 msg_ptr->counters[i] = vc->node_ids[i].counter;
+		 (msg_ptr->ids)[i] = vc->node_ids[i].node_id;
+		 (msg_ptr->counters)[i] = vc->node_ids[i].counter;
 	 }
 }
 

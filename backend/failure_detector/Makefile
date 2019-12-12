@@ -52,7 +52,7 @@ libremote: db_messages.pb-c.o cells.o db_queries.o fd.o $(LIBDIR)
 db_messages_test: db_messages_test.c libremote libvc
 	cc db_messages_test.c \
 		$(CFLAGS) -I ../src -I/usr/local/include \
-		-L $(LIBDIR) -L/usr/local/lib -lvc -lremote -ldb -pthread -lprotobuf-c $(LFLAGS) \
+		-L $(LIBDIR) -L/usr/local/lib -lvc -lremote -pthread -lprotobuf-c $(LFLAGS) \
 		$(LIBS) \
 		-o db_messages_test
 
