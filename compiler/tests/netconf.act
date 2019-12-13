@@ -9,18 +9,18 @@ actor session(conn, error_cb):
     var message_id = 1
     var responder = None
     
-    async def get(path, reply_cb):
+    def get(path, reply_cb):
         conn.deliver(print_rpc(message_id, 'get', print_path(path, '')))
         responder = lambda text: reply_cb(xml.parse(strip_path(path, strip_reply(message_id, 'data', text))))
     
-    async def edit_config(path, value):
+    def edit_config(path, value):
         conn.deliver(print_rpc(message_id, 'edit-config', print_path(path, xml.print(value))))
         responder = lambda text: xml.parse_empty(strip_reply(message_id, 'ok', text))
 
-    async def abort():
+    def abort():
         conn.close()
 
-    async def _receive(text):
+    def _receive(text):
         try:
             if responder:
                 responder(text)
@@ -30,11 +30,11 @@ actor session(conn, error_cb):
             error_cb(str(ex))
         message_id += 1
     
-    async def _error(what):
+    def _error(what):
         error_cb(what)
         responder = None
     
-    conn.receive_on(_receive, _error)
+    conn.receive_on(async(_receive), async(_error))
 
 
 def print_rpc(message_id, second_tag, inner):

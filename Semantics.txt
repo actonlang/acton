@@ -33,7 +33,7 @@ Bindings:           B       ::=     B,x=V  |  B,c=V  |  .                       
 
 Statements:         S       ::=     E  |  P = E  |  D  |  return E  |  pass  |
                                     E.x = E  |  if E: S else S  |  while E: S  |
-                                    var z = E  |  z = E  |
+                                    var z = E  |  z = E  |  after E: E'  |
                                     raise E  |  try S Z else S finally S  |
                                     S; S                                            associative, with unit 'pass'
 
@@ -59,7 +59,8 @@ E-in-E contexts:    EE      ::=     _.x  |  _(A,M)  |  E if _ else E  |
                                     _ is E  |  V is _  |  await _  |  isinstance(_,c)
 
 E-in-S contexts:    SE      ::=     _  |  return _  |  P = _  |  if _: S else S  |
-                                    _.x = E  |  var z = _  |  z = _  |  raise _
+                                    _.x = E  |  var z = _  |  z = _  |  raise _  |
+                                    after _: x(A,M)  |  after V: _
                                     
 S-in-S contexts:    SS      ::=     _; S  |  try _ Z else S finally S
 
