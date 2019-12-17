@@ -52,7 +52,7 @@ protocol Indexed[A,B]:
 protocol Sliceable[A] (Indexed[int,A]):
   __getslice__ : (int?,int?,int?) -> Sequence[A]
  
-protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
+protocol Sequence[A] (Sliceable[A], Container[A], Plus):
   __reversed__ : () -> Iterable[A] 
   insert      : !(int,A) -> None
   append      : !(A) -> None   
