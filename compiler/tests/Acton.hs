@@ -1,52 +1,52 @@
 {-# LANGUAGE RankNTypes, MultiParamTypeClasses, FlexibleInstances #-}
-module ActonLevels where
+module Acton where
 
 import Control.Monad.Except
 
-data ST s l a   = ST a
+data ST s a     = ST a
 
-instance Functor (ST s l) where
+instance Functor (ST s) where
     fmap = undefined
 
-instance Applicative (ST s l) where
+instance Applicative (ST s) where
     pure = undefined
     (<*>) = undefined
     
-instance Monad (ST s l) where
+instance Monad (ST s) where
     return = undefined
     (>>=) = undefined
 
-instance MonadError String (ST s l) where
+instance MonadError String (ST s) where
     throwError = undefined
     catchError = undefined
 
-data Msg l t    = Msg t
+data Msg t      = Msg t
 
-data Var s l t  = Var t             -- A Var mentions a level l simply to connect the type of methods sharing a state
+data Var s t    = Var t
 
-data Async l a b = Async a b
+data Async a b  = Async a b
 
 data Actor a    = Actor a
 
-class Less l l' where
-    less        :: l -> l' -> ()
 
-actor           :: (forall s . ST s l t) -> Actor t
-_new            :: Actor a -> a -> ST s l a
 
-_asyn           :: (a -> ST s l b) -> Async l a b
-_snd            :: Async l' a b -> a -> ST s l (Msg l' b)
-await           :: Less l l' => Msg l' a -> ST s l a
 
-after           :: Int -> ST s l a -> ST s l ()
+actor           :: (forall s . ST s t) -> Actor t
+_new            :: Actor a -> a -> ST s a
 
-var             :: a -> ST s l (Var s l a)
-readv           :: Var s l a -> ST s l a
-writev          :: Var s l a -> a -> ST s l ()
+_asyn           :: (a -> ST s b) -> Async a b
+_snd            :: Async a b -> a -> ST s (Msg b)
+await           :: Msg a -> ST s a
 
-prints          :: String -> ST s l ()
-pass            :: ST s l ()
-msg             :: a -> ST s l (Msg l' a)
+after           :: Int -> ST s a -> ST s ()
+
+var             :: a -> ST s (Var s a)
+readv           :: Var s a -> ST s a
+writev          :: Var s a -> a -> ST s ()
+
+prints          :: String -> ST s ()
+pass            :: ST s ()
+msg             :: a -> ST s (Msg a)
 
 
 actor a         = undefined
@@ -65,7 +65,7 @@ _asyn p         = undefined
 _snd            = undefined
 _new            = undefined
 
-pingpong        :: Int -> Actor (Async l Int ())
+pingpong        :: Int -> Actor (Async Int ())
 pingpong i      = actor $ do
                     count <- var 0
                     let ping q = do
@@ -79,7 +79,7 @@ pingpong i      = actor $ do
                     ping i
                     return (_asyn ping)
 
-session         :: (Less l_conn l_me) => Conn l_conn -> Async l_cb String () -> Actor (Async l_me (String, Async l_cb Int ()) (), Async l_me (String,String) (), Async l_me () ())
+session         :: Conn -> Async String () -> Actor (Async (String, Async Int ()) (), Async (String,String) (), Async () ())
 session conn error_cb = actor $ do
                 message_id <- var 1
                 responder <- var Nothing
@@ -107,12 +107,12 @@ session conn error_cb = actor $ do
                 _snd (receive_on conn) (_asyn _receive, _asyn _error)
                 return (_asyn get, _asyn edit_config, _asyn abort)
 
-data Conn l     = Conn
+data Conn       = Conn
 
-deliver         :: Conn l -> Async l String ()
-close           :: Conn l -> Async l () ()
-receive_on      :: (Less l l1, Less l l2) => Conn l -> Async l (Async l1 String (), Async l2 String ()) ()
--- The Less constraints above make no obvious sense here, they are only added for testing purposes.
+deliver         :: Conn -> Async String ()
+close           :: Conn -> Async () ()
+receive_on      :: Conn -> Async (Async String (), Async String ()) ()
+
 
 deliver         = undefined
 close           = undefined
