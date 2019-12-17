@@ -31,6 +31,7 @@
 #define RANDOM_NONCES
 
 #define CLIENT_VERBOSITY 0
+#define SYNC_SOCKET 1
 
 #define NO_QUORUM_ERR -1
 #define NO_SUCH_MSG_CALLBACK -2
@@ -94,6 +95,7 @@ typedef struct remote_server
 	char * hostname;
 	int portno;
 	int sockfd;
+    pthread_mutex_t* sockfd_lock;
 	struct sockaddr_in serveraddr;
 	struct hostent *server;
 	char id[256];

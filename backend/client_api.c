@@ -222,6 +222,9 @@ void * comm_thread_loop(void * args)
 				    break;
 				}
 
+				if(skip_parsing)
+					continue;
+
 			    assert(announced_msg_len == msg_len);
 
 			    read_buf_offset = 0; // Reset
@@ -465,6 +468,9 @@ remote_server * get_remote_server(char *hostname, int portno)
         return NULL;
     }
 
+	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));
+	pthread_mutex_init(rs->sockfd_lock, NULL);
+
     snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
 
 	return rs;
@@ -472,6 +478,7 @@ remote_server * get_remote_server(char *hostname, int portno)
 
 void free_remote_server(remote_server * rs)
 {
+	free(rs->sockfd_lock);
 	free(rs);
 }
 
@@ -577,7 +584,13 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce,
 	for(snode_t * server_node = HEAD(db->servers); server_node!=NULL; server_node=NEXT(server_node))
 	{
 		remote_server * rs = (remote_server *) server_node->value;
+#if SYNC_SOCKET > 0
+		pthread_mutex_lock(rs->sockfd_lock);
+#endif
 		ret = send_packet(out_buf, out_len, rs->sockfd);
+#if SYNC_SOCKET > 0
+		pthread_mutex_unlock(rs->sockfd_lock);
+#endif
 		if(ret != 0)
 		{
 			assert(0);

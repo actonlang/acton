@@ -503,8 +503,8 @@ void * actor(void * cargs)
 				checkpoint_success = (ret == VAL_STATUS_COMMIT);
 			}
 
-			remote_print_long_table(state_table_key, ca->db);
-			remote_print_long_table(queue_table_key, ca->db);
+//			remote_print_long_table(state_table_key, ca->db);
+//			remote_print_long_table(queue_table_key, ca->db);
 
 			increment_vc(ca->vc, (int) ca->consumer_id);
 

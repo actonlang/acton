@@ -827,8 +827,8 @@ int main(int argc, char **argv) {
 		}
 		else if (size_len == 0)
 		{
-				handle_socket_close(&childfd);
-				break;
+			handle_socket_close(&childfd);
+			break;
 		}
 
 		announced_msg_len = *((int *)in_buf);
