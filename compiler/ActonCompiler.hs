@@ -207,6 +207,7 @@ runRestPasses args paths src env original = (do
 -}
                           return (Acton.Env.dropNames env',sigs))
                              `catch` handle generalError src paths
+                             `catch` handle Acton.Kinds.kindError src paths
                              `catch` handle Acton.Env.checkerError src paths
                              `catch` handle Acton.Types.solverError src paths
 
