@@ -93,7 +93,7 @@ NOTES:
 ***** Syntax *******************************************************************************************************************************************************
 
                     
-Type constants:     c,d                                                                                 including int,bool,str,literals,async,ref
+Type constants:     c,d                                                                                 including int,bool,str,literals,Msg,ref
 
 Type variables:     X                                                                                   includes Self
 
@@ -109,7 +109,7 @@ Type environments:  n       ::=     x:T,n  |  .                                 
 
 Type rows:          r       ::=     x:T,r  |  **X  |  .                                                 associative, commutative\duplicates
 
-Effect rows:        e       ::=     ret[t],e  |  st[X],e  |  act,e  |  X  |  .                          associative, commutative\duplicates
+Effect rows:        e       ::=     ret[t],e  |  st[t],e  |  act,e  |  X  |  .                          associative, commutative\duplicates
 
 Qua(l|nt)ifiers:    q       ::=     X(U)  |  q,q  |  .                                                  associative
 
@@ -175,13 +175,18 @@ N' = N,q,Self(c[q])     N' |- c[q] ~ class(U):n     N' |- ui ~ protocol(Ui):ni  
 N |- extension c[q](ui):M  :  c:[q]=>extension(ui)
 
 
-N' = N,q,bv(F,K,S):#,zv(N,S):#,_self_:ref[X]   X not in fv(N,q,e',p,r)    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e,st[X]
--------------------------------------------------------------------------------------------------------------------------------------------------------- (Actor)
+X not in fv(N,q,e',p,r)
+N' = N,q,bv(F,K,S):#,zv(N,S):#,_self_:ref[X]        N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e    N',N1,N2 |- S : t | e,st[X]
+---------------------------------------------------------------------------------------------------------------------------------- (Actor)
 N |- actor x[q](F,K):S  :  x : [q] => e',act(p,r)->t
 
-N' = N,q,bv(F,K,S):#    N |- _self_ : ref[X]    X not in fv(q,e',p,r,t)    N' |- F : p ~ N1 | e    N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e,st[X]
------------------------------------------------------------------------------------------------------------------------------------------------------------ (Async)
-N |- async def x[q](F,K):S  :  x : [q] => e',act(p,r)->async[X,t]
+N |- _self_ : ref[X]     N' = N,q,bv(F,K,S):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e,st[X]
+--------------------------------------------------------------------------------------------------------------------------------- (ADef)
+N |- def x[q](F,K):S  :  x : [q] => e,st[X](p,r)->t
+
+N |- _self_ : #     N' = N,q,bv(F,K,S):#,zv(N):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
+------------------------------------------------------------------------------------------------------------------------------ (Def)
+N |- def x[q](F,K):S  :  x : [q] => e(p,r)->t
 
 N' = N,q,bv(F,K,S):#,zv(N):#    N' |- y,F : Self,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 ----------------------------------------------------------------------------------------------------------------- (Meth)
@@ -190,10 +195,6 @@ N |- @instmethod def x[q](y,F,K):S  :  x : [q] => e(p,r)->t
 N' = N,q,bv(F,K,S):#,zv(N):#    N' |- Self < u     N' |- F : @u,p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
 -------------------------------------------------------------------------------------------------------------------------------- (ClassMeth)
 N |- @classmethod def x[q](y,F,K):S  :  x : [q] => e(p,r)->t
-
-N' = N,q,bv(F,K,S):#,zv(N):#    N' |- F : p ~ N1 | e     N',N1 |- K : r ~ N2 | e     N',N1,N2 |- S : t | e
----------------------------------------------------------------------------------------------------------- (Def)
-N |- def x[q](F,K):S  :  x : [q] => e(p,r)->t
 
 
 N |- D1 : N1      N |- D2 : N2
@@ -350,9 +351,9 @@ N |- E : T | e     N |- (M) : (r) | e                                           
 N |- (x=E,M) : (x:T,r) | e                                                          N |- (**E) : (r) | e                    N |- (.) : (.) | e
 
 
-N |- _self_ : ref[X]    N |- E : async[Y,t] | e    N |- less[X,Y]                   N |- _self_ : ref[X]    N |- E : async[X,t]
------------------------------------------------------------------ (Await)           ------------------------------------------- (Call)
-N |- await E : t | e,act                                                            N |- call E : t | e,act
+N |- E : Msg[t] | e,act
+------------------------ (Await)
+N |- await E : t | e,act
 
 
 ***** N |- F : p | N | e *******************************************************************************************************************************************
@@ -422,9 +423,9 @@ N,z:# |- E : T | e,st[X]     N |- _self_ : ref[X]                               
 N,z:# |- var z = E ~ z:T | e,st[X]                                                  N,z:T |- z = E ~ . | e,st[X]
 
 
-N |- S ~ N1 | e     N,N1 |- S2 ~ N2 | e                                             N |- E1 : int | e     N |- _self_ : ref[X]    N |- E2 : async[X,t] | e,act
---------------------------------------- (Seq)                                       -------------------------------------------------------------------------- (After)
-N |- S1; S2 ~ N1,N2 | e                                                             N |- after E1: E2 ~ . | e,act
+N |- S ~ N1 | e     N,N1 |- S2 ~ N2 | e                                             N |- E1 : int | e     N |- _self_ : ref[X]    N |- E2(A,M) : t | e,st[X]
+--------------------------------------- (Seq)                                       ------------------------------------------------------------------------ (After)
+N |- S1; S2 ~ N1,N2 | e                                                             N |- after E1: E2(A,M) ~ . | e,act
 
 
 ***** N |- S : t | e ***********************************************************************************************************************************************
@@ -449,6 +450,11 @@ N |- S : t | e                                                                  
 N |- S : t | e,st[X]    X not in fv(N,t)
 ---------------------------------------- (RunST)
 N |- S : t | e
+
+
+N |- E : e,st[X](p,r)->t | e'      N |- _self_ : ref[X]
+-------------------------------------------------------
+N |- ASYNC(_self_,E) : act(p,r)->Msg[t] | e'
 
 
 ********************************************************************************************************************************************************************
@@ -478,3 +484,48 @@ protocol        x = e       @classattr          x = e           (no def)        
 extension       x = e       @classattr          x = e                           def x           def x           def x
                 def x       @instmeth           actor x
                 actor x     @classattr
+
+********************************************************************************************************************************************************************
+********************************************************************************************************************************************************************
+
+
+The defs of an actor
+--------------------
+
+Fundamentals objectives:
+-   Actors are concurrent
+-   Actors communicate both asynchronously and synchronously
+-   Actor methods are first class values (like ordinary Python defs)
+-   An actor must not leak references to its state to other actors
+-   Synchronous communication must be restricted to avoid deadlocks
+-   Actor programming must look "familiar" to Python programmers
+
+Decision points:
+
+A.  Should actor methods be marked by special syntax?
+    A1. Yes, by "async" and (default) "sync"
+    A2. Yes, by "async" throughout
+    A3. No, the context (def within an actor) sets the actor method status <<<<<<<<<<<<<<<<<<<<<<<<<<
+    A4. Like A3, but only if state variables are also referenced
+
+B.  Should the asynchronous/synchronous choice reside with the callee or the caller?
+    B1. With the callee, based on syntax (choice A1 above)
+    B2. With the callee (like B1), but overridable by the caller (e.g. by "await")
+    B3. With the caller, based on context (result ignored or not)
+    B4. With the caller, based on special syntax ("await") <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+C.  Should actor methods have types (behaviors) distinct from ordinary defs?
+    C1. No (unlikely to work...)
+    C2. Yes, always
+    C3. Yes, but only when viewed from another actor <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+D.  Should conversion between internal and external method types be explicit or implicit?
+    D1. Explicit (writing "async my_meth" instead of just "my_meth" at exposed places)
+    D2. Implicit, based on type inference <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< (+ caveat)
+
+E.  Is a postponed method call an internal or external method reference?
+    E1. External, all async messages can be postponed (with non-deterministic cancel)
+    E2. Internal, with deterministic cancel (but dedicated syntax) <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+*********************************************************************************************************
