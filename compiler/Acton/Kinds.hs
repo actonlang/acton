@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Kinds(check) where
+module Acton.Kinds(check, kindError) where
 
 import qualified Control.Exception
 import qualified Data.Map.Strict as Map
@@ -285,7 +285,8 @@ instance KInfer TCon where
     kinfer env (TC n ts)            = do let kn = tconKind n env
                                          ks <- mapM (kinfer env) ts
                                          k <- newKVar
-                                         kunify kn (KFun ks k)
+                                         traceM ("## kinfer " ++ prstr n ++ " :: " ++ prstr kn)
+                                         kunify (loc n) kn (KFun ks k)
                                          return k
 
 --instance KInfer TSchema where
@@ -321,20 +322,20 @@ instance KInfer Type where
                                          return KRow
 
 kexpect env k t                     = do k' <- kinfer env t
-                                         kunify k' k
+                                         kunify (loc t) k' k
 
-kunify (KVar v1) (KVar v2)
+kunify l (KVar v1) (KVar v2)
   | v1 == v2                        = return ()
-kunify (KVar v) k2                  = do when (v `elem` kfree k2) (infiniteKind v k2)
+kunify l (KVar v) k2                = do when (v `elem` kfree k2) (infiniteKind l v k2)
                                          substitute v k2
-kunify k1 (KVar v)                  = do when (v `elem` kfree k1) (infiniteKind v k1)
+kunify l k1 (KVar v)                = do when (v `elem` kfree k1) (infiniteKind l v k1)
                                          substitute v k1
-kunify (KFun ks1 k1) (KFun ks2 k2)
-  | length ks1 == length ks2        = do mapM_ (uncurry kunify) (ks1 `zip` ks2)
-                                         kunify k1 k2
-kunify k1 k2
+kunify l (KFun ks1 k1) (KFun ks2 k2)
+  | length ks1 == length ks2        = do mapM_ (uncurry $ kunify l) (ks1 `zip` ks2)
+                                         kunify l k1 k2
+kunify l k1 k2
   | k1 == k2                        = return ()
-  | otherwise                       = noUnify k1 k2
+  | otherwise                       = noUnify l k1 k2
 
 
 kfree (KVar v)                      = []
@@ -544,8 +545,8 @@ data KindError                      = KindError SrcLoc Kind Kind
 
 instance Control.Exception.Exception KindError
 
-noUnify k1 k2                       = Control.Exception.throw $ KindError NoLoc k1 k2
-infiniteKind v k                    = Control.Exception.throw $ InfiniteKind NoLoc v k
+noUnify l k1 k2                     = Control.Exception.throw $ KindError l k1 k2
+infiniteKind l v k                  = Control.Exception.throw $ InfiniteKind l v k
 
 kindError (KindError l k1 k2)       = (l, " Incompatible kinds: " ++ prstr k1 ++ " and " ++ prstr k2)
 kindError (InfiniteKind l v k)      = (l, " Infinite kind inferred: " ++ prstr  v ++ " = " ++ prstr k)

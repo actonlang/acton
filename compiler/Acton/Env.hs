@@ -250,7 +250,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
                                                         (name "strip",  NVar (monotype $ tFun0 [] tStr))
                                                     ]),
                                 (nRef,              NClass [] [] []),
-                                (nMsg,              NClass [] [] []),
+                                (nMsg,              NClass [a] [] []),
                                 (nException,        NClass [] [] []),
                                 (nBoolean,          NProto [] [] []),
                                 (nIndexed,          NProto [a,b] [] []),
