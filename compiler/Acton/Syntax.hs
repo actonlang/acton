@@ -593,7 +593,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "False","None","NotImplemented","Self","True","actor","after","and","as",
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in",
-                                        "is","lambda","not","protocol","or","pass","raise","return","sync",
+                                        "is","lambda","not","protocol","or","pass","raise","return",
                                         "try","var","while","with","yield"
                                       ]
 

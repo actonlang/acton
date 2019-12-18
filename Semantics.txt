@@ -25,7 +25,7 @@ Keywords:           K       ::=     x,K  |  x=E,K  |  **x  |  .
 Values:             V,W     ::=     True  |  False  |  None  |  (O)  |  (B)  |  c  |
                                     ---- Only intangible constructs below
                                     CLOS(B;F,K):S  |  l  |  a  |  a.m  |
-                                    ACTOR V  |  ASYNC(a) V  |
+                                    ACTOR(V)  |  ASYNC(a,V)  |
                                     CLASS(c):B  |  (c):B
 
 Orderings:          O       ::=     O,V    |  .                                     associative
@@ -38,7 +38,6 @@ Statements:         S       ::=     E  |  P = E  |  D  |  return E  |  pass  |
                                     S; S                                            associative, with unit 'pass'
 
 Declarations:       D       ::=     def x(F,K): S  |
-                                    async def x(F,K): S  |  
                                     actor x(F,K): S  |  
                                     class c(d): M  |
                                     D; D                                            associative & commutative & disjoint
@@ -172,21 +171,6 @@ B  |-  S                    -->     S'                                          
 B  |-  D                    -->     B'                                          if  B,B' |- D ==> B'
 
 
-***** B |- D ==> B *****************
-
-B  |-  def x(F,K): S        ==>     x = CLOS(B;F,K): S
-B  |-  async def x(F,K): S  ==>     x = ASYNC(a) (CLOS(B;F,K):S)                if  (B)._self_ --> a
-B  |-  actor x(F,K): S      ==>     x = ACTOR (CLOS(B;_self_,F,K):S)
-B  |-  class c(d): M        ==>     c = CLASS(d): B'                            if  B |- M ==> B'
-B  |-  D1; D2               ==>     B1; B2                                      if  B |- D1 ==> B1 and B |- D2 ==> B2
-
-
-***** B |- M ==> B *****************
-
-B  |-  x=y,M                ==>     x=V,B'                                      if  B |- x --> V and B |- M ==> B'
-B  |-  .                    ==>     .
-
-
 ***** S --> S' *********************
 
 V; S                        -->     S
@@ -231,6 +215,21 @@ L,l=(c):B  |  l.x = V       -->     L,l=(c):B,x=V  |  pass                      
 L,l=(c):B,x=W  |  l.x = V   -->     L,l=(c):B,x=V  |  pass
 
 
+***** B |- D ==> B *****************
+
+B  |-  def x(F,K): S        ==>     x = CLOS(B;F,K): S
+B  |-  def x(F,K): S        ==>     x = ASYNC(a,CLOS(B;F,K):S)                  if  (B)._self_ --> a  (external view...)
+B  |-  actor x(F,K): S      ==>     x = ACTOR(CLOS(B;_self_,F,K):S)
+B  |-  class c(d): M        ==>     c = CLASS(d): B'                            if  B |- M ==> B'
+B  |-  D1; D2               ==>     B1; B2                                      if  B |- D1 ==> B1 and B |- D2 ==> B2
+
+
+***** B |- M ==> B *****************
+
+B  |-  x=y,M                ==>     x=V,B'                                      if  B |- x --> V and B |- M ==> B'
+B  |-  .                    ==>     .
+
+
 
 ######################################### Global reduction #############################################
 
@@ -246,10 +245,10 @@ B  |-  G                    -->     G'                                          
 
 ***** G --> G' *********************
 
-a:<L | QE[ (ASYNC(a) V)(O,B) ]>                         -->     a:<L | QE[ a.m ],m=V(O,B)>
-a:<L | QE[ (ASYNC(b) V)(O,B) ]>,    b:<L' | Q>          -->     a:<L | QE[ b.m ]>,           b:<L' | Q,m=V(O,B)>
-a:<L | QE[ (ACTOR V)(O,B) ]>                            -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,O,B)>
-a:<L | QE[ await b.m ]>,            b:<L' | H,m=V,Q>    -->     a:<L | QE[ V ]>,             b:<L' | H,m=V,Q>
+a:<L | QE[ ASYNC(a,V)(O,B) ]>                           -->     a:<L | QE[ a.m ],m=V(O,B)>
+a:<L | QE[ ASYNC(b,V)(O,B) ]>,   b:<L' | Q>             -->     a:<L | QE[ b.m ]>,           b:<L' | Q,m=V(O,B)>
+a:<L | QE[ ACTOR(V)(O,B) ]>                             -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,O,B)>
+a:<L | QE[ await b.m ]>,         b:<L' | H,m=V,Q>       -->     a:<L | QE[ V ]>,             b:<L' | H,m=V,Q>
 
 a:<L | QE[ await b.m ]>,   b:<L' | H,m=do raise V,Q>    -->     a:<L | QE[ do raise V ]>,    b:<L' | H,m=do raise V,Q>
 

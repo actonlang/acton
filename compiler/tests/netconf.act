@@ -3,6 +3,9 @@ import xml
 
 def connect(env, address, port, established_cb, error_cb):
     env.open(address, port, lambda conn: established_cb(session(conn, error_cb)))
+
+
+
     
 actor session(conn, error_cb):
 
@@ -34,7 +37,10 @@ actor session(conn, error_cb):
         error_cb(what)
         responder = None
     
-    conn.receive_on(async(_receive), async(_error))
+    conn.receive_on(_receive, _error)
+
+
+
 
 
 def print_rpc(message_id, second_tag, inner):
