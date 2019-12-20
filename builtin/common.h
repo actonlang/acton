@@ -1,7 +1,7 @@
 #pragma once
 
 typedef void *$WORD;
-typedef int $int;
+typedef int *$int;
 typedef int $bool;
 
 struct exception;
@@ -11,10 +11,12 @@ typedef struct exception *exception;
 void RAISE(exception e);
 
 typedef struct Slice {
-  $int *start;
-  $int *end;
-  $int *step;
+  $int start;
+  $int stop;
+  $int step;
 } *Slice;
+
+void normalize_slice(Slice slc, int len, int *slen, int *start, int *stop, int *step);
 
 struct Pair {
   $WORD fst;
