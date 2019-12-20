@@ -7,7 +7,16 @@ x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
 x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
-x9 : sync X (int,*A,b : bool,**B) -> set[int]            # function with effects and all kinds of parameters
+x9 : async X (int,*A,b : bool,**B) -> set[int]           # function with effects and all kinds of parameters
+
+x10: act(int, *A, b: bool) -> Msg[int]
+x11: X(f: X(A)->B, a: [A]) -> [B]
+#x12: st[Y](int, list[Y,str]) -> str
+#x13: st(int, dict[int]) -> None
+#x14: mut[Y](int, list[Y,str]) -> str
+#x15: mut(int, dict[int]) -> None
+#x16: !Y(int, list[Y,str]) -> str
+#x17: !(int, dict[int]) -> None
 
 a0 : (float,float) -> (float | 'division by zero')       # function without effects; union result
 a1 : (str,*P,c : bool) -> None                           # function with * separation of pos and kwd parameters

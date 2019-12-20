@@ -3,15 +3,15 @@ import netconf
 actor Controller(env, address, port):
     
     var nc = None
-    var state = 'IDLE'                  # EMPTY | IDLE(nc) | GET(nc)
+    var state = 'IDLE'
     var setting = 0
     
-    def _restart(what):
+    def restart(what):
         if nc != None:
             nc.abort()
             nc = None
         print('Controller', str(address) + ':' + str(port), what)
-        netconf.connect(env, address, port, async(_established), async(_error))
+        netconf.connect(env, address, port, _established, _error)
         state = 'IDLE'
 
     def _established(sess):
@@ -19,15 +19,15 @@ actor Controller(env, address, port):
             nc = sess
             after 10: _tick()
         else:
-            _restart('connection failure')
+            restart('connection failure')
     
     def _tick():
         if state == 'IDLE':
             state = 'GET'
             after 10: _tick()
-            nc.get('/oper/thevalue', async(_reply))
+            nc.get('/oper/thevalue', _reply)
         else:
-            _restart('timeout')
+            restart('timeout')
     
     def _reply(newval):
         if state == 'GET':
@@ -35,12 +35,12 @@ actor Controller(env, address, port):
             nc.edit_config('/config/settings/thesetting', setting)
             state = 'IDLE'
         else:
-            _restart('stray reply')
+            restart('stray reply')
             
     def _error(what):
-        _restart('NETCONF error: ' + what)
+        restart('NETCONF error: ' + what)
 
-    _restart('initial')
+    restart('initial')
 
 
 def compute(setting, newval):
