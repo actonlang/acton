@@ -5,6 +5,7 @@
 #include "common.h"
 #include "list.h"
 
+//For now...
 void RAISE(exception e) {
   fprintf(stderr,"exception raised\n");
   exit(1);
@@ -40,8 +41,11 @@ $list fromto(int a, int b) {
     $list_append(res,toWord(i));
   return res;
 }
-// sum : [A (Plus)] => (Sequence[A]) -> A
-// Here we do the special case of a list of lists so the Plus ancestor works...
+
+
+// sum : Sequence[Sequence[A]]) -> Sequence[A]
+//Note that we do only a special case. The code below does not cover the case where Sequence[A] is replaced by B(Plus)
+//Note also that we cannot use __len__ to find the length of s, because we cannot pass Container. This must be fixed.
 $WORD sum(int n, Sequence s) {
   $WORD res = s->__class__->Sliceable$__methods__->Indexed$__methods__->__getitem__((Indexed)s,toWord(0));
   // We cannot follow the chain past Container_Eq, since we have a function there 

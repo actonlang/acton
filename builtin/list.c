@@ -8,7 +8,7 @@
 //  Method tables ///////////////////////////////////////////////////////////////
 
 static struct $list$__methods__ table = {$list_copy};
-$list$__methods__ methods = &table;
+$list$__methods__ list_methods = &table;
  
 static struct Plus$__class__ Plus_$list_struct;
 Plus$__class__ Plus_$list_instance;
@@ -92,7 +92,7 @@ static $list list_new(int capacity) {
   lst->capacity = capacity;
   $list res;
   res = malloc(sizeof($list));
-  res->__class__ = methods; 
+  res->__class__ = list_methods; 
   res->__internal__ = lst;
   return res;
 }

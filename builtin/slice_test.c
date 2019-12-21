@@ -4,8 +4,7 @@
 #include "common.h"
 #include "list.h"
 
-void
-RAISE(exception e) {
+void RAISE(exception e) {
   fprintf(stderr,"exception raised\n");
   exit(1);
 }
