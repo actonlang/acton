@@ -332,7 +332,7 @@ int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
 	int node_ids[] = {0,1};
 	long counters[] = {0,0};
 
-	vector_clock * vc = init_vc(2, node_ids, counters, 1), * vc_r = NULL;
+	vector_clock * vc = init_vc(2, node_ids, counters, 0), * vc_r = NULL;
 	add_component_vc(vc, 2, 0);
 	increment_vc(vc, 0);
 	increment_vc(vc, 0);

@@ -13,9 +13,11 @@
 #include "db_messages.pb-c.h"
 
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
-#define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)					\
+#define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)						\
 	   (exact_match) = 0; 			  												\
-	   for(int first = 0, last = (vc)->no_nodes - 1, middle = (first+last)/2;first <= last; middle = (first + last)/2) \
+	   int first = 0, last = (vc)->no_nodes - 1; 			  							\
+	   int middle = (first+last)/2; 			  										\
+	   for(;first <= last; middle = (first + last)/2) 								\
 	   { 																			\
 		   if((vc)->node_ids[middle].node_id == (node_id)) 							\
 		   { 								  										\

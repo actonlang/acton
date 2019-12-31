@@ -225,7 +225,12 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 
 vector_clock * get_empty_vc()
 {
-	int node_ids[] = {0};
+	return init_vc(0, NULL, NULL, 0);
+}
+
+vector_clock * get_local_vc(int my_id)
+{
+	int node_ids[] = {my_id};
 	long counters[] = {0};
 	return init_vc(1, node_ids, counters, 0);
 }

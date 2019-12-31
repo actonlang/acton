@@ -543,12 +543,14 @@ int main(int argc, char **argv) {
 	// Get db pointer:
 
     /* check command line arguments */
-    if (argc != 3) {
-       fprintf(stderr,"usage: %s <hostname> <port>\n", argv[0]);
+    if (argc != 5) {
+       fprintf(stderr,"usage: %s <hostname> <port> <no_actors> <no_enqueues>\n", argv[0]);
        exit(0);
     }
     hostname = argv[1];
     portno = atoi(argv[2]);
+    no_actors = atoi(argv[3]);
+    no_items = atoi(argv[4]);
 
     remote_db_t * db = get_remote_db(3);
 
@@ -569,13 +571,17 @@ int main(int argc, char **argv) {
 	pthread_t actor_ts[50];
 	actor_args cargs[50];
 	int node_ids[50];
+	memset(&node_ids, 0, 50*sizeof(int));
 	long counters[50];
 	memset(&counters, 0, 50*sizeof(long));
 
 	for(int i=0;i<no_actors;i++)
 	{
 		node_ids[i] = i;
+	}
 
+	for(int i=0;i<no_actors;i++)
+	{
 		memset(&(cargs[i]), 0, sizeof(actor_args));
 		cargs[i].db = db;
 		cargs[i].app_id = (WORD) 0;

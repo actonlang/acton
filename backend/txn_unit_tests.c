@@ -550,13 +550,17 @@ int main(int argc, char **argv) {
 	pthread_t actor_ts[50];
 	actor_args cargs[50];
 	int node_ids[50];
+	memset(&node_ids, 0, 50*sizeof(int));
 	long counters[50];
 	memset(&counters, 0, 50*sizeof(long));
 
 	for(int i=0;i<no_actors;i++)
 	{
 		node_ids[i] = i;
+	}
 
+	for(int i=0;i<no_actors;i++)
+	{
 		memset(&(cargs[i]), 0, sizeof(actor_args));
 		cargs[i].db = db;
 		cargs[i].app_id = (WORD) 0;
