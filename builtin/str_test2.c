@@ -19,7 +19,7 @@ int main() {
   $str suffix =  fromUTF8("</rpc-reply>");
   $str message = fromUTF8("message");
   $str text = $str_add(prefix,$str_add(message,suffix));
-  $bool a = $str_startswith(text,prefix,NULL,NULL);
+  $bool a = text->__class__->startswith(text,prefix,NULL,NULL);
   if (a && $str_endswith(text,suffix,NULL,NULL)) {
     struct  Slice slc;
     slc.start = $str_len(prefix);
