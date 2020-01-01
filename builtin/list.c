@@ -422,7 +422,7 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
 // Instance initialization ////////////////////////////////////////////////////////////////////
 
 Container_Eq$__class__ Container_Eq$list_instance(Eq eqA) {
-  Container_Eq$__class__ res = malloc(sizeof(Container_Eq$__class__));
+  Container_Eq$__class__ res = malloc(sizeof(struct Container_Eq$__class__));
   res->$GCINFO = "GC_Container_Eq";
   res->Collection$__methods__ = Collection_$list_instance;
   res->__contains__ = $list_contains_instance;
