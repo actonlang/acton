@@ -116,4 +116,4 @@ $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests remote_txn_unit_tests server client
+	rm -rf *.o failure_detector/*.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests remote_txn_unit_tests server client failure_detector/db_messages_test
