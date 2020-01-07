@@ -30,6 +30,9 @@ protocol Minus:
   @staticmethod
   __sub__      : (Self,Self) -> Self
 
+protocol Hashable[A (Eq)]:
+  __hash__     : int
+  
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
@@ -40,10 +43,6 @@ protocol Collection[A] (Iterable[A]):
   __fromiter__ : (Iterable[A]) -> Self 
   __len__      : () -> int
   
-protocol Container [A (Eq)] (Collection):
-  __contains__    : (A) -> bool  
-  __containsnot__ : (A) -> bool  
-
 protocol Indexed[A,B]:
   __getitem__  : (A) -> B
   __setitem__ : !(A,B) -> None 
@@ -52,13 +51,17 @@ protocol Indexed[A,B]:
 protocol Sliceable[A] (Indexed[int,A]):
   __getslice__ : (int?,int?,int?) -> Sequence[A]
  
-protocol Sequence[A] (Sliceable[A], Container[A], Plus):
+protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   __reversed__ : () -> Iterable[A] 
   insert      : !(int,A) -> None
   append      : !(A) -> None   
   reverse     : !() -> None       
 
-protocol Mapping[A,B] (Collection[A], Indexed[A,B]):
+protocol Container [A (Eq)] (Collection):
+  __contains__    : (A) -> bool  
+  __containsnot__ : (A) -> bool  
+
+protocol Mapping[A (Eq),B] (Container[A], Indexed[A,B]):
   get         : (A) -> B?
   keys        : () -> Iterable[A]
   values      : () -> Iterable[B]
@@ -67,7 +70,7 @@ protocol Mapping[A,B] (Collection[A], Indexed[A,B]):
   popitem     : !() -> (A,B)
   setdefault  : !(A,B) -> None
 
-protocol Set[A (Eq)] (Collection[A], Ord, Logical, Minus):
+protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
   isdisjoint  : (Set[A]) -> bool
   add         : !(A) -> None  
   discard     : !(A) -> None  
