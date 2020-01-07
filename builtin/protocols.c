@@ -61,6 +61,16 @@ Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__) {
   return pack;
 }
 
+// protocol Hashable_Eq  ////////////////////////////////////////////////////////////////////////////////////
+ 
+Hashable_Eq Hashable_Eq$__pack__(Hashable_Eq$__class__ __class__, $WORD __impl__) {
+  Hashable_Eq pack = malloc(sizeof(struct Hashable_Eq));
+  pack->$GCINFO = "pack";
+  pack->__class__ = __class__;
+  pack->__impl__ = __impl__;
+  return pack;
+}
+
 // protocol Iterable  ////////////////////////////////////////////////////////////////////////////////////
  
 Iterable Iterable$__pack__(Iterable$__class__ __class__, $WORD __impl__) {

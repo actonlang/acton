@@ -136,6 +136,28 @@ struct Iterator$__class__ {
 
 Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__);
  
+// protocol Hashable  ////////////////////////////////////////////////////////////////////////////////////
+
+struct Hashable_Eq;
+typedef struct Hashable_Eq *Hashable_Eq;
+
+struct Hashable_Eq$__class__;
+typedef struct Hashable_Eq$__class__ *Hashable_Eq$__class__;
+
+struct Hashable_Eq {
+  char *$GCINFO;
+  Hashable_Eq$__class__ __class__;
+  $WORD __impl__;
+};
+
+struct Hashable_Eq$__class__ {
+  char *$GCINFO;
+  $int (*__hash__)(Hashable_Eq self);
+  Eq eqA;
+};
+
+Hashable_Eq Hashable_Eq$__pack__(Hashable_Eq$__class__ __class__, $WORD __impl__);
+ 
 // protocol Iterable  ////////////////////////////////////////////////////////////////////////////////////
 
 struct Iterable;
@@ -268,7 +290,7 @@ struct Sequence {
 struct Sequence$__class__ {
   char *$GCINFO;
   Sliceable$__class__ Sliceable$__methods__;
-  Container_Eq$__class__ Container_Eq$__methods__;
+  Collection$__class__ Collection$__methods__;
   Plus$__class__ Plus$__methods__;
   Iterable (*__reversed__)(Sequence self);
   void (*insert)(Sequence self, $int ix, $WORD elem);
@@ -294,7 +316,7 @@ struct Mapping {
 
 struct Mapping$__class__ {
   char *$GCINFO;
-  Collection$__class__ Collection$__methods__;
+  Container_Eq$__class__ Container_Eq$__methods__;
   Indexed$__class__ Indexed$__methods__;
   $WORD (*get)(Mapping self, $WORD key);
   Iterable (*keys)(Mapping self);
@@ -323,7 +345,7 @@ struct Set {
 
 struct Set$__class__ {
   char *$GCINFO;
-  Collection$__class__ Collection$__methods__;
+  Container_Eq$__class__ Container_Eq$__methods__;
   Ord$__class__ Ord$__methods__;
   Logical$__class__ Logical$__methods__;
   Minus$__class__ Minus$__methods__;
