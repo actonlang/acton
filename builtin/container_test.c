@@ -18,7 +18,7 @@ $WORD toWord(long i) {
   return res;
 }
 
-$list fromto(int a, int b) {
+$list range(int a, int b) {
   $list res = $list_fromiter(NULL);
   for (long i = a; i<b; i++)
     $list_append(res,toWord(i));
@@ -39,7 +39,7 @@ struct Eq Eq$int_instance = {"...GC",&$int_Eq_class,NULL};
 
 int main() {
   list_instance_init();
-  $list lst = fromto(1,100);
+  $list lst = range(1,100);
   Container_Eq$__class__ cl = Container_Eq$list_instance(&Eq$int_instance);
   Container_Eq lstc = Container_Eq$__pack__(cl,lst);
   $bool b = lstc->__class__->__contains__(lstc,toWord(17));

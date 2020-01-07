@@ -390,18 +390,18 @@ void $list_reverse($list lst) {
 // instance methods
 
 Iterable $list_reversed_instance(Sequence self) {
-  return $list_reversed(($list)self);
+  return $list_reversed(($list)self->__impl__);
 }
 
 void $list_insert_instance(Sequence self, $int ix, $WORD elem) {
-  $list_insert(($list)self,*ix,elem);
+  $list_insert(($list)self->__impl__,*ix,elem);
 }
 void $list_append_instance(Sequence self, $WORD elem) {
-  $list_append(($list)self,elem);
+  $list_append(($list)self->__impl__,elem);
 }
 
 void $list_reverse_instance(Sequence self) {
-  $list_reverse(($list)self);
+  $list_reverse(($list)self->__impl__);
 }
 
 // List-specific methods /////////////////////////////////////////////////////////////////////
@@ -467,7 +467,7 @@ void list_instance_init() {
   Sequence_$list_struct.$GCINFO = "GC_Sequence";
   Sequence_$list_struct.Plus$__methods__ = Plus_$list_instance;
   Sequence_$list_struct.Sliceable$__methods__ = Sliceable_$list_instance;
-  // Sequence_$list_struct.Container$__methods__ = Container_$list_instance;
+  Sequence_$list_struct.Collection$__methods__ = Collection_$list_instance;
   Sequence_$list_struct.append = $list_append_instance;
   Sequence_$list_struct.insert = $list_insert_instance;
   Sequence_$list_struct.__reversed__ = $list_reversed_instance;
