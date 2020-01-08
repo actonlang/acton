@@ -285,7 +285,6 @@ instance KInfer TCon where
     kinfer env (TC n ts)            = do let kn = tconKind n env
                                          ks <- mapM (kinfer env) ts
                                          k <- newKVar
-                                         traceM ("## kinfer " ++ prstr n ++ " :: " ++ prstr kn)
                                          kunify (loc n) kn (KFun ks k)
                                          return k
 

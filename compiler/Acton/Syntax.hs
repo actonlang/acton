@@ -277,14 +277,14 @@ nSelf           = Name NoLoc "Self"
 rPos n          = Name NoLoc (show n)
 rAwait          = Name NoLoc "await"
 rAsync          = Name NoLoc "async"
-rAct            = Name NoLoc "actor"
+rAct            = Name NoLoc "act"
 rMut            = Name NoLoc "mut"
 rRet            = Name NoLoc "ret"
 
 fxAwait         = TRow NoLoc rAwait (monotype tNone)
 fxAsync         = TRow NoLoc rAsync (monotype tNone)
 fxAct           = TRow NoLoc rAct (monotype tNone)
-fxMut           = TRow NoLoc rMut (monotype tNone)
+fxMut t         = TRow NoLoc rMut (monotype t)
 fxRet t         = TRow NoLoc rRet (monotype t)
 fxVar v         = TVar NoLoc v
 fxNil           = TNil NoLoc
@@ -571,12 +571,6 @@ cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
 -- tuple es                            = Tuple l0 (map Elem es)
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
-
-asyncKW                             = Name NoLoc "async"
-syncKW                              = Name NoLoc "sync"
-actKW                               = Name NoLoc "actor"
-mutKW                               = Name NoLoc "mut"
-retKW                               = Name NoLoc "ret"
 
 isInstAttr (InstAttr _)             = True
 isInstAttr _                        = False

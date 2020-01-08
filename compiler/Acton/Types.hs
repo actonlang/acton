@@ -894,17 +894,17 @@ instance Infer Target where
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
                                              constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
-                                             equFX env (fxMut tWild)
+                                             equFX env (fxMut tWild tWild)
                                              return (t0, TIndex l e' [i'])
     infer env (TSlice l e [s])          = do (t,e') <- infer env e
                                              s' <- inferSlice env s
                                              constrain [Impl env t cSliceable, Sub env t tObject]
-                                             equFX env (fxMut tWild)
+                                             equFX env (fxMut tWild tWild)
                                              return (t, TSlice l e' [s'])
     infer env (TDot l e n)              = do (t,e') <- infer env e
                                              t0 <- newTVar
                                              constrain [Mut env t n t0]
-                                             equFX env (fxMut tWild)
+                                             equFX env (fxMut tWild tWild)
                                              return (t0, TDot l e' n)
     infer env (TaTuple l targs)         = do (ts,targs') <- unzip <$> mapM (infer env) targs
                                              return (tTuple (foldr posRow' posNil ts), TaTuple l targs')

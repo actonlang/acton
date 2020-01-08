@@ -1055,11 +1055,9 @@ funargs = funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 --- Types ----------------------------------------------------------------------
 
 fx      :: Parser (S.FXRow -> S.FXRow)
-fx      =   rword "await" *> return S.fxAwait
-        <|> rword "async" *> return S.fxAsync
-        <|> rword "act" *> return S.fxAct
-        <|> rword "mut" *> return S.fxMut
-        <|> rword "ret" *> parens (S.fxRet <$> ttype)
+fx      =   rword "act" *> return S.fxAct
+        <|> rword "mut" *> brackets (S.fxMut <$> ttype)
+        <|> rword "ret" *> brackets (S.fxRet <$> ttype)
 
 fxrow   :: Parser S.FXRow
 fxrow   = do fxs <- many fx
