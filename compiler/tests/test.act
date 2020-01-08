@@ -152,6 +152,9 @@ protocol Bepa():
     compare : (Self,Self) -> bool
     
     def compare(x:Self, y:Self) -> bool:
+        if True:
+            while False:
+                pass
         return True
     
 
