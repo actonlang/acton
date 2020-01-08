@@ -143,6 +143,10 @@ class Apa:
     def f(x):
         pass
 
+if True:
+    while False:
+        pass
+
 protocol Bepa():
         
     @classattr

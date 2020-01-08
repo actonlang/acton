@@ -79,7 +79,7 @@ assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success 
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
 assertNotProtoExt   = ifCtx [PROTO,EXT]             [IF,SEQ,LOOP]       (fail "statement not allowed inside a protocol or extension") success
-assertNotDeclOrTop  = ifCtx [CLASS,PROTO,EXT,TOP]   [IF]                (fail "statement not allowed on the top level or inside a class, protocol or extension") success
+assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
 ifDecl              = ifCtx [CLASS,PROTO]           [IF]
@@ -685,14 +685,14 @@ if_stmt = addLoc $ do
 branch p = S.Branch <$> expr <*> suite IF p
 
 while_stmt = addLoc $ do
-                 assertNotDeclOrTop
+                 assertNotDecl
                  (p,_) <- withPos (rword "while")
                  e <- expr
                  ss1 <- suite LOOP p
                  S.While NoLoc e ss1 . maybe [] id <$>  optional (else_part p)
                  
 for_stmt = addLoc $ do
-                 assertNotDeclOrTop
+                 assertNotDecl
                  (p,_) <- withPos (rword "for")
                  pat <- gen_pattern
                  rword "in"
@@ -709,7 +709,7 @@ except = addLoc $ do
             
 try_stmt = addLoc $ do
                 assertNotData
-                assertNotDeclOrTop
+                assertNotDecl
                 (p,_) <- withPos (rword "try")
                 ss <- suite SEQ p
                 do
@@ -728,7 +728,7 @@ try_stmt = addLoc $ do
                  
 with_stmt = addLoc $ do
                 assertNotData
-                assertNotDeclOrTop
+                assertNotDecl
                 (s,_) <- withPos (rword "with")
                 S.With NoLoc <$> (with_item `sepBy1` comma) <*> suite SEQ s
   where with_item = S.WithItem <$> expr <*> optional (rword "as" *> gen_pattern)
