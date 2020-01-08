@@ -349,11 +349,9 @@ instance Pretty UType where
     pretty (ULit str)               = text str
 
 prettyFXRow (TRow _ n t r)
-  | n == syncKW                     = text "sync" <+> prettyFXRow r
-  | n == asyncKW                    = text "async" <+> prettyFXRow r
-  | n == actKW                      = text "act" <+> prettyFXRow r
-  | n == mutKW                      = text "mut" <+> prettyFXRow r
-  | n == retKW                      = text "ret" <> parens (pretty t) <+> prettyFXRow r
+  | n == rAct                       = text "act" <+> prettyFXRow r
+  | n == rMut                       = text "mut" <> brackets (pretty t) <+> prettyFXRow r
+  | n == rRet                       = text "ret" <> brackets (pretty t) <+> prettyFXRow r
 prettyFXRow (TVar _ tv)             = pretty tv
 prettyFXRow (TWild _)               = text "_"
 prettyFXRow (TNil _)                = empty

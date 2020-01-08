@@ -7,7 +7,7 @@ x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
 x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
-x9 : async X (int,*A,b : bool,**B) -> set[int]           # function with effects and all kinds of parameters
+x9 : act X (int,*A,b : bool,**B) -> set[int]             # function with effects and all kinds of parameters
 
 x10: act(int, *A, b: bool) -> Msg[int]
 x11: X(f: X(A)->B, a: [A]) -> [B]
