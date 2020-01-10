@@ -182,7 +182,7 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 
 	vc->capacity = (int)(((init_no_nodes > DEFAULT_SIZE)?init_no_nodes:DEFAULT_SIZE) * GROWTH_RATE);
 
-	printf("Alloc-ing vc of capacity %d for no_nodes = %d\n", vc->capacity, vc->no_nodes);
+//	printf("Alloc-ing vc of capacity %d for no_nodes = %d\n", vc->capacity, vc->no_nodes);
 
 	vc->node_ids =  (versioned_id *) malloc (vc->capacity * sizeof(struct versioned_id));
 	memset(vc->node_ids, 0, vc->capacity * sizeof(struct versioned_id));

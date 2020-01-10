@@ -7,7 +7,7 @@
 #ifndef BACKEND_FAILURE_DETECTOR_VECTOR_CLOCK_H_
 #define BACKEND_FAILURE_DETECTOR_VECTOR_CLOCK_H_
 
-#define DEFAULT_SIZE 16
+#define DEFAULT_SIZE 8
 #define GROWTH_RATE 2.0
 
 #include "db_messages.pb-c.h"
