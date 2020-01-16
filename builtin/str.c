@@ -3,9 +3,91 @@
 #include <stdio.h>
 #include <limits.h>
 #include "str.h"
+#include "iterator.h"
 #include "utf8proc.h"
-//#include "hash.h"
+#include "hash.h"
 
+//  Method tables ///////////////////////////////////////////////////////////////
+
+$bool $str_contains($str s, $str sub);
+
+$WORD $str_getitem($str s, int i);
+$str $str_getslice($str s, Slice slc);
+
+$str $str_capitalize($str s);
+$str $str_center($str s, int width, $str fill);
+$int $str_count($str s, $str sub, $int start, $int end);
+//void $str_encode($str s, bytes_t *res);
+$bool $str_endswith($str s, $str suffix, $int start, $int end);
+$str $str_expandtabs($str s, int tabsize);      
+$int $str_find($str s, $str sub, $int start, $int end);
+//format and format_map will be replace by other methods
+$int $str_index($str s, $str sub, $int start, $int end);
+$bool $str_isalnum($str s);
+$bool $str_isalpha($str s);
+$bool $str_isascii($str s);
+$bool $str_isdecimal($str s);
+$bool $str_isdigit($str s);
+$bool $str_isidentifier($str s);
+$bool $str_islower($str s);
+$bool $str_isnumeric($str s);
+$bool $str_isprintable($str s);
+$bool $str_isspace($str s);
+$bool $str_istitle($str s);
+$bool $str_isupper($str s);
+$str $str_join($str sep, Iterator iter);
+$str $str_ljust($str s, int width, $str fill); 
+$str $str_lower($str s);
+$str $str_lstrip($str s,$str cs); 
+void $str_partition($str s, $str sep, $str *ls, $str *ssep, $str *rs);
+$str $str_replace($str s, $str old, $str new, $int count);
+$int $str_rfind($str s, $str sub, $int start, $int end);
+$int $str_rindex($str s, $str sub, $int start, $int end);
+$str $str_rjust($str s, int width, $str fill);  
+void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs); 
+$str $str_rstrip($str s,$str cs);
+$list $str_split($str s, $str sep, $int maxsplit);  
+$list $str_splitlines($str s); 
+$bool $str_startswith($str s, $str prefix, $int start, $int end); 
+$str $str_strip($str s,$str cs);
+$str $str_upper($str s);
+$str $str_zfill($str s, int width);
+
+static struct $str$__methods__ $str_table =
+   {$str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii,
+    $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
+    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith,
+    $str_strip, $str_upper, $str_zfill};
+
+
+static $str$__methods__ $str_methods = &$str_table;
+
+static struct Eq$__class__  Eq$str_struct;
+
+static struct Hashable_Eq$__class__ Hashable_Eq$str_struct;
+
+static struct Plus$__class__ Plus$str_struct;
+
+static struct Iterator$__class__ Iterator$str_struct;
+Iterator$__class__ Iterator$str_instance;
+
+static struct Iterator$__class__ Iterator$str_reversed_struct;
+Iterator$__class__ Iterator$str_reversed_instance;
+
+static struct Iterable$__class__ Iterable$str_struct;
+
+static struct Iterable$__class__ Iterable$str_reversed_struct;
+Iterable$__class__ Iterable$str_reversed_instance;
+
+static struct Collection$__class__ Collection$str_struct;
+
+static struct Indexed$__class__ Indexed$str_struct;
+
+static struct Sliceable$__class__ Sliceable$str_struct;
+
+static struct Sequence$__class__ Sequence$str_struct;
+
+static struct Container_Eq$__class__ Container_Eq$str_struct;
 
 static unsigned char nul = 0;
 
@@ -13,41 +95,31 @@ static struct str_internal_t null_struct = {0,0,&nul};
 
 static str_internal_t null_str = &null_struct;
 
-$int to$int(int n) {
-  $int res = malloc(sizeof(int));
+$int to$int(long n) {
+  $int res = malloc(sizeof(long));
   *res = n;
   return res;
 }
 
 
-static struct $str$__methods__ table =
-  {$str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii,
-   $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
-   $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith,
-   $str_strip, $str_upper, $str_zfill};
-
-static $str$__methods__ methods = &table;
- #define NEW_INTERNAL(nm,nchrs,nbtes)         \
-        nm = malloc(sizeof(struct str_internal_t)); \
-        (nm)->nchars = nchrs;            \
-        (nm)->nbytes = nbtes;            \
-        (nm)->str = malloc((nm)->nbytes + 1);    \
-        (nm)->str[(nm)->nbytes] = 0
+#define NEW_INTERNAL(nm,nchrs,nbtes)         \
+nm = malloc(sizeof(struct str_internal_t)); \
+(nm)->nchars = nchrs;            \
+(nm)->nbytes = nbtes;            \
+(nm)->str = malloc((nm)->nbytes + 1);    \
+(nm)->str[(nm)->nbytes] = 0
 
 #define NEW_STR(nm,internal)  \
-  $str nm; \
-  nm = malloc(sizeof(struct $str)); \
-  (nm)->__class__ = methods; \
-  (nm)->__internal__ = internal; \
-  return nm
-
+$str nm; \
+nm = malloc(sizeof(struct $str)); \
+(nm)->__class__ = $str_methods; \
+(nm)->__internal__ = internal; \
+return nm;
+         
 $str mk_str(str_internal_t internal) {
-  NEW_STR(res,internal);
+  NEW_STR(res,internal)
 }
-
-// This constructor
-// - checks that the argument is a null-terminated, correctly UTF-8 encoded string,
-// - computes and stores both # bytes (excluding the terminating 0) and # Unicode characters.
+         
 $str fromUTF8(char *str) {
   int nbytes = 0;
   int nchars = 0;
@@ -188,7 +260,7 @@ static int get_index(int i, int nchars) {
 // Eliminates slice notation in find, index, count and other methods
 // with optional start and end and adds defaults for omitted parameters.
 
-static int fix_start_end(int nchars, int **start, int **end) {
+static int fix_start_end(int nchars, long **start, long **end) {
   if (*start==NULL) {
     *start = to$int(0);
   }
@@ -275,7 +347,46 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
   return -1;
 }
 
-/* ******** str methods ******************* */
+// Protocol instances /////////////////////////////////////////////////////////////////////////////
+/* 
+Note: We make str instances for Collection, Indexed, Sliceable and Sequence even though these protocols 
+include mutating methods. These methods raise NOTIMPLEMENTED.
+*/
+
+// Eq ///////////////////////////////////////////////////////////////////////////////////////////////
+$bool $str_eq($str a, $str b) {
+  return !strcmp((char *)a->__internal__->str,(char *)b->__internal__->str);
+}
+         
+$bool $str_neq($str a, $str b) {
+  return !$str_eq(a,b);
+}
+
+// instance methods
+
+$bool $str_eq_instance($WORD a, $WORD b) {
+  return $str_eq(($str)a,($str)b);
+}
+
+$bool $str_neq_instance($WORD a, $WORD b) {
+  return $str_neq(($str)a,($str)b);
+}
+
+// Hashable_Eq ///////////////////////////////////////////////////////////////////////////////////
+
+
+// hash function $string_hash defined in hash.c
+
+// instance method
+
+$int $str_hash_instance(Hashable_Eq self) {
+  $int res = malloc(sizeof(long));
+  str_internal_t s = (($str)self->__impl__)->__internal__;
+  *res = $string_hash(s->str,s->nbytes);
+  return res;
+}
+
+// Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
 $str $str_add($str s, $str t) {
   str_internal_t r, si = s->__internal__, ti = t->__internal__;
@@ -285,10 +396,40 @@ $str $str_add($str s, $str t) {
   NEW_STR(res,r);
 }
 
+// instance method
+
+$WORD $str_add_instance($WORD a, $WORD b) {
+  return ($WORD)$str_add(($str)a,($str)b);
+}
+
+
+// Collection ///////////////////////////////////////////////////////////////////////////////////////
+
+$str $str_fromiter(Iterable it) {
+  exception e;
+  MKEXCEPTION(e,NOTIMPLEMENTED);
+  RAISE(e);
+  return NULL;
+}
+         
+         
 $int $str_len($str s) {
   $int res = to$int(s->__internal__->nchars);
   return res;
 }
+
+// instance methods
+
+Collection $str_fromiter_instance(Iterable it) {
+  $str res = $str_fromiter(it);
+  return Collection$__pack__(Collection$str_instance,($WORD)res);
+}
+
+$int $str_len_instance(Collection self) {
+  return $str_len(($str)self->__impl__);
+}
+
+// Container ///////////////////////////////////////////////////////////////////////////
 
 $bool $str_contains($str s, $str sub) {
   str_internal_t si = s->__internal__;
@@ -296,67 +437,137 @@ $bool $str_contains($str s, $str sub) {
   return bmh(si->str,subi->str,si->nbytes,subi->nbytes) > 0;
 }
 
-/*
+$bool $str_containsnot($str s, $str sub) {
+  return !$str_contains(s,sub);
+}
+
+// instance methods
+
+$bool $str_contains_instance (Container_Eq self, $WORD elem) {
+  return $str_contains(($str)self->__impl__,elem);
+}
+
+$bool $str_containsnot_instance (Container_Eq self, $WORD elem) {
+  return $str_containsnot(($str)self->__impl__,elem);
+}
+
+// Iterable ///////////////////////////////////////////////////////////////////////////
 
 typedef struct str_iterator_struct {
+  char *$GCINFO;
   unsigned char *nxt;
   int remaining;
 } *str_iterator_state_t; 
 
-int str_next(iterator_t iter,WORD *res) {
+static str_iterator_state_t $str_state_of($str s) {
+  str_iterator_state_t state = malloc(sizeof(struct str_iterator_struct));
+  state->$GCINFO = "iterator_state";
+  state->nxt = s->__internal__->str;
+  state->remaining = s->__internal__->nchars;
+  return state;
+}
+
+static $WORD $str_iterator_next(iterator_internal_t iter) {
+  $WORD res;
   str_iterator_state_t state = iter->state;
-  if (state->remaining==0)
-    return STOPITERATION;
-  else {
-    *res = (WORD)mk_char(state->nxt);
+  if (state->remaining==0) {
+    exception e;
+    MKEXCEPTION(e,STOPITERATION);
+    RAISE(e);
+  } else {
+    res = ($WORD)mk_char(state->nxt);
     state->nxt +=byte_length2(*state->nxt);
     state->remaining--;
-    return 0;
   }
+  return res;
 }
 
-int str_reversed_next(iterator_t iter,WORD *res) {
+static $WORD $str_reversed_next(iterator_internal_t iter) {
+  $WORD res;
   str_iterator_state_t state = iter->state;
-  if (state->remaining==0)
-    return STOPITERATION;
-  else {
-    *res = (WORD)mk_char(state->nxt);
+  if (state->remaining==0) {
+    exception e;
+    MKEXCEPTION(e,STOPITERATION);
+    RAISE(e);
+  } else {
+    res = ($WORD)mk_char(state->nxt);
     state->nxt = skip_chars(state->nxt,-1,0);
     state->remaining--;
-    return 0;
   }
+  return res;
 }
 
 
-iterator_t str_iter(str_t s) {
+iterator_internal_t $str_iter($str s) {
   str_iterator_state_t state = malloc(sizeof(struct str_iterator_struct));
-  iterator_t it = malloc(sizeof(struct iterator_struct));
-  state->nxt = s->str;
-  state->remaining = s->nchars;
-  it->state = (WORD)state;
-  it->next = str_next;
+  iterator_internal_t it = malloc(sizeof(iterator_internal_t));
+  state->nxt = s->__internal__->str;
+  state->remaining = s->__internal__->nchars;
+  it->state = ($WORD)state;
+  it->next = $str_iterator_next;
   return it;
 }
 
-iterator_t str_reversed(str_t s) {
+iterator_internal_t $str_reversed($str s) {
   str_iterator_state_t state = malloc(sizeof(struct str_iterator_struct));
-  iterator_t it = malloc(sizeof(struct iterator_struct));
-  state->remaining = s->nchars;
+  iterator_internal_t it = malloc(sizeof(iterator_internal_t));
+  state->remaining = s->__internal__->nchars;
   if (state->remaining > 0)
-    state->nxt = skip_chars(s->str+s->nbytes,-1,0);
-  it->state = (WORD)state;
-  it->next = str_reversed_next;
+    state->nxt = skip_chars(s->__internal__->str+s->__internal__->nbytes,-1,0);
+  it->state = ($WORD)state;
+  it->next = $str_reversed_next;
   return it;
 }
-*/
 
-$str $str_getitem($str s, int i) {
+// instance methods
+
+Iterator $str_iter_instance(Iterable self) {
+  $str s = ($str)self->__impl__;
+  return Iterator$__pack__(Iterator$str_instance,$str_state_of(s));
+}
+
+$WORD $str_next_instance(Iterator self) {
+  return  $str_iterator_next(self->__impl__);
+}
+
+// Indexed ///////////////////////////////////////////////////////////////////////////
+
+$WORD $str_getitem($str s, int i) {
   str_internal_t si = s->__internal__;
   unsigned char *p = si->str;
   int ix = get_index(i,si->nchars);
   p = skip_chars(p,ix,si->nchars == si->nbytes);
   return mk_char(p);
 }
+
+void $str_setitem($str s, int ix, $WORD val) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+void $str_delitem($str s,int ix) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+// instance methods
+
+$WORD $str_getitem_instance(Indexed self, $WORD ix) {
+  $WORD w = $str_getitem(($str)self->__impl__,*(long*)ix);
+  return w;
+}
+
+void $str_setitem_instance(Indexed self, $WORD ix, $WORD val){
+  $str_setitem(($str)self->__impl__,*(int*)ix,val);
+}
+
+void $str_delitem_instance(Indexed self, $WORD ix) {
+  $str_delitem(($str)self->__impl__,*(int*)ix);
+}
+
+// Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
 $str $str_getslice($str s, Slice slc) {
   str_internal_t si = s->__internal__;
@@ -383,6 +594,83 @@ $str $str_getslice($str s, Slice slc) {
     memcpy(r->str,buffer,nbytes);
   NEW_STR(res,r);
 }
+
+void $str_setslice($str s, Slice slice, Iterable it) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+void $str_delslice($str s, Slice slice) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+
+// instance methods
+
+Sequence $str_getslice_instance(Sliceable self, Slice slice) {
+  $str res = $str_getslice(($str)self->__impl__,slice);
+  return Sequence$__pack__(Sequence$str_instance,($WORD)res);
+}
+  
+void $str_setslice_instance(Sliceable self, Slice slice, Iterable it) {
+  $str_setslice(($str)self->__impl__,slice,it);
+}
+  
+void $str_delslice_instance(Sliceable self, Slice slice) {
+  $str_delslice(($str)self->__impl__,slice);
+}
+
+// Sequence /////////////////////////////////////////////////////////////////////////////
+
+void $str_append($str s, $WORD val) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+
+void $str_insert($str s, int ix, $WORD val) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+void $str_reverse($str s) {
+    exception e;
+    MKEXCEPTION(e,NOTIMPLEMENTED);
+    RAISE(e);
+}
+
+  // instance methods
+
+Iterator $str_iter_reversed_instance(Iterable self) {
+  $str s = ($str)self->__impl__;
+  return Iterator$__pack__(Iterator$str_reversed_instance,$str_state_of(s));
+}
+
+$WORD $str_next_reversed_instance(Iterator self) {
+  return  $str_reversed_next(self->__impl__);
+}
+
+Iterable $str_reversed_instance(Sequence self) {
+  return Iterable$__pack__(Iterable$str_reversed_instance,($str)self->__impl__);
+}
+
+void $str_insert_instance(Sequence self, $int ix, $WORD elem) {
+  $str_insert(($str)self->__impl__,*ix,elem);
+}
+void $str_append_instance(Sequence self, $WORD elem) {
+  $str_append(($str)self->__impl__,elem);
+}
+
+void $str_reverse_instance(Sequence self) {
+  $str_reverse(($str)self->__impl__);
+}
+
+// str-specific methods ////////////////////////////////////////////////////////
 
 $str $str_capitalize($str s) {
   str_internal_t si = s->__internal__;
@@ -757,7 +1045,7 @@ $str $str_lstrip($str s, $str cs) {
 void $str_partition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
   str_internal_t si = s->__internal__;
   str_internal_t sepi = sep->__internal__;
-  int *n = $str_find(s,sep,NULL,NULL);
+  $int n = $str_find(s,sep,NULL,NULL);
   if (*n<0) {
     *ls = s; *ssep = mk_str(null_str); *rs = mk_str(null_str);
   } else {
@@ -1068,25 +1356,82 @@ $str $str_zfill($str s, int width) {
   memcpy(r->str+hassign+fill,si->str+hassign,si->nbytes-hassign);
   NEW_STR(res,r);
 }
+void str_instance_init() {
 
-/*
-int str_eq(str_t a, str_t b) {
-  return !strcmp((char *)a->str,(char *)b->str);
+  Eq$str_struct.$GCINFO = "GC_Eq";
+  Eq$str_struct.__eq__ = $str_eq_instance;
+  Eq$str_struct.__neq__ = $str_neq_instance;
+
+  Eq$str_instance = &Eq$str_struct;
+
+  Hashable_Eq$str_struct.$GCINFO = "GC_Hashable_Eq";
+  Hashable_Eq$str_struct.__hash__ = $str_hash_instance;
+  Hashable_Eq$str_struct.eqA = Eq$__pack__(Eq$str_instance,NULL);
+
+  Hashable_Eq$str_instance = &Hashable_Eq$str_struct;
+
+  Plus$str_struct.$GCINFO = "GC_Plus";
+  Plus$str_struct.__add__ = $str_add_instance;
+
+  Plus$str_instance = &Plus$str_struct;
+
+  Plus$str_struct.$GCINFO = "GC_Plus";
+  Plus$str_struct.__add__ = $str_add_instance;
+
+  Plus$str_instance = &Plus$str_struct;
+
+  Iterable$str_struct.$GCINFO = "GC_Iterable";
+  Iterable$str_struct.__iter__ = $str_iter_instance;
+  
+  Iterable$str_instance = &Iterable$str_struct;
+
+  Iterator$str_struct.$GCINFO = "GC_Iterator";
+  Iterator$str_struct.__next__ = $str_next_instance;
+
+  Iterator$str_instance = &Iterator$str_struct;
+  
+  Iterable$str_reversed_struct.$GCINFO = "GC_Iterable";
+  Iterable$str_struct.__iter__ = $str_iter_reversed_instance;
+  
+  Iterable$str_reversed_instance = &Iterable$str_reversed_struct;
+
+  Iterator$str_reversed_struct.$GCINFO = "GC_Iterator";
+  Iterator$str_reversed_struct.__next__ = $str_next_reversed_instance;
+
+  Iterator$str_reversed_instance = &Iterator$str_reversed_struct;
+  
+  Collection$str_struct.$GCINFO = "GC_Collection";
+  Collection$str_struct.Iterable$__methods__ = Iterable$str_instance;
+  Collection$str_struct.__fromiter__ = $str_fromiter_instance;
+  Collection$str_struct.__len__ = $str_len_instance;
+
+  Collection$str_instance = &Collection$str_struct;
+
+  Indexed$str_struct.$GCINFO = "GC_Indexed";
+  Indexed$str_struct.__getitem__ = $str_getitem_instance;
+  Indexed$str_struct.__setitem__ = $str_setitem_instance;
+  Indexed$str_struct.__delitem__ = $str_delitem_instance;
+
+  Indexed$str_instance = &Indexed$str_struct;
+  
+  Sliceable$str_struct.$GCINFO = "GC_Sliceable";
+  Sliceable$str_struct.Indexed$__methods__ = Indexed$str_instance;
+  Sliceable$str_struct.__getslice__ = $str_getslice_instance;
+  Sliceable$str_struct.__setslice__ = $str_setslice_instance;
+  Sliceable$str_struct.__delslice__ = $str_delslice_instance;
+
+  Sliceable$str_instance = &Sliceable$str_struct;
+
+  Sequence$str_struct.$GCINFO = "GC_Sequence";
+  Sequence$str_struct.Plus$__methods__ = Plus$str_instance;
+  Sequence$str_struct.Sliceable$__methods__ = Sliceable$str_instance;
+  Sequence$str_struct.Collection$__methods__ = Collection$str_instance;
+  Sequence$str_struct.append = $str_append_instance;
+  Sequence$str_struct.insert = $str_insert_instance;
+  Sequence$str_struct.__reversed__ = $str_reversed_instance;
+  Sequence$str_struct.reverse = $str_reverse_instance;
+
+  Sequence$str_instance = &Sequence$str_struct;
 }
 
-size_t str_hash(str_t s) {
-  return bytes_hash(s->str,s->nbytes);
-}
 
-static int str_eqW(WORD a, WORD b) {
-  return !strcmp((char *)((str_t)a)->str,(char *)((str_t)b)->str);
-}
-
-static size_t str_hashW(WORD w) {
-  return bytes_hash(((str_t)w)->str,((str_t)w)->nbytes);
-}
-
-static struct Hashable_struct str_h = {str_eqW, str_hashW};
-
-Hashable str_Hashable = &str_h;
-*/

@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "common.h"
-#include "list.h"
+#include "../builtin.h"
 
 void RAISE(exception e) {
   fprintf(stderr,"exception raised\n");
@@ -37,9 +36,9 @@ int main() {
   $list lst = $list_fromiter(NULL);
   for (long i=0; i<100; i++)
     $list_append(lst,toWord(i));
-  int start = -1;
-  int stop = 0;
-  int step = -2;
+  long start = -1;
+  long stop = 0;
+  long step = -2;
   struct Slice slc;
   slc.start = &start;
   slc.stop = &stop;

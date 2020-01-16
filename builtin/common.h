@@ -1,7 +1,8 @@
 #pragma once
 
 typedef void *$WORD;
-typedef int *$int;
+typedef long *$int;
+typedef double *$float;
 typedef int $bool;
 
 struct exception;
@@ -23,7 +24,7 @@ struct Pair {
   $WORD snd;
 };
 
-enum  exc { INDEXERROR, VALUEERROR, KEYERROR, STOPITERATION, TYPEERROR, MEMORYERROR};
+enum  exc {INDEXERROR, VALUEERROR, KEYERROR, STOPITERATION, TYPEERROR, MEMORYERROR, NOTIMPLEMENTED};
 
 typedef enum exc exc;
 
