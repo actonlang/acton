@@ -43,13 +43,13 @@ void $list_reverse($list lst);
 
 // Protocol instances ///////////////////////////////////////////////////////////////////////
 
-Plus$__class__ Plus_$list_instance;
-Collection$__class__ Collection_$list_instance;
-Iterable$__class__ Iterable_$list_instance;
+Plus$__class__ Plus$list_instance;
+Collection$__class__ Collection$list_instance;
+Iterable$__class__ Iterable$list_instance;
 Container_Eq$__class__ Container_Eq$list_instance(Eq eqA);
-Indexed$__class__ Indexed_$list_instance;
-Sliceable$__class__ Sliceable_$list_instance;
-Sequence$__class__ Sequence_$list_instance;
+Indexed$__class__ Indexed$list_instance;
+Sliceable$__class__ Sliceable$list_instance;
+Sequence$__class__ Sequence$list_instance;
 
 void list_instance_init();
 

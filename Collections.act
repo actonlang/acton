@@ -45,12 +45,14 @@ protocol Collection[A] (Iterable[A]):
   
 protocol Indexed[A,B]:
   __getitem__  : (A) -> B
-  __setitem__ : !(A,B) -> None 
-  __delitem__ : !(A) -> None
+  __setitem__  : !(A,B) -> None 
+  __delitem__  : !(A) -> None
 
 protocol Sliceable[A] (Indexed[int,A]):
   __getslice__ : (int?,int?,int?) -> Sequence[A]
- 
+  __setslice__ : ((int?,int?,int?),Iterable[A]) -> None
+  __delslice__ : (int?,int?,int?) -> None
+  
 protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   __reversed__ : () -> Iterable[A] 
   insert      : !(int,A) -> None

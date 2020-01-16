@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "list.h"
+#include "../builtin.h"
 
 /* 
   If UNBOXED is defined, both keys and values are unboxed integers. 
@@ -99,12 +99,15 @@ void printSequence(Sequence s) {
   }
   printf("]\n");
 }
+
+// Here the primes are collected in a Sequence; however, the Sequence is 
+// actually a dsessed-up list, since it is initiated using the list instance.
  
 Sequence sieveS(int n) {
   $WORD false = toWord(0);
   $WORD true = toWord(1);
   $WORD w;
-  Sequence isPrime = Sequence$__pack__(Sequence_$list_instance,Sequence_$list_instance->Collection$__methods__->__fromiter__(NULL)->__impl__);
+  Sequence isPrime = Sequence$__pack__(Sequence$list_instance,Sequence$list_instance->Collection$__methods__->__fromiter__(NULL)->__impl__);
   isPrime->__class__->append(isPrime,false); 
   isPrime->__class__->append(isPrime,false);
   for (int i=2; i < n; i++) 
@@ -116,7 +119,7 @@ Sequence sieveS(int n) {
         isPrime->__class__->Sliceable$__methods__->Indexed$__methods__->__setitem__((Indexed)isPrime,toWord(k),false);
     }
   }
-  Sequence primes = Sequence$__pack__(Sequence_$list_instance,Sequence_$list_instance->Collection$__methods__->__fromiter__(NULL)->__impl__);
+  Sequence primes = Sequence$__pack__(Sequence$list_instance,Sequence$list_instance->Collection$__methods__->__fromiter__(NULL)->__impl__);
   for (int i=0; i<n; i++) {
     w = isPrime->__class__->Sliceable$__methods__->Indexed$__methods__->__getitem__((Indexed)isPrime,toWord(i));
     if (fromWord(w)) {
@@ -126,6 +129,24 @@ Sequence sieveS(int n) {
   return primes;
 }
 
+$list range(int a, int b) {
+  $list res = $list_fromiter(NULL);
+  for (long i = a; i<b; i++)
+    $list_append(res,toWord(i));
+  return res;
+}
+
+$bool $int__eq__($WORD a, $WORD b) {
+  return *($int)a ==  *($int)b;
+}
+
+$bool $int__neq__($WORD a, $WORD b) {
+  return *($int)a !=  *($int)b;
+}
+
+struct Eq$__class__ $int_Eq_class = {"...GC",$int__eq__,$int__neq__};
+
+struct Eq Eq$int_instance = {"...GC",&$int_Eq_class,NULL};
 
 int main() {
 
@@ -133,5 +154,8 @@ int main() {
 
   list_instance_init();
   Sequence primes = sieveS(10000000);
-  printf("%d\n",*primes->__class__->Collection$__methods__->__len__((Collection)primes));
+  Container_Eq$__class__ cl = Container_Eq$list_instance(&Eq$int_instance);
+  Container_Eq lstc = Container_Eq$__pack__(cl,primes->__impl__);
+  if (cl->__contains__(lstc,toWord(17)))
+    printf("%ld\n",*primes->__class__->Collection$__methods__->__len__((Collection)primes));
 }
