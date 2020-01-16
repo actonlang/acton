@@ -83,7 +83,7 @@ long $float_hash($float v) {
         x = ((x << 28) & _PyHASH_MODULUS) | x >> (_PyHASH_BITS - 28);
         m *= 268435456.0;  /* 2**28 */
         e -= 28;
-        y = (long)m;  /* pull out integer part */printf("y = %ld\n",y);
+        y = (long)m;  /* pull out integer part */
         m -= y;
         x += y;
         if (x >= _PyHASH_MODULUS)
