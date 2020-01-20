@@ -1,8 +1,10 @@
 #pragma once
 
 #include "common.h"
-#include "iterator.h"
-#include "hash.h"
 #include "protocols.h"
+#include "int.h"
+#include "hash.h"
 #include "list.h"
 #include "str.h"
+#include "dict.h"
+#include "set.h"

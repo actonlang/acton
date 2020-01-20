@@ -19,8 +19,8 @@ struct Eq {
 
 struct Eq$__class__ {
   char *$GCINFO;
-  $bool (*__eq__)($WORD a, $WORD b);
-  $bool (*__neq__)($WORD a, $WORD b);
+  $bool (*__eq__)( Eq$__class__, $WORD, $WORD);
+  $bool (*__neq__)( Eq$__class__, $WORD, $WORD);
 };
 
 Eq Eq$__pack__(Eq$__class__ __class__, $WORD __impl__);
@@ -42,10 +42,10 @@ struct Ord {
 struct Ord$__class__ {
   char *$GCINFO;
   Eq$__class__ Eq$__methods__;
-  $bool (*__lt__)($WORD a, $WORD b);
-  $bool (*__le__)($WORD a, $WORD b);
-  $bool (*__gt__)($WORD a, $WORD b);
-  $bool (*__ge__)($WORD a, $WORD b);
+  $bool (*__lt__)(Ord$__class__, $WORD, $WORD);
+  $bool (*__le__)(Ord$__class__, $WORD, $WORD);
+  $bool (*__gt__)(Ord$__class__, $WORD, $WORD);
+  $bool (*__ge__)(Ord$__class__, $WORD, $WORD);
 };
 
 Ord Ord$__pack__(Ord$__class__ __class__, $WORD __impl__);
@@ -66,9 +66,9 @@ struct Logical {
 
 struct Logical$__class__ {
   char *$GCINFO;
-  $bool (*and)($WORD a, $WORD b);
-  $bool (*or)($WORD a, $WORD b);
-  $bool (*xor)($WORD a, $WORD b);
+  $WORD (*__and__)(Logical$__class__, $WORD, $WORD);
+  $WORD (*__or__)(Logical$__class__, $WORD, $WORD);
+  $WORD (*__xor__)(Logical$__class__, $WORD, $WORD);
 };
 
 Logical Logical$__pack__(Logical$__class__ __class__, $WORD __impl__);
@@ -89,7 +89,7 @@ struct Plus {
 
 struct Plus$__class__ {
   char *$GCINFO;
-  $WORD (*__add__)($WORD a, $WORD b);
+  $WORD (*__add__)(Plus$__class__, $WORD, $WORD);
 };
 
 Plus Plus$__pack__(Plus$__class__ __class__, $WORD __impl__);
@@ -110,7 +110,7 @@ struct Minus {
 
 struct Minus$__class__ {
   char *$GCINFO;
-  $WORD (*__sub__)($WORD a, $WORD b);
+  $WORD (*__sub__)(Minus$__class__, $WORD, $WORD);
 };
 
 Minus Minus$__pack__(Minus$__class__ __class__, $WORD __impl__);
@@ -131,32 +131,33 @@ struct Iterator {
 
 struct Iterator$__class__ {
   char *$GCINFO;
-  $WORD (*__next__)(Iterator self);
+  $WORD (*__next__)(Iterator$__class__, $WORD);
 };
 
 Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__);
  
 // protocol Hashable  ////////////////////////////////////////////////////////////////////////////////////
 
-struct Hashable_Eq;
-typedef struct Hashable_Eq *Hashable_Eq;
+struct Eq_Hashable;
+typedef struct Eq_Hashable *Eq_Hashable;
 
-struct Hashable_Eq$__class__;
-typedef struct Hashable_Eq$__class__ *Hashable_Eq$__class__;
+struct Eq_Hashable$__class__;
+typedef struct Eq_Hashable$__class__ *Eq_Hashable$__class__;
 
-struct Hashable_Eq {
+struct Eq_Hashable {
   char *$GCINFO;
-  Hashable_Eq$__class__ __class__;
+  Eq_Hashable$__class__ __class__;
   $WORD __impl__;
 };
 
-struct Hashable_Eq$__class__ {
+struct Eq_Hashable$__class__ {
   char *$GCINFO;
-  $int (*__hash__)(Hashable_Eq self);
-  Eq eqA;
+  $bool (*__eq__)( Eq$__class__, $WORD, $WORD);
+  $bool (*__neq__)( Eq$__class__, $WORD, $WORD);
+  $int (*__hash__)(Eq_Hashable$__class__, $WORD);
 };
 
-Hashable_Eq Hashable_Eq$__pack__(Hashable_Eq$__class__ __class__, $WORD __impl__);
+Eq_Hashable Eq_Hashable$__pack__(Eq_Hashable$__class__ __class__, $WORD __impl__);
  
 // protocol Iterable  ////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,7 +175,7 @@ struct Iterable {
 
 struct Iterable$__class__ {
   char *$GCINFO;
-  Iterator (*__iter__)(Iterable self);
+  Iterator (*__iter__)(Iterable$__class__, $WORD);
 };
 
 Iterable Iterable$__pack__(Iterable$__class__ __class__, $WORD __impl__);
@@ -196,8 +197,8 @@ struct Collection {
 struct Collection$__class__ {
   char *$GCINFO;
   Iterable$__class__ Iterable$__methods__;
-  Collection (*__fromiter__)(Iterable it);
-  $int (*__len__)(Collection self);
+  Collection (*__fromiter__)(Collection$__class__, Iterable);  
+  $int (*__len__)(Collection$__class__, $WORD);
 };
 
 Collection Collection$__pack__(Collection$__class__ __class__, $WORD __impl__);
@@ -219,9 +220,9 @@ struct Container_Eq {
 struct Container_Eq$__class__ {
   char *$GCINFO;
   Collection$__class__ Collection$__methods__;
-  $bool (*__contains__)(Container_Eq self, $WORD elem);
-  $bool (*__containsnot__)(Container_Eq self, $WORD elem);
-  Eq eqA;
+  $bool (*__contains__)(Container_Eq$__class__, $WORD, $WORD);
+  $bool (*__containsnot__)(Container_Eq$__class__, $WORD, $WORD);
+  Eq$__class__ eqA;
 };
 
 Container_Eq Container_Eq$__pack__(Container_Eq$__class__ __class__, $WORD __impl__);
@@ -242,9 +243,9 @@ struct Indexed {
 
 struct Indexed$__class__ {
   char *$GCINFO;
-  $WORD (*__getitem__)(Indexed self, $WORD ix);
-  void (*__setitem__)(Indexed self, $WORD ix, $WORD val);
-  void (*__delitem__)(Indexed self, $WORD ix);
+  $WORD (*__getitem__)(Indexed$__class__, $WORD, $WORD);
+  void (*__setitem__)(Indexed$__class__, $WORD, $WORD, $WORD);
+  void (*__delitem__)(Indexed$__class__, $WORD, $WORD);
 };
 
 Indexed Indexed$__pack__(Indexed$__class__ __class__, $WORD __impl__);
@@ -269,9 +270,10 @@ typedef struct Sequence *Sequence;
 struct Sliceable$__class__ {
   char *$GCINFO;
   Indexed$__class__ Indexed$__methods__;
-  Sequence (*__getslice__)(Sliceable self, Slice slice);
-  void (*__setslice__)(Sliceable self, Slice slice, Iterable it);
-  void (*__delslice__)(Sliceable self, Slice slice);
+  $WORD (*__getslice__)(Sliceable$__class__, $WORD, Slice);
+  // last param to setslice should be an Iterable!**********
+  void (*__setslice__)(Sliceable$__class__, $WORD, Slice, Sequence);
+  void (*__delslice__)(Sliceable$__class__, $WORD, Slice);
 };
 
 Sliceable Sliceable$__pack__(Sliceable$__class__ __class__, $WORD __impl__);
@@ -292,10 +294,10 @@ struct Sequence$__class__ {
   Sliceable$__class__ Sliceable$__methods__;
   Collection$__class__ Collection$__methods__;
   Plus$__class__ Plus$__methods__;
-  Iterable (*__reversed__)(Sequence self);
-  void (*insert)(Sequence self, $int ix, $WORD elem);
-  void (*append)(Sequence self, $WORD elem);
-  void (*reverse)(Sequence self);
+  Iterable (*__reversed__)(Sequence$__class__, $WORD);
+  void (*insert)(Sequence$__class__, $WORD, $int, $WORD);
+  void (*append)(Sequence$__class__, $WORD, $WORD);
+  void (*reverse)(Sequence$__class__, $WORD);
 };
 
 Sequence Sequence$__pack__(Sequence$__class__ __class__, $WORD __impl__);
@@ -316,15 +318,15 @@ struct Mapping {
 
 struct Mapping$__class__ {
   char *$GCINFO;
-  Container_Eq$__class__ Container_Eq$__methods__;
+  // Container_Eq$__class__ Container_Eq$__methods__;
   Indexed$__class__ Indexed$__methods__;
-  $WORD (*get)(Mapping self, $WORD key);
-  Iterable (*keys)(Mapping self);
-  Iterable (*values)(Mapping self);
-  Iterable (*items)(Mapping self);
-  void (*update)(Mapping self, Mapping other);
-  struct $Pair (*popitem)(Mapping self);
-  void (*setdefault)(Mapping self, $WORD key, $WORD value);
+  $WORD (*get)(Mapping$__class__, $WORD, $WORD, $WORD);
+  Iterator (*keys)(Mapping$__class__,$WORD);
+  Iterator (*values)(Mapping$__class__,$WORD);
+  Iterator (*items)(Mapping$__class__,$WORD);
+  void (*update)(Mapping$__class__,$WORD, Mapping);
+  $WORD (*popitem)(Mapping$__class__,$WORD);
+  $WORD (*setdefault)(Mapping$__class__,$WORD, $WORD, $WORD);
 };
 
 Mapping Mapping$__pack__(Mapping$__class__ __class__, $WORD __impl__);
@@ -345,15 +347,19 @@ struct Set {
 
 struct Set$__class__ {
   char *$GCINFO;
-  Container_Eq$__class__ Container_Eq$__methods__;
+  Eq$__class__ Eq$__methods__;
   Ord$__class__ Ord$__methods__;
   Logical$__class__ Logical$__methods__;
   Minus$__class__ Minus$__methods__;
-  $bool (*isdisjoint)(Set self, Set other);
-  void (*add)(Set self, $WORD elem);
-  void (*discard)(Set self, $WORD elem);
-  $WORD (*pop)(Set self);
+  Collection$__class__ Collection$__methods__;
+  $bool (*isdisjoint)(Set$__class__, $WORD, $WORD);
+  void (*add)(Set$__class__, $WORD, $WORD);
+  void (*discard)(Set$__class__, $WORD, $WORD);
+  $WORD (*pop)(Set$__class__, $WORD);
 };
 
 Set Set$__pack__(Set$__class__ __class__, $WORD __impl__);
  
+// Convenience functions ////////////////////////////////////////
+
+$WORD next(Iterator it);

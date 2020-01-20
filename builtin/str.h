@@ -1,6 +1,5 @@
 #pragma once
 
-#include "iterator.h"
 #include "list.h"
 //#include "slice.h"
 //#include "hash.h"
@@ -10,6 +9,7 @@ struct $str;
 typedef struct $str *$str;
 
 typedef struct str_internal_t {
+  char *GCINFO;
   int nbytes;              // length of str in bytes
   int nchars;              // length of str in Unicode chars
   unsigned char *str;      // str is UTF-8 encoded.
@@ -19,6 +19,7 @@ struct $str$__methods__;
 typedef struct $str$__methods__ *$str$__methods__;
 
 struct $str {
+  char *GCINFO;
   $str$__methods__ __class__;
   str_internal_t __internal__;
 };
@@ -75,8 +76,8 @@ unsigned char *toUTF8($str str);
  
 // Protocol instances ////////////////////////////////////////////////////////////////////////////////////////
 
-Eq$__class__ Eq$str_instance;
-Hashable_Eq$__class__ Hashable_Eq$str_instance;
+Eq$__class__ Eq$str_instance; // We could eliminate this and cast the next instance to serve as Eq$__class__
+Eq_Hashable$__class__ Eq_Hashable$str_instance;
 Plus$__class__ Plus$str_instance;
 Collection$__class__ Collection$str_instance;
 Iterable$__class__ Iterable$str_instance;
@@ -85,5 +86,4 @@ Sliceable$__class__ Sliceable$str_instance;
 Sequence$__class__ Sequence$str_instance;
 Container_Eq$__class__ Container_Eq$str_instance;
 
-void str_instance_init();
 

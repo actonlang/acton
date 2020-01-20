@@ -3,37 +3,79 @@
 #include <string.h>
 
 #include "list.h"
-#include "iterator.h"
 
 //  Method tables ///////////////////////////////////////////////////////////////
+
+$WORD $list_add_instance(Plus$__class__ cl, $WORD a, $WORD b);
+
+Iterator $list_iter_instance(Iterable$__class__ cl,$WORD self);
+
+$WORD $list_next_instance(Iterator$__class__ cl, $WORD self);
+
+Collection $list_fromiter_instance(Collection$__class__ cl, Iterable it);
+$int $list_len_instance(Collection$__class__ cl, $WORD self);
+
+$WORD $list_getitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix); 
+void $list_setitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix, $WORD val);
+void $list_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix);
+
+$WORD $list_getslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice);
+void $list_setslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice, Sequence it); 
+void $list_delslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice);
+
+Iterable $list_reversed_instance(Sequence$__class__ cl, $WORD self);
+void $list_insert_instance(Sequence$__class__ cl, $WORD self, $int ix, $WORD elem);
+void $list_append_instance(Sequence$__class__ cl, $WORD self, $WORD elem);
+void $list_reverse_instance(Sequence$__class__ cl, $WORD self);
+
+static struct Plus$__class__ Plus$list_struct = {"GC_Plus",$list_add_instance};
+Plus$__class__ Plus$list_instance = &Plus$list_struct;
+
+static struct Iterator$__class__ Iterator$list_struct = {"GC_Iterator",$list_next_instance};
+Iterator$__class__ Iterator$list_instance = &Iterator$list_struct;
+
+static struct Iterable$__class__ Iterable$list_struct = {"GC_Iterable", $list_iter_instance};
+Iterable$__class__ Iterable$list_instance = &Iterable$list_struct;
+
+static struct Collection$__class__ Collection$list_struct = {"GC_Collection",&Iterable$list_struct,$list_fromiter_instance,$list_len_instance};
+Collection$__class__ Collection$list_instance = &Collection$list_struct;
+
+static struct Indexed$__class__ Indexed$list_struct = {"GC_Indexed", $list_getitem_instance, $list_setitem_instance, $list_delitem_instance};
+Indexed$__class__ Indexed$list_instance = &Indexed$list_struct;
+
+static struct Sliceable$__class__ Sliceable$list_struct = {"GC_Sliceable", &Indexed$list_struct, $list_getslice_instance, $list_setslice_instance, $list_delslice_instance};
+Sliceable$__class__ Sliceable$list_instance = &Sliceable$list_struct;
+
+static struct Sequence$__class__ Sequence$list_struct = {"GC_Sequence",&Sliceable$list_struct, &Collection$list_struct, &Plus$list_struct,
+                                                         $list_reversed_instance,$list_insert_instance,$list_append_instance,$list_reverse_instance};
+Sequence$__class__ Sequence$list_instance = &Sequence$list_struct;
+
+Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA);
+
+// List methods ////////////////////////////////////////////////////////////////////////////
+
 
 static struct $list$__methods__ $list_table = {$list_copy};
 $list$__methods__ $list_methods = &$list_table;
  
-static struct Plus$__class__ Plus$list_struct;
-Plus$__class__ Plus$list_instance;
-
-static struct Iterator$__class__ Iterator$list_struct;
-Iterator$__class__ Iterator$list_instance;
-
-static struct Iterable$__class__ Iterable$list_struct;
-Iterable$__class__ Iterable$list_instance;
-
-static struct Collection$__class__ Collection$list_struct;
-Collection$__class__ Collection$list_instance;
-
-static struct Indexed$__class__ Indexed$list_struct;
-Indexed$__class__ Indexed$list_instance;
-
-static struct Sliceable$__class__ Sliceable$list_struct;
-Sliceable$__class__ Sliceable$list_instance;
-
-static struct Sequence$__class__ Sequence$list_struct;
-Sequence$__class__ Sequence$list_instance;
-
-Container_Eq$__class__ Container_Eq$list_instance(Eq eqA);
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
+ 
+
+//prints a list[$int]
+void printlist($list lst) {
+  $WORD w;
+  printf("[");
+  for (int i=0; i < *$list_len(lst)-1; i++) {
+    w = $list_getitem(lst,i);
+    printf("%ld, ",from$int(w));
+  }
+  if (*$list_len(lst) > 0) {
+    w = $list_getitem(lst,*$list_len(lst)-1);
+    printf("%ld",from$int(w));
+  }
+  printf("]\n");
+}
 
 static inline int min(int a, int b) {
     if (a > b)
@@ -113,8 +155,8 @@ $list $list_add($list lst, $list other) {
 
 // instance method
 
-$WORD $list_add_instance($WORD a, $WORD b) {
-  return ($WORD)$list_add(($list)a,($list)b);
+$WORD $list_add_instance(Plus$__class__ cl, $WORD a, $WORD b) {
+    return $list_add(($list)a,($list)b);
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
@@ -125,9 +167,9 @@ $list $list_fromiter(Iterable it) {
   if (it==NULL) {
     return res;
   }
-  Iterator iter = it->__class__->__iter__(it);
+  Iterator iter = it->__class__->__iter__(Iterable$list_instance, it);
   while(1) {
-    $WORD nxt = iter->__class__->__next__(iter);
+    $WORD nxt = iter->__class__->__next__(Iterator$list_instance, iter);
     $list_append(res,nxt);
   }                                         // try/except to stop loop when next raises STOPITERATION.
   return res;
@@ -141,36 +183,36 @@ $int $list_len($list lst) {
 
 // instance methods
 
-Collection $list_fromiter_instance(Iterable it) {
-  $list res = $list_fromiter(it);
-  return Collection$__pack__(Collection$list_instance,($WORD)res);
+Collection $list_fromiter_instance(Collection$__class__ cl, Iterable it) {
+  return Collection$__pack__(Collection$list_instance,$list_fromiter(it));
 }
 
-$int $list_len_instance(Collection self) {
-  return $list_len(($list)self->__impl__);
+$int $list_len_instance(Collection$__class__ cl, $WORD self) {
+  return $list_len(($list)self);
 }
 
 // Container ///////////////////////////////////////////////////////////////////////////
 
-$bool $list_contains($list lst, $WORD elem, int (*eq)($WORD,$WORD)) {
-  for (int i=0; i < lst->__internal__->length; i++)
-    if (eq(elem,lst->__internal__->data[i]))
+$bool $list_contains($list lst, $WORD elem, $bool (*eq)(Eq$__class__,$WORD,$WORD)) {
+  for (int i=0; i < lst->__internal__->length; i++) {
+    if (eq(NULL,elem,lst->__internal__->data[i]))
       return 1;
+  }
   return 0;
 }
 
-$bool $list_containsnot($list lst, $WORD elem, int (*eq)($WORD,$WORD)) {
+$bool $list_containsnot($list lst, $WORD elem, $bool (*eq)(Eq$__class__,$WORD,$WORD)) {
   return !$list_contains(lst,elem,eq);
 }
 
 // instance methods
 
-$bool $list_contains_instance (Container_Eq self, $WORD elem) {
-  return $list_contains(($list)self->__impl__,elem,self->__class__->eqA->__class__->__eq__);
+$bool $list_contains_instance (Container_Eq$__class__ cl, $WORD self, $WORD elem) {
+  return $list_contains(($list)self,elem,cl->eqA->__eq__);
 }
 
-$bool $list_containsnot_instance (Container_Eq self, $WORD elem) {
-  return $list_containsnot(($list)self->__impl__,elem,self->__class__->eqA->__class__->__eq__);
+$bool $list_containsnot_instance (Container_Eq$__class__ cl, $WORD self, $WORD elem) {
+  return $list_containsnot(($list)self,elem,cl->eqA->__neq__);
 }
 
 
@@ -182,8 +224,7 @@ typedef struct list_iterator_state_t {
   int nxt;
 } *list_iterator_state_t; 
 
-static $WORD $list_iterator_next(iterator_internal_t iter) {
-  list_iterator_state_t state = iter->state;
+static $WORD $list_iterator_next( list_iterator_state_t state) {
   if (state->nxt > state->src->length) {
     exception e;
     MKEXCEPTION(e,STOPITERATION);
@@ -192,13 +233,14 @@ static $WORD $list_iterator_next(iterator_internal_t iter) {
   return state->src->data[state->nxt++];
 }
 
+/*
 iterator_internal_t $list_iter(list_iterator_state_t state) {
   iterator_internal_t iter = malloc(sizeof(struct iterator_internal_t));
   iter->state = state;
   iter->next = $list_iterator_next;
   return iter;
 }
-
+*/
 static list_iterator_state_t $list_state_of($list lst) {
   list_iterator_state_t state = malloc(sizeof(struct list_iterator_state_t));
   state->src = lst->__internal__;
@@ -208,13 +250,12 @@ static list_iterator_state_t $list_state_of($list lst) {
 
 // instance methods
 
-Iterator $list_iter_instance(Iterable self) {
-  $list lst = ($list)self->__impl__;
-  return Iterator$__pack__(Iterator$list_instance,$list_state_of(lst));
+ Iterator $list_iter_instance(Iterable$__class__ cl,$WORD self) {
+  return Iterator$__pack__(Iterator$list_instance,$list_state_of(($list)self));
 }
 
-$WORD $list_next_instance(Iterator self) {
-  return  $list_iterator_next(self->__impl__);
+ $WORD $list_next_instance(Iterator$__class__ cl, $WORD self) {
+  return  $list_iterator_next(self);
 }
 
 // Indexed ///////////////////////////////////////////////////////////////////////////
@@ -223,7 +264,7 @@ $WORD $list_getitem($list lst, int ix) {
   int len = lst->__internal__->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
-    exception e;
+     exception e;
     MKEXCEPTION(e,INDEXERROR);
     RAISE(e);
   }
@@ -258,17 +299,17 @@ void $list_delitem($list lst,int ix) {
 
 // instance methods
 
-$WORD $list_getitem_instance(Indexed self, $WORD ix) {
-  $WORD w = $list_getitem(($list)self->__impl__,*(long*)ix);
+$WORD $list_getitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
+  $WORD w = $list_getitem(($list)self,*(long*)ix);
   return w;
 }
 
-void $list_setitem_instance(Indexed self, $WORD ix, $WORD val){
-  $list_setitem(($list)self->__impl__,*(int*)ix,val);
+void $list_setitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix, $WORD val){
+  $list_setitem(($list)self,*(int*)ix,val);
 }
 
-void $list_delitem_instance(Indexed self, $WORD ix) {
-  $list_delitem(($list)self->__impl__,*(int*)ix);
+void $list_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
+  $list_delitem(($list)self,*(int*)ix);
 }
 
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
@@ -342,17 +383,28 @@ void $list_delslice($list lst, Slice slc) {
 
 // instance methods
 
-Sequence $list_getslice_instance(Sliceable self, Slice slice) {
-  $list res = $list_getslice(($list)self->__impl__,slice);
-  return Sequence$__pack__(Sequence$list_instance,($WORD)res);
+// This auxiliary function is needed until we can change last param of setslice to an Iterable
+$list seq2list(Sequence s) {
+  Collection$__class__ cl =  s->__class__->Collection$__methods__;
+  $int len = cl->__len__(cl,s->__impl__);
+  $list res = list_new(*len);
+  for(int i = 0; i<*len; i++) {
+    Indexed$__class__ cl1 = s->__class__->Sliceable$__methods__->Indexed$__methods__;
+    $list_append(res,cl1->__getitem__(cl1,s->__impl__,to$int(i)));
+  }
+  return res;
 }
-  
-void $list_setslice_instance(Sliceable self, Slice slice, Iterable it) {
-  $list_setslice(($list)self->__impl__,slice,$list_fromiter(it));
+
+$WORD $list_getslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice) {
+  return $list_getslice(($list)self,slice);
 }
-  
-void $list_delslice_instance(Sliceable self, Slice slice) {
-  $list_delslice(($list)self->__impl__,slice);
+
+void $list_setslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice, Sequence it) {
+  $list_setslice(($list)self,slice,/*$list_fromiter(it)*/seq2list(it));
+}
+
+void $list_delslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice) {
+  $list_delslice(($list)self,slice);
 }
 
 // Sequence /////////////////////////////////////////////////////////////////////////////
@@ -393,19 +445,19 @@ void $list_reverse($list lst) {
 
 // instance methods
 
-Iterable $list_reversed_instance(Sequence self) {
-  return $list_reversed(($list)self->__impl__);
+Iterable $list_reversed_instance(Sequence$__class__ cl, $WORD self) {
+  return $list_reversed(($list)self);
 }
 
-void $list_insert_instance(Sequence self, $int ix, $WORD elem) {
-  $list_insert(($list)self->__impl__,*ix,elem);
+void $list_insert_instance(Sequence$__class__ cl, $WORD self, $int ix, $WORD elem) {
+  $list_insert(($list)self,*ix,elem);
 }
-void $list_append_instance(Sequence self, $WORD elem) {
-  $list_append(($list)self->__impl__,elem);
+void $list_append_instance(Sequence$__class__ cl, $WORD self, $WORD elem) {
+  $list_append(($list)self,elem);
 }
 
-void $list_reverse_instance(Sequence self) {
-  $list_reverse(($list)self->__impl__);
+void $list_reverse_instance(Sequence$__class__ cl, $WORD self) {
+  $list_reverse(($list)self);
 }
 
 // List-specific methods /////////////////////////////////////////////////////////////////////
@@ -425,7 +477,7 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
 
 // Instance initialization ////////////////////////////////////////////////////////////////////
 
-Container_Eq$__class__ Container_Eq$list_instance(Eq eqA) {
+Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA) {
   Container_Eq$__class__ res = malloc(sizeof(struct Container_Eq$__class__));
   res->$GCINFO = "GC_Container_Eq";
   res->Collection$__methods__ = Collection$list_instance;
@@ -434,53 +486,5 @@ Container_Eq$__class__ Container_Eq$list_instance(Eq eqA) {
   res->eqA = eqA;
   return res;
 }
+
  
-void list_instance_init() {
-  Plus$list_struct.$GCINFO = "GC_Plus";
-  Plus$list_struct.__add__ = $list_add_instance;
-
-  Plus$list_instance = &Plus$list_struct;
-
-  Iterable$list_struct.$GCINFO = "GC_Iterable";
-  Iterable$list_struct.__iter__ = $list_iter_instance;
-  
-  Iterable$list_instance = &Iterable$list_struct;
-
-  Iterator$list_struct.$GCINFO = "GC_Iterator";
-  Iterator$list_struct.__next__ = $list_next_instance;
-
-  Iterator$list_instance = &Iterator$list_struct;
-  
-  Collection$list_struct.$GCINFO = "GC_Collection";
-  Collection$list_struct.Iterable$__methods__ = Iterable$list_instance;
-  Collection$list_struct.__fromiter__ = $list_fromiter_instance;
-  Collection$list_struct.__len__ = $list_len_instance;
-
-  Collection$list_instance = &Collection$list_struct;
-
-  Indexed$list_struct.$GCINFO = "GC_Indexed";
-  Indexed$list_struct.__getitem__ = $list_getitem_instance;
-  Indexed$list_struct.__setitem__ = $list_setitem_instance;
-  Indexed$list_struct.__delitem__ = $list_delitem_instance;
-
-  Indexed$list_instance = &Indexed$list_struct;
-  
-  Sliceable$list_struct.$GCINFO = "GC_Sliceable";
-  Sliceable$list_struct.Indexed$__methods__ = Indexed$list_instance;
-  Sliceable$list_struct.__getslice__ = $list_getslice_instance;
-  Sliceable$list_struct.__setslice__ = $list_setslice_instance;
-  Sliceable$list_struct.__delslice__ = $list_delslice_instance;
-
-  Sliceable$list_instance = &Sliceable$list_struct;
-
-  Sequence$list_struct.$GCINFO = "GC_Sequence";
-  Sequence$list_struct.Plus$__methods__ = Plus$list_instance;
-  Sequence$list_struct.Sliceable$__methods__ = Sliceable$list_instance;
-  Sequence$list_struct.Collection$__methods__ = Collection$list_instance;
-  Sequence$list_struct.append = $list_append_instance;
-  Sequence$list_struct.insert = $list_insert_instance;
-  Sequence$list_struct.__reversed__ = $list_reversed_instance;
-  Sequence$list_struct.reverse = $list_reverse_instance;
-
-  Sequence$list_instance = &Sequence$list_struct;
-}
