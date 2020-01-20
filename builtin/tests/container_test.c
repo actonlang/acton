@@ -2,47 +2,31 @@
 #include <stdio.h>
 #include "../builtin.h"
 
-void RAISE(exception e) {
-  fprintf(stderr,"exception raised\n");
-  exit(1);
-}
-long fromWord($WORD w) {
-  return *(long*) w;
-}
-
-$WORD toWord(long i) {
-  $WORD res = malloc(sizeof(long));
-  *(long*)res = i;
-  return res;
+Sequence fromto(long a, long b) {
+  Sequence$__class__ cl = Sequence$list_instance;  
+  $WORD res = cl->Collection$__methods__->__fromiter__( cl->Collection$__methods__,NULL)->__impl__;
+  for (long i=a; i<b; i++)
+    cl->append(cl,res,to$int(i));
+  return Sequence$__pack__(cl,res);
 }
 
-$list range(int a, int b) {
-  $list res = $list_fromiter(NULL);
-  for (long i = a; i<b; i++)
-    $list_append(res,toWord(i));
-  return res;
-}
-
-$bool $int__eq__($WORD a, $WORD b) {
+/*
+$bool $int__eq__(Eq$__class__ cl,$WORD a, $WORD b) {
   return *($int)a ==  *($int)b;
 }
 
-$bool $int__neq__($WORD a, $WORD b) {
+$bool $int__neq__(Eq$__class__ cl,$WORD a, $WORD b) {
   return *($int)a !=  *($int)b;
 }
 
-struct Eq$__class__ $int_Eq_class = {"...GC",$int__eq__,$int__neq__};
-
-struct Eq Eq$int_instance = {"...GC",&$int_Eq_class,NULL};
-
+struct Eq$__class__ Eq$int_instance = {"...GC",$int__eq__,$int__neq__};
+*/
 int main() {
-  list_instance_init();
-  $list lst = range(1,100);
-  Container_Eq$__class__ cl = Container_Eq$list_instance(&Eq$int_instance);
-  Container_Eq lstc = Container_Eq$__pack__(cl,lst);
-  $bool b = lstc->__class__->__contains__(lstc,toWord(17));
-  $bool c = lstc->__class__->__contains__(lstc,toWord(171));
-  $bool d = lstc->__class__->__contains__(lstc,toWord(100));
+  $WORD lst = fromto(1,100)->__impl__;
+  Container_Eq$__class__ cl = Container_Eq$list_instance(Eq$int_instance);
+  $bool b = cl->__contains__(cl,lst,to$int(17));
+  $bool c = cl->__contains__(cl,lst,to$int(171));
+  $bool d = cl->__contains__(cl,lst,to$int(100));
   printf("results are %d, %d, %d\n",b,c,d);
 }
   

@@ -61,10 +61,10 @@ Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__) {
   return pack;
 }
 
-// protocol Hashable_Eq  ////////////////////////////////////////////////////////////////////////////////////
+// protocol Eq_Hashable  ////////////////////////////////////////////////////////////////////////////////////
  
-Hashable_Eq Hashable_Eq$__pack__(Hashable_Eq$__class__ __class__, $WORD __impl__) {
-  Hashable_Eq pack = malloc(sizeof(struct Hashable_Eq));
+Eq_Hashable Eq_Hashable$__pack__(Eq_Hashable$__class__ __class__, $WORD __impl__) {
+  Eq_Hashable pack = malloc(sizeof(struct Eq_Hashable));
   pack->$GCINFO = "pack";
   pack->__class__ = __class__;
   pack->__impl__ = __impl__;
@@ -149,4 +149,10 @@ Set Set$__pack__(Set$__class__ __class__, $WORD __impl__) {
   pack->__class__ = __class__;
   pack->__impl__ = __impl__;
   return pack;
+}
+
+
+
+$WORD next(Iterator it) {
+  return it->__class__->__next__(it->__class__,it->__impl__);
 }

@@ -4,3 +4,7 @@ all:
 clean:
 	rm builtin.o
 	cd tests && $(MAKE) clean
+
+tests:
+	cd tests && $(MAKE) tests
+

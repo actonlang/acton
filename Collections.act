@@ -60,14 +60,16 @@ protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   reverse     : !() -> None       
 
 protocol Container [A (Eq)] (Collection):
+  @classmethod
   __contains__    : (A) -> bool  
+  @classmethod
   __containsnot__ : (A) -> bool  
 
 protocol Mapping[A (Eq),B] (Container[A], Indexed[A,B]):
   get         : (A) -> B?
-  keys        : () -> Iterable[A]
-  values      : () -> Iterable[B]
-  items       : () -> Iterable[(A,B)]
+  keys        : () -> Iterator[A]
+  values      : () -> Iterator[B]
+  items       : () -> Iterator[(A,B)]
   update      : !(Mapping[A,B]) -> None  
   popitem     : !() -> (A,B)
   setdefault  : !(A,B) -> None
