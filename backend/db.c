@@ -1148,6 +1148,8 @@ int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)
 	return table_delete_by_index(index_key, idx_idx, table);
 }
 
+#define DEBUG_QUEUE_CALLBACK 0
+
 queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, int status)
 {
 	queue_callback_args * qca = (queue_callback_args *) malloc(sizeof(queue_callback_args));
@@ -1177,6 +1179,28 @@ queue_callback * get_queue_callback(void (*callback)(queue_callback_args *))
 	pthread_cond_init(qc->signal, NULL);
 	qc->callback = callback;
 	return qc;
+}
+
+int wait_on_queue_callback(queue_callback * qc)
+{
+	int ret = pthread_mutex_lock(qc->lock);
+
+#if DEBUG_QUEUE_CALLBACK > 0
+	printf("Locked consumer lock %p/%p\n", qc, qc->lock);
+#endif
+
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec += 3;
+	ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
+
+	pthread_mutex_unlock(qc->lock);
+
+#if DEBUG_QUEUE_CALLBACK > 0
+	printf("Unlocked consumer lock %p/%p\n", qc, qc->lock);
+#endif
+
+	return ret;
 }
 
 void free_queue_callback(queue_callback * qc)

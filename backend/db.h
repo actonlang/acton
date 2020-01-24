@@ -216,6 +216,7 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, int status);
 void free_queue_callback_args(queue_callback_args * qca);
 queue_callback * get_queue_callback(void (*callback)(queue_callback_args *));
+int wait_on_queue_callback(queue_callback *);
 void free_queue_callback(queue_callback * qc);
 
 #endif /* BACKEND_DB_H_ */
