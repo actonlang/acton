@@ -1,0 +1,57 @@
+protocol Number:
+  # inga metoder; numbers.py har ändå denna abc som basklass; troligen ska vi ta bort den?
+
+protocol Complex (Eq, Plus, Minus):
+  __complex__  : () -> complex
+  __bool__     : () -> bool
+
+  @staticmethod
+  __mul__      : (Self,Self) -> Self
+  @staticmethod
+  __truediv__  : (Self,Self) -> Self
+  @staticmethod
+  __pow__      : (Self,Self) -> Self
+
+  __neg__      : () -> Self
+  __pos__      : () -> Self
+  
+  real         : () -> Real
+  imag         : () -> Real
+  __abs__      : () -> Self  # What about arg?
+
+  conjugate    : () -> Self
+
+
+protocol Real (Complex, Ord):
+  __float__    : () -> float
+
+  __trunc__    : () -> Integral
+  __floor__    : () -> Integral
+  __ceil__     : () -> Integral
+  __round__    : () -> Integral
+
+  @staticmethod
+  __divmod__   : (Self,Self) -> (Self,Self)
+  @staticmethod
+  __floordiv__ : (Self,Self) -> Self
+  @staticmethod
+  __mod__      : (Self,Self) -> Self
+
+
+protocol Rational (Real):
+  numerator    : () -> Integral
+  denominator  : () -> Integral
+
+protocol Integral (Rational, Logical):
+  __int__      : () -> int
+  __index__    : () -> int
+
+  @staticmethod
+  __lshift__   : (Self,Self) -> Self
+  @staticmethod
+  __rshift__   : (Self,Self) -> Self
+
+  __invert__   : () -> Self
+
+
+
