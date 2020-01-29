@@ -3,12 +3,6 @@
 
 #include "../builtin.h"
 
-$float to$float(double x) {
-  $float res = malloc(sizeof(double));
-  *(double*)res = x;
-  return res;
-}
-
 int main() {
   
   long x1 = 543;
@@ -21,5 +15,5 @@ int main() {
   printf("hash of %f is %ld\n",-1.0,$float_hash(to$float(-1.0)));
   printf("hash of %f is %ld\n",0.75,$float_hash(to$float(0.75)));
   printf("hash of '%s' is %ld\n","test",$string_hash("test",4));
-  printf("hash of 'test' as $str is %ld\n",*Eq_Hashable$str_instance->__hash__(Eq_Hashable$str_instance,fromUTF8("test")));
+  printf("hash of 'test' as $str is %ld\n",*Hashable$str_instance->__hash__(Hashable$str_instance,fromUTF8("test")));
 }

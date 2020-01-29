@@ -51,6 +51,46 @@ Minus Minus$__pack__(Minus$__class__ __class__, $WORD __impl__) {
   return pack;
 }
 
+// protocol Complex  ////////////////////////////////////////////////////////////////////////////////////
+ 
+Complex Complex$__pack__(Complex$__class__ __class__, $WORD __impl__) {
+  Complex pack = malloc(sizeof(struct Complex));
+  pack->$GCINFO = "pack";
+  pack->__class__ = __class__;
+  pack->__impl__ = __impl__;
+  return pack;
+}
+
+// protocol Real  ////////////////////////////////////////////////////////////////////////////////////
+ 
+Real Real$__pack__(Real$__class__ __class__, $WORD __impl__) {
+  Real pack = malloc(sizeof(struct Real));
+  pack->$GCINFO = "pack";
+  pack->__class__ = __class__;
+  pack->__impl__ = __impl__;
+  return pack;
+}
+
+// protocol Rational ////////////////////////////////////////////////////////////////////////////////////
+ 
+Rational Rational$__pack__(Rational$__class__ __class__, $WORD __impl__) {
+  Rational pack = malloc(sizeof(struct Rational));
+  pack->$GCINFO = "pack";
+  pack->__class__ = __class__;
+  pack->__impl__ = __impl__;
+  return pack;
+}
+
+// protocol Integral ////////////////////////////////////////////////////////////////////////////////////
+ 
+Integral Integral$__pack__(Integral$__class__ __class__, $WORD __impl__) {
+  Integral pack = malloc(sizeof(struct Integral));
+  pack->$GCINFO = "pack";
+  pack->__class__ = __class__;
+  pack->__impl__ = __impl__;
+  return pack;
+}
+
 // protocol Iterator  ////////////////////////////////////////////////////////////////////////////////////
  
 Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__) {
@@ -61,10 +101,10 @@ Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__) {
   return pack;
 }
 
-// protocol Eq_Hashable  ////////////////////////////////////////////////////////////////////////////////////
+// protocol Hashable  ////////////////////////////////////////////////////////////////////////////////////
  
-Eq_Hashable Eq_Hashable$__pack__(Eq_Hashable$__class__ __class__, $WORD __impl__) {
-  Eq_Hashable pack = malloc(sizeof(struct Eq_Hashable));
+Hashable Hashable$__pack__(Hashable$__class__ __class__, $WORD __impl__) {
+  Hashable pack = malloc(sizeof(struct Hashable));
   pack->$GCINFO = "pack";
   pack->__class__ = __class__;
   pack->__impl__ = __impl__;

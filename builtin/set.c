@@ -83,7 +83,7 @@ typedef struct $set_internal_struct {
      */
   long mask;
   long finger;                       // Search finger for pop() 
-  Eq_Hashable$__class__  h;          // eq and hash function used in this $set
+  Hashable$__class__  h;          // eq and hash function used in this $set
   $setentry *table;                   // the hashtable
 } *$set_internal_t;
 
@@ -192,7 +192,7 @@ static $setentry *$set_lookkey($set_internal_t set, $WORD key, long hash) {
             $WORD *startkey = entry->key;
             // startkey cannot be a dummy because the dummy hash field is -1 
             // assert(startkey != dummy);
-            if (startkey == key || set->h->__eq__((Eq$__class__)set->h,startkey,key))
+            if (startkey == key || set->h->Eq$__methods__->__eq__(set->h->Eq$__methods__,startkey,key))
               return entry;
         }
         perturb >>= PERTURB_SHIFT;
@@ -208,8 +208,8 @@ static int $set_contains_entry($set set, $WORD elem, long hash) {
   return $set_lookkey(set->__internal__, elem, hash)->key != NULL;
 }
 
-$set $set_new(Eq_Hashable$__class__ h) {
-  $set_internal_t res = malloc(4*sizeof(long)+sizeof(Eq_Hashable$__class__)+sizeof($setentry*));
+$set $set_new(Hashable$__class__ h) {
+  $set_internal_t res = malloc(4*sizeof(long)+sizeof(Hashable$__class__)+sizeof($setentry*));
   res->numelements = 0;
   res->fill = 0;
   res->mask = MIN_SIZE-1;
@@ -242,7 +242,7 @@ static void $set_add_entry($set_internal_t set, $WORD key, long hash) {
       $WORD startkey = entry->key;
       // startkey cannot be a dummy because the dummy hash field is -1 
       //assert(startkey != dummy);
-      if (startkey == key || set->h->__eq__((Eq$__class__)set->h,startkey,key))
+      if (startkey == key || set->h->Eq$__methods__->__eq__(set->h->Eq$__methods__,startkey,key))
           goto found_active;
           }
       else if (entry->hash == -1)
@@ -546,7 +546,7 @@ $WORD $set_pop_instance(Set$__class__ cl, $WORD self) {
 
 // Collection /////////////////////////////////////////////////////////////////////////////////////////////
 
-// What about from_iter; needs an instance of Eq_Hashable
+// What about from_iter; needs an instance of Hashable to create empty set.
 
 $int $set_len($set set) {
   return to$int(set->__internal__->numelements);

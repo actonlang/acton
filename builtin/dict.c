@@ -128,7 +128,7 @@ static int dictresize($dict_internal_t d) {
 }
 
 
-$dict $dict_new(Eq_Hashable$__class__ h) {
+$dict $dict_new(Hashable$__class__ h) {
   $dict_internal_t dict =  malloc(sizeof(long) + 2*sizeof($WORD));
   dict->numelements = 0;
   dict->h = h;
@@ -180,7 +180,7 @@ static int lookdict($dict_internal_t dict, long hash, $WORD key, $WORD *res) {
     }
     if (ix >= 0) {
       $entry_t entry = &TB_ENTRIES(table)[ix];
-      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && dict->h->__eq__((Eq$__class__)dict->h,key,entry->key)))) {
+      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && dict->h->Eq$__methods__->__eq__(dict->h->Eq$__methods__,key,entry->key)))) {
         // found an entry with the same or equal key
         *res = entry->value;
         return ix;
@@ -348,7 +348,7 @@ $int $dict_len($dict dict) {
   return res;
 }
 
-// What to do with from_iter? We need to have a Eq_Hashable instance to get started.
+// What to do with from_iter? We need to have a Hashable instance to get started.
 
 // instance methods
 

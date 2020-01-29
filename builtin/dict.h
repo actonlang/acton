@@ -21,7 +21,7 @@ typedef struct $table_struct {
 typedef struct $dict_internal_t {
   char *$GCINFO;
   long numelements;        // nr of elements in dictionary
-  Eq_Hashable$__class__ h; // eq and hash function used in this dictionary
+  Hashable$__class__ h; // eq and hash function used in this dictionary
   $table table;            // the hashtable
 } *$dict_internal_t;
 
@@ -71,7 +71,7 @@ $WORD $dict_popitem($dict dict); // returns an item; items are returned in LIFO 
 void $dict_update($dict dict, $dict other);
 $WORD $dict_setdefault($dict dict, $WORD key, $WORD deflt);
 
-$dict $dict_new(Eq_Hashable$__class__);
+$dict $dict_new(Hashable$__class__);
 
 // Protocol instances ///////////////////////////////////////////////////////////////////////
 

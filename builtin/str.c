@@ -67,7 +67,7 @@ static $str$__methods__ $str_methods = &$str_table;
 $bool $str_eq_instance(Eq$__class__ cl,$WORD a, $WORD b); 
 $bool $str_neq_instance(Eq$__class__ cl, $WORD a, $WORD b);
 
-$int $str_hash_instance(Eq_Hashable$__class__ cl, $WORD self);
+$int $str_hash_instance(Hashable$__class__ cl, $WORD self);
 
 $WORD $str_add_instance(Plus$__class__ cl, $WORD a, $WORD b);
 
@@ -100,8 +100,8 @@ $bool $str_containsnot_instance (Container_Eq$__class__ cl, $WORD self, $WORD el
 static struct Eq$__class__  Eq$str_struct = {"GC_Eq", $str_eq_instance, $str_neq_instance};
 Eq$__class__ Eq$str_instance = &Eq$str_struct;
 
-static struct Eq_Hashable$__class__ Eq_Hashable$str_struct = {"GC_Hashable__Eq", $str_eq_instance, $str_neq_instance, $str_hash_instance};
-Eq_Hashable$__class__ Eq_Hashable$str_instance = &Eq_Hashable$str_struct;
+static struct Hashable$__class__ Hashable$str_struct = {"GC_Hashable__Eq", &Eq$str_struct, $str_hash_instance};
+Hashable$__class__ Hashable$str_instance = &Hashable$str_struct;
 
 static struct Plus$__class__ Plus$str_struct = {"GC_Plus",$str_add_instance};
 Plus$__class__ Plus$str_instance = &Plus$str_struct;
@@ -413,14 +413,14 @@ $bool $str_neq_instance(Eq$__class__ cl, $WORD a, $WORD b) {
   return $str_neq(cl,($str)a,($str)b);
 }
 
-// Eq_Hashable ///////////////////////////////////////////////////////////////////////////////////
+// Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 
 // hash function $string_hash defined in hash.c
 
 // instance method
 
-$int $str_hash_instance(Eq_Hashable$__class__ cl, $WORD self) {
+$int $str_hash_instance(Hashable$__class__ cl, $WORD self) {
   $int res = malloc(sizeof(long));
   str_internal_t s = (($str)self)->__internal__;
   *res = $string_hash(s->str,s->nbytes);
@@ -442,7 +442,6 @@ $str $str_add($str s, $str t) {
 $WORD $str_add_instance(Plus$__class__ cl, $WORD a, $WORD b) {
   return ($WORD)$str_add(($str)a,($str)b);
 }
-
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 

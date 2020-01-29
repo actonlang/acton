@@ -19,8 +19,8 @@ long fromWord($WORD w) {
 }
 
 int main() {
-  $dict dict = $dict_new(Eq_Hashable$str_instance);
-  $dict other = $dict_new(Eq_Hashable$str_instance);
+  $dict dict = $dict_new(Hashable$str_instance);
+  $dict other = $dict_new(Hashable$str_instance);
   int j;
   for (long i=1; i < 1000000; i++) {
     $dict_setitem(dict,toWord(i),toWord(i+1));
