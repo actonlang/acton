@@ -1,7 +1,5 @@
 #pragma once
-
 #include <stdlib.h>
-#include "common.h"
 
 // protocol Eq  ////////////////////////////////////////////////////////////////////////////////////
 
@@ -114,7 +112,124 @@ struct Minus$__class__ {
 };
 
 Minus Minus$__pack__(Minus$__class__ __class__, $WORD __impl__);
+
+// protocol Complex  ////////////////////////////////////////////////////////////////////////////////////
+
+struct Complex;
+typedef struct Complex *Complex;
+
+struct Complex$__class__;
+typedef struct Complex$__class__ *Complex$__class__;
+
+struct Complex {
+  char *$GCINFO;
+  Complex$__class__ __class__;
+  $WORD __impl__;
+};
+
+struct Real;
+typedef struct Real *Real;
+
+struct Integral;
+typedef struct Integral *Integral;
+
+struct Complex$__class__ {
+  char *$GCINFO;
+  Eq$__class__ Eq$__methods__;
+  Plus$__class__ Plus$__methods__;
+  Minus$__class__ Minus$__methods__;
+  double _Complex (*__complx__)(Complex$__class__, $WORD);  // spelling correctly correctly gives gcc error, in spite of macro complex being undef'ed in common.h???
+  $bool (*__bool__)(Complex$__class__, $WORD);
+  $WORD (*__mul__)(Complex$__class__, $WORD, $WORD);
+  $WORD (*__truediv__)(Complex$__class__, $WORD, $WORD);
+  $WORD (*__pow__)(Complex$__class__, $WORD, $WORD);
+  $WORD (*__neg__)(Complex$__class__, $WORD);
+  $WORD (*__pos__)(Complex$__class__, $WORD);
+  Real (*real)(Complex$__class__, $WORD);
+  Real (*imag)(Complex$__class__, $WORD);
+  $WORD (*__abs__)(Complex$__class__, $WORD);
+  $WORD (*conjugate)(Complex$__class__, $WORD);
+};
+
+Complex Complex$__pack__(Complex$__class__ __class__, $WORD __impl__);
  
+// protocol Real  ////////////////////////////////////////////////////////////////////////////////////
+
+
+struct Real$__class__;
+typedef struct Real$__class__ *Real$__class__;
+
+struct Real {
+  char *$GCINFO;
+  Real$__class__ __class__;
+  $WORD __impl__;
+};
+
+struct Real$__class__ {
+  char *$GCINFO;
+  Ord$__class__ Ord$__methods__;
+  Complex$__class__ Complex$__methods__;
+  $float (*__float__)(Real$__class__, $WORD);
+  Integral (*__trunc__)(Real$__class__, $WORD);
+  Integral (*__floor__)(Real$__class__, $WORD);
+  Integral (*__ceil__)(Real$__class__, $WORD);
+  Integral (*__round__)(Real$__class__, $WORD);
+};
+
+Real Real$__pack__(Real$__class__ __class__, $WORD __impl__);
+ 
+// protocol Rational  ////////////////////////////////////////////////////////////////////////////////////
+
+struct Rational;
+typedef struct Rational *Rational;
+
+struct Rational$__class__;
+typedef struct Rational$__class__ *Rational$__class__;
+
+struct Rational {
+  char *$GCINFO;
+  Rational$__class__ __class__;
+  $WORD __impl__;
+};
+
+struct Rational$__class__ {
+  char *$GCINFO;
+  Real$__class__ Real$__methods__;
+  Integral (*__numerator__)(Rational$__class__, $WORD);
+  Integral (*__denominator__)(Rational$__class__, $WORD);
+};
+
+Rational Rational$__pack__(Rational$__class__ __class__, $WORD __impl__);
+
+// protocol Integral  ////////////////////////////////////////////////////////////////////////////////////
+
+struct Real;
+typedef struct Real *Real;
+struct Integral$__class__;
+typedef struct Integral$__class__ *Integral$__class__;
+
+struct Integral {
+  char *$GCINFO;
+  Integral$__class__ __class__;
+  $WORD __impl__;
+};
+
+struct Integral$__class__ {
+  char *$GCINFO;
+  Logical$__class__ Logical$__methods__;
+  Rational$__class__ Rational$__methods__;
+  $int (*__int__)(Integral$__class__, $WORD);
+  $int (*__index__)(Integral$__class__, $WORD);
+  $divmod_t (*__divmod__)(Integral$__class__, $WORD, $WORD);
+  $WORD (*__floordiv__)(Integral$__class__, $WORD, $WORD);
+  $WORD (*__mod__)(Integral$__class__, $WORD, $WORD);
+  $WORD (*__lshift__)(Integral$__class__, $WORD, $WORD);
+  $WORD (*__rshift__)(Integral$__class__, $WORD, $WORD);
+  $WORD (*__invert__)(Integral$__class__, $WORD);
+};
+
+Integral Integral$__pack__(Integral$__class__ __class__, $WORD __impl__);
+
 // protocol Iterator  ////////////////////////////////////////////////////////////////////////////////////
 
 struct Iterator;
@@ -138,26 +253,25 @@ Iterator Iterator$__pack__(Iterator$__class__ __class__, $WORD __impl__);
  
 // protocol Hashable  ////////////////////////////////////////////////////////////////////////////////////
 
-struct Eq_Hashable;
-typedef struct Eq_Hashable *Eq_Hashable;
+struct Hashable;
+typedef struct Hashable *Hashable;
 
-struct Eq_Hashable$__class__;
-typedef struct Eq_Hashable$__class__ *Eq_Hashable$__class__;
+struct Hashable$__class__;
+typedef struct Hashable$__class__ *Hashable$__class__;
 
-struct Eq_Hashable {
+struct Hashable {
   char *$GCINFO;
-  Eq_Hashable$__class__ __class__;
+  Hashable$__class__ __class__;
   $WORD __impl__;
 };
 
-struct Eq_Hashable$__class__ {
+struct Hashable$__class__ {
   char *$GCINFO;
-  $bool (*__eq__)( Eq$__class__, $WORD, $WORD);
-  $bool (*__neq__)( Eq$__class__, $WORD, $WORD);
-  $int (*__hash__)(Eq_Hashable$__class__, $WORD);
+  Eq$__class__ Eq$__methods__;
+  $int (*__hash__)(Hashable$__class__, $WORD);
 };
 
-Eq_Hashable Eq_Hashable$__pack__(Eq_Hashable$__class__ __class__, $WORD __impl__);
+Hashable Hashable$__pack__(Hashable$__class__ __class__, $WORD __impl__);
  
 // protocol Iterable  ////////////////////////////////////////////////////////////////////////////////////
 

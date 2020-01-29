@@ -3,7 +3,7 @@ struct $set;
 
 typedef struct $set *$set;
 
-$set $set_new(Eq_Hashable$__class__ h);
+$set $set_new(Hashable$__class__ h);
 void $set_add($set set, $WORD elem);     // never fails
 void $set_remove($set set, $WORD elem);   // raises KEYERROR if elem not in s
 void $set_discard($set set, $WORD elem); // does not fail if elem not in s

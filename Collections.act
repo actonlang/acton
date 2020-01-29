@@ -30,8 +30,8 @@ protocol Minus:
   @staticmethod
   __sub__      : (Self,Self) -> Self
 
-protocol Hashable[A (Eq)]:
-  __hash__     : int
+protocol Hashable (Eq):
+  __hash__     : () -> int
   
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]

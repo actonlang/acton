@@ -2,6 +2,7 @@
 
 #include "common.c"
 #include "int.c"
+#include "float.c"
 #include "slice.c"
 #include "hash.c"
 #include "protocols.c"

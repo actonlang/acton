@@ -77,7 +77,7 @@ unsigned char *toUTF8($str str);
 // Protocol instances ////////////////////////////////////////////////////////////////////////////////////////
 
 Eq$__class__ Eq$str_instance; // We could eliminate this and cast the next instance to serve as Eq$__class__
-Eq_Hashable$__class__ Eq_Hashable$str_instance;
+Hashable$__class__ Hashable$str_instance;
 Plus$__class__ Plus$str_instance;
 Collection$__class__ Collection$str_instance;
 Iterable$__class__ Iterable$str_instance;
