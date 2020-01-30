@@ -6,8 +6,9 @@ all:
 	gcc ../builtin.o hash_test.c -o hash_test -lutf8proc
 	gcc ../builtin.o container_test.c -o container_test -lutf8proc
 	gcc ../builtin.o dict_test2.c -o dict_test2 -lutf8proc
+	gcc ../builtin.o set_test.c -o set_test -lutf8proc
 clean:
-	rm slice_test sieve protocol_test str_test2 hash_test container_test dict_test2
+	rm slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test
 
 tests:
 	./slice_test
@@ -17,4 +18,6 @@ tests:
 	./hash_test
 	./container_test
 	./dict_test2
+	./set_test
+
 

@@ -432,7 +432,7 @@ struct Mapping {
 
 struct Mapping$__class__ {
   char *$GCINFO;
-  // Container_Eq$__class__ Container_Eq$__methods__;
+  Container_Eq$__class__ Container_Eq$__methods__;
   Indexed$__class__ Indexed$__methods__;
   $WORD (*get)(Mapping$__class__, $WORD, $WORD, $WORD);
   Iterator (*keys)(Mapping$__class__,$WORD);
@@ -465,7 +465,7 @@ struct Set$__class__ {
   Ord$__class__ Ord$__methods__;
   Logical$__class__ Logical$__methods__;
   Minus$__class__ Minus$__methods__;
-  Collection$__class__ Collection$__methods__;
+  Container_Eq$__class__ Container_Eq$__methods__;
   $bool (*isdisjoint)(Set$__class__, $WORD, $WORD);
   void (*add)(Set$__class__, $WORD, $WORD);
   void (*discard)(Set$__class__, $WORD, $WORD);
