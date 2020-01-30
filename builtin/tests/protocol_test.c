@@ -56,7 +56,7 @@ int main() {
   Sequence$__class__ cl = Sequence$list_instance;
   // first we use concat for list concatenation
   $WORD lst = cl->Collection$__methods__->__fromiter__(cl->Collection$__methods__,NULL)->__impl__;
-  $WORD emptylist = (($list)lst)->__class__->copy(lst);
+  $WORD emptylist = cl->Collection$__methods__->__fromiter__(cl->Collection$__methods__,NULL)->__impl__;
   for (long i = 1; i< 10; i++) {
     cl->append(cl,lst,range(i,2*i));
   }

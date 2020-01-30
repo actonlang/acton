@@ -4,6 +4,25 @@
 
 #include "list.h"
 
+
+$list $list_copy($list lst);
+$list $list_add($list lst, $list other);
+$list $list_fromiter(Iterable it);
+$int $list_len($list lst);
+$bool $list_contains($list lst, $WORD elem, int (*eq)(Eq$__class__,$WORD,$WORD));
+$bool $list_containsnot($list lst, $WORD elem, int (*eq)(Eq$__class__,$WORD,$WORD));
+$WORD $list_getitem($list lst, int ix);
+void $list_setitem($list lst, int ix, $WORD val);
+void $list_delitem($list lst,int ix);
+$list $list_getslice($list lst, Slice slc);
+void $list_setslice($list lst, Slice slc, $list other);
+void $list_delslice($list lst, Slice slc);
+void $list_append($list lst, $WORD val);
+Iterable $list_reversed($list lst);
+void $list_insert($list lst, int ix, $WORD val);
+void $list_reverse($list lst);
+
+
 //  Method tables ///////////////////////////////////////////////////////////////
 
 $WORD $list_add_instance(Plus$__class__ cl, $WORD a, $WORD b);
@@ -34,6 +53,7 @@ Plus$__class__ Plus$list_instance = &Plus$list_struct;
 static struct Iterator$__class__ Iterator$list_struct = {"GC_Iterator",$list_next_instance};
 Iterator$__class__ Iterator$list_instance = &Iterator$list_struct;
 
+
 static struct Iterable$__class__ Iterable$list_struct = {"GC_Iterable", $list_iter_instance};
 Iterable$__class__ Iterable$list_instance = &Iterable$list_struct;
 
@@ -52,7 +72,28 @@ Sequence$__class__ Sequence$list_instance = &Sequence$list_struct;
 
 Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA);
 
-// List methods ////////////////////////////////////////////////////////////////////////////
+// Types /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+typedef struct list_internal_t {
+  char *GCINFO;
+  $WORD *data;
+  int length;
+  int capacity;
+} *list_internal_t;
+
+typedef struct $list$__methods__ {
+  $list (*copy)($list self);
+  //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
+} *$list$__methods__;
+
+struct $list {
+  char *GCINFO;
+  $list$__methods__ __class__;
+  list_internal_t __internal__;
+};
+
+
+// List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static struct $list$__methods__ $list_table = {$list_copy};
