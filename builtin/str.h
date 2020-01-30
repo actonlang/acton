@@ -1,10 +1,4 @@
-#pragma once
-
-#include "list.h"
-//#include "slice.h"
-//#include "hash.h"
-#include <stddef.h>
-
+ 
 struct $str;
 typedef struct $str *$str;
 

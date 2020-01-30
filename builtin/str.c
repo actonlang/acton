@@ -2,9 +2,9 @@
 #include <string.h>
 #include <stdio.h>
 #include <limits.h>
-#include "str.h"
+#include "builtin.h"
 #include "utf8proc.h"
-#include "hash.h"
+
 
 //  Method tables ///////////////////////////////////////////////////////////////
 
