@@ -23,8 +23,8 @@ def test():
     print ("Sum of remaining keys is ",t)
     deflt = d.get("100",666)
     print("dict_get on existing key 100; should return 101. Returned ",deflt)
-#    deflt = d.get("37",666)
-#    print("dict_get on non-existing key; should return default value 666. Returned ",deflt)
+    deflt = d.get("37",666)
+    print("dict_get on non-existing key; should return default value 666. Returned ",deflt)
     other = dict()
     for j in range(11,200,20):
       other[str(j)] = 2*j

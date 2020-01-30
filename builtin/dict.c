@@ -6,6 +6,46 @@
 
 #include "builtin.h"
 
+// types //////////////////////////////////////////////////////////////////////////////////////
+
+typedef struct $entry_struct {
+  char *GCINFO;
+  long hash;
+  $WORD key;
+  $WORD value;  // deleted entry has value NULL
+} *$entry_t;
+
+typedef struct $table_struct {
+  char *GCINFO;
+  long tb_size;        // size of dk_indices array; must be power of 2
+  long tb_usable;      // nr of unused entries in dk_entries (deleted entries are counted as used)
+  long tb_nentries;    // nr of used entries in dk_entries
+  int  tb_indices[];   // array of indices
+                       // after this follows tb_entries array;
+} *$table;
+
+typedef struct $dict_internal_t {
+  char *$GCINFO;
+  long numelements;        // nr of elements in dictionary
+  Hashable$__class__ h; // eq and hash function used in this dictionary
+  $table table;            // the hashtable
+} *$dict_internal_t;
+
+
+typedef void *$dict$__methods__; // All dictionary methods are from protocols
+
+struct $dict {
+  char *$GCINFO;
+  $dict$__methods__ __class__;
+  $dict_internal_t __internal__;
+};
+
+typedef struct dict_iterator_struct {
+  char *$GCINFO;
+  $dict_internal_t src;
+  int nxt;
+} *dict_iterator_state_t; 
+ 
 // Method tables /////////////////////////////////////////////////
 
 Iterator $dict_iter_instance(Iterable$__class__ cl,$WORD self);
@@ -40,18 +80,19 @@ Iterable$__class__ Iterable$dict_instance = &Iterable$dict_struct;
 static struct Collection$__class__ Collection$dict_struct = {"GC_Collection",&Iterable$dict_struct,$dict_fromiter_instance,$dict_len_instance};
 Collection$__class__ Collection$dict_instance = &Collection$dict_struct;
 
+static struct Container_Eq$__class__ Container_Eq$dict_struct = {"GC_Container_Eq",&Collection$dict_struct, $dict_contains_instance,$dict_containsnot_instance,NULL};
+
+Container_Eq$__class__ Container_Eq$dict_instance = &Container_Eq$dict_struct;
+
 static struct Indexed$__class__ Indexed$dict_struct = {"GC_Indexed", $dict_getitem_instance, $dict_setitem_instance, $dict_delitem_instance};
 Indexed$__class__ Indexed$dict_instance = &Indexed$dict_struct;
 
-static struct Mapping$__class__ Mapping$dict_struct = {"GC_Mapping", &Indexed$dict_struct, $dict_get_instance, $dict_keys_instance,
+static struct Mapping$__class__ Mapping$dict_struct = {"GC_Mapping", &Container_Eq$dict_struct, &Indexed$dict_struct, $dict_get_instance, $dict_keys_instance,
                                                        $dict_values_instance,  $dict_items_instance, $dict_update_instance, $dict_popitem_instance,
                                                        $dict_setdefault_instance};
 
 Mapping$__class__ Mapping$dict_instance = &Mapping$dict_struct;
 
-static struct Container_Eq$__class__ Container_Eq$dict_struct = {"GC_Container_Eq",&Collection$dict_struct, $dict_contains_instance,$dict_containsnot_instance,NULL};
-
-Container_Eq$__class__ Container_Eq$dict_instance = &Container_Eq$dict_struct;
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */

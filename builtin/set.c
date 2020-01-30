@@ -9,6 +9,12 @@
 #define DISCARD_NOTFOUND 0
 #define DISCARD_FOUND 1
 
+/* 
+This implementation of sets is an adaptaation of CPython's set implementation.
+*/
+
+// Method tables //////////////////////////////////////////////////////////////////////////////////////////////////
+
 $bool $set_eq_instance( Eq$__class__ cl, $WORD a, $WORD b);
 $bool $set_neq_instance( Eq$__class__ cl, $WORD a, $WORD b);
 
@@ -59,13 +65,14 @@ Iterable$__class__ Iterable$set_instance = &Iterable$set_struct;
 static struct Collection$__class__ Collection$set_struct = {"GC_Collection", &Iterable$set_struct, $set_fromiter_instance, $set_len_instance};
 Collection$__class__ Collection$set_instance = &Collection$set_struct;
 
-static struct Set$__class__ Set$set_struct = {"GC_Set", &Eq$set_struct,  &Ord$set_struct,  &Logical$set_struct,  &Minus$set_struct,  &Collection$set_struct,
+static struct Container_Eq$__class__ Container_Eq$set_struct = {"GC_Container_Eq",&Collection$set_struct, $set_contains_instance,$set_containsnot_instance,NULL};
+Container_Eq$__class__ Container_Eq$set_instance = &Container_Eq$set_struct;
+
+static struct Set$__class__ Set$set_struct = {"GC_Set", &Eq$set_struct,  &Ord$set_struct,  &Logical$set_struct,  &Minus$set_struct,  &Container_Eq$set_struct,
                                               $set_isdisjoint_instance, $set_add_instance, $set_discard_instance, $set_pop_instance};
 Set$__class__ Set$set_instance = &Set$set_struct;
 
-static struct Container_Eq$__class__ Container_Eq$set_struct = {"GC_Container_Eq",&Collection$set_struct, $set_contains_instance,$set_containsnot_instance,NULL};
-
-Container_Eq$__class__ Container_Eq$set_instance = &Container_Eq$set_struct;
+// Types ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct {
   char *$GCINFO;
@@ -83,11 +90,12 @@ typedef struct $set_internal_struct {
      */
   long mask;
   long finger;                       // Search finger for pop() 
-  Hashable$__class__  h;          // eq and hash function used in this $set
-  $setentry *table;                   // the hashtable
+  Hashable$__class__  h;             // eq and hash function used in this $set
+  $setentry *table;                  // the hashtable
 } *$set_internal_t;
 
-typedef void *$set$__methods__; // All set methods are from protocols
+typedef void *$set$__methods__;       // All set methods are from protocols
+// Maybe we should  offer union, intersection and symmetric difference under those names.
 
 struct $set {
   char *$GCINFO;
@@ -109,8 +117,7 @@ static $set mk$set($set_internal_t s) {
   return res;
 };
 
-static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash)
-{
+static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
     $setentry *entry;
     long perturb = hash;
     long i = hash & mask;
@@ -135,7 +142,6 @@ static int $set_table_resize($set_internal_t so, int minsize) {
     long newmask;
 
     /* Find the smallest table size > minused. */
-    /* XXX speed-up with intrinsics */
     long newsize = MIN_SIZE;
     while (newsize <= (long)minsize) {
         newsize <<= 1; // The largest possible value is PY_SSIZE_T_MAX + 1.
@@ -153,7 +159,7 @@ static int $set_table_resize($set_internal_t so, int minsize) {
     so->mask = newsize - 1;
     so->table = newtable;
 
-    /* Copy the data over; this is refcount-neutral for active entries;
+    /* Copy the data over; 
        dummy entries aren't copied over, of course */
     newmask = (long)so->mask;
     if (so->fill == so->numelements) {
@@ -209,7 +215,8 @@ static int $set_contains_entry($set set, $WORD elem, long hash) {
 }
 
 $set $set_new(Hashable$__class__ h) {
-  $set_internal_t res = malloc(4*sizeof(long)+sizeof(Hashable$__class__)+sizeof($setentry*));
+  $set_internal_t res = malloc(sizeof(struct $set_internal_struct));
+  // $set_internal_t res = malloc(sizeof(char*) + 4*sizeof(long)+sizeof(Hashable$__class__)+sizeof($setentry*));
   res->numelements = 0;
   res->fill = 0;
   res->mask = MIN_SIZE-1;
@@ -241,7 +248,6 @@ static void $set_add_entry($set_internal_t set, $WORD key, long hash) {
     if (entry->hash == hash) {
       $WORD startkey = entry->key;
       // startkey cannot be a dummy because the dummy hash field is -1 
-      //assert(startkey != dummy);
       if (startkey == key || set->h->Eq$__methods__->__eq__(set->h->Eq$__methods__,startkey,key))
           goto found_active;
           }
@@ -281,7 +287,7 @@ static void $set_add_entry($set_internal_t set, $WORD key, long hash) {
 static $set $set_copy($set set) {
   $set_internal_t s = set->__internal__;
   $set res = $set_new(s->h);
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,s);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,set);
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
@@ -343,7 +349,7 @@ $bool $set_ge($set set, $set other) {
     
   if (s->numelements < o->numelements)
     return 0;
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other->__internal__);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     if(!$set_contains_entry(set, (($setentry*)w)->key, (($setentry*)w)->hash))
@@ -360,7 +366,7 @@ $bool $set_gt($set set, $set other) {
     
   if (s->numelements <= o->numelements)
     return 0;
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other->__internal__);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     if(!$set_contains_entry(set, (($setentry*)w)->key, (($setentry*)w)->hash))
@@ -407,8 +413,8 @@ $set $set_intersection($set set, $set other) {
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
-    size_t hash = (($setentry*)w)->hash;
-    if ($set_contains_entry(set,key,hash))
+    long hash = (($setentry*)w)->hash;
+    if ($set_contains_entry(other,key,hash))
       $set_add_entry(res->__internal__,key,hash);
   }
   return res;
@@ -416,12 +422,14 @@ $set $set_intersection($set set, $set other) {
 
 
 $set $set_union($set set, $set other) {
+  if (Collection$set_instance->__len__(Collection$set_instance,other) > Collection$set_instance->__len__(Collection$set_instance,set))
+    return $set_union(other,set);
   $set res = $set_copy(set);
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,set);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
-    size_t hash = (($setentry*)w)->hash;
+    long hash = (($setentry*)w)->hash;
     $set_add_entry(res->__internal__,key,hash);
   }
   return res;
@@ -429,7 +437,7 @@ $set $set_union($set set, $set other) {
 
 $set $set_symmetric_difference($set set, $set other) {
   $set res = $set_copy(set);
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,set);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
@@ -483,26 +491,26 @@ $WORD $set_pop($set set) {
   $WORD res;
   $set_internal_t s = set->__internal__;
   // Make sure the search finger is in bounds 
-    $setentry *entry = s->table + (s->finger & s->mask);
-    $setentry *limit = s->table + s->mask;
+  $setentry *entry = s->table + (s->finger & s->mask);
+  $setentry *limit = s->table + s->mask;
 
-    if (s->numelements == 0) {
-      exception e;
-      MKEXCEPTION(e,KEYERROR);
-      RAISE(e);
-      return NULL;
-    }
-    while (entry->key == NULL || entry->key==dummy) {
-        entry++;
-        if (entry > limit)
-            entry = s->table;
-    }
-    res = entry->key;
-    entry->key = dummy;
-    entry->hash = -1;
-    s->numelements--;
-    s->finger = entry - s->table + 1;   // next place to start 
-    return res;
+  if (s->numelements == 0) {
+    exception e;
+    MKEXCEPTION(e,KEYERROR);
+    RAISE(e);
+    return NULL;
+  }
+  while (entry->key == NULL || entry->key==dummy) {
+    entry++;
+    if (entry > limit)
+      entry = s->table;
+  }
+  res = entry->key;
+  entry->key = dummy;
+  entry->hash = -1;
+  s->numelements--;
+  s->finger = entry - s->table + 1;   // next place to start 
+  return res;
 }
 
 $bool $set_isdisjoint($set set, $set other) {
@@ -631,16 +639,15 @@ $set_iterator_state_t $set_state_of($set set) {
 // instance methods
 
 $WORD $set_next_instance(Iterator$__class__ cl, $WORD self) {
-  return  $set_iterator_next($set_state_of(self));
+  return  $set_iterator_next(self);
 }
 $WORD $set_next_entry_instance(Iterator$__class__ cl, $WORD self) {
-  return  $set_iterator_next_entry($set_state_of(self));
+  return  $set_iterator_next_entry(self);
 }
 
 Iterator $set_iter_instance(Iterable$__class__ cl, $WORD self) {
   return Iterator$__pack__(Iterator$set_instance,$set_state_of(($set)self));
 }
-
 
 Iterator $set_iter_entry_instance(Iterable$__class__ cl, $WORD self) {
   Iterator$__class__ cl1 = malloc(sizeof(struct Iterator$__class__));
@@ -648,6 +655,7 @@ Iterator $set_iter_entry_instance(Iterable$__class__ cl, $WORD self) {
   cl1->__next__ = $set_next_entry_instance;
   return Iterator$__pack__(cl1,$set_state_of(($set)self));
 }
+
 // Minus ///////////////////////////////////////////////////////////////////////////////////////////
 
 $set $set_difference($set set, $set other) {
