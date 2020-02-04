@@ -41,6 +41,9 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
 						short use_lock, db_t * db, unsigned int * fastrandstate);
+int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					int * sockfd, long * prev_read_head, long * prev_consume_head,
+					short use_lock, db_t * db, unsigned int * fastrandstate);
 int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						short use_lock, db_t * db);
 int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short use_lock,

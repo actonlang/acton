@@ -77,14 +77,14 @@ db_unit_tests: db_unit_tests.c libdb
 queue_unit_tests: queue_unit_tests.c libdb
 	cc queue_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) \
-		-ldb -lvc $(LFLAGS) -pthread \
+		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o queue_unit_tests
 
 txn_unit_tests: txn_unit_tests.c libdb
 	cc txn_unit_tests.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) \
-		-ldb -lvc $(LFLAGS) -pthread \
+		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o txn_unit_tests
 		

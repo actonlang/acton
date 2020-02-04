@@ -5,6 +5,8 @@
  */
 
 #include "queue.h"
+#include "failure_detector/cells.h"
+#include "failure_detector/db_queries.h"
 #include <limits.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -53,6 +55,96 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 
 	return ret;
 }
+
+// Functions for handling remote notifications:
+
+int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id,
+									long new_no_entries, int status,
+									void ** snd_buf, unsigned * snd_msg_len)
+{
+	cell_address ca;
+
+	copy_cell_address(&ca, (long) table_key, (long *) &queue_id, 1);
+
+	queue_query_message * m = init_queue_notification(&ca, NULL, 0, (int) app_id, (int) shard_id, (int) consumer_id, new_no_entries, status, NULL, -1);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_queue_message(m, (char *) print_buff);
+	printf("Sending queue notification message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0);
+
+	assert(ret == 0);
+
+	free_queue_message(m);
+
+	return ret;
+}
+
+int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
+{
+	db_table_t * table = get_table_by_key(table_key, db);
+	int status = 0;
+
+	if(table == NULL)
+		return DB_ERR_NO_TABLE; // Table doesn't exist
+
+	snode_t * node = skiplist_search(table->rows, queue_id);
+	if(node == NULL)
+		return DB_ERR_NO_QUEUE; // Queue doesn't exist
+
+	db_row_t * db_row = (db_row_t *) (node->value);
+
+	// Notify remote subscribers if they haven't been notified:
+
+	for(snode_t * cell=HEAD(db_row->consumer_state);cell!=NULL;cell=NEXT(cell))
+	{
+		if(cell->value != NULL)
+		{
+			consumer_state * cs = (consumer_state *) (cell->value);
+
+			if(cs->callback != NULL || cs->notified > 0) // Skip local subscribers or one that have already been notified:
+				continue;
+
+			assert(cs->sockfd != NULL);
+
+			if(*(cs->sockfd) == 0)
+			{
+#if (VERBOSITY > 0)
+				printf("SERVER: Skipping notifying disconnected subscriber %ld\n", (long) cs->consumer_id);
+				continue;
+#endif
+			}
+
+			void * snd_buf = NULL;
+			unsigned snd_msg_len = -1;
+			status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id,
+														db_row->no_entries, 0,
+														&snd_buf, &snd_msg_len);
+			assert(status == 0);
+
+		    int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
+		    if (n < 0)
+		    {
+		    		fprintf(stderr, "ERROR writing notification to socket!\n");
+		    		continue;
+		    }
+
+		    free(snd_buf);
+
+			cs->notified=1;
+
+#if (VERBOSITY > 0)
+			printf("SERVER: Notified remote subscriber %ld\n", (long) cs->consumer_id);
+#endif
+		}
+	}
+
+	return status;
+}
+
 
 int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate)
 {
@@ -103,33 +195,66 @@ int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, sh
 		{
 			consumer_state * cs = (consumer_state *) (cell->value);
 
-			if(cs->callback == NULL || cs->notified > 0)
+			if(cs->notified > 0) // Skip already notified subscribers (whether local or remote)
 				continue;
 
-			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_ENQUEUED);
+			if(cs->callback != NULL) // Local subscriber
+			{
+				assert(cs->sockfd == NULL);
+
+				queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+				printf("BACKEND: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
 
-			ret = pthread_mutex_lock(cs->callback->lock);
+				ret = pthread_mutex_lock(cs->callback->lock);
 
 #if (LOCK_VERBOSITY > 0)
-			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+				printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
-			pthread_cond_signal(cs->callback->signal);
-			cs->callback->callback(qca);
-			ret = pthread_mutex_unlock(cs->callback->lock);
+				pthread_cond_signal(cs->callback->signal);
+				cs->callback->callback(qca);
+				ret = pthread_mutex_unlock(cs->callback->lock);
 
 #if (LOCK_VERBOSITY > 0)
-			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+				printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
+			}
+			else // remote subscriber
+			{
+				assert(cs->sockfd != NULL);
+
+				if(*(cs->sockfd) == 0)
+				{
+#if (VERBOSITY > 0)
+					printf("SERVER: Skipping notifying disconnected remote subscriber %ld\n", (long) cs->consumer_id);
+#endif
+					continue;
+				}
+
+				void * snd_buf = NULL;
+				unsigned snd_msg_len = -1;
+				status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id,
+															db_row->no_entries, 0,
+															&snd_buf, &snd_msg_len);
+				assert(status == 0);
+
+				int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
+				if (n < 0)
+				{
+				      fprintf(stderr, "ERROR writing notification to socket!\n");
+				      continue;
+				}
+
+				free(snd_buf);
+			}
 
 			cs->notified=1;
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Notified subscriber %ld\n", (long) qca->consumer_id);
+			printf("BACKEND: Notified %s subscriber %ld\n", (cs->callback != NULL)?"local":"remote", (long) cs->consumer_id);
 #endif
 		}
 	}
@@ -451,8 +576,8 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 	return (int) new_consume_head;
 }
 
-int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, int * sockfd, long * prev_read_head, long * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -495,6 +620,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 	cs->private_read_head = -1;
 	cs->private_consume_head = -1;
 	cs->callback = callback;
+	cs->sockfd = sockfd;
 	cs->notified=0;
 	cs->prh_version=NULL;
 	cs->pch_version=NULL;
@@ -512,6 +638,29 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 
 	return ret;
 }
+
+int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+					short use_lock, db_t * db, unsigned int * fastrandstate)
+{
+	assert(callback != NULL);
+
+	return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id,
+			callback, NULL, prev_read_head, prev_consume_head,
+			use_lock, db, fastrandstate);
+}
+
+int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					int * sockfd, long * prev_read_head, long * prev_consume_head,
+					short use_lock, db_t * db, unsigned int * fastrandstate)
+{
+	assert(sockfd != NULL);
+
+	return _subscribe_queue(consumer_id, shard_id, app_id, table_key, queue_id,
+			NULL, sockfd, prev_read_head, prev_consume_head,
+			use_lock, db, fastrandstate);
+}
+
 
 int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						short use_lock, db_t * db)

@@ -31,6 +31,7 @@
 #define RANDOM_NONCES
 
 #define CLIENT_VERBOSITY 0
+#define CLIENT_LOCK_VERBOSITY 0
 #define SYNC_SOCKET 1
 
 #define NO_QUORUM_ERR -1
@@ -165,6 +166,8 @@ int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id
 
 int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 					queue_callback * callback, short use_lock, remote_db_t * db);
+queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
+					short use_lock, remote_db_t * db);
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						short use_lock, remote_db_t * db);
 

@@ -182,6 +182,7 @@ queue_query_message * init_enqueue_message(cell_address * cell_address, cell * c
 queue_query_message * init_read_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long max_entries, uuid_t * txnid, long nonce);
 queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long new_consume_head, uuid_t * txnid, long nonce);
 queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, uuid_t * txnid, long nonce);
+queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_no_entries, short status, uuid_t * txnid, long nonce);
 void free_queue_message(queue_query_message * ca);
 int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server);
 int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca);

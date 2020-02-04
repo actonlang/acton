@@ -102,6 +102,16 @@ cell_address * init_cell_address_single_key_copy(long table_key, long key)
 	return ca;
 }
 
+int copy_cell_address(cell_address * ca, long table_key, long * keys, int no_keys)
+{
+	ca->table_key = table_key;
+	ca->keys = keys;
+	ca->no_keys = no_keys;
+
+	return 0;
+}
+
+
 void free_cell_address(cell_address * ca)
 {
 	free(ca->keys);

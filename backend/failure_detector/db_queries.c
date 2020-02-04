@@ -1086,6 +1086,21 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
 
 }
 
+queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_no_entries, short status, uuid_t * txnid, long nonce)
+{
+	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
+	ca->msg_type = QUERY_TYPE_QUEUE_NOTIFICATION;
+	ca->queue_index = new_no_entries;
+	ca->app_id = app_id;
+	ca->shard_id = shard_id;
+	ca->consumer_id = consumer_id;
+	ca->cells = cells;
+	ca->no_cells = no_cells;
+	ca->status = status;
+	return ca;
+
+}
+
 void free_queue_message(queue_query_message * ca)
 {
 	for(int i=0;i<ca->no_cells;i++)
@@ -1194,6 +1209,14 @@ queue_query_message * init_queue_message_from_msg(QueueQueryMessage * msg)
 			}
 
 			return init_read_queue_response(cell_address, cells, msg->n_cells, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
+		}
+		case QUERY_TYPE_QUEUE_NOTIFICATION:
+		{
+			return init_queue_notification(cell_address, NULL, 0, msg->app_id, msg->shard_id, msg->consumer_id, msg->queue_index, msg->status, (uuid_t *) msg->txnid.data, msg->nonce);
+		}
+		default:
+		{
+			assert(0);
 		}
 	}
 

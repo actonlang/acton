@@ -45,6 +45,7 @@ typedef void *WORD;
 #define QUERY_TYPE_UNSUBSCRIBE_QUEUE 15
 
 #define QUERY_TYPE_READ_QUEUE_RESPONSE 16
+#define QUERY_TYPE_QUEUE_NOTIFICATION 17
 
 #define VERBOSE_BACKEND 0
 
@@ -107,7 +108,8 @@ typedef struct consumer_state {
 
 	short notified;
 
-	queue_callback* callback;;
+	queue_callback* callback; // For local subscribers
+	int * sockfd; // For remote subscribers
 } consumer_state;
 
 // Cells:

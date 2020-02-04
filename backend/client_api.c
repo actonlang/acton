@@ -247,7 +247,59 @@ void * comm_thread_loop(void * args)
 			    		assert(0);
 			    }
 
-			    status = add_reply_to_nonce(q, msg_type, nonce, db);
+			    if(nonce > 0) // A server reply
+			    {
+			    		status = add_reply_to_nonce(q, msg_type, nonce, db);
+			    }
+			    else // A queue notification
+			    {
+			    		// Notify local subscriber if found:
+
+			    		assert(msg_type == RPC_TYPE_QUEUE);
+
+			    		queue_query_message * qqm = (queue_query_message *) q;
+
+			    		assert(qqm->msg_type == QUERY_TYPE_QUEUE_NOTIFICATION);
+
+			    		WORD notif_table_key = (WORD) qqm->cell_address->table_key;
+			    		WORD notif_queue_id = (WORD) qqm->cell_address->keys[0];
+
+			    		queue_callback * qc = get_queue_client_callback((WORD) qqm->consumer_id, (WORD) qqm->shard_id, (WORD) qqm->app_id,
+			    														notif_table_key, notif_queue_id,
+																	1, db);
+
+			    		if(qc == NULL)
+			    		{
+						fprintf(stderr, "CLIENT: No local subscriber subscriber %ld/%ld/%ld exists for queue %ld/%ld!\n",
+																		(long) qqm->consumer_id, (long) qqm->shard_id, (long) qqm->app_id,
+																		(long) notif_table_key, (long) notif_queue_id);
+			    		}
+
+					queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+#if (CLIENT_VERBOSITY > 0)
+					printf("CLIENT: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (long) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+#endif
+
+					status = pthread_mutex_lock(qc->lock);
+
+#if (CLIENT_LOCK_VERBOSITY > 0)
+					printf("CLIENT: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qqm->consumer_id, qc, qc->lock, status);
+#endif
+
+					pthread_cond_signal(qc->signal);
+					qc->callback(qca);
+					status = pthread_mutex_unlock(qc->lock);
+					assert(status == 0);
+
+#if (CLIENT_LOCK_VERBOSITY > 0)
+					printf("CLIENT: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qqm->consumer_id, qc, qc->lock, status);
+#endif
+
+#if (CLIENT_VERBOSITY > 0)
+					printf("CLIENT: Notified local subscriber %ld (%p/%p/%p/%p)\n", (long) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+#endif
+			    }
 
 //			    assert(status > 0);
 			}
@@ -1949,6 +2001,21 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 #endif
 
 	return status;
+}
+
+queue_callback * get_queue_client_callback(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, short use_lock, remote_db_t * db)
+{
+	queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, app_id, shard_id, consumer_id, QUEUE_NOTIF_ENQUEUED);
+
+	if(use_lock)
+		pthread_mutex_lock(db->subscribe_lock);
+
+	snode_t * subscription_node = skiplist_search(db->queue_subscriptions, (WORD) qca);
+
+	if(use_lock)
+		pthread_mutex_unlock(db->subscribe_lock);
+
+	return (subscription_node != NULL)? ((queue_callback *) (subscription_node->value)):NULL;
 }
 
 int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,

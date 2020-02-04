@@ -141,7 +141,7 @@ message TxnMessage {
 message QueueQueryMessage {
 	required CellAddressMessage queue_address=1;
 	
-	required int32 msg_type=2;
+	required int32 msg_type=2; // QUERY_TYPE_{CREATE_QUEUE, DELETE_QUEUE, SUBSCRIBE_QUEUE, UNSUBSCRIBE_QUEUE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE, NOTIFICATION}
 
 	required int32 app_id=3;
 	required int32 shard_id=4;
