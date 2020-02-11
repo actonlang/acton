@@ -2,20 +2,15 @@
 struct $str;
 typedef struct $str *$str;
 
-typedef struct str_internal_t {
-  char *GCINFO;
-  int nbytes;              // length of str in bytes
-  int nchars;              // length of str in Unicode chars
-  unsigned char *str;      // str is UTF-8 encoded.
-} *str_internal_t;
-
 struct $str$__methods__;
 typedef struct $str$__methods__ *$str$__methods__;
 
 struct $str {
   char *GCINFO;
   $str$__methods__ __class__;
-  str_internal_t __internal__;
+  int nbytes;              // length of str in bytes
+  int nchars;              // length of str in Unicode chars
+  unsigned char *str;      // str is UTF-8 encoded.
 };
 
 struct $str$__methods__ {
@@ -65,12 +60,13 @@ struct $str$__methods__ {
 // The constructor checks this and returns a $str value.
 $str fromUTF8(char *str);
 
+// Destructor; recover the internal string.
 unsigned char *toUTF8($str str);
 
  
 // Protocol instances ////////////////////////////////////////////////////////////////////////////////////////
 
-Eq$__class__ Eq$str_instance; // We could eliminate this and cast the next instance to serve as Eq$__class__
+Eq$__class__ Eq$str_instance; 
 Hashable$__class__ Hashable$str_instance;
 Plus$__class__ Plus$str_instance;
 Collection$__class__ Collection$str_instance;

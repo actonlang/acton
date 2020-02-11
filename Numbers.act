@@ -32,7 +32,7 @@ protocol Rational (Real):
   numerator    : () -> Integral
   denominator  : () -> Integral
 
-protocol Integral (Logical,Rational):
+protocol Integral (Rational,Logical):
   __int__      : () -> int
   __index__    : () -> int
 

@@ -74,13 +74,6 @@ Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA);
 
 // Types /////////////////////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct list_internal_t {
-  char *GCINFO;
-  $WORD *data;
-  int length;
-  int capacity;
-} *list_internal_t;
-
 typedef struct $list$__methods__ {
   $list (*copy)($list self);
   //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
@@ -89,7 +82,9 @@ typedef struct $list$__methods__ {
 struct $list {
   char *GCINFO;
   $list$__methods__ __class__;
-  list_internal_t __internal__;
+  $WORD *data;
+  int length;
+  int capacity;
 };
 
 
@@ -131,7 +126,7 @@ static inline int max(int a, int b) {
 }
 
 // For now, expansion doubles capacity. 
-static void expand(list_internal_t lst,int n) {
+static void expand($list lst,int n) {
    if (lst->capacity >= lst->length + n)
      return;
    int newcapacity = lst->capacity==0 ? 1 : lst->capacity;
@@ -155,7 +150,7 @@ static $list list_new(int capacity) {
     MKEXCEPTION(e,VALUEERROR);
     RAISE(e);
   } 
-  list_internal_t lst = malloc(sizeof(struct list_internal_t));
+  $list lst = malloc(sizeof(struct $list));
   if (lst == NULL) {
      exception e;
      MKEXCEPTION(e,MEMORYERROR);
@@ -173,24 +168,20 @@ static $list list_new(int capacity) {
   }
   lst->length = 0;
   lst->capacity = capacity;
-  $list res;
-  res = malloc(sizeof(struct $list));
-  res->__class__ = $list_methods; 
-  res->__internal__ = lst;
-  return res;
+  lst->__class__ = $list_methods; 
+  return lst;
 }
 
 // Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
 $list $list_add($list lst, $list other) {
-  int lstlen = lst->__internal__->length;
-  int otherlen = other->__internal__->length;
+  int lstlen = lst->length;
+  int otherlen = other->length;
   int reslen = lstlen + otherlen;
   $list res = list_new(reslen);
-  list_internal_t resinternal = res->__internal__;
-  memcpy(resinternal->data,lst->__internal__->data,lstlen*sizeof($WORD));
-  memcpy(resinternal->data+lstlen,other->__internal__->data,otherlen*sizeof($WORD));
-  resinternal->length = reslen;
+  memcpy(res->data,lst->data,lstlen*sizeof($WORD));
+  memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
+  res->length = reslen;
   return res;
 }
 
@@ -218,7 +209,7 @@ $list $list_fromiter(Iterable it) {
   
 $int $list_len($list lst) {
   long *res = malloc(sizeof(long));
-  *res = (long)lst->__internal__->length;
+  *res = (long)lst->length;
   return res;
 }
 
@@ -235,8 +226,8 @@ $int $list_len_instance(Collection$__class__ cl, $WORD self) {
 // Container ///////////////////////////////////////////////////////////////////////////
 
 $bool $list_contains($list lst, $WORD elem, $bool (*eq)(Eq$__class__,$WORD,$WORD)) {
-  for (int i=0; i < lst->__internal__->length; i++) {
-    if (eq(NULL,elem,lst->__internal__->data[i]))
+  for (int i=0; i < lst->length; i++) {
+    if (eq(NULL,elem,lst->data[i]))
       return 1;
   }
   return 0;
@@ -261,7 +252,7 @@ $bool $list_containsnot_instance (Container_Eq$__class__ cl, $WORD self, $WORD e
 
 typedef struct list_iterator_state_t {
   char *$GCINFO;
-  list_internal_t src;
+  $list src;
   int nxt;
 } *list_iterator_state_t; 
 
@@ -284,7 +275,7 @@ iterator_internal_t $list_iter(list_iterator_state_t state) {
 */
 static list_iterator_state_t $list_state_of($list lst) {
   list_iterator_state_t state = malloc(sizeof(struct list_iterator_state_t));
-  state->src = lst->__internal__;
+  state->src = lst;
   state->nxt = 0;
   return state;
 }
@@ -302,40 +293,39 @@ static list_iterator_state_t $list_state_of($list lst) {
 // Indexed ///////////////////////////////////////////////////////////////////////////
 
 $WORD $list_getitem($list lst, int ix) {
-  int len = lst->__internal__->length;
+  int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
      exception e;
     MKEXCEPTION(e,INDEXERROR);
     RAISE(e);
   }
-  return lst->__internal__->data[ix0];
+  return lst->data[ix0];
 }
 
 void $list_setitem($list lst, int ix, $WORD val) {
-  int len = lst->__internal__->length;
+  int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
     exception e;
     MKEXCEPTION(e,INDEXERROR);
     RAISE(e);
   }
-  lst->__internal__->data[ix0] = val;
+  lst->data[ix0] = val;
 }
 
 void $list_delitem($list lst,int ix) {
-  list_internal_t internal = lst->__internal__;
-  int len = internal->length;
+  int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if(ix0 < 0 || ix0 >= len) {
     exception e;
     MKEXCEPTION(e,INDEXERROR);
     RAISE(e);
   }
-  memmove(internal->data + ix0,
-          internal->data + (ix0 + 1),
+  memmove(lst->data + ix0,
+          lst->data + (ix0 + 1),
           (len-(ix0+1))*sizeof($WORD));
-  internal->length--;
+  lst->length--;
 }
 
 // instance methods
@@ -356,7 +346,7 @@ void $list_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
 $list $list_getslice($list lst, Slice slc) {
-  int len = lst->__internal__->length;
+  int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   //slice notation have been eliminated and default values applied.
@@ -373,10 +363,8 @@ $list $list_getslice($list lst, Slice slc) {
 }
 
 void $list_setslice($list lst, Slice slc, $list other) {
-  list_internal_t internal = lst->__internal__;
-  list_internal_t ointernal = other->__internal__;
-  int len = internal->length; 
-  int olen = ointernal->length; 
+  int len = lst->length; 
+  int olen = other->length; 
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (step != 1 && olen != slen) {
@@ -387,34 +375,34 @@ void $list_setslice($list lst, Slice slc, $list other) {
   int copy = olen <= slen ? olen : slen;
   int t = start;
   for (int i= 0; i<copy; i++) {
-    internal->data[t] = ointernal->data[i];
+    lst->data[t] = other->data[i];
     t += step;
   }
   if (olen == slen)
     return;
   // now we know that step=1
   if (olen < slen) {
-    memmove(internal->data + start + copy,
-            internal->data + start + slen,
+    memmove(lst->data + start + copy,
+            lst->data + start + slen,
             (len-(start+slen))*sizeof($WORD));
-     internal->length-=slen-olen;
+     lst->length-=slen-olen;
      return;
   } else {
-    expand(internal,olen-slen);
+    expand(lst,olen-slen);
     int rest = len - (start+copy);
     int incr = olen - slen;
-    memmove(internal->data + start + copy + incr,
-            internal->data + start + copy,
+    memmove(lst->data + start + copy + incr,
+            lst->data + start + copy,
             rest*sizeof($WORD));
     for (int i = copy; i < olen; i++)
-      internal->data[start+i] = ointernal->data[i];
-    internal->length += incr;
+      lst->data[start+i] = other->data[i];
+    lst->length += incr;
   }
 }
 
 
 void $list_delslice($list lst, Slice slc) {
-  int len = lst->__internal__->length;
+  int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &len, &start, &stop, &step);
   if (slen==0) return;
@@ -451,8 +439,8 @@ void $list_delslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice) {
 // Sequence /////////////////////////////////////////////////////////////////////////////
 
 void $list_append($list lst, $WORD val) {
-   expand(lst->__internal__,1);
-  lst->__internal__->data[lst->__internal__->length++] = val;
+  expand(lst,1);
+  lst->data[lst->length++] = val;
 }
 
 Iterable $list_reversed($list lst){
@@ -462,25 +450,23 @@ Iterable $list_reversed($list lst){
 }
 
 void $list_insert($list lst, int ix, $WORD val) {
-  list_internal_t internal = lst->__internal__;
-  int len = internal->length;
-  expand(internal,1);
+  int len = lst->length;
+  expand(lst,1);
   int ix0 = ix < 0 ? max(len+ix,0) : min(ix,len);
-  memmove(internal->data + (ix0 + 1),
-          internal->data + ix0 ,
+  memmove(lst->data + (ix0 + 1),
+          lst->data + ix0 ,
           (len - ix0) * sizeof($WORD));
-  internal->data[ix0] = val;
-  internal->length++;
+  lst->data[ix0] = val;
+  lst->length++;
 }
 
 // In place reversal
 void $list_reverse($list lst) {
-  list_internal_t internal = lst->__internal__;
-  int len = internal->length;
+  int len = lst->length;
   for (int i = 0; i < len/2; i++) {
-    $WORD tmp = internal->data[i];
-    internal->data[i] = internal->data[len-1-i];
-    internal->data[len-1-i] = tmp;
+    $WORD tmp = lst->data[i];
+    lst->data[i] = lst->data[len-1-i];
+    lst->data[len-1-i] = tmp;
   }
 }
 
@@ -504,10 +490,10 @@ void $list_reverse_instance(Sequence$__class__ cl, $WORD self) {
 // List-specific methods /////////////////////////////////////////////////////////////////////
 
 $list $list_copy($list lst) {
-  int len = lst->__internal__->length;
+  int len = lst->length;
   $list res = list_new(len);
-  res->__internal__->length = len;
-  memcpy(res->__internal__->data,lst->__internal__->data,len*sizeof($WORD));
+  res->length = len;
+  memcpy(res->data,lst->data,len*sizeof($WORD));
   return res;
 }
 /*                   
