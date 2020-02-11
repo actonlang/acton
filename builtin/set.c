@@ -80,8 +80,12 @@ typedef struct {
   long hash;    
 } $setentry;
 
-typedef struct $set_internal_struct {
+typedef void *$set$__methods__;       // All set methods are from protocols
+// Maybe we should  offer union, intersection and symmetric difference under those names.
+
+typedef struct $set {
   char *$GCINFO;
+  $set$__methods__ __class__;
   long numelements;    // nr of elements in $set
   long fill;           // numelements + #dummy entries
     /* The table contains mask + 1 slots, and that's a power of 2.
@@ -94,28 +98,11 @@ typedef struct $set_internal_struct {
   $setentry *table;                  // the hashtable
 } *$set_internal_t;
 
-typedef void *$set$__methods__;       // All set methods are from protocols
-// Maybe we should  offer union, intersection and symmetric difference under those names.
-
-struct $set {
-  char *$GCINFO;
-  $set$__methods__ __class__;
-  $set_internal_t __internal__;
-};
-
-
 #define PERTURB_SHIFT 5
 #define MIN_SIZE 8
 
 static $WORD _dummy;
 #define dummy (&_dummy)
-
-static $set mk$set($set_internal_t s) {
-  $set res = malloc(sizeof(struct $set));
-  res->__class__ = NULL;
-  res->__internal__ = s;
-  return res;
-};
 
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
     $setentry *entry;
@@ -136,7 +123,7 @@ static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash
     entry->hash = hash;
 }
 
-static int $set_table_resize($set_internal_t so, int minsize) {
+static int $set_table_resize($set so, int minsize) {
     $setentry *oldtable, *newtable, *entry;
     long oldmask = so->mask;
     long newmask;
@@ -181,7 +168,7 @@ static int $set_table_resize($set_internal_t so, int minsize) {
     return 0;
 }
 
-static $setentry *$set_lookkey($set_internal_t set, $WORD key, long hash) {
+static $setentry *$set_lookkey($set set, $WORD key, long hash) {
     $setentry *entry;
     long perturb;
     long mask = set->mask;
@@ -211,11 +198,11 @@ static $setentry *$set_lookkey($set_internal_t set, $WORD key, long hash) {
 }
 
 static int $set_contains_entry($set set, $WORD elem, long hash) {
-  return $set_lookkey(set->__internal__, elem, hash)->key != NULL;
+  return $set_lookkey(set, elem, hash)->key != NULL;
 }
 
 $set $set_new(Hashable$__class__ h) {
-  $set_internal_t res = malloc(sizeof(struct $set_internal_struct));
+  $set res = malloc(sizeof(struct $set));
   // $set_internal_t res = malloc(sizeof(char*) + 4*sizeof(long)+sizeof(Hashable$__class__)+sizeof($setentry*));
   res->numelements = 0;
   res->fill = 0;
@@ -224,11 +211,12 @@ $set $set_new(Hashable$__class__ h) {
   res->h = h;
   res->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(res->table,0,MIN_SIZE*sizeof($setentry));
-  return mk$set(res); 
+  res->__class__ = NULL;
+  return res; 
 }
 
 
-static void $set_add_entry($set_internal_t set, $WORD key, long hash) {
+static void $set_add_entry($set set, $WORD key, long hash) {
   $setentry *freeslot;
   $setentry *entry;
   long perturb;
@@ -285,25 +273,23 @@ static void $set_add_entry($set_internal_t set, $WORD key, long hash) {
 
 
 static $set $set_copy($set set) {
-  $set_internal_t s = set->__internal__;
-  $set res = $set_new(s->h);
+  $set res = $set_new(set->h);
   Iterator iter = $set_iter_entry_instance(Iterable$set_instance,set);
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
     long hash = (($setentry*)w)->hash;
-    $set_add_entry(res->__internal__,key,hash);
+    $set_add_entry(res,key,hash);
   }
   return res;
 }
 
 static int $set_discard_entry($set set, $WORD elem, long hash) {
-  $set_internal_t s = set->__internal__;
-  $setentry *entry = $set_lookkey(s, elem, hash);
+  $setentry *entry = $set_lookkey(set, elem, hash);
   if (entry->key != NULL) {
     entry->key = dummy;
     entry->hash = -1;
-    s->numelements--;
+    set->numelements--;
     return DISCARD_FOUND;
   } else
     return DISCARD_NOTFOUND;
@@ -314,13 +300,11 @@ static int $set_discard_entry($set set, $WORD elem, long hash) {
 
 
 $bool $set_eq($set set, $set other) {
-  $set_internal_t s = set->__internal__;
-  $set_internal_t o = other->__internal__;
   if (set == other) 
     return 1;
-  if (s->numelements != o->numelements)
+  if (set->numelements != other->numelements)
     return 0;
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other->__internal__);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     if(!$set_contains_entry(set, (($setentry*)w)->key, (($setentry*)w)->hash))
@@ -343,11 +327,8 @@ $bool $set_neq_instance(Eq$__class__ cl, $WORD a, $WORD b) {
 
 $bool $set_ge($set set, $set other) {
   if (set == other) 
-    return 1;
-  $set_internal_t s = set->__internal__;
-  $set_internal_t o = other->__internal__;
-    
-  if (s->numelements < o->numelements)
+    return 1;    
+  if (set->numelements < other->numelements)
     return 0;
   Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
@@ -360,11 +341,8 @@ $bool $set_ge($set set, $set other) {
 
 $bool $set_gt($set set, $set other) {
   if (set == other) 
-    return 0;
-  $set_internal_t s = set->__internal__;
-  $set_internal_t o = other->__internal__;
-    
-  if (s->numelements <= o->numelements)
+    return 0;    
+  if (set->numelements <= other->numelements)
     return 0;
   Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
@@ -405,17 +383,16 @@ $bool $set_ge_instance(Ord$__class__ cl, $WORD a, $WORD b) {
 
 
 $set $set_intersection($set set, $set other) {
-  $set_internal_t s = set->__internal__;
   if (Collection$set_instance->__len__(Collection$set_instance,other) > Collection$set_instance->__len__(Collection$set_instance,set))
     return $set_intersection(other,set);
-  $set res = $set_new(s->h);
+  $set res = $set_new(set->h);
   Iterator iter = $set_iter_entry_instance(Iterable$set_instance,set);
   $WORD w;
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
     long hash = (($setentry*)w)->hash;
     if ($set_contains_entry(other,key,hash))
-      $set_add_entry(res->__internal__,key,hash);
+      $set_add_entry(res,key,hash);
   }
   return res;
 }
@@ -430,7 +407,7 @@ $set $set_union($set set, $set other) {
   while((w = next(iter))){
     $WORD key = (($setentry*)w)->key;
     long hash = (($setentry*)w)->hash;
-    $set_add_entry(res->__internal__,key,hash);
+    $set_add_entry(res,key,hash);
   }
   return res;
 }
@@ -443,7 +420,7 @@ $set $set_symmetric_difference($set set, $set other) {
     $WORD key = (($setentry*)w)->key;
     long hash = (($setentry*)w)->hash;
     if(!$set_discard_entry(res,key,hash))
-      $set_add_entry(res->__internal__,key,hash);
+      $set_add_entry(res,key,hash);
   }
   return res;
 }
@@ -465,19 +442,16 @@ $WORD $set_xor_instance(Logical$__class__ cl, $WORD a, $WORD b) {
 // Set /////////////////////////////////////////////////////////////////////////////////////////////
 
 void $set_add($set set, $WORD elem) {
-  $set_internal_t s = set->__internal__;
-  $set_add_entry(s,elem,*s->h->__hash__(s->h,elem));
+  $set_add_entry(set,elem,*set->h->__hash__(set->h,elem));
 }
 
 
 void $set_discard($set set, $WORD elem) {
-  $set_internal_t s = set->__internal__;
-  $set_discard_entry(set,elem,*s->h->__hash__(s->h,elem));
+  $set_discard_entry(set,elem,*set->h->__hash__(set->h,elem));
 }
 
 void $set_remove($set set, $WORD elem) {
-  $set_internal_t s = set->__internal__;
-  long hash = *s->h->__hash__(s->h,elem);
+  long hash = *set->h->__hash__(set->h,elem);
   if($set_discard_entry(set,elem,hash))
     return;
   else {
@@ -489,12 +463,11 @@ void $set_remove($set set, $WORD elem) {
 
 $WORD $set_pop($set set) {
   $WORD res;
-  $set_internal_t s = set->__internal__;
   // Make sure the search finger is in bounds 
-  $setentry *entry = s->table + (s->finger & s->mask);
-  $setentry *limit = s->table + s->mask;
+  $setentry *entry = set->table + (set->finger & set->mask);
+  $setentry *limit = set->table + set->mask;
 
-  if (s->numelements == 0) {
+  if (set->numelements == 0) {
     exception e;
     MKEXCEPTION(e,KEYERROR);
     RAISE(e);
@@ -503,23 +476,22 @@ $WORD $set_pop($set set) {
   while (entry->key == NULL || entry->key==dummy) {
     entry++;
     if (entry > limit)
-      entry = s->table;
+      entry = set->table;
   }
   res = entry->key;
   entry->key = dummy;
   entry->hash = -1;
-  s->numelements--;
-  s->finger = entry - s->table + 1;   // next place to start 
+  set->numelements--;
+  set->finger = entry - set->table + 1;   // next place to start 
   return res;
 }
 
 $bool $set_isdisjoint($set set, $set other) {
-  $set_internal_t s = set->__internal__;
   if (set == other) 
-    return s->numelements == 0;
-  if (other->__internal__->numelements > s->numelements)
+    return set->numelements == 0;
+  if (other->numelements > set->numelements)
     return $set_isdisjoint(other,set);
-  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other->__internal__);
+  Iterator iter = $set_iter_entry_instance(Iterable$set_instance,other);
   $WORD w;
   while((w = next(iter))){
     if($set_contains_entry(set, (($setentry*)w)->key, (($setentry*)w)->hash))
@@ -557,7 +529,7 @@ $WORD $set_pop_instance(Set$__class__ cl, $WORD self) {
 // What about from_iter; needs an instance of Hashable to create empty set.
 
 $int $set_len($set set) {
-  return to$int(set->__internal__->numelements);
+  return to$int(set->numelements);
 }
 
 //instance methods
@@ -576,8 +548,7 @@ Collection $set_fromiter_instance(Collection$__class__ cl, Iterable it) {
 // Container_Eq ///////////////////////////////////////////////////////////////////////////////////////
 
 int $set_contains($set set, $WORD elem) {
-  $set_internal_t s = set->__internal__;
-  return $set_contains_entry(set,elem,*s->h->__hash__(s->h,elem));
+  return $set_contains_entry(set,elem,*set->h->__hash__(set->h,elem));
 }
 
 $bool $set_contains_instance(Container_Eq$__class__ cl, $WORD self, $WORD elem) {
@@ -629,9 +600,8 @@ $WORD $set_iterator_next($set_iterator_state_t state) {
 }
 
 $set_iterator_state_t $set_state_of($set set) {
-  $set_internal_t s = set->__internal__;
   $set_iterator_state_t state = malloc(sizeof(struct $set_iterator_struct));
-  state->src = s;
+  state->src = set;
   state->nxt = 0;
   return state;
 }

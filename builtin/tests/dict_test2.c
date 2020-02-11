@@ -22,9 +22,13 @@ int main() {
   $dict dict = $dict_new(Hashable$str_instance);
   $dict other = $dict_new(Hashable$str_instance);
   int j;
-  for (long i=1; i < 1000000; i++) {
-    Indexed$dict_instance->__setitem__(Indexed$dict_instance,dict,toWord(i),toWord(i+1));
-  }
+  //  for (long i=1; i < 1000000; i++) {
+  //  Indexed$dict_instance->__setitem__(Indexed$dict_instance,dict,toWord(i),toWord(i+1));
+  //}
+
+  Indexed dict1 = Indexed$__pack__(Indexed$dict_instance,dict);
+  for (long i=1; i < 1000000; i++)
+    dict1->__class__->__setitem__(dict1->__class__,dict1->__impl__,toWord(i),toWord(i+1));
   $WORD b;
   long r = 17;
   long s = 0;

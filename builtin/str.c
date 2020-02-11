@@ -138,29 +138,19 @@ Container_Eq$__class__ Container_Eq$str_instance = &Container_Eq$str_struct;
 
 static unsigned char nul = 0;
 
-static struct str_internal_t null_struct = {"GC_NUL",0,0,&nul};
+static struct $str null_struct = {"GC_NUL",&$str_table,0,0,&nul};
 
-static str_internal_t null_str = &null_struct;
+static $str null_str = &null_struct;
 
 
-#define NEW_INTERNAL(nm,nchrs,nbtes)         \
-nm = malloc(sizeof(struct str_internal_t)); \
+#define NEW_UNFILLED(nm,nchrs,nbtes)         \
+nm = malloc(sizeof(struct $str)); \
+(nm)->__class__ = $str_methods; \
 (nm)->nchars = nchrs;            \
 (nm)->nbytes = nbtes;            \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
-#define NEW_STR(nm,internal)  \
-$str nm; \
-nm = malloc(sizeof(struct $str)); \
-(nm)->__class__ = $str_methods; \
-(nm)->__internal__ = internal; \
-return nm;
-         
-$str mk_str(str_internal_t internal) {
-  NEW_STR(res,internal)
-}
-         
 $str fromUTF8(char *str) {
   int nbytes = 0;
   int nchars = 0;
@@ -169,11 +159,12 @@ $str fromUTF8(char *str) {
   int cp, cpnbytes;
   while(1) {
     if (*p == '\0') {
-      str_internal_t internal = malloc(sizeof(struct str_internal_t));
-      internal->nbytes = nbytes;
-      internal->nchars = nchars;
-      internal->str = (unsigned char*)str;
-      NEW_STR(res,internal);
+      $str res = malloc(sizeof(struct $str));
+      res->__class__ = $str_methods;
+      res->nbytes = nbytes;
+      res->nchars = nchars;
+      res->str = (unsigned char*)str;
+      return res;
     }
     cpnbytes = utf8proc_iterate(p,-1,&cp);
     if (cpnbytes < 0)
@@ -187,7 +178,7 @@ $str fromUTF8(char *str) {
 }
 
 unsigned char *toUTF8($str str) {
-  return str->__internal__->str;
+  return str->str;
 }
 
 // #bytes in UTF-8 to represent codepoint cp
@@ -220,13 +211,12 @@ typedef int (*transform)(int codepoint);
 // For the moment only used for str_upper and str_lower;
 // maybe not worthwhile to keep.
 static $str str_transform($str s, transform f) {
-  str_internal_t si = s->__internal__;
   int cp, cpu, cplen, cpulen;
   int ulen = 1;
-  unsigned char *p = si->str;
-  unsigned char buffer[4*si->nchars];
+  unsigned char *p = s->str;
+  unsigned char buffer[4*s->nchars];
   unsigned char *up = buffer;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     cplen = utf8proc_iterate(p,-1,&cp);
     cpu = f(cp);
     cpulen = utf8proc_encode_char(cpu,up);
@@ -234,15 +224,15 @@ static $str str_transform($str s, transform f) {
     up += cpulen;
   }
   int nbytes = (int)(up-buffer);
-  str_internal_t r;
-  NEW_INTERNAL(r,si->nchars,nbytes);
-  memcpy(r->str,buffer,nbytes);
-  NEW_STR(res,r);
+  $str res;
+  NEW_UNFILLED(res,s->nchars,nbytes);
+  memcpy(res->str,buffer,nbytes);
+  return res;
 }
 
 // Find char position in text from byte position.
 // Assume that i is first byte of a char in text.
-static int char_no(str_internal_t text,int i) {
+static int char_no($str text,int i) {
   if (text->nbytes == text->nchars) // ASCII string
     return i;
   int res = 0;
@@ -274,7 +264,7 @@ static unsigned char *skip_chars(unsigned char* start,int n, int isascii) {
 
 // Find byte position in text from char position.
 // Assume i is a valid char index in text
-static int byte_no(str_internal_t text, int i) {
+static int byte_no($str text, int i) {
   int res = 0;
   unsigned char *t = text->str;
   for (int k=0; k<i; k++)
@@ -327,11 +317,11 @@ static int fix_start_end(int nchars, long **start, long **end) {
 
 // Builds a new one-char string starting at p.
 static $str mk_char(unsigned char *p) {
-  str_internal_t r;
-  NEW_INTERNAL(r,1,byte_length2(*p));
-  for (int i=0; i<r->nbytes; i++)
-    r->str[i] = p[i];
-  NEW_STR(res,r);
+  $str res;
+  NEW_UNFILLED(res,1,byte_length2(*p));
+  for (int i=0; i<res->nbytes; i++)
+    res->str[i] = p[i];
+  return res;
 }
 
 static int isspace_codepoint(int codepoint) {
@@ -396,7 +386,7 @@ include mutating methods. These methods raise NOTIMPLEMENTED.
 
 // Eq ///////////////////////////////////////////////////////////////////////////////////////////////
 $bool $str_eq(Eq$__class__ cl, $str a, $str b) {
-  return !strcmp((char *)a->__internal__->str,(char *)b->__internal__->str);
+  return !strcmp((char *)a->str,(char *)b->str);
 }
          
 $bool $str_neq(Eq$__class__ cl, $str a, $str b) {
@@ -422,7 +412,7 @@ $bool $str_neq_instance(Eq$__class__ cl, $WORD a, $WORD b) {
 
 $int $str_hash_instance(Hashable$__class__ cl, $WORD self) {
   $int res = malloc(sizeof(long));
-  str_internal_t s = (($str)self)->__internal__;
+  $str s = ($str)self;
   *res = $string_hash(s->str,s->nbytes);
   return res;
 }
@@ -430,11 +420,11 @@ $int $str_hash_instance(Hashable$__class__ cl, $WORD self) {
 // Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
 $str $str_add($str s, $str t) {
-  str_internal_t r, si = s->__internal__, ti = t->__internal__;
-  NEW_INTERNAL(r,si->nchars + ti->nchars,si->nbytes + ti->nbytes);
-  memcpy(r->str,si->str,si->nbytes);
-  memcpy(r->str+si->nbytes,ti->str,ti->nbytes);
-  NEW_STR(res,r);
+  $str res;
+  NEW_UNFILLED(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
+  memcpy(res->str,s->str,s->nbytes);
+  memcpy(res->str+s->nbytes,t->str,t->nbytes);
+  return res;
 }
 
 // instance method
@@ -454,7 +444,7 @@ $str $str_fromiter(Iterable it) {
          
          
 $int $str_len($str s) {
-  $int res = to$int(s->__internal__->nchars);
+  $int res = to$int(s->nchars);
   return res;
 }
 
@@ -471,9 +461,7 @@ $int $str_len_instance(Collection$__class__ cl, $WORD self) {
 // Container ///////////////////////////////////////////////////////////////////////////
 
 $bool $str_contains($str s, $str sub) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
-  return bmh(si->str,subi->str,si->nbytes,subi->nbytes) > 0;
+  return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
 }
 
 $bool $str_containsnot($str s, $str sub) {
@@ -501,8 +489,8 @@ typedef struct str_iterator_struct {
 static str_iterator_state_t $str_state_of($str s) {
   str_iterator_state_t state = malloc(sizeof(struct str_iterator_struct));
   state->$GCINFO = "iterator_state";
-  state->nxt = s->__internal__->str;
-  state->remaining = s->__internal__->nchars;
+  state->nxt = s->str;
+  state->remaining = s->nchars;
   return state;
 }
 
@@ -535,10 +523,9 @@ $WORD $str_next_instance(Iterator$__class__ cl, $WORD self) {
 // Indexed ///////////////////////////////////////////////////////////////////////////
 
 $WORD $str_getitem($str s, int i) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
-  int ix = get_index(i,si->nchars);
-  p = skip_chars(p,ix,si->nchars == si->nbytes);
+  unsigned char *p = s->str;
+  int ix = get_index(i,s->nchars);
+  p = skip_chars(p,ix,s->nchars == s->nbytes);
   return mk_char(p);
 }
 
@@ -572,16 +559,15 @@ void $str_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
 $str $str_getslice($str s, Slice slc) {
-  str_internal_t si = s->__internal__;
-  int isascii = si->nchars == si->nbytes;
-  int nchars = si->nchars;
+  int isascii = s->nchars == s->nbytes;
+  int nchars = s->nchars;
   int nbytes = 0;
   int start, stop, step, slen;
   normalize_slice(slc, nchars, &slen, &start, &stop, &step);
  //slice notation have been eliminated and default values applied.
   unsigned char buffer[4*slen];       // very conservative buffer size.
   unsigned char *p = buffer;
-  unsigned char *t = skip_chars(si->str,start,isascii);
+  unsigned char *t = skip_chars(s->str,start,isascii);
   for (int i=0; i<slen; i++) {
     int bytes = byte_length2(*t);
     for (int k=0; k<bytes;k++) {
@@ -590,11 +576,11 @@ $str $str_getslice($str s, Slice slc) {
     }
     t = skip_chars(t,step-1,isascii);
   }
-  str_internal_t r;
-  NEW_INTERNAL(r,slen,nbytes);
+  $str res;
+  NEW_UNFILLED(res,slen,nbytes);
   if (nbytes > 0)
-    memcpy(r->str,buffer,nbytes);
-  NEW_STR(res,r);
+    memcpy(res->str,buffer,nbytes);
+ return res;
 }
 
 
@@ -683,42 +669,39 @@ void $str_reverse_instance(Sequence$__class__ cl, $WORD self) {
 // str-specific methods ////////////////////////////////////////////////////////
 
 $str $str_capitalize($str s) {
-  str_internal_t si = s->__internal__;
-  if (si->nchars==0) {
-    NEW_STR(res,null_str);
+  if (s->nchars==0) {
+    return null_str;
   }
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int cp;
   int cplen = utf8proc_iterate(p,-1,&cp);
   int cpt = utf8proc_totitle(cp);
-  int nbytes = si->nbytes - cplen + byte_length(cpt);
-  str_internal_t r;
-  NEW_INTERNAL(r,si->nchars,nbytes);
-  int cpulen = utf8proc_encode_char(cpt,r->str);
-  memcpy(r->str+cpulen,si->str+cplen,si->nbytes-cplen);
-  NEW_STR(res,r);
+  int nbytes = s->nbytes - cplen + byte_length(cpt);
+  $str res;
+  NEW_UNFILLED(res,s->nchars,nbytes);
+  int cpulen = utf8proc_encode_char(cpt,res->str);
+  memcpy(res->str+cpulen,s->str+cplen,s->nbytes-cplen);
+  return res;
 }
 
 $str $str_center($str s, int width, $str fill) {
-  str_internal_t filli = fill->__internal__;
-  if (filli->nchars != 1) {
+  if (fill->nchars != 1) {
     exception e;
     MKEXCEPTION(e,TYPEERROR);
     RAISE(e);
   }
-  str_internal_t si = s->__internal__;
-  if (width <= si->nchars) {
+  if (width <= s->nchars) {
     return s;
   }
-  int pad = (width-si->nchars);
+  int pad = (width-s->nchars);
   int padleft = pad/2; // Below we make use of the fact padright >= padleft.
   int padright = pad-padleft;
-  int fillbytes = filli->nbytes;
-  int sbytes = si->nbytes;
-  str_internal_t r;
-  NEW_INTERNAL(r, width,sbytes+pad*fillbytes);
-  unsigned char *c = filli->str;
-  unsigned char *p = r->str;
+  int fillbytes = fill->nbytes;
+  int sbytes = s->nbytes;
+  $str res;
+  NEW_UNFILLED(res, width,sbytes+pad*fillbytes);
+  unsigned char *c = fill->str;
+  unsigned char *p = res->str;
   p += padleft*fillbytes+sbytes;
   for (int i = 0; i<padright; i++) {
     for (int j = 0; j < fillbytes; j++) 
@@ -726,42 +709,38 @@ $str $str_center($str s, int width, $str fill) {
     p += fillbytes;
   }
   p -= padright*fillbytes;
-  memcpy(r->str,p,padleft*fillbytes);
+  memcpy(res->str,p,padleft*fillbytes);
   p -= sbytes;
-  memcpy(p,si->str,sbytes);
-  NEW_STR(res,r);
+  memcpy(p,s->str,sbytes);
+  return res;
 }
 
 
 $int $str_count($str s, $str sub, $int start, $int end) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
-  int isascii = si->nchars == si->nbytes;
+  int isascii = s->nchars == s->nbytes;
   $int st = start;
   $int en = end;
-  if (fix_start_end(si->nchars,&st,&en) < 0) return to$int(0);
-  unsigned char *p = skip_chars(si->str,*st,isascii);
+  if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(0);
+  unsigned char *p = skip_chars(s->str,*st,isascii);
   unsigned char *q = skip_chars(p,*en-*st,isascii);
   int res = 0;
-  int n = bmh(p,subi->str,q-p,subi->nbytes);
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
   while (n>=0) {
     res++;
-    p += n + (subi->nbytes>0 ? subi->nbytes : 1);
-    n = bmh(p,subi->str,q-p,subi->nbytes);
+    p += n + (sub->nbytes>0 ? sub->nbytes : 1);
+    n = bmh(p,sub->str,q-p,sub->nbytes);
   }
   return to$int(res);
 }
 
 $bool $str_endswith($str s, $str sub, $int start, $int end) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
   $int st = start;
   $int en = end;
-  if (fix_start_end(si->nchars,&st,&en) < 0) return 0;
-  int isascii = si->nchars==si->nbytes;
-  unsigned char *p = skip_chars(si->str + si->nbytes,*en - si->nchars,isascii) - subi->nbytes;
-  unsigned char *q = subi->str;
-  for (int i=0; i<subi->nbytes; i++) {
+  if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
+  int isascii = s->nchars==s->nbytes;
+  unsigned char *p = skip_chars(s->str + s->nbytes,*en - s->nchars,isascii) - sub->nbytes;
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
     if (*p == 0 || *p++ != *q++) {
       return 0;
     }
@@ -770,14 +749,13 @@ $bool $str_endswith($str s, $str sub, $int start, $int end) {
 }
 
 $str $str_expandtabs($str s, int tabsize){
-  str_internal_t si = s->__internal__;
   int pos = 0;
   int expanded = 0;
   tabsize = tabsize <= 0 ? 1 : tabsize;
-  unsigned char buffer[tabsize * si->nchars];
-  unsigned char *p = si->str;
+  unsigned char buffer[tabsize * s->nchars];
+  unsigned char *p = s->str;
   unsigned char *q = buffer;
-  for (int i=0; i<si->nchars; i++) {
+  for (int i=0; i<s->nchars; i++) {
     if (*p == '\t') {
       int n = tabsize - pos % tabsize;
       for (int j=0; j < n; j++) {
@@ -796,24 +774,22 @@ $str $str_expandtabs($str s, int tabsize){
       }
     }
   }
-  str_internal_t r;
-  NEW_INTERNAL(r,si->nchars+expanded,si->nbytes+expanded);
-  memcpy(r->str,buffer,si->nbytes+expanded);
-  NEW_STR(res,r);
+  $str res;
+  NEW_UNFILLED(res,s->nchars+expanded,s->nbytes+expanded);
+  memcpy(res->str,buffer,s->nbytes+expanded);
+  return res;
 }
 
 $int $str_find($str s, $str sub, $int start, $int end) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
-  int isascii = si->nchars == si->nbytes;
+  int isascii = s->nchars == s->nbytes;
   $int st = start;
   $int en = end;
-  if (fix_start_end(si->nchars,&st,&en) < 0) return to$int(-1);
-  unsigned char *p = skip_chars(si->str,*st,isascii);
+  if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = skip_chars(s->str,*st,isascii);
   unsigned char *q = skip_chars(p,*en-*st,isascii);
-  int n = bmh(p,subi->str,q-p,subi->nbytes);
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
   if (n<0) return to$int(-1);
-  return to$int(char_no(si,n+p-si->str));
+  return to$int(char_no(s,n+p-s->str));
 }
 
 $int $str_index($str s, $str sub, $int start, $int end) {
@@ -827,13 +803,12 @@ $int $str_index($str s, $str sub, $int start, $int end) {
 }
 
 $bool $str_isalnum($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if ((cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO) && cat != UTF8PROC_CATEGORY_ND)
@@ -844,13 +819,12 @@ $bool $str_isalnum($str s) {
 }
 
 $bool $str_isalpha($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO)
@@ -861,9 +835,8 @@ $bool $str_isalpha($str s) {
 }
 
 $bool $str_isascii($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
-  for (int i=0; i < si->nbytes; i++) {
+  unsigned char *p = s->str;
+  for (int i=0; i < s->nbytes; i++) {
     if (*p > 127)
       return 0;
     p++;
@@ -872,13 +845,12 @@ $bool $str_isascii($str s) {
 }
 
 $bool $str_isdecimal($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat != UTF8PROC_CATEGORY_ND)
@@ -889,14 +861,13 @@ $bool $str_isdecimal($str s) {
 }
 
 $bool $str_islower($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
   int has_cased = 0;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LT|| cat == UTF8PROC_CATEGORY_LU)
@@ -909,13 +880,12 @@ $bool $str_islower($str s) {
 }
 
 $bool $str_isprintable($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
@@ -926,13 +896,12 @@ $bool $str_isprintable($str s) {
 }
 
 $bool $str_isspace($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     if (!isspace_codepoint(codepoint))
       return 0;
@@ -942,15 +911,14 @@ $bool $str_isspace($str s) {
 }
 
 $bool $str_istitle($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
   int hascased = 0;
   int incasedrun = 0;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT ) {
@@ -970,14 +938,13 @@ $bool $str_istitle($str s) {
 }
 
 $bool $str_isupper($str s) {
-  str_internal_t si = s->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int codepoint;
   int nbytes;
   int hascased = 0;
-  if (si->nchars == 0)
+  if (s->nchars == 0)
     return 0;
-  for (int i=0; i < si->nchars; i++) {
+  for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LL)
@@ -1006,27 +973,25 @@ $str $str_join($str s, Iterator iter) {
 }
 
 $str $str_ljust($str s, int width, $str fill) {
-  str_internal_t si = s->__internal__;
-  str_internal_t filli = fill->__internal__;
-  if (filli->nchars != 1) {
+  if (fill->nchars != 1) {
     exception e;
     MKEXCEPTION(e,TYPEERROR);
     RAISE(e);
   }
-  if (width <= si->nchars) {
+  if (width <= s->nchars) {
     return s;
   }
-  int pad = (width-si->nchars);
-  str_internal_t r;
-  NEW_INTERNAL(r,width, si->nbytes+pad*filli->nbytes);
-  unsigned char *c = filli->str;
-  unsigned char *p = r->str + si->nbytes;
+  int pad = (width-s->nchars);
+  $str res;
+  NEW_UNFILLED(res,width, s->nbytes+pad*fill->nbytes);
+  unsigned char *c = fill->str;
+  unsigned char *p = res->str + s->nbytes;
   for (int i = 0; i<pad; i++) {
-    for (int j = 0; j < filli->nbytes; j++) 
+    for (int j = 0; j < fill->nbytes; j++) 
       *p++ = c[j];
   }
-  memcpy(r->str,si->str,si->nbytes);
-  NEW_STR(res,r);
+  memcpy(res->str,s->str,s->nbytes);
+  return res;
 }
 
 $str $str_lower($str s) {
@@ -1034,41 +999,37 @@ $str $str_lower($str s) {
 }
 
 $str $str_lstrip($str s, $str cs) {
-  str_internal_t si = s->__internal__;
-  str_internal_t csi = cs->__internal__;
-  unsigned char *p = si->str;
+  unsigned char *p = s->str;
   int i, nbytes;
-  for (i=0; i<si->nchars; i++) {
+  for (i=0; i<s->nchars; i++) {
     $str c = mk_char(p);
     if (cs == NULL ?  !$str_isspace(c) :
-      bmh(csi->str,p,csi->nbytes,byte_length2(*p)) < 0) 
+      bmh(cs->str,p,cs->nbytes,byte_length2(*p)) < 0) 
       break;
     p += byte_length2(*p);
   }
-  nbytes = si->nbytes + si->str - p;
-  str_internal_t r;
-  NEW_INTERNAL(r,si->nchars-i,nbytes);
-  memcpy(r->str,p,nbytes);
-  NEW_STR(res,r);
+  nbytes = s->nbytes + s->str - p;
+  $str res;
+  NEW_UNFILLED(res,s->nchars-i,nbytes);
+  memcpy(res->str,p,nbytes);
+  return res;
 }
 
 void $str_partition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
-  str_internal_t si = s->__internal__;
-  str_internal_t sepi = sep->__internal__;
   $int n = $str_find(s,sep,NULL,NULL);
   if (*n<0) {
-    *ls = s; *ssep = mk_str(null_str); *rs = mk_str(null_str);
+    *ls = s; *ssep = null_str; *rs = null_str;
   } else {
-    int nb = bmh(si->str,sepi->str,si->nbytes,sepi->nbytes);
-    str_internal_t r1;
-    NEW_INTERNAL(r1,*n,nb);
-    memcpy(r1->str,si->str,nb);
-    *ls = mk_str(r1);
-    str_internal_t r2;
-    int nbr = si->nbytes - sepi->nbytes - nb;
-    NEW_INTERNAL(r2,si->nchars-*n-sepi->nchars,nbr);
-    memcpy(r2->str,si->str+nb+sepi->nbytes,nbr);
-    *rs = mk_str(r2);
+    int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $str res1;
+    NEW_UNFILLED(res1,*n,nb);
+    memcpy(res1->str,s->str,nb);
+    *ls = res1;
+    $str res2;
+    int nbr = s->nbytes - sep->nbytes - nb;
+    NEW_UNFILLED(res2,s->nchars-*n-sep->nchars,nbr);
+    memcpy(res2->str,s->str+nb+sep->nbytes,nbr);
+    *rs = res2;
     *ssep = sep;
   }
 }
@@ -1081,48 +1042,43 @@ $str $str_replace($str s, $str old, $str new, $int count) {
   if (c0==0){
     return s;
   }
-  str_internal_t si = s->__internal__;
-  str_internal_t newi = new->__internal__;
-  str_internal_t oldi = old->__internal__;
-  int nbytes = si->nbytes + c0*(newi->nbytes-oldi->nbytes);
-  int nchars = si->nchars+c0*(newi->nchars-oldi->nchars);
-  str_internal_t r;
-  NEW_INTERNAL(r,nchars,nbytes);
-  unsigned char *p = si->str;
-  unsigned char *q = r->str;
-  unsigned char *pold = oldi->str;
-  unsigned char *pnew = newi->str;
-  int plen = si->nbytes;
+  int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+  int nchars = s->nchars+c0*(new->nchars-old->nchars);
+  $str res;
+  NEW_UNFILLED(res,nchars,nbytes);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
+  unsigned char *pold = old->str;
+  unsigned char *pnew = new->str;
+  int plen = s->nbytes;
   int n;
   for (int i=0; i<c0; i++) {
-    n = i>0 && oldi->nbytes==0 ? 1 : bmh(p,pold,plen,oldi->nbytes);
+    n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
     if (n>0) {
       memcpy(q,p,n);
       p+=n; q+=n;
     }
-    memcpy(q,pnew,newi->nbytes);
-    p += oldi->nbytes;
-    q += newi->nbytes;
-    plen -= n+oldi->nbytes;
+    memcpy(q,pnew,new->nbytes);
+    p += old->nbytes;
+    q += new->nbytes;
+    plen -= n+old->nbytes;
   }
   if (plen>0)
     memcpy(q,p,plen);
-  NEW_STR(res,r);
+  return res;
 }
       
 
 $int $str_rfind($str s, $str sub, $int start, $int end) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
-  int isascii = si->nchars == si->nbytes;
+  int isascii = s->nchars == s->nbytes;
   $int st = start;
   $int en = end;
-  if (fix_start_end(si->nchars,&st,&en) < 0) return to$int(-1);
-  unsigned char *p = skip_chars(si->str,*st,isascii);
+  if (fix_start_end(s->nchars,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = skip_chars(s->str,*st,isascii);
   unsigned char *q = skip_chars(p,*en-*st,isascii);
-  int n = rbmh(p,subi->str,q-p,subi->nbytes);
+  int n = rbmh(p,sub->str,q-p,sub->nbytes);
   if (n<0) return to$int(-1);
-  return to$int(char_no(si,n+p-si->str));
+  return to$int(char_no(s,n+p-s->str));
 }
 
 
@@ -1137,46 +1093,42 @@ $int $str_rindex($str s, $str sub, $int start, $int end) {
 }
 
 $str $str_rjust($str s, int width, $str fill) {
-  str_internal_t si = s->__internal__;
-  str_internal_t filli = fill->__internal__;
-  if (filli->nchars != 1) {
+  if (fill->nchars != 1) {
     exception e;
     MKEXCEPTION(e,TYPEERROR);
     RAISE(e);
   }
-  if (width <= si->nchars) {
+  if (width <= s->nchars) {
     return s;
   }
-  int pad = (width-si->nchars);
-  str_internal_t r;
-  NEW_INTERNAL(r,width,si->nbytes+pad*filli->nbytes);
-  unsigned char *c = filli->str;
-  unsigned char *p = r->str;
+  int pad = (width-s->nchars);
+  $str res;
+  NEW_UNFILLED(res,width,s->nbytes+pad*fill->nbytes);
+  unsigned char *c = fill->str;
+  unsigned char *p = res->str;
   for (int i = 0; i<pad; i++) {
-    for (int j = 0; j < filli->nbytes; j++) 
+    for (int j = 0; j < fill->nbytes; j++) 
       *p++ = c[j];
   }
-  memcpy(p,si->str,si->nbytes);
-  NEW_STR(res,r);
+  memcpy(p,s->str,s->nbytes);
+  return res;
 }
                                 
 void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
-  str_internal_t si = s->__internal__;
-  str_internal_t sepi = sep->__internal__;
   $int n = $str_rfind(s,sep,NULL,NULL);
   if (*n<0) {
-    *ls =mk_str( null_str); *ssep = mk_str(null_str); *rs = s;
+    *ls = null_str; *ssep = null_str; *rs = s;
   } else {
-    int nb = rbmh(si->str,sepi->str,si->nbytes,sepi->nbytes);
-    str_internal_t r1;
-    NEW_INTERNAL(r1,*n,nb);
-    memcpy(r1->str,si->str,nb);
-    *ls = mk_str(r1);
-    int nbr = si->nbytes - sepi->nbytes - nb;
-    str_internal_t r2;    
-    NEW_INTERNAL(r2,si->nchars-*n-sepi->nchars,nbr);
-    memcpy(r2->str,si->str+nb+sepi->nbytes,nbr);
-    *rs = mk_str(r2);
+    int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $str res1;
+    NEW_UNFILLED(res1,*n,nb);
+    memcpy(res1->str,s->str,nb);
+    *ls = res1;
+    int nbr = s->nbytes - sep->nbytes - nb;
+    $str res2;    
+    NEW_UNFILLED(res2,s->nchars-*n-sep->nchars,nbr);
+    memcpy(res2->str,s->str+nb+sep->nbytes,nbr);
+    *rs = res2;
     *ssep = sep;
   }
 }
@@ -1184,11 +1136,10 @@ void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
 
 $list $str_split($str s, $str sep, $int maxsplit) {
   $list res = $list_fromiter(NULL);
-  str_internal_t si = s->__internal__;
   if (maxsplit == NULL || *maxsplit < 0) maxsplit = to$int(INT_MAX); 
-  int remaining = si->nchars;
+  int remaining = s->nchars;
   if (sep == NULL) {
-    unsigned char *p = si->str;
+    unsigned char *p = s->str;
     int nbytes, codepoint, wordlength;
     if (remaining==0) {
       return res;
@@ -1209,10 +1160,10 @@ $list $str_split($str s, $str sep, $int maxsplit) {
       } else {
           if (inword) {
             inword = 0;
-            str_internal_t word;
-            NEW_INTERNAL(word,wordlength,p-q);
+            $str word;
+            NEW_UNFILLED(word,wordlength,p-q);
             memcpy(word->str,q,p-q);
-            $list_append(res,mk_str(word));
+            $list_append(res,word);
           }
       }
       remaining--;
@@ -1221,39 +1172,38 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     // this if statement should be simplified; almost code duplication.
     if (remaining == 0) {
       if (inword) {
-        str_internal_t word;
-        NEW_INTERNAL(word,wordlength,p-q);
+        $str word;
+        NEW_UNFILLED(word,wordlength,p-q);
         memcpy(word->str,q,p-q);
-        $list_append(res,mk_str(word));
+        $list_append(res,word);
       }
     } else {
-      str_internal_t word;
-      p = si->str+si->nbytes;
-      NEW_INTERNAL(word,remaining,p-q);
+      $str word;
+      p = s->str+s->nbytes;
+      NEW_UNFILLED(word,remaining,p-q);
       memcpy(word->str,q,p-q);
-      $list_append(res,mk_str(word));
+      $list_append(res,word);
     }
     // $WORD w = list_getitem(res,0);
     return res;
   } else { // separator given
-    str_internal_t sepi = sep->__internal__;
-    if (sepi->nchars==0) {
+    if (sep->nchars==0) {
       exception e;
       MKEXCEPTION(e,VALUEERROR);
       RAISE(e);
     }
     if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
-      $list_append(res,mk_str(null_str));
+      $list_append(res,null_str);
       return res;
     }
     $str ls, rs, ssep;
     rs = s;
     // Note: This builds many intermediate rs strings...
-    while (rs->__internal__->nchars>0 && *$list_len(res) < *maxsplit) {
+    while (rs->nchars>0 && *$list_len(res) < *maxsplit) {
      $str_partition(rs,sep,&ls,&ssep,&rs);
      $list_append(res,ls);
     }
-    if (ssep->__internal__->nchars>0)
+    if (ssep->nchars>0)
       $list_append(res,rs);
     return res;
   }
@@ -1261,9 +1211,8 @@ $list $str_split($str s, $str sep, $int maxsplit) {
 
 $list $str_splitlines($str s) {
   $list res = $list_fromiter(NULL);
-  str_internal_t si = s->__internal__;
-  int remaining = si->nchars;
-  unsigned char *p = si->str;
+  int remaining = s->nchars;
+  unsigned char *p = s->str;
   int nbytes, codepoint, wordlength;
   if (remaining==0) {
     return 0;
@@ -1283,54 +1232,50 @@ $list $str_splitlines($str s) {
     } else {
       if (inword) {
         inword = 0;
-        str_internal_t word;
-        NEW_INTERNAL(word,wordlength,p-q);
+        $str word;
+        NEW_UNFILLED(word,wordlength,p-q);
         memcpy(word->str,q,p-q);
-        $list_append(res,mk_str(word));
+        $list_append(res,word);
       }
     }
     remaining--;
     p += nbytes;
   }
   if (inword) {
-    str_internal_t word;
-    NEW_INTERNAL(word,wordlength,p-q);
+    $str word;
+    NEW_UNFILLED(word,wordlength,p-q);
     memcpy(word->str,q,p-q);
-    $list_append(res,mk_str(word));
+    $list_append(res,word);
   }
   return res;
 } 
 
 
 $str $str_rstrip($str s, $str cs) {
-  str_internal_t si = s->__internal__;
-  str_internal_t csi = cs->__internal__;
-  unsigned char *p = si->str + si->nbytes;
+  unsigned char *p = s->str + s->nbytes;
   int i, nbytes;
-  for (i=0; i<si->nchars; i++) {
+  for (i=0; i<s->nchars; i++) {
     p = skip_chars(p,-1,0);
     $str c = mk_char(p);
     if (cs == NULL ?  !$str_isspace(c) :
-      rbmh(csi->str,p,csi->nbytes,byte_length2(*p)) < 0) 
+      rbmh(cs->str,p,cs->nbytes,byte_length2(*p)) < 0) 
       break;
   }
-  nbytes = p + byte_length2(*p) - si->str;
-  str_internal_t r;
-  NEW_INTERNAL(r,si->nchars-i,nbytes);
-  memcpy(r->str,si->str,nbytes);
-  NEW_STR(res,r);
+  nbytes = p + byte_length2(*p) - s->str;
+  $str res;
+  NEW_UNFILLED(res,s->nchars-i,nbytes);
+  memcpy(res->str,s->str,nbytes);
+  return res;
 }
 
 $bool $str_startswith($str s, $str sub, $int start, $int end) {
-  str_internal_t si = s->__internal__;
-  str_internal_t subi = sub->__internal__;
   $int st = start;
   $int en = end;
-  if (fix_start_end(si->nchars,&st,&en) < 0) return 0;
-  int isascii = si->nchars==si->nbytes;
-  unsigned char *p = skip_chars(si->str,*st,isascii);
-  unsigned char *q = subi->str;
-  for (int i=0; i<subi->nbytes; i++) {
+  if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
+  int isascii = s->nchars==s->nbytes;
+  unsigned char *p = skip_chars(s->str,*st,isascii);
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
     if (*p == 0 || *p++ != *q++) {
       return 0;
     }
@@ -1348,14 +1293,13 @@ $str $str_upper($str s) {
 }
 
 $str $str_zfill($str s, int width) {
-  str_internal_t si = s->__internal__;
-  int fill = width - si->nchars;
+  int fill = width - s->nchars;
   if (fill < 0)
     return s;
-  str_internal_t r;
-  NEW_INTERNAL(r,width,si->nbytes+fill);
-  unsigned char *p = si->str;
-  unsigned char *q = r->str;
+  $str res;
+  NEW_UNFILLED(res,width,s->nbytes+fill);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
   int hassign = (*p=='+' | *p=='-');
   if (hassign) {
     *q = *p;
@@ -1363,7 +1307,7 @@ $str $str_zfill($str s, int width) {
   }
   for (int i=0; i < fill; i++) 
     *q++ = '0';
-  memcpy(r->str+hassign+fill,si->str+hassign,si->nbytes-hassign);
-  NEW_STR(res,r);
+  memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+  return res;
 }
  

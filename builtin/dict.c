@@ -24,25 +24,19 @@ typedef struct $table_struct {
                        // after this follows tb_entries array;
 } *$table;
 
-typedef struct $dict_internal_t {
-  char *$GCINFO;
-  long numelements;        // nr of elements in dictionary
-  Hashable$__class__ h; // eq and hash function used in this dictionary
-  $table table;            // the hashtable
-} *$dict_internal_t;
-
-
 typedef void *$dict$__methods__; // All dictionary methods are from protocols
 
 struct $dict {
   char *$GCINFO;
   $dict$__methods__ __class__;
-  $dict_internal_t __internal__;
+  long numelements;        // nr of elements in dictionary
+  Hashable$__class__ h; // eq and hash function used in this dictionary
+  $table table;            // the hashtable
 };
 
 typedef struct dict_iterator_struct {
   char *$GCINFO;
-  $dict_internal_t src;
+  $dict src;
   int nxt;
 } *dict_iterator_state_t; 
  
@@ -125,7 +119,7 @@ items again.  When entries have been deleted, the new table may
 actually be smaller than the old one.
 */
 
-static int dictresize($dict_internal_t d) {
+static int dictresize($dict d) {
   $table oldtable = d->table;
   long numelements = d->numelements;
   long newsize, minsize = 3*numelements;
@@ -142,7 +136,7 @@ static int dictresize($dict_internal_t d) {
     }
   */
   /* Allocate a new table. */
-  $table newtable =  malloc(3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
+  $table newtable =  malloc(sizeof(char*) + 3*sizeof(long) + newsize*sizeof(int) + (2*newsize/3)*sizeof(struct $entry_struct));
   newtable->tb_size = newsize;
   newtable->tb_usable = 2*newsize/3-numelements;
   newtable->tb_nentries = numelements;
@@ -170,18 +164,16 @@ static int dictresize($dict_internal_t d) {
 
 
 $dict $dict_new(Hashable$__class__ h) {
-  $dict_internal_t dict =  malloc(sizeof(long) + 2*sizeof($WORD));
+  $dict dict =  malloc(sizeof(struct $dict));
   dict->numelements = 0;
   dict->h = h;
-  dict->table = malloc(3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+  dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  $dict res = malloc(sizeof(struct $dict));
-  res->__class__ = NULL;
-  res->__internal__ = dict;
-  return res;
+  dict->__class__ = NULL;
+  return dict;
 }
 
 // Search index of hash table from offset of entry table 
@@ -207,7 +199,7 @@ static int lookdict_index($table table, long hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-static int lookdict($dict_internal_t dict, long hash, $WORD key, $WORD *res) {
+static int lookdict($dict dict, long hash, $WORD key, $WORD *res) {
   $table table = dict->table;
   long mask = (table->tb_size)-1, i = hash & mask, perturb = hash;
   int ix;
@@ -252,7 +244,7 @@ static long find_empty_slot($table table, long hash) {
     return i;
 }
 
-static int insertdict($dict_internal_t dict, long hash, $WORD key, $WORD value) {
+static int insertdict($dict dict, long hash, $WORD key, $WORD value) {
   $WORD old_value;
   $table table;
   $entry_t ep;
@@ -282,7 +274,7 @@ static int insertdict($dict_internal_t dict, long hash, $WORD key, $WORD value) 
 dict_iterator_state_t $dict_state_of($dict dict) {
   dict_iterator_state_t state = malloc(sizeof(struct dict_iterator_struct));
   state->$GCINFO = "GC_State";
-  state->src = dict->__internal__;
+  state->src = dict;
   state->nxt = 0;
   return state;
 }
@@ -318,8 +310,8 @@ $WORD $dict_next_instance(Iterator$__class__ cl, $WORD self) {
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
 void $dict_setitem($dict dict, $WORD key, $WORD value) {
-  long hash = *dict->__internal__->h->__hash__(dict->__internal__->h,key);
-  if (insertdict(dict->__internal__, hash, key, value)<0) {
+  long hash = *dict->h->__hash__(dict->h,key);
+  if (insertdict(dict, hash, key, value)<0) {
     exception e;
     MKEXCEPTION(e,MEMORYERROR);
     RAISE(e);
@@ -327,9 +319,9 @@ void $dict_setitem($dict dict, $WORD key, $WORD value) {
 }
 
 $WORD $dict_getitem($dict dict, $WORD key) {
-  long hash = *dict->__internal__->h->__hash__(dict->__internal__->h,key);
+  long hash = *dict->h->__hash__(dict->h,key);
   $WORD res;
-  int ix = lookdict(dict->__internal__,hash,key,&res);
+  int ix = lookdict(dict,hash,key,&res);
   if (ix < 0)  {
     exception e;
     MKEXCEPTION(e,KEYERROR);
@@ -340,10 +332,10 @@ $WORD $dict_getitem($dict dict, $WORD key) {
 
 
 void $dict_delitem($dict dict,  $WORD key) {
-  long hash = *dict->__internal__->h->__hash__(dict->__internal__->h,key);
+  long hash = *dict->h->__hash__(dict->h,key);
   $WORD res;
-  int ix = lookdict(dict->__internal__,hash,key,&res);
-  $table table = dict->__internal__->table;
+  int ix = lookdict(dict,hash,key,&res);
+  $table table = dict->table;
   if (ix >= 0) {
     $entry_t entry = &TB_ENTRIES(table)[ix];
     int i = lookdict_index(table,hash,ix);
@@ -355,7 +347,7 @@ void $dict_delitem($dict dict,  $WORD key) {
       RAISE(e);
     }
     entry->value = NULL;
-    dict->__internal__->numelements--;
+    dict->numelements--;
     /*
     downsizing does not guarantee LIFO order in popitem
     if (10*dict->__internal__->numelements < dict->__internal__->table->tb_size) {
@@ -385,7 +377,7 @@ void $dict_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
 
 $int $dict_len($dict dict) {
   $int res = malloc(sizeof(long));
-  *res = dict->__internal__->numelements;
+  *res = dict->numelements;
   return res;
 }
 
@@ -408,7 +400,7 @@ $int $dict_len_instance(Collection$__class__ cl, $WORD self) {
 
 $bool $dict_contains($dict dict, $WORD key) {
   $WORD res;
-  return lookdict(dict->__internal__,*dict->__internal__->h->__hash__(dict->__internal__->h,key),key,&res) >= 0;
+  return lookdict(dict,*dict->h->__hash__(dict->h,key),key,&res) >= 0;
 }
 
 $bool $dict_contains_instance (Container_Eq$__class__ cl, $WORD self, $WORD elem) {
@@ -519,8 +511,7 @@ int dict_pop(dict_t dict, WORD key, WORD *res) {
 }
 */
 $WORD $dict_popitem($dict dict) {
-  $dict_internal_t d = dict->__internal__;
-  $table table = d->table;
+  $table table = dict->table;
   int ix = table->tb_nentries;
   while (ix >= 0) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
@@ -529,10 +520,10 @@ $WORD $dict_popitem($dict dict) {
       res->key = entry->key;
       res->value = entry->value;
       entry->value = NULL;
-      long hash = *d->h->__hash__(d->h,entry->key);
+      long hash = *dict->h->__hash__(dict->h,entry->key);
       int i = lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
-      d->numelements--;
+      dict->numelements--;
       table->tb_nentries = ix;
       return res;
     }
@@ -553,13 +544,12 @@ void $dict_update($dict dict, $dict other) {
 
 $WORD $dict_setdefault($dict dict, $WORD key, $WORD deflt) {
   // if (!deflt) deflt = None; what i the name of None here?...
-  $dict_internal_t d = dict->__internal__;
-  long hash = *d->h->__hash__(d->h,key);
+  long hash = *dict->h->__hash__(dict->h,key);
   $WORD value;
-  int ix = lookdict(d,hash,key,&value);
+  int ix = lookdict(dict,hash,key,&value);
   if (ix >= 0)
     return value;
-  TB_ENTRIES(d->table)[ix].value = deflt;
+  TB_ENTRIES(dict->table)[ix].value = deflt;
   return deflt;
 }
 
