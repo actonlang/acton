@@ -6,6 +6,7 @@
 
 #include "comm.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
 {
@@ -321,6 +322,95 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	*nonce = -1;
 
 	return 1;
+}
+
+int sockaddr_cmp(WORD a1, WORD a2)
+{
+	struct sockaddr * x = (struct sockaddr *) a1;
+	struct sockaddr * y = (struct sockaddr *) a2;
+
+#define CMP(a, b) if (a != b) return a - b
+
+    CMP(x->sa_family, y->sa_family);
+
+    if (x->sa_family == AF_UNIX) {
+        struct sockaddr_un *xun = (void*)x, *yun = (void*)y;
+        int r = strcmp(xun->sun_path, yun->sun_path);
+        if (r != 0)
+            return r;
+    } else if (x->sa_family == AF_INET) {
+        struct sockaddr_in *xin = (void*)x, *yin = (void*)y;
+        CMP(ntohl(xin->sin_addr.s_addr), ntohl(yin->sin_addr.s_addr));
+        CMP(ntohs(xin->sin_port), ntohs(yin->sin_port));
+    } else if (x->sa_family == AF_INET6) {
+        struct sockaddr_in6 *xin6 = (void*)x, *yin6 = (void*)y;
+        int r = memcmp(xin6->sin6_addr.s6_addr, yin6->sin6_addr.s6_addr, sizeof(xin6->sin6_addr.s6_addr));
+        if (r != 0)
+            return r;
+        CMP(ntohs(xin6->sin6_port), ntohs(yin6->sin6_port));
+        CMP(xin6->sin6_flowinfo, yin6->sin6_flowinfo);
+        CMP(xin6->sin6_scope_id, yin6->sin6_scope_id);
+    } else {
+        assert(!"unknown sa_family");
+    }
+
+#undef CMP
+    return 0;
+}
+
+// Remote server struct fctns:
+
+remote_server * get_remote_server(char *hostname, int portno)
+{
+	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
+    bzero(rs, sizeof(remote_server));
+
+	rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (rs->sockfd < 0)
+    {
+        fprintf(stderr, "ERROR opening socket!\n");
+        free_remote_server(rs);
+        return NULL;
+    }
+
+    rs->server = gethostbyname(hostname);
+    if (rs->server == NULL)
+    {
+        fprintf(stderr, "ERROR, no such host %s\n", hostname);
+        free_remote_server(rs);
+        return NULL;
+    }
+
+//    bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
+    rs->serveraddr.sin_family = AF_INET;
+    bcopy((char *)rs->server->h_addr,
+	  (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+    rs->serveraddr.sin_port = htons(portno);
+
+    if (connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in)) < 0)
+    {
+    		fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
+        free_remote_server(rs);
+        return NULL;
+    }
+
+	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));
+	pthread_mutex_init(rs->sockfd_lock, NULL);
+
+    snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
+
+	return rs;
+}
+
+void free_remote_server(remote_server * rs)
+{
+	free(rs->sockfd_lock);
+	free(rs);
+}
+
+void free_remote_server_ptr(WORD ptr)
+{
+	free_remote_server((remote_server *) ptr);
 }
 
 

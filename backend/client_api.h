@@ -14,20 +14,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 #include <uuid/uuid.h>
-#include <sys/time.h>
-#include <sys/select.h>
 #include <errno.h>
 
-#define BUFSIZE 4096
 #define RANDOM_NONCES
 
 #define CLIENT_VERBOSITY 0
@@ -90,22 +80,6 @@ int free_remote_db(remote_db_t * db);
 int close_remote_db(remote_db_t * db);
 int sockaddr_cmp(WORD a1, WORD a2);
 int queue_callback_cmp(WORD e1, WORD e2);
-
-typedef struct remote_server
-{
-	char * hostname;
-	int portno;
-	int sockfd;
-    pthread_mutex_t* sockfd_lock;
-	struct sockaddr_in serveraddr;
-	struct hostent *server;
-	char id[256];
-	char in_buf[BUFSIZE];
-//	char out_buf[BUFSIZE];
-} remote_server;
-
-remote_server * get_remote_server(char *hostname, int portno);
-void free_remote_server(remote_server * rs);
 
 // Write ops:
 

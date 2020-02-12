@@ -20,11 +20,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#include <errno.h>
 
-#define BUFSIZE (1024 * 1024)
+#define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
 
-char in_buf[BUFSIZE];
-char out_buf[BUFSIZE];
+char in_buf[SERVER_BUFSIZE];
+char out_buf[SERVER_BUFSIZE];
 
 /*
 int no_cols = 4;
@@ -801,6 +804,259 @@ int handle_socket_close(int * childfd)
 	return 0;
 }
 
+int add_peer_to_membership(char *hostname, int portno, skiplist_t * peers, unsigned int * seedptr)
+{
+    remote_server * rs = get_remote_server(hostname, portno);
+
+    if(rs == NULL)
+    {
+		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		return 1;
+    }
+
+    if(skiplist_search(peers, &rs->serveraddr) != NULL)
+    {
+		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
+		free_remote_server(rs);
+		return -1;
+    }
+
+    int status = skiplist_insert(peers, &rs->serveraddr, rs, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
+		free_remote_server(rs);
+		return -2;
+    }
+
+    return 0;
+}
+
+typedef struct client_descriptor
+{
+	struct sockaddr_in addr;
+	int sockfd;
+	char id[256];
+} client_descriptor;
+
+client_descriptor * get_client_descriptor(struct sockaddr_in addr, int sockfd, char *hostname, int portno)
+{
+	client_descriptor * cd = (client_descriptor *) malloc(sizeof(struct client_descriptor));
+	memcpy(&(cd->addr), &addr, sizeof(struct sockaddr_in));
+	cd->sockfd = sockfd;
+    snprintf((char *) &cd->id, 256, "%s:%d", hostname, portno);
+	return cd;
+}
+
+void free_client_descriptor(client_descriptor * cd)
+{
+	free(cd);
+}
+
+int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr)
+{
+	client_descriptor * cd = get_client_descriptor(addr, sockfd, hostname, portno);
+
+    if(skiplist_search(clients, &(cd->addr)) != NULL)
+    {
+		fprintf(stderr, "ERROR: Client address %s:%d was already added to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -1;
+    }
+
+    int status = skiplist_insert(clients, &(cd->addr), cd, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding client address %s:%d to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -2;
+    }
+
+    return 0;
+}
+
+int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate)
+{
+    void * tmp_out_buf = NULL, * q = NULL;
+    unsigned snd_msg_len;
+    short msg_type;
+	db_schema_t * schema;
+	long nonce = -1;
+
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1);
+
+    if(status != 0)
+    {
+//    		error("ERROR decoding client request");
+    		fprintf(stderr, "ERROR decoding client request");
+    		return -1;
+    }
+
+    switch(msg_type)
+    {
+    		case RPC_TYPE_WRITE:
+    		{
+    			status = handle_write_query((write_query *) q, db, fastrandstate);
+    			if(status != 0)
+    			{
+    				printf("ERROR: handle_write_query returned %d!", status);
+    				assert(0);
+    			}
+    			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
+    			break;
+    		}
+    		case RPC_TYPE_READ:
+    		{
+    			db_row_t* result = handle_read_query((read_query *) q, &schema, db, fastrandstate);
+    			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    			break;
+    		}
+    		case RPC_TYPE_RANGE_READ:
+    		{
+    			snode_t * start_row = NULL, * end_row = NULL;
+    			int no_results = handle_range_read_query((range_read_query *) q, &start_row, &end_row, &schema, db, fastrandstate);
+    			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    			break;
+    		}
+    		case RPC_TYPE_QUEUE:
+    		{
+    			queue_query_message * qm = (queue_query_message *) q;
+
+    			switch(qm->msg_type)
+    			{
+    				case QUERY_TYPE_CREATE_QUEUE:
+    				{
+    					status = handle_create_queue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					break;
+    				}
+    				case QUERY_TYPE_DELETE_QUEUE:
+    				{
+    					status = handle_delete_queue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					break;
+    				}
+    				case QUERY_TYPE_SUBSCRIBE_QUEUE:
+    				{
+    					long prev_read_head = -1, prev_consume_head = -1;
+    					status = handle_subscribe_queue(qm, &childfd, &prev_read_head, &prev_consume_head, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					break;
+    				}
+    				case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
+    				{
+    					status = handle_unsubscribe_queue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					break;
+    				}
+    				case QUERY_TYPE_ENQUEUE:
+    				{
+    					status = handle_enqueue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case QUERY_TYPE_READ_QUEUE:
+    				{
+    					int entries_read = 0;
+    					long new_read_head = -1;
+    					vector_clock * prh_version = NULL;
+    					snode_t * start_row = NULL, * end_row = NULL;
+    					db_schema_t * schema = NULL;
+    					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
+    													&start_row, &end_row, &schema, db, fastrandstate);
+    					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
+    					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case QUERY_TYPE_CONSUME_QUEUE:
+    				{
+    					status = handle_consume_queue(qm, db, fastrandstate);
+//    					assert(status == (int) qm->queue_index);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					break;
+    				}
+    				default:
+    				{
+    					assert(0);
+    				}
+    			}
+
+    			break;
+    		}
+    		case RPC_TYPE_TXN:
+    		{
+    			txn_message * tm = (txn_message *) q;
+
+    			switch(tm->type)
+    			{
+    				case DB_TXN_BEGIN:
+    				{
+    					status = handle_new_txn(tm, db, fastrandstate);
+    					assert(status == 0 || status == -2);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_VALIDATION:
+    				{
+    					status = handle_validate_txn(tm, db, fastrandstate);
+    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_COMMIT:
+    				{
+    					status = handle_commit_txn(tm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    				case DB_TXN_ABORT:
+    				{
+    					status = handle_abort_txn(tm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+
+    					break;
+    				}
+    			}
+
+    			break;
+    		}
+    		case RPC_TYPE_ACK:
+    		{
+    			assert(0); // S'dn't happen currently
+    			break;
+    		}
+		default:
+		{
+			assert(0);
+		}
+    }
+
+    assert(status == 0);
+
+    int n = write(childfd, tmp_out_buf, snd_msg_len);
+    if (n < 0)
+      error("ERROR writing to socket");
+
+    free(tmp_out_buf);
+
+    return 0;
+}
+
+
 int main(int argc, char **argv) {
   int parentfd;
   int childfd;
@@ -812,9 +1068,18 @@ int main(int argc, char **argv) {
   char *hostaddrp;
   int optval; /* flag value for setsockopt */
   int msg_len; /* message byte size */
-  unsigned snd_msg_len;
   unsigned int seed;
   int ret = 0;
+
+  skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
+  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
+  fd_set readfds;
+
+  struct timeval timeout;
+  timeout.tv_sec = 3;
+  timeout.tv_usec = 0;
+  int announced_msg_len = -1;
+  int read_buf_offset = 0;
 
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
@@ -854,257 +1119,172 @@ int main(int argc, char **argv) {
 
   clientlen = sizeof(clientaddr);
 
-  childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
-  if (childfd < 0)
-    error("ERROR on accept");
-
-  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
-			  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-  if (hostp == NULL)
-    error("ERROR on gethostbyaddr");
-  hostaddrp = inet_ntoa(clientaddr.sin_addr);
-  if (hostaddrp == NULL)
-    error("ERROR on inet_ntoa\n");
-  printf("server established connection with %s (%s)\n", hostp->h_name, hostaddrp);
-
-  int read_buf_offset = 0;
-  int announced_msg_len = -1;
-
-  while (1)
+  while(1)
   {
-	assert(read_buf_offset < BUFSIZE - sizeof(int));
+		FD_ZERO(&readfds);
 
-	if(read_buf_offset == 0)
-	{
-		// Read msg len header from packet:
+		FD_SET(parentfd, &readfds);
+		int max_fd = parentfd;
 
-		bzero(in_buf, BUFSIZE);
-		msg_len = -1;
-
-		int size_len = read(childfd, in_buf, sizeof(int));
-
-		if (size_len < 0)
+		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
 		{
-			fprintf(stderr, "ERROR reading from socket\n");
-			continue;
-		}
-		else if (size_len == 0)
-		{
-			handle_socket_close(&childfd);
-			break;
+			client_descriptor * rs = (client_descriptor *) crt->value;
+			if(rs->sockfd > 0)
+			{
+//				printf("Listening to client socket %s..\n", rs->id);
+				FD_SET(rs->sockfd, &readfds);
+				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("Not listening to disconnected client socket %s..\n", rs->id);
+			}
 		}
 
-		announced_msg_len = *((int *)in_buf);
+		int status = select(max_fd + 1 , &readfds , NULL , NULL , &timeout);
 
-		*((int *)in_buf) = 0; // 0 back buffer
-
-		read_buf_offset = 0;
-	}
-
-    msg_len = read(childfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
-
-#if SERVER_VERBOSITY > 1
-	printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
-#endif
-
-    if (msg_len < 0)
-    {
-    		fprintf(stderr, "ERROR reading from socket\n");
-		continue;
-    }
-	else if(msg_len == 0) // client closed socket
-    {
-		handle_socket_close(&childfd);
-        break;
-    }
-	else if(msg_len < announced_msg_len - read_buf_offset)
-	{
-		read_buf_offset += msg_len;
-		continue; // Continue reading socket until full packet length
-	}
-
-    assert(announced_msg_len == msg_len);
-
-    read_buf_offset = 0; // Reset
-
-#if SERVER_VERBOSITY > 1
-    printf("server received %d / %d bytes\n", announced_msg_len, msg_len);
-#endif
-
-    void * tmp_out_buf = NULL, * q = NULL;
-    short msg_type;
-	db_schema_t * schema;
-	long nonce = -1;
-
-    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1);
-
-    if(status != 0)
-    {
-//    		error("ERROR decoding client request");
-    		fprintf(stderr, "ERROR decoding client request");
-    		continue;
-    }
-
-    switch(msg_type)
-    {
-    		case RPC_TYPE_WRITE:
-    		{
-    			status = handle_write_query((write_query *) q, db, &seed);
-    			if(status != 0)
-    			{
-    				printf("ERROR: handle_write_query returned %d!", status);
-    				assert(0);
-    			}
-    			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
-    			break;
-    		}
-    		case RPC_TYPE_READ:
-    		{
-    			db_row_t* result = handle_read_query((read_query *) q, &schema, db, &seed);
-    			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
-    			break;
-    		}
-    		case RPC_TYPE_RANGE_READ:
-    		{
-    			snode_t * start_row = NULL, * end_row = NULL;
-    			int no_results = handle_range_read_query((range_read_query *) q, &start_row, &end_row, &schema, db, &seed);
-    			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
-    			break;
-    		}
-    		case RPC_TYPE_QUEUE:
-    		{
-    			queue_query_message * qm = (queue_query_message *) q;
-
-    			switch(qm->msg_type)
-    			{
-    				case QUERY_TYPE_CREATE_QUEUE:
-    				{
-    					status = handle_create_queue(qm, db, &seed);
-    					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-    					break;
-    				}
-    				case QUERY_TYPE_DELETE_QUEUE:
-    				{
-    					status = handle_delete_queue(qm, db, &seed);
-    					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-    					break;
-    				}
-    				case QUERY_TYPE_SUBSCRIBE_QUEUE:
-    				{
-    					long prev_read_head = -1, prev_consume_head = -1;
-    					status = handle_subscribe_queue(qm, &childfd, &prev_read_head, &prev_consume_head, db, &seed);
-    					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-    					break;
-    				}
-    				case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
-    				{
-    					status = handle_unsubscribe_queue(qm, db, &seed);
-    					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-    					break;
-    				}
-    				case QUERY_TYPE_ENQUEUE:
-    				{
-    					status = handle_enqueue(qm, db, &seed);
-    					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    				case QUERY_TYPE_READ_QUEUE:
-    				{
-    					int entries_read = 0;
-    					long new_read_head = -1;
-    					vector_clock * prh_version = NULL;
-    					snode_t * start_row = NULL, * end_row = NULL;
-    					db_schema_t * schema = NULL;
-    					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
-    													&start_row, &end_row, &schema, db, &seed);
-    					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
-    					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    				case QUERY_TYPE_CONSUME_QUEUE:
-    				{
-    					status = handle_consume_queue(qm, db, &seed);
-//    					assert(status == (int) qm->queue_index);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
-    					break;
-    				}
-    				default:
-    				{
-    					assert(0);
-    				}
-    			}
-
-    			break;
-    		}
-    		case RPC_TYPE_TXN:
-    		{
-    			txn_message * tm = (txn_message *) q;
-
-    			switch(tm->type)
-    			{
-    				case DB_TXN_BEGIN:
-    				{
-    					status = handle_new_txn(tm, db, &seed);
-    					assert(status == 0 || status == -2);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    				case DB_TXN_VALIDATION:
-    				{
-    					status = handle_validate_txn(tm, db, &seed);
-    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    				case DB_TXN_COMMIT:
-    				{
-    					status = handle_commit_txn(tm, db, &seed);
-    					assert(status == 0);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    				case DB_TXN_ABORT:
-    				{
-    					status = handle_abort_txn(tm, db, &seed);
-    					assert(status == 0);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
-
-    					break;
-    				}
-    			}
-
-    			break;
-    		}
-    		case RPC_TYPE_ACK:
-    		{
-    			assert(0); // S'dn't happen currently
-    			break;
-    		}
-		default:
+		if ((status < 0) && (errno!=EINTR))
 		{
+			printf("select error!\n");
 			assert(0);
 		}
-    }
 
-    assert(status == 0);
+		// Check if there's a new connection attempt from a client:
 
-    int n = write(childfd, tmp_out_buf, snd_msg_len);
-    if (n < 0)
-      error("ERROR writing to socket");
+		if (FD_ISSET(parentfd, &readfds))
+		{
+			  childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
+			  if (childfd < 0)
+			    error("ERROR on accept");
 
-    free(tmp_out_buf);
+			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
+						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+			  if (hostp == NULL)
+			    error("ERROR on gethostbyaddr");
+			  hostaddrp = inet_ntoa(clientaddr.sin_addr);
+			  if (hostaddrp == NULL)
+			    error("ERROR on inet_ntoa\n");
+
+#if SERVER_VERBOSITY > 0
+			  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
+#endif
+			  ret = add_client_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, clients, &seed); // hostp->h_name
+
+//			  assert(ret == 0);
+		}
+
+		// Check if there are messages from existing clients:
+
+		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+		{
+			client_descriptor * rs = (client_descriptor *) crt->value;
+			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			// Received a msg from this client:
+			{
+				int skip_parsing = 0;
+
+				while(1) // Loop until reading complete packet:
+				{
+					assert(read_buf_offset < SERVER_BUFSIZE - sizeof(int));
+
+					if(read_buf_offset == 0)
+					{
+						// Read msg len header from packet:
+
+						bzero(in_buf, SERVER_BUFSIZE);
+						msg_len = -1;
+
+						int size_len = read(rs->sockfd, in_buf, sizeof(int));
+
+						if (size_len < 0)
+						{
+//							fprintf(stderr, "ERROR reading from socket\n");
+							continue;
+						}
+						else if (size_len == 0)
+						{
+							handle_socket_close(&(rs->sockfd));
+							skip_parsing = 1;
+							break;
+						}
+
+						announced_msg_len = *((int *)in_buf);
+
+						*((int *)in_buf) = 0; // 0 back buffer
+
+						read_buf_offset = 0;
+					}
+
+					if(announced_msg_len <= 0)
+					{
+						read_buf_offset = 0;
+						continue;
+					}
+
+				    msg_len = read(rs->sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
+
+#if SERVER_VERBOSITY > 1
+					printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
+#endif
+
+				    if (msg_len < 0)
+				    {
+				    		fprintf(stderr, "ERROR reading from socket\n");
+						continue;
+				    }
+					else if(msg_len == 0) // client closed socket
+				    {
+						handle_socket_close(&(rs->sockfd));
+						skip_parsing = 1;
+				        break;
+				    }
+					else if(msg_len < announced_msg_len - read_buf_offset)
+					{
+						read_buf_offset += msg_len;
+						continue; // Continue reading socket until full packet length
+					}
+
+				    break;
+				}
+
+				if(skip_parsing)
+					continue;
+
+			    assert(announced_msg_len == msg_len);
+
+			    read_buf_offset = 0; // Reset
+
+#if SERVER_VERBOSITY > 1
+			    printf("server received %d / %d bytes\n", announced_msg_len, msg_len);
+#endif
+
+			    ret = handle_client_message(childfd, msg_len, db, &seed);
+
+			    if(ret != 0)
+			    		continue;
+			}
+		}
   }
-  close(childfd);
+
+  // Close sockets to clients and peers:
+
+	for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+	{
+		client_descriptor * rs = (client_descriptor *) crt->value;
+		if(rs->sockfd > 0)
+		{
+			close(rs->sockfd);
+		}
+	}
+
+	for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		if(rs->sockfd > 0)
+		{
+			close(rs->sockfd);
+		}
+	}
 }
 
 
