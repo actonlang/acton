@@ -600,15 +600,10 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 
 	// Send packet to server and wait for reply:
 
-//	int n = -1;
-//	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-//    ack_message * ack;
-//    success = deserialize_ack_message(rs->in_buf, n, &ack);
-//    assert(success == 0);
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, wq->nonce, &mc, db);
 	assert(success == 0);
+	free_write_query(wq);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -665,25 +660,10 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, wq->nonce, &mc, db);
 	assert(success == 0);
+	free_write_query(wq);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -734,25 +714,10 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clusteri
 
 	// Send packet to server and wait for reply:
 
-	/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-	*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, wq->nonce, &mc, db);
 	assert(success == 0);
+	free_write_query(wq);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -929,26 +894,11 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 #endif
 
 	// Send packet to server and wait for reply:
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    range_read_response_message * response;
-    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_range_read_response_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-	return get_db_rows_tree_from_read_response(response, db);
-*/
 
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_read_query(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1005,26 +955,10 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_k
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    range_read_response_message * response;
-    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_range_read_response_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	// If result returned multiple cells, accumulate them all in a single tree rooted at "result":
-	return get_db_rows_tree_from_read_response(response, db);
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_read_query(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1095,29 +1029,10 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    range_read_response_message * response;
-    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_range_read_response_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    if(success < 0)
-    		return success;
-
-	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_range_read_query(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1176,29 +1091,10 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    range_read_response_message * response;
-    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_range_read_response_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    if(success < 0)
-    		return success;
-
-	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_range_read_query(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1261,29 +1157,10 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    range_read_response_message * response;
-    success = deserialize_range_read_response_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_range_read_response_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    if(success < 0)
-    		return success;
-
-	// If result returned multiple cells, accumulate them all in a forest of db_rows rooted at elements of list start_row->end_row:
-	return get_db_rows_forest_from_read_response(response, start_row, end_row, db);
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_range_read_query(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1351,25 +1228,10 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1421,25 +1283,10 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1491,24 +1338,10 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WOR
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-*/
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1563,28 +1396,10 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-	queue_query_message * response;
-    success = deserialize_queue_message(rs->in_buf, n, &response);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_queue_message(response, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    assert(response->msg_type == QUERY_TYPE_READ_QUEUE_RESPONSE);
-
-    if(success < 0)
-    		return success;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1658,25 +1473,10 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1730,26 +1530,10 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    if(ack->status == CLIENT_ERR_SUBSCRIPTION_EXISTS)
-    		return CLIENT_ERR_SUBSCRIPTION_EXISTS;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1807,26 +1591,10 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-    ack_message * ack;
-    success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-
-    if(ack->status == CLIENT_ERR_NO_SUBSCRIPTION_EXISTS)
-    		return CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_queue_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -1983,23 +1751,10 @@ uuid_t * remote_new_txn(remote_db_t * db)
 
 		// Send packet to server and wait for reply:
 
-/*
-		int n = -1;
-		success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-		ack_message * ack;
-		success = deserialize_ack_message(rs->in_buf, n, &ack);
-	    assert(success == 0);
-		status = ack->status;
-
-#if CLIENT_VERBOSITY > 0
-		to_string_ack_message(ack, (char *) print_buff);
-		printf("Got back response from server %s: %s\n", rs->id, print_buff);
-#endif
-*/
 		msg_callback * mc = NULL;
 		success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 		assert(success == 0);
+		free_txn_message(q);
 
 		if(mc->no_replies < db->quorum_size)
 		{
@@ -2056,25 +1811,10 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-	ack_message * ack;
-	success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response: %s\n", print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_txn_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -2132,25 +1872,10 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-	ack_message * ack;
-	success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response: %s\n", print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_txn_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{
@@ -2207,25 +1932,10 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 
 	// Send packet to server and wait for reply:
 
-/*
-	int n = -1;
-	success = send_packet_wait_reply(tmp_out_buf, len, rs->sockfd, (void *) (&rs->in_buf), BUFSIZE, &n);
-
-	ack_message * ack;
-	success = deserialize_ack_message(rs->in_buf, n, &ack);
-    assert(success == 0);
-
-#if CLIENT_VERBOSITY > 0
-	to_string_ack_message(ack, (char *) print_buff);
-	printf("Got back response: %s\n", print_buff);
-#endif
-
-	return ack->status;
-*/
-
 	msg_callback * mc = NULL;
 	success = send_packet_wait_replies_sync(tmp_out_buf, len, q->nonce, &mc, db);
 	assert(success == 0);
+	free_txn_message(q);
 
 	if(mc->no_replies < db->quorum_size)
 	{

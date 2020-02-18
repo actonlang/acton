@@ -176,7 +176,11 @@ int get_ack_packet(int status, write_query * q,
 	printf("Sending ack message: %s\n", print_buff);
 #endif
 
-	return serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+
+	free_ack_message(ack);
+
+	return ret;
 }
 
 int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate)
@@ -308,7 +312,6 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
 		cell * c = init_cell(q->cell_address->table_key,
 							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-//							q->cell_address->keys + q->cell_address->no_keys - 1, 1,
 							(long *) result->column_array, no_columns,
 							result->version);
 
@@ -328,17 +331,6 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		assert(last_cell_ptr - cells == no_results);
 
 		m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
-
-/*
-		long keys = (long *) malloc(no_keys);
-		long columns = (long *) malloc(no_columns);
-		for(int i = 0; i < no_keys; i++)
-			keys[i] = q->cell_address->keys[i + q->cell_address->no_keys - 1];
-		for(int i = 0; i < no_columns; i++)
-			columns[i] = (long) result->column_array[i];
-
-		cell * c = init_cell(q->cell_address->table_key, keys, no_keys, columns, no_columns, result->version);
-*/
 	}
 
 #if (VERBOSE_RPC > 0)
@@ -347,7 +339,11 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	printf("Sending range read response message: %s\n", print_buff);
 #endif
 
-	return serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+	int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+
+	free_range_read_response_message(m);
+
+	return ret;
 }
 
 db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, unsigned int * fastrandstate)
@@ -410,24 +406,6 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		assert(last_cell_ptr - cells == no_cells);
 
 		m = init_range_read_response_message(cells, no_cells, q->txnid, q->nonce);
-
-/*
-		cell * cells = malloc(no_results * sizeof(cell));
-
-		int i=0;
-		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
-		{
-			db_row_t* result = (db_row_t* ) crt_row->value;
-			assert(q->start_cell_address->keys[q->start_cell_address->no_keys - 1] <= (long) result->key);
-			assert(q->end_cell_address->keys[q->end_cell_address->no_keys - 1] >= (long) result->key);
-			copy_cell(cells+i, q->start_cell_address->table_key,
-						(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-						(long *) result->column_array, no_columns,
-						result->version);
-		}
-
-		m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
-*/
 	}
 
 #if (VERBOSE_RPC > 0)
@@ -436,7 +414,11 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		printf("Sending range read response message: %s\n", print_buff);
 #endif
 
-		return serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+		int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+
+		free_range_read_response_message(m);
+
+		return ret;
 }
 
 int handle_range_read_query(range_read_query * q,
@@ -487,7 +469,11 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 	printf("Sending queue ack message: %s\n", print_buff);
 #endif
 
-	return serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+
+	free_ack_message(ack);
+
+	return ret;
 }
 
 int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results,
@@ -532,35 +518,12 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		printf("Sending read queue response message: %s\n", print_buff);
 #endif
 
-		return serialize_queue_message(m, snd_buf, snd_msg_len, 0);
+		int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0);
+
+		free_queue_message(m);
+
+		return ret;
 }
-
-/*
-int get_queue_notification_packet(WORD table_key, WORD queue_id, int app_id, int shard_id, int consumer_id,
-									long new_no_entries, int status,
-									void ** snd_buf, unsigned * snd_msg_len)
-{
-	cell_address ca;
-
-	copy_cell_address(&ca, (long) table_key, (long *) &queue_id, 1);
-
-	queue_query_message * m = init_queue_notification(&ca, NULL, 0, app_id, shard_id, consumer_id, new_no_entries, status, NULL, -1);
-
-#if (VERBOSE_RPC > 0)
-	char print_buff[1024];
-	to_string_queue_message(m, (char *) print_buff);
-	printf("Sending queue notification message: %s\n", print_buff);
-#endif
-
-	int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0);
-
-	assert(ret);
-
-	free_queue_message(m);
-
-	return ret;
-}
-*/
 
 int handle_create_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
 {
@@ -735,7 +698,11 @@ int get_txn_ack_packet(int status, txn_message * q,
 	printf("Sending txn ack message: %s\n", print_buff);
 #endif
 
-	return serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+
+	free_ack_message(ack);
+
+	return ret;
 }
 
 
