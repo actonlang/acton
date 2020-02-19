@@ -1,3 +1,6 @@
+class Iterator[A]:                           
+  __next__     : () -> A
+ 
 protocol Eq:
   @staticmethod
   __eq__       : (Self,Self) -> bool
@@ -36,71 +39,49 @@ protocol Hashable (Eq):
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
-protocol Iterator[A]:                           
-  __next__     : () -> A
- 
 protocol Collection[A] (Iterable[A]):
+  @staticmethod
   __fromiter__ : (Iterable[A]) -> Self 
   __len__      : () -> int
   
 protocol Indexed[A,B]:
   __getitem__  : (A) -> B
-  __setitem__  : !(A,B) -> None 
-  __delitem__  : !(A) -> None
+  __setitem__  : (A,B) -> None 
+  __delitem__  : (A) -> None
 
 protocol Sliceable[A] (Indexed[int,A]):
-  __getslice__ : (int?,int?,int?) -> Sequence[A]
-  __setslice__ : ((int?,int?,int?),Iterable[A]) -> None
-  __delslice__ : (int?,int?,int?) -> None
+  __getslice__ : (Slice) -> Sequence[A]
+  __setslice__ : (Slice,Iterable[A]) -> None
+  __delslice__ : (Slice) -> None
   
 protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   __reversed__ : () -> Iterable[A] 
-  insert      : !(int,A) -> None
-  append      : !(A) -> None   
-  reverse     : !() -> None       
+  insert      : (int,A) -> None
+  append      : (A) -> None   
+  reverse     : () -> None       
 
-protocol Container [A (Eq)] (Collection):
-  @classmethod
+protocol Container [A (Eq)] (Collection[A]):
   __contains__    : (A) -> bool  
-  @classmethod
   __containsnot__ : (A) -> bool  
 
 protocol Mapping[A (Eq),B] (Container[A], Indexed[A,B]):
-  get         : (A) -> B?
+  get         : (A,B) -> B
   keys        : () -> Iterator[A]
   values      : () -> Iterator[B]
   items       : () -> Iterator[(A,B)]
-  update      : !(Mapping[A,B]) -> None  
-  popitem     : !() -> (A,B)
-  setdefault  : !(A,B) -> None
+  update      : (Mapping[A,B]) -> None  
+  popitem     : () -> (A,B)
+  setdefault  : (A,B) -> None
 
 protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
   isdisjoint  : (Set[A]) -> bool
-  add         : !(A) -> None  
-  discard     : !(A) -> None  
-  pop         : !() -> A 
+  add         : (A) -> None  
+  discard     : (A) -> None  
+  pop         : () -> A 
 
+extension list[A] (Sequence[A]): ...
 
-# --------------- Mutable collections and auxiliary protocols ---------------------
+extension dict[A,B] (Mapping[A,B]): ...
 
-protocol IncrementalPlus[A] (Plus):
-  __iadd__     : !(A) -> None
+extension set[A] (Set[A]): ...
 
-protocol IncrementalMinus[A] (Minus):
-  __isub__     : !(A) -> None
-
-protocol IncrementalLogical[A] (Logical):
-  @staticmethod
-  __iand__     : !(Self,Self) -> Self
-  @staticmethod
-  __ior__      : !(Self,Self) -> Self
-  @staticmethod
-  __ixor__     : !(Self,Self) -> Self
-
- 
-protocol Identity:
-  @staticmethod
-  __is__      : (Self,Self) -> bool 
-  @staticmethod
-  __isnot__   : (Self,Self) -> bool 
- 
