@@ -801,6 +801,17 @@ instance Subst TSchema where
     tyfree (TSchema _ q t dec)      = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t dec)     = tybound q
 
+msubstRenaming                      :: Subst a => a -> TypeM (Substitution,Substitution)
+msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey relevant <$> getSubstitution
+                                         return $ (dom s `zip` subst (renaming_s  (tyfree (rng s))) (rng s),renaming_s (tyfree (rng s)))
+      where relevant k _            = k `elem` vs0
+            vs0                     = tyfree c
+            vs                      = tybound c
+            renaming_s newvars      = clashvars `zip` map tVar freshvars
+              where clashvars       = vs `intersect` newvars
+                    avoidvars       = vs0 ++ vs ++ newvars
+                    freshvars       = tvarSupply \\ avoidvars
+
 testSchemaSubst = do
     putStrLn ("t:  " ++ render (pretty t))
     putStrLn ("s1: " ++ render (pretty s1))
@@ -835,7 +846,7 @@ instance Subst TBind where
 instance Subst Type where
     msubst (TVar l v)               = do s <- getSubstitution
                                          case Map.lookup v s of
-                                            Just t  -> msubst t
+                                            Just t -> msubst t
                                             Nothing -> return (TVar l v)
     msubst (TCon l c)               = TCon l <$> msubst c
     msubst (TAt l c)                = TAt l <$> msubst c
@@ -882,10 +893,29 @@ instance Subst KwdPar where
 
 instance Subst Expr where
     msubst e                        = return e
-    
     tyfree e                        = []
 
+instance Subst Decl where
+    msubst p@(Protocol l n qs bs ss)= do (s,ren) <- msubstRenaming p
+                                         return $ Protocol l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst c@(Class l n qs bs ss)   = do (s,ren) <- msubstRenaming c
+                                         return $ Class l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst (Signature l ns tsc)     = Signature l ns <$> msubst tsc
 
+    tybound (Protocol l n qs bs ss) = tybound qs
+    tybound (Class l n qs bs ss)    = tybound qs
+
+    tyfree (Protocol l n qs bs ss)  = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
+    tyfree (Class l n qs bs ss)     = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
+    tyfree (Signature l ns tsc)     = tyfree tsc
+    
+instance Subst Stmt where
+    msubst (Decl l ds)              = Decl l <$> msubst ds
+
+    tyfree (Decl l ds)              = tyfree ds
+
+
+    
 -- Error handling ------------------------------------------------------------------------
 
 data CheckerError                   = FileNotFound ModName
