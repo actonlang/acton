@@ -40,16 +40,21 @@ uuid_t * new_txn(db_t * db, unsigned int * seedptr)
 	return &(ts->txnid);
 }
 
+int close_txn_state(txn_state * ts, db_t * db)
+{
+	skiplist_delete(db->txn_state, ts->txnid);
+	free_txn_state(ts);
+
+	return 0;
+}
+
 int close_txn(uuid_t * txnid, db_t * db)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
-	skiplist_delete(db->txn_state, txnid);
-	free_txn_state(ts);
-
-	return 0;
+	return close_txn_state(ts, db);
 }
 
 int key_path_overlaps(txn_read * tr, txn_write * tw)
@@ -314,14 +319,18 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 //				if(ww_conflict(tw, tw2, 0))
 //				{
 #if (VERBOSE_TXNS > 0)
-						printf("Invalidating txn due to ww conflict on table=%ld/%ld, write_type=%d/%d, key=%ld/%ld, txn=%ld/%ld\n",
+					char uuid_str1[37], uuid_str2[37];
+					uuid_unparse_lower(rts->txnid, uuid_str1);
+					uuid_unparse_lower(ts->txnid, uuid_str2);
+
+					printf("Invalidating txn due to ww conflict on table=%ld/%ld, write_type=%d/%d, key=%ld/%ld, txn=%s/%s\n",
 								(long) tw->table_key, (long) tw2->table_key,
 								tw->query_type, tw2->query_type,
 								((long *) tw->column_values)[0], ((long *) tw2->column_values)[0],
-								(long) rts->txnid, (long) ts->txnid);
-//						assert(0);
+								uuid_str2, uuid_str1);
+//					assert(0);
 #endif
-					return 0; // 1;
+					return 1;
 //				}
 			}
 		}
@@ -341,7 +350,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 
 				if(queue_op_conflict(tw, tw2))
 				{
-					return 0; // 1;
+					return 1;
 				}
 			}
 		}
@@ -476,7 +485,7 @@ int persist_txn(txn_state * ts, db_t * db, unsigned int * fastrandstate)
 		}
 	}
 
-	return 0;
+	return close_txn_state(ts, db);
 }
 
 int abort_txn(uuid_t * txnid, db_t * db)
@@ -510,12 +519,6 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 
 #if (VERBOSE_TXNS > 0)
 		printf("BACKEND: persist txn %s returned %d\n", uuid_str, res);
-#endif
-
-		res = close_txn(txnid, db);
-
-#if (VERBOSE_TXNS > 1)
-		printf("BACKEND: close txn %s returned %d\n", uuid_str, res);
 #endif
 	}
 	else if(res == VAL_STATUS_ABORT)

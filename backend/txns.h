@@ -19,6 +19,7 @@
 txn_state * get_txn_state(uuid_t * txnid, db_t * db);
 uuid_t * new_txn(db_t * db, unsigned int * seedptr);
 int close_txn(uuid_t * txnid, db_t * db);
+int close_txn_state(txn_state * ts, db_t * db);
 int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db);
 int abort_txn(uuid_t * txnid, db_t * db);
 int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int * fastrandstate);
