@@ -155,11 +155,8 @@ transChain mb ps e (cs : css)           = c2{dname = c2nm, dbody = sigs} : trans
          ts                             = tCon (mkTC (dqname e) (qual e)) : tcargs (head (bounds e))
          cs2@(c2:_)                     = substAll ts cs1
          tc                             = head (bounds c2)
-         c2nm                           = name (nstr (dname c2) ++ '_' : nstr (noqual (dqname e)))
+         c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 CPass
          witType                        = maybe (tCon tc) id mb
-         notMeth (Decl _ (s:_))         = notFunType (sctype (dtyp s))
-         notFunType (TFun {})           = False
-         notFunType _                   = True
          sigs                           = maybe [] (\(TCon _ (TC nm _))->[Decl NoLoc [Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]]) mb ++
                                           trans ((newTransEnv []){fstpar = tCon (mkTC (NoQual c2nm) (qual c2))}) (dropWhile notMeth $ concatMap dbody cs2)
 
@@ -177,6 +174,9 @@ substAll ts (Class l nm qs bs ss : cs)  = Class l nm (nub $ map tBind (tyfree ts
 
 mkTC nm qs                             = TC nm $ map (\(TBind tv _) -> tVar tv) qs
 
+notMeth (Decl _ (s:_))                  = notFunType (sctype (dtyp s))
+   where notFunType (TFun {})           = False
+         notFunType _                   = True
 
 protocolsOf (Module _ _ ss)             = [(dname p,p) |  Decl _ ds <- ss, p@(Protocol{}) <- ds]
 
@@ -200,3 +200,4 @@ chains (e:es)                           = c e es []
          find k (x:xs) es
              |dname x == k              = (x,reverse es ++ xs)
              |otherwise                 = find k xs (x:es)
+
