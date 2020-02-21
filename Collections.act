@@ -1,5 +1,5 @@
-class Iterator[A]:                           
-  __next__     : () -> A
+#class Iterator[A]:                           
+#  __next__     : () -> A
  
 protocol Eq:
   @staticmethod
