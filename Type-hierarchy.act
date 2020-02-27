@@ -1,9 +1,9 @@
 ######################################### Type and class hierarchy ###############################################
 
 protocol Eq:
-    @staticmethod
+    @static
     __eq__          : (Self,Self) -> bool
-    @staticmethod
+    @static
     __ne__          : (Self,Self) -> bool
     
     def __ne__(a,b):
@@ -17,39 +17,37 @@ protocol Eq:
         return not (a == b)
 ====>
 class Eq[S]():
-    @classmethod
     __eq__          : (S,S) -> bool
-    @classmethod
     __ne__          : (S,S) -> bool
 
-    def __ne__(cls,a,b):
-        return not cls.__eq__(a,b)
+    def __ne__(w,a,b):
+        return not w.__eq__(a,b)
     
 -----------------------------------------------------------------
 
 class Fruit (Eq):
-    @staticmethod
     def __eq__(a, b):
         return a.weight == b.weight
 
 class Apple (Fruit):
-    @staticmethod
     def __eq__(a, b):
         return Fruit.__eq__(a,b) and a.appleness == b.appleness
 
 class Orange (Fruit):
-    @staticmethod
     def __eq__(a, b):
         return Fruit.__eq__(a,b) and a.orangeness == b.orangeness
 
 a, b : Apple
 a == b
+Eq.__eq__(a,b)
 x, y : Orange
 x == y
+Eq.__eq__(x,y)
 f1 : Fruit = a
 f2 : Fruit = x
 f1 == f2
 a == x
+Eq.__eq__(a,x)
 ====>
 class Fruit:
     ...
@@ -68,28 +66,25 @@ class Orange (Fruit):
         return Fruit.__eq__(a,b) and a.orangeness == b.orangeness
 ====>
 class Fruit:
-    _Eq         : @Eq[Fruit]        = Eq_Fruit
-    ...
-class Eq_Fruit (Eq[Fruit]):
-    @classmethod
-    def __eq__(cls, a:Fruit, b:Fruit):
+    weight : int
+    
+class Eq_Fruit[S(Fruit)] (Eq[S]):
+    def __eq__(w, a:S, b:S):
         return Eq_int.__eq__(a.weight, b.weight)
 
 class Apple (Fruit):
-    _Eq                             = Eq_Apple
-    ...
-class Eq_Apple (Eq[Apple]):
-    @classmethod
-    def __eq__(cls, a:Apple, b:Apple):
-        return Fruit._Eq.__eq__(a,b) and Eq_str(a.appleness, b.appleness)
+    appleness : str
+
+class Eq_Apple[S(Apple)] (Eq_Fruit[S]):
+    def __eq__(w, a:S, b:S):
+        return Eq_Fruit.__eq__(a,b) and Eq_str(a.appleness, b.appleness)
 
 class Orange (Fruit):
-    _Eq                             = Eq_Orange
-    ...
-class Eq_Orange (Eq[Orange]):
-    @classmethod
-    def __eq__(cls, a:Orange, b:Orange):
-        return Fruit._Eq.__eq__(a,b) and Eq_str(a.orangeness, b.orangeness)
+    orangeness : str
+
+class Eq_Orange[S(Orange)] (Eq[S]):
+    def __eq__(w, a:S, b:S):
+        return Eq_Fruit.__eq__(a,b) and Eq_str(a.orangeness, b.orangeness)
 
 a, b : Apple
 Eq_Apple.__eq__(a,b)
@@ -102,25 +97,60 @@ Eq_Fruit.__eq__(a,x)
 
 -----------------------------------------------------------------
 
+protocol Hashable (Eq):
+    __hash__        : () -> int
+====>
+"typeclass" (Eq[S]) => Hashable[S]:
+    __hash__        : (S) -> int
+====>
+class Hashable[S] (Eq[S]):
+    __hash__        : (S) -> int
+
+-----------------------------------------------------------------
+
+class Apa(Hashable):
+    x : int
+    def apa(self, y):
+        return self.hash() if y==0 else y
+    def hash(self):
+        return self.x + self.apa(1)
+
+====>
+
+class Apa():
+    x : int
+    def apa(self, w:Hashable[Apa], y):
+        return w.hash(self) if y==0 else y
+
+class Hashable_Apa (Hashable[Apa]):
+    def hash(w, self):
+        return self.x + self.apa(w,1)
+
+-----------------------------------------------------------------
+
 class MyClass (Hashable):
+    attr1 : int
     def __eq__(a, b):
-        return hash(a) == hash(b)
-    def __hash__(self):
+        return a.hash() == b.hash()
+    def hash(self):
         return self.attr1
+    my_method: ()->int
     def my_method(self):
-        return hash(self)
+        return self.hash()
         
 class MySubClass (MyClass):
-    def __hash__(self):
-        return fancy_hash(self.attr1)
+    attr2 : int
+    def hash(self):
+        return fancy_hash(self.attr2)
 
 x, y : MySubClass
 z : MyClass = y
-x == y  -->  MySubClass.__eq__(x,y)
-x == z  -->  MyClass.__eq__(x,z)
 
-y.my_method()  -->  hash(self)  -->  self.__hash__()  -->  fancy_hash(y.attr1)
-z.my_method()  -->  hash(self)  -->  self.__hash__()  -->  fancy_hash(z.attr1)
+x == y  -->  Eq.__eq__(x,y)  -->  MySubClass.hash(x) == MySubClass.hash(y)  -->  fancy_hash(x.attr2) == fancy_hash(y.attr2)
+x == z  -->  Eq.__eq__(x,z)  -->  MyClass.hash(x) == MyClass.hash(z)        -->  x.attr1 == z.attr1
+
+y.my_method()  -->  MySubClass.my_method(y)  -->  MySubClass.hash(y)  -->  fancy_hash(y.attr2)
+z.my_method()  -->  MySubClass.my_method(z)  -->  MyClass.hash(z)     -->  z.attr1
 
 ====>
 class MyClass:
@@ -136,57 +166,74 @@ class MySubClass (MyClass):
     pass
 "instance" Hashable[MySubClass]:
     def __hash__(self):
-        return fancy_hash(self.attr1)
+        return fancy_hash(self.attr2)
 ====>
+
 class MyClass:
-    _Hashable = Hashable_MyClass
-    _Eq = Hashable_MyClass
-    def my_method(self):
-        return self._Hashable.__hash__(self)
-class Hashable_MyClass (Hashable[MyClass]):
-    _MyClass = MyClass
-    def __hash__(cls, self):
-        return self.attr1
-class Eq_MyClass (Eq[MyClass]):
-    _MyClass = MyClass
-    def __eq__(cls, a, b):
-        return Eq_int.__eq__(cls.__hash__(a), cls.__hash__(b))
+    attr1 : int
+    my_method : (Hashable(Self))->int                   # Covariant in Self, since Hashable is a contravariant operator
+    def my_method(self, w:Hashable[Self]):              # Note: w:Hashable[MyClass] would render ny_method uninheritable in MySubClass
+        return w.hash(self)
+
 class MySubClass (MyClass):
-    _Hashable = Hashable_MySubClass
-    _Eq = Hashable_MySubClass
-class Hashable_MySubClass (Hashable_MyClass):
-    _MyClass = MySubClass
-    @classmethod
-    def __hash__(cls, self):
-        return fancy_hash(self.attr1)
-Eq_MySubClass = Hashable_MyClass
+    attr2 : int
+
+class Hashable_MyClass[S(MyClass)] (Hashable[S]):
+    def __eq__(w, a:S, b:S):
+        return Eq_int.__eq__(w.hash(a), w.hash(b))
+    def hash(w, self:S):
+        return self.attr1
+class Hashable_MySubClass[S(MySubClass)] (Hashable_MyClass[S]):
+    def hash(w, self:S):
+        return fancy_hash(self.attr2)
 
 x, y : MySubClass
 z : MyClass = y
-MySubClass._Eq.__eq__(x,y)  -->  Hashable_MySubClass.__eq__(x,y)  -->  ... Hashable_MySubClass.__hash__(x) ...
-MyClass._Eq.__eq__(x,z)  -->  Hashable_MyClass.__eq__(x,z)  -->  ... Hashable_MyClass.__hash__(x) ...
 
-y.my_method()  -->  MySubClass.my_method(y)  -->  y._Hashable.__hash__(y)  -->  Hashable_MySubClass.__hash__(y)
-z.my_method()  -->  MySubClass.my_method(z)  -->  z._Hashable.__hash__(z)  -->  Hashable_MySubClass.__hash__(y)
+w0 : Hashable_MyClass
+w1 : Hashable_MySubClass
+
+x == y  -->  w1.__eq__(x,y)  -->  Hashable_MySubClass.hash(w1,x) == Hashable_MySubClass.hash(w1,y)  -->  fancy_hash(x.attr2) == fancy_hash(y.attr2)
+x == z  -->  w0.__eq__(x,z)  -->  Hashable_MyClass.hash(w0,x) == Hashable_MyClass.hash(w0,z)        -->  x.attr1 == z.attr1
+
+y.my_method()  -->  y.my_method(w1)  -->  MySubClass.my_method(y,w1)  -->  Hashable_MySubClass.hash(w1,y)  -->  fancy_hash(y.attr2)
+z.my_method()  -->  z.my_method(w2)  -->  MySubClass.my_method(z,w2)  -->  Hashable_MyClass.hash(w2,z)     -->  z.attr1
+
+# P1          ===     Obj(Self) [hash:Int, mymeth:Int, a1:Int]
+# Class(P1)   ===     [new:P1, hash:All(Self<P1)Self->Int, mymeth:All(Self<P1)Self->Int]
+# p1_class    ===     [new    = sigma(z:Class(P1)) obj(Self=P1) [hash = sigma(s:Self)z.hash(Self)(s), 
+#                                                                mymeth = sigma(s:Self)z.mymeth(Self)(s), 
+#                                                                a1 = sigma(s:Self)1],
+#                      hash   = lambda(Self<P1) lambda(s:Self) s.a1,
+#                      mymeth = lambda(Self<P1) lambda(s:Self) s.hash]
+#
+# P2          ===     Obj(Self) [hash:Int, mymeth:Int, a1:Int, a2:Int]
+# Class(P2)   ===     [new:P2, hash:All(Self<P2)Self->Int, mymeth:All(Self<P2)Self->Int]
+# p2_class    ===     [new    = sigma(z:Class(P2)) obj(Self=P2) [hash = sigma(s:Self)z.hash(Self)(s), 
+#                                                                mymeth = sigma(s:Self)z.mymeth(Self)(s), 
+#                                                                a1 = sigma(s:Self)1, 
+#                                                                a2 = sigma(s:Self)2],
+#                      hash   = lambda(Self<P2) lambda(s:Self) fancy_hash(s.a2)
+#                      mymeth = p1_class.mymeth]
 
 -----------------------------------------------------------------
     
 protocol Ord (Eq):
-    @staticmethod
+    @static
     __lt__          : (Self,Self) -> bool
-    @staticmethod
+    @static
     __le__          : (Self,Self) -> bool
-    @staticmethod
+    @static
     __gt__          : (Self,Self) -> bool
-    @staticmethod
+    @static
     __ge__          : (Self,Self) -> bool
 
     def __le__(a,b):
-        return a < b or a == b
+        return a < b or a == b              # return Ord.__lt__(a,b) or Eq.__eq__(a,b)
     def __gt__(a,b):
-        return b < a
+        return b < a                        # return Ord.__lt__(b,a)
     def __ge__(a,b):
-        return b <= a
+        return b <= a                       # return Ord.__le__(b,a)
 ====>
 "typeclass" (Eq[S]) => Ord[S]:
     __lt__          : (S,S) -> bool
@@ -202,21 +249,17 @@ protocol Ord (Eq):
         return b <= a
 ====>
 class Ord[S] (Eq[S]):
-    @classmethod
     __lt__          : (S,S) -> bool
-    @classmethod
     __le__          : (S,S) -> bool
-    @classmethod
     __gt__          : (S,S) -> bool
-    @classmethod
     __ge__          : (S,S) -> bool
 
-    def __le__(cls,a,b):
-        return cls.__lt__(a,b) or cls.__eq__(a,b)
-    def __gt__(cls,a,b):
-        return cls.__lt__(b,a)
-    def __ge__(a,b):
-        return cls.__le__(b,a)
+    def __le__(w,a,b):
+        return w.__lt__(a,b) or w.__eq__(a,b)
+    def __gt__(w,a,b):
+        return w.__lt__(b,a)
+    def __ge__(w,a,b):
+        return w.__le__(b,a)
 
 -----------------------------------------------------------------
 
@@ -226,22 +269,26 @@ extension int (Eq):
 extension int (Ord):
     def __lt__(a:int, b:int) -> bool:
         return primltint(a,b)
-#    def __eq__(a:int, b:int) -> bool:             # WOULD TRIGGER AMBIGUITY ERROR: EXISTING EXTENSION int (Eq)
-#        return primeqint(a,b)
+    def __eq__(a:int, b:int) -> bool:             # Overrides int._eq_
+        return primeqint(a,b)
 ====>
 "instance" Eq[int]:
     def __eq__(a:int, b:int) -> bool:
         return primeqint(a,b)
 "instance" Ord[int]:
     def __lt__(a:int, b:int) -> bool:
+        return primltint(a,b)
+    def __eq__(a:int, b:int) -> bool:
         return primeqint(a,b)
 ====>
 class Eq_int (Eq[int]):
-    def __eq__(cls, a:int, b:int) -> bool:
+    def __eq__(w, a:int, b:int) -> bool:
         return primeqint(a,b)
 class Ord_int (Ord[int]):
-    def __lt__(cls, a:int, b:int) -> bool:
-        return primeqint(a,b)
+    def __lt__(w, a:int, b:int) -> bool:
+        return primltint(a,b)
+w1 : Eq[int] = Eq_int()
+w2 : Ord[int] = Ord_int()
 
 -----------------------------------------------------------------
 
@@ -257,24 +304,13 @@ extension int (Ord):                                   # ALTERNATIVELY: A JOINT 
     def __lt__(a:int, b:int) -> bool:
         return primeqint(a,b)
 ====>
-class Eq_int (Eq[int]):
-    def __eq__(cls, a:int, b:int) -> bool:
+class Ord_int (Ord[int]):
+    def __eq__(w, a:int, b:int) -> bool:
         return primeqint(a,b)
-class Ord_int (Eq_int):
-    def __lt__(cls, a:int, b:int) -> bool:
+    def __lt__(w, a:int, b:int) -> bool:
         return primeqint(a,b)
-
------------------------------------------------------------------------
-
-protocol Hashable (Eq):
-    __hash__        : () -> int
-====>
-"typeclass" (Eq[S]) => Hashable[S]:
-    __hash__        : (S) -> int
-====>
-class Hashable[S] (Eq[S]):
-    @classmethod
-    __hash__        : (S) -> int
+w2 : Ord[int] = Ord_int()
+w1 : Eq[int] = w2
 
 -----------------------------------------------------------------
 
@@ -285,7 +321,6 @@ protocol SupportsInt:
     __int__         : (S) -> int
 ====>
 class SupportsInt[S]():
-    @classmethod
     __int__         : (S) -> int
 
 -----------------------------------------------------------------
@@ -299,7 +334,7 @@ extension int (SupportsInt):
         return self
 ====>
 class SupportsInt_int (SupportsInt[int]):
-    def __int__(self:int) -> int
+    def __int__(w, self:int) -> int
         return self
 
 -----------------------------------------------------------------
@@ -311,7 +346,6 @@ protocol SupportsFloat:
     __float__       : (S) -> float
 ====>
 class SupportsFloat[S]():
-    @classmethod
     __float__       : (S) -> float
 
 -----------------------------------------------------------------
@@ -323,7 +357,6 @@ protocol SupportsComplex:
     __complex__     : (S) -> complex
 ====>
 class SupportsComplex[S]():
-    @classmethod
     __complex__     : (S) -> complex
 
 -----------------------------------------------------------------
@@ -335,17 +368,16 @@ protocol SupportsBytes:
     __bytes__       : (S) -> bytes
 ====>
 class SupportsBytes[S]():
-    @classmethod
     __bytes__       : (S) -> bytes
 
 -----------------------------------------------------------------
 
 protocol Logical:
-    @staticmethod
+    @static
     __and__         : (Self,Self) -> Self
-    @staticmethod
+    @static
     __or__          : (Self,Self) -> Self
-    @staticmethod
+    @static
     __xor__         : (Self,Self) -> Self
 ====>
 "typeclass" Logical[S]:
@@ -354,37 +386,32 @@ protocol Logical:
     __xor__         : (S,S) -> S
 ====>
 class Logical[S]():
-    @classmethod
     __and__         : (S,S) -> S
-    @classmethod
     __or__          : (S,S) -> S
-    @classmethod
     __xor__         : (S,S) -> S
 
 -----------------------------------------------------------------
 
 protocol Plus:
-    @staticmethod
+    @static
     __add__         : (Self,Self) -> Self
 ====>
 "typeclass" Plus[S]:
     __add__         : (S,S) -> S
 ====>
 class Plus[S]():
-    @classmethod
     __add__         : (S,S) -> S
 
 -----------------------------------------------------------------
 
 protocol Minus:
-    @staticmethod
+    @static
     __sub__         : (Self,Self) -> Self
 ====>
 "typeclass" Minus[S]:
     __sub__         : (S,S) -> S
 ====>
 class Minus[S]():
-    @classmethod
     __sub__         : (S,S) -> S
 
 -----------------------------------------------------------------
@@ -392,9 +419,9 @@ class Minus[S]():
 protocol Number (Ord, Plus, Minus):
     __pos__         : () -> Self
     __neg__         : () -> Self
-    @staticmethod
+    @static
     __mul__         : (Self,Self) -> Self
-    @staticmethod
+    @static
     __pow__         : (Self,Self) -> Self
     def __sub__(a,b):
         return a + (-b)
@@ -406,65 +433,28 @@ protocol Number (Ord, Plus, Minus):
     __pow__         : (S,S) -> S
     def __sub__(a:S, b:S):
         return __add__(a, __neg__(b))
+    
 ====>
+class Plus_Number[S] (Plus[S]):
+    _Number         : Number[S]
+    def __add__(w, a, b):
+        return w._Number.__add__(a, b)
+class Minus_Number[S] (Minus[S]):
+    _Number         : Number[S]
+    def __sub__(w, a:S, b:S):                       # if __sub__ is NOT inherited from Minus
+        return w._Number.__sub__(a, b)
 class Number[S] (Ord[S]):
-    _Plus           : @Plus[S]  = Plus_Number
-    _Minus          : @Minus[S] = Minus_Number
-    @classmethod
+    _Plus           : Plus[S]
+    _Minus          : Minus[S]
+    __add__         : (S,S) -> S
+    __sub__         : (S,S) -> S
     __pos__         : (S) -> S
-    @classmethod
     __neg__         : (S) -> S
-    @classmethod
     __mul__         : (S,S) -> S
-    @classmethod
     __pow__         : (S,S) -> S
-class Plus_Number[S] (Plus[S]):
-    _Number         = Number
-class Minus_Number[S] (Minus[S]):
-    _Number         = Number[S]
-    def __sub__(cls, a:S, b:S):
-        return cls._Number._Plus.__add__(a, cls._Number.__neg__(b))
+    def __sub__(w, a, b):
+        return w.__add__(a, w.__neg__(b))
 
------------------------------------------------------------------
-
-protocol Number (Ord, Plus, Minus):                                 # ALTERNATIVE TRANSLATION WITHOUT TYPE EXTENSION
-    __pos__         : () -> Self
-    __neg__         : () -> Self
-    @staticmethod
-    __mul__         : (Self,Self) -> Self
-    @staticmethod
-    __pow__         : (Self,Self) -> Self
-    def __sub__(a,b):
-        return a + (-b)
-====>
-"typeclass" (Ord[S], Plus[S], Minus[S]) => Number[S]:
-    __pos__         : (S) -> S
-    __neg__         : (S) -> S
-    __mul__         : (S,S) -> S
-    __pow__         : (S,S) -> S
-    def __sub__(a:S, b:S):
-        return __add__(a, __neg__(b))
-====>
-class Number[S]():
-    _Ord            : @Ord[S]   = Ord_Number
-    _Plus           : @Plus[S]  = Plus_Number
-    _Minus          : @Minus[S] = Minus_Number
-    @classmethod
-    __pos__         : (S) -> S
-    @classmethod
-    __neg__         : (S) -> S
-    @classmethod
-    __mul__         : (S,S) -> S
-    @classmethod
-    __pow__         : (S,S) -> S
-class Ord_Number[S] (Ord[S]):
-    _Number         = Number
-class Plus_Number[S] (Plus[S]):
-    _Number         = Number
-class Minus_Number[S] (Minus[S]):
-    _Number         = Number
-    def __sub__(cls, a:S, b:S):
-        return cls._Number._Plus.__add__(a, cls._Number.__neg__(b))
 
 -----------------------------------------------------------------
 
@@ -475,44 +465,54 @@ extension int (Number):
         return primnegint(self)
     def __add__(a:int, b:int) -> int:
         return primaddint(a,b)
-#    def __sub__(a:int, b:int) -> int:
-#        return primaddint(a,b)
+    def __sub__(a:int, b:int) -> int:
+        return primaddint(a,b)
     def __mul__(a:int, b:int) -> int:
         return primmulint(a,b)
-#    def __eq__(a:int, b:int) -> bool:             # WOULD TRIGGER AMBIGUITY ERROR: EXISTING EXTENSION int (Eq)
-#        return primeqint(a,b)
-#    def __lt__(a:int, b:int) -> bool:             # WOULD TRIGGER AMBIGUITY ERROR: EXISTING EXTENSION int (Ord)
-#        return primltint(a,b)
+    def __eq__(a:int, b:int) -> bool:
+        return primeqint(a,b)
+    def __lt__(a:int, b:int) -> bool:
+        return primltint(a,b)
 ====>
-"instance" Number[int]:                             # requires: Ord[int], Plus[int], Minus[int]
+"instance" Number[int]:
     def __pos__(self:int) -> int:
         return self
     def __neg__(self:int) -> int:
         return primnegint(self)
     def __add__(a:int, b:int) -> int:
         return primaddint(a,b)
-#    def __sub__(a:int, b:int) -> int:
-#        return primaddint(a,b)
+    def __sub__(a:int, b:int) -> int:
+        return primaddint(a,b)
     def __mul__(a:int, b:int) -> int:
         return primmulint(a,b)
+    def __eq__(a:int, b:int) -> bool:
+        return primeqint(a,b)
+    def __lt__(a:int, b:int) -> bool:
+        return primltint(a,b)
+
 ====>
 class Plus_int (Plus_Number[int]):
-    _Number = Number_int
-    def __add__(a:int, b:int) -> int:
+    def __add__(w, a:int, b:int) -> int:
         return primaddint(a,b)
 class Minus_int (Minus_Number[int]):
-    _Number = Number_int
-#    def __sub__(a:int, b:int) -> int:
-#        return primsubint(a,b)
+    def __sub__(wit, a:int, b:int) -> int:
+        return primsubint(a,b)
+    # def __sub__(w, a:S, b:S):                                     # if not overridden, inherited from Minus_Number
+    #     return w._Number._Plus.__add__(a, w._Number.__neg__(b))
 class Number_int (Number[int]):
-    _Plus = Plus_int
-    _Minus = Minus_int
-    def __pos__(cls, self:int) -> int:
+    def __init__(w):
+        w._Plus = Plus_int(w)
+        w._Minus = Minus_int(w)
+    def __pos__(e, self:int) -> int:
         return self
-    def __neg__(cls, self:int) -> int:              # neg(7) ====> 7.__neg__() ====> Number_int.__neg__(7) ====> primnegint(7)
+    def __neg__(w, self:int) -> int:
         return primnegint(self)
-    def __mul__(cls, a:int, b:int) -> int:
+    def __mul__(w, a:int, b:int) -> int:
         return primmulint(a,b)
+    def __eq__(w, a:int, b:int) -> bool:
+        return primeqint(a,b)
+    def __lt__(w, a:int, b:int) -> bool:
+        return primltint(a,b)
 
 -----------------------------------------------------------------
 
@@ -523,15 +523,14 @@ protocol SupportsAbs:
     __abs__         : (S) -> S
 ====>
 class SupportsAbs[S]():
-    @classmethod
     __abs__         : (S) -> S
 
 -----------------------------------------------------------------
 
 protocol Complex (Number, SupportsAbs, SupportsComplex):
-    @staticmethod
+    @static
     __fromcomplex__ : (complex) -> Self
-    @staticmethod
+    @static
     __div__         : (Self,Self) -> Self
     real            : () -> Real
     imag            : () -> Real
@@ -540,33 +539,22 @@ protocol Complex (Number, SupportsAbs, SupportsComplex):
 "typeclass" (Number[S],SupportsAbs[S],SupportsComplex[S]) => Complex[S]:
     __fromcomplex__ : (complex) -> S
     __div__         : (S,S) -> S
-    real            : (Real[T]) => (S) -> T
-    imag            : (Real[T]) => (S) -> T
+    real            : (S) -> EXISTS[T,Real[T]]
+    imag            : (S) -> EXISTS[T,Real[T]]
     conjugate       : (S) -> S
 ====>
-class Plus_Complex[S] (Plus_Number[S]):
-    _Number         = Complex
-class Minus_Complex[S] (Minus_Number[S]):
-    _Number         = Complex
 class SupportsAbs_Complex[S] (SupportsAbs[S]):
-    _Complex        : @Complex[S]           = Complex
+    _Complex        : Complex[S]
 class SupportsComplex_Complex[S] (SupportsComplex[S]):
-    _Complex        : @Complex[S]           = Complex
+    _Complex        : Complex[S]
 class Complex[S] (Number[S]):
-    _Plus           = Plus_Complex
-    _Minus          = Minus_Complex
-    _SuppAbs        : @SupportsAbs[S]       = SupportsAbs_Complex
-    _SuppComplex    : @SupportsComplex[S]   = SupportsComplex_Complex
+    _SuppAbs        : SupportsAbs[S]
+    _SuppComplex    : SupportsComplex[S]
 
-    @classmethod
     __fromcomplex__ : (complex) -> S
-    @classmethod
     __div__         : (S,S) -> S
-    @classmethod
-    real            : (@Real[T], S) -> T
-    @classmethod
-    imag            : (@Real[T], S) -> T
-    @classmethod
+    real            : (S) -> EXISTS[T,Real[T]]
+    imag            : (S) -> EXISTS[T,Real[T]]
     conjugate       : (S) -> S
 
 -----------------------------------------------------------------
@@ -578,22 +566,21 @@ protocol SupportsRound:
     __round__       : (S) -> int
 ====>
 class SupportsRound[S]():
-    @classmethod
     __round__       : (S) -> int
 
 -----------------------------------------------------------------
 
 protocol Real (Complex, SupportsRound, SupportsFloat):
-    @staticmethod
+    @static
     __fromfloat__   : (float) -> Self
     __trunc__       : () -> Integral
     __floor__       : () -> Integral
     __ceil__        : () -> Integral
-    @staticmethod
+    @static
     __divmod__      : (Self,Self) -> (Self,Self) 
-    @staticmethod
+    @static
     __floordiv__    : (Self,Self) -> Integral    
-    @staticmethod
+    @static
     __mod__         : (Self,Self) -> Self        
 
     def __complex__(a):
@@ -609,11 +596,11 @@ protocol Real (Complex, SupportsRound, SupportsFloat):
 ====>
 "typeclass" (Complex[S],SupportsRound[S],SupportsFloat[S]) => Real[S]:
     __fromfloat__   : (float) -> S
-    __trunc__       : (Integral[T]) => (S) -> T
-    __floor__       : (Integral[T]) => (S) -> T
-    __ceil__        : (Integral[T]) => (S) -> T
+    __trunc__       : (S) -> EXISTS[T,Intergral[T]]
+    __floor__       : (S) -> EXISTS[T,Intergral[T]]
+    __ceil__        : (S) -> EXISTS[T,Intergral[T]]
     __divmod__      : (S,S) -> (S,S)
-    __floordiv__    : (Integral[T]) => (S,S) -> T
+    __floordiv__    : (S,S) -> EXISTS[T,Intergral[T]]
     __mod__         : (S,S) -> S
 
     def __complex__(a):
@@ -628,42 +615,31 @@ protocol Real (Complex, SupportsRound, SupportsFloat):
         return (a//b, a%b)
 ====>
 class Plus_Real[S] (Plus_Complex[S]):
-    _Number         = Real
+    _Real           : Real[S]
 class Minus_Real[S] (Minus_Complex[S]):
-    _Number         = Real
+    _Real           : Real[S]
 class SupportsAbs_Real[S] (SupportsAbs_Complex[S]):
-    _Complex        = Real
+    _Real           : Real[S]
 class SupportsComplex_Real[S] (SupportsComplex_Complex[S]):
-    _Complex        = Real
+    _Real           : Real[S]
 class SupportsRound_Real[S] (SupportsRound[S]):
-    _Real           = Real
+    _Real           : Real[S]
 class SupportsFloat_Real[S] (SupportsFloat[S]):
-    _Real           = Real
+    _Real           : Real[S]
 class Real[S] (Complex[S]):
-    _Plus           = Plus_Real
-    _Minus          = Minus_Real
-    _SuppAbs        = SupportsAbs_Real
-    _SuppComplex    = SupportsComplex_Real
-    _SuppRound      = SupportsRound_Real
-    _SuppFloat      = SupportsFloat_Real
+    _SuppRound      : SupportsRound[S]
+    _SuppFloat      : SupportsFloat[S]
     
-    @classmethod
     __fromfloat__   : (float) -> S
-    @classmethod
-    __trunc__       : (@Integral[T],S) -> T
-    @classmethod
-    __floor__       : (@Integral[T],S) -> T
-    @classmethod
-    __ceil__        : (@Integral[T],S) -> T
-    @classmethod
+    __trunc__       : (S) -> EXISTS[T,Intergral[T]]
+    __floor__       : (S) -> EXISTS[T,Intergral[T]]
+    __ceil__        : (S) -> EXISTS[T,Intergral[T]]
     __divmod__      : (S,S) -> (S,S)
-    @classmethod
-    __floordiv__    : (@Integral[T],S,S) -> T
-    @classmethod
+    __floordiv__    : (S,S) -> EXISTS[T,Intergral[T]]
     __mod__         : (S,S) -> S
 
-    def __complex__(cls,a):
-        return cls.__complex__(cls.__float__(a))
+    def __complex__(w,a):
+        return w.__complex__(w.__float__(a))
     def real(cls,_w,a):
         return _w.__fromfloat__(cls.__float__(a))
     def imag(cls,_w,a):
@@ -715,20 +691,18 @@ class Rational[S] (Real[S]):
     _SuppRound      = SupportsRound_Rational
     _SuppFloat      = SupportsFloat_Rational
     
-    @classmethod
     numerator       : (@Integral[T], S) -> T
-    @classmethod
     denominator     : (@Integral[T], S) -> T
     
 -----------------------------------------------------------------
 
 protocol Integral (Rational,SupportsInt,Logical):
-    @staticmethod
+    @static
     __fromint__     : (int) -> Self
     __index__       : () -> Self
-    @staticmethod
+    @static
     __lshift__      : (Self,Self) -> Self
-    @staticmethod
+    @static
     __rshift__      : (Self,Self) -> Self
     __invert__      : () -> Self
     
@@ -789,7 +763,7 @@ class Integral[S] (Rational[S]):
     _SuppInt        = SupportsInt_Integral
     _Logical        = Logical_Integral
     
-    @staticmethod
+    @static
     __fromint__     : (int) -> S
     __index__       : (S) -> S
     __lshift__      : (S,S) -> S
@@ -798,7 +772,6 @@ class Integral[S] (Rational[S]):
 
     def __index__(cls,a):
         return cls._SuppInt.__int__(a)
-    @classmethod
     def __lshift__(cls,a,b):
         return cls.__fromint__(Integral_int.__lshift__(cls._SuppInt.__int__(a), cls._SuppInt.__int__(b)))
     def __invert__(cls,a):
@@ -932,11 +905,8 @@ protocol IncrementalLogical[A] (Logical):
     __ixor__        : !(S,A) -> None
 ====>
 class IncrementalLogical[S,A] (Logical[S])
-    @classmethod
     __iand__        : !(S,A) -> None
-    @classmethod
     __ior__         : !(S,A) -> None
-    @classmethod
     __ixor__        : !(S,A) -> None
 
 -----------------------------------------------------------------
@@ -948,7 +918,6 @@ protocol IncrementalPlus[A] (Plus):
     __iadd__        : !(S,A) -> None
 ====>
 class IncrementalPlus[S,A] (Plus[S]):
-    @classmethod
     __iadd__        : !(S,A) -> None
 
 -----------------------------------------------------------------
@@ -960,7 +929,6 @@ protocol IncrementalMinus[A] (Minus):
     __isub__        : !(S,A) -> None
 ====>
 class IncrementalMinus[S,A] (Minus[S]):
-    @classmethod
     __isub__        : !(S,A) -> None
 
 -----------------------------------------------------------------
@@ -972,7 +940,6 @@ protocol Foldable[A]:
     __fold__        : (S, (A,B)->B, B) -> B
 ====>
 class Foldable[S,A]():
-    @classmethod
     __fold__        : (S, (A,B)->B, B) -> B
 
 -----------------------------------------------------------------
@@ -986,7 +953,6 @@ protocol Iterable[A]:
     __iter__        : (S) -> Iterator[A]
 ====>
 class Iterable[S,A]():
-    @classmethod
     __iter__        : (S) -> Iterator[A]
 
 -----------------------------------------------------------------
@@ -1004,7 +970,6 @@ class Iterator[A]():
 class Iterator[A]():
     __next__        : !() -> A
 class Iterable_Iterator (Iterable[Iterator[A],A]):
-    @classmethod
     def __iter__(cls,self): return self
 
 -----------------------------------------------------------------
@@ -1016,7 +981,6 @@ protocol Reversible[A] (Iterable[A]):
     __reversed__    : (S) -> S
 ====>
 class  Reversible[S,A] (Iterable[S,A]):
-    @classmethod
     __reversed__    : (S) -> S
 
 -----------------------------------------------------------------
@@ -1028,7 +992,6 @@ protocol Container[A]:
     __contains__    : (S,A) -> bool
 ====>
 class Container[S,A]():
-    @classmethod
     __contains__    : (S,A) -> bool
 
 -----------------------------------------------------------------
@@ -1040,7 +1003,6 @@ protocol Sized:
     __len__         : (S) -> int
 ====>
 class Sized[S]():
-    @classmethod
     __len__         : (S) -> int
 
 -----------------------------------------------------------------
@@ -1052,7 +1014,6 @@ protocol Indexed[A,B]:
     __getitem__     : (S,A) -> B
 ====>
 class Indexed[S,A,B]():
-    @classmethod
     __getitem__     : (S,A) -> B
 
 -----------------------------------------------------------------
@@ -1064,7 +1025,6 @@ protocol Sliceable:
     __getslice__    : (S,int?,int?,int?) -> S
 ====>
 class Sliceable[S,A]():
-    @classmethod
     __getslice__    : (S,int?,int?,int?) -> S
 
 -----------------------------------------------------------------
@@ -1083,7 +1043,6 @@ class Collection[S,A] (Container[S,A]):
     _Sized          : @Sized_Collection[S,A]
     _Iterable       : @Iterable_Collection[S,A]
 
-    @classmethod
     __fromiter__    : (@Iterable[A],T) -> S
 
 -----------------------------------------------------------------
@@ -1148,7 +1107,7 @@ class Sized_Set[S,A] (Sized_Collection[S]):
     _Set            : @Set[S,A]
 class Iterable_Set[S,A] (Iterable_Collection[S,A]):
     _Set            : @Set[S,A]
-class Ord_Set[S,A] (Ord[S,A]):
+class Ord_Set[S,A] (Ord[S]):
     _Set            : @Set[S,A]
     def __le__(cls, a:S, b:S):
         if Ord_int.__gt__(cls._Set._Sized.__len__(a), cls._Set._Sized.__len__(b)):
@@ -1180,7 +1139,6 @@ class Set[S,A] (Collection[S,A]):
     _Logical        : @Logical_Set[S,A]
     _Minus          : @Minus_Set[S,A]
     
-    @classmethod
     isdisjoint      : (@Set[T,A],S,T) -> bool
 
     def isdisjoint(cls:@Self, _q:@Set[T,A]), self:S, other:T):
@@ -1286,6 +1244,33 @@ def Set_frozenset[A](_qual: @Hashable[A]) -> @Set[frozenset[A],A]:
 
     return Set_frozenset
 
+####### Minus_frozenset[A] < Minus_Set[frozenset[A],A] < Minus[frozenset[A]]
+## But assume frozensubset[A] < frozenset[A]
+## and Minus_frozensubset[A] < Minus_frozenset[A]
+## Can we inherit _sub_ from Minus_frozenset in Minus_frozensubset?
+## Minus_frozenset._sub_ : (frozenset[A],frozenset[A])->frozenset[A] </ Minus_frozensubset._sub_ : (frozensubset[A],frozensubset[A])->frozensubset[A]
+## Answer is NO!
+## But had we instead defined
+####### Minus_frozenset[A,S(frozenset[A])] < Minus_Set[S,A] < Minus[S]
+## and
+####### Minus_frozensubset[A,S(frosensubset[A])] < Minus_frozenset[A,S]
+## Then
+## Minus_frozenset._sub_ : [S(frozenset[A])]=>(S,S)->S < Minus_frozensubset._sub_ : [S(frozensubset[A])]=>(S,S)->S 
+## I.e., Minus_frozenset._sub_ would be inheritable!
+## But then the question is of course how to implement a generic Minus_frozenset._sub_ with type (S,S)->S that works for all S < frozenset...
+## Conclusion: perhaps better stick to the non-inheritable version and ask all subclasses of frozenset for a reimplementation of _sub_
+
+## Can we direct the translation on basis of what the type of Minus_frozenset._sub_ is?
+## That is, if the inferred type is indeed [S(frozenset)]=>(S,S)->S, then the translation 
+## Minus_frozenset[A,S(frozenset[A])] (Minus_Set[S,A]) is chosen and Minus_frozenset._sub_ is available to inherit
+## Otherwise then translation defaults to Minus_frozenset[A] (Minus_Set[frozenset[A],A])
+## Hmm, isn't this just translating the extension frozenset (Minus) on basis of the most general method types inferred?
+## Yes, it is!
+
+## Conclusion: how to translate extension declarations will be based on inferred types.
+## And whether a method can be inherited or not will also be determined entirely by the type-checker.
+
+
 def Hashable_frozenset[A](_qual: @Hashable[A]) -> @Hashable[frozenset[A]]:
     class Hashable_frozenset[A] (Hashable[frozenset[A]]):
         def __hash__(cls, self): ...
@@ -1350,9 +1335,7 @@ protocol MutableIndexed[A,B] (Indexed[A,B]):
     __delitem__     : !(S,A) -> None
 ====>
 class MutableIndexed[S,A,B] (Indexed[S,A,B]):
-    @classmethod
     __setitem__     : !(S,A,B) -> None
-    @classmethod
     __delitem__     : !(S,A) -> None
 
 -----------------------------------------------------------------
@@ -1373,7 +1356,7 @@ protocol MutableSet[A] (Set[A], IncrementalLogical[Set[A]], IncrementalMinus[Set
         for value in other:
             self.add(value)
 ====>
-"typeclass" (Set[S,A], IncrementalLogical[S,EXISTS(T)[Set[T,A]], IncrementalMinus[S,EXISTS(T)[Set[T,A]]) => MutableSet[S,A]:
+"typeclass" (Set[S,A], IncrementalLogical[S,EXISTS[T,Set[T,A]], IncrementalMinus[S,EXISTS[T,Set[T,A]]) => MutableSet[S,A]:
     add             : !(A,A) -> None
     pop             : !(S) -> A
     clear           : !(S) -> None
@@ -1388,38 +1371,37 @@ protocol MutableSet[A] (Set[A], IncrementalLogical[Set[A]], IncrementalMinus[Set
             self.add(value)
 ====>
 class Sized_MutableSet[S,A] (Sized_Set[S,A]):
-    _MutableSet         : @MutableSet[S,A]
+    _MutableSet         : MutableSet[S,A]
 class Iterable_MutableSet[S,A] (Iterable_Set[S,A]):
-    _MutableSet         : @MutableSet[S,A]
+    _MutableSet         : MutableSet[S,A]
 class Ord_MutableSet[S,A] (Ord_Set[S,A]):
-    _MutableSet         : @MutableSet[S,A]
+    _MutableSet         : MutableSet[S,A]
 class Logical_MutableSet[S,A] (Logical_Set[S,A]):
-    _MutableSet         : @MutableSet[S,A]
+    _MutableSet         : MutableSet[S,A]
 class Minus_MutableSet[S,A] (Minus_Set[S,A]):
-    _MutableSet         : @MutableSet[S,A]
-class IncrementalLogical_MutableSet[S,A] (IncrementalLogical[S,EXISTS(T)[Set[T,A]]):
-    _MutableSet         : @MutableSet[S,A]
-    def __ior__(cls,self: S, other: EXISTS(T)[Set[T,A]):
+    _MutableSet         : MutableSet[S,A]
+class IncrementalLogical_MutableSet[S,A] (IncrementalLogical[S,EXISTS[T,Set[T,A]]):
+    _MutableSet         : MutableSet[S,A]
+    def __ior__(cls,self: S, other: EXISTS[T,Set[T,A]):
         for value in other._protocol._Iterable.__iter__(other._element):
             cls._MutableSet.add(value)
-class IncrementalMinus_MutableSet[S,A] (IncrementalMinus[S,EXISTS(T)[Set[T,A]]):
-    _MutableSet         : @MutableSet[S,A]
+class IncrementalMinus_MutableSet[S,A] (IncrementalMinus[S,EXISTS[T,Set[T,A]]):
+    _MutableSet         : MutableSet[S,A]
 class MutableSet[S,A] (Set[S,A]):
-    _Sized              : @Sized_MutableSet[S,A]
-    _Iterable           : @Iterable_MutableSet[S,A]
-    _Ord                : @Ord_MutableSet[S,A]
-    _Logical            : @Logical_MutableSet[S,A]
-    _Minus              : @Minus_MutableSet[S,A]
-    _IncrementalLogical : @IncrementalLogical_MutableSet[S,A]
-    _IncrementalMinus   : @IncrementalMinus_MutableSet[S,A]
+    _Sized              : Sized_MutableSet[S,A]
+    _Iterable           : Iterable_MutableSet[S,A]
+    _Ord                : Ord_MutableSet[S,A]
+    _Logical            : Logical_MutableSet[S,A]
+    _Minus              : Minus_MutableSet[S,A]
+    _IncrementalLogical : IncrementalLogical_MutableSet[S,A]
+    _IncrementalMinus   : IncrementalMinus_MutableSet[S,A]
 
     add             : !(S,A) -> None
     pop             : !(S) -> A
-    @classmethod
-    def clear(cls, self):
+    def clear(wit, self):
         try:
             while True:
-                cls.pop(self)
+                wit.pop(self)
         except KeyError:
             pass
 
@@ -1530,11 +1512,8 @@ class Mapping[S,A,B] (Collection[S,A]):
     _Iterable       = Iterable_Mapping
     _Indexed        = Indexed_Mapping
     
-    @classmethod
     keys            : (S) -> Iterator[A]
-    @classmethod
     values          : (S) -> Iterator[B]
-    @classmethod
     items           : (S) -> Iterator[(A,B)]
 
 -----------------------------------------------------------------
@@ -1685,7 +1664,6 @@ class MutableMapping[S,A,B] (Mapping[S,A,B]):
     _Indexed        = Indexed_MutableMapping
     _MutableIndexed = MutableIndexed_MutableMapping
     
-    @classmethod
     update          : !(@Mapping[T,A,B],S,T) -> None
 
 -----------------------------------------------------------------
@@ -1705,22 +1683,18 @@ protocol Sequence[A] (Collection[A], Indexed[int,A], Reversible[A], Plus):
 class Sized_Sequence[S,A] (Sized_Collection[S]):
     _Collection     = Sequence
     _Sequence       = Sequence
-    @classmethod
     def __contains__(cls, self, key): ...
 class Iterable_Sequence[S,A] (Iterable_Collection[S,A]):
     _Collection     = Sequence
     _Sequence       = Sequence
-    @classmethod
     def __iter__(cls, self): ...
 class Indexed_Sequence[S,A] (Indexed[S,int,A]):
     _Sequence       = Sequence
 class Reversible_Sequence[S,A] (Reversible[S,A]):
     _Sequence       = Sequence
-    @classmethod
     def __reversed__(cls, self): ...
 class Plus_Sequence[S,A] (Plus[S]):
     _Sequence       = Sequence
-    @classmethod
     def __add__(cls, self, other): ...
 class Sequence[S,A] (Collection[S,A]):
     _Sized          = Sized_Sequence
@@ -1803,13 +1777,9 @@ def f(s,a):
     return s.count(a)
 ====>
 class Sequence_EXT[S,A]():
-    @classattr
     _Eq             : @Eq[A]
-    @classattr
     _Sequence       : @Sequence[S,A]
-    @classmethod
     index           : (S,A) -> int?
-    @classmethod
     count           : (S,A) -> int
 
     def index(cls, self, val):
@@ -1836,9 +1806,7 @@ def f(_Eq:@Eq[A], _Sequence:@Sequence[S,A], s:S, a:A):
 ### OR ####
 
 class Sequence_EXT[S,A]():
-    @classmethod
     index           : (@Eq[A], @Sequence[S,A], S, A) -> int?            # NEW METHOD, SIGNATURE CAN BE ADAPTED
-    @classmethod
     count           : (@Eq[A], @Sequence[S,A], S, A) -> int             # NEW METHOD, SIGNATURE CAN BE ADAPTED
 
     def index(cls, _Eq: @Eq[A], _Sequence:@Sequence[S,A], self:S, val:A) -> int?:
@@ -1859,9 +1827,7 @@ def f(_Eq:@Eq[A], _Sequence:@Sequence[S,A], s:S, a:A):
 ### OR ####
 
 class Sequence_EXT[S,A]():
-    @classmethod
     index           : (@Eq[A], @Sequence[S,A], S, A) -> int?
-    @classmethod
     count           : (@Eq[A], @Sequence[S,A], S, A) -> int
 
 def Sequence_EXT_Eq_Sequence(_Eq: @Eq[A], _Sequence:@Sequence[S,A]):
@@ -1943,7 +1909,6 @@ class MutableSequence[S,A] (Sequence[S,A]):
     _MutableIndexed     = MutableIndexed_MutableSequence
     _IncrementalPlus    = IncrementalPlus_MutableSequence[S,A])
 
-    @classmethod
     append              : !(S,A) -> None
 
     def append(cls, self, val):
@@ -1952,93 +1917,57 @@ class MutableSequence[S,A] (Sequence[S,A]):
 -----------------------------------------------------------------
 
 protocol Apa:
-    apa         : () -> int
-    def apa(self):
+    def apa1(self):
         return 1
-protocol Bepa (Apa):
-    bepa        : () -> int
-    def apa(self):
+    def apa2(self):
         return 2
+protocol Bepa (Apa):
+    def apa1(self):
+        return 3
     def bepa(self):
-        return 20 + self.apa()
+        return 30 + self.apa2()
 protocol Cepa (Apa):
-    cepa        : () -> int
-    def apa(self):
-        return 3
+    def apa2(self):
+        return 4
     def cepa(self):
-        return 30 + self.apa()
-protocol Depa (Bepa, Cepa):
-    depa        : () -> int
+        return 40 + self.apa1()
+protocol Depa (Cepa, Bepa):             # mro: Depa, Cepa, Bepa, Apa
     def depa(self):
-        return (self.bepa(), self.apa(), self.cepa(), Apa.apa(self))
+        return (self.apa1(), self.apa2(), self.bepa(), self.cepa())
 ====>
-"typeclass" Apa[S]:
-    apa         : (S) -> int
-    def apa(self):
+class Apa[S] ():
+    def apa1(wit,self):
         return 1
-"typeclass" (Apa[S]) => Bepa[S]:
-    bepa        : (S) -> int
-    def apa(self):                      # NOT POSSIBLE IN HASKELL
-        return 2                        #
-    def bepa(self):
-        return 20 + self.apa()
-"typeclass" (Apa[S]) => Cepa[S]:
-    cepa        : (S) -> int
-    def apa(self):                      # NOT POSSIBLE IN HASKELL
-        return 3                        #
-    def cepa(self):
-        return 30 + self.apa()
-"typeclass" (Bepa[S], Cepa[S]) => Depa[S]:
-    depa        : (S) -> int
-    def depa(self):
-        return (self.bepa(), self.apa(), self.cepa(), Apa.apa(self))
-====>
-class Apa[S]():
-    @classmethod
-    apa         : (S) -> int
-    def apa(cls,self):
-        return 1
+    def apa2(wit,self):
+        return 2
 
-class Bepa[S]():
-    _Apa        : @Apa[S]       = Apa
-    @classmethod
-    bepa        : (S) -> int
-    def bepa(cls,self):
-        return 20 + cls._Apa.apa(self)
-class Apa_Bepa[S] (Apa[S]):
-    _Bepa       : @Bepa[S]      = Bepa
-#    def apa(cls,self):
-#        return 2
-    pass
-
-class Cepa[S]():
-    _Apa        : @Apa[S]       = Apa
-    @classmethod
-    cepa        : (S) -> int
-    def cepa(cls,self):
-        return 30 + cls.apa(self)
-class Apa_Cepa[S] (Apa[S]):
-    _Cepa       : @Cepa[S]      = Cepa
-    def apa(cls,self):
+class Bepa[S] (Apa[S]):
+    def apa1(wit,self):
         return 3
+    def bepa(wit,self):
+        return 30 + wit.apa2(self)
 
-class Depa[S]():
-    _Bepa       : @Bepa[S]      = Bepa_Depa
-    _Cepa       : @Cepa[S]      = Cepa_Depa
-    @classmethod
-    depa        : (S) -> int
-    def depa(cls,self):
-        return (cls._Bepa.bepa(self), cls._Bepa._Apa.apa(self), cls._Cepa.cepa(self), Apa.apa(self))
+class Cepa[S] (Apa[S]):
+    def apa2(wit,self):
+        return 4
+    def cepa(wit,self):
+        return 40 + wit.apa1(self)
+
 class Bepa_Depa[S] (Bepa[S]):
-    _Apa        = Apa_Depa
-    _Depa       : @Depa[S]      = Depa
-class Cepa_Depa[S] (Cepa[S]):
-    _Apa        = Apa_Depa
-    _Depa       : @Depa[S]      = Depa
-class Apa_Depa[S] (Apa_Bepa[S])
-    apa         = Apa_Cepa.apa                  # DIAMON PROBLEM RESOLUTION
+    _Depa       : Depa[S]
+    def apa2(wit,self):
+        return wit._Depa.apa2(self)                     # DIAMOND PROBLEM RESOLUTION
 
------------------------------------------------------------------
+class Depa[S] (Cepa[S]):
+    _Bepa       : Bepa[S]
+    def __init__(wit):
+        wit._Bepa = Bepa_Depa(wit)
+    def apa1(wit,self):                                 # DIAMOND PROBLEM RESOLUTION
+        return wit._Bepa.apa1(self)
+    def depa(wit,self):
+        return (wit.apa1(self), wit.apa2(self), wit._Bepa.bepa(self), wit.cepa(self))
+
+---------------------
 
 extension int (Depa):
     pass
@@ -2046,20 +1975,518 @@ extension int (Depa):
 "instance" Depa[int]:
     pass
 ====>
-Depa_int = Depa
-Cepa_int = Depa._Cepa                           # BECAUSE NO SEPARATE EXTENSIONS EXIST
-Bepa_int = Depa._Bepa                           #               -"-
-Apa_int  = Depa._Bepa._Apa                      #               -"-
+wit  : Depa[int] = Depa()
+witB : Bepa[int] = wit._Bepa
 
 7.depa() ====> 
-Depa_int.depa(7) ====> 
-Depa.depa(7) ====> 
-(Depa._Bepa.bepa(self), Depa._Bepa._Apa.apa(self), Depa._Cepa.cepa(self), Apa.apa(self)) ====> 
-(Bepa_Depa.bepa(self), Apa_Depa.apa(self), Cepa_Depa.cepa(self), 1) ====> 
-(Bepa.bepa(self), Apa_Cepa.apa(self), Cepa.cepa(self), 1) ====> 
-(20+Bepa_Depa._Apa.apa(), 3, 30+Cepa_Depa._Apa.apa(), 1) ====>
-(20+Apa_Depa.apa(), 3, 30+Apa_Depa.apa(), 1) ====>
-(20+Apa_Cepa.apa(), 3, 30+Apa_Cepa.apa(), 1) ====>
-(20+3, 3, 30+3, 1) ====>
-(23, 3, 33, 1)
+wit.depa(7) ====> 
+Depa.depa(wit,7) ====> 
+(wit.apa1(7), wit.apa2(7), wit._Bepa.bepa(7), wit.cepa(7)) ====>
+(Bepa.apa1(wit,7), Cepa.apa2(wit,7), Bepa.bepa(witB,7), Cepa.cepa(wit,7)) ====>
+(3, 4, 30 + witB.apa2(7), 40 + wit.apa1(7)) ====>
+(3, 4, 30 + witB._Depa.apa2(7), 40 + wit._Bepa.apa1(7)) ====>
+(3, 4, 30 + wit.apa2(7), 40 + witB.apa1(7)) ====>
+(3, 4, 30 + Cepa.apa2(wit,7), 40 + Bepa.apa1(witB,7)) ====>
+(3, 4, 30 + 4, 40 + 3) ====>
+(3, 4, 34, 43)
+
+
+-----------------------------------------------------------------
+
+protocol Apa:
+    def apa1(self):
+        return 1
+    def apa2(self):
+        return 2
+protocol Bepa (Apa):
+    def apa1(self):
+        return 3
+    def bepa(self):
+        return 30 + self.apa2()
+protocol Cepa (Apa):
+    def apa2(self):
+        return 4
+    def cepa(self):
+        return 40 + self.apa1()
+protocol Depa (Cepa, Bepa):
+    def depa(self):
+        return (self.apa1(), self.apa2(), self.bepa(), self.cepa())
+protocol Xtra (Apa):
+    def apa1(self):
+        return 5
+    def apa2(self):
+        return 6
+protocol Epa1 (Depa,Xtra,Bepa):      # mro: Epa1,Depa,Cepa,Xtra,Bepa,Apa
+    pass
+protocol Epa2 (Depa,Xtra,Cepa):      # mro: Epa2,Depa,Xtra,Cepa,Bepa,Apa
+    pass
+====>
+class Apa[S] ():                    # apa1, apa2
+    def apa1(wit,self):
+        return 1
+    def apa2(wit,self):
+        return 2
+
+class Bepa[S] (Apa[S]):             # apa1, apa2, bepa
+    def apa1(wit,self):
+        return 3
+    # apa2 = Apa.apa2
+    def bepa(wit,self):
+        return 30 + wit.apa2(self)
+
+class Cepa[S] (Apa[S]):             # apa1, apa2, cepa
+    # apa1 = Apa.apa1
+    def apa2(wit,self):
+        return 4
+    def cepa(wit,self):
+        return 40 + wit.apa1(self)
+
+class Bepa_Depa[S] (Bepa[S]):       # apa1, apa2, bepa
+    _Depa       : Depa[S]
+    # apa1 = Bepa.apa1
+    def apa2(wit,self):
+        return wit._Depa.apa2(self)                     # DIAMOND PROBLEM RESOLUTION
+    # bepa = Bepa.bepa
+
+class Depa[S] (Cepa[S]):            # apa1, apa2, cepa, depa, bepa
+    _Bepa       : Bepa[S]
+    def __init__(wit):
+        wit._Bepa = Bepa_Depa(wit)
+    def apa1(wit,self):                                 # DIAMOND PROBLEM RESOLUTION
+        return wit._Bepa.apa1(self)
+    # apa2 = Cepa.apa2
+    # cepa = Cepa.cepa
+    def depa(wit,self):
+        return (wit.apa1(self), wit.apa2(self), wit.bepa(self), wit.cepa(self))
+    def bepa(wit,self):
+        return wit._Bepa.bepa(self)
+        
+# mro:      Depa        Cepa        Bepa        Apa
+#           -           -           apa1        (apa1)
+#           -           apa2        *-          (apa2)
+#           -           cepa
+#           depa
+#           -*                      bepa
+
+----
+
+class Xtra[S] (Apa[S]):             # apa1, apa2
+    def apa1(wit,self):
+        return 5
+    def apa2(wit,self):
+        return 6
+
+----
+
+class Xtra_Epa1[S] (Xtra[S]):       # apa1, apa2
+    _Exp1       : Epa1[S]
+    # apa1 = Xtra.apa1
+    def apa2(wit,self):
+        return wit._Exp1.apa1(self)
+
+class Bepa_Epa1[S] (Bepa[S]):       # apa1, apa2, bepa
+    _Epa1       : Epa1[S]
+    def apa1(wit,self):
+        return wit._Epa1.apa1(self)
+    def apa2(wit,self):
+        return wit._Epa1.apa2(self)
+    # bepa = Bepa.bepa
+    
+class Epa1[S] (Depa[S]):            # apa1, apa2, cepa, depa, bepa
+    _Xtra       : Xtra[S]
+    def __init__(wit):
+        wit._Bepa = Bepa_Epa1(wit)
+        wit._Xtra = Xtra_Epa1(wit)
+    def apa1(wit,self):
+        return wit._Xtra.apa1(self)
+    # apa2 = Cepa.apa2
+    # cepa = Depa.cepa
+    # depa = Depa.depa
+    # bepa = Depa.bepa
+    
+# mro:      Epa1      Depa      Cepa        Xtra        Bepa        Apa
+#           -*        -         -           apa1        *-          (apa1)
+#           -         -         apa2        *-          *-          (apa2)
+#           -         -         cepa
+#           -         depa
+#           -         -*                                bepa
+
+----
+
+class Xtra_Epa2[S] (Xtra[S]):       # apa1, apa2
+    _Exp1       : Epa1[S]
+    # apa1 = Xtra.apa1
+    # apa2 = Xtra.apa2
+
+class Bepa_Epa2[S] (Bepa[S]):       # apa1, apa2, bepa
+    _Epa1       : Epa1[S]
+    def apa1(wit,self):
+        return wit._Epa2.apa1(self)
+    def apa2(wit,self):
+        return wit._Epa2.apa2(self)
+    # bepa = Bepa.bepa
+    
+class Epa2[S] (Depa[S]):            # apa1, apa2, cepa, depa, bepa
+    _Xtra       : Xtra[S]
+    def __init__(wit):
+        wit._Bepa = Bepa_Epa2(wit)
+        wit._Xtra = Xtra_Epa2(wit)
+    def apa1(wit,self):
+        return wit._Xtra.apa1(self)
+    def apa2(wit,self):
+        return wit._Xtra.apa2(self)
+    # cepa = Depa.cepa
+    # depa = Depa.depa
+    # bepa = Depa.bepa
+    
+# mro:      Epa2      Depa      Xtra        Cepa        Bepa        Apa
+#           -*        -         apa1        -           *-          (apa1)
+#           -*        -         apa2        -           *-          (apa2)
+#           -         -                     cepa
+#           -         depa
+#           -         -*                                bepa
+
+---------------------
+
+extension int (Depa):
+    pass
+====>
+"instance" Depa[int]:
+    pass
+====>
+wit  : Depa[int] = Depa()
+witB : Bepa[int] = wit._Bepa
+
+7.depa() ====> 
+wit.depa(7) ====> 
+Depa.depa(wit,7) ====> 
+(wit.apa1(7), wit.apa2(7), wit._Bepa.bepa(7), wit.cepa(7)) ====>
+(Bepa.apa1(wit,7), Cepa.apa2(wit,7), Bepa.bepa(witB,7), Cepa.cepa(wit,7)) ====>
+(3, 4, 30 + witB.apa2(7), 40 + wit.apa1(7)) ====>
+(3, 4, 30 + witB._Depa.apa2(7), 40 + wit._Bepa.apa1(7)) ====>
+(3, 4, 30 + wit.apa2(7), 40 + witB.apa1(7)) ====>
+(3, 4, 30 + Cepa.apa2(wit,7), 40 + Bepa.apa1(witB,7)) ====>
+(3, 4, 30 + 4, 40 + 3) ====>
+(3, 4, 34, 43)
+
+-----------------------------------------
+
+protocol Apa:
+    def apa1(self):
+        return 1
+    def apa2(self):
+        return 2
+
+protocol Bepa (Apa):
+    def apa1(self):
+        return 10
+    def bepa(self):
+        return self.apa2()
+
+protocol Cepa (Apa):
+    def apa2(self):
+        return 20
+    def cepa(self):
+        return self.apa1()
+
+---
+
+protocol Depa (Cepa,Bepa):
+    def depa(self):
+        return (self.cepa(), self.bepa())
+
+extension int (Depa):                       # Extension by multi inheritance protocol
+    def ipa(self):
+        return depa(self)
+
+---
+
+extension str (Cepa,Bepa):                  # Simultaneous multi extension
+    def epa(self):
+        return (self.cepa(), self.bepa())
+
+---
+
+extension str (Bepa):                       # First extension
+    pass
+
+extension str (Cepa):                       # Second extension. Hmm... should this really affect the str (Bepa) extension behavior? Yes, on the
+    def fepa(self):                         #                   grounds that it introduces a new behavior for str.apa2, on which str.bepa depends.
+        return (self.cepa(), self.bepa())
+
+# Witness translation goal: keep witnesses selection for Self and its type parameters open-ended in the OO way!
+# Achieve this via the "self" parameter of the translated protocol methods, here denoted "w" to distinguish it from the original "self"
+
+====================================================>           # Regular translation, avoiding class inheritance in translation of multiple base protocols
+
+class Apa[S] ():
+    def apa1(w, self):
+        return 1
+    def apa2(w, self):
+        return 2
+
+        
+class Bepa[S] ():
+
+    class Apa_wrapped[S] (Apa[S]):
+        _main   : Bepa[S]
+        def apa1(w, self):
+            return w._main.apa1(self)           # Overriding apa1 (= redirection to Bepa, in case of Apa sibling use or Bepa promotion to Apa)
+        # apa2 = Apa.apa1                       # Inheriting apa2
+
+    _Apa    : Apa[S]
+    def __init__(w):
+        w._Apa = Apa_wrapped(_main = w)
+        
+    def apa1(w, self):                      # Overriding apa1
+        return 10
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Apa, in case of either Bepa sibling use or official Bepa call)
+        return w._Apa.apa2(self)
+    def bepa(w, self):                      # Adding bepa
+        return w.apa2(self)
+
+            
+class Cepa[S] ():
+
+    class Apa_wrapped[S] (Apa[S]):
+        _main   : Cepa[S]
+        # apa1 = Apa.apa1                       # Inheriting apa1
+        def apa2(w, self):
+            return w._main.apa2(self)           # Overriding apa2 (= redirection to Cepa, in case of Apa sibling use or Cepa promotion to Apa)
+
+    _Apa    : Apa[S]
+    def __init__(w):
+        w._Apa = Apa_Cepa(_main = w)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Apa, in case of Cepa sibling use or official Cepa call)
+        return w._Apa.apa1(self)
+    def apa2(w, self):                      # Overriding apa2
+        return 20
+    def cepa(w, self):                      # Adding cepa
+        return w.apa1(self)
+
+--- extension int (Depa)
+
+class Depa[S] ():
+    
+    class Bepa_wrapped[S] (Bepa[S]):
+        _main   : Depa[S]
+        # apa1 = Bepa.apa1                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Depa, in case of Bepa sibling use or Depa promotion to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa.bepa                      # Inheriting bepa
+        
+    class Cepa_wrapped[S] (Cepa[S]):
+        _main   : Depa[S]
+        def apa1(w, self):                      # Overriding apa1 (= redirection to Depa, in case of Cepa sibling use or Depa promotion to Cepa)
+            return w._main.apa1(self)
+        # apa2 = Cepa.apa2                      # Inheriting apa2
+        # cepa = Cepa.cepa                      # Inheriting cepa
+    
+    _Bepa   : Bepa[S]
+    _Cepa   : Cepa[S]
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+        w._Cepa = Cepa_wrapped(_main = w)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Depa sibling use or official Depa call)
+        return w._Bepa.apa1(self)
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Depa sibling use or official Depa call)
+        return w._Bepa.bepa(self)
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Cepa, in case of Depa sibling use or official Depa call)
+        return w._Cepa.apa2(self)
+    def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Depa sibling use or official Depa call)
+        return w._Cepa.bepa(self)
+    def depa(w, self):                      # Adding depa
+        return w.cepa(self) + w.bepa(self)
+    
+class Depa_int (Depa[int]):                 # Extension by multi inheritance protocol
+    def __init__(w):
+        Depa.__init__(w)
+    def ipa(w, self):
+        return w.depa(self)
+
+--- extension str (Cepa,Bepa)
+
+class Cepa_Bepa_str ():                     # Simultaneous multi extension
+
+    class Bepa_wrapped (Bepa[str]):
+        _main   : Cepa_Bepa_str
+        # apa1 = Bepa.apa1                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_str, in case of Bepa sibling use or Cepa_Bepa_str promotion to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa.bepa                      # Inheriting bepa
+        
+    class Cepa_wrapped (Cepa[str]):
+        _main   : Cepa_Bepa_str
+        def apa1(w, self):                      # Overriding apa1 (= redirection to Cepa_Bepa_str, in case of Cepa sibling use or Cepa_Bepa_str promotion to Cepa)
+            return w._main.apa1(self)
+        # apa2 = Cepa.apa2                      # Inheriting apa2
+        # cepa = Cepa.cepa                      # Inheriting cepa
+    
+    _Bepa   : Bepa[str]
+    _Cepa   : Cepa[str]
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+        w._Cepa = Cepa_wrapped(_main = w)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Bepa.apa1(self)
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Bepa.bepa(self)
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Cepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Cepa.apa2(self)
+    def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Cepa.bepa(self)
+    def depa(w, self):                      # Adding depa
+        return w.cepa(self) + w.bepa(self)
+
+    def epa(w, self):
+        return w.cepa(self) + w.bepa(self)
+
+--- extension str (Bepa); extension str (Cepa)
+
+class Bepa_str ():                          # First extension
+
+    class Bepa_wrapped (Bepa[str]):
+        _main   : Bepa_str
+        # apa1 = Bepa.apa1                      # Inheriting apa1
+        # apa2 = Bepa.apa2                      # Inheriting apa2
+        # bepa = Bepa.bepa                      # Inheriting bepa
+        
+    _Bepa   : Bepa[str]                     # NOTE: real str(Bepa) witness!
+    def __init__(w):
+        w._Bepa = Bepa_str(_main = w)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Bepa_str sibling use or official Bepa_str call)
+        return w._Bepa.apa1(self)
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Bepa, in case of Bepa_str sibling use or official Bepa_str call)
+        return w._Bepa.apa2(self)
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Bepa_str sibling use or official Bepa_str call)
+        return w._Bepa.bepa(self)
+
+class Cepa_Bepa_str (Bepa_str):             # Second extension
+
+    class Cepa_wrapped (Cepa[str]):
+        _main   : Cepa_Bepa_str
+        def apa1(w, self):                      # Overriding apa1 (= redirection to Cepa_Bepa_str, in case of Cepa sibling use or Cepa_Bepa_str promotion to Cepa)
+            return w._main.apa1(self)
+        # apa2 = Cepa.apa2                      # Inheriting apa2
+        # cepa = Cepa.cepa                      # Inheriting cepa
+    
+    _Cepa   : Cepa[str]                     # NOTE: real str(Cepa) witness!
+    def __init__(w):
+        Bepa_str.__init__(w)
+        w._Cepa = Cepa_wrapped(_main = w)
+
+    # apa1 = Bepa_str.apa1                  # Inheriting apa1
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Cepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Cepa.apa2(self)
+    # bepa = Bepa_str.bepa                  # Inheriting bepa
+    def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Cepa.bepa(self)
+    def fepa(w, self):                      # Adding depa
+        return w.cepa(self) + w.bepa(self)
+
+
+====================================================>           # Utilizing single class inheritance....
+
+class Apa[S] ():
+    def apa1(w, self):
+        return 1
+    def apa2(w, self):
+        return 2
+
+class Bepa[S] (Apa[S]):
+    def apa1(w, self):
+        return 10
+    def bepa(w, self):
+        return w.apa2(self)
+
+class Cepa[S] (Apa[S]):
+    # apa1 = Apa.apa1
+    def apa2(w, self):
+        return 20
+    def cepa(w, self):
+        return w.apa1(self)
+
+class Bepa_Depa[S] (Bepa[S]):
+    _Depa   : Depa[S]
+    # apa1 = Bepa.apa1
+    def apa2(w, self):
+        return w._Depa.apa2(self)
+    # bepa = Bepa.bepa
+
+--- extension int (Depa)
+
+class Depa[S] (Cepa[S]):
+    _Bepa   : Bepa[S]
+    def apa1(w, self):
+        return w._Bepa.apa1(self)
+    # apa2 = Cepa.apa2
+    # cepa = Cepa.cepa
+    def bepa(w, self):
+        return w._Bepa.bepa(self)
+    def depa(w, self):
+        return w.cepa(self) + w.bepa(self)
+
+class Depa_int (Depa[int]):
+    def __init__(w):
+        w._Bepa = Bepa_Depa(w)
+    def ipa(w, self):
+        return w.depa(self)
+
+
+--- extension str (Cepa,Bepa)
+
+class Cepa_Bepa_str (Cepa[str]):
+    
+    class Bepa_wrapped (Bepa[str]):
+        _main   : Cepa[str]
+        # apa1 = Bepa.apa2                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_str, in case of Bepa sibling use or Cepa_Bepa_str promotion to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa_str.bepa                  # Inheriting bepa
+    
+    _Bepa   : Bepa[str]                         # NOTE: real str(Bepa) witness!
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+    
+    def apa1(w, self):
+        retun w._Bepa.apa1(self)
+    # apa2 = Cepa.apa2
+    # cepa = Cepa.cepa
+    def bepa(w, self):
+        return w._Bepa.bepa(self)
+    def fepa(w, self):
+        return w.cepa(self) + w.bepa(self)
+
+--- extension str (Bepa); extension str (Cepa)
+
+class Bepa_str (Bepa[str]):
+    # apa1 = Bepa.apa1                      # Inheriting apa1
+    # apa2 = Bepa.apa2                      # Inheriting apa2
+    # bepa = Bepa.bepa                      # Inheriting bepa
+    
+class Cepa_Bepa_str (Cepa[str]):            # Encoding Cepa_Bepa_str (Bepa_str, Cepa[str])
+    
+    class Bepa_wrapped (Bepa_str):              # Forms inner baseclass (deleate), but comes before Cepa in the MRO
+        _main   : Cepa[str]
+        # apa1 = Bepa.apa2                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_str, in case of Bepa_str sibling use or Cepa_Bepa_str promotion to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa_str.bepa                  # Inheriting bepa
+        
+    _Bepa   : Bepa[str]                     # NOTE: real str(Bepa) witness!
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+    
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        retun w._Bepa.apa1(self)
+    # apa2 = Cepa.apa2                      # Inheriting apa2
+    # cepa = Cepa.cepa                      # Inheriting cepa
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Bepa.bepa(self)
+    def fepa(w, self):
+        return w.cepa(self) + w.bepa(self)
 
