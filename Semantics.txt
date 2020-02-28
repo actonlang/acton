@@ -2,7 +2,7 @@
 
 Variables:          x,y
 Statevars:          z
-Type constants:     c,d
+Type constants:     C
 
 Locations:          l
 Actor refs:         a,b
@@ -12,38 +12,37 @@ Integers:           i
 Floats:             f
 Strings:            s
 
-Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  (M)  |  lambda F,K: E  |
-                                    E(A,M)  |  E.x  |  E if E else E  |  E is E  |
-                                    await E  |  isinstance(E,c)  |  do S
+Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |
+                                    E(A)  |  E.n  |  E.x  |  E if E else E  |  E is E  |
+                                    await E  |  isinstance(E,C)  |  do S
 
-Actuals:            A       ::=     E,A    |  *E   |  .
-Mappings:           M       ::=     x=E,M  |  **E  |  .
+Actuals:            A       ::=     E,A    |  *E,M   |  M
+Mappings actuals:   M       ::=     x=E,M  |  **E  |  .
 
-Formals:            F       ::=     x,F  |  x=E,F  |  *x   |  .
-Keywords:           K       ::=     x,K  |  x=E,K  |  **x  |  .
+Formals:            F       ::=     x,F  |  x=E,F  |  *x,K   |  K
+Keyword formals:    K       ::=     x,K  |  x=E,K  |  **x  |  .
 
-Values:             V,W     ::=     True  |  False  |  None  |  (O)  |  (B)  |  c  |
+Values:             V,W     ::=     True  |  False  |  None  |  (R)  |
                                     ---- Only intangible constructs below
-                                    CLOS(B;F,K):S  |  l  |  a  |  a.m  |
-                                    ACTOR(V)  |  ASYNC(a,V)  |
-                                    CLASS(c):B  |  (c):B
+                                    CLOS(B;F):S  |  l  |  a  |  a.m  |  (C;B)  |
+                                    ACTOR(V)  |  ASYNC(a,V)  |  CLASS(C):B
 
+Value rows:         R       ::=     O,B                                             associative
 Orderings:          O       ::=     O,V    |  .                                     associative
-Bindings:           B       ::=     B,x=V  |  B,c=V  |  .                           associative & commutative\duplicates, disjoint c
+Bindings:           B       ::=     B,x=V  |  B,C=V  |  .                           associative & commutative\duplicates, disjoint C
 
-Statements:         S       ::=     E  |  P = E  |  D  |  return E  |  pass  |
+Statements:         S       ::=     E  |  x = E  |  (F) = E  |  D  |  return E  |
                                     E.x = E  |  if E: S else S  |  while E: S  |
                                     var z = E  |  z = E  |  after E: E'  |
                                     raise E  |  try S Z else S finally S  |
-                                    S; S                                            associative, with unit 'pass'
+                                    pass  |  S; S                                   associative, with unit 'pass'
 
-Declarations:       D       ::=     def x(F,K): S  |
-                                    actor x(F,K): S  |  
-                                    class c(d): M  |
+Declarations:       D       ::=     def x(F): S  |
+                                    actor x(F): S  |  
+                                    class C(C): M  |
                                     D; D                                            associative & commutative & disjoint
 
-Patterns:           P       ::=     x  |  (F)  |  (K)
-Excepts:            Z       ::=     except c as y: S Z  |  .
+Excepts:            Z       ::=     except C as y: S Z  |  .
 
 ---- Only intangible constructs below
 
@@ -52,14 +51,14 @@ Local states:       L       ::=     z=V, L  |  l=V, L  |  .                     
 Queues:             Q       ::=     m=E,Q  |  .                                     associative & disjoint
 Histories:          H       ::=     m=V,H  |  m=do raise V, H  |  .                 associative & disjoint
 
-E-in-E contexts:    EE      ::=     _.x  |  _(A,M)  |  E if _ else E  |  
-                                    V(O,_,A,M)  |  V(O,*_,M)  |  V(O,B,x=_,M)  |  V(O,B,**_)  |
-                                    (O,_,A)  |  (O,*_)  |  (B,x=_,M)  |  (B,**_)  |
-                                    _ is E  |  V is _  |  await _  |  isinstance(_,c)
+E-in-E contexts:    EE      ::=     _.x  |  _(A)  |  E if _ else E  |  
+                                    V(O,_,A)  |  V(O,*_,M)  |  V(R,x=_,M)  |  V(R,**_)  |
+                                    (O,_,A)  |  (O,*_,M)  |  (R,x=_,M)  |  (R,**_)  |
+                                    _ is E  |  V is _  |  await _  |  isinstance(_,C)
 
-E-in-S contexts:    SE      ::=     _  |  return _  |  P = _  |  if _: S else S  |
+E-in-S contexts:    SE      ::=     _  |  return _  |  x = _  |  (F) = _  |  if _: S else S  |
                                     _.x = E  |  var z = _  |  z = _  |  raise _  |
-                                    after _: x(A,M)  |  after V: _
+                                    after _: x(A)  |  after V: _
                                     
 S-in-S contexts:    SS      ::=     _; S  |  try _ Z else S finally S
 
@@ -68,11 +67,11 @@ E-in-Q contexts:    QE      ::=     H, m=_, Q
 
 ####################################### Expression evaluation ##########################################
 
-***** B |- c(d) ********************
+***** B |- C(C') ********************
 
-B  |-  c(c)
+B  |-  C(C)
 
-B,c=CLASS(c'):B'   |-  c(d)                                                     if  B |- c'(d)
+B,C=CLASS(C'):B'   |-  C(C1)                                                    if  B |- C'(C1)
 
 
 ***** B |- L | E --> L' | E' *******
@@ -85,15 +84,15 @@ B  |-  L  |  E              -->     L  |  E'                                    
 
 B  |-  L,z=V  |  z          -->     L,z=V  |  V
 
-B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            if  (B').x --> V
-B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  CLOS(B2,y=l;F,K):S           if  x # B' and B |- c.x ==> @instmethod CLOS(B2;y,F,K):S
-B  |-  L,l=(c):B'  |  l.x   -->     L,l=(c):B'  |  V                            if  x # B' and B |- c.x ==> V otherwise
+B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  V                            if  B' |- x --> V
+B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  CLOS(B2,y=l;F):S             if  x # B' and B |- C.x ==> @class CLOS(B2;y,F):S
+B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  V                            if  x # B' and B |- C.x ==> V otherwise
 
-B  |-  L  |  c(O,B')        -->     L,l=(c):.  |  do l._init_(O,B'); return l   if  B = B1,c=CLASS(d):B2  and  N |- c(object)
+B  |-  L  |  C(R)           -->     L,l=(C;.)  |  do l._init_(R); return l      if  B = B1,C=CLASS(C'):B2  and  N |- C(object)
 
-B  |-  L,l=(c):B'  |  isinstance(l,d)    
-                            -->     L,l=(c):B'  |  True                         if  B |- c(d)
-                            -->     L,l=(c):B'  |  False                        if  not B |- c(d)
+B  |-  L,l=(C;B')  |  isinstance(l,C')    
+                            -->     L,l=(C;B')  |  True                         if  B |- C(C')
+                            -->     L,l=(C;B')  |  False                        if  not B |- C(C')
 
 
 ***** B |- E --> E' ****************
@@ -102,25 +101,24 @@ B  |-  E                    -->     E'                                          
 
 B,x=V  |-  x                -->     V
 
-B  |-  lambda F,K: E        -->     CLOS(B;F,K): return E
+B  |-  lambda F: E          -->     CLOS(B;F): return E
 
-B  |-  ((c):B').x           -->     V                                           if  (B').x --> V
-B  |-  ((c):B').x           -->     CLOS(B2,y=((c):B');F,K):S                   if  x # B' and B |- c.x ==> @instmethod CLOS(B2;y,F,K):S
-B  |-  ((c):B').x           -->     V                                           if  x # B' and B |- c.x ==> V otherwise
+B  |-  (C;B').x             -->     V                                           if  B' |- x --> V
+B  |-  (C;B').x             -->     CLOS(B2,y=(C;B');F):S                       if  x # B' and B |- C.x ==> @class CLOS(B2;y,F):S
+B  |-  (C;B').x             -->     V                                           if  x # B' and B |- C.x ==> V otherwise
 
-B  |-  c.x                  -->     CLOS(B',y=c;F,K):S                          if  B |- c.x ==> @classmethod CLOS(B';y,F,K):S
-B  |-  c.x                  -->     W                                           if  B |- c.x ==> W otherwise
+B  |-  C.x                  -->     W                                           if  B |- C.x ==> W otherwise
 
-B  |-  c(.,B')              -->     (c):B'                                      if  B = B1,c=CLASS(d):B2  and  N |- c(struct)
+B  |-  C(B')                -->     (C;B')                                      if  B = B1,C=CLASS(C'):B2  and  N |- C(struct)
 
-B  |-  isinstance((c):B',d) -->     True                                        if  B |- c(d)
-                            -->     False                                       if  not B |- c(d)
+B  |-  isinstance((C;B'),C')-->     True                                        if  B |- C(C')
+                            -->     False                                       if  not B |- C(C')
 
 
 ***** B |- E ==> E' ****************
 
-B,c=CLASS(d):B'  |-  c.x    ==>     V                                           if  (B').x --> V
-B,c=CLASS(d):B'  |-  c.x    ==>     V                                           if  x # B' and B |- d.x ==> V
+B,C=CLASS(C'):B'  |-  C.x   ==>     V                                           if  (B').x --> V
+B,C=CLASS(C'):B'  |-  C.x   ==>     V                                           if  x # B' and B |- C'.x ==> V
 
 
 ***** E --> E' *********************
@@ -134,12 +132,13 @@ do B; raise V               -->     do raise V                                  
 
 EE[do raise V]              -->     do raise V
 
-(O,*(O'))                   -->     (O,O')
-(B,**(B'))                  -->     (B',B)                                      Note the order!
+(O,*(O'),M)                 -->     (O,O',M)
+(O,B,**(B'))                -->     (O,B',B)                                    (The binding order...!)
 
-V(O,B)                      -->     do B'; (F)=(O); (K)=(B); S                  if  V = CLOS(B';F,K):S
+V(R)                        -->     do B; (F)=(R); S                            if  V = CLOS(B;F):S
 
-(B).x                       -->     V                                           if  B |- x --> V
+(V0,..,Vn,R).n              -->     Vn
+(R,x=V).x                   -->     V
 
 l is l                      -->     True
 l is l'                     -->     False                                       if  l != l'
@@ -181,12 +180,10 @@ if True: S1 else S2         -->     S1
 if False: S1 else S2        -->     S2
 while E: S                  -->     if E: S; while E: S else pass
 
-(x,F) = (V,O)               -->     x = V; (F) = (O)
-(x=E,F) = (None,O)          -->     x = E; (F) = (O)
-(x=E,F) = (V,O)             -->     x = V; (F) = (O)
-(*x) = (O)                  -->     x = (O)
-() = ()                     -->     pass
-
+(x,F) = (V,R)               -->     x = V; (F) = (R)
+(x=E,F) = (None,R)          -->     x = E; (F) = (R)
+(x=E,F) = (V,R)             -->     x = V; (F) = (R)
+(*x,K) = (O,B)              -->     x = (O); (K) = (B)
 (x,K) = (x=V,B)             -->     x = V; (K) = (B)
 (x=E,K) = (x=None,B)        -->     x = E; (K) = (B)
 (x=E,K) = (x=V,B)           -->     x = V; (K) = (B)
@@ -199,8 +196,8 @@ try B; S Z else S1 finally S2                       -->   B; try S Z else S1 fin
 try return V Z else S1 finally S2                   -->   S2; return V
 try pass Z else pass finally S2                     -->   S2
 try pass Z else S1 finally S2                       -->   try S1 . else pass finally S2
-try raise V except c as y: S Z else S1 finally S2   -->   try raise V Z else S1 finally S2          if  V = (d):B and c != d
-try raise V except c as y: S Z else S1 finally S2   -->   try y=V; S . else pass finally S2         if  V = (c):B
+try raise V except C as y: S Z else S1 finally S2   -->   try raise V Z else S1 finally S2          if  V = (C';B) and C != C'
+try raise V except C as y: S Z else S1 finally S2   -->   try y=V; S . else pass finally S2         if  V = (C;B)
 try raise V . else S1 finally S2                    -->   S2; raise V
 
 
@@ -211,22 +208,21 @@ L  |  B; S                  -->     L'  |  B; S'                                
 L  |  var z=V               -->     L,z=V  |  pass
 L,z=V  |  z = W             -->     L,z=W  |  pass
 
-L,l=(c):B  |  l.x = V       -->     L,l=(c):B,x=V  |  pass                          if  x # B
-L,l=(c):B,x=W  |  l.x = V   -->     L,l=(c):B,x=V  |  pass
+L,l=(C;B)  |  l.x = V       -->     L,l=(C;B),x=V  |  pass                          if  x # B
+L,l=(C;B),x=W  |  l.x = V   -->     L,l=(C;B),x=V  |  pass
 
 
 ***** B |- D ==> B *****************
 
-B  |-  def x(F,K): S        ==>     x = CLOS(B;F,K): S
-B  |-  def x(F,K): S        ==>     x = ASYNC(a,CLOS(B;F,K):S)                  if  (B)._self_ --> a  (external view...)
-B  |-  actor x(F,K): S      ==>     x = ACTOR(CLOS(B;_self_,F,K):S)
-B  |-  class c(d): M        ==>     c = CLASS(d): B'                            if  B |- M ==> B'
-B  |-  D1; D2               ==>     B1; B2                                      if  B |- D1 ==> B1 and B |- D2 ==> B2
+B  |-  def x(F): S          ==>     x = CLOS(B;F): S
+B  |-  actor x(F): S        ==>     x = ACTOR(CLOS(B;_self_,F):S)
+B  |-  class C(C'): M       ==>     C = CLASS(C'): B'                               if  B |- M ==> B'
+B  |-  D1; D2               ==>     B1; B2                                          if  B |- D1 ==> B1 and B |- D2 ==> B2
 
 
 ***** B |- M ==> B *****************
 
-B  |-  x=y,M                ==>     x=V,B'                                      if  B |- x --> V and B |- M ==> B'
+B  |-  x=y,M                ==>     x=V,B'                                          if  B |- x --> V and B |- M ==> B'
 B  |-  .                    ==>     .
 
 
@@ -245,12 +241,12 @@ B  |-  G                    -->     G'                                          
 
 ***** G --> G' *********************
 
-a:<L | QE[ ASYNC(a,V)(O,B) ]>                           -->     a:<L | QE[ a.m ],m=V(O,B)>
-a:<L | QE[ ASYNC(b,V)(O,B) ]>,   b:<L' | Q>             -->     a:<L | QE[ b.m ]>,           b:<L' | Q,m=V(O,B)>
-a:<L | QE[ ACTOR(V)(O,B) ]>                             -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,O,B)>
-a:<L | QE[ await b.m ]>,         b:<L' | H,m=V,Q>       -->     a:<L | QE[ V ]>,             b:<L' | H,m=V,Q>
+a:<L | QE[ ASYNC(a,V)(R) ]>                               -->     a:<L | QE[ a.m ],m=V(R)>
+a:<L | QE[ ASYNC(b,V)(R) ]>,  b:<L' | Q>                  -->     a:<L | QE[ b.m ]>,           b:<L' | Q,m=V(R)>
+a:<L | QE[ ACTOR(V)(R) ]>                                 -->     a:<L | QE[ await b.m ]>,     b:< . | m=V(b,R)>
+a:<L | QE[ await b.m ]>,      b:<L' | H,m=V,Q>            -->     a:<L | QE[ V ]>,             b:<L' | H,m=V,Q>
 
-a:<L | QE[ await b.m ]>,   b:<L' | H,m=do raise V,Q>    -->     a:<L | QE[ do raise V ]>,    b:<L' | H,m=do raise V,Q>
+a:<L | QE[ await b.m ]>,      b:<L' | H,m=do raise V,Q>   -->     a:<L | QE[ do raise V ]>,    b:<L' | H,m=do raise V,Q>
 
 
 

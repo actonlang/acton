@@ -185,5 +185,47 @@ ex11  = [("Rational",[]), ("Integer",["Rational"]), ("Eq",[]), ("Ord",["Eq"]),
          ("tt",[]),
          ("tt_1",["tt","Integer","Rational"]), 
          ("tt_2",["tt","Ord"]), 
-         ("tt_tot",["tt_2","tt_1"])]
+         ("tt_tot",["tt_2","tt_1"])]                                                    -- ok
 
+
+ex12a = [("Eq",[]), ("Ord",["Eq"]), ("Apa",["Eq"]), ("Bepa",["Apa","Ord"])]             -- Bepa,Apa,Ord,Eq
+
+ex12b = [("Eq",[]), ("Ord",["Eq"]), ("Apa",["Eq"]), ("Bepa",["Ord","Apa"])]             -- Bepa,Ord,Apa,Eq
+
+
+ex13a = [("Eq",[]), ("Ord",["Eq"]), ("Hmm",["Eq"]), 
+         ("Apa",["Ord"]), ("Bepa",["Apa","Hmm"])]                                       -- Bepa,Apa,Ord,Hmm,Eq
+
+ex13b = [("Eq",[]), ("Ord",["Eq"]), ("Hmm",["Eq"]), 
+         ("Apa",["Ord"]), ("Bepa",["Apa","Hmm","Ord"])]                                 -- Bepa,Apa,Hmm,Ord,Eq
+
+
+ex14a = [("Apa",[]), ("Bepa",["Apa"]), ("Cepa",["Apa"]), ("Depa",["Cepa","Bepa"])]      -- Depa,Cepa,Bepa,Apa
+
+ex14b = [("Apa",[]), ("Bepa",["Apa"]), ("Cepa",["Apa"]), ("Depa",["Cepa","Bepa"]),
+         ("Xtra",["Bepa"]), ("Epa",["Depa","Xtra","Bepa"])]                             -- Epa,Depa,Cepa,Xtra,Bepa,Apa
+
+ex14c = [("Apa",[]), ("Bepa",["Apa"]), ("Cepa",["Apa"]), ("Depa",["Cepa","Bepa"]),
+         ("Xtra",["Apa"]), ("Epa",["Depa","Xtra","Cepa"])]                              -- Epa,Depa,Xtra,Cepa,Bepa,Apa
+
+ex15  = [("G",[]), ("F",[]), ("E",[]),
+         ("D",["G","F"]), ("C",["F"]), ("B",["E","F"]),
+         ("A",["B","C","D"])]                                                           -- A,B,E,C,D,G,F
+         
+ex16  = [("Eq",[]), ("Ord",["Eq"]), ("Hmm",["Eq","Ord"])]                               -- fails
+
+ex17a = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["C","B"]),
+         ("str_D",["D"])]                                                               -- str_D,D,C,B,A
+
+ex17b = [("A",[]), ("B",["A"]), ("C",["A"]), 
+         ("str_CB",["C","B"])]                                                          -- str_CB,C,B,A
+
+ex17c = [("A",[]), ("B",["A"]), ("C",["A"]), 
+         ("str_C",["C"]), ("str_B",["str_C","B"])]                                      -- str_B,str_C,C,B,A                <--- desired successive extension semantics!
+
+ex18  = [("A",[]), ("B",["A"]), ("C",["A"]), 
+         ("str_C",["C"]), ("str_B",["B"]), ("str_tot",["str_C","str_B"])]               -- str_tot,str_C,C,str_B,B,A        <--- bad, picks C before str_B
+         
+-- Conclusion: accumulating extensions top->down correspond to one multi-extension left->right
+-- That is, later extensions cover earlier ones, but protocol methods (the method defaults) only 
+-- apply for methods implemented in neither of the extensions.
