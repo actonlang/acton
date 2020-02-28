@@ -5,47 +5,44 @@ import Acton.Syntax
 import Data.List
 import Data.Maybe
 import Acton.Printer
+import Utils
+import Prelude hiding ((<>))
 
 class CPretty a where
   cpretty :: a -> Doc
 
 instance CPretty Module where
-   cpretty (Module  _ _ ss)             =  text "#include \"common.h\"" $+$ blank $+$
-                                           vcat (map (structdecls . cpretty . name) ["$list","$dict","$set","$tup1_t","$tup2_t","$tup3_t"] ++
+   cpretty (Module  _ _ ss)             =  text "#pragma once" $+$ blank $+$
+                                           text "#include \"common.h\"" $+$ blank $+$
+                                           vcat (map (structdecls . cpretty . name) ["$list","$dict","$set"] ++
                                                 concat (concatMap structs ss) ++
                                                 map cpretty ss
                                                )
 
-
 structs (Decl  _ ds)                    = map strs ds
-  where strs (Class _ nm@(Name _ _) qs bs ss) 
-                                        = [structdecls cnm, structdecls (cnm <> text "$__class__"), structdecls (cnm <> text "$opaque")]
+  where strs (Class _ nm qs bs ss) 
+                                        = [structdecls cnm, structdecls (cnm <> text "$__class__")] ++
+                                          case nm of
+                                             Name{} -> [structdecls (cnm <> text "$opaque")]
+                                             Internal{} -> []
            where cnm                    = cpretty nm
-        strs (Class _ nm qs bs ss)      -- Internal class names are for classes formed from extensions
-                                        = [structdecls cnm, structdecls (cnm <> text "$__class__")]
-           where cnm                    = cpretty nm
-                    
+                     
 instance CPretty Stmt where
   cpretty (Decl _ ds)                   = vcat (map cpretty ds)
                                           
 instance CPretty Decl where
-   cpretty (Class _ nm@(Name _ ns) qs bs ss)
+   cpretty (Class _ nm qs bs ss)
                                         = vcat (map ($+$ blank) [
-                                              text "//" <+> text ns <+> text (replicate (76 - length ns) '/'),
+                                              text "//" <+> cnm <+> text (replicate 60 '/'),
                                               witness_struct cnm is,
-                                              class_struct cnm ms,
-                                              opaque_struct cnm ms
+                                              class_struct nm ms,
+                                              case nm of
+                                                  Name{} -> opaque_struct cnm ms
+                                                  Internal{} -> fun_prototypes nm ms
                                            ])
      where (ms,is)                      = partition isMeth ss
            cnm                          = cpretty nm
-   cpretty (Class _ nm qs bs ss)        = vcat (map ($+$ blank) [
-                                              text "//" <+> cnm <+> text " implementation //////////////////////////////",
-                                              class_struct cnm ss,
-                                              witness_struct cnm is
-                                           ])
-     where (ms,is)                      = partition isMeth ss
-           cnm                          = cpretty nm
-     
+      
    cpretty (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
                                         = vcat (map (\n -> resultTuple r <+> parens (text "*"<> cpretty n)<>parens (cprettyPosRow p) <>semi) ns)
    cpretty (Signature _ ns tsc)         =  vcat (map (\n ->cpretty tsc<+> cpretty n<>semi) ns)
@@ -74,14 +71,10 @@ instance CPretty Name where
     cpretty (Name _ "int")          = text "$int"
     cpretty (Name _ "float")        = text "$float"
     cpretty (Name _ "bool")         = text "$bool"
-    cpretty (Name _ "int")          = text "$int"
     cpretty (Name _ "list")         = text "$list"
     cpretty (Name _ "dict")         = text "$dict"
     cpretty (Name _ "set")          = text "$set"
-    cpretty (Name _ str)            = text str
-    cpretty (Name _ str)            = text str
-    cpretty (Name _ str)            = text str
-    cpretty (Name _ str)            = text str
+    cpretty (Name _ ns)             = text ns
     cpretty (Internal str _ _)      = text (substdollar str)
 
 instance CPretty QName where
@@ -103,54 +96,46 @@ instance CPretty Type where
     cpretty (TWild _)               = text "_"
     cpretty row                     = prettyKwdRow row
 
-{-
-prettyFXRow (TRow _ n t r)
-  | n == rAct                       = text "act" <+> prettyFXRow r
-  | n == rMut                       = text "mut" <> brackets (pretty t) <+> prettyFXRow r
-  | n == rRet                       = text "ret" <> brackets (pretty t) <+> prettyFXRow r
-prettyFXRow (TVar _ tv)             = pretty tv
-prettyFXRow (TWild _)               = text "_"
-prettyFXRow (TNil _)                = empty
--}
 cprettyPosRow (TRow _ _ t (TNil _)) = cpretty t
 cprettyPosRow (TRow _ _ t p)        = cpretty t <> comma <+> cprettyPosRow p
---cprettyPosRow (TVar _ v)             = text "*" <> pretty v
---cprettyPosRow (TWild _)              = text "*"
 cprettyPosRow (TNil _)              = empty
-    
---prettyKwdRow (TRow _ n t (TNil _))  = pretty n <> colon <+> pretty t
---prettyKwdRow (TRow _ n t k)         = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
---prettyKwdRow (TVar _ v)             = text "**" <> pretty v
---prettyKwdRow (TWild _)              = text "**"
---prettyKwdRow (TNil _)               = empty
-    
---prettyFunRow (TNil _) k             = prettyKwdRow k
---prettyFunRow p (TNil _)             = prettyPosRow p
---prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 
-
-structdecls nm                          = text "struct" <+> nm <> semi $+$
-                                          text "typedef struct" <+> nm <+> text "*" <> nm <> semi $+$
+structdecls cnm                         = text "struct" <+> cnm <> semi $+$
+                                          text "typedef struct" <+> cnm <+> text "*" <> cnm <> semi $+$
                                           blank
 
-witness_struct nm is                    = text "struct" <+> nm <+> text "{" $+$
+witness_struct cnm is                   = text "struct" <+> cnm <+> text "{" $+$
                                           (nest 4 $ vcat ([text "char *GCINFO;",
-                                                           nm <> text "$__class__" <+>text" __class__"<>semi] ++
+                                                           cnm <> text "$__class__" <+>text" __class__"<>semi] ++
                                                            [vcat (map cpretty  is)])) $+$
                                            text "};"
 
-class_struct  nm ms                     = text "struct" <+> nm<>text "$__class__" <+> text "{" $+$
-                                          (nest 4 $ text "char *GCINFO;" $+$ vcat (map cpretty ms)) $+$
+class_struct  nm ms                     = text "struct" <+> cpretty nm<>text "$__class__" <+> text "{" $+$
+                                          (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty . addpar nm) ms)) $+$
                                           text "};"
+  where addpar nm (Decl l ds)           = Decl l (map (addparSig nm) ds)
+        addparSig nm sig@(Signature _ _ (TSchema _ _ _ StaticMethod))
+                                        = sig
+        addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
+                                        =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r) d)
 
-opaque_struct  nm ms                     = text "struct" <+> nm<>text "$opaque" <+> text "{" $+$
+addFstElem nm p                         = TRow NoLoc (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
+
+opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$
-                                          vcat [nm<>text "$__class__" <+> text "__proto__"<>semi,
+                                          vcat [cnm <+> text "__proto__"<>semi,
                                                 text "$WORD __impl__"<>semi]) $+$
                                           text "};" $+$ blank $+$
-                                          nm<>text "$opaque" <+> nm<>text "$__pack__"<>parens (nm <+>text "__proto__, $WORD __impl__") <> semi $+$
+                                          cnm<>text "$opaque" <+> cnm<>text "$__pack__"<>parens (cnm <+>text "__proto__, $WORD __impl__") <> semi $+$
                                           blank
-                                          
+
+fun_prototypes nm ss                    = vcat (concatMap protoDecl ss)
+  where  protoDecl (Decl _ ds)          = map proto ds
+         proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) StaticMethod))
+                                        = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
+         proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
+                                        = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow (addFstElem nm p)) <>semi) ns)
+
 
 resultTuple (TTuple _ r)                = tup 0 r
    where tup n (TNil _)                 = text ("$tup"++show n++"_t")
