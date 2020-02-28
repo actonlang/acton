@@ -1023,6 +1023,87 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     return 0;
 }
 
+int read_full_packet(int * sockfd, int * msg_len)
+{
+	int announced_msg_len = -1;
+	int read_buf_offset = 0;
+	int status = 0;
+
+	while(1) // Loop until reading complete packet:
+	{
+		assert(read_buf_offset < SERVER_BUFSIZE - sizeof(int));
+
+		if(read_buf_offset == 0)
+		{
+			// Read msg len header from packet:
+
+			bzero(in_buf, SERVER_BUFSIZE);
+			*msg_len = -1;
+
+			int size_len = read(*sockfd, in_buf, sizeof(int));
+
+			if (size_len < 0)
+			{
+				fprintf(stderr, "ERROR reading from socket\n");
+				continue;
+			}
+			else if (size_len == 0)
+			{
+				handle_socket_close(sockfd);
+				status = 1;
+				break;
+			}
+
+			announced_msg_len = *((int *)in_buf);
+
+			*((int *)in_buf) = 0; // 0 back buffer
+
+			read_buf_offset = 0;
+		}
+
+		if(announced_msg_len <= 0)
+		{
+			read_buf_offset = 0;
+			continue;
+		}
+
+	    *msg_len = read(*sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
+
+#if SERVER_VERBOSITY > 1
+		printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, *msg_len, read_buf_offset);
+#endif
+
+	    if (*msg_len < 0)
+	    {
+	    		fprintf(stderr, "ERROR reading from socket\n");
+			continue;
+	    }
+		else if(*msg_len == 0) // client closed socket
+	    {
+			handle_socket_close(sockfd);
+			status = 1;
+	        break;
+	    }
+		else if(*msg_len < announced_msg_len - read_buf_offset)
+		{
+			read_buf_offset += *msg_len;
+			continue; // Continue reading socket until full packet length
+		}
+
+	    break;
+	}
+
+    assert(status != 0 || announced_msg_len == *msg_len);
+
+//    read_buf_offset = 0; // Reset
+
+#if SERVER_VERBOSITY > 1
+    printf("server received %d / %d bytes\n", announced_msg_len, *msg_len);
+#endif
+
+	return status;
+}
+
 
 int main(int argc, char **argv) {
   int parentfd;
@@ -1035,18 +1116,15 @@ int main(int argc, char **argv) {
   char *hostaddrp;
   int optval; /* flag value for setsockopt */
   int msg_len; /* message byte size */
+  fd_set readfds;
+  struct timeval timeout;
+  timeout.tv_sec = 3;
+  timeout.tv_usec = 0;
   unsigned int seed;
   int ret = 0;
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
   skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
-  fd_set readfds;
-
-  struct timeval timeout;
-  timeout.tv_sec = 3;
-  timeout.tv_usec = 0;
-  int announced_msg_len = -1;
-  int read_buf_offset = 0;
 
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
@@ -1148,86 +1226,10 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this client:
 			{
-				int skip_parsing = 0;
-
-				while(1) // Loop until reading complete packet:
-				{
-					assert(read_buf_offset < SERVER_BUFSIZE - sizeof(int));
-
-					if(read_buf_offset == 0)
-					{
-						// Read msg len header from packet:
-
-						bzero(in_buf, SERVER_BUFSIZE);
-						msg_len = -1;
-
-						int size_len = read(rs->sockfd, in_buf, sizeof(int));
-
-						if (size_len < 0)
-						{
-//							fprintf(stderr, "ERROR reading from socket\n");
-							continue;
-						}
-						else if (size_len == 0)
-						{
-							handle_socket_close(&(rs->sockfd));
-							skip_parsing = 1;
-							break;
-						}
-
-						announced_msg_len = *((int *)in_buf);
-
-						*((int *)in_buf) = 0; // 0 back buffer
-
-						read_buf_offset = 0;
-					}
-
-					if(announced_msg_len <= 0)
-					{
-						read_buf_offset = 0;
-						continue;
-					}
-
-				    msg_len = read(rs->sockfd, in_buf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
-
-#if SERVER_VERBOSITY > 1
-					printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, msg_len, read_buf_offset);
-#endif
-
-				    if (msg_len < 0)
-				    {
-				    		fprintf(stderr, "ERROR reading from socket\n");
-						continue;
-				    }
-					else if(msg_len == 0) // client closed socket
-				    {
-						handle_socket_close(&(rs->sockfd));
-						skip_parsing = 1;
-				        break;
-				    }
-					else if(msg_len < announced_msg_len - read_buf_offset)
-					{
-						read_buf_offset += msg_len;
-						continue; // Continue reading socket until full packet length
-					}
-
-				    break;
-				}
-
-				if(skip_parsing)
+				if(read_full_packet(&(rs->sockfd), &msg_len))
 					continue;
 
-			    assert(announced_msg_len == msg_len);
-
-			    read_buf_offset = 0; // Reset
-
-#if SERVER_VERBOSITY > 1
-			    printf("server received %d / %d bytes\n", announced_msg_len, msg_len);
-#endif
-
-			    ret = handle_client_message(childfd, msg_len, db, &seed);
-
-			    if(ret != 0)
+			    if(handle_client_message(childfd, msg_len, db, &seed))
 			    		continue;
 			}
 		}
