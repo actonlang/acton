@@ -55,16 +55,16 @@ protocol Sliceable[A] (Indexed[int,A]):
   __delslice__ : (Slice) -> None
   
 protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
-  __reversed__ : () -> Iterable[A] 
+  __reversed__ : () -> Iterator[A] 
   insert      : (int,A) -> None
   append      : (A) -> None   
   reverse     : () -> None       
 
-protocol Container [A (Eq)] (Collection[A]):
+protocol Container [A(Eq)] (Collection[A]):
   __contains__    : (A) -> bool  
   __containsnot__ : (A) -> bool  
 
-protocol Mapping[A (Eq),B] (Container[A], Indexed[A,B]):
+protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
   get         : (A,B) -> B
   keys        : () -> Iterator[A]
   values      : () -> Iterator[B]
@@ -81,7 +81,8 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
 
 extension list[A] (Sequence[A]): ...
 
-extension dict[A,B] (Mapping[A,B]): ...
+extension dict[A(Hashable),B] (Mapping[A,B]): ...
 
-extension set[A] (Set[A]): ...
+extension set[A(Hashable)] (Set[A]): ...
 
+extension Iterator[A](Iterable[A]): ...
