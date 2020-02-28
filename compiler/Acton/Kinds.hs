@@ -179,6 +179,7 @@ instance KCheck Target where
     kchk env (TIndex l e ix)        = kchk env e >> kchk env ix
     kchk env (TSlice l e sl)        = kchk env e >> kchk env sl
     kchk env (TDot l e n)           = kchk env e
+    kchk env (TDotI l e i tl)       = kchk env e
     kchk env (TParen l p)           = kchk env p
 
 instance KCheck Exception where
@@ -472,6 +473,7 @@ instance KWalk Target where
     kwalk w (TIndex l e ix)         = TIndex l <$> kwalk w e <*> kwalk w ix
     kwalk w (TSlice l e sl)         = TSlice l <$> kwalk w e <*> kwalk w sl
     kwalk w (TDot l e n)            = TDot l <$> kwalk w e <*> return n
+    kwalk w (TDotI l e i tl)        = TDotI l <$> kwalk w e <*> return i <*> return tl
     kwalk w (TParen l p)            = TParen l <$> kwalk w p
 
 instance KWalk Exception where

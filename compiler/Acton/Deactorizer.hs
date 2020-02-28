@@ -175,6 +175,7 @@ instance Deact Target where
     deact env (TIndex l e ix)       = TIndex l <$> deact env e <*> deact env ix
     deact env (TSlice l e sl)       = TSlice l <$> deact env e <*> deact env sl
     deact env (TDot l e n)          = TDot l <$> deact env e <*> return n
+    deact env (TDotI l e i tl)      = TDotI l <$> deact env e <*> return i <*> return tl
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe

@@ -98,6 +98,7 @@ data Target     = TaVar         { taloc::SrcLoc, tn::Name}
                 | TIndex        { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
                 | TSlice        { taloc::SrcLoc, texp::Expr, tslice::[Slice] }
                 | TDot          { taloc::SrcLoc, texp::Expr, tn::Name }
+                | TDotI         { taloc::SrcLoc, texp::Expr, tival::Integer, ttl :: Bool }
                 | TParen        { taloc::SrcLoc, targ::Target }
                 | TaTuple       { taloc::SrcLoc, targs::[Target]}
 
