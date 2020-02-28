@@ -176,6 +176,7 @@ instance InfEnv Stmt where
             t2e (TIndex l e ix)         = Index l e ix
             t2e (TSlice l e sl)         = Slice l e sl
             t2e (TDot l e n)            = Dot l e n
+            t2e (TDotI l e i tl)        = DotI l e i tl
             t2e (TParen l tg)           = Paren l (t2e tg)
             t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs)
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
@@ -906,6 +907,11 @@ instance Infer Target where
                                              constrain [Mut env t n t0]
                                              equFX env (fxMut tWild tWild)
                                              return (t0, TDot l e' n)
+    infer env (TDotI l e i tl)          = do (t,e') <- infer env e
+                                             t0 <- newTVar
+                                             --constrain [Mut env t n t0]
+                                             equFX env (fxMut tWild tWild)
+                                             return (t0, TDotI l e' i tl)
     infer env (TaTuple l targs)         = do (ts,targs') <- unzip <$> mapM (infer env) targs
                                              return (tTuple (foldr posRow' posNil ts), TaTuple l targs')
 

@@ -100,7 +100,7 @@ instance Pretty (PosPar,KwdPar) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty PosArg where
-    pretty (PosArg e PosNil)        = pretty e
+--    pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
     pretty (PosStar e)              = text "*" <> pretty e
     pretty PosNil                   = empty
@@ -249,6 +249,8 @@ instance Pretty Target where
     pretty (TIndex _ e ix)          = pretty e <> brackets (commaList ix)
     pretty (TSlice _ e sl)          = pretty e <> brackets (commaList sl)
     pretty (TDot _ e n)             = pretty e <> dot <> pretty n
+    pretty (TDotI _ e i False)      = pretty e <> dot <> pretty i
+    pretty (TDotI _ e i True)       = pretty e <> dot <> text "*" <> pretty i
     pretty (TParen _ t)             = parens (pretty t)
 
 prettyPats [] Nothing               = empty

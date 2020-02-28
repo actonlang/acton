@@ -220,6 +220,7 @@ instance Norm Target where
     norm env (TIndex l e ix)        = TIndex l <$> norm env e <*> norm env ix
     norm env (TSlice l e sl)        = TSlice l <$> norm env e <*> norm env sl
     norm env (TDot l e n)           = TDot l <$> norm env e <*> norm env n
+    norm env (TDotI l e i tl)       = TDotI l <$> norm env e <*> return i <*> return tl
     norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
     norm env (TParen l p)           = TParen l <$> norm env p
 

@@ -560,5 +560,6 @@ instance PreCPS Target where
     pre env (TIndex l e ix)             = TIndex l <$> pre env e <*> pre env ix
     pre env (TSlice l e sl)             = TSlice l <$> pre env e <*> pre env sl
     pre env (TDot l e n)                = TDot l <$> pre env e <*> return n
+    pre env (TDotI l e i tl)            = TDotI l <$> pre env e <*> return  i <*> return tl
     pre env (TaTuple l ps)              = TaTuple l <$> pre env ps
     pre env (TParen l p)                = TParen l <$> pre env p

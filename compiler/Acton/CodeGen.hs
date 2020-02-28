@@ -208,6 +208,7 @@ instance Gen Target where
     gen env (TIndex _ e ix)         = gen env e <> brackets (commaList ix)
     gen env (TSlice _ e sl)         = gen env e <> brackets (commaList sl)
     gen env (TDot _ e n)            = gen env e <> text "->" <> gen env n
+    gen env (TDotI _ e i tl)        = undefined
     gen env (TParen _ p)            = gen env p
 
 instance Gen Unary where

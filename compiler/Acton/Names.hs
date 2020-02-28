@@ -318,6 +318,7 @@ instance Vars Target where
     free (TIndex _ e ix)            = free e ++ free ix
     free (TSlice _ e sl)            = free e ++ free sl
     free (TDot _ e n)               = free e
+    free (TDotI _ e i tl)           = free e
     free (TaTuple _ ts)             = free ts
     free (TParen _ t)               = free t
 

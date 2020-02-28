@@ -425,7 +425,7 @@ apat :: Parser S.Pattern
 apat = addLoc (
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
-            ((try . parens) $ return (S.PTuple NoLoc S.PosPatNil))
+            ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil))
         <|>
             ((try . parens) $ S.PParen NoLoc <$> gen_pattern)
         <|>
@@ -457,6 +457,7 @@ atarget = addLoc (
             tmp <- atom_expr
             case tmp of
                 S.Dot _ e n    -> return $ S.TDot NoLoc e n
+                S.DotI _ e i t -> return $ S.TDotI NoLoc e i t
                 S.Index _ e ix -> return $ S.TIndex NoLoc e ix
                 S.Slice _ e sl -> return $ S.TSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
@@ -876,7 +877,7 @@ atom_expr = do
         atom :: Parser S.Expr
         atom =  addLoc (try strings
                <|>
-                 ((try . parens) $ return (S.Tuple NoLoc S.PosNil))
+                 ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil))
                <|>
                  ((try . parens) $ S.Paren NoLoc <$> yield_expr)
                <|>
@@ -971,8 +972,8 @@ atom_expr = do
                      nm <- name
                      return (\a -> S.Dot NoLoc a nm)
                  intdot  = do 
-                        i <- lexeme L.decimal
                         mbt <- optional star
+                        i <- lexeme L.decimal
                         return (\a -> S.DotI NoLoc a i (maybe False (const True) mbt))
                  strdot = do
                         (p,str) <- withPos stringP 

@@ -113,6 +113,7 @@ instance Relabel Target where
     relabel (TIndex _ e ix) = TIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (TSlice _ e sl) = TSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (TDot _ e n) = TDot <$> newLoc <*> relabel e <*> relabel n
+    relabel (TDotI _ e i tl) = TDotI <$> newLoc <*> relabel e <*> return i <*> return tl
     relabel (TParen _ t) = TParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where

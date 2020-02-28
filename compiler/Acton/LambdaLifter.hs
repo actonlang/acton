@@ -365,4 +365,5 @@ instance Lift Target where
     ll env (TIndex l e ix)              = TIndex l <$> ll env e <*> ll env ix
     ll env (TSlice l e sl)              = TSlice l <$> ll env e <*> ll env sl
     ll env (TDot l e n)                 = TDot l <$> ll env e <*> return n
+    ll env (TDotI l e i tl)             = TDotI l <$> ll env e <*> return i <*> return tl
     ll env (TParen l p)                 = TParen l <$> ll env p
