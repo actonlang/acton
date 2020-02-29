@@ -156,9 +156,7 @@ instance KCheck Expr where
     kchk env (Yield l e)            = kchk env e
     kchk env (YieldFrom l e)        = kchk env e
     kchk env (Tuple l es)           = kchk env es
-    kchk env (TupleComp l e c)      = kchk env e >> kchk env c
     kchk env (Record l fs)          = kchk env fs
-    kchk env (RecordComp l n e c)   = kchk env e >> kchk env c
     kchk env (List l es)            = kchk env es
     kchk env (ListComp l e c)       = kchk env e >> kchk env c
     kchk env (Dict l as)            = kchk env as
@@ -450,9 +448,7 @@ instance KWalk Expr where
     kwalk w (Yield l e)             = Yield l <$> kwalk w e
     kwalk w (YieldFrom l e)         = YieldFrom l <$> kwalk w e
     kwalk w (Tuple l es)            = Tuple l <$> kwalk w es
-    kwalk w (TupleComp l e c)       = TupleComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Record l fs)           = Record l <$> kwalk w fs
-    kwalk w (RecordComp l n e c)    = RecordComp l n <$> kwalk w e <*> kwalk w c
     kwalk w (List l es)             = List l <$> kwalk w es
     kwalk w (ListComp l e c)        = ListComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Dict l as)             = Dict l <$> kwalk w as

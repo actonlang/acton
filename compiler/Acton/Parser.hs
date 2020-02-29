@@ -913,9 +913,7 @@ atom_expr = do
                return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
              <|> do
                e <- expr
-               mb <- optional (S.TupleComp NoLoc e <$> comp_for
-                                 <|>
-                               do mp <- comma *> optional (posarg <* optional comma)
+               mb <- optional (do mp <- comma *> optional (posarg <* optional comma)
                                   return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
                return (maybe (S.Paren NoLoc e) id mb)
             
@@ -924,9 +922,7 @@ atom_expr = do
                return $ S.Record NoLoc (S.KwdStar e)
              <|> do
                (n,e) <- kwdbind
-               mb <- optional (S.RecordComp NoLoc n e <$> comp_for
-                                 <|>
-                               do mp <- comma *> optional kwdarg
+               mb <- optional (do mp <- comma *> optional kwdarg
                                   return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
                return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
                      

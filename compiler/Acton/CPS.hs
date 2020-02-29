@@ -457,15 +457,7 @@ instance PreCPS Expr where
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es)                = Tuple l <$> pre env es
-    pre env (TupleComp l e c)           = do (e1,stmts) <- withPrefixes $ liftM2 (TupleComp l) (pre env e) (pre env c)
-                                             case stmts of
-                                                 [] -> return e1
-                                                 _  -> notYet l "Continuations inside a tuple comprehension"
     pre env (Record l fs)               = Record l <$> pre env fs
-    pre env (RecordComp l n e c)        = do (e1,stmts) <- withPrefixes $ liftM2 (RecordComp l n) (pre env e) (pre env c)
-                                             case stmts of
-                                                 [] -> return e1
-                                                 _  -> notYet l "Continuations inside a record comprehension"
     pre env (List l es)                 = List l <$> pre env es
     pre env (ListComp l (Elem e) c)     = do (e1,stmts) <- withPrefixes $ liftM2 (ListComp l) (fmap Elem $ pre env e) (pre env c)
                                              case stmts of

@@ -661,20 +661,8 @@ instance Infer Expr where
     infer env e@YieldFrom{}             = notYetExpr e
     infer env (Tuple l pargs)           = do (prow,pargs') <- infer env pargs
                                              return (tTuple prow, Tuple l pargs')
-    infer env (TupleComp l e co)
-      | nodup co                        = do (te,co') <- infEnv env co
-                                             (_,e') <- infer (define te env) e
-                                             prow <- newRowVar
-                                             return (tTuple prow, TupleComp l e' co')       -- !! Extreme short-cut, for now
     infer env (Record l kargs)          = do (krow,kargs') <- infer env kargs
                                              return (tRecord krow, Record l kargs')
-    infer env (RecordComp l n e co)
-      | nodup co                        = do (te,co') <- infEnv env co
-                                             let env1 = define te env
-                                             _ <- infer env1 (Var (nloc n) (NoQual n))
-                                             (_,e') <- infer env1 e
-                                             krow <- newRowVar
-                                             return (tRecord krow, RecordComp l n e' co')   -- !! Extreme short-cut, for now
     infer env (List l es)               = do t0 <- newTVar
                                              es' <- infElems env es pSequence t0
                                              return (pSequence t0, List l es')

@@ -154,9 +154,7 @@ instance Deact Expr where
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es)          = Tuple l <$> deact env es
-    deact env (TupleComp l e c)     = TupleComp l <$> deact env e <*> deact env c
     deact env (Record l fs)         = Record l <$> deact env fs
-    deact env (RecordComp l n e c)  = RecordComp l n <$> deact env e <*> deact env c
     deact env (List l es)           = List l <$> deact env es
     deact env (ListComp l e c)      = ListComp l <$> deact env e <*> deact env c
     deact env (Dict l as)           = Dict l <$> deact env as
