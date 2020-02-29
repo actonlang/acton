@@ -183,9 +183,7 @@ instance Vars Expr where
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
     free (Tuple _ ps)               = free ps
-    free (TupleComp _ e co)         = (free e \\ bound co) ++ free co
     free (Record _ fs)              = free fs
-    free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
     free (List _ es)                = free es
     free (ListComp _ e co)          = (free e \\ bound co) ++ free co
     free (Dict _ es)                = free es

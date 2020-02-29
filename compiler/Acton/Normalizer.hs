@@ -191,11 +191,7 @@ instance Norm Expr where
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es)           = Tuple l <$> norm env es
-    norm env (TupleComp l e c)      = TupleComp l <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
     norm env (Record l fs)          = Record l <$> norm env fs
-    norm env (RecordComp l n e c)   = RecordComp l n <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
       where env1                    = extLocal (bound c) env

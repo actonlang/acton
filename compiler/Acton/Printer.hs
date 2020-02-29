@@ -142,10 +142,8 @@ instance Pretty Expr where
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps)             = pretty ps
-    pretty (TupleComp _ e co)       = pretty e <+> pretty co
     pretty (Record _ KwdNil)        = text "record" <> parens empty
     pretty (Record _ kargs)         = parens (pretty kargs)
-    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)

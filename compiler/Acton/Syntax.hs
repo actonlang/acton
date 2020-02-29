@@ -74,9 +74,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, parg::PosArg }
-                | TupleComp     { eloc::SrcLoc, exp1::Expr, comp::Comp }
                 | Record        { eloc::SrcLoc, kargs::KwdArg }
-                | RecordComp    { eloc::SrcLoc, cvar::Name, exp1::Expr, comp::Comp }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
@@ -458,9 +456,7 @@ instance Eq Expr where
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
     x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
-    x@TupleComp{}       ==  y@TupleComp{}       = exp1 x == exp1 y && comp x == comp y
     x@Record{}          ==  y@Record{}          = kargs x == kargs y
-    x@RecordComp{}      ==  y@RecordComp{}      = var x == var y && exp1 x == exp1 y && comp x == comp y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
     x@Dict{}            ==  y@Dict{}            = assocs x == assocs y

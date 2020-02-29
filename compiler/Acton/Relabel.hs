@@ -88,9 +88,7 @@ instance Relabel Expr where
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
     relabel (Tuple _ ps) = Tuple <$> newLoc <*> relabel ps
-    relabel (TupleComp _ e c) = TupleComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
-    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (List _ es) = List <$> newLoc <*> relabel es
     relabel (ListComp _ e c) = ListComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Dict _ as) = Dict <$> newLoc <*> relabel as
