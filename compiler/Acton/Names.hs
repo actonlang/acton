@@ -182,7 +182,7 @@ instance Vars Expr where
     free (Lambda _ ps ks e)         = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
-    free (Tuple _ es)               = free es
+    free (Tuple _ ps)               = free ps
     free (TupleComp _ e co)         = (free e \\ bound co) ++ free co
     free (Record _ fs)              = free fs
     free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
@@ -353,7 +353,7 @@ instance Vars TBind where
 instance Vars Type where
     free (TVar _ v)                 = free v
     free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
-    free (TTuple _ p)               = free p
+    free (TTuple _ p k)             = free p ++ free k
     free (TRecord _ k)              = free k
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c

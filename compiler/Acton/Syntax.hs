@@ -195,7 +195,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TAt       { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
-                | TTuple    { tloc::SrcLoc, posrow::PosRow }
+                | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
                 | TRecord   { tloc::SrcLoc, kwdrow::KwdRow }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
@@ -259,9 +259,9 @@ tBind v         = TBind v []
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
 tAt c           = TAt NoLoc c
-tFun fx p r t   = TFun NoLoc fx p r t
-tTuple p        = TTuple NoLoc p
-tRecord r       = TRecord NoLoc r
+tFun fx p k t   = TFun NoLoc fx p k t
+tTuple p        = TTuple NoLoc p kwdNil
+tRecord k       = TRecord NoLoc k
 tUnion ts       = TUnion NoLoc ts
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
@@ -503,7 +503,7 @@ instance Eq Comp where
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
 --    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
-    PTuple _ ps1        == PTuple _ ps2         = ps1 == ps2
+    PTuple _ p1         == PTuple _ p2          = p1 == p2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
     PParen _ p1         == p2                   = p1 == p2
@@ -511,7 +511,6 @@ instance Eq Pattern where
     _                   == _                    = False
 instance Eq Target where
     TaVar _ n1          == TaVar _ n2           = n1 == n2
---    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
     TaTuple _ ts1       == TaTuple _ ts2        = ts1 == ts2
     TIndex _ e1 ix1     == TIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
     TSlice _ e1 sl1     == TSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
@@ -532,7 +531,7 @@ instance Eq Type where
     TCon _ c1           == TCon _ c2            = c1 == c2
     TAt _ c1            == TAt _ c2             = c1 == c2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
-    TTuple _ p1         == TTuple _ p2          = p1 == p2
+    TTuple _ p1 r1      == TTuple _ p2 r2       = p1 == p2 && r1 == r2
     TRecord _ r1        == TRecord _ r2         = r1 == r2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
     TOpt _ t1           == TOpt _ t2            = t1 == t2

@@ -1123,9 +1123,10 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc es p k t))
-        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
-        <|> try (parens (S.TTuple NoLoc <$> posrow <* optional comma))
-        <|> parens (return (S.TTuple NoLoc S.posNil))
+--        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
+        <|> try (do (p,k) <- parens funrows
+                    return (S.TTuple NoLoc p k))
+        <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))
         <|> try (brackets (Builtin.pSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)

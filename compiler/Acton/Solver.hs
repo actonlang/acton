@@ -120,15 +120,17 @@ red' sub env (TAt _ c1) (TAt l c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
 
 --           as declared           as called
-red' sub env (TFun _ fx1 p1 r1 t1) (TFun _ fx2 p2 r2 t2)
+red' sub env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do red sub env fx1 fx2
                                                  red sub env p2 p1            -- TODO: implement pos/kwd argument shifting
-                                                 red sub env r2 r1
+                                                 red sub env k2 k1
                                                  red sub env t1 t2
 
-red' sub env (TRecord _ r1) (TRecord _ r2)  = red sub env r1 r2
+red' sub env (TRecord _ k1) (TRecord _ k2)  = red sub env k1 k2
 
-red' sub env (TTuple _ p1) (TTuple _ p2)    = red sub env p1 p2
+red' sub env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do red sub env p1 p2
+                                                 red sub env k1 k2
 
 red' sub env (TUnion _ u1) (TUnion _ u2)
   | all (uniElem u2) u1                     = return ()

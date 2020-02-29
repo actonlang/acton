@@ -87,7 +87,7 @@ instance Relabel Expr where
     relabel (Lambda _ ps ks e) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
-    relabel (Tuple _ es) = Tuple <$> newLoc <*> relabel es
+    relabel (Tuple _ ps) = Tuple <$> newLoc <*> relabel ps
     relabel (TupleComp _ e c) = TupleComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
     relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
@@ -219,7 +219,7 @@ instance Relabel TBind where
 instance Relabel Type where
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
-    relabel (TTuple _ p) = TTuple <$> newLoc <*> relabel p
+    relabel (TTuple _ p k) = TTuple <$> newLoc <*> relabel p <*> relabel k
     relabel (TRecord _ k) = TRecord <$> newLoc <*> relabel k
     relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
     relabel (TUnion _ as) = TUnion <$> newLoc <*> return as

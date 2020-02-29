@@ -284,7 +284,7 @@ instance Gen Type where
     gen env (TCon  _ c)             = gen env c
     gen env (TAt  _ c)              = text "@" <> gen env c
     gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
-    gen env (TTuple _ pos)          = parens (genRow env pos)
+    gen env (TTuple _ pos _)        = parens (genRow env pos)
     gen env (TRecord _ kw)          = parens (genRow env kw)
     gen env (TUnion _ as)           = parens (vbarSep (gen env) as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
