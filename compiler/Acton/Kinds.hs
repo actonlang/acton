@@ -308,7 +308,8 @@ instance KInfer Type where
                                          kexpect env KRow k
                                          kexpect env KType t
                                          return KType
-    kinfer env (TTuple _ p)         = do kexpect env KRow p
+    kinfer env (TTuple _ p k)       = do kexpect env KRow p
+                                         kexpect env KRow k
                                          return KType
     kinfer env (TRecord _ k)        = do kexpect env KRow k
                                          return KType
@@ -387,7 +388,7 @@ instance KWalk Type where
     kwalk w (TCon l c)              = TCon l <$> kwalk w c
     kwalk w (TAt l c)               = TAt l <$> kwalk w c
     kwalk w (TFun l fx p k t)       = TFun l <$> kwalk w fx <*> kwalk w p <*> kwalk w k<*> kwalk w t
-    kwalk w (TTuple l p)            = TTuple l <$> kwalk w p
+    kwalk w (TTuple l p k)          = TTuple l <$> kwalk w p <*> kwalk w k
     kwalk w (TRecord l k)           = TRecord l <$> kwalk w k
     kwalk w (TUnion l as)           = return $ TUnion l as
     kwalk w (TOpt l t)              = TOpt l <$> kwalk w t

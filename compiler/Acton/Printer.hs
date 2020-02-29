@@ -141,7 +141,7 @@ instance Pretty Expr where
     pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
-    pretty (Tuple _ pargs)          = pretty pargs
+    pretty (Tuple _ ps)             = pretty ps
     pretty (TupleComp _ e co)       = pretty e <+> pretty co
     pretty (Record _ KwdNil)        = text "record" <> parens empty
     pretty (Record _ kargs)         = parens (pretty kargs)
@@ -380,7 +380,7 @@ instance Pretty Type where
     pretty (TAt  _ c)               = text "@" <> pretty c
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    pretty (TTuple _ pos)           = parens (prettyPosRow pos)
+    pretty (TTuple _ p k)           = parens (prettyFunRow p k)
     pretty (TRecord _ kw)           = parens (prettyKwdRow kw)
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f

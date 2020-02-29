@@ -972,7 +972,7 @@ instance WellFormed Type where
     wfmd env w (TCon _ tc)          = wfmd env w tc
     wfmd env w (TAt _ tc)           = wfmd env w tc
     wfmd env w (TFun _ e p k t)     = wfmd env w e && wfmd env w p && wfmd env w k && wfmd env w t
-    wfmd env w (TTuple _ p)         = wfmd env w p
+    wfmd env w (TTuple _ p k)       = wfmd env w p && wfmd env w k
     wfmd env w (TRecord _ k)        = wfmd env w k
     wfmd env w (TOpt _ t)           = wfmd env w t
     wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
@@ -1001,7 +1001,7 @@ instance Wild Type where
     instwild (TCon l tc)            = TCon l <$> instwild tc
     instwild (TAt l tc)             = TAt l <$> instwild tc
     instwild (TFun l e p k t)       = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
-    instwild (TTuple l p)           = TTuple l <$> instwild p
+    instwild (TTuple l p k)         = TTuple l <$> instwild p <*> instwild k
     instwild (TRecord l k)          = TRecord l <$> instwild k
     instwild (TOpt l t)             = TOpt l <$> instwild t
     instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r

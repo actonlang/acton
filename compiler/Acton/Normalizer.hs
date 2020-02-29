@@ -355,7 +355,7 @@ instance Norm TBind where
 instance Norm Type where
     norm env (TVar l v)             = TVar l <$> norm env v
     norm env (TFun l es p k t)      = TFun l <$> norm env es <*> norm env p <*> norm env k <*> norm env t
-    norm env (TTuple l p)           = TTuple l <$> norm env p
+    norm env (TTuple l p k)         = TTuple l <$> norm env p <*> norm env k
     norm env (TRecord l k)          = TRecord l <$> norm env k
     norm env (TOpt l t)             = TOpt l <$> norm env t
     norm env (TUnion l as)          = TUnion l <$> return as
