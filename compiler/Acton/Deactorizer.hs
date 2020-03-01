@@ -154,9 +154,7 @@ instance Deact Expr where
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es)          = Tuple l <$> deact env es
-    deact env (TupleComp l e c)     = TupleComp l <$> deact env e <*> deact env c
     deact env (Record l fs)         = Record l <$> deact env fs
-    deact env (RecordComp l n e c)  = RecordComp l n <$> deact env e <*> deact env c
     deact env (List l es)           = List l <$> deact env es
     deact env (ListComp l e c)      = ListComp l <$> deact env e <*> deact env c
     deact env (Dict l as)           = Dict l <$> deact env as
@@ -175,6 +173,7 @@ instance Deact Target where
     deact env (TIndex l e ix)       = TIndex l <$> deact env e <*> deact env ix
     deact env (TSlice l e sl)       = TSlice l <$> deact env e <*> deact env sl
     deact env (TDot l e n)          = TDot l <$> deact env e <*> return n
+    deact env (TDotI l e i tl)      = TDotI l <$> deact env e <*> return i <*> return tl
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe

@@ -209,6 +209,7 @@ instance Gen Target where
     gen env (TIndex _ e ix)         = gen env e <> brackets (commaList ix)
     gen env (TSlice _ e sl)         = gen env e <> brackets (commaList sl)
     gen env (TDot _ e n)            = gen env e <> text "->" <> gen env n
+    gen env (TDotI _ e i tl)        = undefined
     gen env (TParen _ p)            = gen env p
 
 instance Gen Unary where
@@ -284,7 +285,7 @@ instance Gen Type where
     gen env (TCon  _ c)             = gen env c
     gen env (TAt  _ c)              = text "@" <> gen env c
     gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
-    gen env (TTuple _ pos)          = parens (genRow env pos)
+    gen env (TTuple _ pos _)        = parens (genRow env pos)
     gen env (TRecord _ kw)          = parens (genRow env kw)
     gen env (TUnion _ as)           = parens (vbarSep (gen env) as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f

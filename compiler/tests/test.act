@@ -85,7 +85,9 @@ def f26(a,):
     pass
     
 def f27(a,*b):
-    pass
+    a.0 = 7
+    a.*1 = (2,)
+    return ()
     
 def f28(a,*b,):
     pass

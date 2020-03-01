@@ -88,7 +88,7 @@ instance CPretty Type where
  --   pretty (TAt  _ c)               = text "@" <> pretty c
     cpretty (TFun _ e p _ t)        =  parens (cprettyPosRow p) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    cpretty (TTuple _ pos)          = parens (cprettyPosRow pos)
+    cpretty (TTuple _ pos _)        = parens (cprettyPosRow pos)
     cpretty (TRecord _ kw)          = parens (cprettyPosRow kw)
     cpretty (TUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f

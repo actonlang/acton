@@ -94,7 +94,7 @@ instance Transform TSchema where
     trans env (TSchema loc bs t d)      = TSchema loc bs (trans (env{dec = d}) t) d 
                                               
 instance Transform Type where
-    trans env (TTuple loc r)            = TTuple loc $ trans env r
+    trans env (TTuple loc p k)          = TTuple loc (trans env p) (trans env k)
     trans env (TFun loc fx p k r)       = TFun loc fx p1 (trans env k) (trans env r)
        where p1                         = if dec env == StaticMethod
                                           then trans env p

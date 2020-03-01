@@ -425,7 +425,7 @@ apat :: Parser S.Pattern
 apat = addLoc (
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
-            ((try . parens) $ return (S.PTuple NoLoc S.PosPatNil))
+            ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil))
         <|>
             ((try . parens) $ S.PParen NoLoc <$> gen_pattern)
         <|>
@@ -457,6 +457,7 @@ atarget = addLoc (
             tmp <- atom_expr
             case tmp of
                 S.Dot _ e n    -> return $ S.TDot NoLoc e n
+                S.DotI _ e i t -> return $ S.TDotI NoLoc e i t
                 S.Index _ e ix -> return $ S.TIndex NoLoc e ix
                 S.Slice _ e sl -> return $ S.TSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
@@ -876,7 +877,7 @@ atom_expr = do
         atom :: Parser S.Expr
         atom =  addLoc (try strings
                <|>
-                 ((try . parens) $ return (S.Tuple NoLoc S.PosNil))
+                 ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil))
                <|>
                  ((try . parens) $ S.Paren NoLoc <$> yield_expr)
                <|>
@@ -912,9 +913,7 @@ atom_expr = do
                return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
              <|> do
                e <- expr
-               mb <- optional (S.TupleComp NoLoc e <$> comp_for
-                                 <|>
-                               do mp <- comma *> optional (posarg <* optional comma)
+               mb <- optional (do mp <- comma *> optional (posarg <* optional comma)
                                   return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
                return (maybe (S.Paren NoLoc e) id mb)
             
@@ -923,9 +922,7 @@ atom_expr = do
                return $ S.Record NoLoc (S.KwdStar e)
              <|> do
                (n,e) <- kwdbind
-               mb <- optional (S.RecordComp NoLoc n e <$> comp_for
-                                 <|>
-                               do mp <- comma *> optional kwdarg
+               mb <- optional (do mp <- comma *> optional kwdarg
                                   return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
                return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
                      
@@ -971,8 +968,8 @@ atom_expr = do
                      nm <- name
                      return (\a -> S.Dot NoLoc a nm)
                  intdot  = do 
-                        i <- lexeme L.decimal
                         mbt <- optional star
+                        i <- lexeme L.decimal
                         return (\a -> S.DotI NoLoc a i (maybe False (const True) mbt))
                  strdot = do
                         (p,str) <- withPos stringP 
@@ -1122,9 +1119,10 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc es p k t))
-        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
-        <|> try (parens (S.TTuple NoLoc <$> posrow <* optional comma))
-        <|> parens (return (S.TTuple NoLoc S.posNil))
+--        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
+        <|> try (do (p,k) <- parens funrows
+                    return (S.TTuple NoLoc p k))
+        <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))
         <|> try (brackets (Builtin.pSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)

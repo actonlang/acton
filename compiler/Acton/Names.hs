@@ -182,10 +182,8 @@ instance Vars Expr where
     free (Lambda _ ps ks e)         = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
-    free (Tuple _ es)               = free es
-    free (TupleComp _ e co)         = (free e \\ bound co) ++ free co
+    free (Tuple _ ps)               = free ps
     free (Record _ fs)              = free fs
-    free (RecordComp _ n e co)      = ((n : free e) \\ bound co) ++ free co
     free (List _ es)                = free es
     free (ListComp _ e co)          = (free e \\ bound co) ++ free co
     free (Dict _ es)                = free es
@@ -318,6 +316,7 @@ instance Vars Target where
     free (TIndex _ e ix)            = free e ++ free ix
     free (TSlice _ e sl)            = free e ++ free sl
     free (TDot _ e n)               = free e
+    free (TDotI _ e i tl)           = free e
     free (TaTuple _ ts)             = free ts
     free (TParen _ t)               = free t
 
@@ -352,7 +351,7 @@ instance Vars TBind where
 instance Vars Type where
     free (TVar _ v)                 = free v
     free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
-    free (TTuple _ p)               = free p
+    free (TTuple _ p k)             = free p ++ free k
     free (TRecord _ k)              = free k
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c

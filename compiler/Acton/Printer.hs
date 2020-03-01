@@ -100,7 +100,7 @@ instance Pretty (PosPar,KwdPar) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty PosArg where
-    pretty (PosArg e PosNil)        = pretty e
+--    pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
     pretty (PosStar e)              = text "*" <> pretty e
     pretty PosNil                   = empty
@@ -141,11 +141,9 @@ instance Pretty Expr where
     pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
-    pretty (Tuple _ pargs)          = pretty pargs
-    pretty (TupleComp _ e co)       = pretty e <+> pretty co
+    pretty (Tuple _ ps)             = pretty ps
     pretty (Record _ KwdNil)        = text "record" <> parens empty
     pretty (Record _ kargs)         = parens (pretty kargs)
-    pretty (RecordComp _ n e co)    = parens (pretty n <+> equals <+> pretty e <+> pretty co)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -249,6 +247,8 @@ instance Pretty Target where
     pretty (TIndex _ e ix)          = pretty e <> brackets (commaList ix)
     pretty (TSlice _ e sl)          = pretty e <> brackets (commaList sl)
     pretty (TDot _ e n)             = pretty e <> dot <> pretty n
+    pretty (TDotI _ e i False)      = pretty e <> dot <> pretty i
+    pretty (TDotI _ e i True)       = pretty e <> dot <> text "*" <> pretty i
     pretty (TParen _ t)             = parens (pretty t)
 
 prettyPats [] Nothing               = empty
@@ -378,7 +378,7 @@ instance Pretty Type where
     pretty (TAt  _ c)               = text "@" <> pretty c
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    pretty (TTuple _ pos)           = parens (prettyPosRow pos)
+    pretty (TTuple _ p k)           = parens (prettyFunRow p k)
     pretty (TRecord _ kw)           = parens (prettyKwdRow kw)
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f

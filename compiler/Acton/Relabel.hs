@@ -87,10 +87,8 @@ instance Relabel Expr where
     relabel (Lambda _ ps ks e) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
-    relabel (Tuple _ es) = Tuple <$> newLoc <*> relabel es
-    relabel (TupleComp _ e c) = TupleComp <$> newLoc <*> relabel e <*> relabel c
+    relabel (Tuple _ ps) = Tuple <$> newLoc <*> relabel ps
     relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
-    relabel (RecordComp _ n e c) = RecordComp <$> newLoc <*> relabel n <*> relabel e <*> relabel c
     relabel (List _ es) = List <$> newLoc <*> relabel es
     relabel (ListComp _ e c) = ListComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Dict _ as) = Dict <$> newLoc <*> relabel as
@@ -113,6 +111,7 @@ instance Relabel Target where
     relabel (TIndex _ e ix) = TIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (TSlice _ e sl) = TSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (TDot _ e n) = TDot <$> newLoc <*> relabel e <*> relabel n
+    relabel (TDotI _ e i tl) = TDotI <$> newLoc <*> relabel e <*> return i <*> return tl
     relabel (TParen _ t) = TParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where
@@ -218,7 +217,7 @@ instance Relabel TBind where
 instance Relabel Type where
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
-    relabel (TTuple _ p) = TTuple <$> newLoc <*> relabel p
+    relabel (TTuple _ p k) = TTuple <$> newLoc <*> relabel p <*> relabel k
     relabel (TRecord _ k) = TRecord <$> newLoc <*> relabel k
     relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
     relabel (TUnion _ as) = TUnion <$> newLoc <*> return as

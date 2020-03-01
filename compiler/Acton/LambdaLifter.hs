@@ -300,11 +300,7 @@ instance Lift Expr where
     ll env (Yield l e)                  = Yield l <$> ll env e
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
     ll env (Tuple l es)                 = Tuple l <$> ll env es
-    ll env (TupleComp l e co)           = TupleComp l <$> ll env1 e <*> ll env co
-      where env1                        = extLocals (bound co) env
     ll env (Record l ks)                = Record l <$> ll env ks
-    ll env (RecordComp l n e co)        = RecordComp l n <$> ll env1 e <*> ll env co
-      where env1                        = extLocals (bound co) env
     ll env (List l es)                  = List l <$> ll env es
     ll env (ListComp l e co)            = ListComp l <$> ll env1 e <*> ll env co
       where env1                        = extLocals (bound co) env
@@ -365,4 +361,5 @@ instance Lift Target where
     ll env (TIndex l e ix)              = TIndex l <$> ll env e <*> ll env ix
     ll env (TSlice l e sl)              = TSlice l <$> ll env e <*> ll env sl
     ll env (TDot l e n)                 = TDot l <$> ll env e <*> return n
+    ll env (TDotI l e i tl)             = TDotI l <$> ll env e <*> return i <*> return tl
     ll env (TParen l p)                 = TParen l <$> ll env p

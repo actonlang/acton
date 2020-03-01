@@ -156,9 +156,7 @@ instance KCheck Expr where
     kchk env (Yield l e)            = kchk env e
     kchk env (YieldFrom l e)        = kchk env e
     kchk env (Tuple l es)           = kchk env es
-    kchk env (TupleComp l e c)      = kchk env e >> kchk env c
     kchk env (Record l fs)          = kchk env fs
-    kchk env (RecordComp l n e c)   = kchk env e >> kchk env c
     kchk env (List l es)            = kchk env es
     kchk env (ListComp l e c)       = kchk env e >> kchk env c
     kchk env (Dict l as)            = kchk env as
@@ -179,6 +177,7 @@ instance KCheck Target where
     kchk env (TIndex l e ix)        = kchk env e >> kchk env ix
     kchk env (TSlice l e sl)        = kchk env e >> kchk env sl
     kchk env (TDot l e n)           = kchk env e
+    kchk env (TDotI l e i tl)       = kchk env e
     kchk env (TParen l p)           = kchk env p
 
 instance KCheck Exception where
@@ -307,7 +306,8 @@ instance KInfer Type where
                                          kexpect env KRow k
                                          kexpect env KType t
                                          return KType
-    kinfer env (TTuple _ p)         = do kexpect env KRow p
+    kinfer env (TTuple _ p k)       = do kexpect env KRow p
+                                         kexpect env KRow k
                                          return KType
     kinfer env (TRecord _ k)        = do kexpect env KRow k
                                          return KType
@@ -386,7 +386,7 @@ instance KWalk Type where
     kwalk w (TCon l c)              = TCon l <$> kwalk w c
     kwalk w (TAt l c)               = TAt l <$> kwalk w c
     kwalk w (TFun l fx p k t)       = TFun l <$> kwalk w fx <*> kwalk w p <*> kwalk w k<*> kwalk w t
-    kwalk w (TTuple l p)            = TTuple l <$> kwalk w p
+    kwalk w (TTuple l p k)          = TTuple l <$> kwalk w p <*> kwalk w k
     kwalk w (TRecord l k)           = TRecord l <$> kwalk w k
     kwalk w (TUnion l as)           = return $ TUnion l as
     kwalk w (TOpt l t)              = TOpt l <$> kwalk w t
@@ -448,9 +448,7 @@ instance KWalk Expr where
     kwalk w (Yield l e)             = Yield l <$> kwalk w e
     kwalk w (YieldFrom l e)         = YieldFrom l <$> kwalk w e
     kwalk w (Tuple l es)            = Tuple l <$> kwalk w es
-    kwalk w (TupleComp l e c)       = TupleComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Record l fs)           = Record l <$> kwalk w fs
-    kwalk w (RecordComp l n e c)    = RecordComp l n <$> kwalk w e <*> kwalk w c
     kwalk w (List l es)             = List l <$> kwalk w es
     kwalk w (ListComp l e c)        = ListComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Dict l as)             = Dict l <$> kwalk w as
@@ -472,6 +470,7 @@ instance KWalk Target where
     kwalk w (TIndex l e ix)         = TIndex l <$> kwalk w e <*> kwalk w ix
     kwalk w (TSlice l e sl)         = TSlice l <$> kwalk w e <*> kwalk w sl
     kwalk w (TDot l e n)            = TDot l <$> kwalk w e <*> return n
+    kwalk w (TDotI l e i tl)        = TDotI l <$> kwalk w e <*> return i <*> return tl
     kwalk w (TParen l p)            = TParen l <$> kwalk w p
 
 instance KWalk Exception where

@@ -176,6 +176,7 @@ instance InfEnv Stmt where
             t2e (TIndex l e ix)         = Index l e ix
             t2e (TSlice l e sl)         = Slice l e sl
             t2e (TDot l e n)            = Dot l e n
+            t2e (TDotI l e i tl)        = DotI l e i tl
             t2e (TParen l tg)           = Paren l (t2e tg)
             t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs)
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
@@ -660,20 +661,8 @@ instance Infer Expr where
     infer env e@YieldFrom{}             = notYetExpr e
     infer env (Tuple l pargs)           = do (prow,pargs') <- infer env pargs
                                              return (tTuple prow, Tuple l pargs')
-    infer env (TupleComp l e co)
-      | nodup co                        = do (te,co') <- infEnv env co
-                                             (_,e') <- infer (define te env) e
-                                             prow <- newRowVar
-                                             return (tTuple prow, TupleComp l e' co')       -- !! Extreme short-cut, for now
     infer env (Record l kargs)          = do (krow,kargs') <- infer env kargs
                                              return (tRecord krow, Record l kargs')
-    infer env (RecordComp l n e co)
-      | nodup co                        = do (te,co') <- infEnv env co
-                                             let env1 = define te env
-                                             _ <- infer env1 (Var (nloc n) (NoQual n))
-                                             (_,e') <- infer env1 e
-                                             krow <- newRowVar
-                                             return (tRecord krow, RecordComp l n e' co')   -- !! Extreme short-cut, for now
     infer env (List l es)               = do t0 <- newTVar
                                              es' <- infElems env es pSequence t0
                                              return (pSequence t0, List l es')
@@ -909,6 +898,11 @@ instance Infer Target where
                                              constrain [Mut env t n t0]
                                              equFX env (fxMut tWild tWild)
                                              return (t0, TDot l e' n)
+    infer env (TDotI l e i tl)          = do (t,e') <- infer env e
+                                             t0 <- newTVar
+                                             --constrain [Mut env t n t0]
+                                             equFX env (fxMut tWild tWild)
+                                             return (t0, TDotI l e' i tl)
     infer env (TaTuple l targs)         = do (ts,targs') <- unzip <$> mapM (infer env) targs
                                              return (tTuple (foldr posRow' posNil ts), TaTuple l targs')
 
@@ -969,7 +963,7 @@ instance WellFormed Type where
     wfmd env w (TCon _ tc)          = wfmd env w tc
     wfmd env w (TAt _ tc)           = wfmd env w tc
     wfmd env w (TFun _ e p k t)     = wfmd env w e && wfmd env w p && wfmd env w k && wfmd env w t
-    wfmd env w (TTuple _ p)         = wfmd env w p
+    wfmd env w (TTuple _ p k)       = wfmd env w p && wfmd env w k
     wfmd env w (TRecord _ k)        = wfmd env w k
     wfmd env w (TOpt _ t)           = wfmd env w t
     wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
@@ -998,7 +992,7 @@ instance Wild Type where
     instwild (TCon l tc)            = TCon l <$> instwild tc
     instwild (TAt l tc)             = TAt l <$> instwild tc
     instwild (TFun l e p k t)       = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
-    instwild (TTuple l p)           = TTuple l <$> instwild p
+    instwild (TTuple l p k)         = TTuple l <$> instwild p <*> instwild k
     instwild (TRecord l k)          = TRecord l <$> instwild k
     instwild (TOpt l t)             = TOpt l <$> instwild t
     instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r

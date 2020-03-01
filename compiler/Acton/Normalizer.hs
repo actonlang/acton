@@ -191,11 +191,7 @@ instance Norm Expr where
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es)           = Tuple l <$> norm env es
-    norm env (TupleComp l e c)      = TupleComp l <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
     norm env (Record l fs)          = Record l <$> norm env fs
-    norm env (RecordComp l n e c)   = RecordComp l n <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
       where env1                    = extLocal (bound c) env
@@ -220,6 +216,7 @@ instance Norm Target where
     norm env (TIndex l e ix)        = TIndex l <$> norm env e <*> norm env ix
     norm env (TSlice l e sl)        = TSlice l <$> norm env e <*> norm env sl
     norm env (TDot l e n)           = TDot l <$> norm env e <*> norm env n
+    norm env (TDotI l e i tl)       = TDotI l <$> norm env e <*> return i <*> return tl
     norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
     norm env (TParen l p)           = TParen l <$> norm env p
 
@@ -354,7 +351,7 @@ instance Norm TBind where
 instance Norm Type where
     norm env (TVar l v)             = TVar l <$> norm env v
     norm env (TFun l es p k t)      = TFun l <$> norm env es <*> norm env p <*> norm env k <*> norm env t
-    norm env (TTuple l p)           = TTuple l <$> norm env p
+    norm env (TTuple l p k)         = TTuple l <$> norm env p <*> norm env k
     norm env (TRecord l k)          = TRecord l <$> norm env k
     norm env (TOpt l t)             = TOpt l <$> norm env t
     norm env (TUnion l as)          = TUnion l <$> return as
