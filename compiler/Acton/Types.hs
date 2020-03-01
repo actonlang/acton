@@ -669,7 +669,8 @@ instance Infer Expr where
     infer env (ListComp l e1 co)
       | nodup co                        = do (te,co') <- infEnv env co
                                              t0 <- newTVar
-                                             [e1'] <- infElems (define te env) [e1] pSequence t0
+                                             es <- infElems (define te env) [e1] pSequence t0
+                                             let [e1'] = es
                                              return (pSequence t0, ListComp l e1' co')
     infer env (Set l es)                = do t0 <- newTVar
                                              es'  <- infElems env es pSet t0
@@ -677,7 +678,8 @@ instance Infer Expr where
     infer env (SetComp l e1 co)
       | nodup co                        = do (te,co') <- infEnv env co
                                              t0 <- newTVar
-                                             [e1'] <- infElems (define te env) [e1] pSet t0
+                                             es <- infElems (define te env) [e1] pSet t0
+                                             let [e1'] = es
                                              return (pSet t0, SetComp l e1' co')
                                              
     infer env (Dict l as)               = do tk <- newTVar
@@ -688,7 +690,8 @@ instance Infer Expr where
       | nodup co                        = do (te,co') <- infEnv env co
                                              tk <- newTVar
                                              tv <- newTVar
-                                             [a1'] <- infAssocs (define te env) [a1] tk tv
+                                             as <- infAssocs (define te env) [a1] tk tv
+                                             let [a1'] = as
                                              return (pMapping tk tv, DictComp l a1' co')
     infer env (Paren l e)               = do (t,e') <- infer env e
                                              return (t, Paren l e')

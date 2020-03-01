@@ -15,8 +15,7 @@
 # resolver:
 #  name: custom-snapshot
 #  location: "./custom-snapshot.yaml"
-resolver: lts-9.2
-compiler: ghc-8.0.2
+resolver: lts-13.0
 
 # use GHC 8.0.1 w/o other option is to build GHC with ./configure --disable-large-address-space
 
@@ -43,7 +42,7 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 # extra-deps: []
-extra-deps: [megaparsec-7.0.0,directory-1.3.3.1, parser-combinators-1.0.0]
+extra-deps: [megaparsec-7.0.0,directory-1.3.3.1, parser-combinators-1.0.0,process-1.6.8.0]
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

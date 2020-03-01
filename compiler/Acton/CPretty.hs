@@ -74,6 +74,7 @@ instance CPretty Name where
     cpretty (Name _ "list")         = text "$list"
     cpretty (Name _ "dict")         = text "$dict"
     cpretty (Name _ "set")          = text "$set"
+    cpretty (Name _ "str")          = text "$str"
     cpretty (Name _ ns)             = text ns
     cpretty (Internal str _ _)      = text (substdollar str)
 

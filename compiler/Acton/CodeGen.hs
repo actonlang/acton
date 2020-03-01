@@ -10,6 +10,7 @@ import Acton.Syntax
 import Acton.Builtin
 import Acton.Printer
 import Acton.Prim
+import Prelude hiding ((<>))
 
 generate                            :: Acton.Env.Env -> Module -> IO String
 generate env m                      = return $ render $ gen (genEnv env) m

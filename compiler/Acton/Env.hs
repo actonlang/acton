@@ -21,7 +21,7 @@ import Acton.Names
 import Utils
 import Pretty
 import InterfaceFiles
--- import Prelude hiding ((<>))
+import Prelude hiding ((<>))
 
 
 
@@ -846,7 +846,7 @@ instance Subst TBind where
 instance Subst Type where
     msubst (TVar l v)               = do s <- getSubstitution
                                          case Map.lookup v s of
-                                            Just t -> msubst t
+                                            Just t ->  msubst t
                                             Nothing -> return (TVar l v)
     msubst (TCon l c)               = TCon l <$> msubst c
     msubst (TAt l c)                = TAt l <$> msubst c
