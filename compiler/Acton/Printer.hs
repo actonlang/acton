@@ -5,7 +5,7 @@ import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
--- import Prelude hiding ((<>))
+import Prelude hiding ((<>))
 
 
 

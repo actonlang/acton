@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.20.0.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8906ca5d8e5c470063caf2481cbe6c276a053f03eb3f099278b2b1ab0aa1d5a8
+-- hash: 577133e1d4e6feb9f676d87d96d29a930ddbe055a147e49af8c1769485bad6df
 
 name:           acton
 version:        0.3.0
@@ -12,7 +14,6 @@ maintainer:     example@example.com
 copyright:      2018 Author name here
 license:        BSD3
 build-type:     Simple
-cabal-version:  >= 1.10
 
 executable actonc
   main-is: ActonCompiler.hs
@@ -43,6 +44,7 @@ executable actonc
   other-modules:
       Acton.Builtin
       Acton.CodeGen
+      Acton.CPretty
       Acton.CPS
       Acton.Deactorizer
       Acton.Env
@@ -53,6 +55,7 @@ executable actonc
       Acton.Parser
       Acton.Prim
       Acton.Printer
+      Acton.ProtExtElim
       Acton.Relabel
       Acton.Solver
       Acton.Syntax
