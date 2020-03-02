@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 577133e1d4e6feb9f676d87d96d29a930ddbe055a147e49af8c1769485bad6df
+-- hash: 47b06594dd0245559063fea9e3a7d6e618e28f09e35be8b5924b705e867bd7ef
 
 name:           acton
 version:        0.3.0
@@ -17,30 +17,6 @@ build-type:     Simple
 
 executable actonc
   main-is: ActonCompiler.hs
-  hs-source-dirs:
-      ./.
-  build-depends:
-      array
-    , base >=4.7 && <5
-    , binary
-    , bytestring
-    , containers
-    , deepseq
-    , directory >=1.3.1
-    , filepath
-    , hashable
-    , megaparsec >=7
-    , mtl
-    , optparse-applicative
-    , parser-combinators
-    , pretty
-    , scientific
-    , transformers
-    , utf8-string
-    , zlib
-  build-tools:
-      alex
-    , happy
   other-modules:
       Acton.Builtin
       Acton.CodeGen
@@ -63,7 +39,30 @@ executable actonc
       InterfaceFiles
       Pretty
       SrcLocation
-      TestTransform
       Utils
       Paths_acton
+  hs-source-dirs:
+      ./.
+  build-tools:
+      alex
+    , happy
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , binary
+    , bytestring
+    , containers
+    , deepseq
+    , directory >=1.3.1
+    , filepath
+    , hashable
+    , megaparsec >=7
+    , mtl
+    , optparse-applicative
+    , parser-combinators
+    , pretty
+    , scientific
+    , transformers
+    , utf8-string
+    , zlib
   default-language: Haskell2010
