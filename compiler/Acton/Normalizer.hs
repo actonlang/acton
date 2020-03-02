@@ -48,7 +48,7 @@ extLocal vs env                     = env{ local = vs ++ local env }
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
-normPat env (PTuple _ pp)           = do v <- newName "tup"
+normPat env (PTuple _ pp kp)        = do v <- newName "tup"  -- *************** nothing done with kp!!!
                                          return (pVar v Nothing,normPP v 0 pp)
   where normPP v n (PosPat p pp)    = s : normPP v (n+1) pp
           where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n False)
@@ -190,8 +190,8 @@ instance Norm Expr where
       where env1                    = extLocal (bound ps ++ bound ks) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
-    norm env (Tuple l es)           = Tuple l <$> norm env es
-    norm env (Record l fs)          = Record l <$> norm env fs
+    norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
+--    norm env (Record l fs)          = Record l <$> norm env fs
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
       where env1                    = extLocal (bound c) env
@@ -206,7 +206,7 @@ instance Norm Expr where
 
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
-    norm env (PTuple l ps)          = PTuple l <$> norm env ps
+    norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
 --    norm env (PRecord l ps)         = PRecord l <$> norm env ps
     norm env (PParen l p)           = PParen l <$> norm env p

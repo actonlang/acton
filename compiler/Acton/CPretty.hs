@@ -88,8 +88,8 @@ instance CPretty Type where
  --   pretty (TAt  _ c)               = text "@" <> pretty c
     cpretty (TFun _ e p _ t)        =  parens (cprettyPosRow p) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
-    cpretty (TTuple _ pos _)        = parens (cprettyPosRow pos)
-    cpretty (TRecord _ kw)          = parens (cprettyPosRow kw)
+    cpretty (TTuple _ p _)          = parens (cprettyPosRow p)
+--    cpretty (TRecord _ kw)          = parens (cprettyPosRow kw)
     cpretty (TUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     cpretty (TOpt _ t)              = text "?" <> pretty t
@@ -138,7 +138,7 @@ fun_prototypes nm ss                    = vcat (concatMap protoDecl ss)
                                         = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow (addFstElem nm p)) <>semi) ns)
 
 
-resultTuple (TTuple _ r)                = tup 0 r
+resultTuple (TTuple _ r _)              = tup 0 r
    where tup n (TNil _)                 = text ("$tup"++show n++"_t")
          tup n (TRow _ _ (TSchema _ _ (TVar{}) _) r)
                                         = tup (n+1) r

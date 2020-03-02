@@ -155,8 +155,8 @@ instance KCheck Expr where
     kchk env (Lambda l ps ks e)     = kchk env ps >> kchk env ks >> kchk env e
     kchk env (Yield l e)            = kchk env e
     kchk env (YieldFrom l e)        = kchk env e
-    kchk env (Tuple l es)           = kchk env es
-    kchk env (Record l fs)          = kchk env fs
+    kchk env (Tuple l es ks)        = kchk env es >> kchk env ks
+--    kchk env (Record l fs)          = kchk env fs
     kchk env (List l es)            = kchk env es
     kchk env (ListComp l e c)       = kchk env e >> kchk env c
     kchk env (Dict l as)            = kchk env as
@@ -167,7 +167,7 @@ instance KCheck Expr where
 
 instance KCheck Pattern where
     kchk env (PVar l n t)           = kexpect env KType t
-    kchk env (PTuple l ps)          = kchk env ps
+    kchk env (PTuple l ps ks)       = kchk env ps >> kchk env ks
     kchk env (PList l ps p)         = kchk env ps >> kchk env p
     kchk env (PParen l p)           = kchk env p
 
@@ -447,8 +447,8 @@ instance KWalk Expr where
     kwalk w (Lambda l ps ks e)      = Lambda l <$> kwalk w ps <*> kwalk w ks <*> kwalk w e
     kwalk w (Yield l e)             = Yield l <$> kwalk w e
     kwalk w (YieldFrom l e)         = YieldFrom l <$> kwalk w e
-    kwalk w (Tuple l es)            = Tuple l <$> kwalk w es
-    kwalk w (Record l fs)           = Record l <$> kwalk w fs
+    kwalk w (Tuple l es ks)         = Tuple l <$> kwalk w es <*> kwalk w ks
+--    kwalk w (Record l fs)           = Record l <$> kwalk w fs
     kwalk w (List l es)             = List l <$> kwalk w es
     kwalk w (ListComp l e c)        = ListComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Dict l as)             = Dict l <$> kwalk w as
@@ -460,7 +460,7 @@ instance KWalk Expr where
 instance KWalk Pattern where
     kwalk w (PVar l n a)            = PVar l n <$> kwalk w a
 --    kwalk w (PRecord l ps)          = PRecord l <$> kwalk w ps
-    kwalk w (PTuple l ps)           = PTuple l <$> kwalk w ps
+    kwalk w (PTuple l ps ks)        = PTuple l <$> kwalk w ps <*> kwalk w ks
     kwalk w (PList l ps p)          = PList l <$> kwalk w ps <*> kwalk w p
     kwalk w (PParen l p)            = PParen l <$> kwalk w p
 

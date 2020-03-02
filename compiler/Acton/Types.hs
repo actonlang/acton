@@ -178,7 +178,7 @@ instance InfEnv Stmt where
             t2e (TDot l e n)            = Dot l e n
             t2e (TDotI l e i tl)        = DotI l e i tl
             t2e (TParen l tg)           = Paren l (t2e tg)
-            t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs)
+            t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs) KwdNil
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
                                              (t,e2') <- infer env e2
                                              constrain [Sub env t tStr]
@@ -538,7 +538,7 @@ instance Infer Expr where
                                              constrain [Impl env t (cIndexed ti t0)]
                                              return (t0, eCall (eDot (eVar w) getitemKW) [e',ix'])
       where ix | length ixs == 1        = head ixs
-               | otherwise              = Tuple NoLoc (foldr PosArg PosNil ixs)
+               | otherwise              = Tuple NoLoc (foldr PosArg PosNil ixs) KwdNil
     infer env (Slice l e slz)           = do (t,e') <- infer env e
                                              sl' <- inferSlice env sl
                                              w <- newName "Sliceable"
@@ -659,10 +659,11 @@ instance Infer Expr where
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
     infer env e@YieldFrom{}             = notYetExpr e
-    infer env (Tuple l pargs)           = do (prow,pargs') <- infer env pargs
-                                             return (tTuple prow, Tuple l pargs')
-    infer env (Record l kargs)          = do (krow,kargs') <- infer env kargs
-                                             return (tRecord krow, Record l kargs')
+    infer env (Tuple l pargs kargs)     = do (prow,pargs') <- infer env pargs
+                                             (krow,kargs') <- infer env kargs
+                                             return (TTuple NoLoc prow krow, Tuple l pargs' kargs')
+--    infer env (Record l kargs)          = do (krow,kargs') <- infer env kargs
+--                                             return (tRecord krow, Record l kargs')
     infer env (List l es)               = do t0 <- newTVar
                                              es' <- infElems env es pSequence t0
                                              return (pSequence t0, List l es')
@@ -841,8 +842,9 @@ instance InfEnvT Pattern where
                                              TSchema _ [] t _ -> return (nEmpty, t, PVar l n Nothing)
                                              _ -> err1 n "Polymorphic variable not assignable:"
     infEnvT env p@PVar{}                = typedReassign p
-    infEnvT env (PTuple l ps)           = do (te,prow,ps') <- infEnvT env ps
-                                             return (te, tTuple prow, PTuple l ps')
+    infEnvT env (PTuple l ps ks)        = do (te1,prow,ps') <- infEnvT env ps
+                                             (te2,krow,ks') <- infEnvT env ks
+                                             return (nCombine te1 te2, TTuple NoLoc prow krow, PTuple l ps' ks')
 --    infEnvT env (PRecord _ ps)          = do (te, krow) <- infEnvT env ps
 --                                             return (te, tRecord krow)
     infEnvT env (PList l ps p)          = do (te1,t1,ps') <- infEnvT env ps

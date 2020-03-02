@@ -299,8 +299,8 @@ instance Lift Expr where
     ll env (Await l e)                  = Await l <$> ll env e
     ll env (Yield l e)                  = Yield l <$> ll env e
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
-    ll env (Tuple l es)                 = Tuple l <$> ll env es
-    ll env (Record l ks)                = Record l <$> ll env ks
+    ll env (Tuple l es ks)              = Tuple l <$> ll env es <*> ll env ks
+--    ll env (Record l ks)                = Record l <$> ll env ks
     ll env (List l es)                  = List l <$> ll env es
     ll env (ListComp l e co)            = ListComp l <$> ll env1 e <*> ll env co
       where env1                        = extLocals (bound co) env

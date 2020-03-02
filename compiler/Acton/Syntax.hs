@@ -73,8 +73,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
-                | Tuple         { eloc::SrcLoc, parg::PosArg }
-                | Record        { eloc::SrcLoc, kargs::KwdArg }
+                | Tuple         { eloc::SrcLoc, pargs::PosArg, kargs::KwdArg }
+--                | Record        { eloc::SrcLoc, kargs::KwdArg }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
@@ -87,7 +87,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
 data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
 --                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
-                | PTuple        { ploc::SrcLoc, ppat::PosPat }
+                | PTuple        { ploc::SrcLoc, ppat::PosPat, kpat::KwdPat}
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
@@ -455,8 +455,8 @@ instance Eq Expr where
     x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
-    x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y
-    x@Record{}          ==  y@Record{}          = kargs x == kargs y
+    x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y && kargs x == kargs y
+ --   x@Record{}          ==  y@Record{}          = kargs x == kargs y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
     x@Dict{}            ==  y@Dict{}            = assocs x == assocs y
@@ -499,7 +499,7 @@ instance Eq Comp where
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
 --    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
-    PTuple _ p1         == PTuple _ p2          = p1 == p2
+    PTuple _ p1 k1      == PTuple _ p2 k2       = p1 == p2 && k1 == k2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
     PParen _ p1         == p2                   = p1 == p2

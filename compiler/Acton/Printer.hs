@@ -100,7 +100,7 @@ instance Pretty (PosPar,KwdPar) where
     pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
 
 instance Pretty PosArg where
---    pretty (PosArg e PosNil)        = pretty e
+    pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
     pretty (PosStar e)              = text "*" <> pretty e
     pretty PosNil                   = empty
@@ -114,7 +114,7 @@ instance Pretty KwdArg where
 instance Pretty (PosArg,KwdArg) where
     pretty (PosNil, ks)             = pretty ks
     pretty (ps, KwdNil)             = pretty ps
-    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks
+    pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
@@ -141,9 +141,9 @@ instance Pretty Expr where
     pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
-    pretty (Tuple _ ps)             = pretty ps
-    pretty (Record _ KwdNil)        = text "record" <> parens empty
-    pretty (Record _ kargs)         = parens (pretty kargs)
+    pretty (Tuple _ ps ks)          = pretty (ps,ks)
+--    pretty (Record _ KwdNil)        = text "record" <> parens empty
+--    pretty (Record _ kargs)         = parens (pretty kargs)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -235,7 +235,7 @@ instance Pretty KwdPat where
 
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
-    pretty (PTuple _ ps)            = pretty ps
+    pretty (PTuple _ ps ks)         = pretty ps <> comma <+> pretty ks
 --    pretty (PRecord _ ps)           = parens (pretty ps)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)

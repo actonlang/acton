@@ -135,9 +135,9 @@ instance Gen Expr where
     gen env (DotI _ e i True)       = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (Yield _ e)             = text "yield" <+> gen env e
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
-    gen env (Tuple _ pargs)         = gen env pargs
-    gen env (Record _ KwdNil)       = text "record" <> parens empty
-    gen env (Record _ kargs)        = parens (gen env kargs)
+    gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
+--    gen env (Record _ KwdNil)       = text "record" <> parens empty
+--    gen env (Record _ kargs)        = parens (gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
     gen env (Dict _ es)             = braces (commaList es)
     gen env (Set _ [])              = text "set" <> parens empty

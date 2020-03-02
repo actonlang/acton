@@ -469,8 +469,8 @@ instance PreCPS Expr where
                                                     return (Var l0 (NoQual f))
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
-    pre env (Tuple l es)                = Tuple l <$> pre env es
-    pre env (Record l fs)               = Record l <$> pre env fs
+    pre env (Tuple l es ks)             = Tuple l <$> pre env es <*> pre env ks
+--    pre env (Record l fs)               = Record l <$> pre env fs
     pre env (List l es)                 = List l <$> pre env es
     pre env (ListComp l (Elem e) c)     = do (e1,stmts) <- withPrefixes $ liftM2 (ListComp l) (fmap Elem $ pre env e) (pre env c)
                                              case stmts of
@@ -555,7 +555,7 @@ instance PreCPS Comp where
 
 instance PreCPS Pattern where
     pre env (PVar l n a)                = return (PVar l n a)
-    pre env (PTuple l ps)               = PTuple l <$> pre env ps
+    pre env (PTuple l ps ks)            = PTuple l <$> pre env ps <*> pre env ks
     pre env (PList l ps p)              = PList l <$> pre env ps <*> pre env p
     pre env (PParen l p)                = PParen l <$> pre env p
     pre env (PData l n ixs)             = PData l n <$> pre env ixs
