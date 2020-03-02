@@ -380,19 +380,28 @@ kwdItems fCons fStar fNil item staritem =
 
 -- parameter list consisting of posItems followed by kwdItems
 -- Unfortunately, the parser below does not make use of posItems
-funItems :: (a1 -> t1 -> t1) -> (a -> t1) -> t1 -> Parser a1 -> Parser a -> Parser t -> t -> Parser (t1,t)
+funItems :: (a1 -> t1 -> t1) -> (a -> t1) -> t1 -> Parser a1 -> Parser a -> Parser t -> t -> Parser (Either (t1,t) a1)
 funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
-              try (do i <- singleStar *> posstaritem; comma; k <- kwdItems; return (posStar i, k))
+              try (do i <- singleStar *> posstaritem; comma; k <- kwdItems; return (Left (posStar i, k)))
            <|>
-              try (do i <- singleStar *> posstaritem; optional comma; return (posStar i, kwdNil))
+              try (do i <- singleStar *> posstaritem; optional comma; return (Left (posStar i, kwdNil)))
            <|>
-              try (do k <- kwdItems; return (posNil, k))
+              try (do k <- kwdItems; return (Left (posNil, k)))
            <|>
-              try (do i <- positem; comma; (p,k) <- funItems posCons posStar posNil positem posstaritem kwdItems kwdNil; return (posCons i p, k))
+              try (do i <- positem
+                      comma
+                      r <- funItems posCons posStar posNil positem posstaritem kwdItems kwdNil
+                      case r of
+                         Left (p,k) -> return (Left (posCons i p, k))
+                         Right p -> return (Left (posCons i (posCons p posNil),kwdNil)))
            <|>
-              try (do i <- positem; optional comma; return (posCons i posNil, kwdNil))
+              try (do i <- positem
+                      mb <- optional comma
+                      case mb of
+                         Just _ -> return (Left (posCons i posNil, kwdNil))
+                         Nothing -> return (Right i))
            <|>
-               (do optional comma; return (posNil, kwdNil))
+               (do optional comma; return (Left (posNil, kwdNil)))
  
 tuple_or_single posItems headItems len tup =
       do pa <- posItems
@@ -409,10 +418,19 @@ pospat :: Parser S.PosPat
 pospat = posItems S.PosPat S.PosPatStar S.PosPatNil apat apat
 
 kwdpat :: Parser S.KwdPat 
-kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil undefined undefined        -- This is not yet used; will be used to build PRecord patterns. 
+kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil kpat apat        -- This is not yet used; will be used to build PRecord patterns. 
+     where kpat = do v <- name
+                     equals
+                     p <- apat
+                     return (v,p)
+     
+gen_pattern = do r <- funItems  S.PosPat S.PosPatStar S.PosPatNil apat apat kwdpat S.KwdPatNil
+                 case r of
+                   Left (p,k) -> return $ S.PTuple NoLoc p k
+                   Right p -> return $ S.PTuple NoLoc (S.PosPat p S.PosPatNil) S.KwdPatNil
 
-gen_pattern :: Parser S.Pattern
-gen_pattern = addLoc $ tuple_or_single pospat S.posPatHead S.posPatLen (S.PTuple NoLoc)
+--gen_pattern :: Parser S.Pattern
+--gen_pattern = addLoc $ tuple_or_single pospat S.posPatHead S.posPatLen (S.PTuple NoLoc)
   
 pelems ::Parser ([S.Pattern], Maybe S.Pattern)
 pelems = do
@@ -425,7 +443,7 @@ apat :: Parser S.Pattern
 apat = addLoc (
             (try $ S.PVar NoLoc <$> name <*> optannot)
         <|>
-            ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil))
+            ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil S.KwdPatNil))
         <|>
             ((try . parens) $ S.PParen NoLoc <$> gen_pattern)
         <|>
@@ -776,7 +794,7 @@ expr =  lambdef
 -- If more than one expr, build a tuple.
 -- if only one, leave as it is unless there is a trailing comma when we build a one-element tuple.
 exprlist :: Parser S.Expr
-exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (S.Tuple NoLoc)
+exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (\p -> S.Tuple NoLoc p S.KwdNil)
  
 
 expr_nocond = or_expr <|> lambdef_nocond
@@ -838,6 +856,7 @@ star_expr = S.Star <$> (star *> arithexpr)
 
 -- Arithmetic expressions ----------------------------------------------------------
 -- Again, everything between arithexpr and factor is handled by makeExprParser
+
 arithexpr :: Parser S.Expr
 arithexpr = makeExprParser factor table <?> "arithmetic expression"
 
@@ -877,13 +896,14 @@ atom_expr = do
         atom :: Parser S.Expr
         atom =  addLoc (try strings
                <|>
-                 ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil))
+                 ((try . parens) $ return $ S.Paren NoLoc (S.Tuple NoLoc S.PosNil S.KwdNil))
                <|>
                  ((try . parens) $ S.Paren NoLoc <$> yield_expr)
                <|>
-                 (try . parens) exprlist2
-               <|>
-                 (try . parens) recordmaker
+               parens expr_or_tuplemaker
+               --   (try . parens) exprlist2
+               -- <|>
+               --   (try . parens) recordmaker
                <|>
                 (brackets $ do
                              mbe <- optional listmaker
@@ -904,27 +924,33 @@ atom_expr = do
                <|> (\l -> S.Bool l False) <$> rwordLoc "False")
                <?> "atomic expression"
 
+        expr_or_tuplemaker              = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
+                                             case r of
+                                                Left (p,k) -> return (S.Tuple NoLoc p k)
+                                                Right e -> return (S.Paren NoLoc e)
+             
+
         -- A non-empty tuple or parenthesized expression. Empty tuple handled directly in atom.
         -- The difference from exprlist is that here a tuple comprehension is allowed.
         -- NOTE: exprlist23 and recordmaker have the same structure; could be refactored.
-        exprlist2 :: Parser S.Expr
-        exprlist2 = addLoc $ do
-               e <- star *> expr
-               return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
-             <|> do
-               e <- expr
-               mb <- optional (do mp <- comma *> optional (posarg <* optional comma)
-                                  return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
-               return (maybe (S.Paren NoLoc e) id mb)
+        -- exprlist2 :: Parser S.Expr
+        -- exprlist2 = addLoc $ do
+        --        e <- star *> expr
+        --        return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
+        --      <|> do
+        --        e <- expr
+        --        mb <- optional (do mp <- comma *> optional (posarg <* optional comma)
+        --                           return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
+        --        return (maybe (S.Paren NoLoc e) id mb)
             
-        recordmaker =  addLoc $ do
-               e <- starstar *> expr
-               return $ S.Record NoLoc (S.KwdStar e)
-             <|> do
-               (n,e) <- kwdbind
-               mb <- optional (do mp <- comma *> optional kwdarg
-                                  return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
-               return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
+        -- recordmaker =  addLoc $ do
+        --        e <- starstar *> expr
+        --        return $ S.Record NoLoc (S.KwdStar e)
+        --      <|> do
+        --        (n,e) <- kwdbind
+        --        mb <- optional (do mp <- comma *> optional kwdarg
+        --                           return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
+        --        return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
                      
         -- common pattern in functions building lists, sets and dictionaries
         maker constr constrComp p = do
@@ -1034,9 +1060,9 @@ funpars ann =   try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> p
 -- Position/Keyword lists of expr's.
 -- posarg is used in exprlist to build the general form of comma-separated expressions 
 
-kwdbind :: Parser (S.Name, S.Expr)
+kwdbind :: Parser (S.Name, S.Expr) 
 kwdbind = do v <- escname
-             colon
+             equals
              e <- expr
              return (v,e)
 
@@ -1047,7 +1073,10 @@ kwdarg :: Parser S.KwdArg
 kwdarg = kwdItems (uncurry S.KwdArg) S.KwdStar S.KwdNil kwdbind expr
 
 funargs :: Parser (S.PosArg, S.KwdArg)
-funargs = funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
+funargs = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
+             case r of
+               Left p -> return p
+               Right t -> return (S.PosArg t S.PosNil, S.KwdNil)
 
 --- Types ----------------------------------------------------------------------
 
@@ -1072,8 +1101,11 @@ kwdrow = kwdItems (uncurry S.kwdRow) S.kwdVar S.kwdNil tsig1 (optional tvar)
                     return (v,t)
  
 funrows :: Parser (S.PosRow, S.KwdRow)
-funrows = funItems S.posRow S.posVar S.posNil tschema (optional tvar) kwdrow S.kwdNil
-
+funrows = do r <- funItems S.posRow S.posVar S.posNil tschema (optional tvar) kwdrow S.kwdNil
+             case r of
+               Left p -> return p
+               Right t -> return (S.posRow t S.posNil, S.kwdNil)
+               
 tcon :: Parser S.TCon
 tcon =  do n <- qual_name
            args <- optional (brackets (do t <- ttype

@@ -69,7 +69,7 @@ instance DataVars Branch where
     datavars n (Branch e ss)        = datavars n ss
 
 instance DataVars Pattern where
-    datavars n (PTuple _ ps)        = bound ps
+    datavars n (PTuple _ ps ks)     = bound ps ++ bound ks
     datavars n (PList _ ps p)       = bound ps ++ bound p
     datavars n (PParen _ p)         = bound p
     datavars n (PData _ v ixs)
@@ -182,8 +182,8 @@ instance Vars Expr where
     free (Lambda _ ps ks e)         = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
-    free (Tuple _ ps)               = free ps
-    free (Record _ fs)              = free fs
+    free (Tuple _ ps ks)            = free ps ++ free ks
+--    free (Record _ fs)              = free fs
     free (List _ es)                = free es
     free (ListComp _ e co)          = (free e \\ bound co) ++ free co
     free (Dict _ es)                = free es
@@ -299,14 +299,14 @@ instance Vars KwdPat where
 instance Vars Pattern where
     free (PVar _ n a)               = []
 --    free (PRecord _ ps)             = free ps
-    free (PTuple _ ps)              = free ps
+    free (PTuple _ ps ks)           = free ps ++ free ks
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
 
     bound (PVar _ n a)              = [n]
 --    bound (PRecord _ ps)            = bound ps
-    bound (PTuple _ ps)             = bound ps
+    bound (PTuple _ ps ks)          = bound ps ++ bound ks
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
