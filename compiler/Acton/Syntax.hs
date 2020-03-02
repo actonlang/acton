@@ -74,7 +74,6 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, pargs::PosArg, kargs::KwdArg }
---                | Record        { eloc::SrcLoc, kargs::KwdArg }
                 | List          { eloc::SrcLoc, elems::[Elem] }
                 | ListComp      { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Dict          { eloc::SrcLoc, assocs::[Assoc] }
@@ -86,7 +85,6 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
 
 data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PParen        { ploc::SrcLoc, pat::Pattern }
---                | PRecord       { ploc::SrcLoc, kpat::KwdPat }
                 | PTuple        { ploc::SrcLoc, ppat::PosPat, kpat::KwdPat}
                 | PList         { ploc::SrcLoc, pats::[Pattern], ptail::Maybe Pattern }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
@@ -194,7 +192,6 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TAt       { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
-                | TRecord   { tloc::SrcLoc, kwdrow::KwdRow }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
@@ -259,7 +256,7 @@ tCon c          = TCon NoLoc c
 tAt c           = TAt NoLoc c
 tFun fx p k t   = TFun NoLoc fx p k t
 tTuple p        = TTuple NoLoc p kwdNil
-tRecord k       = TRecord NoLoc k
+tRecord k       = TTuple NoLoc posNil k
 tUnion ts       = TUnion NoLoc ts
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
@@ -456,7 +453,6 @@ instance Eq Expr where
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
     x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y && kargs x == kargs y
- --   x@Record{}          ==  y@Record{}          = kargs x == kargs y
     x@List{}            ==  y@List{}            = elems x == elems y
     x@ListComp{}        ==  y@ListComp{}        = elem1 x == elem1 y && comp x == comp y
     x@Dict{}            ==  y@Dict{}            = assocs x == assocs y
@@ -498,7 +494,6 @@ instance Eq Comp where
 
 instance Eq Pattern where
     PVar _ n1 a1        == PVar _ n2 a2         = n1 == n2 && a1 == a2
---    PRecord _ ps1       == PRecord _ ps2        = ps1 == ps2
     PTuple _ p1 k1      == PTuple _ p2 k2       = p1 == p2 && k1 == k2
     PList _ ps1 p1      == PList _ ps2 p2       = ps1 == ps2 && p1 == p2
     PData _ n1 ix1      == PData _ n2 ix2       = n1 == n2 && ix1 == ix2
@@ -528,7 +523,6 @@ instance Eq Type where
     TAt _ c1            == TAt _ c2             = c1 == c2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1 r1      == TTuple _ p2 r2       = p1 == p2 && r1 == r2
-    TRecord _ r1        == TRecord _ r2         = r1 == r2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True

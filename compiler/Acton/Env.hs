@@ -216,7 +216,6 @@ instance Unalias Type where
     unalias env (TAt l c)           = TAt l (unalias env c)
     unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
-    unalias env (TRecord l r)       = TRecord l (unalias env r)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
     unalias env (TRow l n t r)      = TRow l n (unalias env t) (unalias env r)
     unalias env t                   = t
@@ -852,7 +851,6 @@ instance Subst Type where
     msubst (TAt l c)                = TAt l <$> msubst c
     msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
     msubst (TTuple l p k)           = TTuple l <$> msubst p <*> msubst k
-    msubst (TRecord l k)            = TRecord l <$> msubst k
     msubst (TUnion l as)            = return $ TUnion l as
     msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TNone l)                = return $ TNone l
@@ -865,7 +863,6 @@ instance Subst Type where
     tyfree (TAt _ c)                = tyfree c
     tyfree (TFun _ fx p k t)        = tyfree fx ++ tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p k)           = tyfree p ++ tyfree k
-    tyfree (TRecord _ k)            = tyfree k
     tyfree (TUnion _ as)            = []
     tyfree (TOpt _ t)               = tyfree t
     tyfree (TNone _)                = []

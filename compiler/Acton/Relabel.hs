@@ -88,7 +88,6 @@ instance Relabel Expr where
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
     relabel (Tuple _ ps ks) = Tuple <$> newLoc <*> relabel ps <*> relabel ks
---    relabel (Record _ fs) = Record <$> newLoc <*> relabel fs
     relabel (List _ es) = List <$> newLoc <*> relabel es
     relabel (ListComp _ e c) = ListComp <$> newLoc <*> relabel e <*> relabel c
     relabel (Dict _ as) = Dict <$> newLoc <*> relabel as
@@ -99,14 +98,12 @@ instance Relabel Expr where
 
 instance Relabel Pattern where
     relabel (PVar _ n a) = PVar <$> newLoc <*> relabel n <*> relabel a
---    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
     relabel (PTuple _ ps ks) = PTuple <$> newLoc <*> relabel ps <*> relabel ks
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
 
 instance Relabel Target where
     relabel (TaVar _ n) = TaVar <$> newLoc <*> relabel n
---    relabel (PRecord _ ps) = PRecord <$> newLoc <*> relabel ps
     relabel (TaTuple _ ps) = TaTuple <$> newLoc <*> relabel ps
     relabel (TIndex _ e ix) = TIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (TSlice _ e sl) = TSlice <$> newLoc <*> relabel e <*> relabel sl
@@ -218,7 +215,6 @@ instance Relabel Type where
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (TTuple _ p k) = TTuple <$> newLoc <*> relabel p <*> relabel k
-    relabel (TRecord _ k) = TRecord <$> newLoc <*> relabel k
     relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
     relabel (TUnion _ as) = TUnion <$> newLoc <*> return as
     relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c

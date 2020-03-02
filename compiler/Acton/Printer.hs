@@ -383,9 +383,10 @@ instance Pretty Type where
     pretty (TCon  _ c)              = pretty c
     pretty (TAt  _ c)               = text "@" <> pretty c
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
-      where spaceSep f              = hsep . punctuate space . map f      
+      where spaceSep f              = hsep . punctuate space . map f
+    pretty (TTuple _ p (TNil _))
+      | rowDepth p == 1             = parens (prettyPosRow p <> comma)
     pretty (TTuple _ p k)           = parens (prettyFunRow p k)
-    pretty (TRecord _ kw)           = parens (prettyKwdRow kw)
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     pretty (TOpt _ t)               = text "?" <> pretty t
