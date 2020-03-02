@@ -418,7 +418,7 @@ pospat :: Parser S.PosPat
 pospat = posItems S.PosPat S.PosPatStar S.PosPatNil apat apat
 
 kwdpat :: Parser S.KwdPat 
-kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil kpat apat        -- This is not yet used; will be used to build PRecord patterns. 
+kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil kpat apat
      where kpat = do v <- name
                      equals
                      p <- apat
@@ -427,11 +427,8 @@ kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil kpat apat        -
 gen_pattern = do r <- funItems  S.PosPat S.PosPatStar S.PosPatNil apat apat kwdpat S.KwdPatNil
                  case r of
                    Left (p,k) -> return $ S.PTuple NoLoc p k
-                   Right p -> return $ S.PTuple NoLoc (S.PosPat p S.PosPatNil) S.KwdPatNil
+                   Right p -> return p
 
---gen_pattern :: Parser S.Pattern
---gen_pattern = addLoc $ tuple_or_single pospat S.posPatHead S.posPatLen (S.PTuple NoLoc)
-  
 pelems ::Parser ([S.Pattern], Maybe S.Pattern)
 pelems = do
     p <- apat
@@ -900,18 +897,15 @@ atom_expr = do
                <|>
                  ((try . parens) $ S.Paren NoLoc <$> yield_expr)
                <|>
-               parens expr_or_tuplemaker
-               --   (try . parens) exprlist2
-               -- <|>
-               --   (try . parens) recordmaker
+                 (parens $ S.Paren NoLoc <$> expr_or_tuplemaker)
                <|>
-                (brackets $ do
+                 (brackets $ do
                              mbe <- optional listmaker
                              return $ maybe (S.List NoLoc []) id mbe)
                <|>
-                (braces $ do
-                            mbe <- optional dictorsetmaker
-                            return $ maybe (S.Dict NoLoc []) id mbe)
+                 (braces $ do
+                             mbe <- optional dictorsetmaker
+                             return $ maybe (S.Dict NoLoc []) id mbe)
                <|> var
                <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
                <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
@@ -927,31 +921,9 @@ atom_expr = do
         expr_or_tuplemaker              = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
                                              case r of
                                                 Left (p,k) -> return (S.Tuple NoLoc p k)
-                                                Right e -> return (S.Paren NoLoc e)
+                                                Right e -> return e
              
 
-        -- A non-empty tuple or parenthesized expression. Empty tuple handled directly in atom.
-        -- The difference from exprlist is that here a tuple comprehension is allowed.
-        -- NOTE: exprlist23 and recordmaker have the same structure; could be refactored.
-        -- exprlist2 :: Parser S.Expr
-        -- exprlist2 = addLoc $ do
-        --        e <- star *> expr
-        --        return $ S.Paren NoLoc (S.Tuple NoLoc (S.PosStar e))
-        --      <|> do
-        --        e <- expr
-        --        mb <- optional (do mp <- comma *> optional (posarg <* optional comma)
-        --                           return (S.Paren NoLoc (S.Tuple NoLoc (S.PosArg e (maybe S.PosNil id mp)))))
-        --        return (maybe (S.Paren NoLoc e) id mb)
-            
-        -- recordmaker =  addLoc $ do
-        --        e <- starstar *> expr
-        --        return $ S.Record NoLoc (S.KwdStar e)
-        --      <|> do
-        --        (n,e) <- kwdbind
-        --        mb <- optional (do mp <- comma *> optional kwdarg
-        --                           return (S.Record NoLoc (S.KwdArg n e (maybe S.KwdNil id mp))))
-        --        return (maybe (S.Record NoLoc (S.KwdArg n e S.KwdNil)) id mb)
-                     
         -- common pattern in functions building lists, sets and dictionaries
         maker constr constrComp p = do
                    (l,a) <- withLoc p
@@ -1151,7 +1123,6 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc es p k t))
---        <|> try (parens (S.TRecord NoLoc <$> kwdrow))
         <|> try (do (p,k) <- parens funrows
                     return (S.TTuple NoLoc p k))
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))

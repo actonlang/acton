@@ -141,9 +141,9 @@ instance Pretty Expr where
     pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
+    pretty (Tuple _ ps KwdNil)
+      | posArgLen ps == 1           = pretty ps <> comma
     pretty (Tuple _ ps ks)          = pretty (ps,ks)
---    pretty (Record _ KwdNil)        = text "record" <> parens empty
---    pretty (Record _ kargs)         = parens (pretty kargs)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -233,10 +233,16 @@ instance Pretty KwdPat where
     pretty (KwdPatStar p)           = text "**" <> pretty p
     pretty KwdPatNil                = empty
 
+instance Pretty (PosPat,KwdPat) where
+    pretty (PosPatNil, ks)          = pretty ks
+    pretty (ps, KwdPatNil)          = pretty ps
+    pretty (ps, ks)                 = pretty ps <> comma <+> pretty ks    
+
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
-    pretty (PTuple _ ps ks)         = pretty ps <> comma <+> pretty ks
---    pretty (PRecord _ ps)           = parens (pretty ps)
+    pretty (PTuple _ ps KwdPatNil)
+      | posPatLen ps == 1           = pretty ps <> comma
+    pretty (PTuple _ ps ks)         = pretty (ps, ks)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
