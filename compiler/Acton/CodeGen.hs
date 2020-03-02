@@ -136,8 +136,6 @@ instance Gen Expr where
     gen env (Yield _ e)             = text "yield" <+> gen env e
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
---    gen env (Record _ KwdNil)       = text "record" <> parens empty
---    gen env (Record _ kargs)        = parens (gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
     gen env (Dict _ es)             = braces (commaList es)
     gen env (Set _ [])              = text "set" <> parens empty
@@ -286,7 +284,6 @@ instance Gen Type where
     gen env (TAt  _ c)              = text "@" <> gen env c
     gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
     gen env (TTuple _ pos _)        = parens (genRow env pos)
-    gen env (TRecord _ kw)          = parens (genRow env kw)
     gen env (TUnion _ as)           = parens (vbarSep (gen env) as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     gen env (TOpt _ t)              = gen env t

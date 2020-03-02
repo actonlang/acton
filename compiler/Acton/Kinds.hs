@@ -156,7 +156,6 @@ instance KCheck Expr where
     kchk env (Yield l e)            = kchk env e
     kchk env (YieldFrom l e)        = kchk env e
     kchk env (Tuple l es ks)        = kchk env es >> kchk env ks
---    kchk env (Record l fs)          = kchk env fs
     kchk env (List l es)            = kchk env es
     kchk env (ListComp l e c)       = kchk env e >> kchk env c
     kchk env (Dict l as)            = kchk env as
@@ -309,8 +308,6 @@ instance KInfer Type where
     kinfer env (TTuple _ p k)       = do kexpect env KRow p
                                          kexpect env KRow k
                                          return KType
-    kinfer env (TRecord _ k)        = do kexpect env KRow k
-                                         return KType
     kinfer env (TUnion _ as)        = return KType
     kinfer env (TOpt _ t)           = do kexpect env KType t
                                          return KType
@@ -387,7 +384,6 @@ instance KWalk Type where
     kwalk w (TAt l c)               = TAt l <$> kwalk w c
     kwalk w (TFun l fx p k t)       = TFun l <$> kwalk w fx <*> kwalk w p <*> kwalk w k<*> kwalk w t
     kwalk w (TTuple l p k)          = TTuple l <$> kwalk w p <*> kwalk w k
-    kwalk w (TRecord l k)           = TRecord l <$> kwalk w k
     kwalk w (TUnion l as)           = return $ TUnion l as
     kwalk w (TOpt l t)              = TOpt l <$> kwalk w t
     kwalk w (TNone l)               = return $ TNone l
@@ -448,7 +444,6 @@ instance KWalk Expr where
     kwalk w (Yield l e)             = Yield l <$> kwalk w e
     kwalk w (YieldFrom l e)         = YieldFrom l <$> kwalk w e
     kwalk w (Tuple l es ks)         = Tuple l <$> kwalk w es <*> kwalk w ks
---    kwalk w (Record l fs)           = Record l <$> kwalk w fs
     kwalk w (List l es)             = List l <$> kwalk w es
     kwalk w (ListComp l e c)        = ListComp l <$> kwalk w e <*> kwalk w c
     kwalk w (Dict l as)             = Dict l <$> kwalk w as
@@ -459,7 +454,6 @@ instance KWalk Expr where
 
 instance KWalk Pattern where
     kwalk w (PVar l n a)            = PVar l n <$> kwalk w a
---    kwalk w (PRecord l ps)          = PRecord l <$> kwalk w ps
     kwalk w (PTuple l ps ks)        = PTuple l <$> kwalk w ps <*> kwalk w ks
     kwalk w (PList l ps p)          = PList l <$> kwalk w ps <*> kwalk w p
     kwalk w (PParen l p)            = PParen l <$> kwalk w p

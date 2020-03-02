@@ -191,7 +191,6 @@ instance Norm Expr where
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
---    norm env (Record l fs)          = Record l <$> norm env fs
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
       where env1                    = extLocal (bound c) env
@@ -208,7 +207,6 @@ instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
---    norm env (PRecord l ps)         = PRecord l <$> norm env ps
     norm env (PParen l p)           = PParen l <$> norm env p
 
 instance Norm Target where
@@ -352,11 +350,9 @@ instance Norm Type where
     norm env (TVar l v)             = TVar l <$> norm env v
     norm env (TFun l es p k t)      = TFun l <$> norm env es <*> norm env p <*> norm env k <*> norm env t
     norm env (TTuple l p k)         = TTuple l <$> norm env p <*> norm env k
-    norm env (TRecord l k)          = TRecord l <$> norm env k
     norm env (TOpt l t)             = TOpt l <$> norm env t
     norm env (TUnion l as)          = TUnion l <$> return as
     norm env (TCon  l c)            = TCon l <$> norm env c
-    norm env (TAt  l c)             = TAt l <$> norm env c
     norm env (TNone l)              = return $ TNone l
     norm env (TWild l)              = return $ TWild l
     norm env (TNil l)               = return $ TNil l

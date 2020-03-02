@@ -183,7 +183,6 @@ instance Vars Expr where
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
     free (Tuple _ ps ks)            = free ps ++ free ks
---    free (Record _ fs)              = free fs
     free (List _ es)                = free es
     free (ListComp _ e co)          = (free e \\ bound co) ++ free co
     free (Dict _ es)                = free es
@@ -298,14 +297,12 @@ instance Vars KwdPat where
     
 instance Vars Pattern where
     free (PVar _ n a)               = []
---    free (PRecord _ ps)             = free ps
     free (PTuple _ ps ks)           = free ps ++ free ks
     free (PList _ ps p)             = free ps ++ free p
     free (PParen _ p)               = free p
     free (PData _ n ixs)            = free ixs
 
     bound (PVar _ n a)              = [n]
---    bound (PRecord _ ps)            = bound ps
     bound (PTuple _ ps ks)          = bound ps ++ bound ks
     bound (PList _ ps p)            = bound ps ++ bound p
     bound (PParen _ p)              = bound p
@@ -352,7 +349,6 @@ instance Vars Type where
     free (TVar _ v)                 = free v
     free (TFun _ es p k t)          = free es ++ free p ++ free k ++ free t
     free (TTuple _ p k)             = free p ++ free k
-    free (TRecord _ k)              = free k
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TAt  _ c)                 = free c

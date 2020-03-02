@@ -59,7 +59,7 @@ reduce' (Sel env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduceAll (Equ env t' t2 : cs)
-reduce' (Sel env (TRecord _ r) n t2)        = reduce (Equ env r (kwdRow n (monotype t2) tWild))
+reduce' (Sel env (TTuple _ p r) n t2)       = reduce (Equ env r (kwdRow n (monotype t2) tWild))
 
 reduce' (Sel env (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
@@ -125,8 +125,6 @@ red' sub env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                                  red sub env p2 p1            -- TODO: implement pos/kwd argument shifting
                                                  red sub env k2 k1
                                                  red sub env t1 t2
-
-red' sub env (TRecord _ k1) (TRecord _ k2)  = red sub env k1 k2
 
 red' sub env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do red sub env p1 p2

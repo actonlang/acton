@@ -85,11 +85,9 @@ instance CPretty QName where
 instance CPretty Type where
     cpretty (TVar _ v)              = text "$WORD"
     cpretty (TCon  _ c)             = cpretty c
- --   pretty (TAt  _ c)               = text "@" <> pretty c
     cpretty (TFun _ e p _ t)        =  parens (cprettyPosRow p) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f      
     cpretty (TTuple _ p _)          = parens (cprettyPosRow p)
---    cpretty (TRecord _ kw)          = parens (cprettyPosRow kw)
     cpretty (TUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     cpretty (TOpt _ t)              = text "?" <> pretty t

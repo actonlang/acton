@@ -662,8 +662,6 @@ instance Infer Expr where
     infer env (Tuple l pargs kargs)     = do (prow,pargs') <- infer env pargs
                                              (krow,kargs') <- infer env kargs
                                              return (TTuple NoLoc prow krow, Tuple l pargs' kargs')
---    infer env (Record l kargs)          = do (krow,kargs') <- infer env kargs
---                                             return (tRecord krow, Record l kargs')
     infer env (List l es)               = do t0 <- newTVar
                                              es' <- infElems env es pSequence t0
                                              return (pSequence t0, List l es')
@@ -845,8 +843,6 @@ instance InfEnvT Pattern where
     infEnvT env (PTuple l ps ks)        = do (te1,prow,ps') <- infEnvT env ps
                                              (te2,krow,ks') <- infEnvT env ks
                                              return (nCombine te1 te2, TTuple NoLoc prow krow, PTuple l ps' ks')
---    infEnvT env (PRecord _ ps)          = do (te, krow) <- infEnvT env ps
---                                             return (te, tRecord krow)
     infEnvT env (PList l ps p)          = do (te1,t1,ps') <- infEnvT env ps
                                              (te2,t2,p') <- infEnvT (define te1 env) p
                                              constrain [Equ env (pSequence t1) t2]
@@ -966,7 +962,6 @@ instance WellFormed Type where
     wfmd env w (TAt _ tc)           = wfmd env w tc
     wfmd env w (TFun _ e p k t)     = wfmd env w e && wfmd env w p && wfmd env w k && wfmd env w t
     wfmd env w (TTuple _ p k)       = wfmd env w p && wfmd env w k
-    wfmd env w (TRecord _ k)        = wfmd env w k
     wfmd env w (TOpt _ t)           = wfmd env w t
     wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
     wfmd env w t                    = True
@@ -995,7 +990,6 @@ instance Wild Type where
     instwild (TAt l tc)             = TAt l <$> instwild tc
     instwild (TFun l e p k t)       = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
     instwild (TTuple l p k)         = TTuple l <$> instwild p <*> instwild k
-    instwild (TRecord l k)          = TRecord l <$> instwild k
     instwild (TOpt l t)             = TOpt l <$> instwild t
     instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r
     instwild t                      = return t
