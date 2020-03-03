@@ -605,44 +605,41 @@ decl_group = do p <- L.indentLevel
 
 decl :: Parser S.Decl
 decl = try signature <|> funcdef <|> classdef <|> protodef <|> extdef <|> actordef
-decorator1 decoration = do
+
+decorator :: Parser S.Decoration
+decorator = do
        p <- L.indentLevel
        d <- decoration
        p1 <- L.indentLevel
        if (p /= p1)
          then fail "Decorated declaration must have same indentation as decoration"
          else return d
+   where decoration = rword "@classattr" *> assertDecl *> newline1 *> return (S.ClassAttr True)
+                  <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
+                  <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
+                  <|> ifDecl (return $ S.ClassAttr False) (return S.NoDec)
 
 signature :: Parser S.Decl
-signature = addLoc (do dec <- decorator1 sig_decoration; assertDeclOrTop; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (decorate dec t))
-   where sig_decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr  
-                      <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
-                      <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
-                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMethod True)
-                      <|> ifDecl (return $ S.InstMethod False) (return S.NoDec)    -- default in a class/protocol/extension
-
-         tsig = do v <- name
+signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (adjust dec t))
+   where tsig = do v <- name
                    vs <- commaList name
                    colon
                    t <- tschema
                    return (v:vs,t)
-
-         decorate (S.InstMethod False) (S.TSchema l [] t S.NoDec)       -- make default decoration depend on the tsig arity
-           | S.TFun{} <- t  = S.TSchema l [] t (S.InstMethod False)
-           | otherwise      = S.TSchema l [] t (S.InstAttr False)
-         decorate dec (S.TSchema l q t S.NoDec) = S.TSchema l q t dec
+         adjust (S.ClassAttr False) (S.TSchema l q t S.NoDec)       -- make default decoration depend on the tsig arity
+           | S.TFun{} <- t   = S.TSchema l q t (S.ClassAttr False)
+           | otherwise       = S.TSchema l q t (S.InstAttr False)
+         adjust dec (S.TSchema l q t S.NoDec) 
+                             = S.TSchema l q t dec
  
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              (p,md) <- withPos (decorator1 fun_decoration <* rword "def")
+              (p,md) <- withPos (decorator <* rword "def")
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
-   where fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
-                      <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
-                      <|> ifDecl (return $ S.InstMeth False) (return S.NoMod)
 
 
 optbinds :: Parser [S.TBind]

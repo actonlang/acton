@@ -42,7 +42,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, modif::Modif }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
                 | Actor         { dloc::SrcLoc, dname:: Name, qual::[TBind], pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
@@ -172,8 +172,7 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Modif      = NoMod | StaticMeth | InstMeth Bool deriving (Show,Eq)
-data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
+data Decoration = NoDec | InstAttr Bool | ClassAttr Bool | StaticMethod deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
@@ -209,7 +208,7 @@ skolem (TV k n) = case n of
                     Name{}     -> True
                     Internal{} -> False
 
-dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoMod
+dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec
 
 sDef n p b      = sDecl [dDef n p b]
 sReturn e       = Return NoLoc (Just e)
@@ -561,9 +560,6 @@ mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
 isInstAttr (InstAttr _)             = True
 isInstAttr _                        = False
-
-isInstMeth (InstMeth _)             = True
-isInstMeth _                        = False
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

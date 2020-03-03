@@ -292,7 +292,7 @@ instance Lift Expr where
                                              let env1 = extLocals (bound ps) $ extPrefix InDef nn env
                                              --traceM ("## ll Lambda (nested)")
                                              b <- defBody env1 [Return l0 (Just e)]
-                                             liftToTop $ Decl l0 $ [Def l nn [] ps' _k Nothing b NoMod]
+                                             liftToTop $ Decl l0 $ [Def l nn [] ps' _k Nothing b NoDec]
                                              return (closure nn vs)
       where ps'                         = addParams vs ps
             vs                          = intersect (free e) (locals env) \\ bound ps
