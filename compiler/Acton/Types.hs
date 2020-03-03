@@ -290,37 +290,33 @@ instance InfData Branch where
 instance InfEnv Decl where
     infEnv env d@(Actor _ n _ p k _ _)
       | not $ reservedOrSig n env       = illegalRedef n
-      | nodup (p,k)                     = do d' <- instwild d
-                                             sc <- instwild $ extractSchema env d'
-                                             return (nVar' n sc, d')
+      | nodup (p,k)                     = do sc <- extractSchema env d
+                                             return (nVar' n sc, d)
     infEnv env d@(Def _ n _ p k _ _ _)
       | not $ reservedOrSig n env       = illegalRedef n
-      | nodup (p,k)                     = do d' <- instwild d
-                                             sc <- instwild $ extractSchema env d'
-                                             return (nVar' n sc, d')
+      | nodup (p,k)                     = do sc <- extractSchema env d
+                                             return (nVar' n sc, d)
     infEnv env (Class l n q us b)
       | not $ reserved n env            = illegalRedef n
-      | wf env q && wf env1 us          = do (te,b') <- noescape <$> infEnv env1 b
+      | otherwise                       = do (te,b') <- noescape <$> infEnv env1 b
                                              return (nClass n q (mro env1 us1) te, Class l n q us1 b')
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             us1                         = classBases env us
     infEnv env (Protocol l n q us b)
       | not $ reserved n env            = illegalRedef n
-      | wf env q && wf env1 us          = do (te,b') <- infEnv env1 b
+      | otherwise                       = do (te,b') <- infEnv env1 b
                                              return (nProto n q (mro env1 us1) te, Protocol l n q us1 b')
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env  
             us1                         = protoBases env us
     infEnv env d@(Extension _ n q us b)
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | wf env q && wf env1 us          = do w <- newName (nstr $ noqual n)
+      | otherwise                       = do w <- newName (nstr $ noqual n)
                                              return (nExt w n q (mro env1 (protoBases env us)), d)
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
     infEnv env d@(Signature _ ns sc)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do d' <- instwild d
-                                             sc <- instwild $ extractSchema env d'
-                                             return (nSig ns sc, d')
+      | otherwise                       = do return (nSig ns sc, d)
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
 classBases env []                       = []
@@ -424,8 +420,7 @@ instance Check Decl where
                                              return $ Class l w [] us b'        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             Just w                      = findWitness env n q us
-    check env d@(Signature l ns sc)
-      | wfWild env sc                   = return d
+    check env d@(Signature l ns sc)     = return d
 
 
 checkBindings env proto us te
@@ -729,24 +724,24 @@ instance (Infer a) => Infer (Maybe a) where
                                              return (t, Just e')
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n ann e p)      = do t <- maybeInstSC ann
+    infEnvT env (PosPar n ann e p)      = do t <- maybe (monotype <$> newTVar) return ann
                                              (t',e') <- inferGen env e
                                              constrain [SubGen env t' t]
                                              (te,r,p') <- infEnvT (define (nVar' n t) env) p
                                              return (nVar' n t ++ te, posRow t r, PosPar n (Just t) e' p')
-    infEnvT env (PosSTAR n ann)         = do t <- maybeInstT KRow ann
+    infEnvT env (PosSTAR n ann)         = do t <- maybe (newTVarOfKind KRow) return ann
                                              r <- newRowVar
                                              constrain [Equ env t (tTuple r)]
                                              return (nVar n t, r, PosSTAR n (Just t))
     infEnvT env PosNIL                  = return (nEmpty, posNil, PosNIL)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n ann e k)      = do t <- maybeInstSC ann
+    infEnvT env (KwdPar n ann e k)      = do t <- maybe (monotype <$> newTVar) return ann
                                              (t',e') <- inferGen env e
                                              constrain [SubGen env t' t]
                                              (te,r,k') <- infEnvT (define (nVar' n t) env) k
                                              return (nVar' n t ++ te, kwdRow n t r, KwdPar n (Just t) e' k')
-    infEnvT env (KwdSTAR n ann)         = do t <- maybeInstT KRow ann
+    infEnvT env (KwdSTAR n ann)         = do t <- maybe (newTVarOfKind KRow) return ann
                                              r <- newRowVar
                                              constrain [Equ env t (tRecord r)]
                                              return (nVar n t, r, KwdSTAR n (Just t))
@@ -817,8 +812,7 @@ instance InfEnvT KwdPat where
 
 instance InfEnvT Pattern where
     infEnvT env (PVar l n ann)
-      | reservedOrSig n env,
-        wfWild env ann                  = do t0 <- maybeInstT KType ann
+      | reservedOrSig n env             = do t0 <- maybe newTVar return ann
                                              return (nVar n t0, t0, PVar l n (Just t0))
     infEnvT env (PVar l n Nothing)      = case findVarType n env of
                                              TSchema _ [] t _ -> return (nEmpty, t, PVar l n Nothing)
@@ -896,152 +890,47 @@ inferIxs env t0 (i:is)                  = do t1 <- newTVar
                                              return (t, i':is')
 
 
--- Well-formed types ------------------------------------------------------
 
-instance Pretty [TCon] where
-    pretty us                       = commaSep pretty us
-
-wf env t                            = wfmd env False t
-
-wfWild env t                        = wfmd env True t
-
-instWF env Nothing                  = newTVar
-instWF env (Just t)
-  | wfWild env t                    = instwild t
-
-class WellFormed a where
-    wfmd                            :: Env -> Bool -> a -> Bool
-
-instance (WellFormed a) => WellFormed (Maybe a) where
-    wfmd env w                      = maybe True (wfmd env w)
-
-instance WellFormed [TBind] where
-    wfmd env w []                   = True
-    wfmd env w (b:bs)               = wfmd env w b && wfmd env1 w bs
-      where env1                    = defineTVars [b] env
-
-instance WellFormed [TCon] where
-    wfmd env w cs                   = all (wfmd env w) cs
-
-instance WellFormed TSchema where
-    wfmd env w (TSchema l [] t d)   = wfmd env1 w t
-      where q                       = [ TBind tv [] | tv <- tyfree t \\ tvarScope env ]
-            env1                    = defineTVars q env
-    wfmd env w (TSchema l q t d)    = wfmd env False q && wfmd env1 w t
-      where env1                    = defineTVars q env
-
-instance WellFormed TBind where
-    wfmd env w (TBind tv us)        = all (wfmd env w) us
-
-instance WellFormed TCon where
-    wfmd env w (TC c ts)
-      | findArity c env==length ts  = all (wfmd env w) ts
-
-instance WellFormed Type where
-    wfmd env False (TWild l)        = err1 l "Illegal wildcard type"
-    wfmd env w (TVar _ tv)
-      | not $ skolem tv             = True
-      | tv `notElem` tvarScope env  = err1 tv "Unbound type variable"
-    wfmd env w (TCon _ tc)          = wfmd env w tc
-    wfmd env w (TAt _ tc)           = wfmd env w tc
-    wfmd env w (TFun _ e p k t)     = wfmd env w e && wfmd env w p && wfmd env w k && wfmd env w t
-    wfmd env w (TTuple _ p k)       = wfmd env w p && wfmd env w k
-    wfmd env w (TOpt _ t)           = wfmd env w t
-    wfmd env w (TRow _ n t r)       = wfmd env w t && wfmd env w r
-    wfmd env w t                    = True
-
-class Wild a where
-    instwild                        :: a -> TypeM a
-
-instance Wild [TBind] where
-    instwild                        = mapM instwild
-
-instance Wild [TCon] where
-    instwild                        = mapM instwild
-
-instance Wild TSchema where
-    instwild (TSchema l q t d)      = TSchema l q <$> instwild t <*> return d
-
-instance Wild TBind where
-    instwild (TBind tv us)          = TBind tv <$> mapM instwild us
-
-instance Wild TCon where
-    instwild (TC c ts)              = TC c <$> mapM instwild ts
-
-instance Wild Type where
-    instwild (TWild _)              = newTVar
-    instwild (TCon l tc)            = TCon l <$> instwild tc
-    instwild (TAt l tc)             = TAt l <$> instwild tc
-    instwild (TFun l e p k t)       = TFun l <$> instwild e <*> instwild p <*> instwild k <*> instwild t
-    instwild (TTuple l p k)         = TTuple l <$> instwild p <*> instwild k
-    instwild (TOpt l t)             = TOpt l <$> instwild t
-    instwild (TRow l n t r)         = TRow l n <$> instwild t <*> instwild r
-    instwild t                      = return t
-
-instance Wild Decl where
-    instwild (Def l n q p k t b m)  = Def l n q <$> instwild p <*> instwild k <*> justInstT KType t <*> return b <*> return m
-    instwild (Actor l n q p k t b)  = Actor l n q <$> instwild p <*> instwild k <*> justInstT KType t <*> return b
-    instwild d                      = return d
-
-instance (Wild a) => Wild (Maybe a) where
-    instwild Nothing                = return Nothing
-    instwild (Just t)               = Just <$> instwild t
-
-instance Wild PosPar where
-    instwild (PosPar n t e p)       = PosPar n <$> justInstSC t <*> return e <*> instwild p
-    instwild (PosSTAR n t)          = PosSTAR n <$> justInstT KRow t
-    instwild PosNIL                 = return PosNIL
-
-instance Wild KwdPar where
-    instwild (KwdPar n t e p)       = KwdPar n <$> justInstSC t <*> return e <*> instwild p
-    instwild (KwdSTAR n t)          = KwdSTAR n <$> justInstT KRow t
-    instwild KwdNIL                 = return KwdNIL
-
-maybeInstT k ann                    = maybe (newTVarOfKind k) instwild ann
-maybeInstSC ann                     = maybe (monotype <$> newTVar) instwild ann
-
-justInstT k ann                     = Just <$> maybeInstT k ann
-justInstSC ann                      = Just <$> maybeInstSC ann
+-- Extracting schemas from (actor and def) declarations
 
 class ExtractT a where
-    extractT                        :: a -> Type
+    extractT                        :: a -> TypeM Type
 
 instance ExtractT PosPar where
-    extractT (PosPar n t _ p)       = posRow (maybe (monotype tWild) id t) (extractT p)
-    extractT (PosSTAR n t)          = posVar Nothing        -- safe to ignore type (not schema) annotation t here
-    extractT PosNIL                 = posNil
+    extractT (PosPar n t _ p)       = posRow <$> maybe (monotype <$> newTVar) return t <*> extractT p
+    extractT (PosSTAR n t)          = newTVar        -- safe to ignore type (not schema) annotation t here
+    extractT PosNIL                 = return posNil
 
 instance ExtractT KwdPar where
-    extractT (KwdPar n t _ k)       = kwdRow n (maybe (monotype tWild) id t) (extractT k)
-    extractT (KwdSTAR n t)          = kwdVar Nothing        -- safe to ignore type (not schema) annotation t here
-    extractT KwdNIL                 = kwdNil
-
-instance ExtractT Decoration where
-    extractT _                      = tWild
+    extractT (KwdPar n t _ k)       = kwdRow n <$> maybe (monotype <$> newTVar) return t <*> extractT k
+    extractT (KwdSTAR n t)          = newTVar        -- safe to ignore type (not schema) annotation t here
+    extractT KwdNIL                 = return kwdNil
 
 instance ExtractT Decl where
-    extractT d@Def{}                = tFun (extractT $ deco d) prow krow (maybe tWild id (ann d))
+    extractT d@Def{}                = do fx <- newTVarOfKind KRow
+                                         pr <- extractT $ pos d
+                                         kr <- extractT $ kwd d
+                                         let (prow,krow) = chop (deco d) pr kr
+                                         tFun fx prow krow <$> maybe newTVar return (ann d)
       where 
-        (prow,krow)                 = chop (deco d) (extractT $ pos d) (extractT $ kwd d)
         chop (ClassAttr _) p k      = chop1 p k
         chop _ p k                  = (p, k)
         chop1 (TRow _ n t p) k      = (p, k)
         chop1 TVar{} k              = missingSelf (dname d)
         chop1 p (TRow _ n t k)      = (p, k)
         chop1 _ _                   = missingSelf (dname d)
-    extractT d@Actor{}              = tFun (fxAct fxNil) prow krow (maybe tWild id (ann d))
-      where (prow,krow)             = (extractT $ pos d, extractT $ kwd d)
-    extractT _                      = tWild
+    extractT d@Actor{}              = do prow <- extractT $ pos d
+                                         krow <- extractT $ kwd d
+                                         tFun (fxAct fxNil) prow krow <$> maybe newTVar return (ann d)
+    extractT _                      = newTVar
 
-extractSchema env (Signature _ _ t) = t
-extractSchema env d
-  | wfWild env schema               = schema
+extractSchema env d                 = do sig <- extractT d
+                                         let q | null (qual d) = [ TBind v [] | v <- nub (tyfree sig \\ tvarScope env), skolem v ]
+                                               | otherwise     = qual d
+                                         return $ TSchema NoLoc q sig (decoration d)
   where
-    schema                          = tSchema' q sig (decoration d)
-    sig                             = extractT d
-    q | null (qual d)               = [ TBind v [] | v <- tyfree sig \\ tvarScope env, skolem v ]
-      | otherwise                   = qual d
     decoration d@Def{}              = deco d
+    decoration Actor{}              = NoDec
     decoration _                    = NoDec
 
 
