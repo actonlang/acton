@@ -568,7 +568,7 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
                                         "False","None","NotImplemented","Self","True","actor","after","and","as",
-                                        "assert","async","await","break","class","continue","def","del","elif","else",
+                                        "assert","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in",
                                         "is","lambda","not","protocol","or","pass","raise","return",
                                         "try","var","while","with","yield"
