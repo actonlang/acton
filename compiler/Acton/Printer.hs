@@ -48,7 +48,7 @@ instance Pretty Stmt where
     pretty (Decl _ ds)              = vcat $ map pretty ds
 
 instance Pretty Decl where
-    pretty (Def _ n q ps ks a b md) = (prettyMod md $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
+    pretty (Def _ n q ps ks a b d)  = (prettyDec d $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
     pretty (Actor _ n q ps ks a b)  = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
                                       nonEmpty (text " -> " <>) pretty a <> colon $+$ prettySuite b
@@ -60,17 +60,8 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Signature _ vs sc)      = prettySig vs sc
 
-prettySig vs (TSchema _ [] t dec)   = pretty dec $+$ commaList vs <+> text ":" <+> pretty t
-prettySig vs (TSchema _ q t dec)    = pretty dec $+$ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
-
-instance Pretty Decoration where
-    pretty ClassAttr                = text "@classattr"
-    pretty (InstAttr True)          = text "@instattr"
-    pretty (InstAttr False)         = empty -- text "(@instattr)"
-    pretty StaticMethod             = text "@staticmethod"
-    pretty (InstMethod True)        = text "@instmethod"
-    pretty (InstMethod False)       = empty -- text "(@instmethod)"
-    pretty NoDec                    = empty
+prettySig vs (TSchema _ [] t d)     = prettyDec d $ commaList vs <+> text ":" <+> pretty t
+prettySig vs (TSchema _ q t d)      = prettyDec d $ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
@@ -261,11 +252,15 @@ prettyPats ps Nothing               = commaSep pretty ps
 prettyPats [] (Just p)              = text "*" <> pretty p
 prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <> pretty p
 
-prettyMod NoMod                     = id
-prettyMod StaticMeth                = (text "@staticmethod" $+$)
-prettyMod (InstMeth True)           = (text "@instmethod" $+$)
-prettyMod (InstMeth False)          = id -- (text "(@instmethod)" $+$)
+prettyDec d                         = (pretty d $+$)
 
+instance Pretty Decoration where
+    pretty NoDec                    = empty
+    pretty StaticMethod             = text "@staticmethod"
+    pretty (ClassAttr True)         = text "@classattr"
+    pretty (ClassAttr False)        = empty -- text "(@classattr)"
+    pretty (InstAttr True)          = text "@instattr"
+    pretty (InstAttr False)         = empty -- text "(@instattr)"
 
 instance Pretty SrcInfoTag where
     pretty (GEN l t)                = text "GEN" <+> parens (pretty l) <> colon <+> pretty t

@@ -465,7 +465,7 @@ instance PreCPS Expr where
                                                     ps1 <- pre env ps
                                                     ks1 <- pre env ks
                                                     f <- newName "lambda"
-                                                    prefix [sDecl [Def l f [] ps1 ks1 Nothing (stmts ++ [sReturn e1]) NoMod]]
+                                                    prefix [sDecl [Def l f [] ps1 ks1 Nothing (stmts ++ [sReturn e1]) NoDec]]
                                                     return (Var l0 (NoQual f))
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e

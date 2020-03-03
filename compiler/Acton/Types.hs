@@ -397,7 +397,7 @@ instance Check Decl where
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $ block (stateScope env) env
             splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
-            splitRow (InstMeth _) (TRow _ n sc r)
+            splitRow (ClassAttr _) (TRow _ n sc r)
                                         = constrain [Equ env (monotypeOf sc) tSelf] >> return r
             splitRow m r                = return r
 
@@ -1016,14 +1016,14 @@ instance ExtractT KwdPar where
     extractT (KwdSTAR n t)          = kwdVar Nothing        -- safe to ignore type (not schema) annotation t here
     extractT KwdNIL                 = kwdNil
 
-instance ExtractT Modif where
+instance ExtractT Decoration where
     extractT _                      = tWild
 
 instance ExtractT Decl where
-    extractT d@Def{}                = tFun (extractT $ modif d) prow krow (maybe tWild id (ann d))
+    extractT d@Def{}                = tFun (extractT $ deco d) prow krow (maybe tWild id (ann d))
       where 
-        (prow,krow)                 = chop (modif d) (extractT $ pos d) (extractT $ kwd d)
-        chop (InstMeth _) p k       = chop1 p k
+        (prow,krow)                 = chop (deco d) (extractT $ pos d) (extractT $ kwd d)
+        chop (ClassAttr _) p k      = chop1 p k
         chop _ p k                  = (p, k)
         chop1 (TRow _ n t p) k      = (p, k)
         chop1 TVar{} k              = missingSelf (dname d)
@@ -1037,13 +1037,12 @@ extractSchema env (Signature _ _ t) = t
 extractSchema env d
   | wfWild env schema               = schema
   where
-    schema                          = tSchema' q sig (deco d)
+    schema                          = tSchema' q sig (decoration d)
     sig                             = extractT d
     q | null (qual d)               = [ TBind v [] | v <- tyfree sig \\ tvarScope env, skolem v ]
       | otherwise                   = qual d
-    deco Def{modif=StaticMeth}      = StaticMethod
-    deco Def{modif=InstMeth f}      = InstMethod f
-    deco _                          = NoDec
+    decoration d@Def{}              = deco d
+    decoration _                    = NoDec
 
 
 -- FX presentation ---------------------

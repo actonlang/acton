@@ -87,11 +87,11 @@ deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                          (bint,dext) <- withStore (deact (env1 n') b)
                                          let (dsigs,dext') = partition isSig dext
-                                             _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoMod
+                                             _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
                                              create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
                                              copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
-                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoMod
+                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoDec
                                              (ds,ss) = partition isDecl bint
                                              extern = Class l n q [] [Decl l0 (_init_ : reverse dext')]
                                              intern = Class l n' q [] (Decl l0 (dsigs ++[_init']) : ds)

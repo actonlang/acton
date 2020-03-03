@@ -67,8 +67,7 @@ reduce' (Sel env (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
                                                  let t' = subst [(tvSelf,tCon tc)] t
                                                  reduceAll (Equ env t' t2 : cs)
   where
-    addself (TSchema l q t (InstMethod _))  = TSchema l q (addself' t) StaticMethod
-    addself (TSchema l q t ClassAttr)       = TSchema l q (addself' t) StaticMethod
+    addself (TSchema l q t (ClassAttr _))   = TSchema l q (addself' t) StaticMethod
     addself sc                              = sc
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
