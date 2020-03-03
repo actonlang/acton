@@ -619,7 +619,6 @@ signature = addLoc (do dec <- decorator1 sig_decoration; assertDeclOrTop; (ns,t)
                       <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
                       <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMethod True)
-                      <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMethod 
                       <|> ifDecl (return $ S.InstMethod False) (return S.NoDec)    -- default in a class/protocol/extension
 
          tsig = do v <- name
@@ -648,7 +647,6 @@ funcdef =  addLoc $ do
 
          fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
-                      <|> rword "@classmethod" *> assertClass *> newline1 *> return S.ClassMeth
                       <|> ifDecl (return $ S.InstMeth False) (return S.NoMod)
 
 

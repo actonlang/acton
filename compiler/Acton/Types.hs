@@ -413,8 +413,6 @@ instance Check Decl where
             splitRows m p k             = (,) <$> splitRow m p <*> return k
             splitRow (InstMeth _) (TRow _ n sc r)
                                         = constrain [Equ env (monotypeOf sc) tSelf] >> return r
-            splitRow (ClassMeth) (TRow _ n sc r)
-                                        = constrain [Equ env (monotypeOf sc) (tAt (findSelf env))] >> return r
             splitRow m r                = return r
 
     check env (Class l n q us b)        = do pushFX fxNil
@@ -1040,7 +1038,6 @@ instance ExtractT Decl where
     extractT d@Def{}                = tFun (extractT $ modif d) prow krow (maybe tWild id (ann d))
       where 
         (prow,krow)                 = chop (modif d) (extractT $ pos d) (extractT $ kwd d)
-        chop ClassMeth p k          = chop1 p k
         chop (InstMeth _) p k       = chop1 p k
         chop _ p k                  = (p, k)
         chop1 (TRow _ n t p) k      = (p, k)
@@ -1060,7 +1057,6 @@ extractSchema env d
     q | null (qual d)               = [ TBind v [] | v <- tyfree sig \\ tvarScope env, skolem v ]
       | otherwise                   = qual d
     deco Def{modif=StaticMeth}      = StaticMethod
-    deco Def{modif=ClassMeth}       = ClassMethod
     deco Def{modif=InstMeth f}      = InstMethod f
     deco _                          = NoDec
 

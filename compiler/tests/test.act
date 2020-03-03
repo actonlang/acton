@@ -145,7 +145,7 @@ class Apa:
     def __init__(self):
         self.x = 1
 
-    @classmethod
+    @staticmethod
     def f(x):
         pass
 

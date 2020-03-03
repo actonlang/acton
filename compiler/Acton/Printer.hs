@@ -68,7 +68,6 @@ instance Pretty Decoration where
     pretty (InstAttr True)          = text "@instattr"
     pretty (InstAttr False)         = empty -- text "(@instattr)"
     pretty StaticMethod             = text "@staticmethod"
-    pretty ClassMethod              = text "@classmethod"
     pretty (InstMethod True)        = text "@instmethod"
     pretty (InstMethod False)       = empty -- text "(@instmethod)"
     pretty NoDec                    = empty
@@ -265,7 +264,6 @@ prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <
 prettyMod Async                     = (text "async" <+>)
 prettyMod NoMod                     = id
 prettyMod StaticMeth                = (text "@staticmethod" $+$)
-prettyMod ClassMeth                 = (text "@classmethod" $+$)
 prettyMod (InstMeth True)           = (text "@instmethod" $+$)
 prettyMod (InstMeth False)          = id -- (text "(@instmethod)" $+$)
 
