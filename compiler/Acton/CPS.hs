@@ -344,7 +344,7 @@ contCall env (Call l e p k)             = True                      -- TODO: uti
 contCall env _                          = False
 
 contDef env l n m
-  | m == Async                          = True
+--  | m == Async                          = True
   | impure l n                          = True
   | otherwise                           = False
   where impure l n                      = True                      -- TODO: utilize type...

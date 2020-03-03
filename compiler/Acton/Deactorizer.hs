@@ -116,9 +116,6 @@ asyncCall env n p                   = Call l0 (Var l0 primASYNC) (PosArg selfSel
 awaitCall env n p                   = Call l0 (Var l0 primAWAIT) (PosArg (asyncCall env n p) PosNil) KwdNil
 
 instance Deact Decl where
-    deact env (Def l n q p k t b Async) 
-                                    = do store [Def l n q (addSelf p) k t [Return l0 $ Just $ asyncCall env n p] NoMod]
-                                         Def l n q (addSelf p) k t <$> deact env b <*> return (InstMeth False)
     deact env (Def l n q p k t b m) = Def l n q p k t <$> deact env1 b <*> return m
       where env1                    = hideLocals (bound (p,k) ++ bound b) env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b

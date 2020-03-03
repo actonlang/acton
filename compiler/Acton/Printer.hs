@@ -261,7 +261,6 @@ prettyPats ps Nothing               = commaSep pretty ps
 prettyPats [] (Just p)              = text "*" <> pretty p
 prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <> pretty p
 
-prettyMod Async                     = (text "async" <+>)
 prettyMod NoMod                     = id
 prettyMod StaticMeth                = (text "@staticmethod" $+$)
 prettyMod (InstMeth True)           = (text "@instmethod" $+$)

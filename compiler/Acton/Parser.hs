@@ -635,17 +635,12 @@ signature = addLoc (do dec <- decorator1 sig_decoration; assertDeclOrTop; (ns,t)
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              dec <- decorator1 fun_decoration
-              (p,md) <- withPos (modifier dec <* rword "def")
+              (p,md) <- withPos (decorator1 fun_decoration <* rword "def")
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
-   where modifier :: S.Modif -> Parser S.Modif
-         modifier S.NoMod = assertActScope *> rword "async" *> return S.Async <|> return S.NoMod
-         modifier m = return m
-
-         fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
+   where fun_decoration = rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMeth
                       <|> rword "@instmethod" *> assertDecl *> newline1 *> return (S.InstMeth True)
                       <|> ifDecl (return $ S.InstMeth False) (return S.NoMod)
 
