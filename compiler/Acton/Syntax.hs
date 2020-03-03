@@ -172,8 +172,8 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Modif      = NoMod | Async | StaticMeth | ClassMeth | InstMeth Bool deriving (Show,Eq)
-data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | ClassMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
+data Modif      = NoMod | Async | StaticMeth | InstMeth Bool deriving (Show,Eq)
+data Decoration = NoDec | InstAttr Bool | ClassAttr | StaticMethod | InstMethod Bool deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
