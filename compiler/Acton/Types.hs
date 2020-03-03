@@ -381,20 +381,6 @@ instance Check Decl where
       where svars                       = statedefs b
             env0                        = define envActorSelf $ defineTVars q $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
-            
-    check env (Def l n q p k ann b Async)
-      | noshadow svars (p,k)            = do t <- newTVar
-                                             pushFX (fxRet t tWild)
-                                             when (fallsthru b) (subFX env (fxRet tNone tWild))
-                                             (te0,prow,p') <- infEnvT env p
-                                             (te1,krow,k') <- infEnvT (define te0 env1) k
-                                             (_,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
-                                             popFX
-                                             fx <- fxAsync <$> newRowVar
-                                             checkAssump env n (tFun fx prow krow (tMsg t))
-                                             return $ Def l n q p' k' ann b' Async
-      where svars                       = stateScope env
-            env1                        = reserve (bound (p,k) ++ bound b \\ svars) $ defineTVars q env
 
     check env (Def l n q p k ann b modif)
                                         = do t <- newTVar
@@ -1031,7 +1017,6 @@ instance ExtractT KwdPar where
     extractT KwdNIL                 = kwdNil
 
 instance ExtractT Modif where
-    extractT Async                  = fxAsync fxNil
     extractT _                      = tWild
 
 instance ExtractT Decl where
