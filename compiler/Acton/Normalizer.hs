@@ -211,12 +211,12 @@ instance Norm Pattern where
 
 instance Norm Target where
     norm env (TaVar l n)            = return $ TaVar l n
-    norm env (TIndex l e ix)        = TIndex l <$> norm env e <*> norm env ix
-    norm env (TSlice l e sl)        = TSlice l <$> norm env e <*> norm env sl
-    norm env (TDot l e n)           = TDot l <$> norm env e <*> norm env n
-    norm env (TDotI l e i tl)       = TDotI l <$> norm env e <*> return i <*> return tl
+    norm env (TaIndex l e ix)       = TaIndex l <$> norm env e <*> norm env ix
+    norm env (TaSlice l e sl)       = TaSlice l <$> norm env e <*> norm env sl
+    norm env (TaDot l e n)          = TaDot l <$> norm env e <*> norm env n
+    norm env (TaDotI l e i tl)      = TaDotI l <$> norm env e <*> return i <*> return tl
     norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
-    norm env (TParen l p)           = TParen l <$> norm env p
+    norm env (TaParen l p)          = TaParen l <$> norm env p
 
 instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
@@ -331,7 +331,7 @@ instance Norm Assoc where
     norm env (Assoc e1 e2)          = Assoc <$> norm env e1 <*> norm env e2
     norm env (StarStar e)           = StarStar <$> norm env e
   
-instance Norm Slice where
+instance Norm Sliz where
     norm env (Sliz l e1 e2 e3)      = Sliz l <$> norm env e1 <*> norm env e2 <*> norm env e3
 {-
 instance Norm TSchema where

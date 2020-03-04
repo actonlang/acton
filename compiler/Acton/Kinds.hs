@@ -173,11 +173,11 @@ instance KCheck Pattern where
 instance KCheck Target where
     kchk env (TaVar l n)            = return ()
     kchk env (TaTuple l ps)         = kchk env ps
-    kchk env (TIndex l e ix)        = kchk env e >> kchk env ix
-    kchk env (TSlice l e sl)        = kchk env e >> kchk env sl
-    kchk env (TDot l e n)           = kchk env e
-    kchk env (TDotI l e i tl)       = kchk env e
-    kchk env (TParen l p)           = kchk env p
+    kchk env (TaIndex l e ix)       = kchk env e >> kchk env ix
+    kchk env (TaSlice l e sl)       = kchk env e >> kchk env sl
+    kchk env (TaDot l e n)          = kchk env e
+    kchk env (TaDotI l e i tl)      = kchk env e
+    kchk env (TaParen l p)          = kchk env p
 
 instance KCheck Exception where
     kchk env (Exception e mbe)      = kchk env e >> kchk env mbe
@@ -244,7 +244,7 @@ instance KCheck Assoc where
     kchk env (Assoc e1 e2)          = kchk env e1 >> kchk env e2
     kchk env (StarStar e)           = kchk env e
   
-instance KCheck Slice where
+instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = kchk env e1 >> kchk env e2 >> kchk env e3
 
 instance KCheck TSchema where
@@ -461,11 +461,11 @@ instance KWalk Pattern where
 instance KWalk Target where
     kwalk w (TaVar l n)             = return $ TaVar l n
     kwalk w (TaTuple l ts)          = TaTuple l <$> kwalk w ts
-    kwalk w (TIndex l e ix)         = TIndex l <$> kwalk w e <*> kwalk w ix
-    kwalk w (TSlice l e sl)         = TSlice l <$> kwalk w e <*> kwalk w sl
-    kwalk w (TDot l e n)            = TDot l <$> kwalk w e <*> return n
-    kwalk w (TDotI l e i tl)        = TDotI l <$> kwalk w e <*> return i <*> return tl
-    kwalk w (TParen l p)            = TParen l <$> kwalk w p
+    kwalk w (TaIndex l e ix)        = TaIndex l <$> kwalk w e <*> kwalk w ix
+    kwalk w (TaSlice l e sl)        = TaSlice l <$> kwalk w e <*> kwalk w sl
+    kwalk w (TaDot l e n)           = TaDot l <$> kwalk w e <*> return n
+    kwalk w (TaDotI l e i tl)       = TaDotI l <$> kwalk w e <*> return i <*> return tl
+    kwalk w (TaParen l p)           = TaParen l <$> kwalk w p
 
 instance KWalk Exception where
     kwalk w (Exception e mbe)       = Exception <$> kwalk w e <*> kwalk w mbe
@@ -525,7 +525,7 @@ instance KWalk Assoc where
     kwalk w (Assoc e1 e2)           = Assoc <$> kwalk w e1 <*> kwalk w e2
     kwalk w (StarStar e)            = StarStar <$> kwalk w e
   
-instance KWalk Slice where
+instance KWalk Sliz where
     kwalk w (Sliz l e1 e2 e3)       = Sliz l <$> kwalk w e1 <*> kwalk w e2 <*> kwalk w e3
 
 

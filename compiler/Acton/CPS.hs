@@ -507,7 +507,7 @@ preComp env s0 s1 c                     = pre env (s0 : mkLoop c) >>= prefix
         mkLoop (CompIf l e c)           = [If l [Branch e (mkLoop c)] []]
         mkLoop (CompFor l t e c)        = [For l t e (mkLoop c) []]
 
-instance PreCPS Slice where
+instance PreCPS Sliz where
     pre env (Sliz l a b c)              = Sliz l <$> pre env a <*> pre env b <*> pre env c
 
 instance PreCPS OpArg where
@@ -561,9 +561,9 @@ instance PreCPS Pattern where
 
 instance PreCPS Target where
     pre env (TaVar l n)                 = return (TaVar l n)
-    pre env (TIndex l e ix)             = TIndex l <$> pre env e <*> pre env ix
-    pre env (TSlice l e sl)             = TSlice l <$> pre env e <*> pre env sl
-    pre env (TDot l e n)                = TDot l <$> pre env e <*> return n
-    pre env (TDotI l e i tl)            = TDotI l <$> pre env e <*> return  i <*> return tl
+    pre env (TaIndex l e ix)            = TaIndex l <$> pre env e <*> pre env ix
+    pre env (TaSlice l e sl)            = TaSlice l <$> pre env e <*> pre env sl
+    pre env (TaDot l e n)               = TaDot l <$> pre env e <*> return n
+    pre env (TaDotI l e i tl)           = TaDotI l <$> pre env e <*> return  i <*> return tl
     pre env (TaTuple l ps)              = TaTuple l <$> pre env ps
-    pre env (TParen l p)                = TParen l <$> pre env p
+    pre env (TaParen l p)               = TaParen l <$> pre env p

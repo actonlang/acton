@@ -176,7 +176,7 @@ instance AddLoc S.Except where
            S.Except _ e -> return (S.Except l e)
            S.ExceptAs _ e nm -> return (S.ExceptAs l e nm)
      
-instance AddLoc S.Slice where
+instance AddLoc S.Sliz where
   addLoc p = do
           (l,i) <- withLoc p
           case i of
@@ -466,15 +466,15 @@ atarget = addLoc (
         <|>
             (try $ S.TaVar NoLoc <$> name)
         <|>
-            (parens $ S.TParen NoLoc <$> gen_target)
+            (parens $ S.TaParen NoLoc <$> gen_target)
          )
   where lvalue = do
             tmp <- atom_expr
             case tmp of
-                S.Dot _ e n    -> return $ S.TDot NoLoc e n
-                S.DotI _ e i t -> return $ S.TDotI NoLoc e i t
-                S.Index _ e ix -> return $ S.TIndex NoLoc e ix
-                S.Slice _ e sl -> return $ S.TSlice NoLoc e sl
+                S.Dot _ e n    -> return $ S.TaDot NoLoc e n
+                S.DotI _ e i t -> return $ S.TaDotI NoLoc e i t
+                S.Index _ e ix -> return $ S.TaIndex NoLoc e ix
+                S.Slice _ e sl -> return $ S.TaSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
 
 ------------------------------------------------------------------------------------------------

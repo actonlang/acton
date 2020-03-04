@@ -105,11 +105,11 @@ instance Relabel Pattern where
 instance Relabel Target where
     relabel (TaVar _ n) = TaVar <$> newLoc <*> relabel n
     relabel (TaTuple _ ps) = TaTuple <$> newLoc <*> relabel ps
-    relabel (TIndex _ e ix) = TIndex <$> newLoc <*> relabel e <*> relabel ix
-    relabel (TSlice _ e sl) = TSlice <$> newLoc <*> relabel e <*> relabel sl
-    relabel (TDot _ e n) = TDot <$> newLoc <*> relabel e <*> relabel n
-    relabel (TDotI _ e i tl) = TDotI <$> newLoc <*> relabel e <*> return i <*> return tl
-    relabel (TParen _ t) = TParen <$> newLoc <*> relabel t
+    relabel (TaIndex _ e ix) = TaIndex <$> newLoc <*> relabel e <*> relabel ix
+    relabel (TaSlice _ e sl) = TaSlice <$> newLoc <*> relabel e <*> relabel sl
+    relabel (TaDot _ e n) = TaDot <$> newLoc <*> relabel e <*> relabel n
+    relabel (TaDotI _ e i tl) = TaDotI <$> newLoc <*> relabel e <*> return i <*> return tl
+    relabel (TaParen _ t) = TaParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where
   relabel (Exception e mbe) = Exception <$> relabel e <*> relabel mbe
@@ -196,7 +196,7 @@ instance Relabel Assoc where
   relabel (Assoc e1 e2) = Assoc <$> relabel e1 <*> relabel e2
   relabel (StarStar e) = StarStar <$> relabel e
   
-instance Relabel Slice where
+instance Relabel Sliz where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
 instance Relabel TSchema where
