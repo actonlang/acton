@@ -97,7 +97,7 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                              intern = Class l n' q [] (Decl l0 (dsigs ++[_init']) : ds)
                                          return [intern, extern]
   where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
-        selfPat n                   = TDot l0 (Var l0 (NoQual selfKW)) n
+        selfPat n                   = TaDot l0 (Var l0 (NoQual selfKW)) n
         isSig Signature{}           = True
         isSig _                     = False
         isDecl Decl{}               = True
@@ -164,12 +164,12 @@ instance Deact Pattern where
 
 instance Deact Target where
     deact env (TaVar l n)
-      | selfRef n env               = return $ TDot l (Var l (NoQual selfKW)) n
+      | selfRef n env               = return $ TaDot l (Var l (NoQual selfKW)) n
     deact env (TaVar l n)           = return $ TaVar l n
-    deact env (TIndex l e ix)       = TIndex l <$> deact env e <*> deact env ix
-    deact env (TSlice l e sl)       = TSlice l <$> deact env e <*> deact env sl
-    deact env (TDot l e n)          = TDot l <$> deact env e <*> return n
-    deact env (TDotI l e i tl)      = TDotI l <$> deact env e <*> return i <*> return tl
+    deact env (TaIndex l e ix)      = TaIndex l <$> deact env e <*> deact env ix
+    deact env (TaSlice l e sl)      = TaSlice l <$> deact env e <*> deact env sl
+    deact env (TaDot l e n)         = TaDot l <$> deact env e <*> return n
+    deact env (TaDotI l e i tl)     = TaDotI l <$> deact env e <*> return i <*> return tl
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe
@@ -207,5 +207,5 @@ instance Deact Assoc where
     deact env (Assoc e1 e2)         = Assoc <$> deact env e1 <*> deact env e2
     deact env (StarStar e)          = StarStar <$> deact env e
   
-instance Deact Slice where
+instance Deact Sliz where
     deact env (Sliz l e1 e2 e3)     = Sliz l <$> deact env e1 <*> deact env e2 <*> deact env e3

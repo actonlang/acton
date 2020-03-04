@@ -173,11 +173,11 @@ instance InfEnv Stmt where
             method BAndA                = iandKW
             method MMultA               = imatmulKW
             t2e (TaVar l n)             = Var l (NoQual n)
-            t2e (TIndex l e ix)         = Index l e ix
-            t2e (TSlice l e sl)         = Slice l e sl
-            t2e (TDot l e n)            = Dot l e n
-            t2e (TDotI l e i tl)        = DotI l e i tl
-            t2e (TParen l tg)           = Paren l (t2e tg)
+            t2e (TaIndex l e ix)        = Index l e ix
+            t2e (TaSlice l e sl)        = Slice l e sl
+            t2e (TaDot l e n)           = Dot l e n
+            t2e (TaDotI l e i tl)       = DotI l e i tl
+            t2e (TaParen l tg)          = Paren l (t2e tg)
             t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs) KwdNil
     infEnv env (Assert l e1 e2)         = do e1' <- inferBool env e1
                                              (t,e2') <- infer env e2
@@ -858,27 +858,27 @@ instance Infer Target where
                                              TSchema _ [] t _ -> return (t, TaVar l n)
                                              _ -> err1 n "Polymorphic variable not assignable:"
 
-    infer env (TIndex l e [i])          = do (t,e') <- infer env e
+    infer env (TaIndex l e [i])         = do (t,e') <- infer env e
                                              (ti,i') <- infer env i
                                              t0 <- newTVar
                                              constrain [Impl env t (cIndexed ti t0), Sub env t tObject]
                                              equFX env (fxMut tWild tWild)
-                                             return (t0, TIndex l e' [i'])
-    infer env (TSlice l e [s])          = do (t,e') <- infer env e
+                                             return (t0, TaIndex l e' [i'])
+    infer env (TaSlice l e [s])         = do (t,e') <- infer env e
                                              s' <- inferSlice env s
                                              constrain [Impl env t cSliceable, Sub env t tObject]
                                              equFX env (fxMut tWild tWild)
-                                             return (t, TSlice l e' [s'])
-    infer env (TDot l e n)              = do (t,e') <- infer env e
+                                             return (t, TaSlice l e' [s'])
+    infer env (TaDot l e n)             = do (t,e') <- infer env e
                                              t0 <- newTVar
                                              constrain [Mut env t n t0]
                                              equFX env (fxMut tWild tWild)
-                                             return (t0, TDot l e' n)
-    infer env (TDotI l e i tl)          = do (t,e') <- infer env e
+                                             return (t0, TaDot l e' n)
+    infer env (TaDotI l e i tl)         = do (t,e') <- infer env e
                                              t0 <- newTVar
                                              --constrain [Mut env t n t0]
                                              equFX env (fxMut tWild tWild)
-                                             return (t0, TDotI l e' i tl)
+                                             return (t0, TaDotI l e' i tl)
     infer env (TaTuple l targs)         = do (ts,targs') <- unzip <$> mapM (infer env) targs
                                              return (tTuple (foldr posRow' posNil ts), TaTuple l targs')
 

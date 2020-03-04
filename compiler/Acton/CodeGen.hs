@@ -182,7 +182,7 @@ instance Gen Assoc where
 instance Gen WithItem where
     gen env (WithItem e p)          = gen env e <+> nonEmpty (text "as" <+>) (gen env) p
 
-instance Gen Slice where
+instance Gen Sliz where
     gen env (Sliz _ a b c)          = gen env a <> colon <> gen env b <> gen env c
 
 instance Gen Comp where
@@ -204,11 +204,11 @@ instance Gen Pattern where
 
 instance Gen Target where
     gen env (TaVar _ n)             = gen env n
-    gen env (TIndex _ e ix)         = gen env e <> brackets (commaList ix)
-    gen env (TSlice _ e sl)         = gen env e <> brackets (commaList sl)
-    gen env (TDot _ e n)            = gen env e <> text "->" <> gen env n
-    gen env (TDotI _ e i tl)        = undefined
-    gen env (TParen _ p)            = gen env p
+    gen env (TaIndex _ e ix)        = gen env e <> brackets (commaList ix)
+    gen env (TaSlice _ e sl)        = gen env e <> brackets (commaList sl)
+    gen env (TaDot _ e n)           = gen env e <> text "->" <> gen env n
+    gen env (TaDotI _ e i tl)       = undefined
+    gen env (TaParen _ p)           = gen env p
 
 instance Gen Unary where
     gen env Not                     = text "not "

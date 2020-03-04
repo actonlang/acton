@@ -202,7 +202,7 @@ instance Pretty ModuleItem where
 instance Pretty ImportItem where
     pretty (ImportItem n1 n2)       = pretty n1 <+> nonEmpty (text "as" <+>) pretty n2
 
-instance Pretty Slice where
+instance Pretty Sliz where
     pretty (Sliz _ a b c)           = pretty a <> colon <> pretty b <> nonEmpty (colon <>) pretty c
 
 instance Pretty Comp where
@@ -240,12 +240,12 @@ instance Pretty Pattern where
 instance Pretty Target where
     pretty (TaVar _ n)              = pretty n
     pretty (TaTuple _ ts)           = commaList ts
-    pretty (TIndex _ e ix)          = pretty e <> brackets (commaList ix)
-    pretty (TSlice _ e sl)          = pretty e <> brackets (commaList sl)
-    pretty (TDot _ e n)             = pretty e <> dot <> pretty n
-    pretty (TDotI _ e i False)      = pretty e <> dot <> pretty i
-    pretty (TDotI _ e i True)       = pretty e <> dot <> text "*" <> pretty i
-    pretty (TParen _ t)             = parens (pretty t)
+    pretty (TaIndex _ e ix)         = pretty e <> brackets (commaList ix)
+    pretty (TaSlice _ e sl)         = pretty e <> brackets (commaList sl)
+    pretty (TaDot _ e n)            = pretty e <> dot <> pretty n
+    pretty (TaDotI _ e i False)     = pretty e <> dot <> pretty i
+    pretty (TaDotI _ e i True)      = pretty e <> dot <> text "*" <> pretty i
+    pretty (TaParen _ t)            = parens (pretty t)
 
 prettyPats [] Nothing               = empty
 prettyPats ps Nothing               = commaSep pretty ps

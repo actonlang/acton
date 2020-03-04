@@ -63,7 +63,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::[Expr] }
-                | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Slice] }
+                | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Op Binary, exp2::Expr }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
@@ -91,11 +91,11 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 deriving (Show)
 
 data Target     = TaVar         { taloc::SrcLoc, tn::Name}
-                | TIndex        { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
-                | TSlice        { taloc::SrcLoc, texp::Expr, tslice::[Slice] }
-                | TDot          { taloc::SrcLoc, texp::Expr, tn::Name }
-                | TDotI         { taloc::SrcLoc, texp::Expr, tival::Integer, ttl :: Bool }
-                | TParen        { taloc::SrcLoc, targ::Target }
+                | TaIndex       { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
+                | TaSlice       { taloc::SrcLoc, texp::Expr, tslice::[Sliz] }
+                | TaDot         { taloc::SrcLoc, texp::Expr, tn::Name }
+                | TaDotI        { taloc::SrcLoc, texp::Expr, tival::Integer, ttl :: Bool }
+                | TaParen       { taloc::SrcLoc, targ::Target }
                 | TaTuple       { taloc::SrcLoc, targs::[Target]}
 
                 deriving (Show)
@@ -163,7 +163,7 @@ data PosPat     = PosPat Pattern PosPat | PosPatStar Pattern | PosPatNil derivin
 data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil deriving (Show,Eq)
 
 data OpArg      = OpArg (Op Comparison) Expr deriving (Eq,Show)
-data Slice      = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
+data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
 
@@ -241,7 +241,7 @@ pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
 pVar n t        = PVar NoLoc n t
 
 taVar n         = TaVar NoLoc n
-tIndex e ix     = TIndex NoLoc e [ix]
+taIndex e ix    = TaIndex NoLoc e [ix]
 
 monotype t      = TSchema NoLoc [] t NoDec
 monotype' t d   = TSchema NoLoc [] t d
@@ -479,7 +479,7 @@ instance Eq Except where
     ExceptAs _ x1 n1    ==  ExceptAs _ x2 n2    = x1 == x2 && n1 == n2
     _                   ==  _                   = False
 
-instance Eq Slice where
+instance Eq Sliz where
     Sliz _ a1 b1 c1     ==  Sliz _ a2 b2 c2     = a1 == a2 && b1 == b2 && c1 == c2
     
 instance Eq Comp where
@@ -499,11 +499,11 @@ instance Eq Pattern where
 instance Eq Target where
     TaVar _ n1          == TaVar _ n2           = n1 == n2
     TaTuple _ ts1       == TaTuple _ ts2        = ts1 == ts2
-    TIndex _ e1 ix1     == TIndex _ e2 ix2      = e1 == e2 && ix1 == ix2
-    TSlice _ e1 sl1     == TSlice _ e2 sl2      = e1 == e2 && sl1 == sl2
-    TDot _ e1 n1        == TDot _ e2 n2         = e1 == e2 && n1 == n2
-    TParen _ t1         == t2                   = t1 == t2
-    t1                  == TParen _ t2          = t1 == t2
+    TaIndex _ e1 ix1    == TaIndex _ e2 ix2     = e1 == e2 && ix1 == ix2
+    TaSlice _ e1 sl1    == TaSlice _ e2 sl2     = e1 == e2 && sl1 == sl2
+    TaDot _ e1 n1       == TaDot _ e2 n2        = e1 == e2 && n1 == n2
+    TaParen _ t1        == t2                   = t1 == t2
+    t1                  == TaParen _ t2         = t1 == t2
     _                   == _                    = False
 
 

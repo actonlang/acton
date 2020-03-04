@@ -342,7 +342,7 @@ instance Lift KwdArg where
     ll env (KwdArg n e k)               = KwdArg n <$> ll env e <*> ll env k
     ll env KwdNil                       = pure KwdNil
 
-instance Lift Slice where
+instance Lift Sliz where
     ll env (Sliz l e1 e2 e3)            = Sliz l <$> ll env e1 <*> ll env e2 <*> ll env e3
 
 instance Lift Comp where
@@ -357,8 +357,8 @@ instance Lift Pattern where
 
 instance Lift Target where
     ll env (TaVar l n)                  = return (TaVar l n)
-    ll env (TIndex l e ix)              = TIndex l <$> ll env e <*> ll env ix
-    ll env (TSlice l e sl)              = TSlice l <$> ll env e <*> ll env sl
-    ll env (TDot l e n)                 = TDot l <$> ll env e <*> return n
-    ll env (TDotI l e i tl)             = TDotI l <$> ll env e <*> return i <*> return tl
-    ll env (TParen l p)                 = TParen l <$> ll env p
+    ll env (TaIndex l e ix)             = TaIndex l <$> ll env e <*> ll env ix
+    ll env (TaSlice l e sl)             = TaSlice l <$> ll env e <*> ll env sl
+    ll env (TaDot l e n)                = TaDot l <$> ll env e <*> return n
+    ll env (TaDotI l e i tl)            = TaDotI l <$> ll env e <*> return i <*> return tl
+    ll env (TaParen l p)                = TaParen l <$> ll env p

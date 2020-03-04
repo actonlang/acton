@@ -265,7 +265,7 @@ instance Vars KwdArg where
 instance Vars OpArg where
     free (OpArg o e)                = free e
 
-instance Vars Slice where
+instance Vars Sliz where
     free (Sliz _ e1 e2 e3)          = free e1 ++ free e2 ++ free e3
 
 instance Vars Comp where
@@ -310,12 +310,12 @@ instance Vars Pattern where
     
 instance Vars Target where
     free (TaVar _ n)                = [n]
-    free (TIndex _ e ix)            = free e ++ free ix
-    free (TSlice _ e sl)            = free e ++ free sl
-    free (TDot _ e n)               = free e
-    free (TDotI _ e i tl)           = free e
+    free (TaIndex _ e ix)           = free e ++ free ix
+    free (TaSlice _ e sl)           = free e ++ free sl
+    free (TaDot _ e n)              = free e
+    free (TaDotI _ e i tl)          = free e
     free (TaTuple _ ts)             = free ts
-    free (TParen _ t)               = free t
+    free (TaParen _ t)              = free t
 
     bound _                         = []
 
