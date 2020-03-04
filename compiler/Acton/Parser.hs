@@ -1119,7 +1119,6 @@ ttype    =  addLoc (
         <|> try (brackets (Builtin.pSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
-        <|> S.TAt NoLoc <$> (symbol "@" *> tcon)
         <|> S.TCon NoLoc <$> tcon)
                 
 

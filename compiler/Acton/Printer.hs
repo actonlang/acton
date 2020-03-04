@@ -373,7 +373,7 @@ prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 instance Pretty Type where
     pretty (TVar _ v)               = pretty v
     pretty (TCon  _ c)              = pretty c
-    pretty (TAt  _ c)               = text "@" <> pretty c
+    pretty (TExist  _ p)            = pretty p
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
     pretty (TTuple _ p (TNil _))

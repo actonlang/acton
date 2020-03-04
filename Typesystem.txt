@@ -66,11 +66,11 @@ Head rows:          h       ::=     T,h  |  *X  |  .                            
 Keyword rows:       k       ::=     x:T,k  |  **X  |  .                                                 associative, commutative\duplicates
 Effects:            e       ::=     ret[t],e  |  st[t],e  |  act,e  |  X  |  .                          associative, commutative\duplicates
 
-Type schemas:       T       ::=     [q] => t  |  t
+Type schemas:       T       ::=     [q]=>e(r)->t  |  t
 Qua(l|nt)ifiers:    q       ::=     X(c,pi),q  |  .                                                     associative
 Goals:              g       ::=     t(c,pi),g  |  .                                                     associative
 
-Environments:       N       ::=     C:[q]=>(c;r)  |  P:[q]=>(pi;r)  |  w:[q]=>c(p)  |  w:q  |
+Environments:       N       ::=     C:[q]=>(c;r)  |  P:[q]=>(pi;r)  |  w:[q]=>C(p)  |  w:q  |
                                     x:T  |  z:t  |  x:#  |  z:#  |  N,N  |  .                           associative, commutative\duplicates
 
 Witness variables:  v
@@ -115,8 +115,8 @@ N |- protocol P[q](pi):r,M  :  P:[q]=>(pi;r,ri)  ~>  !class P[S,q]():[S/Self](r,
 
 
 N,v.v':q |- w : P[o] ~ r1     N,v.v':q |- C[dom(q)] ~ r     N,v.v':q |- M : r' | . ~> M'     r' in [Self(C[dom(q)])]=>(Self)->(r1)
----------------------------------------------------------------------------------------------------------------------------------------------- (Ext)
-N |- extension C[q](P[o]):M  :  P_C:[q]=>C[dom(q)](P[o])  ~>  !class P_C[q](P[C[dom(q)],o]):((v)->M',def _init_(v,*v'):P._init_(v,*w);v.v'=v')
+-------------------------------------------------------------------------------------------------------------------------------------- (Ext)
+N |- extension C[q](P[o]):M  :  P_C:[q]=>C(P[o])  ~>  !class P_C[q](P[C[dom(q)],o]):((v)->M',def _init_(v,*v'):P._init_(v,*w);v.v'=v')
 
 
 N' = N,w:q,bv(F,S):#,bz(S):#,_self_:Ref[X]      N' |- F : r | N1 | e      N',N1 |- S : t | e,st[X]     X not in fv(N,q,e',r,t)
@@ -192,13 +192,13 @@ N |- w : t(p)                                                                   
 N |- \x:(w,x) : t < EX[p]                                                           N,p:[q]=>(pi;r) |- \x:(x.0.i,x) : EX[P[o]] < EX[[o/q]pi] / all i
 
 
-N |- r' < r     N |- t < t'                                                         N |- _self_ : Ref[X]
---------------------------- (SubFun)                                                ----------------------------------- (SubAsync)
-N |- e(r)->t < e(r')->t'                                                            N |- e,st[X](r)->t < act(r)->Msg[t]
+N |- w : r' < r     N |- w' : t < t'                                                N |- _self_ : Ref[X]
+---------------------------------------------- (SubFun)                             ---------------------------------------------------------- (SubAsync)
+N |- \x:\*y:w'(x(w(*y))) : e(r)->t < e(r')->t'                                      N |- \x:ASYNC(_self_,x) : e,st[X](r)->t < e'act(r)->Msg[t]
 
 
 N |- r < r'                                     N |- k < r                          N |- T < T'     N |- r < r'
---------------- (SubRec)                        ------------- (SubOptP)             --------------------------- (SubRowP)
+--------------- (SubTup)                        ------------- (SubOptP)             --------------------------- (SubRowP)
 N |- (r) < (r')                                 N |- k < ?t,r                       N |- T,r < T',r'
 
 N |- T < T'     N |- r < k                      N |- . < k                          N |- T < T'     N |- k < k'
@@ -206,22 +206,22 @@ N |- T < T'     N |- r < k                      N |- . < k                      
 N |- T,r < x=T',k                               N |- . < x:?t,k                     N |- x=T,k < x=T',k'
 
 
------------ (SubOpt)                            -------------- (SubNone)            ------------ (SubStr)
-N |- t < ?t                                     N |- None < ?t                      N |- s < str
+------------------ (SubOpt)                     --------------------- (SubNone)     ------------------- (SubStr)
+N |- \x:x : t < ?t                              N |- \x:x : None < ?t               N |- \x:x : s < str
 
 
-N,w':q' |- w : [o/q]q     N,w':q' |- w2 : [o/q]t < t'     dom(q') not in fv(N)
------------------------------------------------------------------------------- (SubPoly)
-N |- \w1,w': w2(w1(w)) : [q] => t  <  [q'] => t'
+N,v:q' |- v' : [o/q]q     N,v:q' |- w' : r' < [o/q]r    N,v:q' |- w :  [o/q]t < t'     dom(q') not in fv(N)
+----------------------------------------------------------------------------------------------------------- (SubGen)
+N |- \x:\*v,*y:w(x(*v',*w'(y))) : [q]=>e(r)->t  <  [q']=>e(r')->t'
 
 
 
 ***** N |- E : T | e *******************************************************************************************************************************************
 
 
-N |- E : T | e ~> E'     N |- w : T < T'                                            N |- E : [q]=>t | e ~> E'     N |- w : [o/q]q
----------------------------------------- (Sub)                                      --------------------------------------------- (Inst)
-N |- E : T' | e  ~>  w(E')                                                          N |- E : [o/q]t | e  ~>  E'(*w)
+N |- E : T | e ~> E'     N |- w : T < T'                                            N |- E : [q]=>e(r)->t | e' ~> E'     N |- w : [o/q]q
+---------------------------------------- (Sub)                                      ---------------------------------------------------- (Inst)
+N |- E : T' | e  ~>  w(E')                                                          N |- E : [o/q]e(r)->t | e'  ~>  \*x:E'(*w,*x)
 
 
                                                                                     N |- _self_ : Ref[X]
@@ -306,8 +306,8 @@ N |- E : t | e              N |- x : T | N' | e     N |- E : T | e              
 -------------- (Run)        -------------------------------------- (AssignVar)      ---------------------------------------- (AssignPat)
 N |- E  :  . | e            N |- x = E  :  N' | e                                   N |- (F) = E  :  N' | e
 
-N,N' |- D : N'     N,N' well-formed w.r.t. acyclicity and MRO of extensions
---------------------------------------------------------------------------- (Def)
+N,N' |- D : N'     N,N' well-formed w.r.t. acyclicity and MRO
+------------------------------------------------------------- (Def)
 N |- D  :  N' | e
 
 

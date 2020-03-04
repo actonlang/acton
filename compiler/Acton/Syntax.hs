@@ -188,7 +188,7 @@ data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
-                | TAt       { tloc::SrcLoc, tcon::TCon }
+                | TExist    { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
@@ -252,7 +252,7 @@ tBind v         = TBind v []
 
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
-tAt c           = TAt NoLoc c
+tExist p        = TExist NoLoc p
 tFun fx p k t   = TFun NoLoc fx p k t
 tTuple p        = TTuple NoLoc p kwdNil
 tRecord k       = TTuple NoLoc posNil k
@@ -516,7 +516,7 @@ instance Eq TVar where
 instance Eq Type where
     TVar _ v1           == TVar _ v2            = v1 == v2
     TCon _ c1           == TCon _ c2            = c1 == c2
-    TAt _ c1            == TAt _ c2             = c1 == c2
+    TExist _ p1         == TExist _ p2          = p1 == p2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1 r1      == TTuple _ p2 r2       = p1 == p2 && r1 == r2
     TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2

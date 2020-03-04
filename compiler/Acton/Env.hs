@@ -213,7 +213,7 @@ instance Unalias TBind where
 
 instance Unalias Type where
     unalias env (TCon l c)          = TCon l (unalias env c)
-    unalias env (TAt l c)           = TAt l (unalias env c)
+    unalias env (TExist l p)        = TExist l (unalias env p)
     unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
@@ -471,8 +471,8 @@ findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
                                 NSig t         -> t
-                                NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
-                                NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
+--                                NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
+--                                NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
 
 findSubAxiom                :: Env -> TCon -> QName -> Maybe (Bool,Type)
@@ -490,8 +490,8 @@ findAttr env u n            = (cs, findIn (te ++ concat tes))
                                 Just (NVar t)         -> t
                                 Just (NSVar t)        -> t
                                 Just (NSig t)         -> t
-                                Just (NClass q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
-                                Just (NProto q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
+--                                Just (NClass q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
+--                                Just (NProto q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> (Bool,Constraints,[TCon],TEnv)
@@ -848,7 +848,7 @@ instance Subst Type where
                                             Just t ->  msubst t
                                             Nothing -> return (TVar l v)
     msubst (TCon l c)               = TCon l <$> msubst c
-    msubst (TAt l c)                = TAt l <$> msubst c
+    msubst (TExist l p)             = TExist l <$> msubst p
     msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
     msubst (TTuple l p k)           = TTuple l <$> msubst p <*> msubst k
     msubst (TUnion l as)            = return $ TUnion l as
@@ -860,7 +860,7 @@ instance Subst Type where
 
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
-    tyfree (TAt _ c)                = tyfree c
+    tyfree (TExist _ p)             = tyfree p
     tyfree (TFun _ fx p k t)        = tyfree fx ++ tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p k)           = tyfree p ++ tyfree k
     tyfree (TUnion _ as)            = []
