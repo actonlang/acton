@@ -11,6 +11,9 @@
 #define GROWTH_RATE 2.0
 
 #include "db_messages.pb-c.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
 #define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)						\
@@ -61,6 +64,12 @@ int remove_component_vc(vector_clock * vc, int node_id);
 
 vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids);
 
+vector_clock * init_empty_vc();
+
+vector_clock * init_local_vc_id(int local_id);
+
+vector_clock * init_local_vc(struct sockaddr * x);
+
 vector_clock * copy_vc(vector_clock * vc1);
 
 vector_clock * init_vc_from_msg(VectorClockMessage * msg);
@@ -78,5 +87,7 @@ int grow_vc(vector_clock * vc);
 // int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc);
 
 char * to_string_vc(vector_clock * vc, char * msg_buff);
+
+int get_node_id(struct sockaddr * x);
 
 #endif /* BACKEND_FAILURE_DETECTOR_VECTOR_CLOCK_H_ */

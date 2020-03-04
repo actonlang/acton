@@ -39,8 +39,8 @@ void * comm_thread_loop(void * args);
 
 remote_db_t * get_remote_db(int replication_factor)
 {
-	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
-	memset(db, 0, sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
+	remote_db_t * db = (remote_db_t *) malloc(sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
+	memset(db, 0, sizeof(remote_db_t) + 3 * sizeof(pthread_mutex_t));
 
 	db->servers = create_skiplist(&sockaddr_cmp);
 	db->txn_state = create_skiplist_uuid();
@@ -50,12 +50,17 @@ remote_db_t * get_remote_db(int replication_factor)
 	pthread_mutex_init(db->subscribe_lock, NULL);
 	db->msg_callbacks_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + sizeof(pthread_mutex_t));
 	pthread_mutex_init(db->msg_callbacks_lock, NULL);
+	db->lc_lock = (pthread_mutex_t*) ((char*) db + sizeof(remote_db_t) + 2 * sizeof(pthread_mutex_t));
+	pthread_mutex_init(db->lc_lock, NULL);
+
 	db->replication_factor = replication_factor;
 	db->quorum_size = (int) (replication_factor / 2) + 1;
 	db->rpc_timeout = 10;
 
 	db->stop_comm = 0;
 	assert(pthread_create(&(db->comm_thread), NULL, comm_thread_loop, db) == 0);
+
+	db->my_lc = init_empty_vc();
 
 	return db;
 }
@@ -425,6 +430,24 @@ long get_nonce(remote_db_t * db)
 	return nonce;
 }
 
+vector_clock * get_and_increment_lc(remote_db_t * db, int node_id)
+{
+	pthread_mutex_lock(db->lc_lock);
+
+	vector_clock * vc = copy_vc(db->my_lc);
+
+	increment_vc(db->my_lc, node_id);
+
+	pthread_mutex_unlock(db->lc_lock);
+
+	return vc;
+}
+
+vector_clock * get_lc(remote_db_t * db)
+{
+	return copy_vc(db->my_lc);
+}
+
 int close_remote_db(remote_db_t * db)
 {
 	db->stop_comm = 1;
@@ -445,6 +468,7 @@ int free_remote_db(remote_db_t * db)
 	skiplist_free(db->txn_state);
 	skiplist_free(db->queue_subscriptions);
 	free(db);
+	free_vc(db->my_lc);
 	return 0;
 }
 

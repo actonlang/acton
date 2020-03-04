@@ -201,6 +201,49 @@ vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int s
 	return vc;
 }
 
+int get_node_id(struct sockaddr * x)
+{
+	#define LSB 16
+
+	assert(x->sa_family == AF_INET || x->sa_family == AF_INET6); // AF_UNIX?
+
+	if (x->sa_family == AF_INET)
+	{
+        struct sockaddr_in *xin = (struct sockaddr_in *)x;
+
+        return (ntohl(xin->sin_addr.s_addr) << LSB) | (ntohs(xin->sin_port));
+    }
+	else if (x->sa_family == AF_INET6)
+    {
+        struct sockaddr_in6 *xin6 = (struct sockaddr_in6 *)x;
+
+        uint32_t * addr = (uint32_t *) xin6->sin6_addr.s6_addr;
+
+        return (ntohl(addr[1]) << LSB) | (ntohs(xin6->sin6_port)); // use least significant host bits of the host portion of a IPV6 address
+    }
+
+	return 0;
+}
+
+vector_clock * init_empty_vc()
+{
+	return init_vc(0, NULL, NULL, 0);
+}
+
+vector_clock * init_local_vc_id(int local_id)
+{
+	long counter = 0;
+
+	return init_vc(1, &local_id, &counter, 0);
+}
+
+vector_clock * init_local_vc(struct sockaddr * x)
+{
+	assert(x != NULL);
+
+	return init_local_vc_id(get_node_id(x));
+}
+
 vector_clock * copy_vc(vector_clock * vc1)
 {
 	vector_clock * vc = (vector_clock *) malloc(sizeof(struct vector_clock));

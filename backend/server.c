@@ -1023,6 +1023,11 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     return 0;
 }
 
+int handle_server_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate)
+{
+	return 0;
+}
+
 int read_full_packet(int * sockfd, int * msg_len)
 {
 	int announced_msg_len = -1;
@@ -1122,6 +1127,7 @@ int main(int argc, char **argv) {
   timeout.tv_usec = 0;
   unsigned int seed;
   int ret = 0;
+  char msg_buf[256];
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
   skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
@@ -1156,6 +1162,10 @@ int main(int argc, char **argv) {
   serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
   serveraddr.sin_port = htons((unsigned short)portno);
 
+  vector_clock * my_lc = init_local_vc((struct sockaddr *) &serveraddr);
+
+  printf("SERVER: Started %s:%d, my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), serveraddr.sin_port, to_string_vc(my_lc, msg_buf));
+
   if (bind(parentfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
     error("ERROR on binding");
 
@@ -1168,21 +1178,42 @@ int main(int argc, char **argv) {
   {
 		FD_ZERO(&readfds);
 
+		// Add parent socket to read set:
+
 		FD_SET(parentfd, &readfds);
 		int max_fd = parentfd;
+
+		// Add active clients to read set:
 
 		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
 		{
 			client_descriptor * rs = (client_descriptor *) crt->value;
 			if(rs->sockfd > 0)
 			{
-//				printf("Listening to client socket %s..\n", rs->id);
+//				printf("SERVER: Listening to client socket %s..\n", rs->id);
 				FD_SET(rs->sockfd, &readfds);
 				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
 			}
 			else
 			{
-//				printf("Not listening to disconnected client socket %s..\n", rs->id);
+//				printf("SERVER: Not listening to disconnected client socket %s..\n", rs->id);
+			}
+		}
+
+		// Add active peers to read set:
+
+		for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+			if(rs->sockfd > 0)
+			{
+//				printf("SERVER: Listening to peer socket %s..\n", rs->id);
+				FD_SET(rs->sockfd, &readfds);
+				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("SERVER: Not listening to disconnected peer socket %s..\n", rs->id);
 			}
 		}
 
@@ -1230,6 +1261,23 @@ int main(int argc, char **argv) {
 					continue;
 
 			    if(handle_client_message(childfd, msg_len, db, &seed))
+			    		continue;
+			}
+		}
+
+		// Check if there are messages from peer servers:
+
+		for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+
+			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			// Received a msg from this server:
+			{
+				if(read_full_packet(&(rs->sockfd), &msg_len))
+					continue;
+
+			    if(handle_server_message(childfd, msg_len, db, &seed))
 			    		continue;
 			}
 		}

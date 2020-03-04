@@ -67,6 +67,9 @@ typedef struct remote_db {
 
 	long requests;
 	unsigned int fastrandstate;
+
+    pthread_mutex_t* lc_lock;
+	vector_clock * my_lc;
 } remote_db_t;
 
 remote_db_t * get_remote_db(int replication_factor);
@@ -76,6 +79,7 @@ int delete_msg_callback(long nonce, remote_db_t * db);
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
 int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t * db);
 long get_nonce(remote_db_t * db);
+vector_clock * get_and_increment_lc(remote_db_t * db);
 int free_remote_db(remote_db_t * db);
 int close_remote_db(remote_db_t * db);
 int sockaddr_cmp(WORD a1, WORD a2);
