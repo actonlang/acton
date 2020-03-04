@@ -281,7 +281,7 @@ genRow env (TNil _)                 = empty
 instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
-    gen env (TAt  _ c)              = text "@" <> gen env c
+--    gen env (TExist  _ p)           = gen env p
     gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
     gen env (TTuple _ pos _)        = parens (genRow env pos)
     gen env (TUnion _ as)           = parens (vbarSep (gen env) as)

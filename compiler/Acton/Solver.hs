@@ -60,8 +60,8 @@ reduce' (Sel env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduceAll (Equ env t' t2 : cs)
 reduce' (Sel env (TTuple _ p r) n t2)       = reduce (Equ env r (kwdRow n (monotype t2) tWild))
-
-reduce' (Sel env (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
+{-
+reduce' (Sel env (TExist _ p) n t2)         = do let (cs,sc) = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc)
                                                  let t' = subst [(tvSelf,tCon tc)] t
@@ -71,7 +71,7 @@ reduce' (Sel env (TAt _ tc) n t2)           = do let (cs,sc) = findAttr env tc n
     addself sc                              = sc
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
-
+-}
 reduce' (Sel env (TUnion _ [ULit _]) n t2)  = reduce' (Sel env tStr n t2)
 
 reduce' c@(Mut env (TVar _ tv) n t2)
@@ -115,8 +115,8 @@ red' sub env (TCon _ c1) (TCon l c2)
   where n2                                  = tcname c2
 
 
-red' sub env (TAt _ c1) (TAt l c2)
-  | tcname c1 == tcname c2                  = mapM_ (uncurry $ red False env) (tcargs c1 `zip` tcargs c2)       -- TODO: use polarities
+red' sub env (TExist _ p1) (TExist l p2)
+  | tcname p1 == tcname p2                  = mapM_ (uncurry $ red False env) (tcargs p1 `zip` tcargs p2)       -- TODO: use polarities
 
 --           as declared           as called
 red' sub env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)

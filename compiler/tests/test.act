@@ -188,6 +188,6 @@ protocol MyIndexed[A,B]:                                 # just a protocol
 
 g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
 
-h : (f:[A]=>(A)->A, x:int, y:@dict[int,str]) -> str      # a rank-2 scheme with keyword arguments and an @ type
+h : (f:[A]=>(A)->A, x:int, y:dict[int,str]) -> str      # a rank-2 scheme with keyword arguments
 
 ff : (**A) -> bool

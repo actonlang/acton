@@ -298,7 +298,7 @@ instance KInfer Type where
     kinfer env (TVar _ v)           = kinfer env v
     kinfer env (TCon _ c)           = do kexpect env KType c
                                          return KType
-    kinfer env (TAt _ c)            = do kexpect env KType c
+    kinfer env (TExist _ p)         = do kexpect env KType p
                                          return KType
     kinfer env (TFun _ fx p k t)    = do kexpect env KRow fx
                                          kexpect env KRow p
@@ -381,7 +381,7 @@ instance KWalk Type where
     kwalk False (TWild l)           = Acton.Env.err1 l "Illegal wildcard type"
     kwalk w (TVar l v)              = TVar l <$> kwalk w v
     kwalk w (TCon l c)              = TCon l <$> kwalk w c
-    kwalk w (TAt l c)               = TAt l <$> kwalk w c
+    kwalk w (TExist l p)            = TExist l <$> kwalk w p
     kwalk w (TFun l fx p k t)       = TFun l <$> kwalk w fx <*> kwalk w p <*> kwalk w k<*> kwalk w t
     kwalk w (TTuple l p k)          = TTuple l <$> kwalk w p <*> kwalk w k
     kwalk w (TUnion l as)           = return $ TUnion l as
