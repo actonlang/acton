@@ -359,7 +359,8 @@ instance KWalk Kind where
     kwalk w (KVar v)                = do s <- getSubstitution
                                          case Map.lookup v s of
                                             Just k  -> kwalk w k
-                                            Nothing -> return (KVar v)
+                                            Nothing -> return kdefault
+      where kdefault                = if w then KVar v else KType -- default kind, in lieu of kind polymorphism
     kwalk w (KFun ks k)             = KFun <$> mapM (kwalk w) ks <*> kwalk w k
     kwalk w k                       = return k
         
