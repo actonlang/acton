@@ -67,10 +67,7 @@ nClass                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
 nClass n q us te            = [(n, NClass q us te)]
 
 nProto                      :: Name -> [TBind] -> [TCon] -> TEnv -> TEnv
-nProto n q us te            = (n, NProto q us te) : te'
-  where
-    te'                     = [ (n', NSig (f sc)) | (n',NSig sc) <- te, scdec sc == StaticMethod ]
-    f (TSchema l q' t d)    = TSchema l (q ++ (TBind tvSelf [TC (NoQual n) $ map tVar $ tybound q]) : q') t d
+nProto n q us te            = [(n, NProto q us te)]
 
 nExt                        :: Name -> QName -> [TBind] -> [TCon] -> TEnv
 nExt w n q us               = [(w, NExt n q us)]
@@ -186,9 +183,9 @@ instance Unalias ModName where
     unalias env (ModName ns)        = norm (names env) [] ns
       where
         norm te pre []              = ModName (reverse pre)
-        norm te pre (n:ns)          = case lookupM n te of
+        norm te pre (n:ns)          = case lookupMod n te of
                                         Just (NModule te') -> norm te' (n:pre) ns
-                                        Just (NMAlias m) -> m -- norm (findMod m env) [] ns
+                                        Just (NMAlias m) -> m
                                         _ -> error ("### unalias " ++ show (ModName ns))
 
 instance Unalias QName where
@@ -321,7 +318,7 @@ define te env               = env{ names = reverse te ++ prune (dom te) (names e
 defineMod                   :: ModName -> TEnv -> Env -> Env
 defineMod m@(ModName ns) te env  = define [(head ns, defmod (tail ns) $ te1)] env
   where te1                 = case lookup (head ns) (names env) of Just (NModule te1) -> te1; _ -> []
-        defmod [] te1        = NModule $ te -- findMod (ModName ns) env
+        defmod [] te1        = NModule $ te
         defmod (n:ns) te1    = NModule $ (n, defmod ns te2) : prune [n] te1
           where te2         = case lookup n te1 of Just (NModule te2) -> te2; _ -> []
 
@@ -338,6 +335,8 @@ defineSelf'                 :: QName -> [TBind] -> Env -> Env
 defineSelf' qn q env        = define (nTVars [TBind tvSelf [tc]]) env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
+--------------------------------------------------------------------------------------------------------------------
+
 blocked                     :: Env -> Name -> Bool
 blocked env n               = lookup n (names env) == Just NBlocked
 
@@ -352,11 +351,7 @@ reservedOrSig n env         = case lookup n (names env) of
                                 Just (NSig t)  -> True
                                 _              -> False
 
-findSig                     :: Name -> Env -> Maybe TSchema
-findSig n env               = case lookup n (names env) of
-                                Just (NSig t)  -> Just t
-                                _              -> Nothing
-
+-- local def --
 findName                    :: Name -> Env -> NameInfo
 findName n env              = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
@@ -366,17 +361,17 @@ findName n env              = case lookup n (names env) of
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
-lookupM                     :: Name -> TEnv -> Maybe NameInfo
-lookupM m []                = Nothing
-lookupM  m ((n,ni) : te)
-                  |n==m     = case ni of
+lookupMod                   :: Name -> TEnv -> Maybe NameInfo
+lookupMod m []              = Nothing
+lookupMod m ((n,ni) : te)
+  | n == m                  = case ni of
                                  NMAlias _ -> Just ni
                                  NModule _ -> Just ni
-                                 _ -> lookupM m te
-lookupM m (_:te)            = lookupM m te
+                                 _ -> lookupMod m te
+  | otherwise               = lookupMod m te
                                 
 findQName                   :: QName -> Env -> NameInfo
-findQName (QName m n) env   = case lookup n (findMod (unalias env m) env) of
+findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just i -> i
                                 _ -> noItem m n
@@ -391,39 +386,16 @@ tconKind n env              = case findQName n env of
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
 
-invertTEnv (m,te)           = map (inv m) te
-  where inv m (n,ni)        = (n,(m,ni))
-
-invertEnv env               = concatMap invertTEnv ms -- last ms is builtin
-  where ms                  = modules env
-
-findSelf                    :: Env -> TCon
-findSelf env                = case findName nSelf env of
-                                NTVar _ (u:us) -> u
-
-findMod                     :: ModName -> Env -> TEnv
-findMod m env               = fromJust (maybeFindMod m env)
-
-{-
-findMod m env               = case lookup m (modules env) of
-                                Just te -> te
--}
-
 maybeFindMod                :: ModName -> Env -> Maybe TEnv
 maybeFindMod (ModName ns) env = f ns (names env)
   where f [] te             = Just te
-        f (n:ns) te         = case lookupM n te of
+        f (n:ns) te         = case lookupMod n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
                                 Nothing -> Nothing                         
 
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)
 
-{-
-isMod env ns                = case lookup (ModName ns) (modules env) of
-                                Just te -> True
-                                _       -> False
--}
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
 
@@ -446,12 +418,6 @@ findProto n env             = case findQName n env of
                                 NProto q us te -> (q,us,te)
                                 _ -> err1 n "Protocol name expected, got"
 
-findArity                  :: QName -> Env -> Int
-findArity n env             = case findQName n env of
-                                NClass q us te -> length q
-                                NProto q us te -> length q
-                                _ -> notClassOrProto n
-
 findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
                                 NTVar _ (u:us) | not $ isProto env (tcname u) -> Just u
@@ -471,8 +437,6 @@ findVarType' n env          = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
                                 NSig t         -> t
---                                NClass q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
---                                NProto q _ _   -> tSchema q (tAt $ TC n $ map tVar $ tybound q)
                                 _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
 
 findSubAxiom                :: Env -> TCon -> QName -> Maybe (Bool,Type)
@@ -490,8 +454,6 @@ findAttr env u n            = (cs, findIn (te ++ concat tes))
                                 Just (NVar t)         -> t
                                 Just (NSVar t)        -> t
                                 Just (NSig t)         -> t
---                                Just (NClass q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
---                                Just (NProto q _ _)   -> tSchema q (tAt $ TC (NoQual n) $ map tVar $ tybound q)
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> (Bool,Constraints,[TCon],TEnv)
@@ -563,7 +525,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
             (vs, vs')                   = (dom te, dom te')
 
 
--- Import handling -----------------------------------------------------------------------
+-- Import handling (local definitions only) ----------------------------------------------
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
 getImps ps env []               = return env
