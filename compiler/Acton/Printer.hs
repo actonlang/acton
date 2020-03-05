@@ -388,8 +388,9 @@ instance Pretty Type where
 
 instance Pretty Kind where
     pretty KType                    = text "type"
+    pretty KProto                   = text "protocol"
     pretty KRow                     = text "row"
-    pretty (KFun ks k)              = pretty k <> brackets (commaSep pretty ks)
+    pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> text "=>" <+> pretty k
     pretty (KVar v)                 = pretty v
     pretty KWild                    = text "_"
 

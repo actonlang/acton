@@ -153,7 +153,7 @@ if True:
     while False:
         pass
 
-protocol Bepa():
+protocol Bepa [A] ():
         
     @classattr
     x : int
@@ -177,7 +177,7 @@ actor Test[T](v0:T):
 def f(z):
     pass
 
-protocol MyProto[A,B(Eq)] (Eq):
+protocol MyProto[A,B(Eq)] (Bepa[B]):
     pass
 
 extension __builtin__.int (Eq):
