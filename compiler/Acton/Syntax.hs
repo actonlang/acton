@@ -174,7 +174,7 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
 data Decoration = NoDec | InstAttr Bool | ClassAttr Bool | StaticMethod deriving (Eq,Show,Read,Generic)
     
-data Kind       = KType | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+data Kind       = KType | KProto | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type, scdec::Decoration } deriving (Show,Read,Generic)
 

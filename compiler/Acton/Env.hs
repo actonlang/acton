@@ -384,11 +384,11 @@ findQName (NoQual n) env    = findName n env
 
 tconKind                    :: QName -> Env -> Kind
 tconKind n env              = case findQName n env of
-                                NClass q _ _ -> kind q
-                                NProto q _ _ -> kind q
+                                NClass q _ _ -> kind KType q
+                                NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
-  where kind []             = KType
-        kind q              = KFun [ tvkind v | TBind v _ <- q ] KType
+  where kind k []           = k
+        kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
 
 invertTEnv (m,te)           = map (inv m) te
