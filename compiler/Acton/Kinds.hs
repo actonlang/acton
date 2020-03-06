@@ -205,12 +205,12 @@ instance KCheck Except where
 
 instance KCheck PosPar where
     kchk env (PosPar n t e p)       = PosPar n <$> kchk env t <*> kchk env e <*> kchk env p
-    kchk env (PosSTAR n t)          = PosSTAR n <$> kexp PRow env t
+    kchk env (PosSTAR n t)          = PosSTAR n <$> kexp KType env t
     kchk env PosNIL                 = return PosNIL
     
 instance KCheck KwdPar where
     kchk env (KwdPar n t e k)       = KwdPar n <$> kchk env t <*> kchk env e <*> kchk env k
-    kchk env (KwdSTAR n t)          = KwdSTAR n <$> kexp KRow env t
+    kchk env (KwdSTAR n t)          = KwdSTAR n <$> kexp KType env t
     kchk env KwdNIL                 = return KwdNIL
     
 instance KCheck PosArg where
