@@ -260,7 +260,8 @@ tUnion ts       = TUnion NoLoc ts
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
-tNil sort       = TNil NoLoc sort
+tNil k          = TNil NoLoc k
+tRow k          = TRow NoLoc k
 
 tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
 

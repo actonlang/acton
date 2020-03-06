@@ -118,7 +118,7 @@ class_struct  nm ms                     = text "struct" <+> cpretty nm<>text "$_
         addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
                                         =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r) d)
 
-addFstElem nm p                         = TRow NoLoc KRow (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
+addFstElem nm p                         = TRow NoLoc PRow (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
 
 opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$
