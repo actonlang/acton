@@ -346,28 +346,30 @@ instance Pretty UType where
     pretty (UCon n)                 = pretty n
     pretty (ULit str)               = text str
 
-prettyFXRow (TRow _ n t r)
+prettyFXRow (TRow _ XRow n t r)
   | n == rAct                       = text "act" <+> prettyFXRow r
   | n == rMut                       = text "mut" <> brackets (pretty t) <+> prettyFXRow r
   | n == rRet                       = text "ret" <> brackets (pretty t) <+> prettyFXRow r
 prettyFXRow (TVar _ tv)             = pretty tv
 prettyFXRow (TWild _)               = text "_"
-prettyFXRow (TNil _)                = empty
+prettyFXRow (TNil _ XRow)           = empty
 
-prettyPosRow (TRow _ _ t (TNil _))  = pretty t
-prettyPosRow (TRow _ _ t p)         = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
+                                    = pretty t
+prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TVar _ v)             = text "*" <> pretty v
 prettyPosRow (TWild _)              = text "*"
-prettyPosRow (TNil _)               = empty
+prettyPosRow (TNil _ PRow)          = empty
     
-prettyKwdRow (TRow _ n t (TNil _))  = pretty n <> colon <+> pretty t
-prettyKwdRow (TRow _ n t k)         = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
+                                    = pretty n <> colon <+> pretty t
+prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TVar _ v)             = text "**" <> pretty v
 prettyKwdRow (TWild _)              = text "**"
-prettyKwdRow (TNil _)               = empty
+prettyKwdRow (TNil _ KRow)          = empty
     
-prettyFunRow (TNil _) k             = prettyKwdRow k
-prettyFunRow p (TNil _)             = prettyPosRow p
+prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
+prettyFunRow p (TNil _ KRow)        = prettyPosRow p
 prettyFunRow p k                    = prettyPosRow p <> comma <+> prettyKwdRow k
 
 instance Pretty Type where
@@ -376,7 +378,7 @@ instance Pretty Type where
     pretty (TExist  _ p)            = pretty p
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
-    pretty (TTuple _ p (TNil _))
+    pretty (TTuple _ p (TNil _ KRow))
       | rowDepth p == 1             = parens (prettyPosRow p <> comma)
     pretty (TTuple _ p k)           = parens (prettyFunRow p k)
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
@@ -384,12 +386,14 @@ instance Pretty Type where
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
-    pretty row                      = prettyKwdRow row
+    pretty row                      = prettyKwdRow row      -- !!!!!!!!!!!!!!!!!!!!!!
 
 instance Pretty Kind where
     pretty KType                    = text "type"
     pretty KProto                   = text "protocol"
-    pretty KRow                     = text "row"
+    pretty XRow                     = text "effect row"
+    pretty PRow                     = text "positional row"
+    pretty KRow                     = text "keyword row"
     pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> text "=>" <+> pretty k
     pretty (KVar v)                 = pretty v
     pretty KWild                    = text "_"

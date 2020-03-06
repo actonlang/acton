@@ -205,7 +205,7 @@ instance KCheck Except where
 
 instance KCheck PosPar where
     kchk env (PosPar n t e p)       = PosPar n <$> kchk env t <*> kchk env e <*> kchk env p
-    kchk env (PosSTAR n t)          = PosSTAR n <$> kexp KRow env t
+    kchk env (PosSTAR n t)          = PosSTAR n <$> kexp PRow env t
     kchk env PosNIL                 = return PosNIL
     
 instance KCheck KwdPar where
@@ -316,22 +316,22 @@ instance KInfer Type where
                                             _ -> do kunify l k KType; return (KType, TCon l c)
     kinfer env (TExist l p)         = do p <- kexp KType env p
                                          return (KType, TExist l p)
-    kinfer env (TFun l fx p k t)    = do fx <- kexp KRow env fx
-                                         p <- kexp KRow env p
+    kinfer env (TFun l fx p k t)    = do fx <- kexp XRow env fx
+                                         p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          t <- kexp KType env t
                                          return (KType, TFun l fx p k t)
-    kinfer env (TTuple l p k)       = do p <- kexp KRow env p
+    kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
     kinfer env (TUnion l as)        = return (KType, TUnion l as)
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)
     kinfer env (TNone l)            = return (KType, TNone l)
-    kinfer env (TNil l)             = return (KRow, TNil l)
-    kinfer env (TRow l n t r)       = do t <- kchk env t
-                                         r <- kexp KRow env r
-                                         return (KRow, TRow l n t r)
+    kinfer env (TNil l k)           = return (k, TNil l k)
+    kinfer env (TRow l k n t r)     = do t <- kchk env t
+                                         r <- kexp k env r
+                                         return (k, TRow l k n t r)
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
@@ -399,8 +399,8 @@ instance KSubst Type where
     ksubst (TUnion l as)            = return $ TUnion l as
     ksubst (TOpt l t)               = TOpt l <$> ksubst t
     ksubst (TNone l)                = return $ TNone l
-    ksubst (TNil l)                 = return $ TNil l
-    ksubst (TRow l n t r)           = TRow l n <$> ksubst t <*> ksubst r
+    ksubst (TNil l s)               = return $ TNil l s
+    ksubst (TRow l k n t r)         = TRow l k n <$> ksubst t <*> ksubst r
 
 instance KSubst Stmt where
     ksubst (Expr l e)               = Expr l <$> ksubst e

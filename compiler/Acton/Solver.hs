@@ -144,26 +144,27 @@ red' sub env (TNone _) (TNone _)            = return ()
 red' sub env (TWild _) t2                   = return ()
 red' sub env t1 (TWild _)                   = return ()
 
-red' sub env (TNil _) (TNil _)              = return ()
-red' sub env (TRow _ n t1 r1) r2            = do (t2,r2') <- findKwd tNil n r2 (rowTail r1)
+red' sub env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = return ()
+red' sub env (TRow _ k n t1 r1) r2          = do (t2,r2') <- findKwd (tNil k) n r2 (rowTail r1)
                                                  redGen sub env t1 t2
                                                  red sub env r1 r2'
   where findKwd r0 n r tl                   = do r0' <- msubst r0
                                                  r' <- msubst r
                                                  tl' <- msubst tl
                                                  findKwd' r0' n r' tl'
-        findKwd' r0 n (TRow l n1 t r2) tl
+        findKwd' r0 n (TRow l k n1 t r2) tl
           | n == n1                         = return (t, revApp r0 r2)
-          | otherwise                       = findKwd' (TRow l n1 t r0) n r2 tl
-        findKwd' r0 n (TNil _) tl           = kwdNotFound n
+          | otherwise                       = findKwd' (TRow l k n1 t r0) n r2 tl
+        findKwd' r0 n (TNil _ _) tl         = kwdNotFound n
         findKwd' r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
           | otherwise                       = do t <- monotype <$> newTVar
                                                  r <- newRowVar
                                                  substitute tv (kwdRow n t r)
                                                  return (t, revApp r0 r)
-        revApp (TRow l n t r1) r2           = revApp r1 (TRow l n t r2)
-        revApp (TNil _) r2                  = r2
+        revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
+        revApp (TNil _ _) r2                = r2
 red' False env t1 t2                        = noRed (Equ env t1 t2)
 red' True env t1 t2                         = noRed (Sub env t1 t2)
 

@@ -174,7 +174,7 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
 data Decoration = NoDec | InstAttr Bool | ClassAttr Bool | StaticMethod deriving (Eq,Show,Read,Generic)
     
-data Kind       = KType | KProto | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+data Kind       = KType | KProto | XRow | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type, scdec::Decoration } deriving (Show,Read,Generic)
 
@@ -195,8 +195,8 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
-                | TNil      { tloc::SrcLoc }
-                | TRow      { tloc::SrcLoc, label::Name, rtype::TSchema, rtail::TRow }
+                | TNil      { tloc::SrcLoc, rkind::Kind }
+                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::TSchema, rtail::TRow }
                 deriving (Show,Read,Generic)
 
 type FXRow      = Type
@@ -260,7 +260,7 @@ tUnion ts       = TUnion NoLoc ts
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
-tNil            = TNil NoLoc
+tNil sort       = TNil NoLoc sort
 
 tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
 
@@ -274,35 +274,37 @@ rAct            = Name NoLoc "act"
 rMut            = Name NoLoc "mut"
 rRet            = Name NoLoc "ret"
 
-fxAwait         = TRow NoLoc rAwait (monotype tNone)
-fxAct           = TRow NoLoc rAct (monotype tNone)
-fxMut t         = TRow NoLoc rMut (monotype t)
-fxRet t         = TRow NoLoc rRet (monotype t)
+fxAwait         = TRow NoLoc XRow rAwait (monotype tNone)
+fxAct           = TRow NoLoc XRow rAct (monotype tNone)
+fxMut t         = TRow NoLoc XRow rMut (monotype t)
+fxRet t         = TRow NoLoc XRow rRet (monotype t)
 fxVar v         = TVar NoLoc v
-fxNil           = TNil NoLoc
+fxNil           = TNil NoLoc XRow
 
-posRow sc r     = TRow NoLoc (rPos n) sc r
+posRow sc r     = TRow NoLoc PRow (rPos n) sc r
   where n       = rowDepth r + 1
 posRow' t r     = posRow (monotype t) r
 posVar mbv      = maybe tWild tVar mbv
-posNil          = tNil
+posNil          = tNil PRow
 
 
-kwdRow n sc r   = TRow NoLoc n sc r
+kwdRow n sc r   = TRow NoLoc KRow n sc r
 kwdRow' n t r   = kwdRow n (monotype t) r
 kwdVar mbv      = maybe tWild tVar mbv
-kwdNil          = tNil
+kwdNil          = tNil KRow
 
-rowDepth (TRow _ _ _ r) = rowDepth r + 1
-rowDepth _              = 0
+rowDepth (TRow _ _ _ _ r)   = rowDepth r + 1
+rowDepth _                  = 0
 
-rowTail (TRow _ _ _ r)  = rowTail r
-rowTail r               = r
+rowTail (TRow _ _ _ _ r)    = rowTail r
+rowTail r                   = r
 
 
-tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQ" ]
+tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOTUVW" ]
 
-rowSupply       = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RSTUWXY" ]
+xrowSupply      = [ TV XRow $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
+prowSupply      = [ TV PRow $ name (c:tl) | tl <- "" : map show [1..], c <- "PQ" ]
+krowSupply      = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RS" ]
 
 
 type Substitution = [(TVar,Type)]
@@ -523,8 +525,8 @@ instance Eq Type where
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
-    TNil _              == TNil _               = True
-    TRow _ n1 t1 r1     == TRow _ n2 t2 r2      = n1 == n2 && t1 == t2 && r1 == r2
+    TNil _ s1           == TNil _ s2            = s1 == s2
+    TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
     _                   == _                    = False
 
 
@@ -595,5 +597,5 @@ posRowLen                           = rowDepth
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a
 posPatHead (PosPat a _)             = a
-posRowHead (TRow _ _ a _)           = a
+posRowHead (TRow _ PRow _ a _)      = a
  

@@ -372,7 +372,7 @@ instance Check Decl where
                                              (te2,b') <- noescape <$> infEnv (define te1 (define te0 env1)) b
                                              te3 <- genTEnv env te2
                                              fx <- fxAct <$> newRowVar
-                                             checkAssump env n (tFun fx prow krow (tRecord $ env2row tNil $ nVars te3))
+                                             checkAssump env n (tFun fx prow krow (tRecord $ env2row kwdNil $ nVars te3))
                                              return $ Actor l n q p' k' ann b'
       where svars                       = statedefs b
             env0                        = define envActorSelf $ defineTVars q $ block (stateScope env) env
@@ -391,9 +391,9 @@ instance Check Decl where
                                              checkAssump env n (tFun fx prow' krow' t)
                                              return $ Def l n q p' k' ann b' modif
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $ block (stateScope env) env
-            splitRows m p@(TNil _) k    = (,) <$> return p <*> splitRow m k
+            splitRows m p@(TNil _ _) k  = (,) <$> return p <*> splitRow m k
             splitRows m p k             = (,) <$> splitRow m p <*> return k
-            splitRow (ClassAttr _) (TRow _ n sc r)
+            splitRow (ClassAttr _) (TRow _ _ n sc r)
                                         = constrain [Equ env (monotypeOf sc) tSelf] >> return r
             splitRow m r                = return r
 
@@ -444,7 +444,7 @@ checkAssump env n t                     = case findVarType n env of
                                                sc' <- gen1 env n t (scdec sc)   -- TODO: verify that generalizing one decl at a time is ok
                                                constrain [EquGen env sc' sc]
 
-inferPure env e                         = do pushFX tNil
+inferPure env e                         = do pushFX fxNil
                                              t <- infer env e
                                              popFX
                                              return t
@@ -915,9 +915,9 @@ instance ExtractT Decl where
       where 
         chop (ClassAttr _) p k      = chop1 p k
         chop _ p k                  = (p, k)
-        chop1 (TRow _ n t p) k      = (p, k)
+        chop1 (TRow _ _ n t p) k    = (p, k)
         chop1 TVar{} k              = missingSelf (dname d)
-        chop1 p (TRow _ n t k)      = (p, k)
+        chop1 p (TRow _ _ n t k)    = (p, k)
         chop1 _ _                   = missingSelf (dname d)
     extractT d@Actor{}              = do prow <- extractT $ pos d
                                          krow <- extractT $ kwd d
@@ -938,13 +938,13 @@ extractSchema env d                 = do sig <- extractT d
 
 openFX (TSchema l q (TFun l' fx p r t) dec)
   | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t) dec
-  where open (TRow l n t fx)        = TRow l n t <$> open fx
-        open (TNil l)               = Just (TVar l v)
+  where open (TRow l k n t fx)      = TRow l k n t <$> open fx
+        open (TNil l _)             = Just (TVar l v)
         open (TVar _ _)             = Nothing
         v                           = head (tvarSupply \\ tybound q)
 openFX t                            = t
 
 closeFX (TSchema l q f@(TFun l' fx p r t) dec)
-  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,tNil)] fx) p r t) dec
+  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,fxNil)] fx) p r t) dec
   where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
 closeFX t                           = t
