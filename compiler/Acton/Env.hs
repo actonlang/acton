@@ -692,14 +692,14 @@ newName s                               = Internal s <$> newUnique <*> return Ty
 
 newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return GenPass)
   where str KType                       = "V"
+        str XRow                        = "X"
+        str PRow                        = "P"
         str KRow                        = "R"
         str _                           = "C"
 
 newTVars ks                             = mapM newTVarOfKind ks
 
 newTVar                                 = newTVarOfKind KType
-
-newRowVar                               = newTVarOfKind KRow
 
 subst                                   :: Subst a => Substitution -> a -> a
 subst s x                               = evalState (msubst x) (initTypeState $ Map.fromList s)
