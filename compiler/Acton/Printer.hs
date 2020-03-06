@@ -378,8 +378,8 @@ instance Pretty Type where
     pretty (TExist  _ p)            = pretty p
     pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
-    pretty (TTuple _ p (TNil _ KRow))
-      | rowDepth p == 1             = parens (prettyPosRow p <> comma)
+    pretty (TTuple _ (TRow _ PRow _ t (TNil _ PRow)) (TNil _ KRow))
+                                    = parens (pretty t <> comma)
     pretty (TTuple _ p k)           = parens (prettyFunRow p k)
     pretty (TUnion _ as)            = parens (vbarSep pretty as)
       where vbarSep f               = hsep . punctuate (space <> char '|') . map f

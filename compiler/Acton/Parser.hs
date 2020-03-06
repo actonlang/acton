@@ -999,19 +999,25 @@ parm ann = do n <- name
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
-pstar :: Bool -> Parser (S.Name, Maybe S.Type)
-pstar ann = do n <- name
-               mbt <- if ann then optional (colon *> ttype) else return Nothing
-               return (n, mbt)
+pstar :: Bool -> Parser S.Type -> Parser (S.Name, Maybe S.Type)
+pstar ann startype = do n <- name
+                        mbt <- if ann then optional (colon *> startype) else return Nothing
+                        return (n, mbt)
+
+pstartype :: Parser S.Type
+pstartype = parens (S.TTuple NoLoc <$> (posrow <|> return S.posNil) <*> return S.kwdNil <* optional comma)
+
+kstartype :: Parser S.Type
+kstartype = parens (S.TTuple NoLoc S.posNil <$> (kwdrow <|> return S.kwdNil) <* optional comma)
 
 pospar :: Bool -> Parser S.PosPar
-pospar ann = posItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann)
+pospar ann = posItems (\(n,t,e) par -> S.PosPar n t e par) (uncurry S.PosSTAR) S.PosNIL (parm ann) (pstar ann pstartype)
 
 kwdpar :: Bool -> Parser S.KwdPar
-kwdpar ann = kwdItems (\(n,t,e) par -> S.KwdPar n t e par) (uncurry S.KwdSTAR) S.KwdNIL (parm ann) (pstar ann)
+kwdpar ann = kwdItems (\(n,t,e) par -> S.KwdPar n t e par) (uncurry S.KwdSTAR) S.KwdNIL (parm ann) (pstar ann kstartype)
 
 funpars :: Bool -> Parser (S.PosPar, S.KwdPar)
-funpars ann =   try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> pstar ann <* optional comma))
+funpars ann =   try ((\(n,mbt) -> (S.PosNIL,S.KwdSTAR n mbt)) <$> (starstar *> pstar ann kstartype <* optional comma))
             <|> do ps <- pospar ann
                    mbmbks <- optional (comma *> optional (kwdpar ann))
                    return (maybe (ps,S.KwdNIL) (maybe (ps,S.KwdNIL) (\ks -> (ps,ks))) mbmbks)

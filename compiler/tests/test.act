@@ -111,7 +111,7 @@ def f32(a,*b,**c,):
 def f33(a,*b,c,**d):
     pass
     
-def f34(a,*b,c,**d,):
+def f34(a,*b:(int,*P),c,**d,):
     pass
 
 def f35(*a):
@@ -120,7 +120,7 @@ def f35(*a):
 def f35b(*a,):
     pass
 
-def f36(*a,**b):
+def f36(*a,**b:(x:int,**K)):
     pass
 
 def f37(*a,**b,):
