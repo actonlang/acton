@@ -221,6 +221,6 @@ instance Relabel Type where
     relabel (TExist  _ p) = TExist <$> newLoc <*> relabel p
     relabel (TNone _) = TNone <$> newLoc
     relabel (TWild _) = TWild <$> newLoc
-    relabel (TNil _) = TNil <$> newLoc
-    relabel (TRow _ n t r) = TRow <$> newLoc <*> relabel n <*> relabel t <*> relabel r
+    relabel (TNil _ k) = TNil <$> newLoc <*> return k
+    relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
 

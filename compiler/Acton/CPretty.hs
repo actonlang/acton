@@ -95,9 +95,9 @@ instance CPretty Type where
     cpretty (TWild _)               = text "_"
     cpretty row                     = prettyKwdRow row
 
-cprettyPosRow (TRow _ _ t (TNil _)) = cpretty t
-cprettyPosRow (TRow _ _ t p)        = cpretty t <> comma <+> cprettyPosRow p
-cprettyPosRow (TNil _)              = empty
+cprettyPosRow (TRow _ _ _ t (TNil _ _)) = cpretty t
+cprettyPosRow (TRow _ _ _ t p)      = cpretty t <> comma <+> cprettyPosRow p
+cprettyPosRow (TNil _ _)            = empty
 
 structdecls cnm                         = text "struct" <+> cnm <> semi $+$
                                           text "typedef struct" <+> cnm <+> text "*" <> cnm <> semi $+$
@@ -118,7 +118,7 @@ class_struct  nm ms                     = text "struct" <+> cpretty nm<>text "$_
         addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
                                         =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r) d)
 
-addFstElem nm p                         = TRow NoLoc (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
+addFstElem nm p                         = TRow NoLoc KRow (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
 
 opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$
@@ -137,8 +137,8 @@ fun_prototypes nm ss                    = vcat (concatMap protoDecl ss)
 
 
 resultTuple (TTuple _ r _)              = tup 0 r
-   where tup n (TNil _)                 = text ("$tup"++show n++"_t")
-         tup n (TRow _ _ (TSchema _ _ (TVar{}) _) r)
+   where tup n (TNil _ _)               = text ("$tup"++show n++"_t")
+         tup n (TRow _ _ _ (TSchema _ _ (TVar{}) _) r)
                                         = tup (n+1) r
          tup _ r                        = error ("cPrettyPosRow: unhandled tuple; row is "++render(pretty r))
 resultTuple t                           = cpretty t

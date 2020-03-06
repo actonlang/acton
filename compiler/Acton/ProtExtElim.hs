@@ -98,9 +98,9 @@ instance Transform Type where
     trans env (TFun loc fx p k r)       = TFun loc fx p1 (trans env k) (trans env r)
        where p1                         = if dec env == StaticMethod
                                           then trans env p
-                                          else maybe (trans env p) (\t -> TRow loc (name "???") (monotype t) (trans env p)) (fstpar env)
+                                          else maybe (trans env p) (\t -> TRow loc PRow (name "???") (monotype t) (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t
-    trans env (TRow loc nm s r)         = TRow loc nm (trans env s) (trans env r)
+    trans env (TRow loc k nm s r)       = TRow loc k nm (trans env s) (trans env r)
     trans env (TCon loc tc)             = TCon loc (maybe tc (const (opaque tc)) (lookup (noqual (tcname tc)) (protocols env)))
     trans env t                         = t
 

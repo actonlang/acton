@@ -109,9 +109,9 @@ N,v:q |- c ~ r1     r not in r1     N |- M : r' | . ~> M'     r' in [q,Self(C[do
 N |- class C[q](c):r,M  :  C:[q]=>(c;r,r1)  ~>  !class C[q](c):(r,M')
 
 
-N,v.v':q |- wi : pi ~ ri / all i    r not in ri     N,v.v':q |- M : r' | . ~> M'     r' in [Self(P[dom(q)])]=>(Self)->(r,ri)
------------------------------------------------------------------------------------------------------------------------------- (Proto)
-N |- protocol P[q](pi):r,M  :  P:[q]=>(pi;r,ri)  ~>  !class P[S,q]():[S/Self](r,(v)->M',def _init_(v,*v'):v.i=Pi(*wi);v.v'=v')
+N,v.v':q |- wi : Pi[oi] ~ ri / all i    r not in ri     N,v.v':q |- M : r' | . ~> M'     r' in [Self(P[dom(q)])]=>(Self)->(r,ri)
+-------------------------------------------------------------------------------------------------------------------------------------- (Proto)
+N |- protocol P[q](Pi[oi]):r,M  :  P:[q]=>(Pi[oi];r,ri)  ~>  !class P[S,q]():[S/Self](r,(v)->M',def _init_(v,*v'):v.i=Pi(*wi);v.v'=v')
 
 
 N,v.v':q |- w : P[o] ~ r1     N,v.v':q |- C[dom(q)] ~ r     N,v.v':q |- M : r' | . ~> M'     r' in [Self(C[dom(q)])]=>(Self)->(r1)
@@ -119,14 +119,14 @@ N,v.v':q |- w : P[o] ~ r1     N,v.v':q |- C[dom(q)] ~ r     N,v.v':q |- M : r' |
 N |- extension C[q](P[o]):M  :  P_C:[q]=>C(P[o])  ~>  !class P_C[q](P[C[dom(q)],o]):((v)->M',def _init_(v,*v'):P._init_(v,*w);v.v'=v')
 
 
-N' = N,w:q,bv(F,S):#,bz(S):#,_self_:Ref[X]      N' |- F : r | N1 | e      N',N1 |- S : t | e,st[X]     X not in fv(N,q,e',r,t)
+N' = N,v:q,bv(F,S):#,bz(S):#,_self_:Ref[X]      N' |- F : r | N1 | e      N',N1 |- S : t | e,st[X]     X not in fv(N,q,e',r,t)
 ------------------------------------------------------------------------------------------------------------------------------ (Actor)
-N |- actor x[q](F):S  :  (x : [q]=>e',act(r)->t)  ~>  actor x[dom(q)](w:q,F'):S'
+N |- actor x[q](F):S  :  (x : [q]=>e',act(r)->t)  ~>  actor x[dom(q)](v:q,F'):S'
 
 
-N' = N,w:q,bv(F,S):#      N' |- F : r | N1 | e      N',N1 |- S : t | e
+N' = N,v:q,bv(F,S):#      N' |- F : r | N1 | e      N',N1 |- S : t | e
 ----------------------------------------------------------------------- (Def)
-N |- def x[q](F):S  :  (x : [q]=>e(r)->t)  ~>  def x[dom(q)](w:q,F'):S'
+N |- def x[q](F):S  :  (x : [q]=>e(r)->t)  ~>  def x[dom(q)](v:q,F'):S'
 
 
 N |- D1 : N1      N |- D2 : N2

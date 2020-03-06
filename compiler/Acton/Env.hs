@@ -214,7 +214,7 @@ instance Unalias Type where
     unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
-    unalias env (TRow l n t r)      = TRow l n (unalias env t) (unalias env r)
+    unalias env (TRow l k n t r)    = TRow l k n (unalias env t) (unalias env r)
     unalias env t                   = t
 
 instance Unalias NameInfo where
@@ -277,8 +277,8 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),
   where 
     a:b:c:_                 = map tBind tvarSupply
     ta:tb:tc:_              = map tVar tvarSupply
-    r:_                     = map tBind rowSupply
-    tr:_                    = map tVar rowSupply
+    r:_                     = map tBind prowSupply
+    tr:_                    = map tVar prowSupply
     bounded u (TBind v us)  = TBind v (u:us)
     
     
@@ -817,8 +817,8 @@ instance Subst Type where
     msubst (TOpt l t)               = TOpt l <$> msubst t
     msubst (TNone l)                = return $ TNone l
     msubst (TWild l)                = return $ TWild l
-    msubst (TNil l)                 = return $ TNil l
-    msubst (TRow l n t r)           = TRow l n <$> msubst t <*> msubst r
+    msubst (TNil l s)               = return $ TNil l s
+    msubst (TRow l k n t r)         = TRow l k n <$> msubst t <*> msubst r
 
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
@@ -829,9 +829,9 @@ instance Subst Type where
     tyfree (TOpt _ t)               = tyfree t
     tyfree (TNone _)                = []
     tyfree (TWild _)                = []
-    tyfree (TNil _)                 = []
-    tyfree (TRow _ _ t r)           = tyfree t ++ tyfree r
-
+    tyfree (TNil _ _)               = []
+    tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
+ 
 instance Subst PosPar where
     msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t

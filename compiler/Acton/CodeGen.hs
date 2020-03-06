@@ -274,9 +274,9 @@ instance Gen UType where
     gen env (UCon n)                = gen env n
     gen env (ULit str)              = text str
 
-genRow env (TRow _ _ t (TNil _))    = gen env t
-genRow env (TRow _ _ t p)           = gen env t <> comma <+> genRow env p
-genRow env (TNil _)                 = empty
+genRow env (TRow _ _ _ t (TNil _ _))    = gen env t
+genRow env (TRow _ _ _ t p)         = gen env t <> comma <+> genRow env p
+genRow env (TNil _ _)               = empty
     
 instance Gen Type where
     gen env (TVar _ v)              = gen env v
