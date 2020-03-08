@@ -70,15 +70,14 @@ onlyIn s            = fail ("statement only allowed inside " ++ s)
 notIn s             = fail ("statement not allowed inside " ++ s)
 success             = return ()
 
+assertTop           = ifCtx [TOP]                   [IF]                success (fail "declaration only allowed on the module top level")
 assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
-assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "modifier only allowed inside an actor scope")
+assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "statement only allowed inside an actor scope")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
-assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
 assertDecl          = ifCtx [CLASS,PROTO]           [IF]                success (fail "decoration only allowed inside a class or protocol")
-assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success (fail "decoration only allowed on the top level or inside a class or a protocol")
+assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success (fail "signature only allowed on the top level or inside a class or a protocol")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
-assertNotProtoExt   = ifCtx [PROTO,EXT]             [IF,SEQ,LOOP]       (fail "statement not allowed inside a protocol or extension") success
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
@@ -489,7 +488,7 @@ simple_stmt = ((small_stmt `sepEndBy1` semicolon)) <* newline1
 --- Small statements ---------------------------------------------------------------------------------
 
 small_stmt :: Parser S.Stmt
-small_stmt = expr_stmt  <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt
+small_stmt = try signature <|> expr_stmt <|> del_stmt <|> pass_stmt <|> flow_stmt <|> assert_stmt <|> var_stmt <|> after_stmt
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
@@ -596,6 +595,19 @@ import_stmt = import_name <|> import_from
 
 assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr <*> optional (comma *> expr))
 
+signature :: Parser S.Stmt
+signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; return $ S.Signature NoLoc ns (adjust dec t))
+   where tsig = do v <- name
+                   vs <- commaList name
+                   colon
+                   t <- tschema
+                   return (v:vs,t)
+         adjust (S.ClassAttr False) (S.TSchema l q t S.NoDec)       -- make default decoration depend on the tsig arity
+           | S.TFun{} <- t   = S.TSchema l q t (S.ClassAttr False)
+           | otherwise       = S.TSchema l q t (S.InstAttr False)
+         adjust dec (S.TSchema l q t S.NoDec)
+                             = S.TSchema l q t dec
+
 -- Declaration groups ------------------------------------------------------------------
 
 decl_group :: Parser [S.Stmt]
@@ -604,7 +616,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = try signature <|> funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 decorator :: Parser S.Decoration
 decorator = do
@@ -619,19 +631,6 @@ decorator = do
                   <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
                   <|> ifDecl (return $ S.ClassAttr False) (return S.NoDec)
 
-signature :: Parser S.Decl
-signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; newline1; return $ S.Signature NoLoc ns (adjust dec t))
-   where tsig = do v <- name
-                   vs <- commaList name
-                   colon
-                   t <- tschema
-                   return (v:vs,t)
-         adjust (S.ClassAttr False) (S.TSchema l q t S.NoDec)       -- make default decoration depend on the tsig arity
-           | S.TFun{} <- t   = S.TSchema l q t (S.ClassAttr False)
-           | otherwise       = S.TSchema l q t (S.InstAttr False)
-         adjust dec (S.TSchema l q t S.NoDec) 
-                             = S.TSchema l q t dec
- 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
@@ -666,8 +665,7 @@ protodef    = classdefGen "protocol" name PROTO S.Protocol
 extdef      = classdefGen "extension" qual_name EXT S.Extension
 
 classdefGen k pname ctx con = addLoc $ do
-                assertNotData
-                assertNotProtoExt
+                assertTop
                 (s,_) <- withPos (rword k)
                 nm <- pname
                 q <- optbinds

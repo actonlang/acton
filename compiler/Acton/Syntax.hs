@@ -39,6 +39,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | After         { sloc::SrcLoc, expr::Expr, meth::Name, argp::PosArg, argk::KwdArg }
+                | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
@@ -47,7 +48,6 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::[TBind], pos
                 | Class         { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::[TBind], bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::[TBind], bounds::[TCon], dbody::Suite }
-                | Signature     { dloc::SrcLoc, dvars :: [Name], dtyp :: TSchema }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -416,6 +416,7 @@ instance Eq Stmt where
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
     x@After{}           ==  y@After{}           = expr x == expr y && meth x == meth y && argp x == argp y && argk x == argk y
     x@Decl{}            ==  y@Decl{}            = decls x == decls y
+    x@Signature{}       ==  y@Signature{}       = vars x == vars y && typ x == typ y
     _                   ==  _                   = False
 
 instance Eq Decl where
@@ -424,7 +425,6 @@ instance Eq Decl where
     Class _ n1 q1 a1 b1         ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1      ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1     ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Signature _ ns1 t1          ==  Signature _ ns2 t2          = ns1 == ns2 && t1 == t2
     _                           == _                            = False
 
 instance Eq Expr where

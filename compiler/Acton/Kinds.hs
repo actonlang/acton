@@ -124,6 +124,7 @@ instance KCheck Stmt where
     kchk env (VarAssign l ps e)     = VarAssign l <$> kchk env ps <*> kchk env e
     kchk env (After l e n ps ks)    = After l <$> kchk env e <*> return n <*> kchk env ps <*> kchk env ks
     kchk env (Decl l ds)            = Decl l <$> kchk env ds
+    kchk env (Signature l ns t)     = Signature l ns <$> kchk env t
 
 instance KCheck Decl where
     kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> return m
@@ -138,7 +139,6 @@ instance KCheck Decl where
       where env1                    = extvars (tybound q) env
     kchk env (Extension l n q us b) = Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tybound q) env
-    kchk env (Signature l ns t)     = Signature l ns <$> kchk env t
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -423,6 +423,7 @@ instance KSubst Stmt where
     ksubst (VarAssign l ps e)       = VarAssign l <$> ksubst ps <*> ksubst e
     ksubst (After l e n ps ks)      = After l <$> ksubst e <*> return n <*> ksubst ps <*> ksubst ks
     ksubst (Decl l ds)              = Decl l <$> ksubst ds
+    ksubst (Signature l ns t)       = Signature l ns <$> ksubst t
 
 instance KSubst Decl where
     ksubst (Def l n q p k ann b m)  = Def l n <$> ksubst q <*> ksubst p <*> ksubst k <*> ksubst ann <*> ksubst b <*> return m
@@ -430,7 +431,6 @@ instance KSubst Decl where
     ksubst (Class l n q as b)       = Class l n <$> ksubst q <*> ksubst as <*> ksubst b
     ksubst (Protocol l n q as b)    = Protocol l n <$> ksubst q <*> ksubst as <*> ksubst b
     ksubst (Extension l n q as b)   = Extension l n <$> ksubst q <*> ksubst as <*> ksubst b
-    ksubst (Signature l ns t)       = Signature l ns <$> ksubst t
 
 instance KSubst Expr where
     ksubst (Var l n)                = return $ Var l n

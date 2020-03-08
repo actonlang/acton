@@ -194,10 +194,8 @@ addParams vs ps                 = foldr (\n p -> PosPar n Nothing Nothing p) ps 
 
 closure n vs                    = eCall (eQVar primCLOS) (map eVar $ n:vs)
 
-signames ss                     = concatMap snames ss
-  where snames (Decl _ ds)      = concatMap sigs ds
-        snames _                = []
-        sigs d@Signature{}      = dvars d
+signames ss                     = concatMap sigs ss
+  where sigs d@Signature{}      = vars d
         sigs _                  = []
 
 ----------------------------------------------------------------------------------------------------------

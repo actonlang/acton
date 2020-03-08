@@ -248,7 +248,11 @@ instance InfEnv Stmt where
                                              ds2 <- check (define te1 env) ds1
                                              te2 <- genTEnv env te1
                                              return (te2, Decl l ds2)
-            
+
+    infEnv env d@(Signature _ ns sc)
+      | not $ null redefs               = illegalRedef (head redefs)
+      | otherwise                       = do return (nSig ns sc, d)
+      where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 {-
@@ -314,10 +318,6 @@ instance InfEnv Decl where
                                              return (nExt w n q (mro env1 (protoBases env us)), d)
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
-    infEnv env d@(Signature _ ns sc)
-      | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do return (nSig ns sc, d)
-      where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
 classBases env []                       = []
 classBases env (u:us)
@@ -420,7 +420,6 @@ instance Check Decl where
                                              return $ Class l w [] us b'        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf' n q $ defineTVars q $ block (stateScope env) env
             Just w                      = findWitness env n q us
-    check env d@(Signature l ns sc)     = return d
 
 
 checkBindings env proto us te

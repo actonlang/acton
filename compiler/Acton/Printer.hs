@@ -46,6 +46,10 @@ instance Pretty Stmt where
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
     pretty (After _ e n ps ks)      = text "after" <+> pretty e <> colon <+> pretty n <> parens (pretty (ps,ks))
     pretty (Decl _ ds)              = vcat $ map pretty ds
+    pretty (Signature _ vs sc)      = prettySig vs sc
+
+prettySig vs (TSchema _ [] t d)     = prettyDec d $ commaList vs <+> text ":" <+> pretty t
+prettySig vs (TSchema _ q t d)      = prettyDec d $ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
 
 instance Pretty Decl where
     pretty (Def _ n q ps ks a b d)  = (prettyDec d $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
@@ -58,10 +62,6 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
-    pretty (Signature _ vs sc)      = prettySig vs sc
-
-prettySig vs (TSchema _ [] t d)     = prettyDec d $ commaList vs <+> text ":" <+> pretty t
-prettySig vs (TSchema _ q t d)      = prettyDec d $ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 

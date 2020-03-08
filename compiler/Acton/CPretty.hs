@@ -28,7 +28,10 @@ structs (Decl  _ ds)                    = map strs ds
            where cnm                    = cpretty nm
                      
 instance CPretty Stmt where
-  cpretty (Decl _ ds)                   = vcat (map cpretty ds)
+    cpretty (Decl _ ds)                 = vcat (map cpretty ds)
+    cpretty (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
+                                        = vcat (map (\n -> resultTuple r <+> parens (text "*"<> cpretty n)<>parens (cprettyPosRow p) <>semi) ns)
+    cpretty (Signature _ ns tsc)        = vcat (map (\n ->cpretty tsc<+> cpretty n<>semi) ns)
                                           
 instance CPretty Decl where
    cpretty (Class _ nm qs bs ss)
@@ -43,18 +46,17 @@ instance CPretty Decl where
      where (ms,is)                      = partition isMeth ss
            cnm                          = cpretty nm
       
-   cpretty (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
-                                        = vcat (map (\n -> resultTuple r <+> parens (text "*"<> cpretty n)<>parens (cprettyPosRow p) <>semi) ns)
-   cpretty (Signature _ ns tsc)         =  vcat (map (\n ->cpretty tsc<+> cpretty n<>semi) ns)
    cpretty d                            = error ("cpretty: unexpected Decl: "++show d)
 
 substdollar []                          = []
 substdollar ('_':cs)                    = '$':substdollar cs
 substdollar (c:cs)                      = c:substdollar cs
 
-isMeth (Decl _ (s:_))                   = isFunType (sctype (dtyp s))
+--isMeth (Decl _ (s:_))                   = isFunType (sctype (dtyp s))
+isMeth s@Signature{}                    = isFunType (sctype (typ s))
    where isFunType (TFun {})            = True
          isFunType _                    = False
+isMeth s                                = False
  
 instance CPretty TBind where
    cpretty  (TBind tv bs) = vcat (map (\b -> cpretty b<>pretty tv) bs)
@@ -109,10 +111,10 @@ witness_struct cnm is                   = text "struct" <+> cnm <+> text "{" $+$
                                                            [vcat (map cpretty  is)])) $+$
                                            text "};"
 
-class_struct  nm ms                     = text "struct" <+> cpretty nm<>text "$__class__" <+> text "{" $+$
-                                          (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty . addpar nm) ms)) $+$
+class_struct nm ms                      = text "struct" <+> cpretty nm<>text "$__class__" <+> text "{" $+$
+                                          (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty . addparSig nm) ms)) $+$
                                           text "};"
-  where addpar nm (Decl l ds)           = Decl l (map (addparSig nm) ds)
+  where -- addpar nm (Decl l ds)           = Decl l (map (addparSig nm) ds)
         addparSig nm sig@(Signature _ _ (TSchema _ _ _ StaticMethod))
                                         = sig
         addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
@@ -128,8 +130,9 @@ opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" 
                                           cnm<>text "$opaque" <+> cnm<>text "$__pack__"<>parens (cnm <+>text "__proto__, $WORD __impl__") <> semi $+$
                                           blank
 
-fun_prototypes nm ss                    = vcat (concatMap protoDecl ss)
-  where  protoDecl (Decl _ ds)          = map proto ds
+fun_prototypes nm ss                    = vcat (map proto ss)
+--fun_prototypes nm ss                    = vcat (concatMap proto ss)
+  where  -- protoDecl (Decl _ ds)          = map proto ds
          proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) StaticMethod))
                                         = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
          proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
