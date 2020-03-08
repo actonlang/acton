@@ -76,6 +76,7 @@ instance Transform Module where
 
 instance Transform Stmt where
     trans env (Decl loc ds)             = Decl loc $ trans env ds
+    trans env (Signature loc ns t)      = Signature loc ns (subst (sub env) (trans env t))
     trans env stmt                      = stmt
 
 instance Transform Decl where
@@ -87,7 +88,6 @@ instance Transform Decl where
             ss1                         = trans env{fstpar = Just tv, sub = [(self,tv)]} (if inherited env then (addMethods (protocols env) bs ++ ss) else ss)
             (qs1,ws)                    = transParams v qs
             ss2                         = addWitnesses ws ss1   
-    trans env (Signature loc ns t)      = Signature loc ns (subst (sub env) (trans env t))
     trans env ds                        = ds
 
 instance Transform TSchema where
@@ -115,7 +115,7 @@ opaque (TC qn ts)                       = TC (noQual "EXISTS") [t, tCon(TC qn (t
 
 -- adds witnesses to superprotocols other than the first mentioned.
 addWitnesses ws ss                      = map mkSig ws ++ ss
-  where mkSig tc                        = Decl NoLoc [Signature NoLoc [name ('_' : nstr (noqual (tcname tc)))] (monotype (tCon tc))]
+  where mkSig tc                        = Signature NoLoc [name ('_' : nstr (noqual (tcname tc)))] (monotype (tCon tc))
 
 transParents tv bs                      = map addP bs
    where addP (TC qn ts)                = TC qn (tv : ts)
@@ -161,7 +161,7 @@ transChain mb ps e (c : cs)             = c2{dname = c2nm, dbody = sigs} : trans
          tc                             = head (bounds c2)
          c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
          witType                        = maybe (tCon tc) id mb
-         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Decl NoLoc [Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]]) mb ++
+         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]) mb ++
                                           dbody c2
 
 
@@ -189,9 +189,11 @@ mkTC nm qs                              = TC nm $ map (\(TBind tv _) -> tVar tv)
 
 tVars qs                                = map (\(TBind tv _) -> tv) qs
 
-notMeth (Decl _ (s:_))                  = notFunType (sctype (dtyp s))
+--notMeth (Decl _ (s:_))                  = notFunType (sctype (dtyp s))
+notMeth s@Signature{}                   = notFunType (sctype (typ s))
    where notFunType (TFun {})           = False
          notFunType _                   = True
+notMeth _                               = True -- ?
 
 protocolsOf (Module _ _ ss)             = [(dname p,p) |  Decl _ ds <- ss, p@(Protocol{}) <- ds]
 

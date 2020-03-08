@@ -859,19 +859,21 @@ instance Subst Decl where
                                          return $ Protocol l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
     msubst c@(Class l n qs bs ss)   = do (s,ren) <- msubstRenaming c
                                          return $ Class l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst (Signature l ns tsc)     = Signature l ns <$> msubst tsc
 
     tybound (Protocol l n qs bs ss) = tybound qs
     tybound (Class l n qs bs ss)    = tybound qs
 
     tyfree (Protocol l n qs bs ss)  = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
     tyfree (Class l n qs bs ss)     = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
-    tyfree (Signature l ns tsc)     = tyfree tsc
     
 instance Subst Stmt where
     msubst (Decl l ds)              = Decl l <$> msubst ds
+    msubst (Signature l ns tsc)     = Signature l ns <$> msubst tsc
+    msubst s                        = return s
 
     tyfree (Decl l ds)              = tyfree ds
+    tyfree (Signature l ns tsc)     = tyfree tsc
+    tyfree s                        = []
 
 
     

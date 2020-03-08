@@ -9,7 +9,6 @@ import Debug.Trace
 self                                = Name NoLoc "self"
 
 declnames (Extension{} : ds)        = declnames ds
-declnames (Signature _ ns _: ds)    = ns ++ declnames ds
 declnames (d : ds)                  = dname d : declnames ds
 declnames []                        = []
 
@@ -120,6 +119,7 @@ instance Vars Stmt where
     free (VarAssign _ ps e)         = free ps ++ free e
     free (After _ e n ps ks)        = n : free e ++ free ps ++ free ks
     free (Decl _ ds)                = free ds
+    free (Signature _ ns t)         = free t
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
@@ -131,6 +131,7 @@ instance Vars Stmt where
     bound (If _ bs els)             = concatMap bound bs ++ bound els
     bound (Delete _ p)              = bound p
     bound (Decl _ ds)               = bound ds
+    bound (Signature _ ns t)        = ns
     bound _                         = []
 
 instance Vars Decl where
@@ -139,14 +140,12 @@ instance Vars Decl where
     free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound b)
     free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound b)
     free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ bound b
-    free (Signature _ ns t)         = free t
 
     bound (Def _ n _ _ _ _ _ _)     = [n]
     bound (Actor _ n _ _ _ _ _)     = [n]
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
     bound (Extension _ n _ _ _)     = []
-    bound (Signature _ ns t)        = ns
 
 instance Vars Branch where
     free (Branch e ss)              = free e ++ free ss

@@ -84,6 +84,7 @@ instance Gen Stmt where
     gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
     gen env (Try _ b hs _ _)        = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs      -- TODO: remove
     gen env (Decl _ ds)             = vcat $ map (gen env) ds
+    gen env (Signature _ vs sc)     = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
 
@@ -95,7 +96,6 @@ instance Gen Decl where
                                       $+$ genSuite env b $+$ char '}'
     gen env (Class _ n q a b)       = text "class" <+> gen env n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
-    gen env (Signature _ vs sc)     = empty
 
 
 

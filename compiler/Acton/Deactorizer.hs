@@ -13,22 +13,22 @@ deactorize env0 m                   = return $ evalState (deact env m) ([1..], [
   where env                         = deactEnv env0
 
 -- Deactorizing monad
-type DeactM a                       = State ([Int],[Decl]) a
+type DeactM a                       = State ([Int],[Stmt]) a
 
 newName                             :: String -> DeactM Name
 newName s                           = state (\(uniq:supply, stmts) -> (Internal s uniq DeactPass, (supply, stmts)))
 
-store                               :: [Decl] -> DeactM ()
-store ds                            = state (\(supply, decls) -> ((), (supply, reverse ds ++ decls)))
+store                               :: [Stmt] -> DeactM ()
+store ss                            = state (\(supply, stmts) -> ((), (supply, reverse ss ++ stmts)))
 
-swapStore                           :: [Decl] -> DeactM [Decl]
-swapStore ds                        = state (\(supply, decls) -> (decls, (supply, ds)))
+swapStore                           :: [Stmt] -> DeactM [Stmt]
+swapStore ss                        = state (\(supply, stmts) -> (stmts, (supply, ss)))
 
-withStore                           :: DeactM a -> DeactM (a,[Decl])
-withStore m                         = do ds0 <- swapStore []
+withStore                           :: DeactM a -> DeactM (a,[Stmt])
+withStore m                         = do ss0 <- swapStore []
                                          r <- m
-                                         ds1 <- swapStore ds0
-                                         return (r, ds1)
+                                         ss1 <- swapStore ss0
+                                         return (r, ss1)
 
 data DeactEnv                       = DeactEnv { actor :: Maybe Name, locals :: [Name] }
 
@@ -79,22 +79,23 @@ instance Deact Stmt where
                                          let lambda = Lambda l0 PosNIL KwdNIL (Call l0 (Dot l0 (Var l0 (NoQual selfKW)) n) ps' KwdNil)
                                          return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e' $ PosArg lambda PosNil) KwdNil
     deact env (Decl l ds)           = Decl l <$> deactD env ds
+    deact env (Signature l ns t)    = return $ Signature l ns t
 
 deactD env []                       = return []
 deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds
 deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 
 deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
-                                         (bint,dext) <- withStore (deact (env1 n') b)
-                                         let (dsigs,dext') = partition isSig dext
+                                         (bint,sext) <- withStore (deact (env1 n') b)
+                                         let (ssigs,sext') = partition isSig sext
                                              _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
                                              create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
                                              copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
                                              _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoDec
                                              (ds,ss) = partition isDecl bint
-                                             extern = Class l n q [] [Decl l0 (_init_ : reverse dext')]
-                                             intern = Class l n' q [] (Decl l0 (dsigs ++[_init']) : ds)
+                                             extern = Class l n q [] (reverse sext' ++ [Decl l0 [_init_]])
+                                             intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)
                                          return [intern, extern]
   where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
         selfPat n                   = TaDot l0 (Var l0 (NoQual selfKW)) n
@@ -121,7 +122,6 @@ instance Deact Decl where
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
     deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
     deact env (Extension l n q u b) = Extension l n q u <$> deact env b
-    deact env (Signature l ns t)    = return $ Signature l ns t
 
 instance Deact Expr where
     deact env (Var l (NoQual n))

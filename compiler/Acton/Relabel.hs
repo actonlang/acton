@@ -55,6 +55,7 @@ instance Relabel Stmt where
     relabel (VarAssign _ ps e) = VarAssign <$> newLoc <*> relabel ps <*> relabel e
     relabel (After _ e n ps ks) = After <$> newLoc <*> relabel e <*> relabel n <*> relabel ps <*> relabel ks
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
+    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
 
 instance Relabel Decl where
     relabel (Def _ n q ps ks ann ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel ss <*> return md
@@ -62,7 +63,6 @@ instance Relabel Decl where
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
-    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
 
 instance Relabel Expr where
     relabel (Var _ nm) = Var <$> newLoc <*> relabel nm

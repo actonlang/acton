@@ -133,6 +133,7 @@ instance Norm Stmt where
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e n ps ks)    = After l <$> norm env e <*> return n <*> norm env ps <*> norm env ks
     norm env (Decl l ds)            = Decl l <$> norm env ds
+    norm env (Signature l ns t)     = return $ Signature l ns t
 
 --    norm' env (Delete l p)          =
 
@@ -158,7 +159,6 @@ instance Norm Decl where
     norm env (Class l n q as b)     = Class l n q as <$> norm env b
     norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
     norm env (Extension l n q as b) = Extension l n q as <$> norm env b
-    norm env (Signature l ns t)     = return $ Signature l ns t
 
 catStrings ['"':s]                  = '"' : s
 catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']
