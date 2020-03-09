@@ -97,6 +97,8 @@ N |- F : r | N' | e         Formal F has type row r in environment N (if updated
 
 N |- S : N' | e             Statement S generates bindings N' in environment N and effect context e
 
+N |- X : N' | e             Except clause X generates bindings N' in environment N and effect context e
+
 N |- S : t | e              Statement S returns values of type t in environment N and effect context e
 
 
@@ -114,8 +116,8 @@ N,v.v':q |- wi : Pi[oi] ~ ri / all i    r not in ri     N,v.v':q |- M : r' | . ~
 N |- protocol P[q](Pi[oi]):r,M  :  P:[q]=>(Pi[oi];r,ri)  ~>  !class P[S,q]():[S/Self](r,(v)->M',def _init_(v,*v'):v.i=Pi(*wi);v.v'=v')
 
 
-N,v.v':q |- w : P[o] ~ r1     N,v.v':q |- C[dom(q)] ~ r     N,v.v':q |- M : r' | . ~> M'     r' in [Self(C[dom(q)])]=>(Self)->(r1)
--------------------------------------------------------------------------------------------------------------------------------------- (Ext)
+N,v.v':q |- w : P[o] ~ r1     N,v.v':q |- C[dom(q)] ~ r     N,v.v':q |- M : r' | . ~> M'     r' in [Self(C[dom(q)])]=>(Self)->(r1) / [q]=>(r1)
+---------------------------------------------------------------------------------------------------------------------------------------------- (Ext)
 N |- extension C[q](P[o]):M  :  P_C:[q]=>C(P[o])  ~>  !class P_C[q](P[C[dom(q)],o]):((v)->M',def _init_(v,*v'):P._init_(v,*w);v.v'=v')
 
 
@@ -335,6 +337,18 @@ N |- S : N1 | e     N,N1 |- S2 ; N2 | e                                         
 --------------------------------------- (Seq)                                       -------------------------------------------------------------------- (After)
 N |- S1; S2  :  N1,N2 | e                                                           N |- after E1: E2(A)  :  . | e,act
 
+
+N |- S : N1 | e    N |- X : N2 | e     N |- S1 : N1' | e    N |- S2 : N2' | e
+----------------------------------------------------------------------------- (Try)
+N |- try S X else S1 finally S2 : ((N1,N1')&N2),N2' | e
+
+
+***** N |- X : N | e *******************************************************************************************************************************************
+
+
+N,x:C[] |- S : N1 | e    N |- X : N2 | e                                            
+---------------------------------------- (Except1)                                  --------------- (Except0)
+N |- except C as x: S X : N1&N2 | e                                                 N |- . : N' | e
 
 
 ***** N |- S : t | e *******************************************************************************************************************************************
