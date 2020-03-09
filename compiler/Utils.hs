@@ -46,6 +46,8 @@ dom                             = map fst
 
 rng                             = map snd
 
+prune xs                        = filter ((`notElem` xs) . fst)
+
 mapFst f xs                     = [ (f a, b) | (a,b) <- xs ]
 
 mapSnd f xs                     = [ (a, f b) | (a,b) <- xs ]
