@@ -198,10 +198,8 @@ instance KCheck Handler where
 
 instance KCheck Except where
     kchk env (ExceptAll l)          = return $ ExceptAll l
-    kchk env (Except l x)           = case tconKind x env of
-                                        KType -> return $ Except l x
-                                        KFun _ KType -> return $ Except l x
-    kchk env (ExceptAs l x n)       = do kchk env (Except l x); return $ ExceptAs l x n
+    kchk env (Except l x)           = do kexp KType env (TC x []); return $ Except l x
+    kchk env (ExceptAs l x n)       = do kexp KType env (TC x []); return $ ExceptAs l x n
 
 instance KCheck PosPar where
     kchk env (PosPar n t e p)       = PosPar n <$> kchk env t <*> kchk env e <*> kchk env p

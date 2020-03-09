@@ -624,7 +624,7 @@ decorator = do
        d <- decoration
        p1 <- L.indentLevel
        if (p /= p1)
-         then fail "Decorated declaration must have same indentation as decoration"
+         then fail "Decorated statement must have same indentation as decoration"
          else return d
    where decoration = rword "@classattr" *> assertDecl *> newline1 *> return (S.ClassAttr True)
                   <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)

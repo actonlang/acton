@@ -226,7 +226,7 @@ instance Norm Name where
     norm env (Internal s i p)       = return $ Internal s i p
 
 instance Norm ModName where
-    norm env m@(ModName [n])        = case lookupMod n (global env) of
+    norm env m@(ModName [n])        = case lookup n (global env) of
                                           Just (NMAlias m') -> return m'
                                           _ -> return m
     norm env (ModName ns)           = ModName <$> norm env ns
