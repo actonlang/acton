@@ -386,6 +386,12 @@ instance Pretty Type where
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
+    pretty r@TRow{rkind=XRow}       = prettyFXRow r
+    pretty r@TRow{rkind=PRow}       = prettyPosRow r
+    pretty r@TRow{rkind=KRow}       = prettyKwdRow r
+    pretty r@TNil{rkind=XRow}       = prettyFXRow r
+    pretty r@TNil{rkind=PRow}       = prettyPosRow r
+    pretty r@TNil{rkind=KRow}       = prettyKwdRow r
 
 instance Pretty Kind where
     pretty KType                    = text "type"

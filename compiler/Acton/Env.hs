@@ -300,6 +300,13 @@ isMod                       :: Env -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
 
 
+findVarType                 :: QName -> Env -> TSchema                                      -- infer (Var,TaVar), infEnv (after), checkAssump, infEnvT (PVar)
+findVarType n env           = case findQName n env of
+                                NVar t         -> t
+                                NSVar t        -> t
+                                NSig t         -> t
+                                _              -> internal (loc n) ("Unexpected variable name: " ++ prstr n)
+
 
 tconKind                    :: QName -> Env -> Kind                                         -- Kinds.tconKind
 tconKind n env              = case findQName n env of
@@ -314,27 +321,9 @@ isProto n env               = case findQName n env of                           
                                 NProto q us te -> True
                                 _ -> False
 
-findCon0                    :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)                   -- Env (findCon, findSolemizedCon)
-findCon0 n env              = case findQName n env of
-                                NClass q us te -> (False,q,us,te)
-                                NProto q us te -> (True,q,us,te)
-                                _ -> err1 n "Class or protocol name expected, got"
-
-findVarType                 :: QName -> Env -> TSchema                                      -- infer (Var,TaVar), infEnv (after), checkAssump, infEnvT (PVar)
-findVarType n env           = case findQName n env of
-                                NVar t         -> t
-                                NSVar t        -> t
-                                NSig t         -> t
-                                _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
-
-findWitness                 :: QName -> Env -> [TBind] -> [TCon] -> Maybe Name                          -- check (ext)
-findWitness n env q us      = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
-                                [w] -> Just w
-                                _   -> Nothing
-
-findSkolemizedCon           :: QName -> Env -> (Bool,[TBind],TCon)                          -- infException
-findSkolemizedCon n env     = (proto, q, TC n $ map tVar $ tybound q)
-  where (proto,q,us,te)     = findCon0 n env
+locateWitness               :: Env -> QName -> [TBind] -> [TCon] -> Name                    -- check (ext)
+locateWitness env n q us    = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
+                                [w] -> w
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -357,9 +346,16 @@ findAttr env u n            = (cs, findIn (te ++ concat tes))
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> (Bool,Constraints,[TCon],TEnv)                -- mro, checkBindings, Env.findSubAxiom, Env.findAttr
-findCon env u               = (proto, constraintsOf env (subst s q), subst s us, subst s te)
-  where (proto,q,us,te)     = findCon0 (tcname u) env
-        s                   = tybound q `zip` tcargs u
+findCon env (TC n ts)
+  | map tVar tvs == ts      = (proto, constraintsOf env q, us, te)
+  | otherwise               = (proto, constraintsOf env (subst s q), subst s us, subst s te)
+  where (proto,q,us,te)     = case findQName n env of
+                                NClass q us te -> (False,q,us,te)
+                                NProto q us te -> (True,q,us,te)
+                                _ -> err1 n "Class or protocol name expected, got"
+        tvs                 = tybound q
+        s                   = tvs `zip` ts
+
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 

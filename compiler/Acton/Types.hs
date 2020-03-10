@@ -254,41 +254,7 @@ instance InfEnv Stmt where
       where redefs                      = [ n | n <- ns, not $ reserved n env ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
-{-
-    infEnv env (Data l Nothing b)       = do te <- infData env1 b
-                                             let te1 = filter (notemp . fst) te1
-                                             constrain [Equ (tRecord $ env2row tNil $ nVars te1) t]
-                                             return []
-      where t                           = undefined   -- WAS: getReturn env
-            env1                        = reserve (filter istemp $ bound b) env
 
-    infEnv env (Data l (Just p) b)
-      | nodup p                         = do (te0, t) <- infEnvT env p
-                                             (te1,te2) <- partition (istemp . fst) <$> infData env b
-                                             constrain [Equ (tRecord $ env2row tNil $ nVars te2) t]
-                                             return (te0++te1)
-
-instance InfData [Stmt] where
-    infData env []                      = return []
-    infData env (s : ss)                = do te1 <- infData env s
-                                             te2 <- infData (define (filter (istemp . fst) te1) env) ss
-                                             unionTEnv env [te1,te2]
-
-instance InfData Stmt where
-    infData env (While _ e b els)       = do inferBool env e
-                                             te1 <- infEnv env b
-                                             te2 <- infEnv env els
-                                             unionTEnv env [[], te1, te2]
-    infData env (For _ p e b els)       = undefined
-    infData env (If _ bs els)           = do tes <- mapM (infData env) bs
-                                             te <- infData env els
-                                             unionTEnv env (te:tes)
-    infData env s                       = infEnv env s
-
-instance InfData Branch where
-    infData env (Branch e b)            = do inferBool env e
-                                             infData env b
--}
 
 instance InfEnv Decl where
     infEnv env d@(Actor _ n _ p k _ _)
@@ -418,7 +384,7 @@ instance Check Decl where
                                              checkBindings env False us te
                                              return $ Class l w [] us b'        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            Just w                      = findWitness n env q us
+            w                           = locateWitness env n q us
 
 
 checkBindings env proto us te
