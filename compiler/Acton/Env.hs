@@ -294,7 +294,7 @@ maybeFindMod (ModName ns) env = f ns (names env)
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
-                                Nothing -> Nothing                         
+                                Nothing -> Nothing
 
 isMod                       :: Env -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
@@ -316,6 +316,11 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
+isClass                     :: QName -> Env -> Bool
+isClass n env               = case findQName n env of
+                                NClass q us te -> True
+                                _ -> False
+
 isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,constraintsOf),
 isProto n env               = case findQName n env of                                       -- infEnv (ext), class/protoBases
                                 NProto q us te -> True
@@ -421,7 +426,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
 
 envBuiltin                  = [ (nSequence,         NProto [a] [] []),                          -- Env (initEnv)
                                 (nMapping,          NProto [a,b] [] []),
-                                (nSet,              NProto [a] [] []),
+                                (nSetP,             NProto [a] [] []),
                                 (nInt,              NClass [] [] []),
                                 (nFloat,            NClass [] [] []),
                                 (nBool,             NClass [] [] []),
@@ -452,11 +457,12 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nStopIteration,    NClass [] [cException] []),
                                 (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
-                                (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
+                                (nLen,              NVar (tSchema [a] $ tFun0 [tCollection ta] tInt)),
+                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSeq tInt))),
                                 (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
-                                (nSet',             NClass [a] [] [])
+                                (nSetT,             NClass [a] [] [])
                               ]
   where 
     a:b:c:_                 = map tBind tvarSupply

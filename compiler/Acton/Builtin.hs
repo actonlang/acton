@@ -76,7 +76,7 @@ qBuiltin n                          = QName mBuiltin n
 
 nSequence                           = name "Sequence"
 nMapping                            = name "Mapping"
-nSet                                = name "Set"
+nSetP                               = name "Set"
 nInt                                = name "int"
 nFloat                              = name "float"
 nBool                               = name "bool"
@@ -107,15 +107,16 @@ nObject                             = name "object"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
 nShow                               = name "Show"
+nRange                              = name "range"
 nLen                                = name "len"
 nPrint                              = name "print"
 nDict                               = name "dict"
 nList                               = name "list"
-nSet'                               = name "set"
+nSetT                               = name "set"
 
 qnSequence                          = qBuiltin nSequence
 qnMapping                           = qBuiltin nMapping
-qnSet                               = qBuiltin nSet
+qnSetP                              = qBuiltin nSetP
 qnInt                               = qBuiltin nInt
 qnFloat                             = qBuiltin nFloat
 qnBool                              = qBuiltin nBool
@@ -147,14 +148,15 @@ qnStopIteration                     = qBuiltin nStopIteration
 qnValueError                        = qBuiltin nValueError
 qnShow                              = qBuiltin nShow
 qnLen                               = qBuiltin nLen
+qnRange                             = qBuiltin nRange
 qnPrint                             = qBuiltin nPrint
 qnDict                              = qBuiltin nDict
 qnList                              = qBuiltin nList
-qnSet'                              = qBuiltin nSet
+qnSetT                              = qBuiltin nSetT
 
 cSequence a                         = TC qnSequence [a]
 cMapping a b                        = TC qnMapping [a,b]
-cSet a                              = TC qnSet [a]
+cSetP a                             = TC qnSetP [a]
 cInt                                = TC qnInt []
 cFloat                              = TC qnFloat []
 cBool                               = TC qnBool []
@@ -188,7 +190,7 @@ cShow                               = TC qnShow []
 
 pSequence a                         = tCon (cSequence a)
 pMapping a b                        = tCon (cMapping a b)
-pSet a                              = tCon (cSet a)
+pSet a                              = tCon (cSetP a)
 tInt                                = tCon cInt
 tFloat                              = tCon cFloat
 tBool                               = tCon cBool
@@ -220,9 +222,10 @@ tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
 pShow                               = tCon cShow
 
-tSeq                                = pSequence
-tMapping                            = pMapping
-tSet                                = pSet
+tSeq a                              = tExist (cSequence a)
+tMapping a b                        = tExist (cMapping a b)
+tSet a                              = tExist (cSetP a)
+tCollection a                       = tExist (cCollection a)
 
 uniLit t (ULit l)                   = t == tStr
 uniLit t _                          = False

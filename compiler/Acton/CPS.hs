@@ -492,7 +492,7 @@ instance PreCPS Expr where
                                                 [] -> return e1
                                                 _  -> do acc <- newName "acc"
                                                          preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnSet' [])
+      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnSetT [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "add")) [e])
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e
