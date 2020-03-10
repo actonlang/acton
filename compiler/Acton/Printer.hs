@@ -330,7 +330,7 @@ instance Pretty TCon where
     pretty (TC n [])                = pretty n
     pretty (TC n [t])
       | n == qnSequence             = brackets (pretty t)
-      | n == qnSet                  = braces (pretty t)
+      | n == qnSetP                 = braces (pretty t)
     pretty (TC n [kt,vt])
       | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
