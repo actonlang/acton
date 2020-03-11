@@ -12,7 +12,7 @@ Integers:           i
 Floats:             f
 Strings:            s
 
-Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |
+Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |  C  |
                                     E(A)  |  E.n  |  E.x  |  E if E else E  |  E is E  |
                                     await E  |  isinstance(E,C)  |  do S
 
