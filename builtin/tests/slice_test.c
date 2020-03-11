@@ -27,38 +27,41 @@ int main() {
   printlist(lst2);
 }
 */
-void printSequence(Sequence$__class__ cl, $WORD seq) {
-  Indexed$__class__ cl1 = cl->Sliceable$__methods__->Indexed$__methods__;
+
+void printSequence(Sequence$list wit, $WORD seq) {
   printf("[");
-  long n = from$int(cl->Collection$__methods__->__len__(cl->Collection$__methods__,
-                                                        seq));
+  long n = from$int(wit->_Collection->__class__->__len__(wit->_Collection, seq));
   for (long i=0; i < n-1; i++) 
-    printf("%ld, ",from$int(cl1->__getitem__(cl1,seq,to$int(i))));
+    printf("%ld, ",from$int(wit->__class__->__getitem__(wit,seq,to$int(i))));
   if (n > 0) 
-    printf("%ld",from$int(cl1->__getitem__(cl1,seq,to$int(n-1))));
+    printf("%ld",from$int(wit->__class__->__getitem__(wit,seq,to$int(n-1))));
   printf("]\n");
 }
 
+
+
 int main() {
-  Sequence$__class__ cl = Sequence$list_instance;
-  $WORD lst = cl->Collection$__methods__->__fromiter__( cl->Collection$__methods__,NULL)->__impl__;
+  Sequence$list wit = Sequence$list_new();
+  $list lst = wit->_Collection->__class__->__fromiter__( wit->_Collection,NULL);
   for (long i=0; i<100; i++)
-    cl->append(cl,lst,to$int(i));
-  long start = -1;
-  long stop = 0;
-  long step = -2;
+    wit->__class__->append(wit,lst,to$int(i));
+  int start = -1;
+  int stop = 0;
+  int step = -2;
   struct Slice slc;
   slc.start = &start;
   slc.stop = &stop;
   slc.step = &step;
-  $WORD lst2 = cl->Sliceable$__methods__->__getslice__(cl->Sliceable$__methods__,lst,&slc);
-  Sequence lst3 = cl->Collection$__methods__->__fromiter__(cl->Collection$__methods__,NULL)->__impl__;
+  $list lst2 = wit->__class__->__getslice__(wit,lst,&slc);
+  printSequence(wit,lst2);
+  $list lst3 = wit->_Collection->__class__->__fromiter__( wit->_Collection,NULL);
   for (long i=100; i<110; i++)
-    cl->append(cl,lst3,to$int(i));
+    wit->__class__->append(wit,lst3,to$int(i));
+  printSequence(wit,lst3);
   start = 10;
   stop = 30;
   step = 2;
-  cl->Sliceable$__methods__->__setslice__(cl->Sliceable$__methods__,lst2,&slc,Sequence$__pack__(cl,lst3));
-  printSequence(cl,lst2);                                                       
+  Iterable$opaque it = Iterable$__pack__((Iterable)wit->_Collection,lst3);
+  wit->__class__->__setslice__(wit,lst2,&slc,it);
+  printSequence(wit,lst2);                                                       
 }
-

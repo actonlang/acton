@@ -5,6 +5,10 @@ void RAISE(exception e) {
   //exit(1);
 }
 
-$complex to$complex(double re, double im) {
-  return re + I*im;
+//$complex to$complex(double re, double im) {
+//  return re + I*im;
+//}
+
+$WORD next(Iterator iter) {
+  return iter->__class__->__next__(iter);
 }

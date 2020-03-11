@@ -18,69 +18,81 @@ long fromWord($WORD w) {
   return x;
 }
 
+Iterable$opaque dict_iterable(Mapping$dict wit, $dict dict) {
+  Iterable$__class__ cl = malloc(sizeof(struct  Iterable$__class__));
+  cl->__iter__ = (Iterator (*)(Iterable, $WORD))wit->__class__->items;
+  Iterable wit2 = malloc(sizeof(struct Iterable));
+  wit2->__class__ = cl;
+  return Iterable$__pack__(wit2,dict);
+}
+    
 int main() {
-  $dict dict = $dict_new(Hashable$str_instance);
-  $dict other = $dict_new(Hashable$str_instance);
+  Mapping$dict wit = Mapping$dict_new((Hashable)Hashable$str_new());
+  $dict dict = wit->__class__->__fromiter__(wit,NULL); 
+  $dict other = wit->__class__->__fromiter__(wit,NULL);
   int j;
-  //  for (long i=1; i < 1000000; i++) {
-  //  Indexed$dict_instance->__setitem__(Indexed$dict_instance,dict,toWord(i),toWord(i+1));
-  //}
 
-  Indexed dict1 = Indexed$__pack__(Indexed$dict_instance,dict);
   for (long i=1; i < 1000000; i++)
-    dict1->__class__->__setitem__(dict1->__class__,dict1->__impl__,toWord(i),toWord(i+1));
-  $WORD b;
+    wit->_Indexed->__class__->__setitem__(wit->_Indexed,dict,toWord(i),toWord(i+1));
+   $WORD b;
   long r = 17;
   long s = 0;
   for (int j=1; j < 100000; j++) {
     r = r*r % 1000000;
-    b = Indexed$dict_instance->__getitem__(Indexed$dict_instance,dict,toWord(r));
+    b = wit->_Indexed->__class__->__getitem__(wit->_Indexed,dict,toWord(r));
     s += fromWord(b);
   }
   printf("in dict_test after summation; last value retrieved should be %ld, was %ld\n",r+1,fromWord(b));
   printf("Summed 100000 values; sum is %ld\n",s);
-  int t1 = Container_Eq$dict_instance->__contains__(Container_Eq$dict_instance,dict,toWord(678));
-  int t2 = Container_Eq$dict_instance->__contains__(Container_Eq$dict_instance,dict,toWord(-1));
+  
+  int t1 = from$bool(wit->__class__->__contains__(wit,dict,toWord(678)));
+  int t2 = from$bool(wit->__class__->__contains__(wit,dict,toWord(-1)));
   
   if (t1 && !t2)
     printf("contains test ok\n");
   else
     printf("contains test failed\n");
+  
   $WORD res = NULL;
   for (long i=1; i<1000000; i++)
     if (i%100 > 0)
-      Indexed$dict_instance->__delitem__(Indexed$dict_instance,dict,toWord(i));
-  printf("Size of dict after popping is %ld\n",*Container_Eq$dict_instance->Collection$__methods__->__len__(Container_Eq$dict_instance->Collection$__methods__,dict));
-
-  Iterator iter = Iterable$dict_instance->__iter__(Iterable$dict_instance,dict);
+       wit->_Indexed->__class__->__delitem__( wit->_Indexed,dict,toWord(i));
+  printf("Size of dict after popping is %ld\n",from$int(wit->__class__->__len__(wit,dict)));
+  
+  Iterator iter = wit->__class__->__iter__(wit,dict);
   long t = 0;
-  while ((res=iter->__class__->__next__(iter->__class__,iter->__impl__))) {
+  while ((res=iter->__class__->__next__(iter))) {
     t += fromWord(res);
   }
   printf("Sum of remaining keys is %ld\n",t);
-
+  
   $WORD deflt = toWord(666);
-  $WORD w = Mapping$dict_instance->get(Mapping$dict_instance,dict,toWord(100),deflt);
+  $WORD w = wit->__class__->get(wit,dict,toWord(100),deflt);
   printf("dict_get on existing key 100; should return 101. Returned %ld\n",fromWord(w));
-  $WORD w2 = Mapping$dict_instance->get(Mapping$dict_instance,dict,toWord(37),deflt);
-  printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(deflt));
+  //$WORD w2 =  wit->__class__->get(wit,dict,toWord(37),deflt);
+  //printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(w2));
 
   for (long j = 11; j < 200; j+=20)
-    Indexed$dict_instance->__setitem__(Indexed$dict_instance,other,toWord(j),toWord(2*j));
-  Mapping$dict_instance->update(Mapping$dict_instance,dict,Mapping$__pack__(Mapping$dict_instance,other));
-  Iterator items = Mapping$dict_instance->items(Mapping$dict_instance,dict);
+     wit->_Indexed->__class__->__setitem__( wit->_Indexed,other,toWord(j),toWord(2*j));
+
+  Iterator items = wit->__class__->items(wit,dict);
   $WORD item;
   for (int k=0; k<10; k++) {
-    if ((item = items->__class__->__next__(items->__class__,items->__impl__)))
-      printf("item #%d is: key=%ld, value=%ld\n",k,fromWord((($item_t)item)->key),fromWord((($item_t)item)->value));
+    if ((item = items->__class__->__next__(items))) {
+      $str key = (($tup2_t)item)->a;
+      $str val = (($tup2_t)item)->b;
+      printf("item #%d is: key=%ld, value=%ld\n",k,fromWord(key),fromWord(val));
+    }
   }
 
-  if((item = Mapping$dict_instance->popitem(Mapping$dict_instance,dict))) {
-    printf("popitem gives: key=%ld, value=%ld\n",fromWord((($item_t)item)->key),fromWord((($item_t)item)->value));
+  wit->__class__->update(wit,dict,dict_iterable(wit,other));
+  
+  if((item = wit->__class__->popitem(wit,dict))) {
+    printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
   }
-  if((item = Mapping$dict_instance->popitem(Mapping$dict_instance,dict))) {
-    printf("popitem gives: key=%ld, value=%ld\n",fromWord((($item_t)item)->key),fromWord((($item_t)item)->value));
+  if((item = wit->__class__->popitem(wit,dict))) {
+     printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
   }
-  printf("size of dictionary should be 10007; is %ld\n",*Container_Eq$dict_instance->Collection$__methods__->__len__(Container_Eq$dict_instance->Collection$__methods__,dict));
+  printf("size of dictionary should be 10007; is %ld\n",from$int(wit->__class__->__len__(wit,dict)));
 
 }

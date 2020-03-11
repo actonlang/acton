@@ -1,12 +1,12 @@
 def test():
     d = dict();
-    for i in range(1,1000000): d[str(i)] = i+1
+    for i in range(1,1000000): d[str(i)] = str(i+1)
     r = 17
     s=0
     for i in range(1,100000):
         r = r*r % 1000000
         b = d[str(r)]
-        s += b;
+        s += int(b);
     print("in dict_test after summation; last value retrieved should be",r+1,", was ",b)
     print("Summed 100000 values; sum is ",s)
     t1 = "678" in d

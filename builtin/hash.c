@@ -1,10 +1,9 @@
 #include <string.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
-#include "common.h"
-#include "hash.h"
+#include "allprotocols.h"
 
 /* 
 Hashing of primitive types as in 
@@ -43,8 +42,9 @@ BvS 191002: For the moment, stick to little endian. In CPython, this is set in p
 #define PY_LITTLE_ENDIAN 1
 
 long $int_hash ($int n) {
-  long u = *n, sign=1;
+  long u = from$int(n), sign=1;
   if (u<0)  {
+
     sign=-1;
     u = -u;
   }
@@ -59,7 +59,7 @@ long $float_hash($float v) {
     int e, sign;
     double m;
     long x, y;
-    double d = *(double*)v;
+    double d = from$float(v);
     
     if (!isfinite(d)) {
         if (isinf(d))
