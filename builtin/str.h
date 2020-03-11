@@ -1,6 +1,4 @@
  
-struct $str;
-typedef struct $str *$str;
 
 struct $str$__methods__;
 typedef struct $str$__methods__ *$str$__methods__;
@@ -63,17 +61,11 @@ $str fromUTF8(char *str);
 // Destructor; recover the internal string.
 unsigned char *toUTF8($str str);
 
- 
 // Protocol instances ////////////////////////////////////////////////////////////////////////////////////////
 
-Eq$__class__ Eq$str_instance; 
-Hashable$__class__ Hashable$str_instance;
-Plus$__class__ Plus$str_instance;
-Collection$__class__ Collection$str_instance;
-Iterable$__class__ Iterable$str_instance;
-Indexed$__class__ Indexed$str_instance;
-Sliceable$__class__ Sliceable$str_instance;
-Sequence$__class__ Sequence$str_instance;
-Container_Eq$__class__ Container_Eq$str_instance;
-
+Ord$str Ord$str_new();
+Hashable$str Hashable$str_new();
+Plus$str Plus$str_new();
+Sliceable$str Sliceable$str_new();
+Container$str Container$str_new();
 

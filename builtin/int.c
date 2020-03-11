@@ -1,19 +1,33 @@
 
+struct $int {
+  char *GCINFO;
+  long val;
+};
+
+  
 $int to$int(long i) {
-  $int res = malloc(sizeof(long));
-  *res = i;
+  $int res = malloc(sizeof(struct $int));
+  res->val = i;
   return res;
 }
 
 long from$int($int w) {
-  return *w;
+  return w->val;
 }
 
-$bool $int_eq_instance(Eq$__class__ cl, $WORD a, $WORD b);
-$bool $int_neq_instance(Eq$__class__ cl, $WORD a, $WORD b);
 
-$int $int_hash_instance(Hashable$__class__ cl, $WORD a);
+$bool Hashable$int$__eq__(Hashable$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
+}
 
+$bool Hashable$int$__neq__(Hashable$int wit, $int a, $int b) {
+  return to$bool(a->val != b->val);
+}
+
+$int Hashable$int$__hash__(Hashable$int wit, $int a) {
+  return to$int($int_hash(a));
+}
+/*
 $bool $int_lt_instance(Ord$__class__ cl, $WORD a, $WORD b);
 $bool $int_le_instance(Ord$__class__ cl, $WORD a, $WORD b);
 $bool $int_gt_instance(Ord$__class__ cl, $WORD a, $WORD b);
@@ -58,10 +72,24 @@ $WORD $int_invert_instance(Integral$__class__ cl,  $WORD a);
 
 struct Eq$__class__ Eq$int_struct = {"GC_Eq$int",$int_eq_instance,$int_neq_instance};
 Eq$__class__ Eq$int_instance = &Eq$int_struct;
+*/
+struct Hashable$int$__class__ Hashable$int$__methods__ = {"",Hashable$int$__eq__,Hashable$int$__neq__,Hashable$int$__hash__};
+  
+Hashable$int Hashable$int_new() {
+  Hashable$int res = malloc(sizeof(struct Hashable$int));
+  res->__class__ = &Hashable$int$__methods__;
+  return res;
+}
 
-struct Hashable$__class__ Hashable$int_struct = {"GC_Hashable_$int",&Eq$int_struct,$int_hash_instance};
-Hashable$__class__ Hashable$int_instance = &Hashable$int_struct;
+struct Plus$int$__class__ Plus$int$__methods__ = {"",Plus$int$__add__};
 
+Plus$int Plus$int_new() {
+  Plus$int res = malloc(sizeof(struct Plus$int));
+  res->__class__ = &Plus$int$__methods__;
+  return res;
+}
+
+/*
 struct Ord$__class__ Ord$int_struct = {"GC_Ord$int",&Eq$int_struct, $int_lt_instance,$int_le_instance, $int_gt_instance, $int_ge_instance};
 Ord$__class__ Ord$int_instance = &Ord$int_struct;
 
@@ -91,17 +119,17 @@ Integral$__class__ Integral$int_instance = &Integral$int_struct;
 
 // Eq ////////////////////////////////////////////////////////////////////////////////////////
 
-$bool $int_eq_instance(Eq$__class__ cl, $WORD a, $WORD b) {
+$bool Eq$int__eq__(Eq wit, $int a, $int b) {
   return from$int(a) == from$int(b);
 }
 
-$bool $int_neq_instance(Eq$__class__ cl, $WORD a, $WORD b) {
+$bool Eq$int__neq__(Eq wit, $int a, $int b) {
   return from$int(a) != from$int(b);
 }
 
 // Hashable ///////////////////////////////////////////////////////////////////////////////
 
-$int $int_hash_instance(Hashable$__class__ cl, $WORD a) {
+$int Hashable$int$__hash__(Hashable wit, $int a) {
   return to$int($int_hash(a));
 }
 
@@ -133,13 +161,16 @@ $WORD $int_or_instance(Logical$__class__ cl,  $WORD a, $WORD b) {
 $WORD $int_xor_instance(Logical$__class__ cl,  $WORD a, $WORD b) {
   return to$int(from$int(a) ^ from$int(b));
 }  
-                                                 
+ 
+*/
+
 // Plus  ////////////////////////////////////////////////////////////////////////////////////////
 
-$WORD $int_add_instance(Plus$__class__ cl,  $WORD a, $WORD b) {
+$int Plus$int$__add__(Plus$int wit,  $int a, $int b) {
   return to$int(from$int(a) + from$int(b));
 }  
-                                                 
+ 
+/*                                                
 // Minus ////////////////////////////////////////////////////////////////////////////////////////
 
 $WORD $int_sub_instance(Minus$__class__ cl,  $WORD a, $WORD b) {
@@ -273,3 +304,4 @@ $WORD $int_rshift_instance(Integral$__class__ cl,  $WORD a, $WORD b) {
 $WORD $int_invert_instance(Integral$__class__ cl,  $WORD a) {
   return to$int(~from$int(a));
 }
+*/

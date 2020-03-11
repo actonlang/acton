@@ -43,7 +43,6 @@ protocol Integral (Rational,Logical):
   @staticmethod
   __mod__      : (Self,Self) -> Self
 
-
   @staticmethod
   __lshift__   : (Self,Self) -> Self
   @staticmethod
@@ -51,5 +50,8 @@ protocol Integral (Rational,Logical):
 
   __invert__   : () -> Self
 
+extension int (Integral)
+extension int (Hashable)
 
-
+extension float (Real)
+extension float (Hashable)

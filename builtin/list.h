@@ -1,15 +1,10 @@
-
-struct $list;
-typedef struct $list *$list;
-
-
-Plus$__class__ Plus$list_instance;
-Collection$__class__ Collection$list_instance;
-Iterable$__class__ Iterable$list_instance;
-Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA);
-Indexed$__class__ Indexed$list_instance;
-Sliceable$__class__ Sliceable$list_instance;
-Sequence$__class__ Sequence$list_instance;
+Plus$list Plus$list_new();
+//Iterable$list Iterable$list_new();
+Collection$list Collection$list_new();
+//Container$list Container$list_new(Eq eqA);
+//Indexed$list Indexed$list_new();
+//Sliceable$list Sliceable$list_new();
+Sequence$list Sequence$list_new();
 
 void printlist($list list); //for debugging
-
+void $list_init($list lst);
