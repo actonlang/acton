@@ -46,22 +46,22 @@ reduce' (Equ env t1 t2)                     = red' False env t1 t2
 reduce' (SubGen env t1 t2)                  = redGen' True env t1 t2
 reduce' (EquGen env t1 t2)                  = redGen' False env t1 t2
 
-reduce' c@(Impl env (TVar _ tv) u)
+reduce' c@(Impl w env (TVar _ tv) u)
   | not $ skolem tv                         = defer [c]
-reduce' (Impl env t u)
-  | entail (Impl env t u)                   = return ()
+reduce' c@(Impl w env t u)
+  | otherwise                   = return ()
 
 reduce' c@(Sel env (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | Just u <- findSubBound tv env           = reduce' (Sel env (tCon u) n t2)
-reduce' (Sel env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
+reduce' (Sel env t1@(TCon _ tc) n t2)       = do let sc = findAttr env tc n
                                                  when (scdec sc == StaticMethod) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduceAll (Equ env t' t2 : cs)
 reduce' (Sel env (TTuple _ p r) n t2)       = reduce (Equ env r (kwdRow n (monotype t2) tWild))
 {-
-reduce' (Sel env (TExist _ p) n t2)         = do let (cs,sc) = findAttr env tc n
+reduce' (Sel env (TExist _ p) n t2)         = do let sc = findAttr env tc n
                                                  when (isInstAttr $ scdec sc) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc)
                                                  let t' = subst [(tvSelf,tCon tc)] t
@@ -77,7 +77,7 @@ reduce' (Sel env (TUnion _ [ULit _]) n t2)  = reduce' (Sel env tStr n t2)
 reduce' c@(Mut env (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | Just u <- findSubBound tv env           = reduce' (Mut env (tCon u) n t2)
-reduce' (Mut env t1@(TCon _ tc) n t2)       = do let (cs,sc) = findAttr env tc n
+reduce' (Mut env t1@(TCon _ tc) n t2)       = do let sc = findAttr env tc n
                                                  when (not $ isInstAttr $ scdec sc) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
@@ -96,10 +96,11 @@ red' sub env (TVar _ tv1) (TVar _ tv2)
 
 red' True env t1@(TVar _ tv) t2
   | not $ skolem tv                         = defer [Sub env t1 t2]
-  | entail (Sub env t1 t2)                  = return ()
+-- if skolem...
+
 red' True env t1 t2@(TVar _ tv)
   | not $ skolem tv                         = defer [Sub env t1 t2]
-  | entail (Sub env t1 t2)                  = return ()
+-- if skolem...
 
 red' False env (TVar _ tv) t2
   | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
@@ -190,12 +191,5 @@ redGen' sub env sc1 sc2@(TSchema _ q2 t2 d2)
 
 monotypeOf (TSchema _ [] t _)               = t
 monotypeOf sc                               = err1 sc "Monomorphic type expected"
-
-
--- Entailment ----------------------------------------------------------------------------
-
-entail                                  :: Constraint -> Bool
-entail c                                = True                                              -- TODO: implement this
-
 
 

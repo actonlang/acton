@@ -280,7 +280,7 @@ findName n env              = case lookup n (names env) of
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
-findQName                   :: QName -> Env -> NameInfo                     -- Env (findName,tconKind,isProto,findClass,findProto,findVarType,findCon0)
+findQName                   :: QName -> Env -> NameInfo                     -- Env (findName,tconKind,isProto,findClass,findProto,findVarType,findCon)
 findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just i -> i
@@ -294,11 +294,18 @@ maybeFindMod (ModName ns) env = f ns (names env)
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
-                                Nothing -> Nothing                         
+                                Nothing -> Nothing
 
 isMod                       :: Env -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
 
+
+findVarType                 :: QName -> Env -> TSchema                                      -- infer (Var,TaVar), infEnv (after), checkAssump, infEnvT (PVar)
+findVarType n env           = case findQName n env of
+                                NVar t         -> t
+                                NSVar t        -> t
+                                NSig t         -> t
+                                _              -> internal (loc n) ("Unexpected variable name: " ++ prstr n)
 
 
 tconKind                    :: QName -> Env -> Kind                                         -- Kinds.tconKind
@@ -309,32 +316,19 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
-isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,constraintsOf),
+isClass                     :: QName -> Env -> Bool
+isClass n env               = case findQName n env of
+                                NClass q us te -> True
+                                _ -> False
+
+isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,instantiate)
 isProto n env               = case findQName n env of                                       -- infEnv (ext), class/protoBases
                                 NProto q us te -> True
                                 _ -> False
 
-findCon0                    :: QName -> Env -> (Bool,[TBind],[TCon],TEnv)                   -- Env (findCon, findSolemizedCon)
-findCon0 n env              = case findQName n env of
-                                NClass q us te -> (False,q,us,te)
-                                NProto q us te -> (True,q,us,te)
-                                _ -> err1 n "Class or protocol name expected, got"
-
-findVarType                 :: QName -> Env -> TSchema                                      -- infer (Var,TaVar), infEnv (after), checkAssump, infEnvT (PVar)
-findVarType n env           = case findQName n env of
-                                NVar t         -> t
-                                NSVar t        -> t
-                                NSig t         -> t
-                                _              -> internal (loc n) ("Unexpected name: " ++ prstr n)
-
-findWitness                 :: QName -> Env -> [TBind] -> [TCon] -> Maybe Name                          -- check (ext)
-findWitness n env q us      = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
-                                [w] -> Just w
-                                _   -> Nothing
-
-findSkolemizedCon           :: QName -> Env -> (Bool,[TBind],TCon)                          -- infException
-findSkolemizedCon n env     = (proto, q, TC n $ map tVar $ tybound q)
-  where (proto,q,us,te)     = findCon0 n env
+locateWitness               :: Env -> QName -> [TBind] -> [TCon] -> Name                    -- check (ext)
+locateWitness env n q us    = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
+                                [w] -> w
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -343,23 +337,30 @@ findSubAxiom                :: Env -> TCon -> QName -> Maybe (Bool,Type)        
 findSubAxiom env c n
   | null hits               = Nothing 
   | otherwise               = Just (proto, tCon $ head hits)
-  where (proto,cs,us,_)     = findCon env c
+  where (proto,us,_)        = findCon env c
         hits                = [ u | u <- us, tcname u == n ]
 
-findAttr                    :: Env -> TCon -> Name -> (Constraints, TSchema)                -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
-findAttr env u n            = (cs, findIn (te ++ concat tes))
-  where (_,cs,us,te)        = findCon env u
-        tes                 = [ te' | u' <- us, let (_,_,_,te') = findCon env u' ]
+findAttr                    :: Env -> TCon -> Name -> TSchema                               -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
+findAttr env u n            = findIn (te ++ concat tes)
+  where (_,us,te)           = findCon env u
+        tes                 = [ te' | u' <- us, let (_,_,te') = findCon env u' ]
         findIn te1          = case lookup n te1 of
                                 Just (NVar t)         -> t
                                 Just (NSVar t)        -> t
                                 Just (NSig t)         -> t
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> (Bool,Constraints,[TCon],TEnv)                -- mro, checkBindings, Env.findSubAxiom, Env.findAttr
-findCon env u               = (proto, constraintsOf env (subst s q), subst s us, subst s te)
-  where (proto,q,us,te)     = findCon0 (tcname u) env
-        s                   = tybound q `zip` tcargs u
+findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                            -- mro, checkBindings, Env.findSubAxiom, Env.findAttr
+findCon env (TC n ts)
+  | map tVar tvs == ts      = (proto, us, te)
+  | otherwise               = (proto, subst s us, subst s te)
+  where (proto,q,us,te)     = case findQName n env of
+                                NClass q us te -> (False,q,us,te)
+                                NProto q us te -> (True,q,us,te)
+                                _ -> err1 n "Class or protocol name expected, got"
+        tvs                 = tybound q
+        s                   = tvs `zip` ts
+
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
@@ -382,13 +383,11 @@ instantiate env (TSchema _ [] t _)
 instantiate env (TSchema _ q t _)
                             = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
                                  let s = tybound q `zip` tvs
-                                 return (constraintsOf env (subst s q), subst s t)
-
-constraintsOf               :: Env -> [TBind] -> Constraints                                -- Env (findCon,instantiate)
-constraintsOf env q         = [ constr t u | TBind v us <- q, let t = tVar v, u <- us ]
+                                 cs <- sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
+                                 return (cs, subst s t)
   where constr t u@(TC n _)
-          | isProto n env   = Impl env t u
-          | otherwise       = Sub env t (tCon u)
+          | isProto n env   = do w <- newName "inst"; return $ Impl w env t u
+          | otherwise       = return $ Sub env t (tCon u)
 
 
 
@@ -425,7 +424,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
 
 envBuiltin                  = [ (nSequence,         NProto [a] [] []),                          -- Env (initEnv)
                                 (nMapping,          NProto [a,b] [] []),
-                                (nSet,              NProto [a] [] []),
+                                (nSetP,             NProto [a] [] []),
                                 (nInt,              NClass [] [] []),
                                 (nFloat,            NClass [] [] []),
                                 (nBool,             NClass [] [] []),
@@ -456,11 +455,12 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nStopIteration,    NClass [] [cException] []),
                                 (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
-                                (nLen,              NVar (tSchema [a] $ tFun0 [pCollection ta] tInt)),
+                                (nLen,              NVar (tSchema [a] $ tFun0 [tCollection ta] tInt)),
+                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSeq tInt))),
                                 (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
-                                (nSet',             NClass [a] [] [])
+                                (nSetT,             NClass [a] [] [])
                               ]
   where 
     a:b:c:_                 = map tBind tvarSupply
@@ -536,7 +536,7 @@ data Constraint                         = Equ       Env Type Type
                                         | Sub       Env Type Type
                                         | EquGen    Env TSchema TSchema
                                         | SubGen    Env TSchema TSchema
-                                        | Impl      Env Type TCon
+                                        | Impl      Name Env Type TCon
                                         | Sel       Env Type Name Type
                                         | Mut       Env Type Name Type
 
@@ -545,7 +545,7 @@ instance HasLoc Constraint where                 -- TODO: refine
     loc (Sub _ t _)                     = loc t
     loc (EquGen _ sc _)                 = loc sc
     loc (SubGen _ sc _)                 = loc sc
-    loc (Impl _ t _)                    = loc t
+    loc (Impl _ _ t _)                  = loc t
     loc (Sel _ t _ _)                   = loc t
     loc (Mut _ t _ _)                   = loc t
 
@@ -554,7 +554,7 @@ instance Pretty Constraint where
     pretty (Sub _ t1 t2)                = pretty t1 <+> text "  <  " <+> pretty t2
     pretty (EquGen _ sc1 sc2)           = pretty sc1 <+> text "  =  " <+> pretty sc2
     pretty (SubGen _ sc1 sc2)           = pretty sc1 <+> text "  <  " <+> pretty sc2
-    pretty (Impl _ t u)                 = pretty t <+> text "  impl  " <+> pretty u
+    pretty (Impl w _ t u)               = pretty w <+> text ":" <+> pretty t <+> parens (pretty u)
     pretty (Sel _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  =  " <+> pretty t2
     pretty (Mut _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  :=  " <+> pretty t2
 
@@ -679,14 +679,14 @@ instance Subst Constraint where
     msubst (Sub env t1 t2)          = Sub <$> msubst env <*> msubst t1 <*> msubst t1
     msubst (EquGen env t1 t2)       = EquGen <$> msubst env <*> msubst t1 <*> msubst t1
     msubst (SubGen env t1 t2)       = SubGen <$> msubst env <*> msubst t1 <*> msubst t1
-    msubst (Impl env t c)           = Impl <$> msubst env <*> msubst t <*> msubst c
+    msubst (Impl w env t c)         = Impl w <$> msubst env <*> msubst t <*> msubst c
     msubst (Sel env t1 n t2)        = Sel <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
     msubst (Mut env t1 n t2)        = Mut <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
     tyfree (Equ _ t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Sub _ t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (EquGen _ t1 t2)         = tyfree t1 ++ tyfree t2
     tyfree (SubGen _ t1 t2)         = tyfree t1 ++ tyfree t2
-    tyfree (Impl _ t c)             = tyfree t ++ tyfree c
+    tyfree (Impl _ _ t c)           = tyfree t ++ tyfree c
     tyfree (Sel _ t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
 

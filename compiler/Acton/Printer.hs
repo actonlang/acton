@@ -330,7 +330,7 @@ instance Pretty TCon where
     pretty (TC n [])                = pretty n
     pretty (TC n [t])
       | n == qnSequence             = brackets (pretty t)
-      | n == qnSet                  = braces (pretty t)
+      | n == qnSetP                 = braces (pretty t)
     pretty (TC n [kt,vt])
       | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
@@ -386,6 +386,12 @@ instance Pretty Type where
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
+    pretty r@TRow{rkind=XRow}       = prettyFXRow r
+    pretty r@TRow{rkind=PRow}       = prettyPosRow r
+    pretty r@TRow{rkind=KRow}       = prettyKwdRow r
+    pretty r@TNil{rkind=XRow}       = prettyFXRow r
+    pretty r@TNil{rkind=PRow}       = prettyPosRow r
+    pretty r@TNil{rkind=KRow}       = prettyKwdRow r
 
 instance Pretty Kind where
     pretty KType                    = text "type"

@@ -12,7 +12,7 @@ Integers:           i
 Floats:             f
 Strings:            s
 
-Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |
+Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |  C  |
                                     E(A)  |  E.n  |  E.x  |  E if E else E  |  E is E  |
                                     await E  |  isinstance(E,C)  |  do S
 
@@ -85,8 +85,8 @@ B  |-  L  |  E              -->     L  |  E'                                    
 B  |-  L,z=V  |  z          -->     L,z=V  |  V
 
 B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  V                            if  B' |- x --> V
-B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  CLOS(B2,y=l;F):S             if  x # B' and B |- C.x ==> @class CLOS(B2;y,F):S
-B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  V                            if  x # B' and B |- C.x ==> V otherwise
+B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  CLOS(B2,y=l;F):S             if  x # B' and B |- C.x --> @class CLOS(B2;y,F):S
+B  |-  L,l=(C;B')  |  l.x   -->     L,l=(C;B')  |  V                            if  x # B' and B |- C.x --> V otherwise
 
 B  |-  L  |  C(R)           -->     L,l=(C;.)  |  do l._init_(R); return l      if  B = B1,C=CLASS(C'):B2  and  N |- C(object)
 
@@ -104,21 +104,16 @@ B,x=V  |-  x                -->     V
 B  |-  lambda F: E          -->     CLOS(B;F): return E
 
 B  |-  (C;B').x             -->     V                                           if  B' |- x --> V
-B  |-  (C;B').x             -->     CLOS(B2,y=(C;B');F):S                       if  x # B' and B |- C.x ==> @class CLOS(B2;y,F):S
-B  |-  (C;B').x             -->     V                                           if  x # B' and B |- C.x ==> V otherwise
+B  |-  (C;B').x             -->     CLOS(B2,y=(C;B');F):S                       if  x # B' and B |- C.x --> @class CLOS(B2;y,F):S
+B  |-  (C;B').x             -->     V                                           if  x # B' and B |- C.x --> V otherwise
 
-B  |-  C.x                  -->     W                                           if  B |- C.x ==> W otherwise
+B,C=CLASS(C'):B'  |-  C.x   -->     V                                           if  (B').x --> V
+B,C=CLASS(C'):B'  |-  C.x   -->     V                                           if  x # B' and B |- C'.x --> V
 
 B  |-  C(B')                -->     (C;B')                                      if  B = B1,C=CLASS(C'):B2  and  N |- C(struct)
 
 B  |-  isinstance((C;B'),C')-->     True                                        if  B |- C(C')
                             -->     False                                       if  not B |- C(C')
-
-
-***** B |- E ==> E' ****************
-
-B,C=CLASS(C'):B'  |-  C.x   ==>     V                                           if  (B').x --> V
-B,C=CLASS(C'):B'  |-  C.x   ==>     V                                           if  x # B' and B |- C'.x ==> V
 
 
 ***** E --> E' *********************
