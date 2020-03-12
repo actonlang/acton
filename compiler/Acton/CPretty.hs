@@ -14,7 +14,7 @@ class CPretty a where
 instance CPretty Module where
    cpretty (Module  _ _ ss)             =  text "#pragma once" $+$ blank $+$
                                            text "#include \"common.h\"" $+$ blank $+$
-                                           vcat (map (structdecls . cpretty . name) ["$list","$dict","$set"] ++
+                                           vcat (map (structdecls . cpretty . name) ["$list","$dict","$set","$str","$int","$float","$complx","$bool"] ++
                                                 concat (concatMap structs ss) ++
                                                 map cpretty ss
                                                )
@@ -72,6 +72,7 @@ instance CPretty TSchema where
 instance CPretty Name where
     cpretty (Name _ "int")          = text "$int"
     cpretty (Name _ "float")        = text "$float"
+    cpretty (Name _ "complx")       = text "$complx"
     cpretty (Name _ "bool")         = text "$bool"
     cpretty (Name _ "list")         = text "$list"
     cpretty (Name _ "dict")         = text "$dict"
@@ -114,8 +115,7 @@ witness_struct cnm is                   = text "struct" <+> cnm <+> text "{" $+$
 class_struct nm ms                      = text "struct" <+> cpretty nm<>text "$__class__" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty . addparSig nm) ms)) $+$
                                           text "};"
-  where -- addpar nm (Decl l ds)           = Decl l (map (addparSig nm) ds)
-        addparSig nm sig@(Signature _ _ (TSchema _ _ _ StaticMethod))
+  where addparSig nm sig@(Signature _ _ (TSchema _ _ _ StaticMethod))
                                         = sig
         addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
                                         =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r) d)
@@ -131,17 +131,14 @@ opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" 
                                           blank
 
 fun_prototypes nm ss                    = vcat (map proto ss)
---fun_prototypes nm ss                    = vcat (concatMap proto ss)
-  where  -- protoDecl (Decl _ ds)          = map proto ds
-         proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) StaticMethod))
-                                        = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
+  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) StaticMethod))
+         --                               = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
          proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
                                         = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow (addFstElem nm p)) <>semi) ns)
 
 
 resultTuple (TTuple _ r _)              = tup 0 r
    where tup n (TNil _ _)               = text ("$tup"++show n++"_t")
-         tup n (TRow _ _ _ (TSchema _ _ (TVar{}) _) r)
-                                        = tup (n+1) r
+         tup n (TRow _ _ _ _ r)         = tup (n+1) r
          tup _ r                        = error ("cPrettyPosRow: unhandled tuple; row is "++render(pretty r))
 resultTuple t                           = cpretty t

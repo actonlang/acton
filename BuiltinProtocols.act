@@ -1,6 +1,3 @@
-#class Iterator[A]:                           
-#  __next__     : () -> A
- 
 protocol Eq:
   @staticmethod
   __eq__       : (Self,Self) -> bool
@@ -82,6 +79,8 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
 
 extension list[A] (Sequence[A]): ...
 
+extension list[A(Eq)] (Container[A]):...
+
 extension dict[A(Hashable),B] (Mapping[A,B]): ...
 
 extension set[A(Hashable)] (Set[A]): ...
@@ -97,3 +96,61 @@ extension str (Sliceable[str]): ...
 extension str (Plus): ...
 
 extension str(Hashable): ...
+
+
+protocol Complx (Eq, Plus, Minus):
+  __complx__  : () -> complx
+  __bool__     : () -> bool
+
+  @staticmethod
+  __mul__      : (Self,Self) -> Self
+  @staticmethod
+  __truediv__  : (Self,Self) -> Self
+  @staticmethod
+  __pow__      : (Self,Self) -> Self
+
+  __neg__      : () -> Self
+  __pos__      : () -> Self
+  
+  real         : () -> Real
+  imag         : () -> Real
+  __abs__      : () -> Real  # What about arg?
+
+  conjugate    : () -> Self
+
+
+protocol Real (Ord,Complx):
+  __float__    : () -> float
+
+  __trunc__    : () -> Integral
+  __floor__    : () -> Integral
+  __ceil__     : () -> Integral
+  __round__    : () -> Integral
+
+protocol Rational (Real):
+  numerator    : () -> Integral
+  denominator  : () -> Integral
+
+protocol Integral (Rational,Logical):
+  __int__      : () -> int
+  __index__    : () -> int
+
+  @staticmethod
+  __divmod__   : (Self,Self) -> (Self,Self)
+  @staticmethod
+  __floordiv__ : (Self,Self) -> Self
+  @staticmethod
+  __mod__      : (Self,Self) -> Self
+
+  @staticmethod
+  __lshift__   : (Self,Self) -> Self
+  @staticmethod
+  __rshift__   : (Self,Self) -> Self
+
+  __invert__   : () -> Self
+
+extension int (Integral):...
+extension int (Hashable):...
+
+extension float (Real):...
+extension float (Hashable):...

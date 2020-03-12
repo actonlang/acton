@@ -81,17 +81,17 @@ instance Transform Stmt where
 
 instance Transform Decl where
     trans env (Protocol loc n qs bs ss) = case transParents tv bs of
-                                               [] -> Class loc n qs1 [] ss2
-                                               b:bs -> Class loc n qs1 [b] (addWitnesses bs ss2)
+                                               [] -> Class loc n (tBind v:qs1) [] ss2
+                                               b:bs -> Class loc n (tBind v:qs1) [b] (addWitnesses bs ss2)
       where v                           = head (drop 15 tvarSupply Utils.\\ tybound qs)
             tv                          = tVar v
             ss1                         = trans env{fstpar = Just tv, sub = [(self,tv)]} (if inherited env then (addMethods (protocols env) bs ++ ss) else ss)
-            (qs1,ws)                    = transParams v qs
+            (qs1,ws)                    = transParams qs
             ss2                         = addWitnesses ws ss1   
     trans env ds                        = ds
 
 instance Transform TSchema where
-    trans env (TSchema loc bs t d)      = TSchema loc bs (trans (env{dec = d}) t) d 
+    trans env (TSchema loc bs t d)      = TSchema loc bs (trans (env{dec = d}) t) (if d == StaticMethod then NoDec else d) 
                                               
 instance Transform Type where
     trans env (TTuple loc p k)          = TTuple loc (trans env p) (trans env k)
@@ -120,8 +120,10 @@ addWitnesses ws ss                      = map mkSig ws ++ ss
 transParents tv bs                      = map addP bs
    where addP (TC qn ts)                = TC qn (tv : ts)
 
-transParams tv qs                       = trP qs [] []
-   where trP [] ws qs1                  = (tBind tv : reverse qs1,ws)
+-- transforms [A(Eq), B, C(Hashable)] into ([A,B,C],[Eq[A],Hashable[C]])
+transParams                             :: [TBind] -> ([TBind],[TCon])
+transParams qs                          = trP qs [] []
+   where trP [] ws qs1                  = (reverse qs1,reverse ws)
          trP (TBind tv cs:qs) ws qs1    = trP qs ([TC nm [tVar tv] | TC nm _ <- cs]++ws) (tBind tv : qs1) 
 
 ---------------------------------------------------------------------------------------------------------
@@ -143,7 +145,6 @@ transParams tv qs                       = trP qs [] []
 --
 -- transExt constructs the chains and calls transChain for each chain to build the class definition.
 -- TODO: This code must be radically simplified!!
---       Constraints in qs not handled! 
 ---------------------------------------------------------------------------------------------------------
 
 transExt ps env e@(Extension l nm qs bs ss)
@@ -157,12 +158,13 @@ transChain _ _ _ []                     = []
 transChain mb ps e (c : cs)             = c2{dname = c2nm, dbody = sigs} : transChain (Just witType) ps e cs
    where c1                             = fromJust (lookup c ps)
          ts                             = tCon (mkTC (dqname e) (qual e)) : tcargs (head (bounds e))
+         (_,ws)                         = transParams (qual e)
          c2                             = substAll ts c1
          tc                             = head (bounds c2)
          c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
          witType                        = maybe (tCon tc) id mb
-         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]) mb ++
-                                          dbody c2
+         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]) mb 
+                                          ++ nub (addWitnesses ws (dbody c2))
 
 
 substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)
@@ -174,8 +176,11 @@ addMethods ps []                        = []
 addMethods ps (TC n qs : _)             = addMethods ps (subst2 s (bounds p)) ++ subst2 s (methodsOf p)
   where p                               = fromJust (lookup (noqual n) ps)
         s                               = tVars (qual p) `zip` qs
-        methodsOf p                     = [Decl NoLoc (concatMap decls ss2)]
-          where (_,ss2)                 = partition notMeth (dbody p)
+        methodsOf p                     = filter isFunSig (dbody p)
+          where isFunSig s@Signature{}  = isFunType (sctype (typ s))
+                isFunSig stmt           = error ("Internal error: non-signature statement in protocol "++show stmt)
+                isFunType (TFun {})     = True
+                isFunType _             = False
 
 subst2                                  :: Subst a => Substitution -> a -> a
 subst2 s                                = subst s2 . subst s1
@@ -188,12 +193,6 @@ subst2 s                                = subst s2 . subst s1
 mkTC nm qs                              = TC nm $ map (\(TBind tv _) -> tVar tv) qs
 
 tVars qs                                = map (\(TBind tv _) -> tv) qs
-
---notMeth (Decl _ (s:_))                  = notFunType (sctype (dtyp s))
-notMeth s@Signature{}                   = notFunType (sctype (typ s))
-   where notFunType (TFun {})           = False
-         notFunType _                   = True
-notMeth _                               = True -- ?
 
 protocolsOf (Module _ _ ss)             = [(dname p,p) |  Decl _ ds <- ss, p@(Protocol{}) <- ds]
 

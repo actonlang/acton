@@ -1,15 +1,19 @@
-#include <math.h>
 
+struct $float  {
+  char *GCINFO;
+  float val;
+};
+  
 $float to$float(double x) {
-  $float res = malloc(sizeof(double));
-  *res = x;
+  $float res = malloc(sizeof(struct $float));
+  res->val = x;
   return res;
 }
 
 double from$float($float x) {
-  return *x;
+  return x->val;
 }
-
+/*
 $bool $float_eq_instance(Eq$__class__ cl, $WORD a, $WORD b);
 $bool $float_neq_instance(Eq$__class__ cl, $WORD a, $WORD b);
 
@@ -191,5 +195,4 @@ Integral $float_round_instance(Real$__class__ cl, $WORD a) {
   long n = (long)x;
   return Integral$__pack__(Integral$int_instance,to$int(n));
 }
-
- 
+*/

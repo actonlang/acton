@@ -1,517 +1,111 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
-#include "list.h"
+static struct Sequence$list  Sequence$list_instance;
+static struct Collection$list Collection$list_instance;
+static struct Plus$list Plus$list_instance;
 
+static struct Sequence$list$__class__ Sequence$list_methods = {"",Sequence$list$__getitem__, Sequence$list$__setitem__, Sequence$list$__delitem__,
+                                                                  Sequence$list$__getslice__, Sequence$list$__setslice__, Sequence$list$__delslice__,
+                                                               Sequence$list$__reversed__,Sequence$list$insert,Sequence$list$append,Sequence$list$reverse};
+                                                       
+static struct Sequence$list Sequence$list_instance = {"",&Sequence$list_methods, (Collection)&Collection$list_instance,(Plus)&Plus$list_instance};
+static Sequence$list Sequence$list_witness = &Sequence$list_instance;
 
-$list $list_copy($list lst);
-$list $list_add($list lst, $list other);
-$list $list_fromiter(Iterable it);
-$int $list_len($list lst);
-$bool $list_contains($list lst, $WORD elem, int (*eq)(Eq$__class__,$WORD,$WORD));
-$bool $list_containsnot($list lst, $WORD elem, int (*eq)(Eq$__class__,$WORD,$WORD));
-$WORD $list_getitem($list lst, int ix);
-void $list_setitem($list lst, int ix, $WORD val);
-void $list_delitem($list lst,int ix);
-$list $list_getslice($list lst, Slice slc);
-void $list_setslice($list lst, Slice slc, $list other);
-void $list_delslice($list lst, Slice slc);
-void $list_append($list lst, $WORD val);
-Iterable $list_reversed($list lst);
-void $list_insert($list lst, int ix, $WORD val);
-void $list_reverse($list lst);
+static struct Collection$list$__class__ Collection$list_methods = {"",Collection$list$__iter__,Collection$list$__fromiter__,Collection$list$__len__};
+static struct Collection$list Collection$list_instance = {"",&Collection$list_methods,(Sequence)&Sequence$list_instance};
+static Collection$list Collection$list_witness = &Collection$list_instance;
 
 
-//  Method tables ///////////////////////////////////////////////////////////////
+static struct Plus$list$__class__ Plus$list_methods = {"", Plus$list$__add__};
+static struct Plus$list Plus$list_instance = {"", &Plus$list_methods, (Sequence)&Sequence$list_instance};
+static Plus$list Plus$list_witness = &Plus$list_instance;
 
-$WORD $list_add_instance(Plus$__class__ cl, $WORD a, $WORD b);
+static struct Container$list$__class__ Container$list_methods = {"",(Iterator (*)(Container$list, $list))Collection$list$__iter__,
+                                                                 ($list (*)(Container$list, Iterable$opaque))Collection$list$__fromiter__,
+                                                                 ($int (*)(Container$list, $list))Collection$list$__len__,
+                                        Container$list$__contains__,Container$list$__containsnot__};
 
-Iterator $list_iter_instance(Iterable$__class__ cl,$WORD self);
+Sequence$list Sequence$list_new() {
+  return Sequence$list_witness;
+}
 
-$WORD $list_next_instance(Iterator$__class__ cl, $WORD self);
-
-Collection $list_fromiter_instance(Collection$__class__ cl, Iterable it);
-$int $list_len_instance(Collection$__class__ cl, $WORD self);
-
-$WORD $list_getitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix); 
-void $list_setitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix, $WORD val);
-void $list_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix);
-
-$WORD $list_getslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice);
-void $list_setslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice, Sequence it); 
-void $list_delslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice);
-
-Iterable $list_reversed_instance(Sequence$__class__ cl, $WORD self);
-void $list_insert_instance(Sequence$__class__ cl, $WORD self, $int ix, $WORD elem);
-void $list_append_instance(Sequence$__class__ cl, $WORD self, $WORD elem);
-void $list_reverse_instance(Sequence$__class__ cl, $WORD self);
-
-static struct Plus$__class__ Plus$list_struct = {"GC_Plus",$list_add_instance};
-Plus$__class__ Plus$list_instance = &Plus$list_struct;
-
-static struct Iterator$__class__ Iterator$list_struct = {"GC_Iterator",$list_next_instance};
-Iterator$__class__ Iterator$list_instance = &Iterator$list_struct;
+Container$list Container$list_new(Eq _EqA) {
+  Container$list res = malloc(sizeof(struct Container$list));
+  res->__class__ = &Container$list_methods;
+  res->_Eq = _EqA;
+  return res;
+}
 
 
-static struct Iterable$__class__ Iterable$list_struct = {"GC_Iterable", $list_iter_instance};
-Iterable$__class__ Iterable$list_instance = &Iterable$list_struct;
 
-static struct Collection$__class__ Collection$list_struct = {"GC_Collection",&Iterable$list_struct,$list_fromiter_instance,$list_len_instance};
-Collection$__class__ Collection$list_instance = &Collection$list_struct;
+$list Plus$list$__add__ (Plus$list wit, $list a, $list b) {
+  return $list_add(a,b);
+}
 
-static struct Indexed$__class__ Indexed$list_struct = {"GC_Indexed", $list_getitem_instance, $list_setitem_instance, $list_delitem_instance};
-Indexed$__class__ Indexed$list_instance = &Indexed$list_struct;
+Iterator Collection$list$__iter__(Collection$list wit, $list self) {
+  return $list_iter(self);
+}
 
-static struct Sliceable$__class__ Sliceable$list_struct = {"GC_Sliceable", &Indexed$list_struct, $list_getslice_instance, $list_setslice_instance, $list_delslice_instance};
-Sliceable$__class__ Sliceable$list_instance = &Sliceable$list_struct;
-
-static struct Sequence$__class__ Sequence$list_struct = {"GC_Sequence",&Sliceable$list_struct, &Collection$list_struct, &Plus$list_struct,
-                                                         $list_reversed_instance,$list_insert_instance,$list_append_instance,$list_reverse_instance};
-Sequence$__class__ Sequence$list_instance = &Sequence$list_struct;
-
-Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA);
-
-// Types /////////////////////////////////////////////////////////////////////////////////////////////////////
-
-typedef struct $list$__methods__ {
-  $list (*copy)($list self);
-  //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
-} *$list$__methods__;
-
-struct $list {
-  char *GCINFO;
-  $list$__methods__ __class__;
-  $WORD *data;
-  int length;
-  int capacity;
-};
-
-
-// List methods ///////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static struct $list$__methods__ $list_table = {$list_copy};
-$list$__methods__ $list_methods = &$list_table;
+$list Collection$list$__fromiter__(Collection$list wit, Iterable$opaque it) {
+  Iterator iter;
+  if (it == NULL)
+    iter = NULL;
+  else
+    iter = it->__proto__->__class__->__iter__(it->__proto__, it->__impl__);
+  return $list_fromiter(iter);
+}
  
-
-// Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
- 
-
-//prints a list[$int]
-void printlist($list lst) {
-  $WORD w;
-  printf("[");
-  for (int i=0; i < *$list_len(lst)-1; i++) {
-    w = $list_getitem(lst,i);
-    printf("%ld, ",from$int(w));
-  }
-  if (*$list_len(lst) > 0) {
-    w = $list_getitem(lst,*$list_len(lst)-1);
-    printf("%ld",from$int(w));
-  }
-  printf("]\n");
+$int Collection$list$__len__(Collection$list wit, $list self) {
+  return to$int($list_len(self));
 }
 
-static inline int min(int a, int b) {
-    if (a > b)
-        return b;
-    return a;
+$WORD Sequence$list$__getitem__(Sequence$list wit, $list self, $int ix) {
+  return $list_getitem(self,from$int(ix));
 }
 
-static inline int max(int a, int b) {
-    if (a > b)
-        return a;
-    return b;
+None Sequence$list$__setitem__(Sequence$list wit, $list self, $int ix, $WORD val) {
+  $list_setitem(self,from$int(ix),val);
 }
 
-// For now, expansion doubles capacity. 
-static void expand($list lst,int n) {
-   if (lst->capacity >= lst->length + n)
-     return;
-   int newcapacity = lst->capacity==0 ? 1 : lst->capacity;
-   while (newcapacity < lst->length+n)
-     newcapacity <<= 1;
-   $WORD* newptr = lst->data==NULL
-     ? malloc(newcapacity*sizeof($WORD))
-     : realloc(lst->data,newcapacity*sizeof($WORD));
-   if (newptr == NULL) {
-     exception e;
-     MKEXCEPTION(e,MEMORYERROR);
-     RAISE(e);
-   }
-   lst->data = newptr;
-   lst->capacity = newcapacity;
+None Sequence$list$__delitem__(Sequence$list wit, $list self, $int ix) {
+  $list_delitem(self,from$int(ix));
+}
+
+$list Sequence$list$__getslice__(Sequence$list wit, $list self, Slice slice) {
+  return $list_getslice(self,slice);
+}
+
+None Sequence$list$__setslice__(Sequence$list wit, $list self, Slice slice, Iterable$opaque it) {
+  $list_setslice(self,slice,it->__proto__->__class__->__iter__(it->__proto__,it->__impl__));
+}
+
+None Sequence$list$__delslice__(Sequence$list wit, $list self, Slice slice) {
+  $list_delslice(($list)self,slice);
 }  
 
-static $list list_new(int capacity) {
-  if (capacity < 0) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
-  } 
-  $list lst = malloc(sizeof(struct $list));
-  if (lst == NULL) {
-     exception e;
-     MKEXCEPTION(e,MEMORYERROR);
-     RAISE(e);
-  }
-  if (capacity>0) {
-    lst->data = malloc(capacity*sizeof($WORD));
-    if (lst->data == NULL) {
-      exception e;
-      MKEXCEPTION(e,MEMORYERROR);
-      RAISE(e);
-    }
-  } else {
-    lst->data = NULL;
-  }
-  lst->length = 0;
-  lst->capacity = capacity;
-  lst->__class__ = $list_methods; 
-  return lst;
+$bool Container$list$__contains__(Container$list wit, $list self, $WORD elem) {
+  return to$bool($list_contains(wit->_Eq,self,elem));
+}
+                 
+$bool Container$list$__containsnot__(Container$list wit, $list self, $WORD elem) {
+  return to$bool($list_containsnot(wit->_Eq,self,elem));
 }
 
-// Plus /////////////////////////////////////////////////////////////////////////////////////////////
-
-$list $list_add($list lst, $list other) {
-  int lstlen = lst->length;
-  int otherlen = other->length;
-  int reslen = lstlen + otherlen;
-  $list res = list_new(reslen);
-  memcpy(res->data,lst->data,lstlen*sizeof($WORD));
-  memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
-  res->length = reslen;
-  return res;
+Iterator Iterable$list$reversed$__iter__(Iterable wit, $WORD lst) {
+  return $list_reversed(lst);
 }
 
-// instance method
-
-$WORD $list_add_instance(Plus$__class__ cl, $WORD a, $WORD b) {
-    return $list_add(($list)a,($list)b);
+Iterator Sequence$list$__reversed__(Sequence$list wit, $list self) {
+  return $list_reversed(self);
 }
 
-// Collection ///////////////////////////////////////////////////////////////////////////////////////
-
-
-$list $list_fromiter(Iterable it) {
-  $list res = list_new(0);
-  if (it==NULL) {
-    return res;
-  }
-  Iterator iter = it->__class__->__iter__(Iterable$list_instance, it);
-  while(1) {
-    $WORD nxt = iter->__class__->__next__(Iterator$list_instance, iter);
-    $list_append(res,nxt);
-  }                                         // try/except to stop loop when next raises STOPITERATION.
-  return res;
-}
-  
-$int $list_len($list lst) {
-  long *res = malloc(sizeof(long));
-  *res = (long)lst->length;
-  return res;
+void Sequence$list$insert(Sequence$list wit, $list self, $int ix, $WORD elem) {
+  $list_insert(self,from$int(ix),elem);
 }
 
-// instance methods
-
-Collection $list_fromiter_instance(Collection$__class__ cl, Iterable it) {
-  return Collection$__pack__(Collection$list_instance,$list_fromiter(it));
+void Sequence$list$append(Sequence$list wit, $list self, $WORD elem) {
+  $list_append(self,elem);
 }
 
-$int $list_len_instance(Collection$__class__ cl, $WORD self) {
-  return $list_len(($list)self);
+void Sequence$list$reverse(Sequence$list wit, $list self) {
+  $list_reverse(self);
 }
-
-// Container ///////////////////////////////////////////////////////////////////////////
-
-$bool $list_contains($list lst, $WORD elem, $bool (*eq)(Eq$__class__,$WORD,$WORD)) {
-  for (int i=0; i < lst->length; i++) {
-    if (eq(NULL,elem,lst->data[i]))
-      return 1;
-  }
-  return 0;
-}
-
-$bool $list_containsnot($list lst, $WORD elem, $bool (*eq)(Eq$__class__,$WORD,$WORD)) {
-  return !$list_contains(lst,elem,eq);
-}
-
-// instance methods
-
-$bool $list_contains_instance (Container_Eq$__class__ cl, $WORD self, $WORD elem) {
-  return $list_contains(($list)self,elem,cl->eqA->__eq__);
-}
-
-$bool $list_containsnot_instance (Container_Eq$__class__ cl, $WORD self, $WORD elem) {
-  return $list_containsnot(($list)self,elem,cl->eqA->__neq__);
-}
-
-
-// Iterable ///////////////////////////////////////////////////////////////////////////
-
-typedef struct list_iterator_state_t {
-  char *$GCINFO;
-  $list src;
-  int nxt;
-} *list_iterator_state_t; 
-
-static $WORD $list_iterator_next( list_iterator_state_t state) {
-  if (state->nxt > state->src->length) {
-    exception e;
-    MKEXCEPTION(e,STOPITERATION);
-    RAISE(e);
-  }
-  return state->src->data[state->nxt++];
-}
-
-/*
-iterator_internal_t $list_iter(list_iterator_state_t state) {
-  iterator_internal_t iter = malloc(sizeof(struct iterator_internal_t));
-  iter->state = state;
-  iter->next = $list_iterator_next;
-  return iter;
-}
-*/
-static list_iterator_state_t $list_state_of($list lst) {
-  list_iterator_state_t state = malloc(sizeof(struct list_iterator_state_t));
-  state->src = lst;
-  state->nxt = 0;
-  return state;
-}
-
-// instance methods
-
- Iterator $list_iter_instance(Iterable$__class__ cl,$WORD self) {
-  return Iterator$__pack__(Iterator$list_instance,$list_state_of(($list)self));
-}
-
- $WORD $list_next_instance(Iterator$__class__ cl, $WORD self) {
-  return  $list_iterator_next(self);
-}
-
-// Indexed ///////////////////////////////////////////////////////////////////////////
-
-$WORD $list_getitem($list lst, int ix) {
-  int len = lst->length;
-  int ix0 = ix < 0 ? len + ix : ix;
-  if (ix0 < 0 || ix0 >= len) {
-     exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
-  }
-  return lst->data[ix0];
-}
-
-void $list_setitem($list lst, int ix, $WORD val) {
-  int len = lst->length;
-  int ix0 = ix < 0 ? len + ix : ix;
-  if (ix0 < 0 || ix0 >= len) {
-    exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
-  }
-  lst->data[ix0] = val;
-}
-
-void $list_delitem($list lst,int ix) {
-  int len = lst->length;
-  int ix0 = ix < 0 ? len + ix : ix;
-  if(ix0 < 0 || ix0 >= len) {
-    exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
-  }
-  memmove(lst->data + ix0,
-          lst->data + (ix0 + 1),
-          (len-(ix0+1))*sizeof($WORD));
-  lst->length--;
-}
-
-// instance methods
-
-$WORD $list_getitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
-  $WORD w = $list_getitem(($list)self,*(long*)ix);
-  return w;
-}
-
-void $list_setitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix, $WORD val){
-  $list_setitem(($list)self,*(int*)ix,val);
-}
-
-void $list_delitem_instance(Indexed$__class__ cl, $WORD self, $WORD ix) {
-  $list_delitem(($list)self,*(int*)ix);
-}
-
-// Sliceable //////////////////////////////////////////////////////////////////////////////////////
-
-$list $list_getslice($list lst, Slice slc) {
-  int len = lst->length;
-  int start, stop, step, slen;
-  normalize_slice(slc, len, &slen, &start, &stop, &step);
-  //slice notation have been eliminated and default values applied.
-  // slen now is the length of the slice
-  $list rlst = list_new(slen);
-  int t = start;
-  for (int i=0; i<slen; i++) {
-    $WORD w;
-    w = $list_getitem(lst,t);
-    $list_append(rlst,w);
-    t += step;
-  }
-  return rlst;
-}
-
-void $list_setslice($list lst, Slice slc, $list other) {
-  int len = lst->length; 
-  int olen = other->length; 
-  int start, stop, step, slen;
-  normalize_slice(slc, len, &slen, &start, &stop, &step);
-  if (step != 1 && olen != slen) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
-  }
-  int copy = olen <= slen ? olen : slen;
-  int t = start;
-  for (int i= 0; i<copy; i++) {
-    lst->data[t] = other->data[i];
-    t += step;
-  }
-  if (olen == slen)
-    return;
-  // now we know that step=1
-  if (olen < slen) {
-    memmove(lst->data + start + copy,
-            lst->data + start + slen,
-            (len-(start+slen))*sizeof($WORD));
-     lst->length-=slen-olen;
-     return;
-  } else {
-    expand(lst,olen-slen);
-    int rest = len - (start+copy);
-    int incr = olen - slen;
-    memmove(lst->data + start + copy + incr,
-            lst->data + start + copy,
-            rest*sizeof($WORD));
-    for (int i = copy; i < olen; i++)
-      lst->data[start+i] = other->data[i];
-    lst->length += incr;
-  }
-}
-
-
-void $list_delslice($list lst, Slice slc) {
-  int len = lst->length;
-  int start, stop, step, slen;
-  normalize_slice(slc, len, &len, &start, &stop, &step);
-  if (slen==0) return;
-  for (int ix = start+step*(slen-1); ix>= start; ix -= step)
-    $list_delitem(lst,ix);
-}
-
-// instance methods
-
-// This auxiliary function is needed until we can change last param of setslice to an Iterable
-$list seq2list(Sequence s) {
-  Collection$__class__ cl =  s->__class__->Collection$__methods__;
-  $int len = cl->__len__(cl,s->__impl__);
-  $list res = list_new(*len);
-  for(int i = 0; i<*len; i++) {
-    Indexed$__class__ cl1 = s->__class__->Sliceable$__methods__->Indexed$__methods__;
-    $list_append(res,cl1->__getitem__(cl1,s->__impl__,to$int(i)));
-  }
-  return res;
-}
-
-$WORD $list_getslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice) {
-  return $list_getslice(($list)self,slice);
-}
-
-void $list_setslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice, Sequence it) {
-  $list_setslice(($list)self,slice,/*$list_fromiter(it)*/seq2list(it));
-}
-
-void $list_delslice_instance(Sliceable$__class__ cl, $WORD self, Slice slice) {
-  $list_delslice(($list)self,slice);
-}
-
-// Sequence /////////////////////////////////////////////////////////////////////////////
-
-void $list_append($list lst, $WORD val) {
-  expand(lst,1);
-  lst->data[lst->length++] = val;
-}
-
-Iterable $list_reversed($list lst){
-  $list copy = $list_copy(lst);
-  $list_reverse(copy);
-  return Iterable$__pack__(Iterable$list_instance,$list_state_of(copy));
-}
-
-void $list_insert($list lst, int ix, $WORD val) {
-  int len = lst->length;
-  expand(lst,1);
-  int ix0 = ix < 0 ? max(len+ix,0) : min(ix,len);
-  memmove(lst->data + (ix0 + 1),
-          lst->data + ix0 ,
-          (len - ix0) * sizeof($WORD));
-  lst->data[ix0] = val;
-  lst->length++;
-}
-
-// In place reversal
-void $list_reverse($list lst) {
-  int len = lst->length;
-  for (int i = 0; i < len/2; i++) {
-    $WORD tmp = lst->data[i];
-    lst->data[i] = lst->data[len-1-i];
-    lst->data[len-1-i] = tmp;
-  }
-}
-
-// instance methods
-
-Iterable $list_reversed_instance(Sequence$__class__ cl, $WORD self) {
-  return $list_reversed(($list)self);
-}
-
-void $list_insert_instance(Sequence$__class__ cl, $WORD self, $int ix, $WORD elem) {
-  $list_insert(($list)self,*ix,elem);
-}
-void $list_append_instance(Sequence$__class__ cl, $WORD self, $WORD elem) {
-  $list_append(($list)self,elem);
-}
-
-void $list_reverse_instance(Sequence$__class__ cl, $WORD self) {
-  $list_reverse(($list)self);
-}
-
-// List-specific methods /////////////////////////////////////////////////////////////////////
-
-$list $list_copy($list lst) {
-  int len = lst->length;
-  $list res = list_new(len);
-  res->length = len;
-  memcpy(res->data,lst->data,len*sizeof($WORD));
-  return res;
-}
-/*                   
-int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
-  return heapsort(lst->data, lst->length, sizeof(WORD), cmp);
-}
-*/
-
-// Instance initialization ////////////////////////////////////////////////////////////////////
-
-Container_Eq$__class__ Container_Eq$list_instance(Eq$__class__ eqA) {
-  Container_Eq$__class__ res = malloc(sizeof(struct Container_Eq$__class__));
-  res->$GCINFO = "GC_Container_Eq";
-  res->Collection$__methods__ = Collection$list_instance;
-  res->__contains__ = $list_contains_instance;
-  res->__containsnot__ = $list_containsnot_instance;
-  res->eqA = eqA;
-  return res;
-}
-
- 
