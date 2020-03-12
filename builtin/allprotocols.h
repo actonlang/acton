@@ -206,6 +206,12 @@ typedef struct Collection$list *Collection$list;
 struct Collection$list$__class__;
 typedef struct Collection$list$__class__ *Collection$list$__class__;
 
+struct Container$list;
+typedef struct Container$list *Container$list;
+
+struct Container$list$__class__;
+typedef struct Container$list$__class__ *Container$list$__class__;
+
 struct Mapping$dict;
 typedef struct Mapping$dict *Mapping$dict;
 
@@ -907,6 +913,29 @@ struct Collection$list$__class__ {
 Iterator Collection$list$__iter__ (Collection$list, $list);
 $list Collection$list$__fromiter__ (Collection$list, Iterable$opaque);
 $int Collection$list$__len__ (Collection$list, $list);
+
+// Container$list ////////////////////////////////////////////////////////////
+
+struct Container$list {
+    char *GCINFO;
+    Container$list$__class__  __class__;
+    Eq _Eq;
+};
+
+struct Container$list$__class__ {
+    char *GCINFO;
+    Iterator (*__iter__)(Container$list, $list);
+    $list (*__fromiter__)(Container$list, Iterable$opaque);
+    $int (*__len__)(Container$list, $list);
+    $bool (*__contains__)(Container$list, $list, $WORD);
+    $bool (*__containsnot__)(Container$list, $list, $WORD);
+};
+
+Iterator Container$list$__iter__ (Container$list, $list);
+$list Container$list$__fromiter__ (Container$list, Iterable$opaque);
+$int Container$list$__len__ (Container$list, $list);
+$bool Container$list$__contains__ (Container$list, $list, $WORD);
+$bool Container$list$__containsnot__ (Container$list, $list, $WORD);
 
 // Mapping$dict ////////////////////////////////////////////////////////////
 

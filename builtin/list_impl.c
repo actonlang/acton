@@ -2,11 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "common.h"
-#include "int.h"
-#include "list_impl.h"
-
-
+#include "builtin.h"
  
 typedef struct $list$__methods__ {
   $list (*copy)($list self);
@@ -141,16 +137,16 @@ long $list_len($list lst) {
 
 // Container ///////////////////////////////////////////////////////////////////////////
 
-int $list_contains($list lst, $WORD elem, $bool (*eq)($WORD,$WORD)) {
+int $list_contains(Eq w, $list lst, $WORD elem) {
   for (int i=0; i < lst->length; i++) {
-    if (from$bool(eq(elem,lst->data[i])))
+    if (from$bool(w->__class__->__eq__(w,elem,lst->data[i])))
       return 1;
   }
   return 0;
 }
 
-int $list_containsnot($list lst, $WORD elem, $bool (*eq)($WORD,$WORD)) {
-  return !$list_contains(lst,elem,eq);
+int $list_containsnot(Eq w, $list lst, $WORD elem) {
+  return !$list_contains(w,lst,elem);
 }
 
   

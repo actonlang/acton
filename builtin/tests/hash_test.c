@@ -5,7 +5,7 @@
 
 int main() {
 
-  Hashable wit = Hashable$str_new();
+  Hashable wit = (Hashable)Hashable$str_new();
   printf("hash of %d is %ld\n",543,$int_hash(to$int(543)));
   printf("hash of %d is %ld\n",-1,$int_hash(to$int(-1)));
   printf("hash of %d is %ld\n",-5,$int_hash(to$int(-5)));

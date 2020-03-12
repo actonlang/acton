@@ -164,7 +164,7 @@ transChain mb ps e (c : cs)             = c2{dname = c2nm, dbody = sigs} : trans
          c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
          witType                        = maybe (tCon tc) id mb
          sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]) mb 
-                                          ++ addWitnesses ws (dbody c2)
+                                          ++ nub (addWitnesses ws (dbody c2))
 
 
 substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)

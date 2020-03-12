@@ -15,7 +15,7 @@ void printSequence(Sequence wit, $WORD seq) {
   printf("]\n");
 }
 
-$list range(Sequence$list wit, long a, long b) {
+$list range(Sequence wit, long a, long b) {
   $list res = wit->_Collection->__class__->__fromiter__(wit->_Collection,NULL);
   for (long i=a; i<b; i++)
     wit->__class__->append(wit,res,to$int(i));
@@ -30,13 +30,12 @@ $list fromto(long a, long b) {
   return res;
 }
 */
-// concat : (Sequence[A(Plus)],A) -> A
-$WORD concat(Sequence wit1, Plus wit2, $WORD s, $WORD zero) {
+$WORD concat(Collection wit1, Indexed wit2, Plus wit3, $WORD s, $WORD zero) {
   $WORD res = zero;
-  $int len = wit1->_Collection->__class__->__len__(wit1->_Collection,s);
+  $int len = wit1->__class__->__len__(wit1,s);
   for (long i = 0; i < from$int(len); i++) {
-    $WORD nxt = wit1->__class__->__getitem__(wit1,s,to$int(i));
-    res = wit2->__class__->__add__(wit2,res,nxt);
+    $WORD nxt = wit2->__class__->__getitem__(wit2,s,to$int(i));
+    res = wit3->__class__->__add__(wit3,res,nxt);
   }
   return res;
 }
@@ -56,12 +55,12 @@ int main() {
   for (long i = 1; i< 10; i++) {
     wit->__class__->append(wit,lst,range(wit,i,2*i));
   }
-  printSequence(wit,concat(wit,wit->_Plus,lst,emptylist));
+  printSequence(wit,concat(wit->_Collection,(Indexed)wit,wit->_Plus,lst,emptylist));
   // and then to sum a list of integers
   $WORD lst2 = range(wit,1,100);
-  printf("1+2+...+99 = %ld\n",from$int(concat(wit,Plus$int_new(),lst2,to$int(0))));
+  printf("1+2+...+99 = %ld\n",from$int(concat(wit->_Collection,(Indexed)wit,(Plus)Plus$int_new(),lst2,to$int(0))));
   // and finally as a very complicated identity function for strings
-  // printf("result is '%s'\n",toUTF8(concat(Sequence$str_new(),Plus$str_new(),fromUTF8("Complicated identity function"),fromUTF8(""))));
+  printf("result is '%s'\n",toUTF8(concat((Collection)Container$str_new(),(Indexed)Sliceable$str_new(),(Plus)Plus$str_new(),fromUTF8("Complicated identity function"),fromUTF8(""))));
 }
                  
   
