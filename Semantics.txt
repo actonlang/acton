@@ -16,10 +16,10 @@ Expressions:        E       ::=     x  |  z  |  V  |  (A)  |  lambda F: E  |  C 
                                     E(A)  |  E.n  |  E.x  |  E if E else E  |  E is E  |
                                     await E  |  isinstance(E,C)  |  do S
 
-Actuals:            A       ::=     E,A    |  *E,M   |  M
+Actuals:            A       ::=     E,A    |  *E,M   |  M  |  ***E
 Mappings actuals:   M       ::=     x=E,M  |  **E  |  .
 
-Formals:            F       ::=     x,F  |  x=E,F  |  *x,K   |  K
+Formals:            F       ::=     x,F  |  x=E,F  |  *x,K   |  K  |   ***x
 Keyword formals:    K       ::=     x,K  |  x=E,K  |  **x  |  .
 
 Values:             V,W     ::=     True  |  False  |  None  |  (R)  |
@@ -52,8 +52,8 @@ Queues:             Q       ::=     m=E,Q  |  .                                 
 Histories:          H       ::=     m=V,H  |  m=do raise V, H  |  .                 associative & disjoint
 
 E-in-E contexts:    EE      ::=     _.x  |  _(A)  |  E if _ else E  |  
-                                    V(O,_,A)  |  V(O,*_,M)  |  V(R,x=_,M)  |  V(R,**_)  |
-                                    (O,_,A)  |  (O,*_,M)  |  (R,x=_,M)  |  (R,**_)  |
+                                    V(O,_,A)  |  V(O,*_,M)  |  V(O,***_)  |  V(R,x=_,M)  |  V(R,**_)  |
+                                    (O,_,A)  |  (O,*_,M)  |  (O,***_)  |  (R,x=_,M)  |  (R,**_)  |
                                     _ is E  |  V is _  |  await _  |  isinstance(_,C)
 
 E-in-S contexts:    SE      ::=     _  |  return _  |  x = _  |  (F) = _  |  if _: S else S  |
@@ -175,10 +175,11 @@ if True: S1 else S2         -->     S1
 if False: S1 else S2        -->     S2
 while E: S                  -->     if E: S; while E: S else pass
 
-(x,F) = (V,R)               -->     x = V; (F) = (R)
-(x=E,F) = (None,R)          -->     x = E; (F) = (R)
-(x=E,F) = (V,R)             -->     x = V; (F) = (R)
+(x,F) = (V,O,B)             -->     x = V; (F) = (O,B)
+(x=E,F) = (None,O,B)        -->     x = E; (F) = (O,B)
+(x=E,F) = (V,O,B)           -->     x = V; (F) = (O,B)
 (*x,K) = (O,B)              -->     x = (O); (K) = (B)
+(***x) = (O,B)              -->     x = (O,B)
 (x,K) = (x=V,B)             -->     x = V; (K) = (B)
 (x=E,K) = (x=None,B)        -->     x = E; (K) = (B)
 (x=E,K) = (x=V,B)           -->     x = V; (K) = (B)
