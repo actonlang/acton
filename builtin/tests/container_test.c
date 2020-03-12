@@ -2,31 +2,20 @@
 #include <stdio.h>
 #include "../builtin.h"
 
-Sequence fromto(long a, long b) {
-  Sequence$__class__ cl = Sequence$list_instance;  
-  $WORD res = cl->Collection$__methods__->__fromiter__( cl->Collection$__methods__,NULL)->__impl__;
+ 
+$list range(Sequence$list wit, long a, long b) {
+  $list res = wit->_Collection->__class__->__fromiter__(wit->_Collection,NULL);
   for (long i=a; i<b; i++)
-    cl->append(cl,res,to$int(i));
-  return Sequence$__pack__(cl,res);
+    wit->__class__->append(wit,res,to$int(i));
+  return res;
 }
-
-/*
-$bool $int__eq__(Eq$__class__ cl,$WORD a, $WORD b) {
-  return *($int)a ==  *($int)b;
-}
-
-$bool $int__neq__(Eq$__class__ cl,$WORD a, $WORD b) {
-  return *($int)a !=  *($int)b;
-}
-
-struct Eq$__class__ Eq$int_instance = {"...GC",$int__eq__,$int__neq__};
-*/
+ 
 int main() {
-  $WORD lst = fromto(1,100)->__impl__;
-  Container_Eq$__class__ cl = Container_Eq$list_instance(Eq$int_instance);
-  $bool b = cl->__contains__(cl,lst,to$int(17));
-  $bool c = cl->__contains__(cl,lst,to$int(171));
-  $bool d = cl->__contains__(cl,lst,to$int(100));
-  printf("results are %d, %d, %d\n",b,c,d);
+  $list lst = range(Sequence$list_new(),1,100);
+  Container$list wit2 = Container$list_new((Eq)Hashable$int_new());
+  $bool b = wit2->__class__->__contains__(wit2,lst,to$int(17));
+  $bool c = wit2->__class__->__contains__(wit2,lst,to$int(171));
+  $bool d = wit2->__class__->__contains__(wit2,lst,to$int(100));
+  printf("results are %d, %d, %d\n",from$bool(b),from$bool(c),from$bool(d));
 }
   

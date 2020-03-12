@@ -18,18 +18,24 @@ static Collection$list Collection$list_witness = &Collection$list_instance;
 static struct Plus$list$__class__ Plus$list_methods = {"", Plus$list$__add__};
 static struct Plus$list Plus$list_instance = {"", &Plus$list_methods, (Sequence)&Sequence$list_instance};
 static Plus$list Plus$list_witness = &Plus$list_instance;
- 
-Plus$list Plus$list_new() {
-  return Plus$list_witness;
-}
 
-Collection$list Collection$list_new() {
-  return Collection$list_witness;
-}
+static struct Container$list$__class__ Container$list_methods = {"",(Iterator (*)(Container$list, $list))Collection$list$__iter__,
+                                                                 ($list (*)(Container$list, Iterable$opaque))Collection$list$__fromiter__,
+                                                                 ($int (*)(Container$list, $list))Collection$list$__len__,
+                                        Container$list$__contains__,Container$list$__containsnot__};
 
 Sequence$list Sequence$list_new() {
   return Sequence$list_witness;
 }
+
+Container$list Container$list_new(Eq _EqA) {
+  Container$list res = malloc(sizeof(struct Container$list));
+  res->__class__ = &Container$list_methods;
+  res->_Eq = _EqA;
+  return res;
+}
+
+
 
 $list Plus$list$__add__ (Plus$list wit, $list a, $list b) {
   return $list_add(a,b);
@@ -76,11 +82,13 @@ None Sequence$list$__delslice__(Sequence$list wit, $list self, Slice slice) {
   $list_delslice(($list)self,slice);
 }  
 
-/*
-$bool __contains__(Container$list wit, $WORD self, $WORD);
-$bool __containsnot__(Container$list wit, $WORD self, $WORD);
-*/
-
+$bool Container$list$__contains__(Container$list wit, $list self, $WORD elem) {
+  return to$bool($list_contains(wit->_Eq,self,elem));
+}
+                 
+$bool Container$list$__containsnot__(Container$list wit, $list self, $WORD elem) {
+  return to$bool($list_containsnot(wit->_Eq,self,elem));
+}
 
 Iterator Iterable$list$reversed$__iter__(Iterable wit, $WORD lst) {
   return $list_reversed(lst);

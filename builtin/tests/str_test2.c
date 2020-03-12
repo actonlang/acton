@@ -31,8 +31,8 @@ int main() {
     $str s = fromUTF8("/abc/def/g.xml/");
     $list lst = s->__class__->split(s,fromUTF8("/"),NULL);
     printf("list has been split");
-    Collection$list wit4 = Collection$list_new();
-    $int len = wit4->__class__->__len__(wit4,lst);
+    Sequence$list wit4 = Sequence$list_new();
+    $int len = wit4->_Collection->__class__->__len__(wit4->_Collection,lst);
     for (long i=0; i < from$int(len); i++) {
       Sequence$list wit5 =  Sequence$list_new();
       printf("  '%s'\n",toUTF8(wit5->__class__->__getitem__(wit5,lst,to$int(i))));

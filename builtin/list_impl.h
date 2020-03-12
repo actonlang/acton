@@ -12,8 +12,8 @@ Iterator $list_iter($list lst);
 $list $list_fromiter(Iterator it);
 long $list_len($list lst);
 
-int $list_contains($list lst, $WORD elem, $bool (*eq)($WORD,$WORD));
-int $list_containsnot($list lst, $WORD elem, $bool (*eq)($WORD,$WORD));
+int $list_contains(Eq w,$list lst, $WORD elem);
+int $list_containsnot(Eq w, $list lst, $WORD elem);
 
 $WORD $list_getitem($list lst, int ix);
 void $list_setitem($list lst, int ix, $WORD val);
