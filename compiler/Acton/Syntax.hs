@@ -564,6 +564,9 @@ mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 isInstAttr (InstAttr _)             = True
 isInstAttr _                        = False
 
+isClassAttr (ClassAttr _)           = True
+isClassAttr _                       = False
+
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
