@@ -1108,7 +1108,7 @@ ttype    =  addLoc (
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)
-                       return (maybe (Builtin.pSet t) (Builtin.pMapping t) mbt))
+                       return (maybe (Builtin.tSet t) (Builtin.tMapping t) mbt))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
@@ -1120,7 +1120,7 @@ ttype    =  addLoc (
         <|> try (do (p,k) <- parens funrows
                     return (S.TTuple NoLoc p k))
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))
-        <|> try (brackets (Builtin.pSequence <$> ttype))
+        <|> try (brackets (Builtin.tSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> S.TCon NoLoc <$> tcon)

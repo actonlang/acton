@@ -429,7 +429,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nFloat,            NClass [] [] []),
                                 (nBool,             NClass [] [] []),
                                 (nStr,              NClass [] [] [
-                                                        (name "join",   NVar (monotype $ tFun0 [tSeq tStr] tStr)),
+                                                        (name "join",   NVar (monotype $ tFun0 [tSequence tStr] tStr)),
                                                         (name "strip",  NVar (monotype $ tFun0 [] tStr))
                                                     ]),
                                 (nRef,              NClass [] [] []),
@@ -456,8 +456,8 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
                                 (nLen,              NVar (tSchema [a] $ tFun0 [tCollection ta] tInt)),
-                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSeq tInt))),
-                                (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
+                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSequence tInt))),
+                                (nPrint,            NVar (tSchema [bounded pShow r] $ tFun fxNil tr kwdNil tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
                                 (nSetT,             NClass [a] [] [])
@@ -603,13 +603,15 @@ pushFX fx                               = state $ \st -> ((), st{ effectstack = 
 currFX                                  :: TypeM FXRow
 currFX                                  = state $ \st -> (head (effectstack st), st)
 
-equFX                                   :: Env -> FXRow -> TypeM ()
+equFX                                   :: Env -> FXRow -> TypeM Constraint
 equFX env fx                            = do fx0 <- currFX
-                                             constrain [Equ env fx fx0]
+                                             return $ Equ env fx fx0
+--                                             constrain [Equ env fx fx0]
 
-subFX                                   :: Env -> FXRow -> TypeM ()
+subFX                                   :: Env -> FXRow -> TypeM Constraint
 subFX env fx                            = do fx0 <- currFX
-                                             constrain [Sub env fx fx0]
+                                             return $ Sub env fx fx0
+--                                             constrain [Sub env fx fx0]
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
