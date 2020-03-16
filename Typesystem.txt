@@ -216,18 +216,19 @@ N |- \x:x : t < ?t                                                              
 
 
 
-N |- w : [o/q]q                                                                     N,v:q |- w : t < t'     dom(q) not in fv(N)
------------------------------- (SubInst)                                            ------------------------------------------- (SubGen)
-N |- \x:x(w) : [q]=>t < [o/q]t                                                      N |- \x:\v:w(x) : t < [q] => t'
+N |- w : [o/q]q                                                                     N,v:q |- w : T < t     dom(q) not in fv(N,T)
+------------------------------ (SubInst)                                            -------------------------------------------- (SubGen)
+N |- \y:y(w) : [q]=>t < [o/q]t                                                      N |- \x:\v:w(x) : T < [q] => t
 
 
 
 ***** N |- E : T | e *******************************************************************************************************************************************
 
 
-N |- E : T | e ~> E'     N |- w : T < T'
----------------------------------------- (Sub)
-N |- E : T' | e  ~>  w(E')
+N |- E : T | e ~> E'     N |- w : T < T'                                            N,v:q |- E : t ~> E'     dom(v) not in fv(N)
+---------------------------------------- (Sub)                                      -------------------------------------------- (Gen)
+N |- E : T' | e  ~>  w(E')                                                          N |- E : [q]=>t  ~>  \v:E'
+
 
                                                                                     N |- _self_ : Ref[X]
 ------------------------- (Var)                                                     -------------------------------------- (Read)
@@ -378,8 +379,26 @@ N |- S : t | e,st[X]    X not in fv(N,t)
 N |- S : t | e
 
 
-****************************************************************************************************************************************************************
-****************************************************************************************************************************************************************
+
+################################################################################################################################################################
+################################################################################################################################################################
+
+
+N,v:B(Ord) |- v._Eq_ : B(Eq)
+------------------------------------------------- (SubInst)
+N,v:B(Ord) |- \y:y(v._Eq_) : [A(Eq)]=>t[A] < t[B]
+-------------------------------------------------------------- (SubGen)
+N |- \x:\v:(\y:y(v._Eq_))(x)  : [A(Eq)]=>t[A] < [B(Ord)]=>t[B]
+N |- \x:\v:    x(v._Eq_)      : [A(Eq)]=>t[A] < [B(Ord)]=>t[B]
+
+
+N,v:A(Eq) |- \a,b: Eq._eq_(a,b) : (A,A)->bool  ~>  \a,b: v._eq_(a,b)
+------------------------------------------------------------------------- (Gen)
+N |- \a,b: Eq._eq_(a,b) : [A(Eq)]=>(A,A)->bool  ~>  \v':\a,b: v'._eq_(a,b)         N |- \x:\v:x(v._Eq_) : [A(Eq)]=(A,A)->bool[A] < [B(Ord)]=>(B,B)->bool[B]
+----------------------------------------------------------------------------------------------------------------------------------------------------------- (Sub)
+N |- \a,b: Eq._eq_(a,b) : [B(Ord)]=>(B,B)->bool  ~>  (\x:\v:x(v._Eq_))(\v':\a,b: v'._eq_(a,b))
+N |- \a,b: Eq._eq_(a,b) : [B(Ord)]=>(B,B)->bool  ~>      \v:(\v':\a,b: v'._eq_(a,b))(v._Eq_)
+N |- \a,b: Eq._eq_(a,b) : [B(Ord)]=>(B,B)->bool  ~>      \v:\a,b: v._Eq_._eq_(a,b)
 
 ###################################################################################
 
@@ -469,22 +488,6 @@ class Maximal_list[A] (Maximal[list[A],A]):
     
 
 ###################################################################################
-
-
-#################################################################################################################################
-E.x             |                               |   @inst               |   @class                      |   @static             |
----------------------------------------------------------------------------------------------------------------------------------
-E:u ~ class     |   _ : u < class(x:T)          |   E'.x                |   E'.x                        |   E'.x                |
-E:u ~ class     |   w : u ext protocol(x:T)     |   -                   |   w.x(E')                     |   w.x                 |
-E:u ~ protocol  |   w : u < protocol(x:T)       |   -                   |   w(E'._proto_).x(E'._impl_)  |   w(E'._proto_).x     |
-#################################################################################################################################
-c.x             |                               |                       |   @class                      |   @static             |
----------------------------------------------------------------------------------------------------------------------------------
-c[o] ~ class    |   _ : c[o] < class(x:T)       |                       |   c.x                         |   c.x                 |
-c[o] ~ class    |   w : c[o] ext protocol(x:T)  |                       |   w.x                         |   w.x                 |
-c[o] ~ protocol |   w : c[o] < protocol(x:T)    |   w' : u impl c[o]    |   w(w').x                     |   w(w').x             |
-#################################################################################################################################
-
 
 
 CONV(cs) =
@@ -875,45 +878,3 @@ MRO(tt_2)       = [tt,Ord,Eq]
 
 ****************************************************************************************************************************************************************
 ****************************************************************************************************************************************************************
-
-
-The defs of an actor
---------------------
-
-Fundamentals objectives:
--   Actors are concurrent
--   Actors communicate both asynchronously and synchronously
--   Actor methods are first class values (like ordinary Python defs)
--   An actor must not leak references to its state to other actors
--   Synchronous communication must be restricted to avoid deadlocks
--   Actor programming must look "familiar" to Python programmers
-
-Decision points:
-
-A.  Should actor methods be marked by special syntax?
-    A1. Yes, by "async" and (default) "sync"
-    A2. Yes, by "async" throughout
-    A3. No, the context (def within an actor) sets the actor method status <<<<<<<<<<<<<<<<<<<<<<<<<<
-    A4. Like A3, but only if state variables are also referenced
-
-B.  Should the asynchronous/synchronous choice reside with the callee or the caller?
-    B1. With the callee, based on syntax (choice A1 above)
-    B2. With the callee (like B1), but overridable by the caller (e.g. by "await")
-    B3. With the caller, based on context (result ignored or not)
-    B4. With the caller, based on special syntax ("await") <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-C.  Should actor methods have types (behaviors) distinct from ordinary defs?
-    C1. No (unlikely to work...)
-    C2. Yes, always
-    C3. Yes, but only when viewed from another actor <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-D.  Should conversion between internal and external method types be explicit or implicit?
-    D1. Explicit (writing "async my_meth" instead of just "my_meth" at exposed places)
-    D2. Implicit, based on type inference <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< (+ caveat)
-
-E.  Is a postponed method call an internal or external method reference?
-    E1. External, all async messages can be postponed (with non-deterministic cancel)
-    E2. Internal, with deterministic cancel (but dedicated syntax) <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-
-*********************************************************************************************************
