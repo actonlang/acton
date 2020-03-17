@@ -254,9 +254,12 @@ instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
 instance KCheck TSchema where
-    kchk env (TSchema l q t d)      = TSchema l <$> kchkQual env q <*> kexp KType env1 t <*> return d
+    kchk env (TSchema l q t d)
+      | null ambig                  = TSchema l <$> kchkQual env q <*> kexp KType env1 t <*> return d
+      | otherwise                   = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
       where env1 | null q           = extvars (tyfree t \\ tvars env) env
                  | otherwise        = extvars (tybound q) env
+            ambig                   = tybound q \\ tyfree t
 
 kchkQual env []                     = return []
 kchkQual env (TBind v us : q)
