@@ -400,10 +400,12 @@ instantiate env (TSchema _ q t _)
 
 -- Environment unification ----------------------------------------------------------------------------------------------------------
 
-unifyTEnv                               :: Env -> [TEnv] -> [Name] -> TypeM ()              -- commonTEnv
-unifyTEnv env tenvs []                  = return ()
+unifyTEnv                               :: Env -> [TEnv] -> [Name] -> TypeM Constraints              -- commonTEnv
+unifyTEnv env tenvs []                  = return []
 unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
-                                            ni:nis -> mapM (unif ni) nis >> unifyTEnv env tenvs vs
+                                            ni:nis -> do css <- mapM (unif ni) nis
+                                                         cs <- unifyTEnv env tenvs vs
+                                                         return (concat css ++ cs)
   where
     unif (NVar t) (NVar t')             = unifT t t'
     unif (NSVar t) (NSVar t')           = unifT t t'
@@ -416,7 +418,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif _ _                            = err1 v "Inconsistent bindings for"
 
     unifT (TSchema _ [] t d) (TSchema _ [] t' d')
-      | d == d'                         = constrain [Equ env t t']
+      | d == d'                         = return [Equ env t t']
     unifT t t'                          = err1 v "Cannot merge bindings of polymorphic type"
     
     unifC q us te q' us' te'
@@ -437,7 +439,7 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nFloat,            NClass [] [] []),
                                 (nBool,             NClass [] [] []),
                                 (nStr,              NClass [] [] [
-                                                        (name "join",   NVar (monotype $ tFun0 [tSeq tStr] tStr)),
+                                                        (name "join",   NVar (monotype $ tFun0 [tSequence tStr] tStr)),
                                                         (name "strip",  NVar (monotype $ tFun0 [] tStr))
                                                     ]),
                                 (nRef,              NClass [] [] []),
@@ -464,8 +466,8 @@ envBuiltin                  = [ (nSequence,         NProto [a] [] []),          
                                 (nValueError,       NClass [] [cException] []),
                                 (nShow,             NProto [] [] []),
                                 (nLen,              NVar (tSchema [a] $ tFun0 [tCollection ta] tInt)),
-                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSeq tInt))),
-                                (nPrint,            NVar (tSchema [bounded cShow r] $ tFun fxNil tr kwdNil tNone)),
+                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSequence tInt))),
+                                (nPrint,            NVar (tSchema [bounded pShow r] $ tFun fxNil tr kwdNil tNone)),
                                 (nDict,             NClass [a,b] [] []),
                                 (nList,             NClass [a] [] []),
                                 (nSetT,             NClass [a] [] [])
@@ -575,14 +577,13 @@ type TVarMap                            = Map TVar Type
 
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
-                                                constraints     :: Constraints,
                                                 effectstack     :: [FXRow],
                                                 deferred        :: Constraints,
                                                 currsubst       :: TVarMap,
                                                 dumped          :: SrcInfo
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, constraints = [], effectstack = [], deferred = [], currsubst = s, dumped = [] }
+initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s, dumped = [] }
 
 type TypeM a                            = State TypeState a
 
@@ -599,25 +600,19 @@ runTypeM m                              = case evalState (runExceptT m) (initTyp
 newUnique                               :: TypeM Int
 newUnique                               = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
-constrain                               :: Constraints -> TypeM ()
-constrain cs                            = state $ \st -> ((), st{ constraints = cs ++ constraints st })
-
-collectConstraints                      :: TypeM Constraints
-collectConstraints                      = state $ \st -> (constraints st, st{ constraints = [] })
-
 pushFX                                  :: FXRow -> TypeM ()
 pushFX fx                               = state $ \st -> ((), st{ effectstack = fx : effectstack st })
 
 currFX                                  :: TypeM FXRow
 currFX                                  = state $ \st -> (head (effectstack st), st)
 
-equFX                                   :: Env -> FXRow -> TypeM ()
+equFX                                   :: Env -> FXRow -> TypeM Constraint
 equFX env fx                            = do fx0 <- currFX
-                                             constrain [Equ env fx fx0]
+                                             return $ Equ env fx fx0
 
-subFX                                   :: Env -> FXRow -> TypeM ()
+subFX                                   :: Env -> FXRow -> TypeM Constraint
 subFX env fx                            = do fx0 <- currFX
-                                             constrain [Sub env fx fx0]
+                                             return $ Sub env fx fx0
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })

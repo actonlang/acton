@@ -312,7 +312,7 @@ instance KInfer Type where
                                          case k of
                                             KProto -> return (KType, TExist l c)
                                             _ -> do kunify l k KType; return (KType, TCon l c)
-    kinfer env (TExist l p)         = do p <- kexp KType env p
+    kinfer env (TExist l p)         = do p <- kexp KProto env p
                                          return (KType, TExist l p)
     kinfer env (TFun l fx p k t)    = do fx <- kexp XRow env fx
                                          p <- kexp PRow env p
