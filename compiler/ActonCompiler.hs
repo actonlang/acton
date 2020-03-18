@@ -13,6 +13,7 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.CodeGen
+import qualified Acton.Builtin
 {-
 import qualified Yang.Syntax as Y
 import qualified Yang.Parser
@@ -49,6 +50,7 @@ data Args       = Args {
 --                    expand  :: Bool,
                     make    :: Bool,
                     verbose :: Bool,
+                    nobuiltin :: Bool,
                     syspath :: String,
                     files   :: [String]
                 }
@@ -70,6 +72,7 @@ getArgs         = Args
 --                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
                     <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
+                    <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> some (argument str (metavar "FILES"))
 
@@ -88,7 +91,8 @@ treatOneFile args
                                         if make args
                                          then do let task = ActonTask mn src tree
                                                  chaseImportsAndCompile args paths task
-                                         else do runRestPasses args paths src Acton.Env.initEnv tree
+                                         else do env0 <- Acton.Env.initEnv (nobuiltin args)
+                                                 runRestPasses args paths src env0 tree
                                                  return ())
                                           `catch` handle Acton.Parser.parserError "" paths
 {-
@@ -174,42 +178,46 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
 
 runRestPasses args paths src env original = (do
                           let outbase = outBase paths
+                              initnms =  Acton.Env.names env
                           env' <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env original
-                          
                           kchecked <- Acton.Kinds.check env' original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
                           
                           (sigs,tchecked,tyinfo) <- Acton.Types.reconstruct outbase env' kchecked
                           iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
-                              
-                          normalized <- Acton.Normalizer.normalize (sigs,env') tchecked
-                          iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                          deacted <- Acton.Deactorizer.deactorize env' normalized
-                          iff (deact args) $ dump "deact" (Pretty.print deacted)
+                          if (not (nobuiltin args)) 
+                           then do
+                            normalized <- Acton.Normalizer.normalize (sigs,env') tchecked
+                            iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                          cpstyled <- Acton.CPS.convert [] deacted
-                          iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+                            deacted <- Acton.Deactorizer.deactorize env' normalized
+                            iff (deact args) $ dump "deact" (Pretty.print deacted)
 
-                          lifted <- Acton.LambdaLifter.liftModule cpstyled
-                          iff (llift args) $ dump "llift" (Pretty.print lifted)
+                            cpstyled <- Acton.CPS.convert [] deacted
+                            iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+
+                            lifted <- Acton.LambdaLifter.liftModule cpstyled
+                            iff (llift args) $ dump "llift" (Pretty.print lifted)
                                 
-                          c <- Acton.CodeGen.generate env' lifted
-                          iff (cgen args) $ dump "cgen" c
+                            c <- Acton.CodeGen.generate env' lifted
+                            iff (cgen args) $ dump "cgen" c
 {-        
-                          py3 <- Backend.Persistable.replace py2
-                          iff (persist args) $ dump "persist" (Pretty.vprint py3) 
+                            py3 <- Backend.Persistable.replace py2
+                            iff (persist args) $ dump "persist" (Pretty.vprint py3) 
     
-                          writeFile (outbase ++ ".py") (Pretty.vprint py3)
-                          unless (projSrcRoot paths == projSysRoot paths)
-                             $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
+                            writeFile (outbase ++ ".py") (Pretty.vprint py3)
+                            unless (projSrcRoot paths == projSysRoot paths)
+                               $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
-                          return (Acton.Env.dropNames env',sigs))
-                             `catch` handle generalError src paths
-                             `catch` handle Acton.Kinds.kindError src paths
-                             `catch` handle Acton.Env.checkerError src paths
-                             `catch` handle Acton.Types.solverError src paths
+                            return (env'{Acton.Env.names = initnms},sigs)
+                           else return (undefined,undefined)
+                             )
+                               `catch` handle generalError src paths
+                               `catch` handle Acton.Kinds.kindError src paths
+                               `catch` handle Acton.Env.checkerError src paths
+                               `catch` handle Acton.Types.solverError src paths
 
 
 handle f src paths ex = do putStrLn "\n********************"
@@ -255,7 +263,8 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs)        = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do foldM (doTask args paths) (Acton.Env.initEnv,[])
+                             then do env0 <- Acton.Env.initEnv False
+                                     foldM (doTask args paths) (env0,[])
                                            ([PythonTask (A.modName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
