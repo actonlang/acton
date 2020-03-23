@@ -29,9 +29,9 @@ structs (Decl  _ ds)                    = map strs ds
                      
 instance CPretty Stmt where
     cpretty (Decl _ ds)                 = vcat (map cpretty ds)
-    cpretty (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
+    cpretty (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) _)
                                         = vcat (map (\n -> resultTuple r <+> parens (text "*"<> cpretty n)<>parens (cprettyPosRow p) <>semi) ns)
-    cpretty (Signature _ ns tsc)        = vcat (map (\n ->cpretty tsc<+> cpretty n<>semi) ns)
+    cpretty (Signature _ ns tsc _)      = vcat (map (\n ->cpretty tsc<+> cpretty n<>semi) ns)
                                           
 instance CPretty Decl where
    cpretty (Class _ nm qs bs ss)
@@ -67,7 +67,7 @@ instance CPretty TCon where
    cpretty (TC qn _)                = cpretty qn
 
 instance CPretty TSchema where
-    cpretty (TSchema _ _ t _)       = cpretty t
+    cpretty (TSchema _ _ t)         = cpretty t
 
 instance CPretty Name where
     cpretty (Name _ "int")          = text "$int"
@@ -115,10 +115,10 @@ witness_struct cnm is                   = text "struct" <+> cnm <+> text "{" $+$
 class_struct nm ms                      = text "struct" <+> cpretty nm<>text "$__class__" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty . addparSig nm) ms)) $+$
                                           text "};"
-  where addparSig nm sig@(Signature _ _ (TSchema _ _ _ StaticMethod))
+  where addparSig nm sig@(Signature _ _ (TSchema _ _ _) StaticMethod)
                                         = sig
-        addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r) d))
-                                        =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r) d)
+        addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r)) d)
+                                        =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d
 
 addFstElem nm p                         = TRow NoLoc PRow (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
 
@@ -131,9 +131,9 @@ opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" 
                                           blank
 
 fun_prototypes nm ss                    = vcat (map proto ss)
-  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) StaticMethod))
+  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) StaticMethod)
          --                               = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
-         proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r) _))
+         proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) _)
                                         = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow (addFstElem nm p)) <>semi) ns)
 
 

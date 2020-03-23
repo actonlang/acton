@@ -39,7 +39,7 @@ data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], 
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
-                            | NSig      TSchema
+                            | NSig      TSchema Decoration
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
                             | NExt      QName [TBind] [TCon]
@@ -60,7 +60,7 @@ instance Pretty Env where
     pretty env                  = vcat (map pretty (names env))
 
 instance Pretty (Name,NameInfo) where
-    pretty (n, NVar t)          = prettySig [n] t
+    pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
@@ -76,7 +76,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
-    pretty (n, NSig t)          = pretty n <+>  colon <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
     pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
@@ -88,7 +88,7 @@ instance Subst Env where
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
-    msubst (NSig t)             = NSig <$> msubst t
+    msubst (NSig t d)           = NSig <$> msubst t <*> return d
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
@@ -101,7 +101,7 @@ instance Subst NameInfo where
 
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
-    tyfree (NSig t)             = tyfree t
+    tyfree (NSig t d)           = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
@@ -155,7 +155,7 @@ instance Unalias QName where
                                         _ -> error ("### unalias " ++ prstr n)
                                     
 instance Unalias TSchema where
-    unalias env (TSchema l q t d)   = TSchema l (unalias env q) (unalias env t) d
+    unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
 
 instance Unalias TCon where
     unalias env (TC qn ts)          = TC (unalias env qn) (unalias env ts)
@@ -175,7 +175,7 @@ instance Unalias Type where
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
-    unalias env (NSig t)            = NSig (unalias env t)
+    unalias env (NSig t d)          = NSig (unalias env t) d
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
@@ -188,7 +188,7 @@ instance Unalias NameInfo where
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
     
--- TEnv construction helpers and queries ---------------------------------------------------------------------------------------
+-- TEnv construction helpers and filters ---------------------------------------------------------------------------------------
     
 nTVars                      :: [TBind] -> TEnv                              -- infEnv (ExceptAs), Env.defineTVars, Env.defineSelf'
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
@@ -196,8 +196,8 @@ nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 nVars                       :: TEnv -> Schemas                              -- dump INS/GEN, gen1, infEnv Data, env2row (Actor), checkBindings (inherited,undefs)
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
-nSigs                       :: TEnv -> Schemas                              -- checkBindings (inherited,refinements,unsigs,allsigs)
-nSigs te                    = [ (n,sc) | (n, NSig sc) <- te ]
+nSigs                       :: TEnv -> TEnv                                 -- checkBindings (inherited,refinements,unsigs,allsigs)
+nSigs te                    = [ (n,i) | (n, i@NSig{}) <- te ]
                                 
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
@@ -267,15 +267,15 @@ reserved n env              = case lookup n (names env) of
 
 reservedOrSig               :: Name -> Env -> Bool                          -- infEnv (actor,def,PVar)
 reservedOrSig n env         = case lookup n (names env) of
-                                Just NReserved -> True
-                                Just (NSig t)  -> True
-                                _              -> False
+                                Just NReserved  -> True
+                                Just (NSig t d) -> True
+                                _               -> False
 
 findName                    :: Name -> Env -> NameInfo                      -- Env (findQName,findSubBound,findImplBound)
 findName n env              = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just NReserved -> nameReserved n
-                                Just (NSig t) -> nameReserved n
+                                Just (NSig t d) -> nameReserved n
                                 Just NBlocked -> nameBlocked n
                                 Just info -> info
                                 Nothing -> nameNotFound n
@@ -304,7 +304,7 @@ findVarType                 :: QName -> Env -> TSchema                          
 findVarType n env           = case findQName n env of
                                 NVar t         -> t
                                 NSVar t        -> t
-                                NSig t         -> t
+                                NSig t d       -> t
                                 _              -> internal (loc n) ("Unexpected variable name: " ++ prstr n)
 
 
@@ -340,14 +340,14 @@ findSubAxiom env c n
   where (proto,us,_)        = findCon env c
         hits                = [ u | u <- us, tcname u == n ]
 
-findAttr                    :: Env -> TCon -> Name -> TSchema                               -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
+findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)                  -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
 findAttr env u n            = findIn (te ++ concat tes)
   where (_,us,te)           = findCon env u
         tes                 = [ te' | u' <- us, let (_,_,te') = findCon env u' ]
         findIn te1          = case lookup n te1 of
-                                Just (NVar t)         -> t
-                                Just (NSVar t)        -> t
-                                Just (NSig t)         -> t
+                                Just (NVar t)         -> (t,NoDec)
+                                Just (NSVar t)        -> (t,NoDec)
+                                Just (NSig t d)       -> (t,d)
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                            -- mro, checkBindings, Env.findSubAxiom, Env.findAttr
@@ -378,16 +378,16 @@ findImplBound tv env        = case findName (tvname tv) env of
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
 instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)                  -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
-instantiate env (TSchema _ [] t _)
+instantiate env (TSchema _ [] t)
                             = return ([], t)
-instantiate env (TSchema _ q t _)
+instantiate env (TSchema _ q t)
                             = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
                                  let s = tybound q `zip` tvs
                                  cs <- sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
                                  return (cs, subst s t)
   where constr t u@(TC n _)
-          | isProto n env   = do w <- newName "inst"; return $ Impl w env t u
-          | otherwise       = return $ Sub env t (tCon u)
+          | isProto n env   = do w <- newName "inst"; return $ Impl w t u
+          | otherwise       = do w <- newName "subinst"; return $ Sub (Just w) t (tCon u)
 
 
 
@@ -402,7 +402,8 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
   where
     unif (NVar t) (NVar t')             = unifT t t'
     unif (NSVar t) (NSVar t')           = unifT t t'
-    unif (NSig t) (NSig t')             = unifT t t'
+    unif (NSig t d) (NSig t' d')
+      | d == d'                         = unifT t t'
     unif (NClass q us te) (NClass q' us' te') 
                                         = unifC q us te q' us' te'
     unif (NProto q us te) (NProto q' us' te') 
@@ -410,9 +411,8 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif (NExt _ q us) (NExt _ q' us')  = unifC q us [] q' us' []
     unif _ _                            = err1 v "Inconsistent bindings for"
 
-    unifT (TSchema _ [] t d) (TSchema _ [] t' d')
-      | d == d'                         = return [Equ env t t']
-    unifT t t'                          = err1 v "Cannot merge bindings of polymorphic type"
+    unifT (TSchema _ [] t) (TSchema _ [] t')
+                                        = return [Sub Nothing t t']
     
     unifC q us te q' us' te'
       | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
@@ -534,31 +534,27 @@ importAll m te              = mapMaybe imp te
 -- Type inference monad ------------------------------------------------------------------
 
 
-data Constraint                         = Equ       Env Type Type
-                                        | Sub       Env Type Type
-                                        | EquGen    Env TSchema TSchema
-                                        | SubGen    Env TSchema TSchema
-                                        | Impl      Name Env Type TCon
-                                        | Sel       Env Type Name Type
-                                        | Mut       Env Type Name Type
+data Constraint                         = Sub       (Maybe Name) Type Type
+                                        | Impl      Name Type TCon
+                                        | Qual      Name [TBind] [Constraint]
+                                        | Sel       Type Name Type
+                                        | Mut       Type Name Type
 
-instance HasLoc Constraint where                 -- TODO: refine
-    loc (Equ _ t _)                     = loc t
-    loc (Sub _ t _)                     = loc t
-    loc (EquGen _ sc _)                 = loc sc
-    loc (SubGen _ sc _)                 = loc sc
-    loc (Impl _ _ t _)                  = loc t
-    loc (Sel _ t _ _)                   = loc t
-    loc (Mut _ t _ _)                   = loc t
+instance HasLoc Constraint where
+    loc (Sub  _ t _)                    = loc t
+    loc (Impl _ t _)                    = loc t
+    loc (Qual _ q cs)                   = loc (head cs)
+    loc (Sel t _ _)                     = loc t
+    loc (Mut t _ _)                     = loc t
 
 instance Pretty Constraint where
-    pretty (Equ _ t1 t2)                = pretty t1 <+> text "  =  " <+> pretty t2
-    pretty (Sub _ t1 t2)                = pretty t1 <+> text "  <  " <+> pretty t2
-    pretty (EquGen _ sc1 sc2)           = pretty sc1 <+> text "  =  " <+> pretty sc2
-    pretty (SubGen _ sc1 sc2)           = pretty sc1 <+> text "  <  " <+> pretty sc2
-    pretty (Impl w _ t u)               = pretty w <+> text ":" <+> pretty t <+> parens (pretty u)
-    pretty (Sel _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  =  " <+> pretty t2
-    pretty (Mut _ t1 n t2)              = pretty t1 <+> text " ." <> pretty n <> text "  :=  " <+> pretty t2
+    pretty (Sub Nothing t1 t2)          = text "_" <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub (Just w) t1 t2)         = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
+    pretty (Qual w q cs)                = pretty w <+> colon <+> brackets (commaSep pretty q) <> text "=>" <> 
+                                          parens (commaSep pretty cs)
+    pretty (Sel t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
+    pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":~" <+> pretty t2
 
 instance Show Constraint where
     show                                = render . pretty
@@ -598,13 +594,11 @@ pushFX fx                               = state $ \st -> ((), st{ effectstack = 
 currFX                                  :: TypeM FXRow
 currFX                                  = state $ \st -> (head (effectstack st), st)
 
-equFX                                   :: Env -> FXRow -> TypeM Constraint
-equFX env fx                            = do fx0 <- currFX
-                                             return $ Equ env fx fx0
+equFX env fx                            = subFX env Nothing fx
 
-subFX                                   :: Env -> FXRow -> TypeM Constraint
-subFX env fx                            = do fx0 <- currFX
-                                             return $ Sub env fx fx0
+subFX                                   :: Env -> Maybe Name -> FXRow -> TypeM Constraint
+subFX env w fx                          = do fx0 <- currFX
+                                             return $ Sub w fx fx0
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
@@ -630,11 +624,13 @@ getDump                                 = state $ \st -> (dumped st, st)
 
 newName s                               = Internal s <$> newUnique <*> return TypesPass
 
+newWitness                              = newName "w"
+
 newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return GenPass)
   where str KType                       = "V"
         str XRow                        = "X"
         str PRow                        = "P"
-        str KRow                        = "R"
+        str KRow                        = "K"
         str _                           = "C"
 
 newTVars ks                             = mapM newTVarOfKind ks
@@ -670,26 +666,23 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst Constraint where
-    msubst (Equ env t1 t2)          = Equ <$> msubst env <*> msubst t1 <*> msubst t2
-    msubst (Sub env t1 t2)          = Sub <$> msubst env <*> msubst t1 <*> msubst t1
-    msubst (EquGen env t1 t2)       = EquGen <$> msubst env <*> msubst t1 <*> msubst t1
-    msubst (SubGen env t1 t2)       = SubGen <$> msubst env <*> msubst t1 <*> msubst t1
-    msubst (Impl w env t c)         = Impl w <$> msubst env <*> msubst t <*> msubst c
-    msubst (Sel env t1 n t2)        = Sel <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
-    msubst (Mut env t1 n t2)        = Mut <$> msubst env <*> msubst t1 <*> return n <*> msubst t2
-    tyfree (Equ _ t1 t2)            = tyfree t1 ++ tyfree t2
-    tyfree (Sub _ t1 t2)            = tyfree t1 ++ tyfree t2
-    tyfree (EquGen _ t1 t2)         = tyfree t1 ++ tyfree t2
-    tyfree (SubGen _ t1 t2)         = tyfree t1 ++ tyfree t2
-    tyfree (Impl _ _ t c)           = tyfree t ++ tyfree c
-    tyfree (Sel _ t1 n t2)          = tyfree t1 ++ tyfree t2
-    tyfree (Mut _ t1 n t2)          = tyfree t1 ++ tyfree t2
+    msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t1
+    msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
+    msubst (Qual w q cs)            = Qual w <$> msubst q <*> msubst cs             -- TODO: refine as for TSchema below
+    msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
+
+    tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Impl w t p)             = tyfree t ++ tyfree p
+    tyfree (Qual w q cs)            = (tyfree q ++ tyfree cs) \\ tybound q
+    tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
-    msubst sc@(TSchema l q t dec)   = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
+    msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
             vs0                     = tyfree sc
-            msubst' s               = TSchema l (subst s q') (subst s t') dec
+            msubst' s               = TSchema l (subst s q') (subst s t')
               where vs              = tybound q
                     newvars         = tyfree (rng s)
                     clashvars       = vs `intersect` newvars
@@ -699,8 +692,8 @@ instance Subst TSchema where
                     q'              = [ TBind (subst renaming_s v) (subst renaming_s cs) | TBind v cs <- q ]
                     t'              = subst renaming_s t
 
-    tyfree (TSchema _ q t dec)      = (tyfree q ++ tyfree t) \\ tybound q
-    tybound (TSchema _ q t dec)     = tybound q
+    tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
+    tybound (TSchema _ q t)         = tybound q
 
 msubstRenaming                      :: Subst a => a -> TypeM (Substitution,Substitution)
 msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey relevant <$> getSubstitution
@@ -808,11 +801,11 @@ instance Subst Decl where
     
 instance Subst Stmt where
     msubst (Decl l ds)              = Decl l <$> msubst ds
-    msubst (Signature l ns tsc)     = Signature l ns <$> msubst tsc
+    msubst (Signature l ns tsc d)   = Signature l ns <$> msubst tsc <*> return d
     msubst s                        = return s
 
     tyfree (Decl l ds)              = tyfree ds
-    tyfree (Signature l ns tsc)     = tyfree tsc
+    tyfree (Signature l ns tsc d)   = tyfree tsc
     tyfree s                        = []
 
 
@@ -839,7 +832,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
                                     | DistinctDecorations Decoration Decoration
-                                    | EscapingVar [TVar] TSchema TSchema
+                                    | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
                                     | NoMutProto Name
@@ -859,7 +852,7 @@ instance HasLoc TypeError where
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
     loc (DistinctDecorations _ _)   = NoLoc
-    loc (EscapingVar tvs t1 t2)     = loc tvs
+    loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
     loc (NoSelInstByClass n u)      = loc n
     loc (NoMutProto n)              = loc n
@@ -875,8 +868,8 @@ typeError err                       = (loc err,render (expl err))
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
     expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
-    expl (EscapingVar tvs t1 t2)    = text "Cannot instantiate" <+> pretty t1 <+> text "to" <+> pretty t2 <+> 
-                                      text "because type variable" <+> pretty (head tvs) <+> text "escapes"
+    expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
+                                      pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
     expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
     expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
@@ -922,7 +915,7 @@ infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
 conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
 kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
 distinctDecorations d1 d2           = Control.Exception.throw $ DistinctDecorations d1 d2
-escapingVar tvs t1 t2               = Control.Exception.throw $ EscapingVar tvs t1 t2
+escapingVar tvs t                   = Control.Exception.throw $ EscapingVar tvs t
 noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
 noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
 noMutProto n                        = Control.Exception.throw $ NoMutProto n

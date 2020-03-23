@@ -44,12 +44,9 @@ instance Pretty Stmt where
     pretty (Data _ (Just e) b)      = pretty e <> colon $+$ prettySuite b
     pretty (Data _ Nothing b)       = text "return" <> colon $+$ prettySuite b
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
-    pretty (After _ e n ps ks)      = text "after" <+> pretty e <> colon <+> pretty n <> parens (pretty (ps,ks))
+    pretty (After _ e e')           = text "after" <+> pretty e <> colon <+> pretty e'
     pretty (Decl _ ds)              = vcat $ map pretty ds
-    pretty (Signature _ vs sc)      = prettySig vs sc
-
-prettySig vs (TSchema _ [] t d)     = prettyDec d $ commaList vs <+> text ":" <+> pretty t
-prettySig vs (TSchema _ q t d)      = prettyDec d $ commaList vs <+> text ":" <+> pretty q <+> text "=>" <+> pretty t
+    pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc
 
 instance Pretty Decl where
     pretty (Def _ n q ps ks a b d)  = (prettyDec d $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
@@ -319,9 +316,8 @@ instance Pretty Aug where
     pretty EuDivA                   = text "//="
 
 instance Pretty TSchema where
-    pretty (TSchema _ [] t NoDec)   = pretty t
-    pretty (TSchema _ q t NoDec)    = pretty q <+> text "=>" <+> pretty t
-    pretty (TSchema l q t d)        = pretty d <+> pretty (TSchema l q t NoDec)
+    pretty (TSchema _ [] t)         = pretty t
+    pretty (TSchema _ q t)          = pretty q <+> text "=>" <+> pretty t
 
 instance Pretty TVar where
     pretty (TV k n)                 = pretty n

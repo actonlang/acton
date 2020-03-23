@@ -43,7 +43,7 @@ import Debug.Trace
 ---------------------------------------------------------------------------------------------------
 
 data TransEnv                           = TransEnv {protocols :: [(Name,Decl)],
-                                                    dec :: Decoration,
+                                                    decor :: Decoration,
                                                     fstpar :: Maybe Type,
                                                     sub :: Substitution,
                                                     inherited :: Bool
@@ -76,7 +76,7 @@ instance Transform Module where
 
 instance Transform Stmt where
     trans env (Decl loc ds)             = Decl loc $ trans env ds
-    trans env (Signature loc ns t)      = Signature loc ns (subst (sub env) (trans env t))
+    trans env (Signature loc ns t d)    = Signature loc ns (subst (sub env) (trans (env{decor = d}) t)) (if d == StaticMethod then NoDec else d)
     trans env stmt                      = stmt
 
 instance Transform Decl where
@@ -91,12 +91,12 @@ instance Transform Decl where
     trans env ds                        = ds
 
 instance Transform TSchema where
-    trans env (TSchema loc bs t d)      = TSchema loc bs (trans (env{dec = d}) t) (if d == StaticMethod then NoDec else d) 
+    trans env (TSchema loc bs t)        = TSchema loc bs (trans env t)
                                               
 instance Transform Type where
     trans env (TTuple loc p k)          = TTuple loc (trans env p) (trans env k)
     trans env (TFun loc fx p k r)       = TFun loc fx p1 (trans env k) (trans env r)
-       where p1                         = if dec env == StaticMethod
+       where p1                         = if decor env == StaticMethod
                                           then trans env p
                                           else maybe (trans env p) (\t -> TRow loc PRow (name "???") (monotype t) (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t
@@ -115,7 +115,7 @@ opaque (TC qn ts)                       = TC (noQual "EXISTS") [t, tCon(TC qn (t
 
 -- adds witnesses to superprotocols other than the first mentioned.
 addWitnesses ws ss                      = map mkSig ws ++ ss
-  where mkSig tc                        = Signature NoLoc [name ('_' : nstr (noqual (tcname tc)))] (monotype (tCon tc))
+  where mkSig tc                        = Signature NoLoc [name ('_' : nstr (noqual (tcname tc)))] (monotype (tCon tc)) NoDec -- ???
 
 transParents tv bs                      = map addP bs
    where addP (TC qn ts)                = TC qn (tv : ts)
@@ -163,7 +163,7 @@ transChain mb ps e (c : cs)             = c2{dname = c2nm, dbody = sigs} : trans
          tc                             = head (bounds c2)
          c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
          witType                        = maybe (tCon tc) id mb
-         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType)]) mb 
+         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType) NoDec]) mb 
                                           ++ nub (addWitnesses ws (dbody c2))
 
 

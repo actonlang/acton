@@ -68,7 +68,7 @@ tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
 
 
 instance Pretty (Name,Kind) where
-    pretty (n,k)                    = pretty n <+> text ":" <+> pretty k
+    pretty (n,k)                    = pretty n <+> colon <+> pretty k
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -122,9 +122,9 @@ instance KCheck Stmt where
     kchk env (With l is b)          = With l <$> kchk env is <*> kchkSuite env b
     kchk env (Data l mbt ss)        = Data l <$> kchk env mbt <*> kchkSuite env ss
     kchk env (VarAssign l ps e)     = VarAssign l <$> kchk env ps <*> kchk env e
-    kchk env (After l e n ps ks)    = After l <$> kchk env e <*> return n <*> kchk env ps <*> kchk env ks
+    kchk env (After l e e')         = After l <$> kchk env e <*> kchk env e'
     kchk env (Decl l ds)            = Decl l <$> kchk env ds
-    kchk env (Signature l ns t)     = Signature l ns <$> kchk env t
+    kchk env (Signature l ns t d)   = Signature l ns <$> kchk env t <*> return d
 
 instance KCheck Decl where
     kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b <*> return m
@@ -254,8 +254,8 @@ instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
 instance KCheck TSchema where
-    kchk env (TSchema l q t d)
-      | null ambig                  = TSchema l <$> kchkQual env q <*> kexp KType env1 t <*> return d
+    kchk env (TSchema l q t)
+      | null ambig                  = TSchema l <$> kchkQual env q <*> kexp KType env1 t
       | otherwise                   = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
       where env1 | null q           = extvars (tyfree t \\ tvars env) env
                  | otherwise        = extvars (tybound q) env
@@ -380,7 +380,7 @@ instance KSubst Kind where
     ksubst k                        = return k
         
 instance KSubst TSchema where
-    ksubst (TSchema l q t dec)      = TSchema l <$> ksubst q <*> ksubst t <*> return dec
+    ksubst (TSchema l q t)          = TSchema l <$> ksubst q <*> ksubst t
 
 instance KSubst TVar where
     ksubst (TV k n)                 = TV <$> ksubst k <*> return n
@@ -422,9 +422,9 @@ instance KSubst Stmt where
     ksubst (With l is b)            = With l <$> ksubst is <*> ksubst b
     ksubst (Data l mbt ss)          = Data l <$> ksubst mbt <*> ksubst ss
     ksubst (VarAssign l ps e)       = VarAssign l <$> ksubst ps <*> ksubst e
-    ksubst (After l e n ps ks)      = After l <$> ksubst e <*> return n <*> ksubst ps <*> ksubst ks
+    ksubst (After l e e')           = After l <$> ksubst e <*> ksubst e'
     ksubst (Decl l ds)              = Decl l <$> ksubst ds
-    ksubst (Signature l ns t)       = Signature l ns <$> ksubst t
+    ksubst (Signature l ns t d)     = Signature l ns <$> ksubst t <*> return d
 
 instance KSubst Decl where
     ksubst (Def l n q p k ann b m)  = Def l n <$> ksubst q <*> ksubst p <*> ksubst k <*> ksubst ann <*> ksubst b <*> return m

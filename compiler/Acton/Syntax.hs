@@ -38,8 +38,8 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | With          { sloc::SrcLoc, context::[WithItem], body::Suite }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
-                | After         { sloc::SrcLoc, expr::Expr, meth::Name, argp::PosArg, argk::KwdArg }
-                | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema }
+                | After         { sloc::SrcLoc, expr::Expr, expr2::Expr }
+                | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema, dec::Decoration }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
@@ -176,7 +176,7 @@ data Decoration = NoDec | InstAttr Bool | ClassAttr Bool | StaticMethod deriving
     
 data Kind       = KType | KProto | XRow | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type, scdec::Decoration } deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -243,10 +243,8 @@ pVar n t        = PVar NoLoc n t
 taVar n         = TaVar NoLoc n
 taIndex e ix    = TaIndex NoLoc e [ix]
 
-monotype t      = TSchema NoLoc [] t NoDec
-monotype' t d   = TSchema NoLoc [] t d
-tSchema q t     = TSchema NoLoc q t NoDec
-tSchema' q t d  = TSchema NoLoc q t d
+monotype t      = TSchema NoLoc [] t
+tSchema q t     = TSchema NoLoc q t
 
 tBind v         = TBind v []
 
@@ -374,7 +372,7 @@ instance HasLoc Pattern where
     loc                 = ploc
 
 instance HasLoc TSchema where
-    loc (TSchema l _ _ _) = l
+    loc (TSchema l _ _) = l
 
 instance HasLoc TVar where
     loc (TV _ v)        = loc v
@@ -414,9 +412,9 @@ instance Eq Stmt where
     x@With{}            ==  y@With{}            = context x == context y && body x == body y
     x@Data{}            ==  y@Data{}            = mbpat x == mbpat y && dsuite x == dsuite y
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
-    x@After{}           ==  y@After{}           = expr x == expr y && meth x == meth y && argp x == argp y && argk x == argk y
+    x@After{}           ==  y@After{}           = expr x == expr y && expr2 x == expr2 y
     x@Decl{}            ==  y@Decl{}            = decls x == decls y
-    x@Signature{}       ==  y@Signature{}       = vars x == vars y && typ x == typ y
+    x@Signature{}       ==  y@Signature{}       = vars x == vars y && typ x == typ y && dec x == dec y
     _                   ==  _                   = False
 
 instance Eq Decl where
@@ -511,7 +509,7 @@ instance Eq Target where
 
 
 instance Eq TSchema where
-    TSchema _ q1 t1 d1  == TSchema _ q2 t2 d2   = q1 == q2 && t1 == t2 && d1 == d2
+    TSchema _ q1 t1     == TSchema _ q2 t2      = q1 == q2 && t1 == t2
 
 instance Eq TVar where
     TV k1 v1            == TV k2 v2             = v1 == v2
