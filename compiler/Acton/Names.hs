@@ -117,9 +117,9 @@ instance Vars Stmt where
     free (With _ items b)           = free items ++ (free b \\ bound items)
     free (Data _ p b)               = free p ++ free b
     free (VarAssign _ ps e)         = free ps ++ free e
-    free (After _ e n ps ks)        = n : free e ++ free ps ++ free ks
+    free (After _ e e')             = free e ++ free e'
     free (Decl _ ds)                = free ds
-    free (Signature _ ns t)         = free t
+    free (Signature _ ns t d)       = free t
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
@@ -131,7 +131,7 @@ instance Vars Stmt where
     bound (If _ bs els)             = concatMap bound bs ++ bound els
     bound (Delete _ p)              = bound p
     bound (Decl _ ds)               = bound ds
-    bound (Signature _ ns t)        = ns
+    bound (Signature _ ns t d)      = ns
     bound _                         = []
 
 instance Vars Decl where
@@ -333,7 +333,7 @@ instance Vars ModRef where
     bound _                         = []
 
 instance Vars TSchema where
-    free (TSchema _ q t d)          = free q ++ free t
+    free (TSchema _ q t)            = free q ++ free t
 
 instance Vars TVar where
     free (TV k v)                   = []

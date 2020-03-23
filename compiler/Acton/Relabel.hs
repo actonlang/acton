@@ -53,9 +53,9 @@ instance Relabel Stmt where
     relabel (With _ is b) = With <$> newLoc <*> relabel is <*> relabel b
     relabel (Data _ mbt ss) = Data <$> newLoc <*> relabel mbt <*> relabel ss
     relabel (VarAssign _ ps e) = VarAssign <$> newLoc <*> relabel ps <*> relabel e
-    relabel (After _ e n ps ks) = After <$> newLoc <*> relabel e <*> relabel n <*> relabel ps <*> relabel ks
+    relabel (After _ e e') = After <$> newLoc <*> relabel e <*> relabel e'
     relabel (Decl _ ds) = Decl <$> newLoc <*> relabel ds
-    relabel (Signature _ ns t) = Signature <$> newLoc <*> relabel ns <*> relabel t
+    relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
 
 instance Relabel Decl where
     relabel (Def _ n q ps ks ann ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel ss <*> return md
@@ -200,7 +200,7 @@ instance Relabel Sliz where
   relabel (Sliz _ e1 e2 e3) = Sliz <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
 
 instance Relabel TSchema where
-    relabel (TSchema _ q t d) = TSchema <$> newLoc <*> relabel q <*> relabel t <*> return d
+    relabel (TSchema _ q t) = TSchema <$> newLoc <*> relabel q <*> relabel t
 
 instance Relabel TVar where
     relabel (TV k n) = TV k <$> relabel n

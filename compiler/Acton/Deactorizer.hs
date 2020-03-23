@@ -72,14 +72,14 @@ instance Deact Stmt where
     deact env (With l is b)         = With l <$> deact env is <*> deact env b
     deact env (Data l mbt ss)       = Data l <$> deact env mbt <*> deact env ss
     deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
-                                         store [Signature l0 [n] (monotype t)]
+                                         store [Signature l0 [n] (monotype t) (InstAttr True)]
                                          Assign l <$> deact env ps <*> deact env e
-    deact env (After l e n ps _)    = do e' <- deact env e
-                                         ps' <- deact env ps
-                                         let lambda = Lambda l0 PosNIL KwdNIL (Call l0 (Dot l0 (Var l0 (NoQual selfKW)) n) ps' KwdNil)
-                                         return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e' $ PosArg lambda PosNil) KwdNil
+    deact env (After l e1 e2)       = do e1' <- deact env e1
+                                         e2' <- deact env e2
+                                         let lambda = Lambda l0 PosNIL KwdNIL e2'
+                                         return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e1' $ PosArg lambda PosNil) KwdNil
     deact env (Decl l ds)           = Decl l <$> deactD env ds
-    deact env (Signature l ns t)    = return $ Signature l ns t
+    deact env (Signature l ns t d)  = return $ Signature l ns t d
 
 deactD env []                       = return []
 deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds

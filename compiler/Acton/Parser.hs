@@ -81,8 +81,6 @@ assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success 
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
-ifDecl              = ifCtx [CLASS,PROTO]           [IF]
-
 --ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
 ifPar               = ifCtx [PAR]                   []
@@ -191,8 +189,8 @@ instance AddLoc S.Comp where
 
 instance AddLoc S.TSchema where
   addLoc p = do
-          (l, S.TSchema _ q t d) <- withLoc p
-          return $ S.TSchema l q t d
+          (l, S.TSchema _ q t) <- withLoc p
+          return $ S.TSchema l q t
 
 instance AddLoc S.Type where
   addLoc p = do
@@ -530,9 +528,11 @@ after_stmt = addLoc $ do
                 rword "after"
                 e <- expr
                 colon
-                n <- name
-                (ps,ks) <- parens funargs
-                return $ S.After NoLoc e n ps ks
+                e' <- addLoc $ do
+                    n <- name
+                    (ps,ks) <- parens funargs
+                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQual n)) ps ks
+                return $ S.After NoLoc e e'
 
 var_stmt :: Parser S.Stmt
 var_stmt = addLoc $ 
@@ -596,17 +596,12 @@ import_stmt = import_name <|> import_from
 assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr <*> optional (comma *> expr))
 
 signature :: Parser S.Stmt
-signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; return $ S.Signature NoLoc ns (adjust dec t))
+signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; return $ S.Signature NoLoc ns t dec)
    where tsig = do v <- name
                    vs <- commaList name
                    colon
                    t <- tschema
                    return (v:vs,t)
-         adjust (S.ClassAttr False) (S.TSchema l q t S.NoDec)       -- make default decoration depend on the tsig arity
-           | S.TFun{} <- t   = S.TSchema l q t (S.ClassAttr False)
-           | otherwise       = S.TSchema l q t (S.InstAttr False)
-         adjust dec (S.TSchema l q t S.NoDec)
-                             = S.TSchema l q t dec
 
 -- Declaration groups ------------------------------------------------------------------
 
@@ -629,7 +624,7 @@ decorator = do
    where decoration = rword "@classattr" *> assertDecl *> newline1 *> return (S.ClassAttr True)
                   <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
                   <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
-                  <|> ifDecl (return $ S.ClassAttr False) (return S.NoDec)
+                  <|> return S.NoDec
 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
