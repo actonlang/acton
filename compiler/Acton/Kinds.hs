@@ -73,7 +73,7 @@ instance Pretty (Name,Kind) where
 ---------------------------------------------------------------------------------------------------------------------
 
 kchkTop env ss                      = do ss <- kchkSuite env ss
-                                         ksubst ss
+                                         ksubst True ss
 
 class KCheck a where
     kchk                            :: KEnv -> a -> KindM a
@@ -297,7 +297,7 @@ instance KInfer TCon where
                                          (ks,ts) <- fmap unzip $ mapM (kinfer env) ts
                                          k <- newKVar
                                          kunify (loc n) kn (KFun ks k)
-                                         k <- ksubst k
+                                         k <- ksubst False k
                                          return (k, TC n ts)
 
 instance KInfer Type where
@@ -338,7 +338,7 @@ kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
                                          return t
 
-kunify l k1 k2                      = do k1 <- ksubst k1; k2 <- ksubst k2; kunify' l k1 k2
+kunify l k1 k2                      = do k1 <- ksubst False k1; k2 <- ksubst False k2; kunify' l k1 k2
 
 kunify' l (KVar v1) (KVar v2)
   | v1 == v2                        = return ()
@@ -362,184 +362,184 @@ kfree _                             = []
 -- Instantiate wildcards / apply kind substitution -------------------------------------------------------------------------
 
 class KSubst s where
-    ksubst                          :: s -> KindM s
+    ksubst                          :: Bool -> s -> KindM s
 
 instance KSubst a => KSubst [a] where
-    ksubst                          = mapM (ksubst)
+    ksubst g                        = mapM (ksubst g)
 
 instance KSubst a => KSubst (Maybe a) where
-    ksubst                          = maybe (return Nothing) (\x -> Just <$> ksubst x)
+    ksubst g                        = maybe (return Nothing) (\x -> Just <$> ksubst g x)
 
 instance KSubst Kind where
-    ksubst KWild                    = return KWild
-    ksubst (KVar v)                 = do s <- getSubstitution
+    ksubst g KWild                  = return KWild
+    ksubst g (KVar v)               = do s <- getSubstitution
                                          case Map.lookup v s of
-                                            Just k  -> ksubst k
-                                            Nothing -> return (KVar v)
-    ksubst (KFun ks k)              = KFun <$> mapM (ksubst) ks <*> ksubst k
-    ksubst k                        = return k
+                                            Just k  -> ksubst g k
+                                            Nothing -> return (if g then KType else KVar v)
+    ksubst g (KFun ks k)            = KFun <$> mapM (ksubst g) ks <*> ksubst g k
+    ksubst g k                      = return k
         
 instance KSubst TSchema where
-    ksubst (TSchema l q t)          = TSchema l <$> ksubst q <*> ksubst t
+    ksubst g (TSchema l q t)        = TSchema l <$> ksubst g q <*> ksubst g t
 
 instance KSubst TVar where
-    ksubst (TV k n)                 = TV <$> ksubst k <*> return n
+    ksubst g (TV k n)               = TV <$> ksubst g k <*> return n
     
 instance KSubst TCon where
-    ksubst (TC n ts)                = TC n <$> ksubst ts
+    ksubst g (TC n ts)              = TC n <$> ksubst g ts
 
 instance KSubst TBind where
-    ksubst (TBind v cs)             = TBind <$> ksubst v <*> ksubst cs
+    ksubst g (TBind v cs)           = TBind <$> ksubst g v <*> ksubst g cs
 
 instance KSubst Type where
-    ksubst (TVar l v)               = TVar l <$> ksubst v
-    ksubst (TCon l c)               = TCon l <$> ksubst c
-    ksubst (TExist l p)             = TExist l <$> ksubst p
-    ksubst (TFun l fx p k t)        = TFun l <$> ksubst fx <*> ksubst p <*> ksubst k<*> ksubst t
-    ksubst (TTuple l p k)           = TTuple l <$> ksubst p <*> ksubst k
-    ksubst (TUnion l as)            = return $ TUnion l as
-    ksubst (TOpt l t)               = TOpt l <$> ksubst t
-    ksubst (TNone l)                = return $ TNone l
-    ksubst (TNil l s)               = return $ TNil l s
-    ksubst (TRow l k n t r)         = TRow l k n <$> ksubst t <*> ksubst r
+    ksubst g (TVar l v)             = TVar l <$> ksubst g v
+    ksubst g (TCon l c)             = TCon l <$> ksubst g c
+    ksubst g (TExist l p)           = TExist l <$> ksubst g p
+    ksubst g (TFun l fx p k t)      = TFun l <$> ksubst g fx <*> ksubst g p <*> ksubst g k<*> ksubst g t
+    ksubst g (TTuple l p k)         = TTuple l <$> ksubst g p <*> ksubst g k
+    ksubst g (TUnion l as)          = return $ TUnion l as
+    ksubst g (TOpt l t)             = TOpt l <$> ksubst g t
+    ksubst g (TNone l)              = return $ TNone l
+    ksubst g (TNil l s)             = return $ TNil l s
+    ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
 
 instance KSubst Stmt where
-    ksubst (Expr l e)               = Expr l <$> ksubst e
-    ksubst (Assign l ts e)          = Assign l <$> ksubst ts <*> ksubst e
-    ksubst (Update l ts e)          = Update l <$> ksubst ts <*> ksubst e
-    ksubst (IUpdate l t op e)       = IUpdate l <$> ksubst t <*> return op <*> ksubst e
-    ksubst (Assert l e mbe)         = Assert l <$> ksubst e <*> ksubst mbe
-    ksubst (Pass l)                 = return $ Pass l
-    ksubst (Delete l p)             = Delete l <$> ksubst p
-    ksubst (Return l mbe)           = Return l <$> ksubst mbe
-    ksubst (Raise l mbex)           = Raise l <$> ksubst mbex
-    ksubst (Break l)                = return $ Break l
-    ksubst (Continue l)             = return $ Continue l
-    ksubst (If l bs els)            = If l <$> ksubst bs <*> ksubst els
-    ksubst (While l e b els)        = While l <$> ksubst e <*> ksubst b <*> ksubst els
-    ksubst (For l p e b els)        = For l <$> ksubst p <*> ksubst e <*> ksubst b <*> ksubst els
-    ksubst (Try l b hs els fin)     = Try l <$> ksubst b <*> ksubst hs <*> ksubst els <*> ksubst fin
-    ksubst (With l is b)            = With l <$> ksubst is <*> ksubst b
-    ksubst (Data l mbt ss)          = Data l <$> ksubst mbt <*> ksubst ss
-    ksubst (VarAssign l ps e)       = VarAssign l <$> ksubst ps <*> ksubst e
-    ksubst (After l e e')           = After l <$> ksubst e <*> ksubst e'
-    ksubst (Decl l ds)              = Decl l <$> ksubst ds
-    ksubst (Signature l ns t d)     = Signature l ns <$> ksubst t <*> return d
+    ksubst g (Expr l e)             = Expr l <$> ksubst g e
+    ksubst g (Assign l ts e)        = Assign l <$> ksubst g ts <*> ksubst g e
+    ksubst g (Update l ts e)        = Update l <$> ksubst g ts <*> ksubst g e
+    ksubst g (IUpdate l t op e)     = IUpdate l <$> ksubst g t <*> return op <*> ksubst g e
+    ksubst g (Assert l e mbe)       = Assert l <$> ksubst g e <*> ksubst g mbe
+    ksubst g (Pass l)               = return $ Pass l
+    ksubst g (Delete l p)           = Delete l <$> ksubst g p
+    ksubst g (Return l mbe)         = Return l <$> ksubst g mbe
+    ksubst g (Raise l mbex)         = Raise l <$> ksubst g mbex
+    ksubst g (Break l)              = return $ Break l
+    ksubst g (Continue l)           = return $ Continue l
+    ksubst g (If l bs els)          = If l <$> ksubst g bs <*> ksubst g els
+    ksubst g (While l e b els)      = While l <$> ksubst g e <*> ksubst g b <*> ksubst g els
+    ksubst g (For l p e b els)      = For l <$> ksubst g p <*> ksubst g e <*> ksubst g b <*> ksubst g els
+    ksubst g (Try l b hs els fin)   = Try l <$> ksubst g b <*> ksubst g hs <*> ksubst g els <*> ksubst g fin
+    ksubst g (With l is b)          = With l <$> ksubst g is <*> ksubst g b
+    ksubst g (Data l mbt ss)        = Data l <$> ksubst g mbt <*> ksubst g ss
+    ksubst g (VarAssign l ps e)     = VarAssign l <$> ksubst g ps <*> ksubst g e
+    ksubst g (After l e e')         = After l <$> ksubst g e <*> ksubst g e'
+    ksubst g (Decl l ds)            = Decl l <$> ksubst g ds
+    ksubst g (Signature l ns t d)   = Signature l ns <$> ksubst g t <*> return d
 
 instance KSubst Decl where
-    ksubst (Def l n q p k ann b m)  = Def l n <$> ksubst q <*> ksubst p <*> ksubst k <*> ksubst ann <*> ksubst b <*> return m
-    ksubst (Actor l n q p k ann b)  = Actor l n <$> ksubst q <*> ksubst p <*> ksubst k <*> ksubst ann <*> ksubst b
-    ksubst (Class l n q as b)       = Class l n <$> ksubst q <*> ksubst as <*> ksubst b
-    ksubst (Protocol l n q as b)    = Protocol l n <$> ksubst q <*> ksubst as <*> ksubst b
-    ksubst (Extension l n q as b)   = Extension l n <$> ksubst q <*> ksubst as <*> ksubst b
+    ksubst g (Def l n q p k ann b m)    = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g ann <*> ksubst g b <*> return m
+    ksubst g (Actor l n q p k ann b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g ann <*> ksubst g b
+    ksubst g (Class l n q as b)         = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Protocol l n q as b)      = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Extension l n q as b)     = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
 
 instance KSubst Expr where
-    ksubst (Var l n)                = return $ Var l n
-    ksubst (Int l i s)              = return $ Int l i s
-    ksubst (Float l f s)            = return $ Float l f s
-    ksubst (Imaginary l i s)        = return $ Imaginary l i s
-    ksubst (Bool l b)               = return $ Bool l b
-    ksubst (None l)                 = return $ None l
-    ksubst (NotImplemented l)       = return $ NotImplemented l
-    ksubst (Ellipsis l)             = return $ Ellipsis l
-    ksubst (Strings l ss)           = return $ Strings l ss
-    ksubst (BStrings l ss)          = return $ BStrings l ss
-    ksubst (Call l e ps ks)         = Call l <$> ksubst e <*> ksubst ps <*> ksubst ks
-    ksubst (Index l e is)           = Index l <$> ksubst e <*> ksubst is
-    ksubst (Slice l e sl)           = Slice l <$> ksubst e <*> ksubst sl
-    ksubst (Cond l e1 e2 e3)        = Cond l <$> ksubst e1 <*> ksubst e2 <*> ksubst e3
-    ksubst (BinOp l e1 op e2)       = BinOp l <$> ksubst e1 <*> return op <*> ksubst e2
-    ksubst (CompOp l e ops)         = CompOp l <$> ksubst e <*> ksubst ops
-    ksubst (UnOp l op e)            = UnOp l op <$> ksubst e 
-    ksubst (Dot l e n)              = Dot l <$> ksubst e <*> return n
-    ksubst (DotI l e i t)           = DotI l <$> ksubst e <*> return i <*> return t
-    ksubst (Lambda l ps ks e)       = Lambda l <$> ksubst ps <*> ksubst ks <*> ksubst e
-    ksubst (Yield l e)              = Yield l <$> ksubst e
-    ksubst (YieldFrom l e)          = YieldFrom l <$> ksubst e
-    ksubst (Tuple l es ks)          = Tuple l <$> ksubst es <*> ksubst ks
-    ksubst (List l es)              = List l <$> ksubst es
-    ksubst (ListComp l e c)         = ListComp l <$> ksubst e <*> ksubst c
-    ksubst (Dict l as)              = Dict l <$> ksubst as
-    ksubst (DictComp l a c)         = DictComp l <$> ksubst a <*> ksubst c
-    ksubst (Set l es)               = Set l <$> ksubst es
-    ksubst (SetComp l e c)          = SetComp l <$> ksubst e <*> ksubst c
-    ksubst (Paren l e)              = Paren l <$> ksubst e
+    ksubst g (Var l n)              = return $ Var l n
+    ksubst g (Int l i s)            = return $ Int l i s
+    ksubst g (Float l f s)          = return $ Float l f s
+    ksubst g (Imaginary l i s)      = return $ Imaginary l i s
+    ksubst g (Bool l b)             = return $ Bool l b
+    ksubst g (None l)               = return $ None l
+    ksubst g (NotImplemented l)     = return $ NotImplemented l
+    ksubst g (Ellipsis l)           = return $ Ellipsis l
+    ksubst g (Strings l ss)         = return $ Strings l ss
+    ksubst g (BStrings l ss)        = return $ BStrings l ss
+    ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
+    ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
+    ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
+    ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
+    ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
+    ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
+    ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
+    ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
+    ksubst g (DotI l e i t)         = DotI l <$> ksubst g e <*> return i <*> return t
+    ksubst g (Lambda l ps ks e)     = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e
+    ksubst g (Yield l e)            = Yield l <$> ksubst g e
+    ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e
+    ksubst g (Tuple l es ks)        = Tuple l <$> ksubst g es <*> ksubst g ks
+    ksubst g (List l es)            = List l <$> ksubst g es
+    ksubst g (ListComp l e c)       = ListComp l <$> ksubst g e <*> ksubst g c
+    ksubst g (Dict l as)            = Dict l <$> ksubst g as
+    ksubst g (DictComp l a c)       = DictComp l <$> ksubst g a <*> ksubst g c
+    ksubst g (Set l es)             = Set l <$> ksubst g es
+    ksubst g (SetComp l e c)        = SetComp l <$> ksubst g e <*> ksubst g c
+    ksubst g (Paren l e)            = Paren l <$> ksubst g e
 
 instance KSubst Pattern where
-    ksubst (PVar l n a)             = PVar l n <$> ksubst a
-    ksubst (PTuple l ps ks)         = PTuple l <$> ksubst ps <*> ksubst ks
-    ksubst (PList l ps p)           = PList l <$> ksubst ps <*> ksubst p
-    ksubst (PParen l p)             = PParen l <$> ksubst p
+    ksubst g (PVar l n a)           = PVar l n <$> ksubst g a
+    ksubst g (PTuple l ps ks)       = PTuple l <$> ksubst g ps <*> ksubst g ks
+    ksubst g (PList l ps p)         = PList l <$> ksubst g ps <*> ksubst g p
+    ksubst g (PParen l p)           = PParen l <$> ksubst g p
 
 instance KSubst Target where
-    ksubst (TaVar l n)              = return $ TaVar l n
-    ksubst (TaTuple l ts)           = TaTuple l <$> ksubst ts
-    ksubst (TaIndex l e ix)         = TaIndex l <$> ksubst e <*> ksubst ix
-    ksubst (TaSlice l e sl)         = TaSlice l <$> ksubst e <*> ksubst sl
-    ksubst (TaDot l e n)            = TaDot l <$> ksubst e <*> return n
-    ksubst (TaDotI l e i tl)        = TaDotI l <$> ksubst e <*> return i <*> return tl
-    ksubst (TaParen l p)            = TaParen l <$> ksubst p
+    ksubst g (TaVar l n)            = return $ TaVar l n
+    ksubst g (TaTuple l ts)         = TaTuple l <$> ksubst g ts
+    ksubst g (TaIndex l e ix)       = TaIndex l <$> ksubst g e <*> ksubst g ix
+    ksubst g (TaSlice l e sl)       = TaSlice l <$> ksubst g e <*> ksubst g sl
+    ksubst g (TaDot l e n)          = TaDot l <$> ksubst g e <*> return n
+    ksubst g (TaDotI l e i tl)      = TaDotI l <$> ksubst g e <*> return i <*> return tl
+    ksubst g (TaParen l p)          = TaParen l <$> ksubst g p
 
 instance KSubst Exception where
-    ksubst (Exception e mbe)        = Exception <$> ksubst e <*> ksubst mbe
+    ksubst g (Exception e mbe)      = Exception <$> ksubst g e <*> ksubst g mbe
 
 instance KSubst Branch where
-    ksubst (Branch e ss)            = Branch <$> ksubst e <*> ksubst ss
+    ksubst g (Branch e ss)          = Branch <$> ksubst g e <*> ksubst g ss
 
 instance KSubst Handler where
-    ksubst (Handler ex b)           = Handler ex <$> ksubst b
+    ksubst g (Handler ex b)         = Handler ex <$> ksubst g b
 
 instance KSubst PosPar where
-    ksubst (PosPar n t e p)         = PosPar n <$> ksubst t <*> ksubst e <*> ksubst p
-    ksubst (PosSTAR n t)            = PosSTAR n <$> ksubst t
-    ksubst PosNIL                   = return PosNIL
+    ksubst g (PosPar n t e p)       = PosPar n <$> ksubst g t <*> ksubst g e <*> ksubst g p
+    ksubst g (PosSTAR n t)          = PosSTAR n <$> ksubst g t
+    ksubst g PosNIL                 = return PosNIL
     
 instance KSubst KwdPar where
-    ksubst (KwdPar n t e k)         = KwdPar n <$> ksubst t <*> ksubst e <*> ksubst k
-    ksubst (KwdSTAR n t)            = KwdSTAR n <$> ksubst t
-    ksubst KwdNIL                   = return KwdNIL
+    ksubst g (KwdPar n t e k)       = KwdPar n <$> ksubst g t <*> ksubst g e <*> ksubst g k
+    ksubst g (KwdSTAR n t)          = KwdSTAR n <$> ksubst g t
+    ksubst g KwdNIL                 = return KwdNIL
     
 instance KSubst PosArg where
-    ksubst (PosArg e p)             = PosArg <$> ksubst e <*> ksubst p
-    ksubst (PosStar e)              = PosStar <$> ksubst e
-    ksubst PosNil                   = return PosNil
+    ksubst g (PosArg e p)           = PosArg <$> ksubst g e <*> ksubst g p
+    ksubst g (PosStar e)            = PosStar <$> ksubst g e
+    ksubst g PosNil                 = return PosNil
     
 instance KSubst KwdArg where
-    ksubst (KwdArg n e k)           = KwdArg n <$> ksubst e <*> ksubst k
-    ksubst (KwdStar e)              = KwdStar <$> ksubst e
-    ksubst KwdNil                   = return KwdNil
+    ksubst g (KwdArg n e k)         = KwdArg n <$> ksubst g e <*> ksubst g k
+    ksubst g (KwdStar e)            = KwdStar <$> ksubst g e
+    ksubst g KwdNil                 = return KwdNil
     
 instance KSubst PosPat where
-    ksubst (PosPat p ps)            = PosPat <$> ksubst p <*> ksubst ps
-    ksubst (PosPatStar p)           = PosPatStar <$> ksubst p
-    ksubst PosPatNil                = return PosPatNil
+    ksubst g (PosPat p ps)          = PosPat <$> ksubst g p <*> ksubst g ps
+    ksubst g (PosPatStar p)         = PosPatStar <$> ksubst g p
+    ksubst g PosPatNil              = return PosPatNil
     
 instance KSubst KwdPat where
-    ksubst (KwdPat n p ps)          = KwdPat n <$> ksubst p <*> ksubst ps
-    ksubst (KwdPatStar p)           = KwdPatStar <$> ksubst p
-    ksubst KwdPatNil                = return KwdPatNil
+    ksubst g (KwdPat n p ps)        = KwdPat n <$> ksubst g p <*> ksubst g ps
+    ksubst g (KwdPatStar p)         = KwdPatStar <$> ksubst g p
+    ksubst g KwdPatNil              = return KwdPatNil
     
 instance KSubst OpArg where
-    ksubst (OpArg op e)             = OpArg op <$> ksubst e
+    ksubst g (OpArg op e)           = OpArg op <$> ksubst g e
 
 instance KSubst Comp where
-    ksubst (CompFor l p e c)        = CompFor l <$> ksubst p <*> ksubst e <*> ksubst c
-    ksubst (CompIf l e c)           = CompIf l <$> ksubst e <*> ksubst c
-    ksubst NoComp                   = return NoComp
+    ksubst g (CompFor l p e c)      = CompFor l <$> ksubst g p <*> ksubst g e <*> ksubst g c
+    ksubst g (CompIf l e c)         = CompIf l <$> ksubst g e <*> ksubst g c
+    ksubst g NoComp                 = return NoComp
 
 instance KSubst WithItem where
-    ksubst (WithItem e p)           = WithItem <$> ksubst e <*> ksubst p
+    ksubst g (WithItem e p)         = WithItem <$> ksubst g e <*> ksubst g p
 
 instance KSubst Elem where
-    ksubst (Elem e)                 = Elem <$> ksubst e
-    ksubst (Star e)                 = Star <$> ksubst e
+    ksubst g (Elem e)               = Elem <$> ksubst g e
+    ksubst g (Star e)               = Star <$> ksubst g e
 
 instance KSubst Assoc where
-    ksubst (Assoc e1 e2)            = Assoc <$> ksubst e1 <*> ksubst e2
-    ksubst (StarStar e)             = StarStar <$> ksubst e
+    ksubst g (Assoc e1 e2)          = Assoc <$> ksubst g e1 <*> ksubst g e2
+    ksubst g (StarStar e)           = StarStar <$> ksubst g e
   
 instance KSubst Sliz where
-    ksubst (Sliz l e1 e2 e3)        = Sliz l <$> ksubst e1 <*> ksubst e2 <*> ksubst e3
+    ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
 
 
 --------------------------------------------------------------------------------------------------------------
