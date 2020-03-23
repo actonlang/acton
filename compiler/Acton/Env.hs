@@ -10,8 +10,9 @@ import Data.Map.Strict (Map)
 import Control.Monad.State.Strict
 import Data.Typeable
 import Data.Traversable
-import System.FilePath.Posix (joinPath)
+import System.FilePath.Posix (joinPath,takeDirectory)
 import System.Directory (doesFileExist)
+import System.Environment (getExecutablePath)
 import Control.Monad
 
 import Acton.Syntax
@@ -202,11 +203,17 @@ nSigs te                    = [ (n,i) | (n, i@NSig{}) <- te ]
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
-initEnv                     :: Env                                          -- ActonCompiler..., Env.dropNames
-initEnv                     = define autoImp env0
-  where autoImp             = importAll mBuiltin envBuiltin
-        env0                = Env{ names = [(nBuiltin,NModule envBuiltin)], modules = [(mBuiltin,envBuiltin)], defaultmod = mBuiltin, nocheck = False }
-
+initEnv                    :: Bool -> IO Env                                          -- ActonCompiler...
+initEnv nobuiltin           = if nobuiltin
+                                then return $ Env{names = [], modules = [], defaultmod = mBuiltin, nocheck = True}
+                                else do path <- getExecutablePath
+                                        envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
+                                        let autoImp = importAll mBuiltin envBuiltin
+                                            env0    = Env{names = [(nBuiltin,NModule envBuiltin)], modules = [(mBuiltin,envBuiltin)],
+                                                          defaultmod = mBuiltin, nocheck = False}
+                                            env     = define autoImp env0
+                                        return env
+                                        
 setDefaultMod               :: ModName -> Env -> Env                        -- Env.mkEnv
 setDefaultMod m env         = env{ defaultmod = m }
 
@@ -216,8 +223,8 @@ setNoCheck env              = env{ nocheck = True }
 addMod                      :: ModName -> TEnv -> Env -> Env                -- Env.doImp, ActonCompiler.doTask
 addMod m te env             = env{ modules = (m,te) : modules env }
 
-dropNames                   :: Env -> Env                                   -- ActonCompiler.runRestPasses
-dropNames env               = env{ names = names initEnv }
+-- dropNames                   :: Env -> Env                                   -- ActonCompiler.runRestPasses
+-- dropNames env               = env{ names = names initEnv }
 
 
 reserve                     :: [Name] -> Env -> Env                         -- infEnv (class,proto,ext), check (actor,def,class,proto,ext)
@@ -295,7 +302,7 @@ maybeFindMod (ModName ns) env = f ns (names env)
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
                                 Nothing -> Nothing
-
+                                Just t -> error ("maybeFindMod finds "++show t)
 isMod                       :: Env -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
 
@@ -423,6 +430,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
 
 
 -- Builtin env -----------------------------------------------------------------------------------------------------------------
+
 
 envBuiltin                  = [ (nSequence,         NProto [a] [] []),                          -- Env (initEnv)
                                 (nMapping,          NProto [a,b] [] []),

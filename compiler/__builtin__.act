@@ -1,0 +1,228 @@
+## Built-in types ##################################################################################
+
+class int:
+  pass
+
+class float:
+  pass
+
+class complex:
+  pass
+
+class bool:
+  pass
+
+class str:
+  capitalize   : () -> str
+  center       : (int,str) -> str
+  count        : (str,int,int) -> int
+  endswith     : (str,int,int) -> bool
+  expandtabs   : (int) -> str
+  find         : (str,int,int) -> int
+  index        : (str,int,int) -> int
+  isalnum      : () -> bool
+  isalpha      : () -> bool
+  isascii      : () -> bool
+  isdecimal    : () -> bool
+  islower      : () -> bool
+  isprintable  : () -> bool
+  isspace      : () -> bool
+  istitle      : () -> bool
+  isupper      : () -> bool
+  join         : (Iterator[str]) -> str
+  ljust        : (int,str) -> str
+  lower        : () -> str
+  lstrip       : (str) -> str
+  partition    : (str) -> (str,str,str)
+  replace      : (str,str,int) -> str
+  rfind        : (str,int,int) -> int
+  rindex       : (str,int,int) -> int
+  rjust        : (int,str) -> str
+  rpartition   : (str) -> (str,str,str)
+  rstrip       : (str) -> str
+  split        : (str,int) -> list[str]
+  splitlines   : () -> list[str]
+  startswith   : (str,int,int) -> bool
+  strip        : (str) -> str
+  upper        : () -> str
+  str_zfill    : (str,int) -> str
+
+class Slice:
+  pass
+  
+class Iterator[A]:
+  next : () -> A
+  
+class list[A]:
+  copy : () -> list[A]
+
+class dict[A]:
+  pass
+
+class set[A]:
+  pass
+
+## General protocols ###############################################################################
+
+protocol Eq:
+  @staticmethod
+  __eq__       : (Self,Self) -> bool
+  @staticmethod
+  __ne__       : (Self,Self) -> bool            # has default defn
+
+protocol Ord (Eq):
+  @staticmethod
+  __lt__       : (Self,Self) -> bool
+  @staticmethod
+  __le__       : (Self,Self) -> bool
+  @staticmethod
+  __gt__       : (Self,Self) -> bool            # has default defn
+  @staticmethod
+  __ge__       : (Self,Self) -> bool            # has default defn
+      
+protocol Logical:
+  @staticmethod
+  __and__     : (Self,Self) -> Self
+  @staticmethod
+  __or__      : (Self,Self) -> Self
+  @staticmethod
+  __xor__     : (Self,Self) -> Self
+
+protocol Plus:
+  @staticmethod
+  __add__      : (Self,Self) -> Self
+
+protocol Minus:
+  @staticmethod
+  __sub__      : (Self,Self) -> Self
+
+protocol Hashable (Eq):
+  __hash__     : () -> int
+
+## Collection protocols ############################################################################
+
+protocol Iterable[A]:
+  __iter__     : () -> Iterator[A]
+  
+protocol Collection[A] (Iterable[A]):
+  @staticmethod
+  __fromiter__ : (Iterable[A]) -> Self 
+  __len__      : () -> int
+  
+protocol Indexed[A,B]:
+  __getitem__  : (A) -> B
+  __setitem__  : (A,B) -> None 
+  __delitem__  : (A) -> None
+
+protocol Sliceable[A] (Indexed[int,A]):
+  __getslice__ : (Slice) -> Self
+  __setslice__ : (Slice,Iterable[A]) -> None
+  __delslice__ : (Slice) -> None
+  
+protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
+  __reversed__ : () -> Iterator[A] 
+  insert      : (int,A) -> None
+  append      : (A) -> None   
+  reverse     : () -> None       
+
+protocol Container[A(Eq)] (Collection[A]):
+  __contains__    : (A) -> bool  
+  __containsnot__ : (A) -> bool
+
+protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
+  get         : (A,B) -> B
+  keys        : () -> Iterator[A]
+  values      : () -> Iterator[B]
+  items       : () -> Iterator[(A,B)]
+  update      : (Iterable[(A,B)]) -> None  
+  popitem     : () -> (A,B)
+  setdefault  : (A,B) -> None
+
+protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
+  @staticmethod
+  isdisjoint  : (Self,Self) -> bool
+  add         : (A) -> None  
+  discard     : (A) -> None  
+  pop         : () -> A 
+
+## Number protocols ################################################################################
+
+protocol Complex (Eq,Plus,Minus):
+  __complex__  : () -> complex
+  __bool__     : () -> bool
+
+  @staticmethod
+  __mul__      : (Self,Self) -> Self
+  @staticmethod
+  __truediv__  : (Self,Self) -> Self
+  @staticmethod
+  __pow__      : (Self,Self) -> Self
+
+  __neg__      : () -> Self
+  __pos__      : () -> Self
+  
+  real         : () -> Real
+  imag         : () -> Real
+  __abs__      : () -> Real  # What about arg?
+
+  conjugate    : () -> Self
+
+
+protocol Real (Ord,Complex):  # Eq implemented in both parents!
+  __float__    : () -> float
+
+  __trunc__    : () -> Integral
+  __floor__    : () -> Integral
+  __ceil__     : () -> Integral
+  __round__    : () -> Integral
+
+protocol Rational (Real):
+  numerator    : () -> Integral
+  denominator  : () -> Integral
+
+protocol Integral (Rational,Logical):
+  __int__      : () -> int
+  __index__    : () -> int
+
+  @staticmethod
+  __divmod__   : (Self,Self) -> (Self,Self)
+  @staticmethod
+  __floordiv__ : (Self,Self) -> Self
+  @staticmethod
+  __mod__      : (Self,Self) -> Self
+
+  @staticmethod
+  __lshift__   : (Self,Self) -> Self
+  @staticmethod
+  __rshift__   : (Self,Self) -> Self
+
+  __invert__   : () -> Self
+
+## Extensions ######################################################################################
+
+extension list[A] (Sequence[A]): pass
+
+extension list[A(Eq)] (Container[A]):pass
+
+extension dict[A(Hashable),B] (Mapping[A,B]): pass
+
+extension set[A(Hashable)] (Set[A]): pass
+
+extension Iterator[A](Iterable[A]): pass
+
+extension str (Ord): pass
+
+extension str (Container[str]): pass
+
+extension str (Sliceable[str]): pass
+
+extension str (Plus): pass
+
+extension str(Hashable): pass
+
+
+extension int (Integral):pass
+extension int (Hashable):pass
+
+extension float (Real):pass
+extension float (Hashable):pass
