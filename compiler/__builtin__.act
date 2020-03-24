@@ -50,16 +50,19 @@ class str:
 class Slice:
   pass
   
-class Iterator[A]:
+class Iterator[A] ():
   next : () -> A
   
-class list[A]:
+class list[A] ():
   copy : () -> list[A]
 
-class dict[A]:
+class dict[A,B] ():
   pass
 
-class set[A]:
+class set[A] ():
+  pass
+
+class Msg[A] ():
   pass
 
 ## General protocols ###############################################################################
@@ -98,6 +101,22 @@ protocol Minus:
 
 protocol Hashable (Eq):
   __hash__     : () -> int
+
+protocol Boolean:
+  __bool__   : () -> bool
+
+extension int (Boolean):
+  def __bool__(self):
+    return self != 0
+
+extension list[A] (Boolean):
+  def __bool__(self):
+    return self.__len__() > 0
+
+#extension Self (Boolean) if Self(Collection):
+#  def __bool__(self):
+#    return self.__len__() > 0
+
 
 ## Collection protocols ############################################################################
 
