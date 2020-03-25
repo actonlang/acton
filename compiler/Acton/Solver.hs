@@ -14,7 +14,7 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: Env -> [Constraint] -> TypeM [Constraint]
+simplify                                    :: Env -> Constraints -> TypeM Constraints
 simplify env cs                             = do --traceM ("### simplify: " ++ prstrs cs)
                                                  reduceAll env cs
                                                  cs0 <- collectDeferred
@@ -25,7 +25,7 @@ simplify env cs                             = do --traceM ("### simplify: " ++ p
   where simple cs                           = True                              -- TODO: add proper test
 
 -- Reduce aggressively or fail
-solve                                       :: Env -> [Constraint] -> TypeM ()
+solve                                       :: Env -> Constraints -> TypeM ()
 solve env cs                                = do --traceM ("### solve: " ++ prstrs cs)
                                                  reduceAll env cs
                                                  cs0 <- collectDeferred
@@ -35,7 +35,7 @@ solve env cs                                = do --traceM ("### solve: " ++ prst
                                                      else solve env cs1
   where done cs                             = True                              -- TODO: ensure proper termination...!
 
-reduceAll                                   :: Env -> [Constraint] -> TypeM ()
+reduceAll                                   :: Env -> Constraints -> TypeM ()
 reduceAll env cs                            = mapM_ (reduce env) cs
 
 reduce                                      :: Env -> Constraint -> TypeM ()
@@ -173,12 +173,11 @@ sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n
 sub' env w t1 t2                            = noRed (Sub w t1 t2)
 
 
-matchSchema env w (TSchema _ [] t) (TSchema _ [] u)
-                                            = return [Sub w t u]
 matchSchema env w sc1 sc2                   = do (cs,t) <- instantiate env sc1
                                                  matchInst env w cs t sc2
 
 
+matchInst env w cs t (TSchema _ [] u)       = simplify env (Sub w t u : cs)
 matchInst env w cs t sc@(TSchema _ q u)     = do cs' <- simplify env1 (Sub w t u : cs)
                                                  fvs <- msubstTV (tyfree sc ++ tyfree env)
                                                  let esc = intersect (tybound q) fvs
@@ -195,4 +194,36 @@ matchInst env w cs t sc@(TSchema _ q u)     = do cs' <- simplify env1 (Sub w t u
 monotypeOf (TSchema _ [] t)                 = t
 monotypeOf sc                               = err1 sc "Monomorphic type expected"
 
+
+{-
+
+
+w0:A(Eq) | A,x:A,y:A |= Eq._eq_ : (A,A)->bool  ~>  w0._eq_      ... |- x : A        ... |- y : A
+------------------------------------------------------------------------------------------------
+w0:A(Eq) | A,x:A,y:A |= Eq._eq_(x,y) : bool  ~>  w0._eq_(x,y)
+---------------------------------------------------------------------------
+w0:A(Eq) | A,x:A,y:A |= return Eq._eq_(x,y) : bool  ~>  return w0._eq_(x,y)
+--------------------------------------------------------------------------------------------------------------
+w2:[A(Ord)]=>A(Eq) | |= def f [A(Ord)] (x:A, y:A) -> bool: return Eq._eq_(x,y) : [A(Ord)]=>(x:A,y:A)->bool  ~>  
+                        def f [A] (w1:A(Ord),x:A,y:A)->bool: w0=w2(w1); return w0._eq_(x,y)
+----------------------------------------------------------------------------------------------
+ | |= def f [A(Ord)] (x:A, y:A) -> bool: return Eq.__eq__(x,y) : [A(Ord)]=>(x:A,y:A)->bool  ~>  
+      def w2 [A] (w3:A(Ord))->A(Eq):return w3._Eq_   +
+      def f [A] (w1:A(Ord),x:A,y:A)->bool: w0=w2(w1); return w0._eq_(x,y)
+
+
+ws:cs | N |= E : t ~> E'   ==>   N,Q(cs) |- E : t ~> E'
+
+
+w:A(Ord)x:A,y:A |- Eq._eq_ : (A,A)->bool  ~>  w._Eq_._eq_      ... |- x : A        ... |- y : A
+-----------------------------------------------------------------------------------------------
+w:A(Ord),x:A,y:A |- Eq._eq_(x,y) : bool  ~>  w._Eq_._eq_(x,y)
+---------------------------------------------------------------------------
+w:A(Ord),x:A,y:A |- return Eq._eq_(x,y) : bool  ~>  return w._Eq_._eq_(x,y)
+----------------------------------------------------------------------------------------------
+|- def f [A(Ord)] (x:A, y:A) -> bool: return Eq._Eq_._eq_(x,y) : [A(Ord)]=>(x:A,y:A)->bool  ~>  
+   def f [A] (w:A(Ord),x:A,y:A)->bool: return w._Eq_._eq_(x,y)
+
+
+-}
 

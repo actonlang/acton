@@ -371,8 +371,8 @@ instantiate env (TSchema _ q t)
                                  cs <- sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
                                  return (cs, subst s t)
   where constr t u@(TC n _)
-          | isProto n env   = do w <- newName "inst"; return $ Impl w t u
-          | otherwise       = do w <- newName "subinst"; return $ Sub (Just w) t (tCon u)
+          | isProto n env   = do w <- newWitness; return $ Impl w t u
+          | otherwise       = return $ Sub Nothing t (tCon u)
 
 
 
@@ -472,7 +472,7 @@ importAll m te              = mapMaybe imp te
 
 data Constraint                         = Sub       (Maybe Name) Type Type
                                         | Impl      Name Type TCon
-                                        | Qual      Name [TBind] [Constraint]
+                                        | Qual      Name [TBind] Constraints
                                         | Sel       Type Name Type
                                         | Mut       Type Name Type
 
