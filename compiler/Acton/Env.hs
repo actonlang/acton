@@ -40,6 +40,7 @@ data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], 
 
 data NameInfo               = NVar      TSchema
                             | NSVar     TSchema
+                            | NDef      TSchema Decoration
                             | NSig      TSchema Decoration
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
@@ -63,6 +64,8 @@ instance Pretty Env where
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
+    pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -77,7 +80,6 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
     pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
@@ -89,6 +91,7 @@ instance Subst Env where
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
     msubst (NSVar t)            = NSVar <$> msubst t
+    msubst (NDef t d)           = NDef <$> msubst t <*> return d
     msubst (NSig t d)           = NSig <$> msubst t <*> return d
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
@@ -102,6 +105,7 @@ instance Subst NameInfo where
 
     tyfree (NVar t)             = tyfree t
     tyfree (NSVar t)            = tyfree t
+    tyfree (NDef t d)           = tyfree t
     tyfree (NSig t d)           = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
@@ -126,7 +130,7 @@ instance Subst SrcInfoTag where
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
-    unalias                         :: Env -> a -> a                                        -- reconstruct, Env.findQName
+    unalias                         :: Env -> a -> a                                        -- reconstruct, Env.findName
     unalias env                     = id
 
 instance (Unalias a) => Unalias [a] where
@@ -136,24 +140,25 @@ instance (Unalias a) => Unalias (Maybe a) where
     unalias env                     = fmap (unalias env)
 
 instance Unalias ModName where
-    unalias env (ModName ns)        = norm (names env) [] ns
+    unalias env (ModName ns0)       = norm (names env) [] ns0
       where
         norm te pre []              = ModName (reverse pre)
         norm te pre (n:ns)          = case lookup n te of
                                         Just (NModule te') -> norm te' (n:pre) ns
                                         Just (NMAlias m) -> m
-                                        _ -> error ("### unalias " ++ show (ModName ns))
+                                        _ -> noModule (ModName ns0)
 
 instance Unalias QName where
     unalias env (QName m n)         = case lookup m' (modules env) of
                                         Just te -> case lookup n te of
                                                       Just (NAlias qn) -> qn
                                                       Just _ -> QName m' n
+                                                      _ -> noItem m n
       where m'                      = unalias env m
     unalias env (NoQual n)          = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
                                         Just _ -> QName (defaultmod env) n
-                                        _ -> error ("### unalias " ++ prstr n)
+                                        _ -> nameNotFound n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -176,6 +181,7 @@ instance Unalias Type where
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
     unalias env (NSVar t)           = NSVar (unalias env t)
+    unalias env (NDef t d)          = NDef (unalias env t) d
     unalias env (NSig t d)          = NSig (unalias env t) d
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
@@ -194,7 +200,7 @@ instance Unalias (Name,NameInfo) where
 nTVars                      :: [TBind] -> TEnv                              -- infEnv (ExceptAs), Env.defineTVars, Env.defineSelf'
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
-nVars                       :: TEnv -> Schemas                              -- dump INS/GEN, gen1, infEnv Data, env2row (Actor), checkBindings (inherited,undefs)
+nVars                       :: TEnv -> Schemas                              -- dump INS/GEN, infEnv Data, env2row (Actor), checkBindings (inherited,undefs)
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
 nSigs                       :: TEnv -> TEnv                                 -- checkBindings (inherited,refinements,unsigs,allsigs)
@@ -267,69 +273,41 @@ tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
-reserved                    :: Name -> Env -> Bool                          -- infEnv (signature,class,proto)
-reserved n env              = case lookup n (names env) of
-                                Just NReserved -> True
-                                _              -> False
-
-reservedOrSig               :: Name -> Env -> Bool                          -- infEnv (actor,def,PVar)
-reservedOrSig n env         = case lookup n (names env) of
-                                Just NReserved  -> True
-                                Just (NSig t d) -> True
-                                _               -> False
-
-findName                    :: Name -> Env -> NameInfo                      -- Env (findQName,findSubBound,findImplBound)
-findName n env              = case lookup n (names env) of
-                                Just (NAlias qn) -> findQName qn env
-                                Just NReserved -> nameReserved n
-                                Just (NSig t d) -> nameReserved n
-                                Just NBlocked -> nameBlocked n
+findQName                   :: QName -> Env -> NameInfo                     -- Env (tconKind,isProto,findClass,findProto,findVarType,findCon)
+findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of    -- infer (Var,TaVar), checkAssump, infEnvT (PVar)
+                                Just (NAlias qn) -> findName qn env
+                                Just i -> i
+                                _ -> noItem m n
+findQName (NoQual n) env    = case lookup n (names env) of
+                                Just (NAlias qn) -> findName qn env
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
-findQName                   :: QName -> Env -> NameInfo                     -- Env (findName,tconKind,isProto,findClass,findProto,findVarType,findCon)
-findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of
-                                Just (NAlias qn) -> findQName qn env
-                                Just i -> i
-                                _ -> noItem m n
-findQName (NoQual n) env    = findName n env
+findName n env              = findName n env
 
-
-maybeFindMod                :: ModName -> Env -> Maybe TEnv                 -- Env (findQName,isMod)
+maybeFindMod                :: ModName -> Env -> Maybe TEnv                 -- Env (findName,isMod)
 maybeFindMod (ModName ns) env = f ns (names env)
   where f [] te             = Just te
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
                                 Nothing -> Nothing
-                                Just t -> error ("maybeFindMod finds "++show t)
+                                Just _ -> noModule (ModName (n:ns))
+
 isMod                       :: Env -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
 
 
-findVarType                 :: QName -> Env -> TSchema                                      -- infer (Var,TaVar), infEnv (after), checkAssump, infEnvT (PVar)
-findVarType n env           = case findQName n env of
-                                NVar t         -> t
-                                NSVar t        -> t
-                                NSig t d       -> t
-                                _              -> internal (loc n) ("Unexpected variable name: " ++ prstr n)
-
-
 tconKind                    :: QName -> Env -> Kind                                         -- Kinds.tconKind
-tconKind n env              = case findQName n env of
+tconKind n env              = case findName n env of
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
-isClass                     :: QName -> Env -> Bool
-isClass n env               = case findQName n env of
-                                NClass q us te -> True
-                                _ -> False
-
 isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,instantiate)
-isProto n env               = case findQName n env of                                       -- infEnv (ext), class/protoBases
+isProto n env               = case findName n env of                                       -- infEnv (ext), class/protoBases
                                 NProto q us te -> True
                                 _ -> False
 
@@ -361,7 +339,7 @@ findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                
 findCon env (TC n ts)
   | map tVar tvs == ts      = (proto, us, te)
   | otherwise               = (proto, subst s us, subst s te)
-  where (proto,q,us,te)     = case findQName n env of
+  where (proto,q,us,te)     = case findName n env of
                                 NClass q us te -> (False,q,us,te)
                                 NProto q us te -> (True,q,us,te)
                                 _ -> err1 n "Class or protocol name expected, got"
@@ -429,57 +407,6 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
             (vs, vs')                   = (dom te, dom te')
 
 
--- Builtin env -----------------------------------------------------------------------------------------------------------------
-
-
-envBuiltin                  = [ (nSequence,         NProto [a] [] []),                          -- Env (initEnv)
-                                (nMapping,          NProto [a,b] [] []),
-                                (nSetP,             NProto [a] [] []),
-                                (nInt,              NClass [] [] []),
-                                (nFloat,            NClass [] [] []),
-                                (nBool,             NClass [] [] []),
-                                (nStr,              NClass [] [] [
-                                                        (name "join",   NVar (monotype $ tFun0 [tSequence tStr] tStr)),
-                                                        (name "strip",  NVar (monotype $ tFun0 [] tStr))
-                                                    ]),
-                                (nRef,              NClass [] [] []),
-                                (nMsg,              NClass [a] [] []),
-                                (nException,        NClass [] [] []),
-                                (nBoolean,          NProto [] [] []),
-                                (nIndexed,          NProto [a,b] [] []),
-                                (nSliceable,        NProto [] [] []),
-                                (nHashable,         NProto [] [] []),
-                                (nPlus,             NProto [] [] []),
-                                (nMinus,            NProto [] [] []),
-                                (nNumber,           NProto [] [] []),
-                                (nReal,             NProto [] [] []),
-                                (nIntegral,         NProto [] [] []),
-                                (nLogical,          NProto [] [] []),
-                                (nMatrix,           NProto [] [] []),
-                                (nEq,               NProto [] [] []),
-                                (nOrd,              NProto [] [] []),
-                                (nIdentity,         NProto [] [] []),
-                                (nCollection,       NProto [a] [] []),
-                                (nContextManager,   NProto [] [] []),
-                                (nObject,           NClass [] [] []),
-                                (nStopIteration,    NClass [] [cException] []),
-                                (nValueError,       NClass [] [cException] []),
-                                (nShow,             NProto [] [] []),
-                                (nLen,              NVar (tSchema [a] $ tFun0 [tCollection ta] tInt)),
-                                (nRange,            NVar (tSchema [] $ tFun0 [tInt, tOpt tInt, tOpt tInt] (tSequence tInt))),
-                                (nPrint,            NVar (tSchema [bounded pShow r] $ tFun fxNil tr kwdNil tNone)),
-                                (nDict,             NClass [a,b] [] []),
-                                (nList,             NClass [a] [] []),
-                                (nSetT,             NClass [a] [] [])
-                              ]
-  where 
-    a:b:c:_                 = map tBind tvarSupply
-    ta:tb:tc:_              = map tVar tvarSupply
-    r:_                     = map tBind prowSupply
-    tr:_                    = map tVar prowSupply
-    bounded u (TBind v us)  = TBind v (u:us)
-
-
 -- Import handling (local definitions only) ----------------------------------------------
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
@@ -536,6 +463,7 @@ importAll m te              = mapMaybe imp te
     imp (n, NExt _ _ _)     = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
+    imp (n, NDef t d)       = Just (n, NAlias (QName m n))
     imp _                   = Nothing                               -- cannot happen
 
 
@@ -796,16 +724,30 @@ instance Subst Expr where
     tyfree e                        = []
 
 instance Subst Decl where
-    msubst p@(Protocol l n qs bs ss)= do (s,ren) <- msubstRenaming p
-                                         return $ Protocol l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst c@(Class l n qs bs ss)   = do (s,ren) <- msubstRenaming c
-                                         return $ Class l n (subst s (subst ren qs)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst d@(Protocol l n q bs ss)     = do (s,ren) <- msubstRenaming d
+                                             return $ Protocol l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst d@(Class l n q bs ss)        = do (s,ren) <- msubstRenaming d
+                                             return $ Class l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst d@(Extension l n q bs ss)    = do (s,ren) <- msubstRenaming d
+                                             return $ Extension l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
+    msubst d@(Def l n q p k a ss dec)   = do (s,ren) <- msubstRenaming d
+                                             return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
+                                                              (subst s (subst ren a)) (subst s (subst ren ss)) dec
+    msubst d@(Actor l n q p k a ss)     = do (s,ren) <- msubstRenaming d
+                                             return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
+                                                                (subst s (subst ren a)) (subst s (subst ren ss))
 
-    tybound (Protocol l n qs bs ss) = tybound qs
-    tybound (Class l n qs bs ss)    = tybound qs
-
-    tyfree (Protocol l n qs bs ss)  = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
-    tyfree (Class l n qs bs ss)     = nub (tyfree qs ++ tyfree bs ++ tyfree ss) \\ tybound qs
+    tybound (Protocol l n q bs ss)  = tybound q
+    tybound (Class l n q bs ss)     = tybound q
+    tybound (Extension l n q bs ss) = tybound q
+    tybound (Def l n q p k a ss d)  = tybound q
+    tybound (Actor l n q p k a ss)  = tybound q
+    
+    tyfree (Protocol l n q bs ss)   = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
+    tyfree (Class l n q bs ss)      = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
+    tyfree (Extension l n q bs ss)  = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
+    tyfree (Def l n q p k a ss d)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
+    tyfree (Actor l n q p k a ss)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
     
 instance Subst Stmt where
     msubst (Decl l ds)              = Decl l <$> msubst ds
@@ -822,14 +764,17 @@ instance Subst Stmt where
 
 data CheckerError                   = FileNotFound ModName
                                     | NameNotFound Name
-                                    | NameReserved Name
-                                    | NameBlocked Name
+                                    | NameReserved QName
+                                    | NameBlocked QName
+                                    | NameUnexpected QName
                                     | TypedReassign Pattern
                                     | IllegalRedef Name
+                                    | IllegalExtension QName
                                     | MissingSelf Name
                                     | IllegalImport SrcLoc
                                     | DuplicateImport Name
                                     | NoItem ModName Name
+                                    | NoModule ModName
                                     | NoClassOrProto QName
                                     | OtherError SrcLoc String
                                     deriving (Show)
@@ -839,7 +784,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
-                                    | DistinctDecorations Decoration Decoration
+                                    | DecorationMismatch Name TSchema Decoration
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
@@ -859,7 +804,7 @@ instance HasLoc TypeError where
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
-    loc (DistinctDecorations _ _)   = NoLoc
+    loc (DecorationMismatch n t d)  = loc n
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
     loc (NoSelInstByClass n u)      = loc n
@@ -875,7 +820,7 @@ typeError err                       = (loc err,render (expl err))
     expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (DistinctDecorations d d') = text "Decorations" <+> pretty d <+> text "and" <+> text "do not match"
+    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match original signature" <+> pretty (n,NSig t d)
     expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
@@ -887,29 +832,35 @@ typeError err                       = (loc err,render (expl err))
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
 
 
-checkerError (FileNotFound n)       = (loc n, " Type interface file not found for " ++ prstr n)
-checkerError (NameNotFound n)       = (loc n, " Name " ++ prstr n ++ " is not in scope")
-checkerError (NameReserved n)       = (loc n, " Name " ++ prstr n ++ " is reserved but not yet defined")
-checkerError (NameBlocked n)        = (loc n, " Name " ++ prstr n ++ " is currently not accessible")
-checkerError (TypedReassign p)      = (loc p, " Type annotation on reassignment: " ++ prstr p)
-checkerError (IllegalRedef n)       = (loc n, " Illegal redefinition of " ++ prstr n)
-checkerError (MissingSelf n)        = (loc n, " Missing 'self' parameter in definition of")
-checkerError (IllegalImport l)      = (l,     " Relative import not yet supported")
-checkerError (DuplicateImport n)    = (loc n, " Duplicate import of name " ++ prstr n)
-checkerError (NoItem m n)           = (loc n, " Module " ++ prstr m ++ " does not export " ++ nstr n)
-checkerError (NoClassOrProto n)     = (loc n, " Class or protocol name expected, got " ++ prstr n)
+checkerError (FileNotFound n)       = (loc n, "Type interface file not found for " ++ prstr n)
+checkerError (NameNotFound n)       = (loc n, "Name " ++ prstr n ++ " is not in scope")
+checkerError (NameReserved n)       = (loc n, "Name " ++ prstr n ++ " is reserved but not yet defined")
+checkerError (NameBlocked n)        = (loc n, "Name " ++ prstr n ++ " is currently not accessible")
+checkerError (NameUnexpected n)     = (loc n, "Unexpected variable name: " ++ prstr n)
+checkerError (TypedReassign p)      = (loc p, "Type annotation on reassignment: " ++ prstr p)
+checkerError (IllegalRedef n)       = (loc n, "Illegal redefinition of " ++ prstr n)
+checkerError (IllegalExtension n)   = (loc n, "Illegal extension of " ++ prstr n)
+checkerError (MissingSelf n)        = (loc n, "Missing 'self' parameter in definition of")
+checkerError (IllegalImport l)      = (l,     "Relative import not yet supported")
+checkerError (DuplicateImport n)    = (loc n, "Duplicate import of name " ++ prstr n)
+checkerError (NoModule m)           = (loc m, "Module " ++ prstr m ++ " does not exist")
+checkerError (NoItem m n)           = (loc n, "Module " ++ prstr m ++ " does not export " ++ nstr n)
+checkerError (NoClassOrProto n)     = (loc n, "Class or protocol name expected, got " ++ prstr n)
 checkerError (OtherError l str)     = (l,str)
 
 nameNotFound n                      = Control.Exception.throw $ NameNotFound n
 nameReserved n                      = Control.Exception.throw $ NameReserved n
 nameBlocked n                       = Control.Exception.throw $ NameBlocked n
+nameUnexpected n                    = Control.Exception.throw $ NameUnexpected n
 typedReassign p                     = Control.Exception.throw $ TypedReassign p
 illegalRedef n                      = Control.Exception.throw $ IllegalRedef n
+illegalExtension n                  = Control.Exception.throw $ IllegalExtension n
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
 illegalImport l                     = Control.Exception.throw $ IllegalImport l
 duplicateImport n                   = Control.Exception.throw $ DuplicateImport n
 noItem m n                          = Control.Exception.throw $ NoItem m n
+noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
 err l s                             = Control.Exception.throw $ OtherError l s
 
@@ -922,7 +873,7 @@ rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
 infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
 conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
 kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
-distinctDecorations d1 d2           = Control.Exception.throw $ DistinctDecorations d1 d2
+decorationMismatch n t d            = Control.Exception.throw $ DecorationMismatch n t d
 escapingVar tvs t                   = Control.Exception.throw $ EscapingVar tvs t
 noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
 noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
