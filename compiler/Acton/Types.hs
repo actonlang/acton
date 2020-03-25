@@ -282,38 +282,39 @@ instance InfEnv Decl where
                                                  | dec==NoDec -> return ([], [(n, NDef sc dec')], d{deco=dec'})
                                                  | otherwise  -> decorationMismatch n sc dec'
                                              _ -> illegalRedef n
-    infEnv env (Class l n q us b)       = case findName n env of
+    infEnv env (Class l n q us b)
+      | null ps                         = case findName n env of
                                              NReserved -> do
                                                  (cs,te,b') <- infEnv env1 b
-                                                 return (cs, [(n, NClass q (mro env1 us1) te)], Class l n q us1 b')
+                                                 return (cs, [(n, NClass q as te)], Class l n q us b')
                                              _ -> illegalRedef n
+      | otherwise                       = notYet (loc n) "Classes with immediate extensions"
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
-            us1                         = classBases env us
-    infEnv env (Protocol l n q us b)    = case findName n env of
+            (as,ps)                     = splitBases env us
+    infEnv env (Protocol l n q ps b)    = case findName n env of
                                              NReserved -> do
                                                  (cs,te,b') <- infEnv env1 b
-                                                 return (cs, [(n, NProto q (mro env1 us1) te)], Protocol l n q us1 b')
+                                                 return (cs, [(n, NProto q (mro env1 ps) te)], Protocol l n q ps b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env  
-            us1                         = protoBases env us
-    infEnv env d@(Extension _ n q us b) = case findQName n env of
+    infEnv env (Extension l n q us b)
+      | length us == 1                  = case findQName n env of
                                              NProto _ _ _ -> notYet (loc n) "Extension of a protocol"
                                              NClass _ _ _ -> do
-                                                 w <- newWitness
-                                                 return ([], [(w, NExt n q (mro env1 (protoBases env us)))], d)
+                                                 ws <- mapM (const newWitness) ps
+                                                 return ([], [ (w, NImpl q t p) | (w,p) <- ws `zip` ps ], Extension l n q ps b)
                                              _ -> illegalExtension n
+      | otherwise                       = notYet (loc n) "Extensions with multiple protocols"
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            u                           = TC n [ tVar tv | TBind tv _ <- q ]
+            t                           = tCon $ TC n [ tVar tv | TBind tv _ <- q ]
+            ps                          = mro env1 us
 
-classBases env []                       = []
-classBases env (u:us)
-  | isProto (tcname u) env              = u : protoBases env us
-  | otherwise                           = u : protoBases env us
 
-protoBases env []                       = []
-protoBases env (u:us)
-  | isProto (tcname u) env              = u : protoBases env us
-  | otherwise                           = err1 u "Protocol expected"
+splitBases env []                       = ([], [])
+splitBases env (u:us)
+  | isProto (tcname u) env              = ([u], us)
+  | otherwise                           = ([], u:us)
+
 
 mro env us                              = merge [] $ linearizations us ++ [us]
   where merge out lists
@@ -325,7 +326,7 @@ mro env us                              = merge [] $ linearizations us ++ [us]
 
         equal u1 u2
           | u1 == u2                    = True
-          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent instantiations of class/protocol"
+          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent protocol instantiations"
           | otherwise                   = False
 
         absent n []                     = True
@@ -415,7 +416,7 @@ instance Check Decl where
                                              cs2 <- checkBindings env False us te
                                              return (cs1++cs2, Class l w [] us b')        -- TODO: properly mix in n and q in us......
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            w                           = locateWitness env n q us
+            w:_                         = locateWitnesses env n us
 
 
 checkBindings env proto us te
