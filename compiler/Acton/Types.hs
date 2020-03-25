@@ -103,10 +103,7 @@ inferGen env e                          = do (cs,t,e) <- infer env e
   where canWait tvs c                   = all (`elem` tvs) (tyfree c)
 
 checkAssump env n cs t                  = case findName n env of
-                                            NDef (TSchema _ [] u) _ ->           -- implicit type: defer the cs and unify result types
-                                                 return (Sub Nothing t u : cs)
-                                            NDef sc _ ->                         -- explicit schema: solve cs in context of q, check that q doesn't escape,
-                                                 matchInst env {- TODO: proper w -}Nothing cs t sc      -- return only deferable constraints
+                                            NDef sc _ -> matchInst env Nothing cs t sc
 
 
 commonTEnv                              :: Env -> [TEnv] -> TypeM (Constraints,TEnv)
@@ -114,9 +111,6 @@ commonTEnv env []                       = return ([], [])
 commonTEnv env tenvs                    = do cs <- unifyTEnv env tenvs vs
                                              return (cs, prune vs $ head tenvs)
   where vs                              = foldr intersect [] $ map dom tenvs
-
-unionTEnv                               :: Env -> [TEnv] -> TypeM TEnv
-unionTEnv env tenvs                     = undefined                                 -- For data statements only. TODO: implement
 
 
 infLiveEnv env x
