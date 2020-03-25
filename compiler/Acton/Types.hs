@@ -68,7 +68,7 @@ splitGen env tvs te cs
     q_new                               = mkBinds gen_cs
     generalize (TSchema l q t)          = closeFX $ TSchema l (subst s (q_new++q)) (subst s t)
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
-    gen (n, NVar sc)                    = (n, NVar (generalize sc))
+    gen (n, NDef sc dec)                = (n, NDef (generalize sc) dec)
     gen (n, i)                          = (n, i)
 
 mkBinds cs                              = collect [] $ catMaybes $ map bound cs
@@ -102,11 +102,11 @@ inferGen env e                          = do (cs,t,e) <- infer env e
                                              return (cs1, tSchema q t, Lambda NoLoc PosNIL KwdNIL e)
   where canWait tvs c                   = all (`elem` tvs) (tyfree c)
 
-checkAssump env n cs t                  = case findVarType (NoQual n) env of
-                                            TSchema _ [] u ->               -- implicit type: defer the cs and unify result types
+checkAssump env n cs t                  = case findName n env of
+                                            NDef (TSchema _ [] u) _ ->           -- implicit type: defer the cs and unify result types
                                                  return (Sub Nothing t u : cs)
-                                            sc ->                           -- explicit schema: solve cs in context of q, check that q doesn't escape,
-                                                 match env {- TODO: proper w -}Nothing cs t sc          -- return only deferable constraints
+                                            NDef sc _ ->                         -- explicit schema: solve cs in context of q, check that q doesn't escape,
+                                                 matchInst env {- TODO: proper w -}Nothing cs t sc      -- return only deferable constraints
 
 
 commonTEnv                              :: Env -> [TEnv] -> TypeM (Constraints,TEnv)
@@ -250,37 +250,64 @@ instance InfEnv Stmt where
 
     infEnv env d@(Signature _ ns sc dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do return ([], [(n, NSig (autoquant env sc) dec) | n <- ns], d)
-      where redefs                      = [ n | n <- ns, not $ reserved n env ]
+      | otherwise                       = do return ([], [(n, NSig (autoQuantize env sc) dec) | n <- ns], d)
+      where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
 
+extractSchema env d                     = do t <- extractT d
+                                             return $ autoQuantize env (TSchema NoLoc (qual d) t)
+
+autoQuantize env (TSchema l [] t)       = TSchema NoLoc q t
+  where q                               = [ TBind v [] | v <- nub (tyfree t \\ tvarScope env), skolem v ]
+autoQuantize env sc                     = sc
+
+autoQuant env [] p k a                  = [ TBind v [] | v <- nub (tvs \\ tvarScope env), skolem v ]
+  where tvs                             = tyfree p ++ tyfree k ++ tyfree a
+autoQuant env q p k a                   = q
+
+
 instance InfEnv Decl where
     infEnv env d@(Actor _ n _ p k _ _)
-      | not $ reservedOrSig n env       = illegalRedef n
-      | nodup (p,k)                     = do sc <- extractSchema env d
-                                             return ([], [(n, NVar sc)], d)
-    infEnv env d@(Def _ n _ p k _ _ _)
-      | not $ reservedOrSig n env       = illegalRedef n
-      | nodup (p,k)                     = do sc <- extractSchema env d
-                                             return ([], [(n, NVar sc)], d)
-    infEnv env (Class l n q us b)
-      | not $ reserved n env            = illegalRedef n
-      | otherwise                       = do (cs,te,b') <- infEnv env1 b
-                                             return (cs, [(n, NClass q (mro env1 us1) te)], Class l n q us1 b')
+      | nodup (p,k)                     = case findName n env of
+                                             NReserved -> do
+                                                 sc <- extractSchema env d
+                                                 return ([], [(n, NDef sc NoDec)], d)
+                                             NSig sc dec
+                                                 | dec==NoDec -> return ([], [(n, NDef sc NoDec)], d)
+                                                 | otherwise  -> decorationMismatch n sc dec
+                                             _ -> illegalRedef n
+    infEnv env d@(Def _ n _ p k _ _ dec)
+      | nodup (p,k)                     = case findName n env of
+                                             NReserved -> do
+                                                 sc <- extractSchema env d
+                                                 return ([], [(n, NDef sc dec)], d)
+                                             NSig sc dec'
+                                                 | dec==dec'  -> return ([], [(n, NDef sc dec)], d)
+                                                 | dec==NoDec -> return ([], [(n, NDef sc dec')], d{deco=dec'})
+                                                 | otherwise  -> decorationMismatch n sc dec'
+                                             _ -> illegalRedef n
+    infEnv env (Class l n q us b)       = case findName n env of
+                                             NReserved -> do
+                                                 (cs,te,b') <- infEnv env1 b
+                                                 return (cs, [(n, NClass q (mro env1 us1) te)], Class l n q us1 b')
+                                             _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
             us1                         = classBases env us
-    infEnv env (Protocol l n q us b)
-      | not $ reserved n env            = illegalRedef n
-      | otherwise                       = do (cs,te,b') <- infEnv env1 b
-                                             return (cs, [(n, NProto q (mro env1 us1) te)], Protocol l n q us1 b')
+    infEnv env (Protocol l n q us b)    = case findName n env of
+                                             NReserved -> do
+                                                 (cs,te,b') <- infEnv env1 b
+                                                 return (cs, [(n, NProto q (mro env1 us1) te)], Protocol l n q us1 b')
+                                             _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env  
             us1                         = protoBases env us
-    infEnv env d@(Extension _ n q us b)
-      | isProto n env                   = notYet (loc n) "Extension of a protocol"
-      | otherwise                       = do w <- newWitness
-                                             return ([], [(w, NExt n q (mro env1 (protoBases env us)))], d)
+    infEnv env d@(Extension _ n q us b) = case findQName n env of
+                                             NProto _ _ _ -> notYet (loc n) "Extension of a protocol"
+                                             NClass _ _ _ -> do
+                                                 w <- newWitness
+                                                 return ([], [(w, NExt n q (mro env1 (protoBases env us)))], d)
+                                             _ -> illegalExtension n
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             u                           = TC n [ tVar tv | TBind tv _ <- q ]
 
@@ -339,7 +366,7 @@ instance Check Branch where
                                              return (cs, Branch e b')
 
 instance Check Decl where
-    check env (Actor l n q p k ann b)
+    check env (Actor l n q p k a b)
       | noshadow svars (p,k)            = do pushFX (fxAct tWild)
                                              (cs0,te0,prow,p') <- infEnvT env p
                                              (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
@@ -347,12 +374,13 @@ instance Check Decl where
                                              popFX
                                              fx <- fxAct <$> newTVarOfKind XRow
                                              cs3 <- checkAssump env n (cs0++cs1++cs2) (tFun fx prow krow (tRecord $ env2row kwdNil $ nVars te2))
-                                             return (cs3, Actor l n q p' k' ann b')
+                                             return (cs3, Actor l n q' p' k' a b')
       where svars                       = statedefs b
-            env0                        = define [(selfKW, NVar (monotype tRef))] $ defineTVars q $ block (stateScope env) env
+            q'                          = autoQuant env q p k a
+            env0                        = define [(selfKW, NVar (monotype tRef))] $ defineTVars q' $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
 
-    check env (Def l n q p k ann b mo)
+    check env (Def l n q p k a b dec)
                                         = do t <- newTVar
                                              fx <- newTVarOfKind XRow
                                              pushFX (fxRet t fx)
@@ -363,10 +391,11 @@ instance Check Decl where
                                              popFX
                                              let (cs3,prow',krow') = split prow krow
                                              cs4 <- checkAssump env n (csfx++cs0++cs1++cs2++cs3) (tFun fx prow' krow' t)
-                                             return (cs4, Def l n q p' k' ann b' mo)
-      where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $ block (stateScope env) env
+                                             return (cs4, Def l n q' p' k' a b' dec)
+      where q'                          = autoQuant env q p k a
+            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q' $ block (stateScope env) env
             split p k 
-              | not $ isClassAttr mo    = ([], p, k)
+              | not $ isClassAttr dec   = ([], p, k)
             split (TRow _ _ n sc p) k   = ([Sub Nothing (monotypeOf sc) tSelf], p, k)
             split p (TRow _ _ n sc k)   = ([Sub Nothing (monotypeOf sc) tSelf], p, k)
 
@@ -401,7 +430,7 @@ checkBindings env proto us te
   | otherwise                           = concat <$> sequence refinements
   where tes                             = [ te' | u <- us, let (_,_,te') = findCon env u ]
         inherited                       = concatMap nSigs tes
-        refinements                     = [ instmatch env Nothing sc sc' | (n,NSig sc d) <- nSigs te, Just (NSig sc' _) <- [lookup n inherited] ]
+        refinements                     = [ matchSchema env Nothing sc sc' | (n,NSig sc d) <- nSigs te, Just (NSig sc' _) <- [lookup n inherited] ]
         undefs                          = (dom $ csigs) \\ (dom $ nVars te ++ concatMap nVars tes)
         unsigs                          = dom te \\ (dom (nSigs te) ++ dom inherited)
         allsigs                         = nSigs te ++ concatMap nSigs tes
@@ -455,8 +484,17 @@ infException env x
         sub                             = findSubAxiom env tc qnException
 
 instance Infer Expr where
-    infer env (Var l n)                 = do (cs,t) <- instantiate env $ openFX $ findVarType n env
+    infer env (Var l n)                 = do (cs,t) <- instantiate env $ openFX sc
                                              return (cs, t, Var l n)
+      where sc                          = case findQName n env of
+                                            NVar sc -> sc
+                                            NSVar sc -> sc
+                                            NDef sc d -> sc
+                                            NClass q _ te -> undefined      -- TODO: define!
+                                            NSig _ _ -> nameReserved n
+                                            NReserved -> nameReserved n
+                                            NBlocked -> nameBlocked n
+                                            _ -> nameUnexpected n
     infer env e@(Int _ val s)           = return ([], tInt, e)
     infer env e@(Float _ val s)         = return ([], tFloat, e)
     infer env e@Imaginary{}             = notYetExpr e
@@ -589,8 +627,8 @@ instance Infer Expr where
     infer env (Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
 --    infer env (Dot l (Var _ c) n)
---      | NClass q us te <- findQName c env = undefined  
---      | NProto q us te <- findQName c env = undefined
+--      | NClass q us te <- findName c env = undefined  
+--      | NProto q us te <- findName c env = undefined
     infer env (Dot l e n)               = do (cs,t,e') <- infer env e
                                              t0 <- newTVar
                                              return (Sel t n t0 :
@@ -603,8 +641,8 @@ instance Infer Expr where
     infer env (Lambda l p k e)
       | nodup (p,k)                     = do fx <- newTVarOfKind XRow
                                              pushFX fx
-                                             (cs0,te0, prow, p') <- infEnvT env1 p
-                                             (cs1,te1, krow, k') <- infEnvT (define te0 env1) k
+                                             (cs0,te0,prow,p') <- infEnvT env1 p
+                                             (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
                                              popFX
                                              dump [INS l $ tFun fx prow krow t]
@@ -734,9 +772,9 @@ instance InfEnvT PosPar where
     infEnvT env (PosPar n a (Just e) p) = do t <- maybe (monotype <$> newTVar) return a
                                              (cs1,t',e') <- inferGen env e
                                              (cs2,te,r,p') <- infEnvT (define [(n, NVar t)] env) p
-                                             cs3 <- instmatch env Nothing t' t                                                  -- TODO: add real witness
+                                             cs3 <- matchSchema env Nothing t' t                                                  -- TODO: add real witness
                                              return (cs1++cs2++cs3, (n, NVar t):te, posRow t r, PosPar n (Just t) (Just e') p')
-    infEnvT env (PosSTAR n ann)         = do t <- maybe newTVar return ann
+    infEnvT env (PosSTAR n a)           = do t <- maybe newTVar return a
                                              r <- newTVarOfKind PRow
                                              return (Sub Nothing t (tTuple r) :
                                                      [], [(n, NVar $ monotype t)], r, PosSTAR n (Just t))
@@ -749,9 +787,9 @@ instance InfEnvT KwdPar where
     infEnvT env (KwdPar n a (Just e) k) = do t <- maybe (monotype <$> newTVar) return a
                                              (cs1,t',e') <- inferGen env e
                                              (cs2,te,r,k') <- infEnvT (define [(n, NVar t)] env) k
-                                             cs3 <- instmatch env Nothing t' t                                                  -- TODO: add real witness
+                                             cs3 <- matchSchema env Nothing t' t                                                  -- TODO: add real witness
                                              return (cs1++cs2++cs3, (n, NVar t):te, kwdRow n t r, KwdPar n (Just t) (Just e') k')
-    infEnvT env (KwdSTAR n ann)         = do t <- maybe newTVar return ann
+    infEnvT env (KwdSTAR n a)           = do t <- maybe newTVar return a
                                              r <- newTVarOfKind KRow
                                              return (Sub Nothing t (tRecord r) :
                                                      [], [(n, NVar $ monotype t)], r, KwdSTAR n (Just t))
@@ -822,13 +860,18 @@ instance InfEnvT KwdPat where
 
 
 instance InfEnvT Pattern where
-    infEnvT env (PVar l n ann)
-      | reservedOrSig n env             = do t0 <- maybe newTVar return ann
-                                             return ([], [(n, NVar $ monotype t0)], t0, PVar l n (Just t0))
-    infEnvT env (PVar l n Nothing)      = case findVarType (NoQual n) env of
-                                             TSchema _ [] t -> return ([], [], t, PVar l n Nothing)
-                                             _ -> err1 n "Polymorphic variable not assignable:"
-    infEnvT env p@PVar{}                = typedReassign p
+    infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
+                                             case findName n env of
+                                                 NReserved ->
+                                                     return ([], [(n, NVar $ monotype t)], t, PVar l n (Just t))
+                                                 NSig (TSchema _ [] t') _ ->
+                                                     return ([Sub Nothing t' t], [(n, NVar $ monotype t)], t, PVar l n (Just t))
+                                                 NVar (TSchema _ [] t') ->
+                                                     return ([Sub Nothing t' t], [], t, PVar l n Nothing)
+                                                 NSVar (TSchema _ [] t') ->
+                                                     return ([Sub Nothing t' t], [], t, PVar l n Nothing)
+                                                 _ -> 
+                                                     err1 n "Variable not assignable:"
     infEnvT env (PTuple l ps ks)        = do (cs1,te1,prow,ps') <- infEnvT env ps
                                              (cs2,te2,krow,ks') <- infEnvT env ks
                                              return (cs1++cs2, te1++te2, TTuple NoLoc prow krow, PTuple l ps' ks')
@@ -849,8 +892,8 @@ instance InfEnvT (Maybe Pattern) where
                                              return (cs, te, t, Just p')
 
 instance InfEnvT [Pattern] where
-    infEnvT env [p]                     = do (cs,te,t,p') <- infEnvT env p
-                                             return (cs, te, t, [p'])
+    infEnvT env [p]                     = do t <- newTVar
+                                             return ([], [], t, [])
     infEnvT env (p:ps)                  = do (cs1,te1,t1,p') <- infEnvT env p
                                              (cs2,te2,t2,ps') <- infEnvT env ps
                                              return (Sub Nothing t1 t2 :
@@ -865,9 +908,10 @@ instance Infer [Target] where
                                                      cs1++cs2, t1, t':ts')
 
 instance Infer Target where
-    infer env (TaVar l n)               = case findVarType (NoQual n) env of
-                                             TSchema _ [] t -> return ([], t, TaVar l n)
-                                             _ -> err1 n "Polymorphic variable not assignable:"
+    infer env (TaVar l n)               = case findName n env of
+                                             NVar (TSchema _ [] t) -> return ([], t, TaVar l n)
+                                             NSVar (TSchema _ [] t) -> return ([], t, TaVar l n)
+                                             _ -> err1 n "Variable not mutable:"
 
     infer env (TaIndex l e [i])         = do (cs1,t,e') <- infer env e
                                              c1 <- checkSub env t tObject
@@ -937,13 +981,6 @@ instance ExtractT Decl where
                                          krow <- extractT $ kwd d
                                          tFun (fxAct fxNil) prow krow <$> maybe newTVar return (ann d)
     extractT _                      = newTVar
-
-extractSchema env d                 = do t <- extractT d
-                                         return $ autoquant env (TSchema NoLoc (qual d) t)
-
-autoquant env (TSchema l [] t)      = TSchema NoLoc q t
-  where q = [ TBind v [] | v <- nub (tyfree t \\ tvarScope env), skolem v ]
-autoquant env sc                    = sc
 
 
 -- FX presentation ---------------------
