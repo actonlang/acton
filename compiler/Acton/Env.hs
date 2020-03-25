@@ -44,7 +44,7 @@ data NameInfo               = NVar      TSchema
                             | NSig      TSchema Decoration
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
-                            | NExt      QName [TBind] [TCon]
+                            | NImpl     [TBind] Type TCon
                             | NTVar     Kind [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
@@ -74,8 +74,8 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
-    pretty (w, NExt n q us)     = pretty w  <+> colon <+> text "extension" <+> pretty n <+>
-                                  nonEmpty brackets commaList q <+> nonEmpty parens commaList us
+    pretty (w, NImpl [] t p)    = pretty w  <+> colon <+> pretty t <+> parens (pretty p)
+    pretty (w, NImpl q t p)     = pretty w  <+> colon <+> pretty q <+> text "=>" <+> pretty t <+> parens (pretty p)
     pretty (n, NTVar k us)      = pretty n <> parens (commaList us)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
@@ -95,7 +95,7 @@ instance Subst NameInfo where
     msubst (NSig t d)           = NSig <$> msubst t <*> return d
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
-    msubst (NExt n q us)        = NExt n <$> msubst q <*> msubst us
+    msubst (NImpl q t p)        = NImpl <$> msubst q <*> msubst t <*> msubst p
     msubst (NTVar k us)         = NTVar k <$> msubst us
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
@@ -109,7 +109,7 @@ instance Subst NameInfo where
     tyfree (NSig t d)           = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
-    tyfree (NExt n q us)        = (tyfree q ++ tyfree us) \\ tybound q
+    tyfree (NImpl q t p)        = (tyfree q ++ tyfree t ++ tyfree p) \\ tybound q
     tyfree (NTVar k us)         = tyfree us
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
@@ -185,7 +185,7 @@ instance Unalias NameInfo where
     unalias env (NSig t d)          = NSig (unalias env t) d
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NExt n q us)       = NExt n (unalias env q) (unalias env us)
+    unalias env (NImpl q t p)       = NImpl (unalias env q) (unalias env t) (unalias env p)
     unalias env (NTVar k us)        = NTVar k (unalias env us)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
@@ -311,9 +311,8 @@ isProto n env               = case findName n env of                            
                                 NProto q us te -> True
                                 _ -> False
 
-locateWitness               :: Env -> QName -> [TBind] -> [TCon] -> Name                    -- check (ext)
-locateWitness env n q us    = case [ w | (w, NExt n' q' us') <- names env, (n,q,us) == (n',q',us') ] of
-                                [w] -> w
+locateWitnesses             :: Env -> QName -> [TCon] -> [Name]
+locateWitnesses env n us    = [ w | u <- us, (w, NImpl _ (TCon _ tc) p) <- names env, tcname tc == n, tcname p == tcname u ]
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -389,11 +388,6 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif (NSVar t) (NSVar t')           = unifT t t'
     unif (NSig t d) (NSig t' d')
       | d == d'                         = unifT t t'
-    unif (NClass q us te) (NClass q' us' te') 
-                                        = unifC q us te q' us' te'
-    unif (NProto q us te) (NProto q' us' te') 
-                                        = unifC q us te q' us' te'
-    unif (NExt _ q us) (NExt _ q' us')  = unifC q us [] q' us' []
     unif _ _                            = err1 v "Inconsistent bindings for"
 
     unifT (TSchema _ [] t) (TSchema _ [] t')
@@ -460,7 +454,7 @@ importAll m te              = mapMaybe imp te
   where 
     imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
-    imp (n, NExt _ _ _)     = Nothing
+    imp (n, NImpl _ _ _)    = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
     imp (n, NDef t d)       = Just (n, NAlias (QName m n))
