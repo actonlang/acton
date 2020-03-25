@@ -151,7 +151,8 @@ sub' env w t1 (TWild _)                     = return ()
 sub' env w (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n r2 (rowTail r1)
-                                                 subQual env w t1 t2
+                                                 cs <- matchSchema env w t1 t2
+                                                 reduceAll env cs
                                                  sub env w r1 r2'
   where findElem r0 n r tl                  = do r0' <- msubst r0
                                                  r' <- msubst r
@@ -172,19 +173,13 @@ sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n
 sub' env w t1 t2                            = noRed (Sub w t1 t2)
 
 
-subQual env w sc1 sc2                       = do sc1' <- msubst sc1
-                                                 sc2' <- msubst sc2
-                                                 cs <- instmatch env w sc1' sc2'
-                                                 reduceAll env cs
-
-
-instmatch env w (TSchema _ [] t) (TSchema _ [] u)
+matchSchema env w (TSchema _ [] t) (TSchema _ [] u)
                                             = return [Sub w t u]
-instmatch env w sc1 sc2                     = do (cs,t) <- instantiate env sc1
-                                                 match env w cs t sc2
+matchSchema env w sc1 sc2                   = do (cs,t) <- instantiate env sc1
+                                                 matchInst env w cs t sc2
 
 
-match env w cs t sc@(TSchema _ q u)         = do cs' <- simplify env1 (Sub w t u : cs)
+matchInst env w cs t sc@(TSchema _ q u)     = do cs' <- simplify env1 (Sub w t u : cs)
                                                  fvs <- msubstTV (tyfree sc ++ tyfree env)
                                                  let esc = intersect (tybound q) fvs
                                                  when (not $ null esc) (escapingVar esc sc)
