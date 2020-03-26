@@ -275,15 +275,15 @@ tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 findQName                   :: QName -> Env -> NameInfo                     -- Env (tconKind,isProto,findClass,findProto,findVarType,findCon)
 findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of    -- infer (Var,TaVar), checkAssump, infEnvT (PVar)
-                                Just (NAlias qn) -> findName qn env
+                                Just (NAlias qn) -> findQName qn env
                                 Just i -> i
                                 _ -> noItem m n
 findQName (NoQual n) env    = case lookup n (names env) of
-                                Just (NAlias qn) -> findName qn env
+                                Just (NAlias qn) -> findQName qn env
                                 Just info -> info
                                 Nothing -> nameNotFound n
 
-findName n env              = findName n env
+findName n env              = findQName (NoQual n) env
 
 maybeFindMod                :: ModName -> Env -> Maybe TEnv                 -- Env (findName,isMod)
 maybeFindMod (ModName ns) env = f ns (names env)
@@ -299,7 +299,7 @@ isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns
 
 
 tconKind                    :: QName -> Env -> Kind                                         -- Kinds.tconKind
-tconKind n env              = case findName n env of
+tconKind n env              = case findQName n env of
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
@@ -307,7 +307,7 @@ tconKind n env              = case findName n env of
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
 isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,instantiate)
-isProto n env               = case findName n env of                                       -- infEnv (ext), class/protoBases
+isProto n env               = case findQName n env of                                       -- infEnv (ext), class/protoBases
                                 NProto q us te -> True
                                 _ -> False
 
@@ -316,13 +316,6 @@ locateWitnesses env n us    = [ w | u <- us, (w, NImpl _ (TCon _ tc) p) <- names
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
-
-findSubAxiom                :: Env -> TCon -> QName -> Maybe (Bool,Type)                    -- Solver.red (TCon/TCon), infException
-findSubAxiom env c n
-  | null hits               = Nothing 
-  | otherwise               = Just (proto, tCon $ head hits)
-  where (proto,us,_)        = findCon env c
-        hits                = [ u | u <- us, tcname u == n ]
 
 findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)                  -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
 findAttr env u n            = findIn (te ++ concat tes)
@@ -334,11 +327,11 @@ findAttr env u n            = findIn (te ++ concat tes)
                                 Just (NSig t d)       -> (t,d)
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                            -- mro, checkBindings, Env.findSubAxiom, Env.findAttr
+findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                            -- mro, checkBindings, Env.findAttr
 findCon env (TC n ts)
   | map tVar tvs == ts      = (proto, us, te)
   | otherwise               = (proto, subst s us, subst s te)
-  where (proto,q,us,te)     = case findName n env of
+  where (proto,q,us,te)     = case findQName n env of
                                 NClass q us te -> (False,q,us,te)
                                 NProto q us te -> (True,q,us,te)
                                 _ -> err1 n "Class or protocol name expected, got"
@@ -371,7 +364,7 @@ instantiate env (TSchema _ q t)
                                  return (cs, subst s t)
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
-          | otherwise       = return $ Sub Nothing t (tCon u)
+          | otherwise       = return $ Cast t (tCon u)
 
 
 
@@ -391,7 +384,7 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
     unif _ _                            = err1 v "Inconsistent bindings for"
 
     unifT (TSchema _ [] t) (TSchema _ [] t')
-                                        = return [Sub Nothing t t']
+                                        = return [Cast t t']
     
     unifC q us te q' us' te'
       | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
@@ -464,13 +457,15 @@ importAll m te              = mapMaybe imp te
 -- Type inference monad ------------------------------------------------------------------
 
 
-data Constraint                         = Sub       (Maybe Name) Type Type
+data Constraint                         = Cast      Type Type
+                                        | Sub       Name Type Type
                                         | Impl      Name Type TCon
                                         | Qual      Name [TBind] Constraints
                                         | Sel       Type Name Type
                                         | Mut       Type Name Type
 
 instance HasLoc Constraint where
+    loc (Cast t _)                      = loc t
     loc (Sub  _ t _)                    = loc t
     loc (Impl _ t _)                    = loc t
     loc (Qual _ q cs)                   = loc (head cs)
@@ -478,8 +473,8 @@ instance HasLoc Constraint where
     loc (Mut t _ _)                     = loc t
 
 instance Pretty Constraint where
-    pretty (Sub Nothing t1 t2)          = text "_" <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub (Just w) t1 t2)         = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Cast t1 t2)                 = text "_" <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
     pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Qual w q cs)                = pretty w <+> colon <+> brackets (commaSep pretty q) <> text "=>" <> 
                                           parens (commaSep pretty cs)
@@ -524,11 +519,9 @@ pushFX fx                               = state $ \st -> ((), st{ effectstack = 
 currFX                                  :: TypeM FXRow
 currFX                                  = state $ \st -> (head (effectstack st), st)
 
-equFX env fx                            = subFX env Nothing fx
-
-subFX                                   :: Env -> Maybe Name -> FXRow -> TypeM Constraint
-subFX env w fx                          = do fx0 <- currFX
-                                             return $ Sub w fx fx0
+equFX                                   :: Env -> FXRow -> TypeM Constraint
+equFX env fx                            = do fx0 <- currFX
+                                             return $ Cast fx fx0
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
@@ -573,6 +566,9 @@ subst s x                               = evalState (msubst x) (initTypeState $ 
 erase x                                 = subst s x
   where s                               = [ (tv, tWild) | tv <- nub (tyfree x) ]
 
+monotypeOf (TSchema _ [] t)             = t
+monotypeOf sc                           = err1 sc "Monomorphic type expected"
+
 
 class Subst t where
     msubst                          :: t -> TypeM t
@@ -596,12 +592,14 @@ instance Subst a => Subst (Maybe a) where
     tybound                         = maybe [] tybound
 
 instance Subst Constraint where
+    msubst (Cast t1 t2)             = Cast <$> msubst t1 <*> msubst t2
     msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t1
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Qual w q cs)            = Qual w <$> msubst q <*> msubst cs             -- TODO: refine as for TSchema below
     msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
 
+    tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
     tyfree (Qual w q cs)            = (tyfree q ++ tyfree cs) \\ tybound q
