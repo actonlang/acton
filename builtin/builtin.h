@@ -1,9 +1,12 @@
 #pragma once
+#include <stdlib.h>
+#include <stddef.h>
 
 #include "common.h"
-#include "allprotocols.h"
+#include "__builtin__.h"
 #include "Iterator.h"
 #include "int.h"
+#include "slice.h"
 #include "float.h"
 #include "bool.h"
 #include "hash.h"

@@ -1,7 +1,7 @@
 #include "builtin.h"
 
 #include "common.c"
-#include "allprotocols.c"
+#include "__builtin__.c"
 #include "int.c"
 #include "float.c"
 #include "bool.c"

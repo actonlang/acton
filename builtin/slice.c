@@ -1,5 +1,3 @@
-#include <stddef.h>
-#include "common.h"
 
 /* Normalize slice notation, so that
 - if step == 0, VALUEERROR is raised
@@ -12,6 +10,7 @@
        - *step is the step size
        - *slen is the # of elements in the slice. 
 */
+
 
 void normalize_slice(Slice slc, int len, int *slen, int *start, int *stop, int *step) {
   if (slc->step == NULL)

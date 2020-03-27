@@ -26,6 +26,12 @@ typedef struct $complx *$complx;
 struct $bool;
 typedef struct $bool *$bool;
 
+struct Iterator;
+typedef struct Iterator *Iterator;
+
+struct Slice;
+typedef struct Slice *Slice;
+
 struct Eq;
 typedef struct Eq *Eq;
 
@@ -79,6 +85,15 @@ typedef struct Hashable$__class__ *Hashable$__class__;
 
 struct Hashable$opaque;
 typedef struct Hashable$opaque *Hashable$opaque;
+
+struct Boolean;
+typedef struct Boolean *Boolean;
+
+struct Boolean$__class__;
+typedef struct Boolean$__class__ *Boolean$__class__;
+
+struct Boolean$opaque;
+typedef struct Boolean$opaque *Boolean$opaque;
 
 struct Iterable;
 typedef struct Iterable *Iterable;
@@ -188,23 +203,35 @@ typedef struct Integral$__class__ *Integral$__class__;
 struct Integral$opaque;
 typedef struct Integral$opaque *Integral$opaque;
 
+struct Boolean$int;
+typedef struct Boolean$int *Boolean$int;
+
+struct Boolean$int$__class__;
+typedef struct Boolean$int$__class__ *Boolean$int$__class__;
+
+struct Boolean$list;
+typedef struct Boolean$list *Boolean$list;
+
+struct Boolean$list$__class__;
+typedef struct Boolean$list$__class__ *Boolean$list$__class__;
+
 struct Sequence$list;
 typedef struct Sequence$list *Sequence$list;
 
 struct Sequence$list$__class__;
 typedef struct Sequence$list$__class__ *Sequence$list$__class__;
 
-struct Plus$list;
-typedef struct Plus$list *Plus$list;
-
-struct Plus$list$__class__;
-typedef struct Plus$list$__class__ *Plus$list$__class__;
-
 struct Collection$list;
 typedef struct Collection$list *Collection$list;
 
 struct Collection$list$__class__;
 typedef struct Collection$list$__class__ *Collection$list$__class__;
+
+struct Plus$list;
+typedef struct Plus$list *Plus$list;
+
+struct Plus$list$__class__;
+typedef struct Plus$list$__class__ *Plus$list$__class__;
 
 struct Container$list;
 typedef struct Container$list *Container$list;
@@ -236,17 +263,17 @@ typedef struct Ord$set *Ord$set;
 struct Ord$set$__class__;
 typedef struct Ord$set$__class__ *Ord$set$__class__;
 
-struct Minus$set;
-typedef struct Minus$set *Minus$set;
-
-struct Minus$set$__class__;
-typedef struct Minus$set$__class__ *Minus$set$__class__;
-
 struct Logical$set;
 typedef struct Logical$set *Logical$set;
 
 struct Logical$set$__class__;
 typedef struct Logical$set$__class__ *Logical$set$__class__;
+
+struct Minus$set;
+typedef struct Minus$set *Minus$set;
+
+struct Minus$set$__class__;
+typedef struct Minus$set$__class__ *Minus$set$__class__;
 
 struct Iterable$Iterator;
 typedef struct Iterable$Iterator *Iterable$Iterator;
@@ -290,17 +317,17 @@ typedef struct Integral$int *Integral$int;
 struct Integral$int$__class__;
 typedef struct Integral$int$__class__ *Integral$int$__class__;
 
-struct Logical$int;
-typedef struct Logical$int *Logical$int;
-
-struct Logical$int$__class__;
-typedef struct Logical$int$__class__ *Logical$int$__class__;
-
 struct Complx$int;
 typedef struct Complx$int *Complx$int;
 
 struct Complx$int$__class__;
 typedef struct Complx$int$__class__ *Complx$int$__class__;
+
+struct Plus$int;
+typedef struct Plus$int *Plus$int;
+
+struct Plus$int$__class__;
+typedef struct Plus$int$__class__ *Plus$int$__class__;
 
 struct Minus$int;
 typedef struct Minus$int *Minus$int;
@@ -308,11 +335,11 @@ typedef struct Minus$int *Minus$int;
 struct Minus$int$__class__;
 typedef struct Minus$int$__class__ *Minus$int$__class__;
 
-struct Plus$int;
-typedef struct Plus$int *Plus$int;
+struct Logical$int;
+typedef struct Logical$int *Logical$int;
 
-struct Plus$int$__class__;
-typedef struct Plus$int$__class__ *Plus$int$__class__;
+struct Logical$int$__class__;
+typedef struct Logical$int$__class__ *Logical$int$__class__;
 
 struct Hashable$int;
 typedef struct Hashable$int *Hashable$int;
@@ -332,17 +359,17 @@ typedef struct Complx$float *Complx$float;
 struct Complx$float$__class__;
 typedef struct Complx$float$__class__ *Complx$float$__class__;
 
-struct Minus$float;
-typedef struct Minus$float *Minus$float;
-
-struct Minus$float$__class__;
-typedef struct Minus$float$__class__ *Minus$float$__class__;
-
 struct Plus$float;
 typedef struct Plus$float *Plus$float;
 
 struct Plus$float$__class__;
 typedef struct Plus$float$__class__ *Plus$float$__class__;
+
+struct Minus$float;
+typedef struct Minus$float *Minus$float;
+
+struct Minus$float$__class__;
+typedef struct Minus$float$__class__ *Minus$float$__class__;
 
 struct Hashable$float;
 typedef struct Hashable$float *Hashable$float;
@@ -484,6 +511,27 @@ struct Hashable$opaque {
 };
 
 Hashable$opaque Hashable$__pack__(Hashable __proto__, $WORD __impl__);
+
+
+// Boolean ////////////////////////////////////////////////////////////
+
+struct Boolean {
+    char *GCINFO;
+    Boolean$__class__  __class__;
+};
+
+struct Boolean$__class__ {
+    char *GCINFO;
+    $bool (*__bool__)(Boolean, $WORD);
+};
+
+struct Boolean$opaque {
+    char *GCINFO;
+    Boolean __proto__;
+    $WORD __impl__;
+};
+
+Boolean$opaque Boolean$__pack__(Boolean __proto__, $WORD __impl__);
 
 
 // Iterable ////////////////////////////////////////////////////////////
@@ -745,6 +793,8 @@ struct Real {
     char *GCINFO;
     Real$__class__  __class__;
     Complx _Complx;
+    Plus _Plus;
+    Minus _Minus;
 };
 
 struct Real$__class__ {
@@ -776,6 +826,9 @@ Real$opaque Real$__pack__(Real __proto__, $WORD __impl__);
 struct Rational {
     char *GCINFO;
     Rational$__class__  __class__;
+    Complx _Complx;
+    Plus _Plus;
+    Minus _Minus;
 };
 
 struct Rational$__class__ {
@@ -809,6 +862,9 @@ Rational$opaque Rational$__pack__(Rational __proto__, $WORD __impl__);
 struct Integral {
     char *GCINFO;
     Integral$__class__  __class__;
+    Complx _Complx;
+    Plus _Plus;
+    Minus _Minus;
     Logical _Logical;
 };
 
@@ -846,6 +902,34 @@ struct Integral$opaque {
 Integral$opaque Integral$__pack__(Integral __proto__, $WORD __impl__);
 
 
+// Boolean$int ////////////////////////////////////////////////////////////
+
+struct Boolean$int {
+    char *GCINFO;
+    Boolean$int$__class__  __class__;
+};
+
+struct Boolean$int$__class__ {
+    char *GCINFO;
+    $bool (*__bool__)(Boolean$int, $int);
+};
+
+$bool Boolean$int$__bool__ (Boolean$int, $int);
+
+// Boolean$list ////////////////////////////////////////////////////////////
+
+struct Boolean$list {
+    char *GCINFO;
+    Boolean$list$__class__  __class__;
+};
+
+struct Boolean$list$__class__ {
+    char *GCINFO;
+    $bool (*__bool__)(Boolean$list, $list);
+};
+
+$bool Boolean$list$__bool__ (Boolean$list, $list);
+
 // Sequence$list ////////////////////////////////////////////////////////////
 
 struct Sequence$list {
@@ -880,21 +964,6 @@ None Sequence$list$insert (Sequence$list, $list, $int, $WORD);
 None Sequence$list$append (Sequence$list, $list, $WORD);
 None Sequence$list$reverse (Sequence$list, $list);
 
-// Plus$list ////////////////////////////////////////////////////////////
-
-struct Plus$list {
-    char *GCINFO;
-    Plus$list$__class__  __class__;
-    Sequence _Sequence;
-};
-
-struct Plus$list$__class__ {
-    char *GCINFO;
-    $list (*__add__)(Plus$list, $list, $list);
-};
-
-$list Plus$list$__add__ (Plus$list, $list, $list);
-
 // Collection$list ////////////////////////////////////////////////////////////
 
 struct Collection$list {
@@ -913,6 +982,21 @@ struct Collection$list$__class__ {
 Iterator Collection$list$__iter__ (Collection$list, $list);
 $list Collection$list$__fromiter__ (Collection$list, Iterable$opaque);
 $int Collection$list$__len__ (Collection$list, $list);
+
+// Plus$list ////////////////////////////////////////////////////////////
+
+struct Plus$list {
+    char *GCINFO;
+    Plus$list$__class__  __class__;
+    Sequence _Sequence;
+};
+
+struct Plus$list$__class__ {
+    char *GCINFO;
+    $list (*__add__)(Plus$list, $list, $list);
+};
+
+$list Plus$list$__add__ (Plus$list, $list, $list);
 
 // Container$list ////////////////////////////////////////////////////////////
 
@@ -1057,22 +1141,6 @@ $bool Ord$set$__le__ (Ord$set, $set, $set);
 $bool Ord$set$__gt__ (Ord$set, $set, $set);
 $bool Ord$set$__ge__ (Ord$set, $set, $set);
 
-// Minus$set ////////////////////////////////////////////////////////////
-
-struct Minus$set {
-    char *GCINFO;
-    Minus$set$__class__  __class__;
-    Set _Set;
-    Hashable _Hashable;
-};
-
-struct Minus$set$__class__ {
-    char *GCINFO;
-    $set (*__sub__)(Minus$set, $set, $set);
-};
-
-$set Minus$set$__sub__ (Minus$set, $set, $set);
-
 // Logical$set ////////////////////////////////////////////////////////////
 
 struct Logical$set {
@@ -1092,6 +1160,22 @@ struct Logical$set$__class__ {
 $set Logical$set$__and__ (Logical$set, $set, $set);
 $set Logical$set$__or__ (Logical$set, $set, $set);
 $set Logical$set$__xor__ (Logical$set, $set, $set);
+
+// Minus$set ////////////////////////////////////////////////////////////
+
+struct Minus$set {
+    char *GCINFO;
+    Minus$set$__class__  __class__;
+    Set _Set;
+    Hashable _Hashable;
+};
+
+struct Minus$set$__class__ {
+    char *GCINFO;
+    $set (*__sub__)(Minus$set, $set, $set);
+};
+
+$set Minus$set$__sub__ (Minus$set, $set, $set);
 
 // Iterable$Iterator ////////////////////////////////////////////////////////////
 
@@ -1215,6 +1299,9 @@ $int Hashable$str$__hash__ (Hashable$str, $str);
 struct Integral$int {
     char *GCINFO;
     Integral$int$__class__  __class__;
+    Complx _Complx;
+    Plus _Plus;
+    Minus _Minus;
     Logical _Logical;
 };
 
@@ -1265,25 +1352,6 @@ $int Integral$int$__lshift__ (Integral$int, $int, $int);
 $int Integral$int$__rshift__ (Integral$int, $int, $int);
 $int Integral$int$__invert__ (Integral$int, $int);
 
-// Logical$int ////////////////////////////////////////////////////////////
-
-struct Logical$int {
-    char *GCINFO;
-    Logical$int$__class__  __class__;
-    Integral _Integral;
-};
-
-struct Logical$int$__class__ {
-    char *GCINFO;
-    $int (*__and__)(Logical$int, $int, $int);
-    $int (*__or__)(Logical$int, $int, $int);
-    $int (*__xor__)(Logical$int, $int, $int);
-};
-
-$int Logical$int$__and__ (Logical$int, $int, $int);
-$int Logical$int$__or__ (Logical$int, $int, $int);
-$int Logical$int$__xor__ (Logical$int, $int, $int);
-
 // Complx$int ////////////////////////////////////////////////////////////
 
 struct Complx$int {
@@ -1325,6 +1393,21 @@ Real$opaque Complx$int$imag (Complx$int, $int);
 Real$opaque Complx$int$__abs__ (Complx$int, $int);
 $int Complx$int$conjugate (Complx$int, $int);
 
+// Plus$int ////////////////////////////////////////////////////////////
+
+struct Plus$int {
+    char *GCINFO;
+    Plus$int$__class__  __class__;
+    Integral _Integral;
+};
+
+struct Plus$int$__class__ {
+    char *GCINFO;
+    $int (*__add__)(Plus$int, $int, $int);
+};
+
+$int Plus$int$__add__ (Plus$int, $int, $int);
+
 // Minus$int ////////////////////////////////////////////////////////////
 
 struct Minus$int {
@@ -1340,20 +1423,24 @@ struct Minus$int$__class__ {
 
 $int Minus$int$__sub__ (Minus$int, $int, $int);
 
-// Plus$int ////////////////////////////////////////////////////////////
+// Logical$int ////////////////////////////////////////////////////////////
 
-struct Plus$int {
+struct Logical$int {
     char *GCINFO;
-    Plus$int$__class__  __class__;
+    Logical$int$__class__  __class__;
     Integral _Integral;
 };
 
-struct Plus$int$__class__ {
+struct Logical$int$__class__ {
     char *GCINFO;
-    $int (*__add__)(Plus$int, $int, $int);
+    $int (*__and__)(Logical$int, $int, $int);
+    $int (*__or__)(Logical$int, $int, $int);
+    $int (*__xor__)(Logical$int, $int, $int);
 };
 
-$int Plus$int$__add__ (Plus$int, $int, $int);
+$int Logical$int$__and__ (Logical$int, $int, $int);
+$int Logical$int$__or__ (Logical$int, $int, $int);
+$int Logical$int$__xor__ (Logical$int, $int, $int);
 
 // Hashable$int ////////////////////////////////////////////////////////////
 
@@ -1379,6 +1466,8 @@ struct Real$float {
     char *GCINFO;
     Real$float$__class__  __class__;
     Complx _Complx;
+    Plus _Plus;
+    Minus _Minus;
 };
 
 struct Real$float$__class__ {
@@ -1449,21 +1538,6 @@ Real$opaque Complx$float$imag (Complx$float, $float);
 Real$opaque Complx$float$__abs__ (Complx$float, $float);
 $float Complx$float$conjugate (Complx$float, $float);
 
-// Minus$float ////////////////////////////////////////////////////////////
-
-struct Minus$float {
-    char *GCINFO;
-    Minus$float$__class__  __class__;
-    Real _Real;
-};
-
-struct Minus$float$__class__ {
-    char *GCINFO;
-    $float (*__sub__)(Minus$float, $float, $float);
-};
-
-$float Minus$float$__sub__ (Minus$float, $float, $float);
-
 // Plus$float ////////////////////////////////////////////////////////////
 
 struct Plus$float {
@@ -1478,6 +1552,21 @@ struct Plus$float$__class__ {
 };
 
 $float Plus$float$__add__ (Plus$float, $float, $float);
+
+// Minus$float ////////////////////////////////////////////////////////////
+
+struct Minus$float {
+    char *GCINFO;
+    Minus$float$__class__  __class__;
+    Real _Real;
+};
+
+struct Minus$float$__class__ {
+    char *GCINFO;
+    $float (*__sub__)(Minus$float, $float, $float);
+};
+
+$float Minus$float$__sub__ (Minus$float, $float, $float);
 
 // Hashable$float ////////////////////////////////////////////////////////////
 
@@ -1497,3 +1586,4 @@ $bool Hashable$float$__eq__ (Hashable$float, $float, $float);
 $bool Hashable$float$__ne__ (Hashable$float, $float, $float);
 $int Hashable$float$__hash__ (Hashable$float, $float);
 
+$WORD next(Iterator it);

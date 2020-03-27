@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "allprotocols.h"
+#include "builtin.h"
 
 /* 
 Hashing of primitive types as in 
