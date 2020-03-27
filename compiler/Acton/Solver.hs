@@ -75,7 +75,7 @@ reduce' env (Sel (TExist _ p) n t2)         = do let (sc,dec) = findAttr env tc 
                                                  let t' = subst [(tvSelf,tCon tc)] t
                                                  reduce env (Cast t' t2 : cs)
   where
-    addself (TSchema l q t) (ClassAttr _)   = TSchema l q (addself' t)
+    addself (TSchema l q t) ClassAttr       = TSchema l q (addself' t)
     addself sc _                            = sc
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t

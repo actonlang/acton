@@ -621,8 +621,8 @@ decorator = do
        if (p /= p1)
          then fail "Decorated statement must have same indentation as decoration"
          else return d
-   where decoration = rword "@classattr" *> assertDecl *> newline1 *> return (S.ClassAttr True)
-                  <|> rword "@instattr" *> assertDecl *> newline1 *> return (S.InstAttr True)
+   where decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr
+                  <|> rword "@instattr" *> assertDecl *> newline1 *> return S.InstAttr
                   <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
                   <|> return S.NoDec
 

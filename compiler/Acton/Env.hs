@@ -203,9 +203,40 @@ nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 nVars                       :: TEnv -> Schemas                              -- dump INS/GEN, infEnv Data, env2row (Actor), checkBindings (inherited,undefs)
 nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
-nSigs                       :: TEnv -> TEnv                                 -- checkBindings (inherited,refinements,unsigs,allsigs)
-nSigs te                    = [ (n,i) | (n, i@NSig{}) <- te ]
-                                
+nSigs                       :: TEnv -> Schemas                              -- checkBindings (inherited,refinements,unsigs,allsigs)
+nSigs te                    = [ (n,sc) | (n, NSig sc dec) <- te ]
+
+nTerms                      :: TEnv -> Schemas
+nTerms []                   = []
+nTerms ((n, NVar sc):te)    = (n,sc) : nTerms te
+nTerms ((n, NDef sc _):te)  = (n,sc) : nTerms te
+nTerms (_:te)               = nTerms te
+
+nSchemas                    :: TEnv -> Schemas
+nSchemas []                 = []
+nSchemas ((n,NVar sc):te)   = (n,sc) : nSchemas te
+nSchemas ((n,NDef sc _):te) = (n,sc) : nSchemas te
+nSchemas ((n,NSig sc _):te) = (n,sc) : nSchemas te
+nSchemas (_:te)             = nSchemas te
+
+
+parentTEnv env us           = concatMap tEnv us
+  where tEnv u              = case findQName (tcname u) env of
+                                NClass q _ te -> subst (tybound q `zip` tcargs u) te
+                                NProto q _ te -> subst (tybound q `zip` tcargs u) te
+                                _             -> []
+
+shadowTEnv te te'           = (nsigs,nterms,osigs,oterms')
+  where (osigs,nsigs)       = partition override $ nSigs te
+        (oterms,nterms)     = partition override $ nTerms te
+        oterms'             = [ (n,sc,sc') | (n,sc) <- oterms, Just sc' <- [lookup n super] ]
+        override            = (`elem` (dom super)) . fst
+        super               = nSchemas te'
+
+abstractTEnv te te'         = filter notImpl $ nSigs te1
+  where te1                 = te ++ te'
+        notImpl             = (`notElem` (dom $ nTerms te1)) . fst
+
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
