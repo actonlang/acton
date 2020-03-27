@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../builtin.h"
- 
+
+
 
 int main() {
   Set$set wit= Set$set_new((Hashable)Hashable$int_new());
@@ -16,7 +17,7 @@ int main() {
   wit->__class__->discard(wit,s,to$int(10000));
   int n = 0;
   for (long k = 0; k < 1000; k++)
-    if (wit->__class__->__contains__(wit,s,to$int(k))) {
+    if (from$bool(wit->__class__->__contains__(wit,s,to$int(k)))) {
       n++;
     }
   printf("#elements <1000 is %d (should be 18)\n",n);
@@ -44,6 +45,5 @@ int main() {
   while((w = wit->__class__->pop(wit,s3)))
     printf("popped %ld\n",from$int(w));
   printf("size of intersection is now %ld\n",from$int(wit->__class__->__len__(wit,s3)));
-        
 }
             
