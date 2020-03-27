@@ -3,6 +3,7 @@ $int to$int(long n);
 long from$int($int n);
 
 Hashable$int Hashable$int_new();
+Integral$int Integral$int_new();
 Plus$int Plus$int_new();
 /*
 
