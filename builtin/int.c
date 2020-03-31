@@ -222,7 +222,7 @@ static struct Logical$int Logical$int_instance;
 static struct Complex$int Complex$int_instance;
 static struct Plus$int Plus$int_instance;
 static struct Minus$int Minus$int_instance;
-static struct Integral$int Integral$int_instance;
+static struct Hashable$int Hashable$int_instance;
 
 static struct Integral$int$__class__ Integral$int_methods = {"", Integral$int$__eq__ , Integral$int$__ne__ , Integral$int$__lt__ , Integral$int$__le__ ,
                                                      Integral$int$__gt__ , Integral$int$__ge__ , Integral$int$__float__ , Integral$int$__trunc__ , Integral$int$__floor__ ,
