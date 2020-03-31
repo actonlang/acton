@@ -22,7 +22,7 @@ static Plus$list Plus$list_witness = &Plus$list_instance;
 static struct Container$list$__class__ Container$list_methods = {"",(Iterator (*)(Container$list, $list))Collection$list$__iter__,
                                                                  ($list (*)(Container$list, Iterable$opaque))Collection$list$__fromiter__,
                                                                  ($int (*)(Container$list, $list))Collection$list$__len__,
-                                        Container$list$__contains__,Container$list$__containsnot__};
+                                                                  Container$list$__contains__,Container$list$__containsnot__};
 
 Sequence$list Sequence$list_new() {
   return Sequence$list_witness;

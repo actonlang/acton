@@ -5,6 +5,7 @@
 #include "int.c"
 #include "float.c"
 #include "bool.c"
+#include "complex.c"
 #include "Iterator.c"
 #include "slice.c"
 #include "hash.c"
