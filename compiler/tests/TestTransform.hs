@@ -4,14 +4,14 @@ import System.IO
 import Pretty
 import Acton.Printer
 import Acton.Syntax
-import Tests.ProtExtElim2
+import Tests.ProtExtElim
 import Tests.CPretty
 import InterfaceFiles
 
 
-main                  = do tenv <- InterfaceFiles.readFile "__builtin__.ty"
-                           let (tenv',ps) = transform tenv
-                           putStrLn (render(cprettyEnv ps tenv'))
+main                  = do (_,m) <- P.parseModule (ModName [name "__builtin__"]) "__builtin__.act"
+                           let m1  = transform m
+                           putStrLn (render(cprint m1))
 
 
 
