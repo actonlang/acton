@@ -119,7 +119,7 @@ class_struct                            :: [Name] -> Name -> [(Name,NameInfo)] -
 class_struct ps nm ms                   = text "struct" <+> cpretty ps nm<>text "$__class__" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty ps . addparSig nm) ms)) $+$
                                           text "};"
-  where addparSig nm (n,sig@(NSig (TSchema _ _ _) StaticMethod))
+  where addparSig nm (n,sig@(NSig (TSchema _ _ _) Static))
                                         = (n,sig)
         addparSig nm (n,NSig (TSchema l2 qs (TFun l3 f p k r)) d)
                                         =  (n,NSig (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d)
@@ -135,7 +135,7 @@ opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" 
                                           blank
 
 fun_prototypes ps nm ss                  = vcat (map proto ss)
-  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) StaticMethod)
+  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) Static)
          --                               = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
          proto (ns,NSig (TSchema _ _ (TFun _ f p _ r)) _)
                                         = resultTuple ps r <+> cpretty ps nm<>text "$"<>cpretty ps ns<+>parens (cprettyPosRow ps (addFstElem nm p)) <>semi

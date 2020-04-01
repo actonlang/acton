@@ -63,20 +63,20 @@ reduce' env c@(Sel (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | Just u <- findSubBound tv env           = reduce' env (Sel (tCon u) n t2)
 reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
-                                                 when (dec == StaticMethod) (noSelStatic n tc)
+                                                 when (dec == Static) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduce env (Cast t' t2 : cs)
 reduce' env (Sel (TTuple _ p r) n t2)       = reduce' env (Cast r (kwdRow n (monotype t2) tWild))
 {-
 reduce' env (Sel (TExist _ p) n t2)         = do let (sc,dec) = findAttr env tc n
-                                                 when (isInstAttr dec) (noSelInstByClass n tc)
+                                                 when (dec==Property) (noSelInstByClass n tc)
                                                  (cs,t) <- instantiate env (addself sc dec)
                                                  let t' = subst [(tvSelf,tCon tc)] t
                                                  reduce env (Cast t' t2 : cs)
   where
-    addself (TSchema l q t) ClassAttr       = TSchema l q (addself' t)
-    addself sc _                            = sc
+    addself sc Static                       = sc
+    addself (TSchema l q t) _               = TSchema l q (addself' t)
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
 -}
@@ -86,7 +86,7 @@ reduce' env c@(Mut (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | Just u <- findSubBound tv env           = reduce' env (Mut (tCon u) n t2)
 reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
-                                                 when (not $ isInstAttr dec) (noMutClass n)
+                                                 when (dec==Property) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduce env (Cast t1 tObject : Cast t' t2 : cs)

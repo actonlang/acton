@@ -63,7 +63,7 @@ instance Transform NameInfo where
             sigs2                       = addWitnesses env ws sigs1
             cs                          = chains (tenv env) bs
             bs1                         = if null cs then [] else map head (tail cs)
-   trans env (NSig sc d)                = NSig (trans env{decor = d} sc) (if d == StaticMethod then NoDec else d) 
+   trans env (NSig sc d)                = NSig (trans env{decor = d} sc) (if d == Static then NoDec else d) 
    trans env ni                         = ni
 
 instance Transform TSchema where
@@ -75,7 +75,7 @@ instance Transform Type where
     trans env v@TVar{}                  = v
     trans env (TTuple loc p k)          = TTuple loc (trans env p) (trans env k)
     trans env (TFun loc fx p k r)       = TFun loc fx p1 (trans env k) (trans env r)
-       where p1                         = if decor env == StaticMethod
+       where p1                         = if decor env == Static
                                           then trans env p
                                           else maybe (trans env p) (\t -> TRow loc PRow (name "???") (monotype (trans env t)) (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t

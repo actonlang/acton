@@ -74,8 +74,8 @@ assertTop           = ifCtx [TOP]                   [IF]                success 
 assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
 assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "statement only allowed inside an actor scope")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
-assertDecl          = ifCtx [CLASS,PROTO]           [IF]                success (fail "decoration only allowed inside a class or protocol")
-assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success (fail "signature only allowed on the top level or inside a class or a protocol")
+assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class or protocol")
+assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
@@ -596,7 +596,7 @@ import_stmt = import_name <|> import_from
 assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr <*> optional (comma *> expr))
 
 signature :: Parser S.Stmt
-signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; return $ S.Signature NoLoc ns t dec)
+signature = addLoc (do dec <- decorator True; (ns,t) <- tsig; return $ S.Signature NoLoc ns t dec)
    where tsig = do v <- name
                    vs <- commaList name
                    colon
@@ -613,23 +613,22 @@ decl_group = do p <- L.indentLevel
 decl :: Parser S.Decl
 decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
-decorator :: Parser S.Decoration
-decorator = do
+decorator :: Bool -> Parser S.Decoration
+decorator sig = do
        p <- L.indentLevel
        d <- decoration
        p1 <- L.indentLevel
        if (p /= p1)
          then fail "Decorated statement must have same indentation as decoration"
          else return d
-   where decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr
-                  <|> rword "@instattr" *> assertDecl *> newline1 *> return S.InstAttr
-                  <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
-                  <|> return S.NoDec
+   where property = rword "@property" *> assertClass *> newline1 *> return S.Property
+         static   = (rword "@staticmethod" <|> rword "@static") *> assertDecl *> newline1 *> return S.Static
+         decoration = (if sig then property <|> static else static) <|> return S.NoDec
 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              (p,md) <- withPos (decorator <* rword "def")
+              (p,md) <- withPos (decorator False <* rword "def")
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)

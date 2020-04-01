@@ -172,7 +172,7 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Decoration = NoDec | InstAttr | ClassAttr | StaticMethod deriving (Eq,Show,Read,Generic)
+data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KProto | XRow | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
@@ -558,12 +558,6 @@ cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
 -- tuple es                            = Tuple l0 (map Elem es)
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
-
-isInstAttr InstAttr                 = True
-isInstAttr _                        = False
-
-isClassAttr ClassAttr               = True
-isClassAttr _                       = False
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

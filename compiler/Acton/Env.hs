@@ -200,23 +200,26 @@ instance Unalias (Name,NameInfo) where
 nTVars                      :: [TBind] -> TEnv                              -- infEnv (ExceptAs), Env.defineTVars, Env.defineSelf'
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
-nVars                       :: TEnv -> Schemas                              -- dump INS/GEN, infEnv Data, env2row (Actor), checkBindings (inherited,undefs)
-nVars te                    = [ (n,sc) | (n, NVar sc) <- te ]
 
-nSigs                       :: TEnv -> Schemas                              -- checkBindings (inherited,refinements,unsigs,allsigs)
-nSigs te                    = [ (n,sc) | (n, NSig sc dec) <- te ]
+nSigs                       :: TEnv -> TEnv                                 -- checkBindings (inherited,refinements,unsigs,allsigs)
+nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
 
-nTerms                      :: TEnv -> Schemas
-nTerms []                   = []
-nTerms ((n, NVar sc):te)    = (n,sc) : nTerms te
-nTerms ((n, NDef sc _):te)  = (n,sc) : nTerms te
-nTerms (_:te)               = nTerms te
+nProps                      :: TEnv -> TEnv
+nProps te                   = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
+  where isProp Property _   = True
+        isProp NoDec sc     = case sctype sc of TFun{} -> False; _ -> True
+        isProp _ _          = False
 
+nTerms                      :: TEnv -> TEnv
+nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
+  where isTerm NDef{}       = True
+        isTerm NVar{}       = True
+        isTerm _            = False
+        
 nSchemas                    :: TEnv -> Schemas
 nSchemas []                 = []
-nSchemas ((n,NVar sc):te)   = (n,sc) : nSchemas te
-nSchemas ((n,NDef sc _):te) = (n,sc) : nSchemas te
-nSchemas ((n,NSig sc _):te) = (n,sc) : nSchemas te
+nSchemas ((n,NVar sc):te)   = (n, sc) : nSchemas te
+nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
 
@@ -226,16 +229,7 @@ parentTEnv env us           = concatMap tEnv us
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
                                 _             -> []
 
-shadowTEnv te te'           = (nsigs,nterms,osigs,oterms')
-  where (osigs,nsigs)       = partition override $ nSigs te
-        (oterms,nterms)     = partition override $ nTerms te
-        oterms'             = [ (n,sc,sc') | (n,sc) <- oterms, Just sc' <- [lookup n super] ]
-        override            = (`elem` (dom super)) . fst
-        super               = nSchemas te'
-
-abstractTEnv te te'         = filter notImpl $ nSigs te1
-  where te1                 = te ++ te'
-        notImpl             = (`notElem` (dom $ nTerms te1)) . fst
+splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
@@ -350,21 +344,21 @@ locateWitnesses env n us    = [ w | u <- us, (w, NImpl _ (TCon _ tc) p) <- names
 
 findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)                  -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
 findAttr env u n            = findIn (te ++ concat tes)
-  where (_,us,te)           = findCon env u
-        tes                 = [ te' | u' <- us, let (_,_,te') = findCon env u' ]
+  where (us,te)             = findCon env u
+        tes                 = [ te' | u' <- us, let (_,te') = findCon env u' ]
         findIn te1          = case lookup n te1 of
                                 Just (NVar t)         -> (t,NoDec)
                                 Just (NSVar t)        -> (t,NoDec)
                                 Just (NSig t d)       -> (t,d)
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> (Bool,[TCon],TEnv)                            -- mro, checkBindings, Env.findAttr
+findCon                     :: Env -> TCon -> ([TCon],TEnv)                                 -- mro, checkBindings, Env.findAttr
 findCon env (TC n ts)
-  | map tVar tvs == ts      = (proto, us, te)
-  | otherwise               = (proto, subst s us, subst s te)
-  where (proto,q,us,te)     = case findQName n env of
-                                NClass q us te -> (False,q,us,te)
-                                NProto q us te -> (True,q,us,te)
+  | map tVar tvs == ts      = (us, te)
+  | otherwise               = (subst s us, subst s te)
+  where (q,us,te)           = case findQName n env of
+                                NClass q us te -> (q,us,te)
+                                NProto q us te -> (q,us,te)
                                 _ -> err1 n "Class or protocol name expected, got"
         tvs                 = tybound q
         s                   = tvs `zip` ts
