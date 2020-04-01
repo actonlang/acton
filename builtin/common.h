@@ -15,12 +15,14 @@ struct $tup2_t;
 typedef struct $tup2_t  *$tup2_t;
 
 struct $tup2_t {
+  char *$GCINFO;
   $WORD a;
   $WORD b;
 };
 
 struct $tup3_t;
 typedef struct $tup3_t {
+  char *$GCINFO;
   $WORD a;
   $WORD b;
   $WORD c;

@@ -96,3 +96,31 @@ Set$opaque Set$__pack__(Set __proto__, $WORD __impl__){
   res->__impl__ = __impl__;
   return res;
 }
+
+Complex$opaque Complex$__pack__(Complex __proto__, $WORD __impl__){
+  Complex$opaque res = malloc(sizeof(struct Complex$opaque));
+  res->__proto__ = __proto__;
+  res->__impl__ = __impl__;
+  return res;
+}
+
+Real$opaque Real$__pack__(Real __proto__, $WORD __impl__){
+  Real$opaque res = malloc(sizeof(struct Real$opaque));
+  res->__proto__ = __proto__;
+  res->__impl__ = __impl__;
+  return res;
+}
+
+Rational$opaque Rational$__pack__(Rational __proto__, $WORD __impl__){
+  Rational$opaque res = malloc(sizeof(struct Rational$opaque));
+  res->__proto__ = __proto__;
+  res->__impl__ = __impl__;
+  return res;
+}
+
+Integral$opaque Integral$__pack__(Integral __proto__, $WORD __impl__){
+  Integral$opaque res = malloc(sizeof(struct Integral$opaque));
+  res->__proto__ = __proto__;
+  res->__impl__ = __impl__;
+  return res;
+}

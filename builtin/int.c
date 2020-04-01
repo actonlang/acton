@@ -15,184 +15,137 @@ long from$int($int w) {
   return w->val;
 }
 
+// Integral$int /////////////////////////////////////////////////////////////////////////
 
-$bool Hashable$int$__eq__(Hashable$int wit, $int a, $int b) {
+$bool Integral$int$__eq__ (Integral$int wit, $int a, $int b) {
   return to$bool(a->val == b->val);
 }
 
-$bool Hashable$int$__neq__(Hashable$int wit, $int a, $int b) {
+$bool Integral$int$__ne__ (Integral$int wit, $int a, $int b) {
   return to$bool(a->val != b->val);
 }
 
-$int Hashable$int$__hash__(Hashable$int wit, $int a) {
-  return to$int($int_hash(a));
+$bool Integral$int$__lt__ (Integral$int wit, $int a, $int b) {
+  return to$bool(a->val < b->val);
 }
-/*
-$bool $int_lt_instance(Ord$__class__ cl, $WORD a, $WORD b);
-$bool $int_le_instance(Ord$__class__ cl, $WORD a, $WORD b);
-$bool $int_gt_instance(Ord$__class__ cl, $WORD a, $WORD b);
-$bool $int_ge_instance(Ord$__class__ cl, $WORD a, $WORD b);
 
-$WORD $int_and_instance(Logical$__class__ cl, $WORD a, $WORD b);
-$WORD $int_or_instance(Logical$__class__ cl, $WORD a, $WORD b);
-$WORD $int_xor_instance(Logical$__class__ cl, $WORD a, $WORD b);
+$bool Integral$int$__le__ (Integral$int wit, $int a, $int b) {
+  return to$bool(a->val <= b->val);
+}
 
-$WORD $int_add_instance(Plus$__class__ cl, $WORD a, $WORD b);
+$bool Integral$int$__gt__ (Integral$int wit, $int a, $int b) {
+  return to$bool(a->val > b->val);
+}
 
-$WORD $int_sub_instance(Minus$__class__ cl, $WORD a, $WORD b);
+$bool Integral$int$__ge__ (Integral$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
+}
 
-$complex $int_complex_instance(Complex$__class__ cl, $WORD a);
-$bool $int_bool_instance(Complex$__class__ cl, $WORD a);
-$WORD $int_mul_instance(Complex$__class__ cl,  $WORD a, $WORD b);
-$WORD $int_truediv_instance(Complex$__class__ cl,  $WORD a, $WORD b);
-$WORD $int_pow_instance(Complex$__class__ cl,  $WORD a, $WORD b);
-$WORD $int_neg_instance(Complex$__class__ cl,  $WORD a);
-$WORD $int_pos_instance(Complex$__class__ cl,  $WORD a);
-Real $int_real_instance(Complex$__class__ cl,  $WORD a);
-Real $int_imag_instance(Complex$__class__ cl,  $WORD a);
-$WORD $int_conjugate_instance(Complex$__class__ cl,  $WORD a);
+$float Integral$int$__float__ (Integral$int wit, $int n) {
+  return to$float((double)n->val);
+}
 
-$float $int_float_instance(Real$__class__ cl, $WORD a);
-Integral $int_trunc_instance(Real$__class__ cl, $WORD a);
-Integral $int_floor_instance(Real$__class__ cl, $WORD a);
-Integral $int_ceil_instance(Real$__class__ cl, $WORD a);
-Integral $int_round_instance(Real$__class__ cl, $WORD a);
-                               
-Integral $int_numerator_instance(Rational$__class__ cl, $WORD a);
-Integral $int_denominator_instance(Rational$__class__ cl, $WORD a);
-
-$int $int_int_instance(Integral$__class__ cl, $WORD a);
-$int $int_index_instance(Integral$__class__ cl, $WORD a);
-$divmod_t $int_divmod_instance(Integral$__class__ cl, $WORD a, $WORD b);
-$WORD $int_floordiv_instance(Integral$__class__ cl, $WORD a, $WORD b);
-$WORD $int_mod_instance(Integral$__class__ cl, $WORD a, $WORD b);
-$WORD $int_lshift_instance(Integral$__class__ cl,  $WORD a, $WORD b);
-$WORD $int_rshift_instance(Integral$__class__ cl,  $WORD a, $WORD b);
-$WORD $int_invert_instance(Integral$__class__ cl,  $WORD a);
-
-struct Eq$__class__ Eq$int_struct = {"GC_Eq$int",$int_eq_instance,$int_neq_instance};
-Eq$__class__ Eq$int_instance = &Eq$int_struct;
-*/
-struct Hashable$int$__class__ Hashable$int$__methods__ = {"",Hashable$int$__eq__,Hashable$int$__neq__,Hashable$int$__hash__};
+Integral$opaque Integral$int$__trunc__ (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,n);
+}
   
-Hashable$int Hashable$int_new() {
-  Hashable$int res = malloc(sizeof(struct Hashable$int));
-  res->__class__ = &Hashable$int$__methods__;
+Integral$opaque Integral$int$__floor__ (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,n);
+}
+  
+Integral$opaque Integral$int$__ceil__ (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,n);
+}
+  
+Integral$opaque Integral$int$__round__ (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,n);
+}
+  
+Integral$opaque Integral$int$numerator (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,n);
+}
+  
+Integral$opaque Integral$int$denominator (Integral$int wit, $int n) {
+  return Integral$__pack__((Integral)wit,to$int(1L));
+}
+  
+$int Integral$int$__int__ (Integral$int wit, $int n) {
+  return n;
+}
+
+$int Integral$int$__index__(Integral$int wit, $int n) {
+  return n;
+}
+
+$tup2_t Integral$int$__divmod__(Integral$int wit, $int a, $int b) {
+  int n = from$int(a);
+  int d = from$int(b);
+  $tup2_t res = malloc(sizeof(struct $tup2_t));
+  res->$GCINFO = "";
+  res->a = to$int(n/d);
+  res->b = to$int(n%d);
   return res;
 }
 
-struct Plus$int$__class__ Plus$int$__methods__ = {"",Plus$int$__add__};
-
-Plus$int Plus$int_new() {
-  Plus$int res = malloc(sizeof(struct Plus$int));
-  res->__class__ = &Plus$int$__methods__;
-  return res;
+$int Integral$int$__floordiv__(Integral$int wit, $int a, $int b) {
+  return to$int(from$int(a) / from$int(b));
 }
 
-/*
-struct Ord$__class__ Ord$int_struct = {"GC_Ord$int",&Eq$int_struct, $int_lt_instance,$int_le_instance, $int_gt_instance, $int_ge_instance};
-Ord$__class__ Ord$int_instance = &Ord$int_struct;
-
-struct Logical$__class__ Logical$int_struct = {"GC_Logical$int", $int_and_instance,$int_or_instance, $int_xor_instance};
-Logical$__class__ Logical$int_instance = &Logical$int_struct;
-
-struct Plus$__class__ Plus$int_struct = {"GC_Plus$int",$int_add_instance};
-Plus$__class__ Plus$int_instance = &Plus$int_struct;
-
-struct Minus$__class__ Minus$int_struct = {"GC_Minus$int",$int_sub_instance};
-Minus$__class__ Minus$int_instance = &Minus$int_struct;
-
-struct Complex$__class__ Complex$int_struct = {"GC_Complex$int",&Eq$int_struct,&Plus$int_struct,&Minus$int_struct,$int_complex_instance,
-                                               $int_bool_instance,$int_mul_instance,$int_truediv_instance,$int_pow_instance,$int_neg_instance,
-                                               $int_pos_instance,$int_real_instance,$int_imag_instance,$int_conjugate_instance};
-Complex$__class__ Complex$int_instance = &Complex$int_struct;
-
-struct Real$__class__ Real$int_struct = {"GC_Real$int",&Ord$int_struct,&Complex$int_struct,$int_float_instance,$int_trunc_instance,
-                                         $int_floor_instance,$int_ceil_instance,$int_round_instance};
-Real$__class__ Real$int_instance = &Real$int_struct;
-
-struct Rational$__class__ Rational$int_struct = {"GC_Rational$int", &Real$int_struct,$int_numerator_instance,$int_denominator_instance};
-Rational$__class__ Rational$int_instance = &Rational$int_struct;
-
-struct Integral$__class__ Integral$int_struct = {"GC_Integral",&Logical$int_struct,&Rational$int_struct,$int_int_instance,$int_index_instance,$int_divmod_instance,$int_floordiv_instance,$int_mod_instance,$int_lshift_instance,$int_rshift_instance,$int_invert_instance};
-Integral$__class__ Integral$int_instance = &Integral$int_struct;
-
-// Eq ////////////////////////////////////////////////////////////////////////////////////////
-
-$bool Eq$int__eq__(Eq wit, $int a, $int b) {
-  return from$int(a) == from$int(b);
+$int Integral$int$__mod__(Integral$int wit, $int a, $int b) {
+  return to$int(from$int(a) % from$int(b));
 }
 
-$bool Eq$int__neq__(Eq wit, $int a, $int b) {
-  return from$int(a) != from$int(b);
+$int Integral$int$__lshift__(Integral$int wit,  $int a, $int b) {
+  return to$int(from$int(a) << from$int(b));
 }
 
-// Hashable ///////////////////////////////////////////////////////////////////////////////
-
-$int Hashable$int$__hash__(Hashable wit, $int a) {
-  return to$int($int_hash(a));
+$int Integral$int$__rshift__(Integral$int wit,  $int a, $int b) {
+  return to$int(from$int(a) >> from$int(b));
+}
+ 
+$int Integral$int$__invert__(Integral$int wit,  $int a) {
+  return to$int(~from$int(a));
 }
 
-// Ord  ////////////////////////////////////////////////////////////////////////////////////////
 
-$bool $int_lt_instance(Ord$__class__ cl, $WORD a, $WORD b) {
-  return from$int(a) < from$int(b);
-}
-$bool $int_le_instance(Ord$__class__ cl, $WORD a, $WORD b) {
-  return from$int(a) <= from$int(b);
-}
-$bool $int_gt_instance(Ord$__class__ cl, $WORD a, $WORD b) {
-  return from$int(a) > from$int(b);
-}
-$bool $int_ge_instance(Ord$__class__ cl, $WORD a, $WORD b) {
-  return from$int(a) >= from$int(b);
-}
-                                                 
-// Logical  ////////////////////////////////////////////////////////////////////////////////////////
+// Logical$int  ////////////////////////////////////////////////////////////////////////////////////////
 
-$WORD $int_and_instance(Logical$__class__ cl,  $WORD a, $WORD b) {
+$int Logical$int$__and__(Logical$int wit,  $int a, $int b) {
   return to$int(from$int(a) & from$int(b));
 }
                                                  
-$WORD $int_or_instance(Logical$__class__ cl,  $WORD a, $WORD b) {
+$int Logical$int$__or__(Logical$int wit,  $int a, $int b) {
   return to$int(from$int(a) | from$int(b));
 }
                                                  
-$WORD $int_xor_instance(Logical$__class__ cl,  $WORD a, $WORD b) {
+$int Logical$int$__xor__(Logical$int wit,  $int a, $int b) {
   return to$int(from$int(a) ^ from$int(b));
 }  
- 
-*/
 
-// Plus  ////////////////////////////////////////////////////////////////////////////////////////
+// Complex$int //////////////////////////////////////////////////////////////////////////////////////
 
-$int Plus$int$__add__(Plus$int wit,  $int a, $int b) {
-  return to$int(from$int(a) + from$int(b));
-}  
- 
-/*                                                
-// Minus ////////////////////////////////////////////////////////////////////////////////////////
-
-$WORD $int_sub_instance(Minus$__class__ cl,  $WORD a, $WORD b) {
-  return to$int(from$int(a) - from$int(b));
-}  
-                                                 
-// Complex //////////////////////////////////////////////////////////////////////////////////////
-
-$complex $int_complex_instance(Complex$__class__ cl, $WORD a) {
-  return to$complex((double)from$int(a),0.0);
+$bool Complex$int$__eq__ (Complex$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
 }
 
-$bool $int_bool_instance(Complex$__class__ cl, $WORD a) {
+$bool Complex$int$__ne__ (Complex$int wit, $int a, $int b) {
+  return to$bool(a->val != b->val);
+}
+
+$complex Complex$int$__complx__(Complex$int wit, $int a) {
+  return to$complex(to$float((double)from$int(a)),to$float(0.0));
+}
+
+$bool Complex$int$__bool__(Complex$int wit, $int a) {
   return from$int(a)==0L ? $true : $false;
 }
 
-$WORD $int_mul_instance(Complex$__class__ cl,  $WORD a, $WORD b) {
+$int Complex$int$__mul__(Complex$int wit,  $int a, $int b) {
   return to$int(from$int(a) * from$int(b));
 }  
 
 // The typechecker will reject true division between two integers.
-$WORD $int_truediv_instance(Complex$__class__ cl,  $WORD a, $WORD b) {
+$int Complex$int$__truediv__(Complex$int wit,  $int a, $int b) {
   // raise NOTIMPLEMENTED
   return NULL;
 }  
@@ -205,7 +158,7 @@ static int intpow(int a, int e) {
   return a * intpow(a*a,e/2);
 }
   
-$WORD $int_pow_instance(Complex$__class__ cl,  $WORD a, $WORD b) {
+$int Complex$int$__pow__(Complex$int wit,  $int a, $int b) {
   if ( from$int(b) < 0) {
     // raise VALUEERROR;
     return NULL;
@@ -213,95 +166,121 @@ $WORD $int_pow_instance(Complex$__class__ cl,  $WORD a, $WORD b) {
   return to$int(intpow(from$int(a),from$int(b)));
 }
 
-$WORD $int_neg_instance(Complex$__class__ cl,  $WORD a) {
+$int Complex$int$__neg__(Complex$int wit,  $int a) {
   return to$int(-from$int(a));
 }
 
-$WORD $int_pos_instance(Complex$__class__ cl,  $WORD a) {
+$int Complex$int$__pos__(Complex$int wit,  $int a) {
   return a;
 }
 
-Real $int_real_instance(Complex$__class__ cl,  $WORD a) {
-  return Real$__pack__(Real$int_instance,a);
+Real$opaque Complex$int$real(Complex$int wit,  $int a) {
+  return Real$__pack__((Real)wit,a);
 }
 
-Real $int_imag_instance(Complex$__class__ cl,  $WORD a) {
-  return  Real$__pack__(Real$int_instance,to$int(0L));
+Real$opaque Complex$int$imag(Complex$int wit,  $int a) {
+  return  Real$__pack__((Real)wit,to$int(0L));
 }
 
-$WORD $int_conjugate_instance(Complex$__class__ cl,  $WORD a) {
+Real$opaque Complex$int$__abs__(Complex$int wit,  $int a) {
+  return  Real$__pack__((Real)wit,to$int(labs(from$int(a))));
+}
+
+$int Complex$int$__conjugate__(Complex$int wit,  $int a) {
   return a;
 }
 
-// Real //////////////////////////////////////////////////////////////////////////////////////////
+// Plus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
-$float $int_float_instance(Real$__class__ cl, $WORD a) {
-  return to$float((double)from$int(a));
-}
+$int Plus$int$__add__(Plus$int wit,  $int a, $int b) {
+  return to$int(from$int(a) + from$int(b));
+}  
+ 
+// Minus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
-Integral $int_trunc_instance(Real$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,a);
-}
-
-Integral $int_floor_instance(Real$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,a);
-}
-
-Integral $int_ceil_instance(Real$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,a);
-}
-
-Integral $int_round_instance(Real$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,a);
-}
-
-// Rational //////////////////////////////////////////////////////////////////////////////////////
-
-Integral $int_numerator_instance(Rational$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,a);
-}
-
-Integral $int_denominator_instance(Rational$__class__ cl, $WORD a) {
-  return Integral$__pack__(Integral$int_instance,to$int(1L));
-}
-
-// Integral //////////////////////////////////////////////////////////////////////////////////////
-
-$int $int_int_instance(Integral$__class__ cl, $WORD a) {
-  return ($int)a;
-}
-
-$int $int_index_instance(Integral$__class__ cl, $WORD a) {
-  return ($int)a;
-}
-
-$divmod_t $int_divmod_instance(Integral$__class__ cl, $WORD a, $WORD b) {
-  int n = from$int(a);
-  int d = from$int(b);
-  $divmod_t res = malloc(sizeof(struct $divmod_struct));
-  res->$GCINFO = "GC";
-  res->quotient = to$int(n/d);
-  res->remainder = to$int(n%d);
-  return res;
-}
-
-$WORD $int_floordiv_instance(Integral$__class__ cl, $WORD a, $WORD b) {
-  return to$int(from$int(a) / from$int(b));
-}
-
-$WORD $int_mod_instance(Integral$__class__ cl, $WORD a, $WORD b) {
-  return to$int(from$int(a) % from$int(b));
-}
-
-$WORD $int_lshift_instance(Integral$__class__ cl,  $WORD a, $WORD b) {
-  return to$int(from$int(a) << from$int(b));
-}
-
-$WORD $int_rshift_instance(Integral$__class__ cl,  $WORD a, $WORD b) {
-  return to$int(from$int(a) >> from$int(b));
+$int Minus$int$__sub__(Minus$int wit,  $int a, $int b) {
+  return to$int(from$int(a) - from$int(b));
 }  
 
-$WORD $int_invert_instance(Integral$__class__ cl,  $WORD a) {
-  return to$int(~from$int(a));
+// Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+$bool Hashable$int$__eq__(Hashable$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
 }
-*/
+
+$bool Hashable$int$__neq__(Hashable$int wit, $int a, $int b) {
+  return to$bool(a->val != b->val);
+}
+
+$int Hashable$int$__hash__(Hashable$int wit, $int a) {
+  return to$int($int_hash(a));
+}
+
+
+static struct Integral$int Integral$int_instance;
+static struct Logical$int Logical$int_instance;
+static struct Complex$int Complex$int_instance;
+static struct Plus$int Plus$int_instance;
+static struct Minus$int Minus$int_instance;
+static struct Hashable$int Hashable$int_instance;
+
+static struct Integral$int$__class__ Integral$int_methods = {"", Integral$int$__eq__ , Integral$int$__ne__ , Integral$int$__lt__ , Integral$int$__le__ ,
+                                                     Integral$int$__gt__ , Integral$int$__ge__ , Integral$int$__float__ , Integral$int$__trunc__ , Integral$int$__floor__ ,
+                                                     Integral$int$__ceil__ , Integral$int$__round__ , Integral$int$numerator , Integral$int$denominator ,
+                                                     Integral$int$__int__ , Integral$int$__index__ , Integral$int$__divmod__ , Integral$int$__floordiv__ ,
+                                                     Integral$int$__mod__ , Integral$int$__lshift__ , Integral$int$__rshift__ , Integral$int$__invert__};
+
+static struct Integral$int Integral$int_instance = {"",&Integral$int_methods, (Logical)&Logical$int_instance};
+static Integral$int Integral$int_witness = &Integral$int_instance;
+
+
+static struct Logical$int$__class__ Logical$int_methods =  {"", Logical$int$__and__ , Logical$int$__or__ , Logical$int$__xor__};
+static struct Logical$int Logical$int_instance = {"",&Logical$int_methods, (Integral)&Integral$int_instance};
+static Logical$int Logical$int_witness = &Logical$int_instance;
+
+
+static struct Complex$int$__class__ Complex$int_methods = {"",Complex$int$__eq__,Complex$int$__ne__,Complex$int$__complx__,
+                                               Complex$int$__bool__,Complex$int$__mul__,Complex$int$__truediv__,Complex$int$__pow__,Complex$int$__neg__,
+                                               Complex$int$__pos__,Complex$int$real,Complex$int$imag,Complex$int$__abs__,Complex$int$__conjugate__};
+static struct Complex$int Complex$int_instance = {"",&Complex$int_methods, (Integral)&Integral$int_instance, (Plus)&Plus$int_instance, (Minus)&Minus$int_instance};
+static Complex$int Complex$int_witness = &Complex$int_instance;
+
+static struct Plus$int$__class__ Plus$int_methods = {"",Plus$int$__add__};
+static struct Plus$int Plus$int_instance = {"",&Plus$int_methods, (Integral)&Integral$int_instance};
+static Plus$int Plus$int_witness = &Plus$int_instance;
+
+static struct Minus$int$__class__ Minus$int_methods = {"",Minus$int$__sub__};
+static struct Minus$int Minus$int_instance = {"",&Minus$int_methods, (Integral)&Integral$int_instance};
+static Minus$int Minus$int_witness = &Minus$int_instance;
+
+static struct Hashable$int$__class__ Hashable$int_methods = {"",Hashable$int$__eq__,Hashable$int$__neq__,Hashable$int$__hash__};
+static struct Hashable$int Hashable$int_instance = {"",&Hashable$int_methods};
+static Hashable$int Hashable$int_witness = &Hashable$int_instance;
+
+ 
+Integral$int Integral$int_new() {
+  return Integral$int_witness;
+}
+
+Logical$int Logical$int_new() {
+  return Logical$int_witness;
+}
+
+Complex$int Complex$int_new() {
+  return Complex$int_witness;
+}
+
+
+Plus$int Plus$int_new() {
+  return Plus$int_witness;
+}
+
+Minus$int Minus$int_new() {
+  return Minus$int_witness;
+}
+
+Hashable$int Hashable$int_new() {
+    return Hashable$int_witness;
+}
+
+ 
