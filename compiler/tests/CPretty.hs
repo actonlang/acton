@@ -127,8 +127,10 @@ witness_struct env cnm is               = text "struct" <+> cnm <+> text "{" $+$
 class_struct env nm ms                  = text "struct" <+> cpretty env nm<>text "$__class__" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty env . addparSig nm) ms)) $+$
                                           text "};"
-  where  addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r)) d)
-                                        =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d
+  where addparSig nm (n,sig@(NSig (TSchema _ _ _) Static))
+                                        = (n,sig)
+        addparSig nm (n,NSig (TSchema l2 qs (TFun l3 f p k r)) d)
+                                        =  (n,NSig (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d)
 
 addFstElem nm p                         = TRow NoLoc KType (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
 
@@ -140,9 +142,11 @@ opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" 
                                           cnm<>text "$opaque" <+> cnm<>text "$__pack__"<>parens (cnm <+>text "__proto__, $WORD __impl__") <> semi $+$
                                           blank
 
-fun_prototypes env nm ss                = vcat (map proto ss)
-  where proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) _)
-                                        = vcat (map (\n -> resultTuple env r <+> cpretty env nm<>text "$"<>cpretty env n<+>parens (cprettyPosRow env (addFstElem nm p)) <>semi) ns)
+fun_prototypes ps nm ss                  = vcat (map proto ss)
+  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) Static)
+         --                               = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
+         proto (ns,NSig (TSchema _ _ (TFun _ f p _ r)) _)
+                                        = resultTuple ps r <+> cpretty ps nm<>text "$"<>cpretty ps ns<+>parens (cprettyPosRow ps (addFstElem nm p)) <>semi
 
 
 resultTuple env (TTuple  _ r _)          = tup 0 r

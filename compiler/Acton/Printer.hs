@@ -253,9 +253,8 @@ prettyDec d                         = (pretty d $+$)
 
 instance Pretty Decoration where
     pretty NoDec                    = empty
-    pretty StaticMethod             = text "@staticmethod"
-    pretty ClassAttr                = text "@classattr"
-    pretty InstAttr                 = text "@instattr"
+    pretty Static                   = text "@static"
+    pretty Property                 = text "@property"
 
 instance Pretty SrcInfoTag where
     pretty (GEN l t)                = text "GEN" <+> parens (pretty l) <> colon <+> pretty t
