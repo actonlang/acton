@@ -201,34 +201,34 @@ nTVars                      :: [TBind] -> TEnv                              -- i
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
 
-nSigs                       :: TEnv -> TEnv                                 -- checkBindings (inherited,refinements,unsigs,allsigs)
-nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
+sigTerms                    :: TEnv -> (TEnv, TEnv)
+sigTerms te                 = (sigs, terms)
+  where sigs                = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
+        terms               = [ (n,i) | (n,i) <- te, isTerm i ]
+        isTerm NDef{}       = True
+        isTerm NVar{}       = True
+        isTerm _            = False
 
-nProps                      :: TEnv -> TEnv
-nProps te                   = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
+propSigs                    :: TEnv -> TEnv
+propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
   where isProp Property _   = True
         isProp NoDec sc     = case sctype sc of TFun{} -> False; _ -> True
         isProp _ _          = False
 
-nTerms                      :: TEnv -> TEnv
-nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
-  where isTerm NDef{}       = True
-        isTerm NVar{}       = True
-        isTerm _            = False
-        
 nSchemas                    :: TEnv -> Schemas
 nSchemas []                 = []
 nSchemas ((n,NVar sc):te)   = (n, sc) : nSchemas te
 nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
-
+parentTEnv                  :: Env -> [TCon] -> TEnv
 parentTEnv env us           = concatMap tEnv us
   where tEnv u              = case findQName (tcname u) env of
                                 NClass q _ te -> subst (tybound q `zip` tcargs u) te
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
                                 _             -> []
 
+splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
 
