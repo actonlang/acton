@@ -353,13 +353,13 @@ checkAttributes env us te
         newSig (n, NDef sc Static)      = (Nothing, (n, NSig sc Static))
         newSig (n, NDef sc dec)         = (Just t,  (n, NSig sc1 dec))
           where (t,sc1)                 = selfSplit n sc
-        newSig (n, NVar sc)             = (Nothing, (n, NSig sc Static))
+        newSig (n, NVar t)              = (Nothing, (n, NSig (monotype t) Static))
         newSig (n, i)                   = (Nothing, (n,i))
 
 selfSplit n sc                          = split sc
-  where split (TSchema l q (TFun l' x (TRow _ _ _ (TSchema _ [] t) p) k t'))
+  where split (TSchema l q (TFun l' x (TRow _ _ _ t p) k t'))
           | unscoped q t                = (t, TSchema l q (TFun l' x p k t'))
-        split (TSchema l q (TFun l' x p@TNil{} (TRow _ _ _ (TSchema _ [] t) k) t'))
+        split (TSchema l q (TFun l' x p@TNil{} (TRow _ _ _ t k) t'))
           | unscoped q t                = (t, TSchema l q (TFun l' x p k t'))
         split _                         = err1 n "Self-parameter expected"
 
@@ -442,11 +442,11 @@ instance Check Decl where
                                              (cs2,te2,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
                                              fx <- fxAct <$> newTVarOfKind XRow
-                                             cs3 <- checkAssump env n (cs0++cs1++cs2) (tFun fx prow krow (tRecord $ env2row kwdNil $ nSchemas te2))
+                                             cs3 <- checkAssump env n (cs0++cs1++cs2) (tFun fx prow krow (tRecord $ env2row kwdNil $ nSchemas' te2))
                                              return (cs3, Actor l n q' p' k' a b')
       where svars                       = statedefs b
             q'                          = autoQuant env q p k a
-            env0                        = define [(selfKW, NVar (monotype tRef))] $ defineTVars q' $ block (stateScope env) env
+            env0                        = define [(selfKW, NVar tRef)] $ defineTVars q' $ block (stateScope env) env
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
 
     check env (Def l n q p k a b dec)   = do t <- newTVar
@@ -512,16 +512,15 @@ instance InfEnv Except where
     infEnv env ex@(ExceptAll l)         = return ([], [], ex)
     infEnv env ex@(Except l x)          = return ([Cast t tException], [], ex)
       where t                           = tCon (TC x [])
-    infEnv env ex@(ExceptAs l x n)      = return ([Cast t tException], [(n, NVar $ monotype t)], ex)
+    infEnv env ex@(ExceptAs l x n)      = return ([Cast t tException], [(n, NVar t)], ex)
       where t                           = tCon (TC x [])
 
 instance Infer Expr where
-    infer env (Var l n)                 = do (cs,t) <- instantiate env $ openFX sc
-                                             return (cs, t, Var l n)
-      where sc                          = case findQName n env of
-                                            NVar sc -> sc
-                                            NSVar sc -> sc
-                                            NDef sc d -> sc
+    infer env (Var l n)                 = case findQName n env of
+                                            NVar t -> return ([], t, Var l n)
+                                            NSVar t -> return ([], t, Var l n)
+                                            NDef sc d -> do (cs,t) <- instantiate env $ openFX sc
+                                                            return (cs, t, Var l n)
                                             NClass q _ te -> undefined      -- TODO: define!
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
@@ -795,41 +794,37 @@ instance (Infer a) => Infer (Maybe a) where
                                              return (cs, t, Just e')
 
 instance InfEnvT PosPar where
-    infEnvT env (PosPar n a Nothing p)  = do sc <- maybe (monotype <$> newTVar) return a
-                                             (cs,te,r,p') <- infEnvT (define [(n, NVar sc)] env) p
-                                             return (cs, (n, NVar sc):te, posRow sc r, PosPar n (Just sc) Nothing p')
-    infEnvT env (PosPar n a (Just e) p) = do sc <- maybe (monotype <$> newTVar) return a
-                                             (cs1,sc',e') <- inferGen env e
-                                             (cs2,te,r,p') <- infEnvT (define [(n, NVar sc)] env) p
-                                             w <- newWitness
-                                             cs3 <- subSchema env w sc' sc
-                                             return (cs1++cs2++cs3, (n, NVar sc):te, posRow sc r, PosPar n (Just sc) (Just e') p')      -- TODO: use witness
+    infEnvT env (PosPar n a Nothing p)  = do t <- maybe newTVar return a
+                                             (cs,te,r,p') <- infEnvT (define [(n, NVar t)] env) p
+                                             return (cs, (n, NVar t):te, posRow t r, PosPar n (Just t) Nothing p')
+    infEnvT env (PosPar n a (Just e) p) = do t <- maybe newTVar return a
+                                             (cs1,e') <- inferSub env t e
+                                             (cs2,te,r,p') <- infEnvT (define [(n, NVar t)] env) p
+                                             return (cs1++cs2, (n, NVar t):te, posRow t r, PosPar n (Just t) (Just e') p')
     infEnvT env (PosSTAR n a)           = do t <- maybe newTVar return a
                                              r <- newTVarOfKind PRow
                                              return (Cast t (tTuple r) :
-                                                     [], [(n, NVar $ monotype t)], r, PosSTAR n (Just t))
+                                                     [], [(n, NVar t)], r, PosSTAR n (Just t))
     infEnvT env PosNIL                  = return ([], [], posNil, PosNIL)
 
 instance InfEnvT KwdPar where
-    infEnvT env (KwdPar n a Nothing k)  = do sc <- maybe (monotype <$> newTVar) return a
-                                             (cs,te,r,k') <- infEnvT (define [(n, NVar sc)] env) k
-                                             return (cs, (n, NVar sc):te, kwdRow n sc r, KwdPar n (Just sc) Nothing k')
-    infEnvT env (KwdPar n a (Just e) k) = do sc <- maybe (monotype <$> newTVar) return a
-                                             (cs1,sc',e') <- inferGen env e
-                                             (cs2,te,r,k') <- infEnvT (define [(n, NVar sc)] env) k
-                                             w <- newWitness
-                                             cs3 <- subSchema env w sc' sc
-                                             return (cs1++cs2++cs3, (n, NVar sc):te, kwdRow n sc r, KwdPar n (Just sc) (Just e') k')    -- TODO: use witness
+    infEnvT env (KwdPar n a Nothing k)  = do t <- maybe newTVar return a
+                                             (cs,te,r,k') <- infEnvT (define [(n, NVar t)] env) k
+                                             return (cs, (n, NVar t):te, kwdRow n t r, KwdPar n (Just t) Nothing k')
+    infEnvT env (KwdPar n a (Just e) k) = do t <- maybe newTVar return a
+                                             (cs1,e') <- inferSub env t e
+                                             (cs2,te,r,k') <- infEnvT (define [(n, NVar t)] env) k
+                                             return (cs1++cs2, (n, NVar t):te, kwdRow n t r, KwdPar n (Just t) (Just e') k')
     infEnvT env (KwdSTAR n a)           = do t <- maybe newTVar return a
                                              r <- newTVarOfKind KRow
                                              return (Cast t (tRecord r) :
-                                                     [], [(n, NVar $ monotype t)], r, KwdSTAR n (Just t))
+                                                     [], [(n, NVar t)], r, KwdSTAR n (Just t))
     infEnvT env KwdNIL                  = return ([], [], kwdNil, KwdNIL)
 
 instance Infer PosArg where
-    infer env (PosArg e p)              = do (cs1,sc,e') <- inferGen env e
+    infer env (PosArg e p)              = do (cs1,t,e') <- infer env e
                                              (cs2,prow,p') <- infer env p
-                                             return (cs1++cs2, posRow sc prow, PosArg e' p')
+                                             return (cs1++cs2, posRow t prow, PosArg e' p')
     infer env (PosStar e)               = do (cs,t,e') <- infer env e
                                              prow <- newTVarOfKind PRow
                                              return (Cast t (tTuple prow) :
@@ -837,9 +832,9 @@ instance Infer PosArg where
     infer env PosNil                    = return ([], posNil, PosNil)
     
 instance Infer KwdArg where
-    infer env (KwdArg n e k)            = do (cs1,sc,e') <- inferGen env e
+    infer env (KwdArg n e k)            = do (cs1,t,e') <- infer env e
                                              (cs2,krow,k') <- infer env k
-                                             return (cs1++cs2, kwdRow n sc krow, KwdArg n e' k')
+                                             return (cs1++cs2, kwdRow n t krow, KwdArg n e' k')
     infer env (KwdStar e)               = do (cs,t,e') <- infer env e
                                              krow <- newTVarOfKind KRow
                                              return (Cast t (tRecord krow) :
@@ -871,7 +866,7 @@ instance Infer Exception where
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (cs1,te1,t,p') <- infEnvT env p
                                              (cs2,te2,r,ps') <- infEnvT env ps
-                                             return (cs1++cs2, te1++te2, posRow (monotype t) r, PosPat p' ps')
+                                             return (cs1++cs2, te1++te2, posRow t r, PosPat p' ps')
     infEnvT env (PosPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind PRow
                                              return (Cast t (tTuple r) :
@@ -882,7 +877,7 @@ instance InfEnvT PosPat where
 instance InfEnvT KwdPat where
     infEnvT env (KwdPat n p ps)         = do (cs1,te1,t,p') <- infEnvT env p
                                              (cs2,te2,r,ps') <- infEnvT env ps
-                                             return (cs1++cs2, te1++te2, kwdRow n (monotype t) r, KwdPat n p' ps')
+                                             return (cs1++cs2, te1++te2, kwdRow n t r, KwdPat n p' ps')
     infEnvT env (KwdPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind KRow
                                              return (Cast t (tRecord r) :
@@ -894,12 +889,12 @@ instance InfEnvT Pattern where
     infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
                                              case findName n env of
                                                  NReserved ->
-                                                     return ([], [(n, NVar $ monotype t)], t, PVar l n (Just t))
-                                                 NSig sc@(TSchema _ [] t') _ ->
-                                                     return ([Cast t t'], [(n, NVar $ monotype t')], t, PVar l n (Just t))
-                                                 NVar (TSchema _ [] t') ->
+                                                     return ([], [(n, NVar t)], t, PVar l n (Just t))
+                                                 NSig (TSchema _ [] t') _ ->
+                                                     return ([Cast t t'], [(n, NVar t')], t, PVar l n (Just t))
+                                                 NVar t' ->
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
-                                                 NSVar (TSchema _ [] t') ->
+                                                 NSVar t' ->
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
                                                  _ -> 
                                                      err1 n "Variable not assignable:"
@@ -940,8 +935,8 @@ instance Infer [Target] where
 
 instance Infer Target where
     infer env (TaVar l n)               = case findName n env of
-                                             NVar (TSchema _ [] t) -> return ([], t, TaVar l n)
-                                             NSVar (TSchema _ [] t) -> return ([], t, TaVar l n)
+                                             NVar t -> return ([], t, TaVar l n)
+                                             NSVar t -> return ([], t, TaVar l n)
                                              _ -> err1 n "Variable not mutable:"
 
     infer env (TaIndex l e [i])         = do (cs1,t,e') <- infer env e
@@ -972,7 +967,7 @@ instance Infer Target where
                                                      cfx :
                                                      cs, t0, TaDotI l e' i tl)
     infer env (TaTuple l targs)         = do (css,ts,targs') <- unzip3 <$> mapM (infer env) targs
-                                             return (concat css, tTuple (foldr posRow' posNil ts), TaTuple l targs')
+                                             return (concat css, tTuple (foldr posRow posNil ts), TaTuple l targs')
 
 
 
@@ -982,14 +977,14 @@ class ExtractT a where
     extractT                        :: a -> TypeM Type
 
 instance ExtractT PosPar where
-    extractT (PosPar n t _ p)       = posRow <$> maybe (monotype <$> newTVar) return t <*> extractT p
+    extractT (PosPar n t _ p)       = posRow <$> maybe newTVar return t <*> extractT p
     extractT (PosSTAR n (Just (TTuple _ prow _)))
                                     = return prow
     extractT (PosSTAR n Nothing)    = newTVarOfKind PRow
     extractT PosNIL                 = return posNil
 
 instance ExtractT KwdPar where
-    extractT (KwdPar n t _ k)       = kwdRow n <$> maybe (monotype <$> newTVar) return t <*> extractT k
+    extractT (KwdPar n t _ k)       = kwdRow n <$> maybe newTVar return t <*> extractT k
     extractT (KwdSTAR n (Just (TTuple _ _ krow)))
                                     = return krow
     extractT (KwdSTAR n Nothing)    = newTVarOfKind KRow

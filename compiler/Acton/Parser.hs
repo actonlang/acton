@@ -985,9 +985,9 @@ yield_expr = addLoc $ do
 
 --- Params ---------------------------------------------------------------------
 
-parm :: Bool -> Parser (S.Name, Maybe S.TSchema, Maybe S.Expr)
+parm :: Bool -> Parser (S.Name, Maybe S.Type, Maybe S.Expr)
 parm ann = do n <- name
-              mbt <- if ann then optional (colon *> tschema) else return Nothing
+              mbt <- if ann then optional (colon *> ttype) else return Nothing
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
@@ -1051,17 +1051,17 @@ fxrow   = do fxs <- many fx
              return (foldr ($) (maybe S.fxNil S.fxVar tv) fxs)
 
 posrow :: Parser S.PosRow 
-posrow = posItems S.posRow S.posVar S.posNil tschema (optional tvar)
+posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)
 
 kwdrow :: Parser S.KwdRow                   
 kwdrow = kwdItems (uncurry S.kwdRow) S.kwdVar S.kwdNil tsig1 (optional tvar)
    where tsig1 = do v <- name
                     colon
-                    t <- tschema
+                    t <- ttype
                     return (v,t)
  
 funrows :: Parser (S.PosRow, S.KwdRow)
-funrows = do r <- funItems S.posRow S.posVar S.posNil tschema (optional tvar) kwdrow S.kwdNil
+funrows = do r <- funItems S.posRow S.posVar S.posNil ttype (optional tvar) kwdrow S.kwdNil
              case r of
                Left p -> return p
                Right t -> return (S.posRow t S.posNil, S.kwdNil)

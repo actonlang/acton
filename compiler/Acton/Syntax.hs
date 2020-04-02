@@ -153,8 +153,8 @@ data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
 -- data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
-data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
-data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
+data PosPar     = PosPar Name (Maybe Type) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
+data KwdPar     = KwdPar Name (Maybe Type) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
 
 data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
 data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
@@ -196,7 +196,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
-                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::TSchema, rtail::TRow }
+                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
                 deriving (Show,Read,Generic)
 
 type FXRow      = Type
@@ -261,7 +261,7 @@ tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
 
-tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
+tFun0 ps t      = tFun fxNil (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
@@ -273,22 +273,20 @@ rAct            = Name NoLoc "act"
 rMut            = Name NoLoc "mut"
 rRet            = Name NoLoc "ret"
 
-fxAwait         = TRow NoLoc XRow rAwait (monotype tNone)
-fxAct           = TRow NoLoc XRow rAct (monotype tNone)
-fxMut t         = TRow NoLoc XRow rMut (monotype t)
-fxRet t         = TRow NoLoc XRow rRet (monotype t)
+fxAwait         = TRow NoLoc XRow rAwait tNone
+fxAct           = TRow NoLoc XRow rAct tNone
+fxMut t         = TRow NoLoc XRow rMut t
+fxRet t         = TRow NoLoc XRow rRet t
 fxVar v         = TVar NoLoc v
 fxNil           = TNil NoLoc XRow
 
-posRow sc r     = TRow NoLoc PRow (rPos n) sc r
+posRow t r      = TRow NoLoc PRow (rPos n) t r
   where n       = rowDepth r + 1
-posRow' t r     = posRow (monotype t) r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow
 
 
-kwdRow n sc r   = TRow NoLoc KRow n sc r
-kwdRow' n t r   = kwdRow n (monotype t) r
+kwdRow n t r    = TRow NoLoc KRow n t r
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil KRow
 
