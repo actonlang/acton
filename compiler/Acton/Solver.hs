@@ -67,7 +67,7 @@ reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc 
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduce env (Cast t' t2 : cs)
-reduce' env (Sel (TTuple _ p r) n t2)       = reduce' env (Cast r (kwdRow n (monotype t2) tWild))
+reduce' env (Sel (TTuple _ p r) n t2)       = reduce' env (Cast r (kwdRow n t2 tWild))
 {-
 reduce' env (Sel (TExist _ p) n t2)         = do let (sc,dec) = findAttr env tc n
                                                  when (dec==Property) (noSelInstByClass n tc)
@@ -164,8 +164,7 @@ cast' env t1 (TWild _)                      = return ()
 cast' env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem (tNil k) n r2 (rowTail r1)
-                                                 cs <- castSchema env t1 t2
-                                                 reduce env cs
+                                                 cast env t1 t2
                                                  cast env r1 r2'
   where findElem r0 n r tl                  = do r0' <- msubst r0
                                                  r' <- msubst r
@@ -177,7 +176,7 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem (tNil k) n
         findElem' r0 n (TNil _ _) tl        = kwdNotFound n
         findElem' r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
-          | otherwise                       = do t <- monotype <$> newTVar
+          | otherwise                       = do t <- newTVar
                                                  r <- newTVarOfKind k
                                                  substitute tv (tRow k n t r)
                                                  return (t, revApp r0 r)
@@ -245,8 +244,7 @@ sub' env w (TTuple _ p1 k1) (TTuple _ p2 k2)
 sub' env w (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
 sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n r2 (rowTail r1)
-                                                 cs <- subSchema env w t1 t2
-                                                 reduce env cs
+                                                 sub env w t1 t2
                                                  sub env w r1 r2'
   where findElem r0 n r tl                  = do r0' <- msubst r0
                                                  r' <- msubst r
@@ -258,7 +256,7 @@ sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n
         findElem' r0 n (TNil _ _) tl        = kwdNotFound n
         findElem' r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
-          | otherwise                       = do t <- monotype <$> newTVar
+          | otherwise                       = do t <- newTVar
                                                  r <- newTVarOfKind k
                                                  substitute tv (tRow k n t r)
                                                  return (t, revApp r0 r)

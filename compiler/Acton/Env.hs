@@ -38,8 +38,8 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool } deriving Show
 
-data NameInfo               = NVar      TSchema
-                            | NSVar     TSchema
+data NameInfo               = NVar      Type
+                            | NSVar     Type
                             | NDef      TSchema Decoration
                             | NSig      TSchema Decoration
                             | NClass    [TBind] [TCon] TEnv
@@ -217,9 +217,15 @@ propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec s
 
 nSchemas                    :: TEnv -> Schemas
 nSchemas []                 = []
-nSchemas ((n,NVar sc):te)   = (n, sc) : nSchemas te
+nSchemas ((n,NVar t):te)    = (n, monotype t) : nSchemas te
 nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
+
+nSchemas'                   :: TEnv -> [(Name,Type)]
+nSchemas' []                = []
+nSchemas' ((n,NVar t):te)   = (n, t) : nSchemas' te
+nSchemas' ((n,NDef sc d):te)= (n, monotypeOf sc) : nSchemas' te
+nSchemas' (_:te)            = nSchemas' te
 
 parentTEnv                  :: Env -> [TCon] -> TEnv
 parentTEnv env us           = concatMap tEnv us
@@ -347,9 +353,7 @@ findAttr env u n            = findIn (te ++ concat tes)
   where (us,te)             = findCon env u
         tes                 = [ te' | u' <- us, let (_,te') = findCon env u' ]
         findIn te1          = case lookup n te1 of
-                                Just (NVar t)         -> (t,NoDec)
-                                Just (NSVar t)        -> (t,NoDec)
-                                Just (NSig t d)       -> (t,d)
+                                Just (NSig sc d)      -> (sc,NoDec)
                                 Nothing               -> err1 n "Attribute not found:"
 
 findCon                     :: Env -> TCon -> ([TCon],TEnv)                                 -- mro, checkBindings, Env.findAttr
@@ -402,8 +406,8 @@ unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) 
                                                          cs <- unifyTEnv env tenvs vs
                                                          return (concat css ++ cs)
   where
-    unif (NVar t) (NVar t')             = unifT t t'
-    unif (NSVar t) (NSVar t')           = unifT t t'
+    unif (NVar t) (NVar t')             = return [Cast t t']
+    unif (NSVar t) (NSVar t')           = return [Cast t t']
     unif (NSig t d) (NSig t' d')
       | d == d'                         = unifT t t'
     unif _ _                            = err1 v "Inconsistent bindings for"

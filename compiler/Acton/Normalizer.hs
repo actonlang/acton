@@ -275,11 +275,11 @@ instance Norm KwdPar where
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
-joinPar (PosSTAR n t) k             = PosPar n (fmap monotype t) Nothing (kwdToPos k)
+joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPos k)
 joinPar PosNIL k                    = kwdToPos k
 
 kwdToPos (KwdPar n t e k)           = PosPar n t e (kwdToPos k)
-kwdToPos (KwdSTAR n t)              = PosPar n (fmap monotype t) Nothing PosNIL
+kwdToPos (KwdSTAR n t)              = PosPar n t Nothing PosNIL
 kwdToPos KwdNIL                     = PosNIL
 
 defaults (PosPar n t (Just e) p)    = s : defaults p

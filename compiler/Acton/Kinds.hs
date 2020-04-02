@@ -202,12 +202,12 @@ instance KCheck Except where
     kchk env (ExceptAs l x n)       = do kexp KType env (TC x []); return $ ExceptAs l x n
 
 instance KCheck PosPar where
-    kchk env (PosPar n t e p)       = PosPar n <$> kchk env t <*> kchk env e <*> kchk env p
+    kchk env (PosPar n t e p)       = PosPar n <$> kexp KType env t <*> kchk env e <*> kchk env p
     kchk env (PosSTAR n t)          = PosSTAR n <$> kexp KType env t
     kchk env PosNIL                 = return PosNIL
     
 instance KCheck KwdPar where
-    kchk env (KwdPar n t e k)       = KwdPar n <$> kchk env t <*> kchk env e <*> kchk env k
+    kchk env (KwdPar n t e k)       = KwdPar n <$> kexp KType env t <*> kchk env e <*> kchk env k
     kchk env (KwdSTAR n t)          = KwdSTAR n <$> kexp KType env t
     kchk env KwdNIL                 = return KwdNIL
     
@@ -330,7 +330,7 @@ instance KInfer Type where
                                          return (KType, TOpt l t)
     kinfer env (TNone l)            = return (KType, TNone l)
     kinfer env (TNil l k)           = return (k, TNil l k)
-    kinfer env (TRow l k n t r)     = do t <- kchk env t
+    kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
 
