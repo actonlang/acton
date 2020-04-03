@@ -352,6 +352,12 @@ instance Vars Type where
     free (TCon  _ c)                = free c
     free (TExist  _ p)              = free p
     free (TRow _ _ _ t r)           = free t ++ free r
+    free (TFX _ fx)                 = free fx
+    free _                          = []
+
+instance Vars FX where
+    free (FXMut t)                  = free t
+    free (FXAct t)                  = free t
     free _                          = []
 
 

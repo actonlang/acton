@@ -174,7 +174,7 @@ data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
 data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
     
-data Kind       = KType | KProto | XRow | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type } deriving (Show,Read,Generic)
 
@@ -186,10 +186,12 @@ data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
 data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
+data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
+
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TExist    { tloc::SrcLoc, tcon::TCon }
-                | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
+                | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
@@ -197,9 +199,10 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
                 | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
+                | TFX       { tloc::SrcLoc, tfx::FX }
                 deriving (Show,Read,Generic)
 
-type FXRow      = Type
+type TFX        = Type
 type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
@@ -261,24 +264,19 @@ tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
 
-tFun0 ps t      = tFun fxNil (foldr posRow posNil ps) kwdNil t
+tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-rPos n          = Name NoLoc (show n)
-rAwait          = Name NoLoc "await"
-rAct            = Name NoLoc "act"
-rMut            = Name NoLoc "mut"
-rRet            = Name NoLoc "ret"
+fxActor         = TFX NoLoc FXActor
+fxAsync         = TFX NoLoc FXAsync
+fxAct t         = TFX NoLoc (FXAct t)
+fxMut t         = TFX NoLoc (FXMut t)
+fxPure          = TFX NoLoc FXPure
 
-fxAwait         = TRow NoLoc XRow rAwait tNone
-fxAct           = TRow NoLoc XRow rAct tNone
-fxMut t         = TRow NoLoc XRow rMut t
-fxRet t         = TRow NoLoc XRow rRet t
-fxVar v         = TVar NoLoc v
-fxNil           = TNil NoLoc XRow
+rPos n          = Name NoLoc (show n)
 
 posRow t r      = TRow NoLoc PRow (rPos n) t r
   where n       = rowDepth r + 1
@@ -299,7 +297,8 @@ rowTail r                   = r
 
 tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOTUVW" ]
 
-xrowSupply      = [ TV XRow $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
+fxSupply        = [ TV KFX $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
+
 prowSupply      = [ TV PRow $ name (c:tl) | tl <- "" : map show [1..], c <- "PQ" ]
 krowSupply      = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RS" ]
 
@@ -319,6 +318,7 @@ instance Data.Binary.Binary UType
 instance Data.Binary.Binary TBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
+instance Data.Binary.Binary FX
 
 
 -- SrcInfo ------------------
