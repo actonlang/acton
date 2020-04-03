@@ -519,7 +519,7 @@ type TVarMap                            = Map TVar Type
 
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
-                                                effectstack     :: [FXRow],
+                                                effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
                                                 currsubst       :: TVarMap,
                                                 dumped          :: SrcInfo
@@ -542,15 +542,14 @@ runTypeM m                              = case evalState (runExceptT m) (initTyp
 newUnique                               :: TypeM Int
 newUnique                               = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
-pushFX                                  :: FXRow -> TypeM ()
-pushFX fx                               = state $ \st -> ((), st{ effectstack = fx : effectstack st })
+pushFX                                  :: TFX -> Type -> TypeM ()
+pushFX fx ret                           = state $ \st -> ((), st{ effectstack = (fx,ret) : effectstack st })
 
-currFX                                  :: TypeM FXRow
-currFX                                  = state $ \st -> (head (effectstack st), st)
+currFX                                  :: TypeM TFX
+currFX                                  = state $ \st -> (fst $ head $ effectstack st, st)
 
-equFX                                   :: Env -> FXRow -> TypeM Constraint
-equFX env fx                            = do fx0 <- currFX
-                                             return $ Cast fx fx0
+currRet                                 :: TypeM Type
+currRet                                 = state $ \st -> (snd $ head $ effectstack st, st)
 
 popFX                                   :: TypeM ()
 popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
@@ -580,7 +579,7 @@ newWitness                              = newName "w"
 
 newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return GenPass)
   where str KType                       = "V"
-        str XRow                        = "X"
+        str KFX                         = "X"
         str PRow                        = "P"
         str KRow                        = "K"
         str _                           = "C"

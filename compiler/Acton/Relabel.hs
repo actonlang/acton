@@ -223,4 +223,12 @@ instance Relabel Type where
     relabel (TWild _) = TWild <$> newLoc
     relabel (TNil _ k) = TNil <$> newLoc <*> return k
     relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
+    relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
+
+instance Relabel FX where
+    relabel (FXActor) = return FXActor
+    relabel (FXAsync) = return FXAsync
+    relabel (FXAct t) = FXAct <$> relabel t
+    relabel (FXMut t) = FXMut <$> relabel t
+    relabel (FXPure) = return FXPure
 

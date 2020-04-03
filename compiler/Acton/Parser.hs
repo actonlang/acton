@@ -1040,15 +1040,16 @@ funargs = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 
 --- Types ----------------------------------------------------------------------
 
-fx      :: Parser (S.FXRow -> S.FXRow)
-fx      =   rword "act" *> return S.fxAct
-        <|> rword "mut" *> brackets (S.fxMut <$> ttype)
-        <|> rword "ret" *> brackets (S.fxRet <$> ttype)
-
-fxrow   :: Parser S.FXRow
-fxrow   = do fxs <- many fx
-             tv <- optional tvar
-             return (foldr ($) (maybe S.fxNil S.fxVar tv) fxs)
+effect  :: Parser S.Type
+effect  = addLoc $  
+            S.TVar NoLoc <$> tvar
+        <|> rword "_" *> return (S.TWild NoLoc)
+        <|> rword "actor" *> return S.fxActor
+        <|> rword "async" *> return S.fxAsync
+        <|> rword "act" *> brackets (S.fxAct <$> varonly)
+        <|> rword "mut" *> brackets (S.fxMut <$> varonly)
+        <|> return S.fxPure
+  where varonly = addLoc $ S.TVar NoLoc <$> tvar
 
 posrow :: Parser S.PosRow 
 posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)
@@ -1106,11 +1107,11 @@ ttype    =  addLoc (
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
-        <|> try (do es <- fxrow
+        <|> try (do fx <- effect
                     (p,k) <- parens funrows
                     arrow
                     t <- ttype
-                    return (S.TFun NoLoc es p k t))
+                    return (S.TFun NoLoc fx p k t))
         <|> try (do (p,k) <- parens funrows
                     return (S.TTuple NoLoc p k))
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))

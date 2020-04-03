@@ -31,7 +31,7 @@ nodup x
 -- Infer -------------------------------
 
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
-infTop env ss                           = do pushFX fxNil
+infTop env ss                           = do pushFX fxPure tNone
                                              (cs,te,ss1) <- infEnv env ss
                                              popFX
                                              solve env cs
@@ -61,7 +61,7 @@ splitGen env tvs te cs
     (ambig_cs, gen_cs)                  = partition (ambig te . tyfree) cs'
     ambig te vs                         = or [ not $ null (vs \\ tyfree info) | (n, info) <- te ]
     q_new                               = mkBinds gen_cs
-    generalize (TSchema l q t)          = closeFX $ TSchema l (subst s (q_new++q)) (subst s t)
+    generalize (TSchema l q t)          = TSchema l (subst s (q_new++q)) (subst s t)
       where s                           = tybound q_new `zip` map tVar (tvarSupply \\ tvs \\ tybound q)
     gen (n, NDef sc dec)                = (n, NDef (generalize sc) dec)
     gen (n, i)                          = (n, i)
@@ -199,14 +199,11 @@ instance InfEnv Stmt where
     infEnv env (Delete l pat)           = undefined
 --      | nodup pat                       = do (cs,_,pat') <- infer env pat                 -- TODO: constrain pat targets to opt type
 --                                            return (cs, [], Delete l pat')
-    infEnv env s@(Return l Nothing)     = do t <- newTVar
-                                             (cs1,e) <- inferSub env t (None NoLoc)
-                                             cfx <- equFX env (fxRet t tWild)
-                                             return (cfx : cs1, [], Return l $ Just e)
-    infEnv env (Return l (Just e))      = do t <- newTVar
-                                             (cs1,e') <- inferSub env t e
-                                             cfx <- equFX env (fxRet t tWild)
-                                             return (cfx : cs1, [], Return l (Just e'))
+    infEnv env s@(Return l Nothing)     = do t <- currRet
+                                             return ([Cast tNone t], [], Return l Nothing)
+    infEnv env (Return l (Just e))      = do t <- currRet
+                                             (cs,e') <- inferSub env t e
+                                             return (cs, [], Return l (Just e'))
     infEnv env s@(Raise _ Nothing)      = return ([], [], s)
     infEnv env (Raise l (Just e))       = do (cs,_,e') <- infer env e
                                              return (cs, [], Raise l (Just e'))
@@ -307,7 +304,7 @@ instance InfEnv Decl where
       | not $ null ps                   = notYet (loc n) "Classes with direct extensions"
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 pushFX fxNil
+                                                 pushFX fxPure tNone
                                                  (cs1,te,b') <- infEnv env1 b
                                                  popFX
                                                  (cs2,nsigs,_,_) <- checkAttributes env1 as te
@@ -317,7 +314,7 @@ instance InfEnv Decl where
             (as,ps)                     = mro2 env us
     infEnv env (Protocol l n q us b)    = case findName n env of
                                              NReserved -> do
-                                                 pushFX fxNil
+                                                 pushFX fxPure tNone
                                                  (cs1,te,b') <- infEnv env1 b
                                                  popFX
                                                  (cs2,nsigs,_,_) <- checkAttributes env1 ps te
@@ -436,13 +433,15 @@ instance Check Branch where
                                              return (cs, Branch e b')
 
 instance Check Decl where
-    check env (Actor l n q p k a b)     = do pushFX (fxAct tWild)
+    check env (Actor l n q p k a b)     = do t <- newTVar
+                                             st <- newTVar
+                                             pushFX (fxAct st) t
                                              (cs0,te0,prow,p') <- infEnvT env p
                                              (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
-                                             (cs2,te2,b') <- infSuiteEnv (define te1 (define te0 env1)) b
+                                             (cs2,te,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
-                                             fx <- fxAct <$> newTVarOfKind XRow
-                                             cs3 <- checkAssump env n (cs0++cs1++cs2) (tFun fx prow krow (tRecord $ env2row kwdNil $ nSchemas' te2))
+                                             cs3 <- checkAssump env n (cs0++cs1++cs2) (tFun fxActor prow krow t)
+                                             -- TODO: check that st doesn't escape
                                              return (cs3, Actor l n q' p' k' a b')
       where svars                       = statedefs b
             q'                          = autoQuant env q p k a
@@ -450,9 +449,9 @@ instance Check Decl where
             env1                        = reserve (bound (p,k) ++ bound b ++ svars) env0
 
     check env (Def l n q p k a b dec)   = do t <- newTVar
-                                             fx <- newTVarOfKind XRow
-                                             pushFX (fxRet t fx)
-                                             csfx <- if fallsthru b then (:[]) <$> equFX env (fxRet tNone tWild) else pure []
+                                             fx <- newTVarOfKind KFX
+                                             pushFX fx t
+                                             let csfx = if fallsthru b then [Cast tNone t] else []
                                              (cs0,te0,prow,p') <- infEnvT env p
                                              (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (cs2,te,b') <- infSuiteEnv (define te1 (define te0 env1)) b
@@ -472,7 +471,7 @@ instance Check Decl where
       where env1                        = defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
             NProto _ ps te              = findName n env
 
-    check env (Extension l n q us b)    = do pushFX fxNil
+    check env (Extension l n q us b)    = do pushFX fxPure tNone
                                              (cs1,te,b') <- infEnv env1 b
                                              popFX
                                              (cs2,nsigs,asigs,sigs) <- checkAttributes env1 us te
@@ -483,8 +482,6 @@ instance Check Decl where
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             w:_                         = locateWitnesses env n us
 
-
-env2row                                 = foldl (\r (n,t) -> kwdRow n t r)           -- TODO: stabilize this...
 
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do (cs1,e') <- inferBool env e
@@ -519,7 +516,7 @@ instance Infer Expr where
     infer env (Var l n)                 = case findQName n env of
                                             NVar t -> return ([], t, Var l n)
                                             NSVar t -> return ([], t, Var l n)
-                                            NDef sc d -> do (cs,t) <- instantiate env $ openFX sc
+                                            NDef sc d -> do (cs,t) <- instantiate env sc
                                                             return (cs, t, Var l n)
                                             NClass q _ te -> undefined      -- TODO: define!
                                             NSig _ _ -> nameReserved n
@@ -546,9 +543,9 @@ instance Infer Expr where
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
-                                             fx <- fxAwait <$> newTVarOfKind XRow
-                                             cfx <- equFX env fx
-                                             return (cfx :
+                                             st <- newTVar
+                                             fx <- currFX
+                                             return (Cast (fxAct st) fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ixs)           = do (cs1,t,e') <- infer env e
                                              (cs2,ti,ix') <- infer env ix
@@ -670,8 +667,8 @@ instance Infer Expr where
                                                      cs, t0, DotI l e' i False)
     infer env e@(DotI l _ _ True)       = notYetExpr e
     infer env (Lambda l p k e)
-      | nodup (p,k)                     = do fx <- newTVarOfKind XRow
-                                             pushFX fx
+      | nodup (p,k)                     = do fx <- newTVarOfKind KFX
+                                             pushFX fx tNone
                                              (cs0,te0,prow,p') <- infEnvT env1 p
                                              (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
@@ -943,28 +940,36 @@ instance Infer Target where
                                              (cs2,ti,i') <- infer env i
                                              t0 <- newTVar
                                              w <- newWitness
-                                             cfx <- equFX env (fxMut tWild tWild)
+                                             fx <- currFX
+                                             st <- newTVar
                                              return (Impl w t (pIndexed ti t0) :
                                                      Cast t tObject : 
-                                                     cfx:cs1++cs2, t0, TaIndex l e' [i'])         -- TODO: translate using w...
+                                                     Cast (fxMut st) fx :
+                                                     cs1++cs2, t0, TaIndex l e' [i'])             -- TODO: translate using w...
     infer env (TaSlice l e [s])         = do (cs1,t,e') <- infer env e
                                              (cs2,s') <- inferSlice env s
                                              w <- newWitness
-                                             cfx <- equFX env (fxMut tWild tWild)
+                                             fx <- currFX
+                                             st <- newTVar
                                              return (Impl w t pSliceable :
                                                      Cast t tObject : 
-                                                     cfx:cs1++cs2, t, TaSlice l e' [s'])          -- TODO: translate using w
+                                                     Cast (fxMut st) fx :
+                                                     cs1++cs2, t, TaSlice l e' [s'])              -- TODO: translate using w
     infer env (TaDot l e n)             = do (cs,t,e') <- infer env e
                                              t0 <- newTVar
-                                             cfx <- equFX env (fxMut tWild tWild)
+                                             fx <- currFX
+                                             st <- newTVar
                                              return (Mut t n t0 :
-                                                     cfx :
+                                                     Cast t tObject : 
+                                                     Cast (fxMut st) fx :
                                                      cs, t0, TaDot l e' n)
     infer env (TaDotI l e i tl)         = do (cs,t,e') <- infer env e
                                              t0 <- newTVar
-                                             cfx <- equFX env (fxMut tWild tWild)
+                                             fx <- currFX
+                                             st <- newTVar
                                              return (--Mut env t n t0 :                     -- TODO: create MutI constraint
-                                                     cfx :
+                                                     Cast t tObject : 
+                                                     Cast (fxMut st) fx :
                                                      cs, t0, TaDotI l e' i tl)
     infer env (TaTuple l targs)         = do (css,ts,targs') <- unzip3 <$> mapM (infer env) targs
                                              return (concat css, tTuple (foldr posRow posNil ts), TaTuple l targs')
@@ -991,7 +996,7 @@ instance ExtractT KwdPar where
     extractT KwdNIL                 = return kwdNil
 
 instance ExtractT Decl where
-    extractT d@Def{}                = do fx <- newTVarOfKind XRow
+    extractT d@Def{}                = do fx <- newTVarOfKind KFX
                                          pr <- extractT $ pos d
                                          kr <- extractT $ kwd d
                                          let (prow,krow) = chop (deco d) pr kr
@@ -1002,23 +1007,8 @@ instance ExtractT Decl where
         chop _ TVar{} k             = missingSelf (dname d)
         chop _ p (TRow _ _ n t k)   = (p, k)
         chop_  _ _                  = missingSelf (dname d)
-    extractT d@Actor{}              = do prow <- extractT $ pos d
+    extractT d@Actor{}              = do st <- newTVar
+                                         prow <- extractT $ pos d
                                          krow <- extractT $ kwd d
-                                         tFun (fxAct fxNil) prow krow <$> maybe newTVar return (ann d)
+                                         tFun (fxAct st) prow krow <$> maybe newTVar return (ann d)
     extractT _                      = newTVar
-
-
--- FX presentation ---------------------
-
-openFX (TSchema l q (TFun l' fx p r t))
-  | Just fx1 <- open fx             = TSchema l (TBind v [] : q) (TFun l' fx1 p r t)
-  where open (TRow l k n t fx)      = TRow l k n t <$> open fx
-        open (TNil l _)             = Just (TVar l v)
-        open (TVar _ _)             = Nothing
-        v                           = head (tvarSupply \\ tybound q)
-openFX t                            = t
-
-closeFX (TSchema l q f@(TFun l' fx p r t))
-  | TVar _ v <- rowTail fx, sole v  = TSchema l (filter ((v`notElem`) . tybound) q) (TFun l' (subst [(v,fxNil)] fx) p r t)
-  where sole v                      = v `elem` tybound q && length (filter (==v) (tyfree q ++ tyfree f)) == 1
-closeFX t                           = t
