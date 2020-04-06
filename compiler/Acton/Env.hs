@@ -466,7 +466,6 @@ importAll m te              = mapMaybe imp te
 data Constraint                         = Cast      Type Type
                                         | Sub       Name Type Type
                                         | Impl      Name Type TCon
-                                        | Qual      Name [TBind] Constraints
                                         | Sel       Type Name Type
                                         | Mut       Type Name Type
 
@@ -474,7 +473,6 @@ instance HasLoc Constraint where
     loc (Cast t _)                      = loc t
     loc (Sub  _ t _)                    = loc t
     loc (Impl _ t _)                    = loc t
-    loc (Qual _ q cs)                   = loc (head cs)
     loc (Sel t _ _)                     = loc t
     loc (Mut t _ _)                     = loc t
 
@@ -482,8 +480,6 @@ instance Pretty Constraint where
     pretty (Cast t1 t2)                 = text "_" <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
     pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
     pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
-    pretty (Qual w q cs)                = pretty w <+> colon <+> brackets (commaSep pretty q) <> text "=>" <> 
-                                          parens (commaSep pretty cs)
     pretty (Sel t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
     pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":~" <+> pretty t2
 
@@ -600,14 +596,12 @@ instance Subst Constraint where
     msubst (Cast t1 t2)             = Cast <$> msubst t1 <*> msubst t2
     msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t1
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
-    msubst (Qual w q cs)            = Qual w <$> msubst q <*> msubst cs             -- TODO: refine as for TSchema below
     msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
-    tyfree (Qual w q cs)            = (tyfree q ++ tyfree cs) \\ tybound q
     tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
