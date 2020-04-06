@@ -797,7 +797,7 @@ instance Infer Expr where
     infer env (DotI l e i False)        = do (ttup,ti,_) <- tupleTemplate i
                                              (cs,e') <- inferSub env ttup e
                                              return (cs, ti, DotI l e' i False)
-    infer env (DotI l e i True)         = do (ttup,_,tl) <- tupleTemplate i
+    infer env (DotI l e i True)         = do (ttup,_,tl) <- tupleTemplate (i-1)
                                              (cs,e') <- inferSub env ttup e
                                              return (cs, tl, DotI l e' i True)
     infer env (Lambda l p k e)
