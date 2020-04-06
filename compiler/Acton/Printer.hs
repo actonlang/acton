@@ -240,8 +240,6 @@ instance Pretty Target where
     pretty (TaIndex _ e ix)         = pretty e <> brackets (commaList ix)
     pretty (TaSlice _ e sl)         = pretty e <> brackets (commaList sl)
     pretty (TaDot _ e n)            = pretty e <> dot <> pretty n
-    pretty (TaDotI _ e i False)     = pretty e <> dot <> pretty i
-    pretty (TaDotI _ e i True)      = pretty e <> dot <> text "*" <> pretty i
     pretty (TaParen _ t)            = parens (pretty t)
 
 prettyPats [] Nothing               = empty

@@ -214,7 +214,6 @@ instance Norm Target where
     norm env (TaIndex l e ix)       = TaIndex l <$> norm env e <*> norm env ix
     norm env (TaSlice l e sl)       = TaSlice l <$> norm env e <*> norm env sl
     norm env (TaDot l e n)          = TaDot l <$> norm env e <*> norm env n
-    norm env (TaDotI l e i tl)      = TaDotI l <$> norm env e <*> return i <*> return tl
     norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
     norm env (TaParen l p)          = TaParen l <$> norm env p
 

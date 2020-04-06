@@ -188,7 +188,6 @@ instance KCheck Target where
     kchk env (TaIndex l e ix)       = TaIndex l <$> kchk env e <*> kchk env ix
     kchk env (TaSlice l e sl)       = TaSlice l <$> kchk env e <*> kchk env sl
     kchk env (TaDot l e n)          = TaDot l <$> kchk env e <*> return n
-    kchk env (TaDotI l e i tl)      = TaDotI l <$> kchk env e <*> return i <*> return tl
     kchk env (TaParen l p)          = TaParen l <$> kchk env p
 
 instance KCheck Exception where
@@ -492,7 +491,6 @@ instance KSubst Target where
     ksubst g (TaIndex l e ix)       = TaIndex l <$> ksubst g e <*> ksubst g ix
     ksubst g (TaSlice l e sl)       = TaSlice l <$> ksubst g e <*> ksubst g sl
     ksubst g (TaDot l e n)          = TaDot l <$> ksubst g e <*> return n
-    ksubst g (TaDotI l e i tl)      = TaDotI l <$> ksubst g e <*> return i <*> return tl
     ksubst g (TaParen l p)          = TaParen l <$> ksubst g p
 
 instance KSubst Exception where

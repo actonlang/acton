@@ -358,5 +358,4 @@ instance Lift Target where
     ll env (TaIndex l e ix)             = TaIndex l <$> ll env e <*> ll env ix
     ll env (TaSlice l e sl)             = TaSlice l <$> ll env e <*> ll env sl
     ll env (TaDot l e n)                = TaDot l <$> ll env e <*> return n
-    ll env (TaDotI l e i tl)            = TaDotI l <$> ll env e <*> return i <*> return tl
     ll env (TaParen l p)                = TaParen l <$> ll env p

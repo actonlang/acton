@@ -94,7 +94,6 @@ data Target     = TaVar         { taloc::SrcLoc, tn::Name}
                 | TaIndex       { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
                 | TaSlice       { taloc::SrcLoc, texp::Expr, tslice::[Sliz] }
                 | TaDot         { taloc::SrcLoc, texp::Expr, tn::Name }
-                | TaDotI        { taloc::SrcLoc, texp::Expr, tival::Integer, ttl :: Bool }
                 | TaParen       { taloc::SrcLoc, targ::Target }
                 | TaTuple       { taloc::SrcLoc, targs::[Target]}
 
@@ -276,23 +275,17 @@ fxAct t         = TFX NoLoc (FXAct t)
 fxMut t         = TFX NoLoc (FXMut t)
 fxPure          = TFX NoLoc FXPure
 
-rPos n          = Name NoLoc (show n)
-
-posRow t r      = TRow NoLoc PRow (rPos n) t r
-  where n       = rowDepth r + 1
+posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow
-
 
 kwdRow n t r    = TRow NoLoc KRow n t r
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil KRow
 
-rowDepth (TRow _ _ _ _ r)   = rowDepth r + 1
-rowDepth _                  = 0
-
-rowTail (TRow _ _ _ _ r)    = rowTail r
-rowTail r                   = r
+rowTail (TRow _ _ _ _ r)
+                = rowTail r
+rowTail r       = r
 
 
 tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOTUVW" ]
@@ -585,8 +578,6 @@ posArgLen (PosArg _ r)              = 1 + posArgLen r
 posPatLen PosPatNil                 = 0
 posPatLen (PosPatStar _)            = 0
 posPatLen (PosPat _ r)              = 1 + posPatLen r
-
-posRowLen                           = rowDepth
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a

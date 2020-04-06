@@ -108,7 +108,6 @@ instance Relabel Target where
     relabel (TaIndex _ e ix) = TaIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (TaSlice _ e sl) = TaSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (TaDot _ e n) = TaDot <$> newLoc <*> relabel e <*> relabel n
-    relabel (TaDotI _ e i tl) = TaDotI <$> newLoc <*> relabel e <*> return i <*> return tl
     relabel (TaParen _ t) = TaParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where

@@ -333,7 +333,6 @@ instance InfEnv Stmt where
             t2e (TaIndex l e ix)        = Index l e ix
             t2e (TaSlice l e sl)        = Slice l e sl
             t2e (TaDot l e n)           = Dot l e n
-            t2e (TaDotI l e i tl)       = DotI l e i tl
             t2e (TaParen l tg)          = Paren l (t2e tg)
             t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs) KwdNil
     infEnv env (Assert l e1 e2)         = do (cs1,e1') <- inferBool env e1
@@ -795,11 +794,12 @@ instance Infer Expr where
                                              t0 <- newTVar
                                              return (Sel t n t0 :
                                                      cs, t0, Dot l e' n)
-    infer env (DotI l e i False)        = do (cs,t,e') <- infer env e
-                                             t0 <- newTVar
-                                             return (Sel t (rPos i) t0 :
-                                                     cs, t0, DotI l e' i False)
-    infer env e@(DotI l _ _ True)       = notYetExpr e
+    infer env (DotI l e i False)        = do (ttup,ti,_) <- tupleTemplate i
+                                             (cs,e') <- inferSub env ttup e
+                                             return (cs, ti, DotI l e' i False)
+    infer env (DotI l e i True)         = do (ttup,_,tl) <- tupleTemplate i
+                                             (cs,e') <- inferSub env ttup e
+                                             return (cs, tl, DotI l e' i True)
     infer env (Lambda l p k e)
       | nodup (p,k)                     = do fx <- newTVarOfKind KFX
                                              pushFX fx tNone
@@ -866,6 +866,10 @@ instance Infer Expr where
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
+tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]
+                                             p <- newTVarOfKind PRow
+                                             k <- newTVarOfKind KRow
+                                             return (TTuple NoLoc (foldl (flip posRow) p ts) k, head ts, TTuple NoLoc p kwdNil)
 
 isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
   where dotChain (Var _ (NoQual n))     = Just [n]
@@ -1097,13 +1101,5 @@ instance Infer Target where
                                                      Cast t tObject : 
                                                      Cast (fxMut st) fx :
                                                      cs, t0, TaDot l e' n)
-    infer env (TaDotI l e i tl)         = do (cs,t,e') <- infer env e
-                                             t0 <- newTVar
-                                             fx <- currFX
-                                             st <- newTVar
-                                             return (--Mut env t n t0 :                     -- TODO: create MutI constraint
-                                                     Cast t tObject : 
-                                                     Cast (fxMut st) fx :
-                                                     cs, t0, TaDotI l e' i tl)
     infer env (TaTuple l targs)         = do (css,ts,targs') <- unzip3 <$> mapM (infer env) targs
                                              return (concat css, tTuple (foldr posRow posNil ts), TaTuple l targs')
