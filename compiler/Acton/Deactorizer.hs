@@ -169,7 +169,6 @@ instance Deact Target where
     deact env (TaIndex l e ix)      = TaIndex l <$> deact env e <*> deact env ix
     deact env (TaSlice l e sl)      = TaSlice l <$> deact env e <*> deact env sl
     deact env (TaDot l e n)         = TaDot l <$> deact env e <*> return n
-    deact env (TaDotI l e i tl)     = TaDotI l <$> deact env e <*> return i <*> return tl
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe

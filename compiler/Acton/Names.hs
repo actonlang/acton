@@ -312,7 +312,6 @@ instance Vars Target where
     free (TaIndex _ e ix)           = free e ++ free ix
     free (TaSlice _ e sl)           = free e ++ free sl
     free (TaDot _ e n)              = free e
-    free (TaDotI _ e i tl)          = free e
     free (TaTuple _ ts)             = free ts
     free (TaParen _ t)              = free t
 

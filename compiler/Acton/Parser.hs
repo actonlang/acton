@@ -469,7 +469,6 @@ atarget = addLoc (
             tmp <- atom_expr
             case tmp of
                 S.Dot _ e n    -> return $ S.TaDot NoLoc e n
-                S.DotI _ e i t -> return $ S.TaDotI NoLoc e i t
                 S.Index _ e ix -> return $ S.TaIndex NoLoc e ix
                 S.Slice _ e sl -> return $ S.TaSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)

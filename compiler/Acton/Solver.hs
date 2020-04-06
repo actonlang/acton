@@ -56,8 +56,6 @@ reduce' env c@(Impl w (TVar _ tv) u)
 reduce' env c@(Impl w t u)
   | otherwise                   = return ()                                      -- TODO: implement, of course
 
---reduce' (Qual w q cs)                       = ...
-
 
 reduce' env c@(Sel (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]

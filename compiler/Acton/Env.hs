@@ -477,8 +477,8 @@ instance HasLoc Constraint where
     loc (Mut t _ _)                     = loc t
 
 instance Pretty Constraint where
-    pretty (Cast t1 t2)                 = text "_" <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
+    pretty (Cast t1 t2)                 = pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<:" <+> pretty t2
     pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
     pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":~" <+> pretty t2

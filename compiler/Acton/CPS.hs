@@ -564,6 +564,5 @@ instance PreCPS Target where
     pre env (TaIndex l e ix)            = TaIndex l <$> pre env e <*> pre env ix
     pre env (TaSlice l e sl)            = TaSlice l <$> pre env e <*> pre env sl
     pre env (TaDot l e n)               = TaDot l <$> pre env e <*> return n
-    pre env (TaDotI l e i tl)           = TaDotI l <$> pre env e <*> return  i <*> return tl
     pre env (TaTuple l ps)              = TaTuple l <$> pre env ps
     pre env (TaParen l p)               = TaParen l <$> pre env p

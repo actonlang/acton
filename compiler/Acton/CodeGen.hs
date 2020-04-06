@@ -207,7 +207,6 @@ instance Gen Target where
     gen env (TaIndex _ e ix)        = gen env e <> brackets (commaList ix)
     gen env (TaSlice _ e sl)        = gen env e <> brackets (commaList sl)
     gen env (TaDot _ e n)           = gen env e <> text "->" <> gen env n
-    gen env (TaDotI _ e i tl)       = undefined
     gen env (TaParen _ p)           = gen env p
 
 instance Gen Unary where
