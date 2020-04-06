@@ -42,9 +42,9 @@ solve env cs                                = do --traceM ("### solve: " ++ prst
 
 reduce                                      :: Env -> Constraints -> TypeM ()
 reduce env []                               = return ()
-reduce env (c:cs)                           = do reduce' env c
+reduce env (c:cs)                           = do c' <- msubst c
+                                                 reduce' env c'
                                                  cs' <- msubst cs
-                                                 --traceM ("### reduce: " ++ prstr c')
                                                  reduce env cs'
 
 reduce'                                     :: Env -> Constraint -> TypeM ()

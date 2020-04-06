@@ -551,37 +551,37 @@ instance Check Branch where
 
 instance Check Decl where
     checkEnv env cl (Actor l n q p k a b)
-                                        = do t <- newTVar
+                                        = do t <- maybe newTVar return a
                                              st <- newTVar
                                              pushFX (fxAct st) t
-                                             (csp,te0,prow,p') <- infEnvT env p
+                                             (csp,te0,prow,p') <- infEnvT env1 p
                                              (csk,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (csp++csk++csb)
                                              solve env1 cs1'
                                              t1 <- msubst (tFun (fxAct st) prow krow t)
-                                             cs0 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
+                                             cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              -- TODO: checkEnv that st doesn't escape
-                                             return (cs0, Actor l n q1 p' k' a b')
+                                             return (cs2, Actor l n q1 p' k' a b')
       where q1                          = autoQuant env q p k a
-            env1                        = define [(selfKW, NVar tRef)] $ block (stateScope env) $ reserve (statedefs b) $
-                                          reserve (bound (p,k) ++ bound b) $ defineTVars q1 env
+            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 $
+                                          define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ block (stateScope env) env
 
     checkEnv env cl (Def l n q p k a b d)
                                         = do t <- maybe newTVar return a
                                              fx <- newTVarOfKind KFX
                                              pushFX fx t
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                             (csp,te0,prow,p') <- infEnvT env p
+                                             (csp,te0,prow,p') <- infEnvT env1 p
                                              (csk,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (csb,_,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (cst++csp++csk++csb)
                                              solve env1 cs1'
                                              t1 <- msubst (tFun fx prow krow t)
-                                             cs0 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
-                                             return (cs0, Def l n q1 p' k' a b' d)
+                                             cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
+                                             return (cs2, Def l n q1 p' k' a b' d)
       where q1                          = autoQuant env q p k a
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 env
 
@@ -605,11 +605,11 @@ instance Check Decl where
             w:_                         = locateWitnesses env n us
 
 
-
 checkAssump env cl n cs sc              = do (cs1,t1) <- instantiate env sc
-                                             (cs0',cs0) <- partition (any (`elem` tybound q0) . tyfree) <$> simplify env0 (Cast t1 (addSelf t0) : cs++cs1)
-                                             solve env0 cs0'
-                                             msubst cs0
+                                             cs2 <- simplify env0 (Cast t1 (addSelf t0) : cs++cs1)
+                                             let (cs3,cs4) = partition (any (`elem` tybound q0) . tyfree) cs2
+                                             solve env0 cs3
+                                             msubst cs4
   where NDef (TSchema _ q0 t0) dec      = findName n env
         env0                            = defineTVars q0 env
         addSelf (TFun l x p k t)
