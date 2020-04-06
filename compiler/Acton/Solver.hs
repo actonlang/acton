@@ -185,23 +185,6 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem (tNil k) n
 cast' env t1 t2                             = noRed (Cast t1 t2)
 
 
-castSchema env sc1 sc2                      = do (cs,t) <- instantiate env sc1
-                                                 castInst env cs t sc2
-
-
-castInst env cs t (TSchema _ [] u)          = simplify env (Cast t u : cs)
-castInst env cs t sc@(TSchema _ q u)        = do cs' <- simplify env1 (Cast t u : cs)
-                                                 fvs <- msubstTV (tyfree sc ++ tyfree env)
-                                                 let esc = intersect (tybound q) fvs
-                                                 when (not $ null esc) (escapingVar esc sc)
-                                                 case partition (canWait fvs) cs' of
-                                                     (cs1,[]) -> return cs1
-                                                     (cs1,cs2) -> do w' <- newWitness
-                                                                     c <- Qual w' <$> msubst q <*> pure cs2
-                                                                     return (c:cs1)
-  where env1                                = defineTVars q env
-        canWait fvs c                       = all (`elem` fvs) (tyfree c)
-
 
 ----------------------------------------------------------------------------------------------------------------------
 -- sub
@@ -265,23 +248,6 @@ sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n
 sub' env w t1 t2                            = do cast env t1 t2
                                                  return ()              -- lambda x:x
 
-
-subSchema env w sc1 sc2                     = do (cs,t) <- instantiate env sc1
-                                                 subInst env w cs t sc2
-
-
-subInst env w cs t (TSchema _ [] u)         = simplify env (Sub w t u : cs)
-subInst env w cs t sc@(TSchema _ q u)       = do cs' <- simplify env1 (Sub w t u : cs)
-                                                 fvs <- msubstTV (tyfree sc ++ tyfree env)
-                                                 let esc = intersect (tybound q) fvs
-                                                 when (not $ null esc) (escapingVar esc sc)
-                                                 case partition (canWait fvs) cs' of
-                                                     (cs1,[]) -> return cs1
-                                                     (cs1,cs2) -> do w' <- newWitness
-                                                                     c <- Qual w' <$> msubst q <*> pure cs2
-                                                                     return (c:cs1)
-  where env1                                = defineTVars q env
-        canWait fvs c                       = all (`elem` fvs) (tyfree c)
 
 
 

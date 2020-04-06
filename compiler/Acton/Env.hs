@@ -200,14 +200,17 @@ instance Unalias (Name,NameInfo) where
 nTVars                      :: [TBind] -> TEnv                              -- infEnv (ExceptAs), Env.defineTVars, Env.defineSelf'
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
+nSigs                       :: TEnv -> TEnv
+nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
 
-sigTerms                    :: TEnv -> (TEnv, TEnv)
-sigTerms te                 = (sigs, terms)
-  where sigs                = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
-        terms               = [ (n,i) | (n,i) <- te, isTerm i ]
-        isTerm NDef{}       = True
+nTerms                      :: TEnv -> TEnv
+nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
+  where isTerm NDef{}       = True
         isTerm NVar{}       = True
         isTerm _            = False
+
+sigTerms                    :: TEnv -> (TEnv, TEnv)
+sigTerms te                 = (nSigs te, nTerms te)
 
 propSigs                    :: TEnv -> TEnv
 propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
@@ -395,32 +398,6 @@ instantiate env (TSchema _ q t)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
 
-
-
--- Environment unification ----------------------------------------------------------------------------------------------------------
-
-unifyTEnv                               :: Env -> [TEnv] -> [Name] -> TypeM Constraints              -- commonTEnv
-unifyTEnv env tenvs []                  = return []
-unifyTEnv env tenvs (v:vs)              = case [ ni | Just ni <- map (lookup v) tenvs] of
-                                            ni:nis -> do css <- mapM (unif ni) nis
-                                                         cs <- unifyTEnv env tenvs vs
-                                                         return (concat css ++ cs)
-  where
-    unif (NVar t) (NVar t')             = return [Cast t t']
-    unif (NSVar t) (NSVar t')           = return [Cast t t']
-    unif (NSig t d) (NSig t' d')
-      | d == d'                         = unifT t t'
-    unif _ _                            = err1 v "Inconsistent bindings for"
-
-    unifT (TSchema _ [] t) (TSchema _ [] t')
-                                        = return [Cast t t']
-    
-    unifC q us te q' us' te'
-      | q /= q' || us /= us'            = err1 v "Inconsistent declaration heads for"
-      | not $ null diff                 = err1 v "Inconsistent attribute sets for"
-      | otherwise                       = unifyTEnv env [te,te'] vs
-      where diff                        = (vs \\ vs') ++ (vs' \\ vs)
-            (vs, vs')                   = (dom te, dom te')
 
 
 -- Import handling (local definitions only) ----------------------------------------------
@@ -840,7 +817,7 @@ typeError err                       = (loc err,render (expl err))
     expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match original signature" <+> pretty (n,NSig t d)
+    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty (n,NSig t d)
     expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
