@@ -59,7 +59,7 @@ reduce' env c@(Impl w t u)
 
 reduce' env c@(Sel (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | Just u <- findSubBound tv env           = reduce' env (Sel (tCon u) n t2)
+  | u:_ <- findSubBound tv env              = reduce' env (Sel (tCon u) n t2)
 reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
                                                  when (dec == Static) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
@@ -78,11 +78,14 @@ reduce' env (Sel (TExist _ p) n t2)         = do let (sc,dec) = findAttr env tc 
     addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
     addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
 -}
-reduce' env (Sel (TUnion _ [ULit _]) n t2)  = reduce' env (Sel tStr n t2)
+reduce' env (Sel (TUnion _ us) n t2)        = do t <- newTVar
+                                                 reduce env (Sel t n t2 : [ Cast (mkTCon u) t | u <- us ])
+  where mkTCon (ULit _)                     = tStr
+        mkTCon (UCon c)                     = tCon (TC c [])
 
 reduce' env c@(Mut (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | Just u <- findSubBound tv env           = reduce' env (Mut (tCon u) n t2)
+  | u:_ <- findSubBound tv env              = reduce' env (Mut (tCon u) n t2)
 reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
                                                  when (dec==Property) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
