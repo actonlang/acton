@@ -1,12 +1,29 @@
 
-struct $int {
-  char *GCINFO;
-  long val;
-};
+struct $int$__methods__ $int_table = {$int_serialize, $int_deserialize};
+$int$__methods__ $int_methods = &$int_table;
 
-  
+// Serialization ///////////////////////////////////////////////////////////////////////
+
+None $int_serialize($int n, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $ROW row = malloc(3*sizeof(int) + (prefix_size + 2)*sizeof($WORD));
+  row->class_id = INT_ID;
+  row->key_size = prefix_size;
+  row->next = NULL;
+  row->blob_size = 1;
+  memcpy(row->data,prefix,prefix_size*sizeof($WORD));
+  row->data[prefix_size] = ($WORD)from$int(n);
+  enqueue(accum,row);
+}
+
+$int $int_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row =this->next;
+  return to$int((long)this->data[this->key_size]);
+}
+
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
+  res->__class__ = $int_methods;
   res->val = i;
   return res;
 }
@@ -14,6 +31,7 @@ $int to$int(long i) {
 long from$int($int w) {
   return w->val;
 }
+
 
 // Integral$int /////////////////////////////////////////////////////////////////////////
 
@@ -282,5 +300,3 @@ Minus$int Minus$int_new() {
 Hashable$int Hashable$int_new() {
     return Hashable$int_witness;
 }
-
- 

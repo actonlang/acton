@@ -1,27 +1,8 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-
-#include "builtin.h"
- 
-typedef struct $list$__methods__ {
-  $list (*copy)($list self);
-  //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
-} *$list$__methods__;
-
-struct $list {
-  char *GCINFO;
-  $list$__methods__ __class__;
-  $WORD *data;
-  int length;
-  int capacity;
-};
-
 
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static struct $list$__methods__ $list_table = {$list_copy};
+static struct $list$__methods__ $list_table = {$list_serialize,$list_deserialize,$list_copy};
 $list$__methods__ $list_methods = &$list_table;
  
 
@@ -74,7 +55,7 @@ static void expand($list lst,int n) {
    lst->capacity = newcapacity;
 }  
 
-static $list list_new(int capacity) {
+$list list_new(int capacity) {
   if (capacity < 0) {
     exception e;
     MKEXCEPTION(e,VALUEERROR);
@@ -340,3 +321,66 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
 }
 */
  
+// (De)serialization //////////////////////////////////////////////////////////////////////////
+
+None $list_serialize($list self, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $WORD deflt = NULL;
+  $PREFIX prevkey = ($PREFIX)$dict_get(done,self,deflt);
+  int prevkey_size = prevkey ? prevkey->prefix_size : 0;
+  //           class_id,key_size,blob_size         next       prefix         blob
+  $ROW row = malloc(3*sizeof(int)           +       (1    + prefix_size + prevkey_size)*sizeof($WORD));
+  row->key_size = prefix_size;
+  row->next = NULL;
+  memcpy(row->data,prefix,prefix_size*sizeof($WORD));
+  if (prevkey) {
+    row->class_id = -LIST_ID;
+    row->blob_size = prevkey->prefix_size;
+    memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
+    enqueue(accum,row);
+    return;
+  }
+  $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
+  pref->prefix_size = prefix_size;
+  memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
+  $dict_setitem(done,self,pref);
+  row->class_id = LIST_ID;
+  row->blob_size = 1;
+  row->data[prefix_size] = ($WORD)(long)self->length;
+  enqueue(accum,row);
+  Sequence$list wit = Sequence$list_new();
+  int extprefix_size = prefix_size + 1;
+  for (long i=0; i<self->length; i++) {
+    $WORD *extprefix = malloc(extprefix_size*sizeof($WORD));
+    memcpy(extprefix, prefix, extprefix_size*sizeof($WORD));
+    extprefix[extprefix_size-1] = ($WORD)i;
+    Serializable elem = (Serializable)wit->__class__->__getitem__(wit,self,to$int(i));
+    elem->__class__->__serialize__(elem,extprefix,extprefix_size,done,accum);
+  }
+}
+
+$list $list_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
+    pref->prefix_size = this->blob_size;
+    memcpy(pref->prefix, this->data+this->key_size, this->blob_size*sizeof($WORD));
+    return $dict_get(done,pref,NULL);
+  } else {
+    $list res = list_new((int)(long)this->data[(int)this->key_size]);
+    res->length = res->capacity;
+    for (int i = 0; i < res->length; i++) 
+      res->data[i] = (serial$_methods[abs((*row)->class_id)])->__deserialize__(row,done);
+    $PREFIX pref = malloc(sizeof(int) + this->key_size*sizeof($WORD));
+    pref->prefix_size = this->key_size;
+    memcpy(pref->prefix, this->data, this->key_size*sizeof($WORD));
+
+    $dict_setitem(done,pref,res);
+    return res;
+  }
+}
+     
+    
+  
+
+  

@@ -41,8 +41,8 @@ BvS 191002: For the moment, stick to little endian. In CPython, this is set in p
 #define PY_BIG_ENDIAN 0
 #define PY_LITTLE_ENDIAN 1
 
-long $int_hash ($int n) {
-  long u = from$int(n), sign=1;
+static long long_hash (long u) {
+  long sign=1;
   if (u<0)  {
 
     sign=-1;
@@ -54,12 +54,14 @@ long $int_hash ($int n) {
   return h;
 }
 
+long $int_hash ($int n) {
+  return long_hash(from$int(n));
+}
 
-long $float_hash($float v) {
+static long double_hash(double d) {
     int e, sign;
     double m;
     long x, y;
-    double d = from$float(v);
     
     if (!isfinite(d)) {
         if (isinf(d))
@@ -100,19 +102,22 @@ long $float_hash($float v) {
     return x;
 }
 
-/*
-size_t pointer_hash(void *p) {
-    size_t x;
-    size_t y = (size_t)p;
+long $float_hash($float v) {
+  return double_hash(from$float(v));
+}
+
+long pointer_hash($WORD p) {
+    long x;
+    long y = (long)p;
     // bottom 3 or 4 bits are likely to be 0; rotate y by 4 to avoid
     //  excessive hash collisions for dicts and sets 
     y = (y >> 4) | (y << 60);
-    x = (size_t)y;
+    x = (long)y;
     if (x == -1)
         x = -2;
     return x;
 }
-*/
+
 /* hash secret
  *
  * memory layout on 64 bit systems
@@ -179,25 +184,27 @@ long $string_hash(void *src, int len) {
    _PyHASH_XXROTATE() expansion. If that doesn't happen for some important
    platform, the macro could be changed to expand to a platform-specific rotate
    spelling instead.
-
-#define _PyHASH_XXPRIME_1 ((size_t)11400714785074694791ULL)
-#define _PyHASH_XXPRIME_2 ((size_t)14029467366897019727ULL)
-#define _PyHASH_XXPRIME_5 ((size_t)2870177450012600261ULL)
+*/
+#define _PyHASH_XXPRIME_1 ((long)11400714785074694791ULL)
+#define _PyHASH_XXPRIME_2 ((long)14029467366897019727ULL)
+#define _PyHASH_XXPRIME_5 ((long)2870177450012600261ULL)
 #define _PyHASH_XXROTATE(x) ((x << 31) | (x >> 33))  // Rotate left 31 bits 
- 
+
+/*
  Tests have shown that it's not worth to cache the hash value, see
    https://bugs.python.org/issue9685 
+*/
 
-size_t tuple_hash(tuple_t v) {
-    ssize_t i, len = v->length;
+long $PREFIX_hash($PREFIX v) {
+    int i, len = v->prefix_size;
 
-    size_t acc = _PyHASH_XXPRIME_5;
+    long acc = _PyHASH_XXPRIME_5;
     for (i = 0; i < len; i++) {
-      size_t lane = double_hash(v->item[i]);
-      printf("tuple element hash is %ld\n",lane);
-      if (lane == (size_t)-1) {
-        return -1;
-      }
+      long lane = long_hash((long)v->prefix[i]);
+      // printf("tuple element hash is %ld\n",lane);
+      //      if (lane == (size_t)-1) {
+      //  return -1;
+      //}
       acc += lane * _PyHASH_XXPRIME_2;
       acc = _PyHASH_XXROTATE(acc);
       acc *= _PyHASH_XXPRIME_1;
@@ -206,13 +213,13 @@ size_t tuple_hash(tuple_t v) {
     //Add input length, mangled to keep the historical value of hash(()). 
     acc += len ^ (_PyHASH_XXPRIME_5 ^ 3527539UL);
 
-    if (acc == (size_t)-1) {
+    if (acc == (long)-1) {
         return 1546275796;
     }
     return acc;
 }
 
-
+/*
  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
     From 3.8 the xxHash-based algorithm above is used.
 
@@ -236,7 +243,7 @@ size_t tuple_hash($WORD ht,$WORD v) {
     mult += (size_t)(82520UL + 2*(len-i-1));
   }
   x += 97531UL;
-  if (x == (size_t)-1)
+  if (x == (size_t)-1) 
     x = -2;
   return x;
 }

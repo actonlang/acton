@@ -16,3 +16,4 @@
 #include "str.c"
 #include "set.c"
 #include "set_impl.c"
+#include "serialize.c"
