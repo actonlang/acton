@@ -27,7 +27,7 @@ import Prelude hiding ((<>))
 
 
 
-mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env           -- ActonCompiler...
+mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env
 mkEnv paths env modul       = getImps paths (setDefaultMod m env) imps
   where Module m imps _     = modul
 
@@ -117,7 +117,7 @@ instance Subst NameInfo where
     tyfree NReserved            = []
     tyfree NBlocked             = []
 
-msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs                  -- splitGen, genTEnv, Solver.redGen
+msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
 instance Subst SrcInfoTag where
     msubst (GEN l t)                = GEN l <$> msubst t
@@ -130,7 +130,7 @@ instance Subst SrcInfoTag where
 -------------------------------------------------------------------------------------------------------------------
 
 class Unalias a where
-    unalias                         :: Env -> a -> a                                        -- reconstruct, Env.findName
+    unalias                         :: Env -> a -> a
     unalias env                     = id
 
 instance (Unalias a) => Unalias [a] where
@@ -197,7 +197,7 @@ instance Unalias (Name,NameInfo) where
     
 -- TEnv construction helpers and filters ---------------------------------------------------------------------------------------
     
-nTVars                      :: [TBind] -> TEnv                              -- infEnv (ExceptAs), Env.defineTVars, Env.defineSelf'
+nTVars                      :: [TBind] -> TEnv
 nTVars q                    = [ (n, NTVar k us) | TBind (TV k n) us <- q ]
 
 nSigs                       :: TEnv -> TEnv
@@ -243,7 +243,7 @@ splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
-initEnv                    :: Bool -> IO Env                                          -- ActonCompiler...
+initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
                                 then return $ Env{names = [], modules = [], defaultmod = mBuiltin, nocheck = True}
                                 else do path <- getExecutablePath
@@ -254,37 +254,33 @@ initEnv nobuiltin           = if nobuiltin
                                             env     = define autoImp env0
                                         return env
                                         
-setDefaultMod               :: ModName -> Env -> Env                        -- Env.mkEnv
+setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
 
-setNoCheck                  :: Env -> Env                                   -- infEnv (Decl)
+setNoCheck                  :: Env -> Env
 setNoCheck env              = env{ nocheck = True }
 
-addMod                      :: ModName -> TEnv -> Env -> Env                -- Env.doImp, ActonCompiler.doTask
+addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
 
--- dropNames                   :: Env -> Env                                   -- ActonCompiler.runRestPasses
--- dropNames env               = env{ names = names initEnv }
+reserve                     :: [Name] -> Env -> Env
+reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
 
-
-reserve                     :: [Name] -> Env -> Env                         -- infEnv (class,proto,ext), check (actor,def,class,proto,ext)
-reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }  -- infer (lambda), infEnv (CompFor), reconstruct
-
-block                       :: [Name] -> Env -> Env                         -- infEnv (class,proto,ext), check (actor,def,class,proto,ext)
+block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
-define                      :: TEnv -> Env -> Env                           -- all local scopes...
+define                      :: TEnv -> Env -> Env
 define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
-defineTVars                 :: [TBind] -> Env -> Env                        -- infEnv (class,proto,ext), check (actor,def,class,proto,ext), Solver.redGen'
+defineTVars                 :: [TBind] -> Env -> Env
 defineTVars q env           = env{ names = nTVars q ++ names env }
 
-defineSelf                  :: QName -> [TBind] -> Env -> Env               -- infEnv (class,proto,ext), check (class,proto,ext)
+defineSelf                  :: QName -> [TBind] -> Env -> Env
 defineSelf qn q env         = define (nTVars [TBind tvSelf [tc]]) env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
 
-defineMod                   :: ModName -> TEnv -> Env -> Env                -- Env.impModule, Env.doImp
+defineMod                   :: ModName -> TEnv -> Env -> Env
 defineMod m te env          = define [(n, defmod ns $ te1)] env
   where ModName (n:ns)      = m
         te1                 = case lookup n (names env) of Just (NModule te1) -> te1; _ -> []
@@ -295,20 +291,20 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
 
-noCheck                     :: Env -> Bool                                  -- infEnv (Decl)
+noCheck                     :: Env -> Bool
 noCheck env                 = nocheck env
 
-stateScope                  :: Env -> [Name]                                -- infEnv (class,proto,ext), check (actor,def,class,proto,ext)
+stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
-tvarScope                   :: Env -> [TVar]                                -- extractSchema
+tvarScope                   :: Env -> [TVar]
 tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
-findQName                   :: QName -> Env -> NameInfo                     -- Env (tconKind,isProto,findClass,findProto,findVarType,findCon)
-findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of    -- infer (Var,TaVar), checkAssump, infEnvT (PVar)
+findQName                   :: QName -> Env -> NameInfo 
+findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just i -> i
                                 _ -> noItem m n
@@ -319,7 +315,7 @@ findQName (NoQual n) env    = case lookup n (names env) of
 
 findName n env              = findQName (NoQual n) env
 
-maybeFindMod                :: ModName -> Env -> Maybe TEnv                 -- Env (findName,isMod)
+maybeFindMod                :: ModName -> Env -> Maybe TEnv
 maybeFindMod (ModName ns) env = f ns (names env)
   where f [] te             = Just te
         f (n:ns) te         = case lookup n te of
@@ -329,10 +325,10 @@ maybeFindMod (ModName ns) env = f ns (names env)
                                 Just _ -> noModule (ModName (n:ns))
 
 isMod                       :: Env -> [Name] -> Bool
-isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)      -- isModule
+isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)
 
 
-tconKind                    :: QName -> Env -> Kind                                         -- Kinds.tconKind
+tconKind                    :: QName -> Env -> Kind
 tconKind n env              = case findQName n env of
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
@@ -340,8 +336,8 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
-isProto                     :: QName -> Env -> Bool                                         -- Env (findSubBound,findImplBound,instantiate)
-isProto n env               = case findQName n env of                                       -- infEnv (ext), class/protoBases
+isProto                     :: QName -> Env -> Bool
+isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
@@ -373,12 +369,12 @@ findCon env (TC n ts)
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
-findSubBound                :: TVar -> Env -> Maybe TCon                                    -- Solver.reduce (Sel,Mut)
+findSubBound                :: TVar -> Env -> Maybe TCon
 findSubBound tv env         = case findName (tvname tv) env of
                                 NTVar _ (u:us) | not $ isProto (tcname u) env -> Just u
                                 _ -> Nothing
 
-findImplBound               :: TVar -> Env -> [TCon]                                        -- Solver.reduce ...
+findImplBound               :: TVar -> Env -> [TCon]
 findImplBound tv env        = case findName (tvname tv) env of
                                 NTVar _ (u:us) | isProto (tcname u) env -> u:us
                                                | otherwise -> us
@@ -386,7 +382,7 @@ findImplBound tv env        = case findName (tvname tv) env of
 
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
-instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)                  -- Solver.reduce (Sel/TCon,Sel/TExists,Mut/TCon)
+instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
 instantiate env (TSchema _ [] t)
                             = return ([], t)
 instantiate env (TSchema _ q t)
