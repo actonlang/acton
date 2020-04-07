@@ -1,11 +1,3 @@
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <string.h> /*memset*/
-#include <assert.h>
-
-#include "builtin.h"
-#include "dict_impl.h"
 
 static struct  Mapping$dict$__class__ Mapping$dict_methods = {"",Mapping$dict$__iter__, Mapping$dict$__fromiter__, Mapping$dict$__len__, Mapping$dict$__contains__,
                                                               Mapping$dict$__containsnot__, Mapping$dict$get, Mapping$dict$keys, Mapping$dict$values,

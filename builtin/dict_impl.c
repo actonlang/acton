@@ -15,28 +15,18 @@ typedef struct $entry_struct {
   $WORD value;  // deleted entry has value NULL
 } *$entry_t;
 
-typedef struct $table_struct {
+struct $table_struct {
   char *GCINFO;
   long tb_size;        // size of dk_indices array; must be power of 2
   long tb_usable;      // nr of unused entries in dk_entries (deleted entries are counted as used)
   long tb_nentries;    // nr of used entries in dk_entries
   int  tb_indices[];   // array of indices
                        // after this follows tb_entries array;
-} *$table;
-
-typedef void *$dict$__methods__; // All dictionary methods are from protocols
-
-struct $dict {
-  char *$GCINFO;
-  $dict$__methods__ __class__;
-  long numelements;               // nr of elements in dictionary
-  Hashable hashwit;
-  // int (*eq)(Hashable,$WORD,$WORD);
-  // $int (*hash)(Hashable,$WORD);      // eq and hash function used in this dictionary
-  $table table;                   // the hashtable
 };
 
+struct $dict$__methods__ $dict_struct = {/*$dict_serialize,$dict_deserialize,*/$dict_hashwitness}; 
 
+$dict$__methods__ $dict_methods = &$dict_struct;
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
@@ -113,7 +103,7 @@ static int dictresize($dict d) {
 }
 
 
-$dict $new_dict(Hashable hashwit) { //int (*eq)($WORD,$WORD),$int (*hash)($WORD,$WORD)) {
+$dict $new_dict(Hashable hashwit) { 
   $dict dict =  malloc(sizeof(struct $dict));
   dict->numelements = 0;
   dict->hashwit = hashwit;
@@ -126,6 +116,10 @@ $dict $new_dict(Hashable hashwit) { //int (*eq)($WORD,$WORD),$int (*hash)($WORD,
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
   dict->__class__ = NULL;
   return dict;
+}
+
+Hashable $dict_hashwitness($dict dict) {
+  return dict->hashwit;
 }
 
 // Search index of hash table from offset of entry table 
@@ -400,9 +394,14 @@ Iterator $dict_items($dict dict) {
   return res;
 }
  
-// TODO: Handle KEYERROR and return deflt
 $WORD $dict_get($dict dict, $WORD key, $WORD deflt) {
-  return $dict_getitem(dict,key);
+  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
+  $WORD res;
+  int ix = lookdict(dict,hash,key,&res);
+  if (ix < 0) 
+    return deflt;
+  else
+    return res;
 }
 
 $WORD $dict_popitem($dict dict) {

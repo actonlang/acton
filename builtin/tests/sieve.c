@@ -124,6 +124,6 @@ int main() {
   // printf("%d\n",*$list_len(sieve(10000000)));
 
   Sequence$list wit = Sequence$list_new();
-  $list primes = sieveS(wit,10000000);
+  $list primes = sieveS(wit,1000000);
   printf("%ld\n",from$int(wit->_Collection->__class__->__len__(wit->_Collection,primes)));
 }

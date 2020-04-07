@@ -109,3 +109,4 @@ void Sequence$list$append(Sequence$list wit, $list self, $WORD elem) {
 void Sequence$list$reverse(Sequence$list wit, $list self) {
   $list_reverse(self);
 }
+
