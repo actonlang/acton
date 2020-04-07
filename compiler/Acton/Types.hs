@@ -419,35 +419,6 @@ matchingDec n sc dec dec'
   | otherwise                           = decorationMismatch n sc dec
 
 
-mro2 env []                             = ([], [])
-mro2 env (u:us)
-  | isProto (tcname u) env              = ([], mro env (u:us))
-  | otherwise                           = (mro env [u], mro env us)
-
-
-mro env us                              = merge [] $ linearizations us ++ [us]
-  where merge out lists
-          | null heads                  = reverse out
-          | h:_ <- good                 = merge (h:out) [ if equal hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
-          | otherwise                   = err2 heads "Inconsistent resolution order for"
-          where (heads,tails)           = unzip [ (hd,tl) | hd:tl <- lists ]
-                good                    = [ h | h <- heads, all (absent (tcname h)) tails]
-
-        equal u1 u2
-          | u1 == u2                    = True
-          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent protocol instantiations"
-          | otherwise                   = False
-
-        absent n []                     = True
-        absent n (u:us)
-          | n == tcname u               = False
-          | otherwise                   = absent n us
-
-        linearizations []               = []
-        linearizations (u : us)         = (u:us') : linearizations us
-          where (us',_)                 = findCon env u
-
-
 checkAttributes env te' te
   | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
   | not $ null props                    = err2 props "Property attribute cannot have a class-level definition"
@@ -489,42 +460,43 @@ instance InfEnv Decl where
       | otherwise                       = case findName n env of
                                              NReserved -> do
                                                  pushFX fxPure tNone
-                                                 (cs1,te,b') <- infEnv env1 b
+                                                 (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  (nsigs,_,_) <- checkAttributes env1 te' te
-                                                 return (cs1, [(n, NClass q as (te++nsigs))], Class l n q us b')
+                                                 return (cs, [(n, NClass q as (te++nsigs))], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
-            (as,ps)                     = mro2 env us
-            te'                         = parentTEnv env as
+            (as,ps)                     = mro2 env1 us
+            te'                         = parentTEnv env1 as
     infEnv env (Protocol l n q us b)    = case findName n env of
                                              NReserved -> do
                                                  pushFX fxPure tNone
-                                                 (cs1,te,b') <- infEnv env1 b
+                                                 (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  (nsigs,_,_) <- checkAttributes env1 te' te
                                                  when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute lacks signature"
-                                                 return (cs1, [(n, NProto q ps te)], Protocol l n q us b')
+                                                 return (cs, [(n, NProto q ps te)], Protocol l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
             ps                          = mro env1 us
-            te'                         = parentTEnv env ps
+            te'                         = parentTEnv env1 ps
     infEnv env (Extension l n q us b)
       | isProto n env                   = notYet (loc n) "Extension of a protocol"
       | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | otherwise                       = do pushFX fxPure tNone
-                                             (cs1,te,b') <- infEnv env1 b
+                                             (cs,te,b') <- infEnv env1 b
                                              popFX
                                              (nsigs,asigs,sigs) <- checkAttributes env1 te' te
                                              when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute not in listed protocols"
                                              when (not $ null asigs) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             ws <- mapM (const newWitness) ps
-                                             return ([], [ (w, NImpl q t p) | (w,p) <- ws `zip` ps ], Extension l n q ps b)
+                                             w <- newWitness
+                                             return (cs, [(w, NImpl q t u)], Extension l n q ps b)
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
+            u                           = head us
             t                           = tCon $ TC n [ tVar tv | TBind tv _ <- q ]
-            ps                          = mro env1 us
-            te'                         = parentTEnv env ps
+            ps                          = mro env1 [u]
+            te'                         = parentTEnv env1 ps
 
 
 class Check a where
