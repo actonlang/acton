@@ -24,7 +24,7 @@ NOTES:
     - The [q] part in class, protocol and extension is required, but can be left out (and inferred) in actor and def(s).
     - Unambiguity in type schemes: for each [q]=>t it must hold that fv(q) <= fv(t)  (not checked here)
     - Structs, classes and protocols have no ambiguity problems since q is always explicit there and the dom(q) are all in the resulting type.
-    - Consistency requirement on extensions not checked here (from Haskell): if  N |- t impl u  and  N |- u < u'  then  N |- t impl u'
+    - Consistency requirement on extensions not checked here (from Haskell): if  N |- t impl p  and  N |- p(p')  then  N |- t impl u'
         - Alternatively: if  N |- t ~ extension(u)  and  N |- u < u'  then  N |- t ~ extension(u')
         - Concretely: if   c:[q]=>extension(d[o])  and  d[q']=>protocol(d'[o'])  both exist in N
                       then c:[q"]=>extension(d'[o"])  must also exist in N such that  [o/dom(q')]o' = phi(o") and  N,q,[o/dom(qd)]q' |- q"
@@ -35,18 +35,19 @@ NOTES:
     - Termination requirements on q in extension c[q](o) not checked here (allow growing terms except in protocol cycles)
     - Self in the range of a substitution is forbidden but not checked here (maybe allow in covariant positions in the future)
     - Python's @classmethods are gone! Absorbed by protocols.
-    - On class/protocol signatures:
+    - On class signatures:
         
                               Attribute         |     stored in class:  |    stored in instance:  |
                             -----------------------------------------------------------------------
-                              of function type: |   @class (default)    |   @inst                 |
+                              of function type: |   <empty> (default)   |   @property             |
                                                 |   @static             |                         |
                             -----------------------------------------------------------------------
-                              of ground type:   |   @class              |   @inst (default)       |
+                              of ground type:   |   @static             |   @property (default)   |
                             -----------------------------------------------------------------------
     
+    - Protocol signatures can only use @static
     
-    - Unused meta variables: d,g,n,u,I,J,P,U,Y
+    - Unused meta variables: d,i,s,I,J,P,U,Y
 
 
 ***** Syntax ***************************************************************************************************************************************************
@@ -56,15 +57,16 @@ Protocol names:     P
 Class names:        C                                                                                   including int,bool,str,string literals,Msg,Ref,super
 Type variables:     X                                                                                   includes Self
 
-Types:              t       ::=     X  |  c  | EX(p)  |  e(r)->t  |  (r)  |  ?t  |  None                var, con, existential, fun, tuple/record, opt, void
+Types:              t,u     ::=     X  |  c  | EX(p)  |  e(r)->t  |  (r)  |  ?t  |  None                var, con, existential, fun, tuple/record, opt, void
 Protocols:          p       ::=     P[o]
 Classes:            c       ::=     C[o]                                                                including int,bool,str,string literals,Msg,Ref,super
 Type orderings:     o       ::=     t,o  |  .                                                           associative
 
 Rows:               r       ::=     h,k                                                                 associative
-Head rows:          h       ::=     T,h  |  *X  |  .                                                    associative
-Keyword rows:       k       ::=     x:T,k  |  **X  |  .                                                 associative, commutative\duplicates
-Effects:            e       ::=     ret[t],e  |  st[t],e  |  act,e  |  X  |  .                          associative, commutative\duplicates
+Head rows:          h       ::=     t,h  |  *X  |  .                                                    associative
+Keyword rows:       k       ::=     x:t,k  |  **X  |  .                                                 associative, commutative\duplicates
+Effects:            e       ::=     pure  |  mut[X]  |  act[X]  |  async  |  X
+Function contexts:  f       ::=     e[t]
 
 Type schemas:       T       ::=     [q]=>t  |  t
 Qua(l|nt)ifiers:    q       ::=     X(c,pi),q  |  .                                                     associative
@@ -72,6 +74,8 @@ Goals:              g       ::=     t(c,pi),g  |  .                             
 
 Environments:       N       ::=     C:[q]=>(c;r)  |  P:[q]=>(pi;r)  |  w:[q]=>C(p)  |  w:q  |
                                     x:T  |  z:t  |  x:#  |  z:#  |  N,N  |  .                           associative, commutative\duplicates
+
+Attribute envs:     n       ::=     x:T  |  n,n  |  .                                                   associative, commutative\duplicates
 
 Witness variables:  v
 Witness terms:      w       ::=     (subset of E)
@@ -83,46 +87,46 @@ Witness terms:      w       ::=     (subset of E)
 
 N |- D : N'                 Declaration D generates bindings N' in environment N
 
-N |- c ~ r                  Class type c exports row r
+N |- c ~ n                  Class type c exports attributes n
 
-N |- w : p ~ r              Protocol p exports row r, if instantiated with w
+N |- w : p ~ n              Protocol p exports attributes n, if instantiated with w
 
 N |- w : g                  Goal (constraint) g holds, as witnessed by w
 
-N |- w : T < T'             Type (schema) T is a subtype (schema) of T' in environment N, as witnessed by w
+N |- w : t < t'             Type (schema) T is a subtype (schema) of T' in environment N, as witnessed by w
 
-N |- E : T | e              Expression E has type (scheme) T in environment N and effect context e
+N |- E : T | e              Expression E has type (scheme) T and effect e in environment N
 
-N |- F : r | N' | e         Formal F has type row r in environment N (if updated with N') and effect context e
+N |- F : r | N'             Formal F has type row r in environment N (if updated with N')
 
-N |- S : N' | e             Statement S generates bindings N' in environment N and effect context e
+N |- S : N' | f             Statement S generates bindings N' in environment N and function context f
 
-N |- X : N' | e             Except clause X generates bindings N' in environment N and effect context e
+N |- X : N' | f             Except clause X generates bindings N' in environment N and function context f
 
-N |- S : t | e              Statement S returns values of type t in environment N and effect context e
+N |- S : t | e              Statement S returns values of type t with effect e in environment N
 
 
 
 ***** N |- D : N' **********************************************************************************************************************************************
 
 
-N,v:q |- c ~ r1     r not in r1     N |- M : r' | . ~> M'     r' in [q,Self(C[dom(q)]]=>(Self)->(r,r1)
------------------------------------------------------------------------------------------------------- (Class)
-N |- class C[q](c):r,M  :  C:[q]=>(c;r,r1)  ~>  !class C[q](c):(r,M')
+N,v:q |- c ~ n1     n not in n1     N |- M : n' ~> M'     n' in [q,Self(C[dom(q)]]=>(Self)->(n,n1)
+-------------------------------------------------------------------------------------------------- (Class)
+N |- class C[q](c):n,M  :  C:[q]=>(c;n,n1)  ~>  !class C[q](c):(n,M')
 
 
-N,v:q |- wi : Pi[oi] ~ ri / all i     r not in ri     N,v:q |- M : r' | . ~> M'     r' in [Self(P[dom(q)])]=>(Self)->(r,ri)
+N,v:q |- wi : Pi[oi] ~ ni / all i     n not in ni     N,v:q |- M : n' ~> M'     r' in [Self(P[dom(q)])]=>(Self)->(n,ni)
 --------------------------------------------------------------------------------------------------------------------------------------------- (Proto)
-N |- protocol P[q](Pi[oi]):r,M  :  P:[q]=>(Pi[oi];r,ri)  ~>  !class P[S,q]():[S/Self](r,(v')->[v'.v/v]M',def _init_(v',v):v'.i=Pi(wi);v'.v=v)
+N |- protocol P[q](Pi[oi]):n,M  :  P:[q]=>(Pi[oi];n,ni)  ~>  !class P[S,q]():[S/Self](n,(v')->[v'.v/v]M',def _init_(v',v):v'.i=Pi(wi);v'.v=v)
 
 
-N,v:q |- w : P[o] ~ r1     N,v:q |- C[dom(q)] ~ r     N,v:q |- M : r' | . ~> M'     r' in [Self(C[dom(q)])]=>(Self)->(r1) / [q]=>(r1)
+N,v:q |- w : P[o] ~ n1     N,v:q |- C[dom(q)] ~ n     N,v:q |- M : n' ~> M'     n' in [Self(C[dom(q)])]=>(Self)->(n1) / [q]=>(n1)
 --------------------------------------------------------------------------------------------------------------------------------------------- (Ext)
 N |- extension C[q](P[o]):M  :  P_C:[q]=>C(P[o])  ~>  !class P_C[q](P[C[dom(q)],o]):((v')->[v'.v/v]M',def _init_(v',v):P._init_(v',w);v'.v=v)
 
 
-N' = N,v:q,bv(F,S):#,bz(S):#,_self_:Ref[X]      N' |- F : r | N1 | e      N',N1 |- S : t | e,st[X]     X not in fv(N,q,e',r,t)
------------------------------------------------------------------------------------------------------------------------------- (Actor)
+N' = N,v:q,bv(F,S):#,bz(S):#,_self_:Ref[X]      N' |- F : r | N1     N',N1 |- S : t | act[X]     X not in fv(N,q,e',r,t)
+------------------------------------------------------------------------------------------------------------------------ (Actor)
 N |- actor x[q](F):S  :  (x : [q]=>e',act(r)->t)  ~>  actor x[dom(q)](v:q,F'):S'
 
 
@@ -137,34 +141,34 @@ N |- D1,D2 : N1,N2
 
 
 
-***** N |- c ~ r ***********************************************************************************************************************************************
+***** N |- c ~ n ***********************************************************************************************************************************************
 
 
-N,C:[q]=>(c;r) |- w : [o/q]q
+N,C:[q]=>(c;n) |- w : [o/q]q
 ------------------------------- (SigC)
-N,C:[q]=>(c;r) |- C[o] ~ [o/q]r
+N,C:[q]=>(c;n) |- C[o] ~ [o/q]n
 
 
 
-***** N |- w : p ~ r ******************************************************************************************************************************************
+***** N |- w : p ~ n ******************************************************************************************************************************************
 
 
-N,P:[q]=>(r;pi) |- w : [o/q]q
+N,P:[q]=>(pi;n) |- w : [o/q]q
 ------------------------------------ (SigP)
-N,P:[q]=>(pi;r) |- w : P[o] ~ [o/q]r
+N,P:[q]=>(pi;n) |- w : P[o] ~ [o/q]n
 
 
 
 ***** N |- w : g **********************************************************************************************************************************************
 
 
-N,C:[q]=>(c;r) |- w : [o/q]q                            N,v:[q]=>C(p) |- w : [o/q]q
+N,C:[q]=>(c;n) |- w : [o/q]q                            N,v:[q]=>C(p) |- w : [o/q]q
 -------------------------------------- (WitC)           ------------------------------------- (WitP)
-N,C:[q]=>(c;r) |- \x:x : C[o] ([o/q]c)                  N,v:[q]=>C(p) |- v(w) : C[o] ([o/q]p)
+N,C:[q]=>(c;n) |- \x:x : C[o] ([o/q]c)                  N,v:[q]=>C(p) |- v(w) : C[o] ([o/q]p)
 
-N,P:[q]=>(pi;r) |- w : t(P[o])                          N,P:[q]=>(pi;r) |- w : [o/q]q
+N,P:[q]=>(pi;n) |- w : t(P[o])                          N,P:[q]=>(pi;n) |- w : [o/q]q
 ------------------------------------------- (WitSub)    -------------------------------------------------- (WitEX)
-N,P:[q]=>(pi;r) |- w.i : t([o/q]pi) / all i             N,P:[q]=>(pi;r) |- \x,y:x.0(y.1) : EX(P[o]) (P[o])
+N,P:[q]=>(pi;n) |- w.i : t([o/q]pi) / all i             N,P:[q]=>(pi;n) |- \x,y:x.0(y.1) : EX(P[o]) (P[o])
 
 N |- w' : t < c    N |- w : t(pi),g                     N |- wi : t(pi) / all i     N |- w : g                     
 ----------------------------------- (ConsC)             -------------------------------------- (ConsP)              ----------- (Cons0)
@@ -180,12 +184,12 @@ N |- \x:x : t < c                                       N |- w.i : t(pi) / all i
 
 
 
-***** N |- w : T < T' ******************************************************************************************************************************************
+***** N |- w : t < t' ******************************************************************************************************************************************
 
 
-                                                                                    N |- w : T < T'    N |- w' : T' < T''
+                                                                                    N |- w : t < t'    N |- w' : t' < t''
 ----------------- (SubRefl)                                                         ------------------------------------- (SubTrans)
-N |- \x:x : t < t                                                                   N |- \x.w'(w(x)) : T < T''
+N |- \x:x : t < t                                                                   N |- \x.w'(w(x)) : t < t''
 
 
 N |- w : t(p)                                                                       N,p:[q]=>(pi;r) |- w : [o/q]q
@@ -193,27 +197,33 @@ N |- w : t(p)                                                                   
 N |- \x:(w,x) : t < EX(p)                                                           N,p:[q]=>(pi;r) |- \x:(x.0.i,x) : EX(P[o]) < EX([o/q]pi) / all i
 
 
-N |- w : (r') < (r)     N |- w' : t < t'                                            N |- _self_ : Ref[X]
--------------------------------------------------- (SubFun)                         ----------------------------------------------------------- (SubAsync)
-N |- \x:\***y:w'(x(***w(y))) : e(r)->t < e(r')->t'                                  N |- \x:ASYNC(_self_,x) : e,st[X](r)->t < e',act(r)->Msg[t]
+N |- w : (r') < (r)     N |- w' : t < t'    e < e'                                  N |- _self_ : Ref[X]
+-------------------------------------------------- (SubFun)                         ---------------------------------------------------- (SubAsync)
+N |- \x:\***y:w'(x(***w(y))) : e(r)->t < e'(r')->t'                                 N |- \x:ASYNC(_self_,x) : act[X](r)->t < async(r)->t
 
 
-N |- w : (k) < (r)                                                                  N |- w : T < T'     N |- w' : (r) < (r')
+------------------ (SubPure)            -------------------- (SubMut)               ------------------------------------ (SubSend)
+N |- pure < mut[X]                      N |- mut[X] < act[X]                        N |- async(r)->t < act[X](r)->Msg[t]
+
+
+N |- w : (k) < (r)                                                                  N |- w : t < t'     N |- w' : (r) < (r')
 ------------------------------------- (SubOptP)                                     --------------------------------------------------------- (SubRowP)
-N |- \v:(None,***w(v)) : (k) < (?t,r)                                               N |- \v:(\x,***y:(w(x),***w'(y)))(***v) : (T,r) < (T',r')
+N |- \v:(None,***w(v)) : (k) < (?t,r)                                               N |- \v:(\x,***y:(w(x),***w'(y)))(***v) : (t,r) < (t',r')
 
-N |- w : () < (k)                                                                   N |- w : T < T'     N |- w' : (k) < (k')
+N |- w : () < (k)                                                                   N |- w : t < t'     N |- w' : (k) < (k')
 --------------------------------------- (SubOptK)                                   ------------------------------------------------------------ (SubRowK)
-N |- \v:(x=None,**w(v)) : () < (x:?t,k)                                             N |- \v:(\x,**y:(x=w(x),**w'(y)))(**v) : (x:T,k) < (x:T',k')
+N |- \v:(x=None,**w(v)) : () < (x:?t,k)                                             N |- \v:(\x,**y:(x=w(x),**w'(y)))(**v) : (x:t,k) < (x:t',k')
 
-N |- w : T < T'     N |- w' : (r) < (k)
+N |- w : t < t'     N |- w' : (r) < (k)
 ----------------------------------------------------------- (SubShift)              ------------------- (SubStr)
-N |- \v:(\x,***y:(x=w(x),**w'(y)))(***v) : (T,r) < (x:T',k)                         N |- \x:x : s < str
+N |- \v:(\x,***y:(x=w(x),**w'(y)))(***v) : (t,r) < (x:t',k)                         N |- \x:x : s < str
 
 
 ------------------ (SubOpt)                                                         --------------------- (SubNone)     
 N |- \x:x : t < ?t                                                                  N |- \x:x : None < ?t
 
+
+***** ...
 
 
 N |- w : [o/q]q                                                                     N,v:q |- w : T < t     dom(q) not in fv(N,T)
@@ -225,37 +235,37 @@ N |- \y:y(w) : [q]=>t < [o/q]t                                                  
 ***** N |- E : T | e *******************************************************************************************************************************************
 
 
-N |- E : T | e ~> E'     N |- w : T < T'                                            N,v:q |- E : t ~> E'     dom(v) not in fv(N)
----------------------------------------- (Sub)                                      -------------------------------------------- (Gen)
-N |- E : T' | e  ~>  w(E')                                                          N |- E : [q]=>t  ~>  \v:E'
+N |- E : t | e ~> E'     N |- w : t < t'     N |- e < e'                            N,v:q |- E : t ~> E'     dom(v) not in fv(N)
+-------------------------------------------------------- (Sub)                      -------------------------------------------- (Gen)
+N |- E : T' | e'  ~>  w(E')                                                         N |- E : [q]=>t  ~>  \v:E'
 
 
                                                                                     N |- _self_ : Ref[X]
 ------------------------- (Var)                                                     -------------------------------------- (Read)
-N,x:T |- x : T | e  ~>  x                                                           N,z:t |- z : t | e,st[X]  ~>  _self_.z
+N,x:T |- x : T | e  ~>  x                                                           N,z:t |- z : t | act[X]  ~>  _self_.z
 
 
-N |- E : (T,r) | e                      N |- E : (T,r) | e                          N |- E : (h,x:T,k) | e
+N |- E : (t,r) | e                      N |- E : (t,r) | e                          N |- E : (h,x:t,k) | e
 ------------------ (SelHead)            ------------------- (SelTail)               ---------------------- (SelKwd...)
-N |- E.0 : T | e                        N |- E.*1 : (r) | e                         N |- E.x : T | e
+N |- E.0 : t | e                        N |- E.*1 : (r) | e                         N |- E.x : t | e
 
 
-N |- E : t | e ~> E'    N |- t < c    N |- c ~ (x:T,r)                              N |- C[o] ~ (x:T,r)
+N |- E : t | e ~> E'    N |- t < c    N |- c ~ (x:T,n)                              N |- C[o] ~ (x:T,n)
 ------------------------------------------------------ (Sel)                        --------------------------------------------- (CSel)
 N |- E.x : [t/Self]T | e  ~>  E'.x                                                  N |- C.x : [C[o]/Self]addself(T) | e  ~>  C.x
 
-N |- E : t | e ~> E'    N |- w : t (p)    N |- p ~ (x:T,r)                          N |- w : C[o] (p)     N |- p ~ (x:T,r)
+N |- E : t | e ~> E'    N |- w : t (p)    N |- p ~ (x:T,n)                          N |- w : C[o] (p)     N |- p ~ (x:T,n)
 ---------------------------------------------------------- (SelP)                   --------------------------------------------- (CSelP)
 N |- E.x : [t/Self]T | e  ~>  app(w(E').x, E')                                      N |- C.x : [C[o]/Self]addself(T) | e  ~>  w.x
 
-N |- E : EX(p) | e ~> E'    N |- p ~ (x:T,r)    Self not in T                       N |- w : t (P[o])     N |- P[o] ~ (x:T,r)
+N |- E : EX(p) | e ~> E'    N |- p ~ (x:T,n)    Self not in T                       N |- w : t (P[o])     N |- P[o] ~ (x:T,n)
 ------------------------------------------------------------- (SelP')               ------------------------------------------ (CSelP')
 N |- E.x : T | e  ~>  app(E'.0.x, E'.1)                                             N |- P.x : [t/Self]addself(T) | e  ~>  w.x
 
 
 
-N' = N,bv(F):#,z(N):#     N' |- F : r | N1 | e     N',N1 |- E : t | e               N |- E : e(r)->t | e     N |-> (A) : (r) | e
---------------------------------------------------------------------- (Lam)         -------------------------------------------- (App)
+N' = N,bv(F):#,z(N):#     N' |- F : r | N1     N',N1 |- E : t | e                   N |- E : e(r)->t | e     N |-> (A) : (r) | e
+----------------------------------------------------------------- (Lam)             -------------------------------------------- (App)
 N |- (lambda F: E) : e(r)->t | e'  ~>  lambda F: E'                                 N |- E(A) : t | e
 
 
@@ -269,97 +279,93 @@ N |- E : bool | e     N |- E1 : t | e     N |- E2 : t | e                       
 N |- E1 if E else E2 : t | e                                                        N |- do S : t | e                       N |- None : None | e
 
 
-N |- E : T | e     N |- (A) : (r) | e                                               N |- E : (h) | e      N |- (M) : (k) | e
+N |- E : t | e     N |- (A) : (r) | e                                               N |- E : (h) | e      N |- (M) : (k) | e
 ------------------------------------- (ETup)                                        ---------------------------------------- (EStar1)
-N |- (E,A) : (T,r) | e                                                              N |- (*E,M) : (h,k) | e
+N |- (E,A) : (t,r) | e                                                              N |- (*E,M) : (h,k) | e
 
-N |- E : T | e     N |- (M) : (k) | e                                               N |- E : (k) | e
+N |- E : t | e     N |- (M) : (k) | e                                               N |- E : (k) | e
 ------------------------------------- (ERec)                                        -------------------- (EStar2)           ------------------ (ENull)
-N |- (x=E,M) : (x:T,k) | e                                                          N |- (**E) : (k) | e                    N |- (.) : (.) | e
+N |- (x=E,M) : (x:t,k) | e                                                          N |- (**E) : (k) | e                    N |- (.) : (.) | e
 
 
-N |- E : Msg[t] | e,act
------------------------- (Await)
-N |- await E : t | e,act
-
-
-
-***** N |- F : r | N | e ***************************************************************************************************************************************
-
-
-N |- x : T | N1 | e      N,N1 |- F : r | N2 | e                                     N |- x : (h) | N1 | e      N,N1 |- K : k | N2 | e
------------------------------------------------ (PatTup)                            ------------------------------------------------- (PatStar1)
-N |- x,F : T,r | N1,N2 | e                                                          N |- *x,K : h,k | N1,N2 | e
-
-N |- x : T | N1 | e      N,N1 |- K : k | N2 | e                                     N |- x : (k) | N1 | e
------------------------------------------------ (PatRec)                            --------------------- (PatStar2)
-N |- x,K : x:T,k | N1,N2 | e                                                        N |- **x : k | N1 | e
-
-N |- x : T | N1 | e     N |- E : T | e     N,N1 |- F : r | N2 | e
------------------------------------------------------------------ (PatOpt)          ------------------ (PatNull)
-N |- x=E,F : T,r | N1,N2 | e                                                        N |- . : . | . | e
-
-
------------------------- (Bind)                                                     ---------------------- (Rebind)
-N,x:# |- x : T | x:T | e                                                            N,x:T |- x : T | . | e
+N |- E : Msg[t] | act[X]
+------------------------- (Await)
+N |- await E : t | act[X]
 
 
 
-***** N |- S : N | e *******************************************************************************************************************************************
+***** N |- F : r | N *******************************************************************************************************************************************
 
 
-N |- E : t | e              N |- x : T | N' | e     N |- E : T | e                  N |- F : r | N' | e     N |- E : (r) | e
--------------- (Run)        -------------------------------------- (AssignVar)      ---------------------------------------- (AssignPat)
-N |- E  :  . | e            N |- x = E  :  N' | e                                   N |- (F) = E  :  N' | e
+N |- x : t | N1      N,N1 |- F : r | N2                                             N |- x : (h) | N1       N,N1 |- K : k | N2
+--------------------------------------- (PatTup)                                    ------------------------------------------ (PatStar1)
+N |- x,F : t,r | N1,N2                                                              N |- *x,K : h,k | N1,N2
 
-N,N' |- D : N'     N,N' well-formed w.r.t. acyclicity and MRO
-------------------------------------------------------------- (Def)
-N |- D  :  N' | e
+N |- x : t | N1      N,N1 |- K : k | N2                                             N |- x : (k) | N1
+--------------------------------------- (PatRec)                                    ----------------- (PatStar2)
+N |- x,K : x:t,k | N1,N2                                                            N |- **x : k | N1
 
-
-N |- E : t | e
------------------------------- (Return)                                             ----------------- (Pass)
-N |- return E  :  . | e,ret[t]                                                      N |- pass  :  . | e
-
-
-N |- E1 : c | e,st[X]    N |- c ~ (@inst x:T,r)    N |- c < object[X]     N |- E2 : T | e,st[X]
------------------------------------------------------------------------------------------------ (Mut)
-N | E1.x = E2  :  . | e,st[X]
+N |- x : t | N1     N |- E : t | pure     N,N1 |- F : r | N2
+------------------------------------------------------------ (PatOpt)               -------------- (PatNull)
+N |- x=E,F : t,r | N1,N2                                                            N |- . : . | .
 
 
-N |- E : bool | e     N |- S1 : N1 | e     N |- S2 : N2 | e                         N |- E : bool | e     N |- S : N' | e
+-------------------- (Bind)                                                         ------------------ (Rebind)
+N,x:# |- x : t | x:T                                                                N,x:t |- x : t | .
+
+
+
+***** N |- S : N | f *******************************************************************************************************************************************
+
+
+N |- E : t | e                  N |- x : t | N'     N |- E : t | e                  N |- F : r | N'     N |- E : (r) | e
+------------------- (Run)       ---------------------------------- (AssignVar)      ------------------------------------ (AssignPat)
+N |- E  :  . | e[u]             N |- x = E  :  N' | e[u]                            N |- (F) = E  :  N' | e[u]
+
+N,N' |- D : N'                  N |- E : t | e[t]
+----------------- (Def)         -------------------------- (Return)                 ------------------- (Pass)
+N |- D  :  N' | f               N |- return E  :  . | e[t]                          N |- pass  :  . | f
+
+
+
+N |- E1 : c | mut[X]    N |- c ~ (@prop x:t,r)    N |- c < object[X]     N |- E2 : t | mut[X]
+--------------------------------------------------------------------------------------------- (Mut)
+N | E1.x = E2  :  . | mut[X][u]
+
+
+N |- E : bool | e     N |- S1 : N1 | f     N |- S2 : N2 | f                         N |- E : bool | e     N |- S : N' | f
 ----------------------------------------------------------- (If2)                   ------------------------------------- (While)
-N |- if E: S1 else S2  :  N1&N2 | e                                                 N |- while E: S  :  . | e
+N |- if E: S1 else S2  :  N1&N2 | f                                                 N |- while E: S  :  . | f
 
 
-N,z:# |- E : t | e,st[X]     N |- _self_ : Ref[X]                                   N,z:t |- E : t | e,st[X]    N |- _self_ : Ref[X]
-------------------------------------------------- (State)                           ------------------------------------------------ (Write)
-N,z:# |- var z = E  :  z:t | e,st[X]                                                N,z:t |- z = E  :  . | e,st[X]
+N,z:# |- E : t | mut[X]     N |- _self_ : Ref[X]                                    N,z:t |- E : t | mut[X]     N |- _self_ : Ref[X]
+------------------------------------------------ (State)                            ------------------------------------------------ (Write)
+N,z:# |- var z = E  :  z:t | mut[X]                                                 N,z:t |- z = E  :  . | mut[X]
 
 
-N |- S : N1 | e     N,N1 |- S2 ; N2 | e                                             N |- E1 : int | e     N |- _self_ : Ref[X]    N |- E2(A) : t | e,st[X]
---------------------------------------- (Seq)                                       -------------------------------------------------------------------- (After)
-N |- S1; S2  :  N1,N2 | e                                                           N |- after E1: E2(A)  :  . | e,act
+N |- E1 : int | act[X]     N |- _self_ : Ref[X]    N |- E2(A) : t | act[X]          N |- S : N1 | f     N,N1 |- S2 : N2 | f
+-------------------------------------------------------------------------- (After)  --------------------------------------- (Seq)
+N |- after E1: E2(A)  :  . | act[X][u]                                              N |- S1; S2  :  N1,N2 | f
 
 
-N |- S : N1 | e    N |- X : N2 | e     N |- S1 : N1' | e    N |- S2 : N2' | e
+N |- S : N1 | f    N |- X : N2 | f     N |- S1 : N1' | f    N |- S2 : N2' | f
 ----------------------------------------------------------------------------- (Try)
-N |- try S X else S1 finally S2 : ((N1,N1')&N2),N2' | e
+N |- try S X else S1 finally S2 : ((N1,N1')&N2),N2' | f
 
 
-***** N |- X : N | e *******************************************************************************************************************************************
+***** N |- X : N | f *******************************************************************************************************************************************
 
 
-N,x:C[] |- S : N1 | e    N |- X : N2 | e                                            
+N,x:C[] |- S : N1 | f    N |- X : N2 | f                                            
 ---------------------------------------- (Except1)                                  --------------- (Except0)
-N |- except C as x: S X : N1&N2 | e                                                 N |- . : N' | e
+N |- except C as x: S X : N1&N2 | f                                                 N |- . : N' | f
 
 
 ***** N |- S : t | e *******************************************************************************************************************************************
 
 
-N |- S : N' | e,ret[t]     btc(N') # ftc(t,e)     not thru(S)                       N |- S : N' | e,ret[t]    N |- None < t     thru(S)
-------------------------------------------------------------- (Result)              --------------------------------------------------- (Thru)
+N |- S : N' | e[t]     btc(N') # ftc(t,e)     not thru(S)                           N |- S : N' | e[t]    N |- None < t     thru(S)
+--------------------------------------------------------- (Result)                  ----------------------------------------------- (Thru)
 N |- S : t | e                                                                      N |- S : t | e
 
     thru(return E)                      = False
@@ -374,9 +380,9 @@ N |- S : t | e                                                                  
     thru(.)                             = False
 
 
-N |- S : t | e,st[X]    X not in fv(N,t)
----------------------------------------- (RunST)
-N |- S : t | e
+N |- S : t | mut[X]    X not in fv(N,t)
+--------------------------------------- (RunST)
+N |- S : t | pure
 
 
 

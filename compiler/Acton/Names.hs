@@ -312,7 +312,6 @@ instance Vars Target where
     free (TaIndex _ e ix)           = free e ++ free ix
     free (TaSlice _ e sl)           = free e ++ free sl
     free (TaDot _ e n)              = free e
-    free (TaDotI _ e i tl)          = free e
     free (TaTuple _ ts)             = free ts
     free (TaParen _ t)              = free t
 
@@ -352,6 +351,12 @@ instance Vars Type where
     free (TCon  _ c)                = free c
     free (TExist  _ p)              = free p
     free (TRow _ _ _ t r)           = free t ++ free r
+    free (TFX _ fx)                 = free fx
+    free _                          = []
+
+instance Vars FX where
+    free (FXMut t)                  = free t
+    free (FXAct t)                  = free t
     free _                          = []
 
 

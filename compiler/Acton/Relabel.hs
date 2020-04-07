@@ -108,7 +108,6 @@ instance Relabel Target where
     relabel (TaIndex _ e ix) = TaIndex <$> newLoc <*> relabel e <*> relabel ix
     relabel (TaSlice _ e sl) = TaSlice <$> newLoc <*> relabel e <*> relabel sl
     relabel (TaDot _ e n) = TaDot <$> newLoc <*> relabel e <*> relabel n
-    relabel (TaDotI _ e i tl) = TaDotI <$> newLoc <*> relabel e <*> return i <*> return tl
     relabel (TaParen _ t) = TaParen <$> newLoc <*> relabel t
 
 instance Relabel Exception where
@@ -223,4 +222,12 @@ instance Relabel Type where
     relabel (TWild _) = TWild <$> newLoc
     relabel (TNil _ k) = TNil <$> newLoc <*> return k
     relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
+    relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
+
+instance Relabel FX where
+    relabel (FXActor) = return FXActor
+    relabel (FXAsync) = return FXAsync
+    relabel (FXAct t) = FXAct <$> relabel t
+    relabel (FXMut t) = FXMut <$> relabel t
+    relabel (FXPure) = return FXPure
 

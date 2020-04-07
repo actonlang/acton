@@ -74,8 +74,8 @@ assertTop           = ifCtx [TOP]                   [IF]                success 
 assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
 assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "statement only allowed inside an actor scope")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
-assertDecl          = ifCtx [CLASS,PROTO]           [IF]                success (fail "decoration only allowed inside a class or protocol")
-assertDeclOrTop     = ifCtx [CLASS,PROTO,TOP]       [IF]                success (fail "signature only allowed on the top level or inside a class or a protocol")
+assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class or protocol")
+assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
@@ -469,7 +469,6 @@ atarget = addLoc (
             tmp <- atom_expr
             case tmp of
                 S.Dot _ e n    -> return $ S.TaDot NoLoc e n
-                S.DotI _ e i t -> return $ S.TaDotI NoLoc e i t
                 S.Index _ e ix -> return $ S.TaIndex NoLoc e ix
                 S.Slice _ e sl -> return $ S.TaSlice NoLoc e sl
                 _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
@@ -596,7 +595,7 @@ import_stmt = import_name <|> import_from
 assert_stmt = addLoc (rword "assert" >> S.Assert NoLoc <$> expr <*> optional (comma *> expr))
 
 signature :: Parser S.Stmt
-signature = addLoc (do dec <- decorator; assertDeclOrTop; (ns,t) <- tsig; return $ S.Signature NoLoc ns t dec)
+signature = addLoc (do dec <- decorator True; (ns,t) <- tsig; return $ S.Signature NoLoc ns t dec)
    where tsig = do v <- name
                    vs <- commaList name
                    colon
@@ -613,23 +612,22 @@ decl_group = do p <- L.indentLevel
 decl :: Parser S.Decl
 decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
-decorator :: Parser S.Decoration
-decorator = do
+decorator :: Bool -> Parser S.Decoration
+decorator sig = do
        p <- L.indentLevel
        d <- decoration
        p1 <- L.indentLevel
        if (p /= p1)
          then fail "Decorated statement must have same indentation as decoration"
          else return d
-   where decoration = rword "@classattr" *> assertDecl *> newline1 *> return S.ClassAttr
-                  <|> rword "@instattr" *> assertDecl *> newline1 *> return S.InstAttr
-                  <|> rword "@staticmethod" *> assertDecl *> newline1 *> return S.StaticMethod
-                  <|> return S.NoDec
+   where property = rword "@property" *> assertClass *> newline1 *> return S.Property
+         static   = (rword "@staticmethod" <|> rword "@static") *> assertDecl *> newline1 *> return S.Static
+         decoration = (if sig then property <|> static else static) <|> return S.NoDec
 
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              (p,md) <- withPos (decorator <* rword "def")
+              (p,md) <- withPos (decorator False <* rword "def")
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
@@ -986,9 +984,9 @@ yield_expr = addLoc $ do
 
 --- Params ---------------------------------------------------------------------
 
-parm :: Bool -> Parser (S.Name, Maybe S.TSchema, Maybe S.Expr)
+parm :: Bool -> Parser (S.Name, Maybe S.Type, Maybe S.Expr)
 parm ann = do n <- name
-              mbt <- if ann then optional (colon *> tschema) else return Nothing
+              mbt <- if ann then optional (colon *> ttype) else return Nothing
               mbe <- optional (equals *> expr)
               return (n, mbt, mbe)
 
@@ -1041,28 +1039,29 @@ funargs = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
 
 --- Types ----------------------------------------------------------------------
 
-fx      :: Parser (S.FXRow -> S.FXRow)
-fx      =   rword "act" *> return S.fxAct
-        <|> rword "mut" *> brackets (S.fxMut <$> ttype)
-        <|> rword "ret" *> brackets (S.fxRet <$> ttype)
-
-fxrow   :: Parser S.FXRow
-fxrow   = do fxs <- many fx
-             tv <- optional tvar
-             return (foldr ($) (maybe S.fxNil S.fxVar tv) fxs)
+effect  :: Parser S.Type
+effect  = addLoc $  
+            S.TVar NoLoc <$> tvar
+        <|> rword "_" *> return (S.TWild NoLoc)
+        <|> rword "actor" *> return S.fxActor
+        <|> rword "async" *> return S.fxAsync
+        <|> rword "act" *> brackets (S.fxAct <$> varonly)
+        <|> rword "mut" *> brackets (S.fxMut <$> varonly)
+        <|> return S.fxPure
+  where varonly = addLoc $ S.TVar NoLoc <$> tvar
 
 posrow :: Parser S.PosRow 
-posrow = posItems S.posRow S.posVar S.posNil tschema (optional tvar)
+posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)
 
 kwdrow :: Parser S.KwdRow                   
 kwdrow = kwdItems (uncurry S.kwdRow) S.kwdVar S.kwdNil tsig1 (optional tvar)
    where tsig1 = do v <- name
                     colon
-                    t <- tschema
+                    t <- ttype
                     return (v,t)
  
 funrows :: Parser (S.PosRow, S.KwdRow)
-funrows = do r <- funItems S.posRow S.posVar S.posNil tschema (optional tvar) kwdrow S.kwdNil
+funrows = do r <- funItems S.posRow S.posVar S.posNil ttype (optional tvar) kwdrow S.kwdNil
              case r of
                Left p -> return p
                Right t -> return (S.posRow t S.posNil, S.kwdNil)
@@ -1107,11 +1106,11 @@ ttype    =  addLoc (
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
-        <|> try (do es <- fxrow
+        <|> try (do fx <- effect
                     (p,k) <- parens funrows
                     arrow
                     t <- ttype
-                    return (S.TFun NoLoc es p k t))
+                    return (S.TFun NoLoc fx p k t))
         <|> try (do (p,k) <- parens funrows
                     return (S.TTuple NoLoc p k))
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))

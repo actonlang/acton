@@ -214,7 +214,6 @@ instance Norm Target where
     norm env (TaIndex l e ix)       = TaIndex l <$> norm env e <*> norm env ix
     norm env (TaSlice l e sl)       = TaSlice l <$> norm env e <*> norm env sl
     norm env (TaDot l e n)          = TaDot l <$> norm env e <*> norm env n
-    norm env (TaDotI l e i tl)      = TaDotI l <$> norm env e <*> return i <*> return tl
     norm env (TaTuple l ps)         = TaTuple l <$> norm env ps
     norm env (TaParen l p)          = TaParen l <$> norm env p
 
@@ -275,11 +274,11 @@ instance Norm KwdPar where
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
-joinPar (PosSTAR n t) k             = PosPar n (fmap monotype t) Nothing (kwdToPos k)
+joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPos k)
 joinPar PosNIL k                    = kwdToPos k
 
 kwdToPos (KwdPar n t e k)           = PosPar n t e (kwdToPos k)
-kwdToPos (KwdSTAR n t)              = PosPar n (fmap monotype t) Nothing PosNIL
+kwdToPos (KwdSTAR n t)              = PosPar n t Nothing PosNIL
 kwdToPos KwdNIL                     = PosNIL
 
 defaults (PosPar n t (Just e) p)    = s : defaults p

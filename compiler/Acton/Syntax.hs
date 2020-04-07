@@ -94,7 +94,6 @@ data Target     = TaVar         { taloc::SrcLoc, tn::Name}
                 | TaIndex       { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
                 | TaSlice       { taloc::SrcLoc, texp::Expr, tslice::[Sliz] }
                 | TaDot         { taloc::SrcLoc, texp::Expr, tn::Name }
-                | TaDotI        { taloc::SrcLoc, texp::Expr, tival::Integer, ttl :: Bool }
                 | TaParen       { taloc::SrcLoc, targ::Target }
                 | TaTuple       { taloc::SrcLoc, targs::[Target]}
 
@@ -153,8 +152,8 @@ data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
 -- data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
-data PosPar     = PosPar Name (Maybe TSchema) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
-data KwdPar     = KwdPar Name (Maybe TSchema) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
+data PosPar     = PosPar Name (Maybe Type) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
+data KwdPar     = KwdPar Name (Maybe Type) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
 
 data PosArg     = PosArg Expr PosArg | PosStar Expr | PosNil deriving (Show,Eq)
 data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show,Eq)
@@ -172,9 +171,9 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Decoration = NoDec | InstAttr | ClassAttr | StaticMethod deriving (Eq,Show,Read,Generic)
+data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
     
-data Kind       = KType | KProto | XRow | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
+data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::[TBind], sctype::Type } deriving (Show,Read,Generic)
 
@@ -186,20 +185,23 @@ data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
 data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
+data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
+
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TExist    { tloc::SrcLoc, tcon::TCon }
-                | TFun      { tloc::SrcLoc, fxrow::FXRow, posrow::PosRow, kwdrow::KwdRow, restype::Type }
+                | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
                 | TUnion    { tloc::SrcLoc, alts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
-                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::TSchema, rtail::TRow }
+                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
+                | TFX       { tloc::SrcLoc, tfx::FX }
                 deriving (Show,Read,Generic)
 
-type FXRow      = Type
+type TFX        = Type
 type PosRow     = Type
 type KwdRow     = Type
 type TRow       = Type
@@ -261,47 +263,35 @@ tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
 
-tFun0 ps t      = tFun fxNil (foldr posRow posNil $ map monotype ps) kwdNil t
+tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-rPos n          = Name NoLoc (show n)
-rAwait          = Name NoLoc "await"
-rAct            = Name NoLoc "act"
-rMut            = Name NoLoc "mut"
-rRet            = Name NoLoc "ret"
+fxActor         = TFX NoLoc FXActor
+fxAsync         = TFX NoLoc FXAsync
+fxAct t         = TFX NoLoc (FXAct t)
+fxMut t         = TFX NoLoc (FXMut t)
+fxPure          = TFX NoLoc FXPure
 
-fxAwait         = TRow NoLoc XRow rAwait (monotype tNone)
-fxAct           = TRow NoLoc XRow rAct (monotype tNone)
-fxMut t         = TRow NoLoc XRow rMut (monotype t)
-fxRet t         = TRow NoLoc XRow rRet (monotype t)
-fxVar v         = TVar NoLoc v
-fxNil           = TNil NoLoc XRow
-
-posRow sc r     = TRow NoLoc PRow (rPos n) sc r
-  where n       = rowDepth r + 1
-posRow' t r     = posRow (monotype t) r
+posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
 posNil          = tNil PRow
 
-
-kwdRow n sc r   = TRow NoLoc KRow n sc r
-kwdRow' n t r   = kwdRow n (monotype t) r
+kwdRow n t r    = TRow NoLoc KRow n t r
 kwdVar mbv      = maybe tWild tVar mbv
 kwdNil          = tNil KRow
 
-rowDepth (TRow _ _ _ _ r)   = rowDepth r + 1
-rowDepth _                  = 0
-
-rowTail (TRow _ _ _ _ r)    = rowTail r
-rowTail r                   = r
+rowTail (TRow _ _ _ _ r)
+                = rowTail r
+rowTail r       = r
 
 
 tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOTUVW" ]
 
-xrowSupply      = [ TV XRow $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
+fxSupply        = [ TV KFX $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
+
 prowSupply      = [ TV PRow $ name (c:tl) | tl <- "" : map show [1..], c <- "PQ" ]
 krowSupply      = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RS" ]
 
@@ -321,6 +311,7 @@ instance Data.Binary.Binary UType
 instance Data.Binary.Binary TBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
+instance Data.Binary.Binary FX
 
 
 -- SrcInfo ------------------
@@ -559,12 +550,6 @@ cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
-isInstAttr InstAttr                 = True
-isInstAttr _                        = False
-
-isClassAttr ClassAttr               = True
-isClassAttr _                       = False
-
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'
         isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
@@ -593,8 +578,6 @@ posArgLen (PosArg _ r)              = 1 + posArgLen r
 posPatLen PosPatNil                 = 0
 posPatLen (PosPatStar _)            = 0
 posPatLen (PosPat _ r)              = 1 + posPatLen r
-
-posRowLen                           = rowDepth
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a

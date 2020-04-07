@@ -240,8 +240,6 @@ instance Pretty Target where
     pretty (TaIndex _ e ix)         = pretty e <> brackets (commaList ix)
     pretty (TaSlice _ e sl)         = pretty e <> brackets (commaList sl)
     pretty (TaDot _ e n)            = pretty e <> dot <> pretty n
-    pretty (TaDotI _ e i False)     = pretty e <> dot <> pretty i
-    pretty (TaDotI _ e i True)      = pretty e <> dot <> text "*" <> pretty i
     pretty (TaParen _ t)            = parens (pretty t)
 
 prettyPats [] Nothing               = empty
@@ -253,9 +251,8 @@ prettyDec d                         = (pretty d $+$)
 
 instance Pretty Decoration where
     pretty NoDec                    = empty
-    pretty StaticMethod             = text "@staticmethod"
-    pretty ClassAttr                = text "@classattr"
-    pretty InstAttr                 = text "@instattr"
+    pretty Static                   = text "@static"
+    pretty Property                 = text "@property"
 
 instance Pretty SrcInfoTag where
     pretty (GEN l t)                = text "GEN" <+> parens (pretty l) <> colon <+> pretty t
@@ -340,14 +337,6 @@ instance Pretty UType where
     pretty (UCon n)                 = pretty n
     pretty (ULit str)               = text str
 
-prettyFXRow (TRow _ _ n t r)
-  | n == rAct                       = text "act" <+> prettyFXRow r
-  | n == rMut                       = text "mut" <> brackets (pretty t) <+> prettyFXRow r
-  | n == rRet                       = text "ret" <> brackets (pretty t) <+> prettyFXRow r
-prettyFXRow (TVar _ tv)             = pretty tv
-prettyFXRow (TWild _)               = text "_"
-prettyFXRow (TNil _ _)              = empty
-
 prettyPosRow (TRow _ _ _ t (TNil _ _))
                                     = pretty t
 prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
@@ -370,7 +359,7 @@ instance Pretty Type where
     pretty (TVar _ v)               = pretty v
     pretty (TCon  _ c)              = pretty c
     pretty (TExist  _ p)            = pretty p
-    pretty (TFun _ e p k t)         = prettyFXRow e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
+    pretty (TFun _ e p k t)         = pretty e <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
     pretty (TTuple _ (TRow _ _ _ t (TNil _ _)) (TNil _ _))
                                     = parens (pretty t <> comma)
@@ -380,17 +369,23 @@ instance Pretty Type where
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
-    pretty r@TRow{rkind=XRow}       = prettyFXRow r
     pretty r@TRow{rkind=PRow}       = prettyPosRow r
     pretty r@TRow{rkind=KRow}       = prettyKwdRow r
-    pretty r@TNil{rkind=XRow}       = prettyFXRow r
     pretty r@TNil{rkind=PRow}       = prettyPosRow r
     pretty r@TNil{rkind=KRow}       = prettyKwdRow r
+    pretty (TFX _ fx)               = pretty fx
+
+instance Pretty FX where
+    pretty (FXActor)                = text "actor"
+    pretty (FXAsync)                = text "async"
+    pretty (FXAct t)                = text "act" <> brackets (pretty t)
+    pretty (FXMut t)                = text "mut" <> brackets (pretty t)
+    pretty (FXPure)                 = empty
 
 instance Pretty Kind where
     pretty KType                    = text "type"
     pretty KProto                   = text "protocol"
-    pretty XRow                     = text "effect row"
+    pretty KFX                      = text "effect"
     pretty PRow                     = text "positional row"
     pretty KRow                     = text "keyword row"
     pretty (KFun ks k)              = brackets (commaSep pretty ks) <+> text "=>" <+> pretty k

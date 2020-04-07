@@ -72,7 +72,7 @@ instance Deact Stmt where
     deact env (With l is b)         = With l <$> deact env is <*> deact env b
     deact env (Data l mbt ss)       = Data l <$> deact env mbt <*> deact env ss
     deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
-                                         store [Signature l0 [n] (monotype t) InstAttr]
+                                         store [Signature l0 [n] (monotype t) Property]
                                          Assign l <$> deact env ps <*> deact env e
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
@@ -169,7 +169,6 @@ instance Deact Target where
     deact env (TaIndex l e ix)      = TaIndex l <$> deact env e <*> deact env ix
     deact env (TaSlice l e sl)      = TaSlice l <$> deact env e <*> deact env sl
     deact env (TaDot l e n)         = TaDot l <$> deact env e <*> return n
-    deact env (TaDotI l e i tl)     = TaDotI l <$> deact env e <*> return i <*> return tl
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe
