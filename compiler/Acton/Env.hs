@@ -36,7 +36,7 @@ type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, nocheck :: Bool } deriving Show
+data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, indecl :: Bool } deriving Show
 
 data NameInfo               = NVar      Type
                             | NSVar     Type
@@ -44,7 +44,7 @@ data NameInfo               = NVar      Type
                             | NSig      TSchema Decoration
                             | NClass    [TBind] [TCon] TEnv
                             | NProto    [TBind] [TCon] TEnv
-                            | NImpl     [TBind] Type TCon
+                            | NExt      QName [TBind] [TCon] TEnv
                             | NTVar     Kind [TCon] [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
@@ -65,7 +65,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text "::" <+> pretty t
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -74,8 +74,11 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
-    pretty (w, NImpl [] t p)    = pretty w  <+> colon <+> pretty t <+> parens (pretty p)
-    pretty (w, NImpl q t p)     = pretty w  <+> colon <+> pretty q <+> text "=>" <+> pretty t <+> parens (pretty p)
+    pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> pretty n <+> parens (commaList ps) <>
+                                  colon $+$ (nest 4 $ pretty te)
+    pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> pretty n <> 
+                                  brackets (commaList $ tybound q) <+> parens (commaList ps) <>
+                                  colon $+$ (nest 4 $ pretty te)
     pretty (n, NTVar k as ps)   = pretty n <> parens (commaList (as++ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
@@ -95,7 +98,7 @@ instance Subst NameInfo where
     msubst (NSig t d)           = NSig <$> msubst t <*> return d
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
-    msubst (NImpl q t p)        = NImpl <$> msubst q <*> msubst t <*> msubst p
+    msubst (NExt n q ps te)     = NExt n <$> msubst q <*> msubst ps <*> msubst te
     msubst (NTVar k as ps)      = NTVar k <$> msubst as <*> msubst ps
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
@@ -109,7 +112,7 @@ instance Subst NameInfo where
     tyfree (NSig t d)           = tyfree t
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
-    tyfree (NImpl q t p)        = (tyfree q ++ tyfree t ++ tyfree p) \\ tybound q
+    tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ tybound q
     tyfree (NTVar k as ps)      = tyfree as ++ tyfree ps
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
@@ -185,7 +188,7 @@ instance Unalias NameInfo where
     unalias env (NSig t d)          = NSig (unalias env t) d
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
-    unalias env (NImpl q t p)       = NImpl (unalias env q) (unalias env t) (unalias env p)
+    unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
     unalias env (NTVar k as ps)     = NTVar k (unalias env as) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
@@ -221,14 +224,12 @@ nSchemas ((n,NVar t):te)    = (n, monotype t) : nSchemas te
 nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
-nImpls                      :: QName -> TEnv -> TEnv
-nImpls n te                 = [ ni | ni@(w, NImpl q (TCon _ tc) p) <- te, tcname tc == n ]
-
 parentTEnv                  :: Env -> [TCon] -> TEnv
 parentTEnv env us           = concatMap tEnv us
   where tEnv u              = case findQName (tcname u) env of
                                 NClass q _ te -> subst (tybound q `zip` tcargs u) te
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
+--                                NExt _ q us' te -> 
                                 _             -> []
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
@@ -239,20 +240,20 @@ splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
-                                then return $ Env{names = [], modules = [], defaultmod = mBuiltin, nocheck = True}
+                                then return $ Env{names = [], modules = [], defaultmod = mBuiltin, indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
                                         let autoImp = importAll mBuiltin envBuiltin
                                             env0    = Env{names = [(nBuiltin,NModule envBuiltin)], modules = [(mBuiltin,envBuiltin)],
-                                                          defaultmod = mBuiltin, nocheck = False}
+                                                          defaultmod = mBuiltin, indecl = False}
                                             env     = define autoImp env0
                                         return env
                                         
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
 
-setNoCheck                  :: Env -> Env
-setNoCheck env              = env{ nocheck = True }
+setInDecl                   :: Env -> Env
+setInDecl env               = env{ indecl = True }
 
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
@@ -267,8 +268,10 @@ define                      :: TEnv -> Env -> Env
 define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
 defineTVars                 :: [TBind] -> Env -> Env
-defineTVars q env           = env{ names = te ++ names env }
-  where te                  = [ (n, NTVar k as ps) | TBind (TV k n) us <- q, let (as,ps) = mro2 env us ]
+defineTVars [] env          = env
+defineTVars (TBind (TV k n) us : q) env
+                            = defineTVars q env{ names = (n, NTVar k as ps) : names env }
+  where (as,ps)             = mro2 env us
 
 defineSelf                  :: QName -> [TBind] -> Env -> Env
 defineSelf qn q env         = defineTVars [TBind tvSelf [tc]] env
@@ -286,8 +289,8 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
 
-noCheck                     :: Env -> Bool
-noCheck env                 = nocheck env
+inDecl                      :: Env -> Bool
+inDecl env                  = indecl env
 
 stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
@@ -336,16 +339,28 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-locateWitnesses             :: Env -> QName -> [TCon] -> [Name]
-locateWitnesses env n us    = [ w | u <- us, (w, NImpl _ (TCon _ tc) p) <- nImpls n (names env), tcname p == tcname u ]
+findExtension               :: QName -> QName -> Env -> Maybe (Name,[TBind],TCon)
+findExtension n tc env      = case [ (w,q,p) | (w,q,ps) <- extensionsOf n env, p <- ps, tc == tcname p ] of
+                                [(w,q,p)] -> Just (w,q,p)
+                                _ -> Nothing
+
+
+extensionsOf                :: QName -> Env -> [(Name,[TBind],[TCon])]
+extensionsOf n env          = [ (w,q,ps) | (w, NExt n' q ps _) <- names env, n == n' ]
+
+
+
+constraintsOf               :: [TBind] -> Env -> Constraints
+constraintsOf q env         = [ constr u (tVar v) | TBind v us <- q, u <- us ]
+  where constr u t          = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u) 
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
 findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)
-findAttr env u n            = findIn (te ++ concat tes)
-  where (us,te)             = findCon env u
-        tes                 = [ te' | u' <- us, let (_,te') = findCon env u' ]
+findAttr env tc n           = findIn (te ++ concat tes)
+  where (us,te)             = findCon env tc
+        tes                 = [ te' | u <- us, let (_,te') = findCon env u ]
         findIn te1          = case lookup n te1 of
                                 Just (NSig sc d)      -> (sc,NoDec)
                                 Nothing               -> err1 n "Attribute not found:"
@@ -357,27 +372,63 @@ findCon env (TC n ts)
   where (q,us,te)           = case findQName n env of
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
+                                NExt n q us te -> (q,us,te)
                                 _ -> err1 n "Class or protocol name expected, got"
         tvs                 = tybound q
         s                   = tvs `zip` ts
-        cs                  = subst s (qualBounds env q)
 
 
-qualBounds env q            = [ constraint u (tVar v) | TBind v us <- q, u <- us ]
-  where constraint u t      = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u) 
+-- Valid tycon applications -----------------------------------------------------------------------------------------------------
 
+class Valid a where
+    valid                   :: Env -> a -> Bool
+
+instance Valid (Maybe Type) where
+    valid env               = maybe True (valid env)
+
+instance Valid [TCon] where
+    valid env               = all (valid env)
+
+instance Valid TCon where
+    valid env (TC n ts)     = all (valid env) ts && all (entail env) (subst s $ constraintsOf q env)
+      where q               = case findQName n env of
+                                NClass q us te -> q
+                                NProto q us te -> q
+                                _ -> err1 n "Class or protocol name expected, got"
+            s               = tybound q `zip` ts
+
+instance Valid Type where
+    valid env (TCon _ tc)       = valid env tc
+    valid env (TExist _ tc)     = valid env tc
+    valid env (TFun _ x p k t)  = valid env x && valid env p && valid env p && valid env k && valid env t
+    valid env (TTuple _ p k)    = valid env p && valid env k
+    valid env (TOpt _ t)        = valid env t
+    valid env (TRow _ _ _ t r)  = valid env t && valid env r
+    valid env _                 = True
+
+instance Valid TSchema where
+    valid env (TSchema _ q t)   = valid env q && valid env1 t
+      where env1                = defineTVars q env
+
+instance Valid [TBind] where
+    valid env []                = True
+    valid env (TBind v us : q)  = all (valid env) us && valid env1 q
+      where env1                = defineTVars [TBind v us] env
 
 entail env (Impl w t p)     = case t of
-                                TCon _ tc -> p `elem` us
-                                  where (us,_) = findCon env tc
-                                TVar _ tv -> p `elem` us
-                                  where us = findImplBound tv env
+                                TCon _ (TC n ts) -> 
+                                  case findExtension n (tcname p) env of
+                                    Just (_,q,u) -> subst s u == p && all (entail env) (subst s $ constraintsOf q env)
+                                      where s = tybound q `zip` ts
+                                    Nothing -> err1 (Impl w t p) "No entailment"
+                                TVar _ tv -> p `elem` ps
+                                  where ps = findProtoBound tv env
                                 _ -> err1 (Impl w t p) "No entailment"
 entail env (Cast t u)       = case (t,u) of
                                 (TCon _ tc, TCon _ tc') -> tc' `elem` us
                                   where (us,_) = findCon env tc
                                 (TVar _ tv, TCon _ tc') -> tc' `elem` us
-                                  where us = findSubBound tv env 
+                                  where us = findClassBound tv env 
                                 _ -> err1 (Cast t u) "No entailment"
 entail env c                = err1 c "No entailment"
 
@@ -414,13 +465,13 @@ mro env us                              = merge [] $ linearizations us ++ [us]
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
-findSubBound                :: TVar -> Env -> [TCon]
-findSubBound tv env         = case findName (tvname tv) env of
+findClassBound              :: TVar -> Env -> [TCon]
+findClassBound tv env       = case findName (tvname tv) env of
                                 NTVar _ as us -> as
                                 _ -> []
 
-findImplBound               :: TVar -> Env -> [TCon]
-findImplBound tv env        = case findName (tvname tv) env of
+findProtoBound              :: TVar -> Env -> [TCon]
+findProtoBound tv env       = case findName (tvname tv) env of
                                 NTVar _ as ps -> ps
                                 _ -> []
 
@@ -493,7 +544,7 @@ importAll m te              = mapMaybe imp te
   where 
     imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
-    imp (n, NImpl _ _ _)    = Nothing
+    imp (n, NExt _ _ _ _)   = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
     imp (n, NDef t d)       = Just (n, NAlias (QName m n))
@@ -510,11 +561,11 @@ data Constraint                         = Cast      Type Type
                                         | Mut       Type Name Type
 
 instance HasLoc Constraint where
-    loc (Cast t _)                      = loc t
-    loc (Sub  _ t _)                    = loc t
-    loc (Impl _ t _)                    = loc t
-    loc (Sel t _ _)                     = loc t
-    loc (Mut t _ _)                     = loc t
+    loc (Cast _ t)                      = loc t
+    loc (Sub  _ _ t)                    = loc t
+    loc (Impl _ _ p)                    = loc p
+    loc (Sel _ n _)                     = loc n
+    loc (Mut _ n _)                     = loc n
 
 instance Pretty Constraint where
     pretty (Cast t1 t2)                 = pretty t1 <+> text "<" <+> pretty t2
