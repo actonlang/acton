@@ -59,7 +59,7 @@ reduce' env c@(Impl w t u)
 
 reduce' env c@(Sel (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | u:_ <- findSubBound tv env              = reduce' env (Sel (tCon u) n t2)
+  | u:_ <- findClassBound tv env            = reduce' env (Sel (tCon u) n t2)
 reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
                                                  when (dec == Static) (noSelStatic n tc)
                                                  (cs,t) <- instantiate env sc
@@ -85,7 +85,7 @@ reduce' env (Sel (TUnion _ us) n t2)        = do t <- newTVar
 
 reduce' env c@(Mut (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | u:_ <- findSubBound tv env              = reduce' env (Mut (tCon u) n t2)
+  | u:_ <- findClassBound tv env            = reduce' env (Mut (tCon u) n t2)
 reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
                                                  when (dec==Property) (noMutClass n)
                                                  (cs,t) <- instantiate env sc
