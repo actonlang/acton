@@ -2169,7 +2169,10 @@ Depa.depa(wit,7) ====>
 (3, 4, 30 + 4, 40 + 3) ====>
 (3, 4, 34, 43)
 
------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 protocol Apa:
     def apa1(self):
@@ -2214,6 +2217,16 @@ extension str (Cepa):                       # Second extension. Hmm... should th
     def fepa(self):                         #                   grounds that it introduces a new behavior for str.apa2, on which str.bepa depends.
         return (self.cepa(), self.bepa())
 
+---
+
+extension list[A] (Bepa):                   # First extension
+    pass
+
+extension list[A] (Cepa):
+    def fepa(self):                         # Second extension
+        return (self.cepa(), self.bepa())
+    
+
 # Witness translation goal: keep witnesses selection for Self and its type parameters open-ended in the OO way!
 # Achieve this via the "self" parameter of the translated protocol methods, here denoted "w" to distinguish it from the original "self"
 
@@ -2256,7 +2269,7 @@ class Cepa[S] ():
 
     _Apa    : Apa[S]
     def __init__(w):
-        w._Apa = Apa_Cepa(_main = w)
+        w._Apa = Apa_wrapped(_main = w)
 
     def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Apa, in case of Cepa sibling use or official Cepa call)
         return w._Apa.apa1(self)
@@ -2356,7 +2369,7 @@ class Bepa_str ():                          # First extension
         
     _Bepa   : Bepa[str]                     # NOTE: real str(Bepa) witness!
     def __init__(w):
-        w._Bepa = Bepa_str(_main = w)
+        w._Bepa = Bepa_wrapped(_main = w)
 
     def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Bepa_str sibling use or official Bepa_str call)
         return w._Bepa.apa1(self)
@@ -2384,6 +2397,96 @@ class Cepa_Bepa_str (Bepa_str):             # Second extension
         return w._Cepa.apa2(self)
     # bepa = Bepa_str.bepa                  # Inheriting bepa
     def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Cepa.bepa(self)
+    def fepa(w, self):                      # Adding depa
+        return w.cepa(self) + w.bepa(self)
+
+--- extension list[A] (Bepa); extension list[A] (Cepa)
+
+class Bepa_list[A] ():                      # First extension
+
+    class Bepa_wrapped[A] (Bepa[list[A]]):
+        _main   : Bepa_list
+        # apa1 = Bepa.apa1                      # Inheriting apa1
+        # apa2 = Bepa.apa2                      # Inheriting apa2
+        # bepa = Bepa.bepa                      # Inheriting bepa
+        
+    _Bepa   : Bepa[list[A]]                 # NOTE: real list[A](Bepa) witness!
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Bepa_list sibling use or official Bepa_list call)
+        return w._Bepa.apa1(self)
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Bepa, in case of Bepa_list sibling use or official Bepa_list call)
+        return w._Bepa.apa2(self)
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Bepa_list sibling use or official Bepa_list call)
+        return w._Bepa.bepa(self)
+
+class Cepa_Bepa_list[A] (Bepa_list[A]):     # Second extension
+
+    class Cepa_wrapped[A] (Cepa[list[A]]):
+        _main   : Cepa_Bepa_list[A]
+        def apa1(w, self):                      # Overriding apa1 (= redirection to Cepa_Bepa_list, in case of Cepa sibling use or Cepa_Bepa_list prom to Cepa)
+            return w._main.apa1(self)
+        # apa2 = Cepa.apa2                      # Inheriting apa2
+        # cepa = Cepa.cepa                      # Inheriting cepa
+    
+    _Cepa   : Cepa[list[A]]                 # NOTE: real str(Cepa) witness!
+    def __init__(w):
+        Bepa_list.__init__(w)
+        w._Cepa = Cepa_wrapped(_main = w)
+
+    # apa1 = Bepa_list.apa1                 # Inheriting apa1
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Cepa, in case of Cepa_Bepa_list sibling use or official Cepa_Bepa_list call)
+        return w._Cepa.apa2(self)
+    # bepa = Bepa_list.bepa                 # Inheriting bepa
+    def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Cepa_Bepa_list sibling use or official Cepa_Bepa_list call)
+        return w._Cepa.bepa(self)
+    def fepa(w, self):                      # Adding depa
+        return w.cepa(self) + w.bepa(self)
+
+--- extension set[A(Eq)] (Bepa); extension set[A(Ord)] (Cepa)
+
+class Bepa_set[A] ():                      # First extension
+
+    class Bepa_wrapped[A] (Bepa[set[A]]):
+        _main   : Bepa_set[A]
+        _Eq_A   : Eq[A]
+        # apa1 = Bepa.apa1                      # Inheriting apa1
+        # apa2 = Bepa.apa2                      # Inheriting apa2
+        # bepa = Bepa.bepa                      # Inheriting bepa
+        
+    _Bepa   : Bepa[set[A]]                 # NOTE: real set[A](Bepa) witness!
+    def __init__(w, _Eq_A):
+        w._Bepa = Bepa_wrapped(_main = w, _Eq_A = _Eq_A)
+
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Bepa_set sibling use or official Bepa_set call)
+        return w._Bepa.apa1(self)
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Bepa, in case of Bepa_set sibling use or official Bepa_set call)
+        return w._Bepa.apa2(self)
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Bepa_set sibling use or official Bepa_set call)
+        return w._Bepa.bepa(self)
+
+class Cepa_Bepa_set[A] (Bepa_set[A]):       # Second extension
+
+    class Cepa_wrapped[A] (Cepa[set[A]]):
+        _main   : Cepa_Bepa_set[A]
+        _Ord_A  : Ord[A]
+        def apa1(w, self):                      # Overriding apa1 (= redirection to Cepa_Bepa_set, in case of Cepa sibling use or Cepa_Bepa_set prom to Cepa)
+            return w._main.apa1(self)
+        # apa2 = Cepa.apa2                      # Inheriting apa2
+        # cepa = Cepa.cepa                      # Inheriting cepa
+    
+    _Cepa   : Cepa[set[A]]                  # NOTE: real str(Cepa) witness!
+    def __init__(w, _Ord_A):
+        Bepa_set.__init__(w, _Eq_A = _Ord_A)
+        w._Cepa = Cepa_wrapped(_main = w, _Ord_A = _Ord_A)
+
+    # apa1 = Bepa_set.apa1                  # Inheriting apa1
+    def apa2(w, self):                      # "Inheriting" apa2 (= delegation to Cepa, in case of Cepa_Bepa_set sibling use or official Cepa_Bepa_set call)
+        return w._Cepa.apa2(self)
+    # bepa = Bepa_set.bepa                  # Inheriting bepa
+    def cepa(w, self):                      # "Inheriting" cepa (= delegation to Cepa, in case of Cepa_Bepa_set sibling use or official Cepa_Bepa_set call)
         return w._Cepa.bepa(self)
     def fepa(w, self):                      # Adding depa
         return w.cepa(self) + w.bepa(self)
@@ -2468,9 +2571,9 @@ class Bepa_str (Bepa[str]):
     # apa2 = Bepa.apa2                      # Inheriting apa2
     # bepa = Bepa.bepa                      # Inheriting bepa
     
-class Cepa_Bepa_str (Cepa[str]):            # Encoding Cepa_Bepa_str (Bepa_str, Cepa[str])
+class Cepa_Bepa_str (Cepa[str]):            # Encoding Cepa_Bepa_str (Cepa[str], Bepa[str])
     
-    class Bepa_wrapped (Bepa_str):              # Forms inner baseclass (deleate), but comes before Cepa in the MRO
+    class Bepa_wrapped (Bepa_str):              # Forms inner baseclass (delegate), but comes before Cepa in the MRO
         _main   : Cepa[str]
         # apa1 = Bepa.apa2                      # Inheriting apa1
         def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_str, in case of Bepa_str sibling use or Cepa_Bepa_str promotion to Bepa)
@@ -2486,6 +2589,69 @@ class Cepa_Bepa_str (Cepa[str]):            # Encoding Cepa_Bepa_str (Bepa_str, 
     # apa2 = Cepa.apa2                      # Inheriting apa2
     # cepa = Cepa.cepa                      # Inheriting cepa
     def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Cepa_Bepa_str sibling use or official Cepa_Bepa_str call)
+        return w._Bepa.bepa(self)
+    def fepa(w, self):
+        return w.cepa(self) + w.bepa(self)
+
+--- extension list[A] (Bepa); extension list[A] (Cepa)
+
+class Bepa_list[A] (Bepa[list[A]]):
+    # apa1 = Bepa.apa1                      # Inheriting apa1
+    # apa2 = Bepa.apa2                      # Inheriting apa2
+    # bepa = Bepa.bepa                      # Inheriting bepa
+    
+class Cepa_Bepa_list[A] (Cepa[list[A]]):    # Encoding Cepa_Bepa_list[A] (Cepa[list[A]], Bepa[list[A]])
+    
+    class Bepa_wrapped[A] (Bepa_list[A]):       # Forms inner baseclass (delegate), but comes before Cepa in the MRO
+        _main   : Cepa[list[A]]
+        # apa1 = Bepa.apa2                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_list, if Bepa_list sibling use or Cepa_Bepa_list prom to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa_list.bepa                 # Inheriting bepa
+        
+    _Bepa   : Bepa[list[A]]                 # NOTE: real list[A](Bepa) witness!
+    def __init__(w):
+        w._Bepa = Bepa_wrapped(_main = w)
+    
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Cepa_Bepa_list sibling use or official Cepa_Bepa_list call)
+        retun w._Bepa.apa1(self)
+    # apa2 = Cepa.apa2                      # Inheriting apa2
+    # cepa = Cepa.cepa                      # Inheriting cepa
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Cepa_Bepa_list sibling use or official Cepa_Bepa_list call)
+        return w._Bepa.bepa(self)
+    def fepa(w, self):
+        return w.cepa(self) + w.bepa(self)
+
+--- extension set[A(Eq)] (Bepa); extension set[A(Ord)] (Cepa)
+
+class Bepa_set[A] (Bepa[set[A]]):
+    _Eq_A   : Eq[A]
+    def __init__(w, _Eq_A):
+        w._Eq_A = _Eq_A
+    # apa1 = Bepa.apa1                      # Inheriting apa1
+    # apa2 = Bepa.apa2                      # Inheriting apa2
+    # bepa = Bepa.bepa                      # Inheriting bepa
+    
+class Cepa_Bepa_set[A] (Cepa[set[A]]):    # Encoding Cepa_Bepa_set[A] (Cepa[set[A]], Bepa[set[A]])
+    
+    class Bepa_wrapped[A] (Bepa_set[A]):        # Forms inner baseclass (delegate), but comes before Cepa in the MRO
+        _main   : Cepa[set[A]]
+        # apa1 = Bepa.apa2                      # Inheriting apa1
+        def apa2(w, self):                      # Overriding apa2 (= redirection to Cepa_Bepa_set, if Bepa_set sibling use or Cepa_Bepa_set prom to Bepa)
+            return w._main.apa2(self)
+        # bepa = Bepa_set.bepa                 # Inheriting bepa
+        
+    _Bepa   : Bepa[set[A]]                 # NOTE: real set[A](Bepa) witness!
+    _Ord_A  : Ord[A]
+    def __init__(w, _Ord_A):
+        w._Bepa = Bepa_wrapped(_main = w, _Eq_A = _Ord_A)           # In general: _Eq_A = some_expr(_Ord_A)
+        w._Ord_A = _Ord_A
+    
+    def apa1(w, self):                      # "Inheriting" apa1 (= delegation to Bepa, in case of Cepa_Bepa_set sibling use or official Cepa_Bepa_set call)
+        retun w._Bepa.apa1(self)
+    # apa2 = Cepa.apa2                      # Inheriting apa2
+    # cepa = Cepa.cepa                      # Inheriting cepa
+    def bepa(w, self):                      # "Inheriting" bepa (= delegation to Bepa, in case of Cepa_Bepa_set sibling use or official Cepa_Bepa_set call)
         return w._Bepa.bepa(self)
     def fepa(w, self):
         return w.cepa(self) + w.bepa(self)
