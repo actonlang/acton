@@ -378,42 +378,42 @@ findCon env (TC n ts)
         s                   = tvs `zip` ts
 
 
--- Valid tycon applications -----------------------------------------------------------------------------------------------------
+-- Well-formed tycon applications -------------------------------------------------------------------------------------------------
 
-class Valid a where
-    valid                   :: Env -> a -> Bool
+wellformed env x            = wf env x
 
-instance Valid (Maybe Type) where
-    valid env               = maybe True (valid env)
+class WellFormed a where
+    wf                      :: Env -> a -> Constraints
 
-instance Valid [TCon] where
-    valid env               = all (valid env)
+instance (WellFormed a) => WellFormed (Maybe a) where
+    wf env                  = maybe [] (wf env)
 
-instance Valid TCon where
-    valid env (TC n ts)     = all (valid env) ts && all (entail env) (subst s $ constraintsOf q env)
+instance (WellFormed a) => WellFormed [a] where
+    wf env                  = concatMap (wf env)
+
+instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
+    wf env (a,b)            = wf env a ++ wf env b
+
+instance WellFormed TCon where
+    wf env (TC n ts)        = wf env ts ++ subst s (constraintsOf q env)
       where q               = case findQName n env of
                                 NClass q us te -> q
                                 NProto q us te -> q
                                 _ -> err1 n "Class or protocol name expected, got"
             s               = tybound q `zip` ts
 
-instance Valid Type where
-    valid env (TCon _ tc)       = valid env tc
-    valid env (TExist _ tc)     = valid env tc
-    valid env (TFun _ x p k t)  = valid env x && valid env p && valid env p && valid env k && valid env t
-    valid env (TTuple _ p k)    = valid env p && valid env k
-    valid env (TOpt _ t)        = valid env t
-    valid env (TRow _ _ _ t r)  = valid env t && valid env r
-    valid env _                 = True
+instance WellFormed Type where
+    wf env (TCon _ tc)      = wf env tc
+    wf env (TExist _ tc)    = wf env tc
+    wf env (TFun _ x p k t) = wf env x ++ wf env p ++ wf env p ++ wf env k ++ wf env t
+    wf env (TTuple _ p k)   = wf env p ++ wf env k
+    wf env (TOpt _ t)       = wf env t
+    wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env _                = []
 
-instance Valid TSchema where
-    valid env (TSchema _ q t)   = valid env q && valid env1 t
-      where env1                = defineTVars q env
 
-instance Valid [TBind] where
-    valid env []                = True
-    valid env (TBind v us : q)  = all (valid env) us && valid env1 q
-      where env1                = defineTVars [TBind v us] env
+instance WellFormed TBind where
+    wf env (TBind v us)     = wf env us
 
 entail env (Impl w t p)     = case t of
                                 TCon _ (TC n ts) -> 
