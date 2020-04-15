@@ -1,12 +1,27 @@
 #include <math.h>
 
-struct $float  {
-  char *GCINFO;
-  float val;
-};
+struct $float$__methods__ $float_table = {$float_serialize, $float_deserialize};
+$float$__methods__ $float_methods = &$float_table;
+
+// Serialization ///////////////////////////////////////////////////////////////////////
+
+None $float_serialize($float x, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $ROW row = new_row(FLOAT_ID,prefix_size,1,prefix);
+  double dx = from$float(x);
+  memcpy(row->data+prefix_size,&dx,sizeof(double)); //Here we rely on sizeof(double) = sizeof($WORD)...
+  enqueue(accum,row);
+}
+
+$float $float_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row =this->next;
+  return to$float((long)this->data[this->prefix_size]);
+}
+
   
 $float to$float(double x) {
   $float res = malloc(sizeof(struct $float));
+  res->__class__ = $float_methods;
   res->val = x;
   return res;
 }
@@ -144,6 +159,9 @@ $int Hashable$float$__hash__(Hashable$float wit, $float a) {
   return to$int($float_hash(a));
 }
 
+$int Hashable$float$__keyinfo__(Hashable$float wit) {
+  return to$int(FLOAT_ID);
+}
 
 static struct Real$float Real$float_instance;
 static struct Complex$float Complex$float_instance;
@@ -172,7 +190,7 @@ static struct Minus$float$__class__ Minus$float_methods = {"",Minus$float$__sub_
 static struct Minus$float Minus$float_instance = {"",&Minus$float_methods, (Real)&Real$float_instance};
 static Minus$float Minus$float_witness = &Minus$float_instance;
 
-static struct Hashable$float$__class__ Hashable$float_methods = {"",Hashable$float$__eq__,Hashable$float$__neq__,Hashable$float$__hash__};
+static struct Hashable$float$__class__ Hashable$float_methods = {"",Hashable$float$__eq__,Hashable$float$__neq__,Hashable$float$__hash__,Hashable$float$__keyinfo__};
 static struct Hashable$float Hashable$float_instance = {"",&Hashable$float_methods};
 static Hashable$float Hashable$float_witness = &Hashable$float_instance;
 
