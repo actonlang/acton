@@ -214,18 +214,56 @@ ex15  = [("G",[]), ("F",[]), ("E",[]),
          
 ex16  = [("Eq",[]), ("Ord",["Eq"]), ("Hmm",["Eq","Ord"])]                               -- fails
 
-ex17a = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["C","B"]),
-         ("str_D",["D"])]                                                               -- str_D,D,C,B,A
 
-ex17b = [("A",[]), ("B",["A"]), ("C",["A"]), 
-         ("str_CB",["C","B"])]                                                          -- str_CB,C,B,A
+------------------------------------------------------------------------------------------------------------------------------------------------
+-- Desired extension semantics:
 
-ex17c = [("A",[]), ("B",["A"]), ("C",["A"]), 
-         ("str_C",["C"]), ("str_B",["str_C","B"])]                                      -- str_B,str_C,C,B,A                <--- desired successive extension semantics!
+ex17a = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["A"]),                                                                   -- C, A
+         ("D",["C","B"]),                                                               -- D, C, B, A
+         ("str_D",["D"])]                                                               -- str_D, D, C, B, A
 
-ex18  = [("A",[]), ("B",["A"]), ("C",["A"]), 
-         ("str_C",["C"]), ("str_B",["B"]), ("str_tot",["str_C","str_B"])]               -- str_tot,str_C,C,str_B,B,A        <--- bad, picks C before str_B
-         
--- Conclusion: accumulating extensions top->down correspond to one multi-extension left->right
+ex17b = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["A"]),                                                                   -- C, A
+         ("str_CB",["C","B"])]                                                          -- str_CB, C, B, A
+
+ex17c = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["A"]),                                                                   -- C, A
+         ("str_A",["A"]),                                                               -- str_A, A
+         ("str_B",["str_A","B"]),                                                       -- str_B, str_A, B, A
+         ("str_C",["str_B","str_A","C"])]                                               -- str_C, str_B, str_A, B, C, A
+
+ex17d = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["A"]),                                                                   -- C, A
+         ("str_B",["B"]),                                                               -- str_B, B, A                      <--- implicit A dep
+         ("str_C",["str_B","C"])]                                                       -- str_C, str_B, B, C, A
+
+ex17e = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["B","A"]),                                                               -- C, B, A
+         ("str_A",["A"]),                                                               -- str_A, A
+         ("str_B",["str_A","B"]),                                                       -- str_B, str_A, B, A
+         ("str_C",["str_B","str_A","C"])]                                               -- str_C, str_B, str_A, C, B, A
+
+ex17f = [("A",[]),                                                                      -- A
+         ("B",["A"]),                                                                   -- B, A
+         ("C",["B","A"]),                                                               -- C, B, A
+         ("str_B",["B"]),                                                               -- str_B, B, A
+         ("str_C",["str_B","C"])]                                                       -- str_C, str_B, C, B, A            <--- implicit A dep
+
+-- Conclusion: a single multi-extension left->right corresponds to *accumulating* extensions top->down.
 -- That is, later extensions cover earlier ones, but protocol methods (the method defaults) only 
 -- apply for methods implemented in neither of the extensions.
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+ex18  = [("A",[]), ("B",["A"]), ("C",["A"]), 
+         ("str_A",["A"]),
+         ("str_B",["B"]), 
+         ("str_C",["C"]), 
+         ("str_tot",["str_C","str_B","str_A"])]                                         -- str_tot,str_C,C,str_B,B,str_A,A  <--- bad, picks C before str_B...
+         
