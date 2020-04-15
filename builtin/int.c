@@ -5,12 +5,7 @@ $int$__methods__ $int_methods = &$int_table;
 // Serialization ///////////////////////////////////////////////////////////////////////
 
 None $int_serialize($int n, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $ROW row = malloc(3*sizeof(int) + (prefix_size + 2)*sizeof($WORD));
-  row->class_id = INT_ID;
-  row->key_size = prefix_size;
-  row->next = NULL;
-  row->blob_size = 1;
-  memcpy(row->data,prefix,prefix_size*sizeof($WORD));
+  $ROW row = new_row(INT_ID,prefix_size,1,prefix);
   row->data[prefix_size] = ($WORD)from$int(n);
   enqueue(accum,row);
 }
@@ -18,7 +13,7 @@ None $int_serialize($int n, $WORD *prefix, int prefix_size, $dict done, $ROWLIST
 $int $int_deserialize($ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
-  return to$int((long)this->data[this->key_size]);
+  return to$int((long)this->data[this->prefix_size]);
 }
 
 $int to$int(long i) {
@@ -234,6 +229,9 @@ $int Hashable$int$__hash__(Hashable$int wit, $int a) {
   return to$int($int_hash(a));
 }
 
+$int Hashable$int$__keyinfo__(Hashable$int wit) {
+  return to$int(INT_ID);
+}
 
 static struct Integral$int Integral$int_instance;
 static struct Logical$int Logical$int_instance;
@@ -271,7 +269,7 @@ static struct Minus$int$__class__ Minus$int_methods = {"",Minus$int$__sub__};
 static struct Minus$int Minus$int_instance = {"",&Minus$int_methods, (Integral)&Integral$int_instance};
 static Minus$int Minus$int_witness = &Minus$int_instance;
 
-static struct Hashable$int$__class__ Hashable$int_methods = {"",Hashable$int$__eq__,Hashable$int$__neq__,Hashable$int$__hash__};
+static struct Hashable$int$__class__ Hashable$int_methods = {"",Hashable$int$__eq__,Hashable$int$__neq__,Hashable$int$__hash__,Hashable$int$__keyinfo__};
 static struct Hashable$int Hashable$int_instance = {"",&Hashable$int_methods};
 static Hashable$int Hashable$int_witness = &Hashable$int_instance;
 

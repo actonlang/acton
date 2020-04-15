@@ -16,6 +16,6 @@ int main() {
   $bool b = wit2->__class__->__contains__(wit2,lst,to$int(17));
   $bool c = wit2->__class__->__contains__(wit2,lst,to$int(171));
   $bool d = wit2->__class__->__contains__(wit2,lst,to$int(100));
-  printf("results are %d, %d, %d\n",from$bool(b),from$bool(c),from$bool(d));
+  printf("results are %ld, %ld, %ld\n",from$bool(b),from$bool(c),from$bool(d));
 }
   

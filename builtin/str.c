@@ -9,7 +9,9 @@
 //  Method tables ///////////////////////////////////////////////////////////////
 
 // String-specific methods
- 
+
+None $str_serialize($str, $WORD*, int, $dict, $ROWLISTHEADER);
+$str $str_deserialize($ROW*, $dict);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
@@ -50,10 +52,10 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 static struct $str$__methods__ $str_table =
-   {$str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii,
-    $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
-    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith,
-    $str_strip, $str_upper, $str_zfill};
+  {$str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
+   $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
+   $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
+   $str_upper, $str_zfill};
 
 static $str$__methods__ $str_methods = &$str_table;
 
@@ -171,8 +173,11 @@ $bool Hashable$str$__ne__ (Hashable$str wit, $str a, $str b) {
 
 $int Hashable$str$__hash__(Hashable$str wit, $str str) {
   return to$int($string_hash(str->str,str->nbytes));
- }
+}
 
+$int Hashable$str$__keyinfo__(Hashable$str wit) {
+  return to$int(STR_ID);
+}
  
 static struct Ord$str$__class__  Ord$str_methods = {"", Ord$str$__eq__, Ord$str$__ne__, Ord$str$__lt__, Ord$str$__le__, Ord$str$__gt__, Ord$str$__ge__};
 static struct Ord$str Ord$str_instance = {"",&Ord$str_methods};
@@ -191,7 +196,7 @@ static struct Plus$str$__class__  Plus$str_methods = {"", Plus$str$__add__};
 static struct Plus$str Plus$str_instance = {"",&Plus$str_methods};
 static Plus$str Plus$str_witness = &Plus$str_instance;
 
-static struct Hashable$str$__class__  Hashable$str_methods = {"", Hashable$str$__eq__, Hashable$str$__ne__, Hashable$str$__hash__};
+static struct Hashable$str$__class__  Hashable$str_methods = {"", Hashable$str$__eq__, Hashable$str$__ne__, Hashable$str$__hash__,Hashable$str$__keyinfo__};
 static struct Hashable$str Hashable$str_instance = {"",&Hashable$str_methods};
 static Hashable$str Hashable$str_witness = &Hashable$str_instance;
 
@@ -610,7 +615,35 @@ $str $str_getslice($str s, Slice slc) {
  return res;
 }
 
- 
+// Serialization ////////////////////////////////////////////////////////////// 
+                       
+None $str_serialize($str str, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
+  $ROW row = new_row(STR_ID,prefix_size,2+nWords,prefix);
+  long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
+  memcpy(row->data+prefix_size,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
+  long nchars = (long)str->nchars;
+  memcpy(row->data+prefix_size+1,&nchars,sizeof($WORD));
+  memcpy(row->data+prefix_size+2,str->str,nbytes+1);
+  enqueue(accum,row);
+}
+
+$str $str_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row =this->next;
+  $str res = malloc(sizeof(struct $str));
+  long nbytes;
+  memcpy(&nbytes,this->data+this->prefix_size,sizeof($WORD));
+  res->__class__ = $str_methods;
+  res->nbytes = (int)nbytes;
+  long nchars;
+  memcpy(&nchars,this->data+this->prefix_size+1,sizeof($WORD));
+  res->nchars = (int)nchars;
+  res->str = malloc(nbytes+1);
+  memcpy(res->str,this->data+this->prefix_size+2,nbytes+1);
+  return res;
+}
+
  
 // str-specific methods ////////////////////////////////////////////////////////
 

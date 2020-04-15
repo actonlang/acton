@@ -34,20 +34,31 @@ int main() {
 
   for (long i=1; i < 1000000; i++)
     wit->_Indexed->__class__->__setitem__(wit->_Indexed,dict,toWord(i),toWord(i+1));
-   $WORD b;
+  
+  $WORD b;
   long r = 17;
   long s = 0;
   for (int j=1; j < 100000; j++) {
-    r = r*r % 1000000;
+    r = r*r % 100000;
     b = wit->_Indexed->__class__->__getitem__(wit->_Indexed,dict,toWord(r));
     s += fromWord(b);
   }
   printf("in dict_test after summation; last value retrieved should be %ld, was %ld\n",r+1,fromWord(b));
-  printf("Summed 100000 values; sum is %ld\n",s);
+  printf("Retrieved and summed 100000 values; sum is %ld\n",s);
   
+  long prefix[] = {3L};
+  serialize_file((Serializable)dict,prefix,1,"test4.bin");
+
+  printf("Wrote serialized dict to test4.bin\n");
+/*
+  long prefix2[10];
+  int prefix2_size;
+  $dict dict2 = ($dict)deserialize_file("test4.bin",prefix2,&prefix2_size);
+  serialize_file((Serializable)dict2,prefix,1,"test5.bin");
+  */
   int t1 = from$bool(wit->__class__->__contains__(wit,dict,toWord(678)));
   int t2 = from$bool(wit->__class__->__contains__(wit,dict,toWord(-1)));
-  
+
   if (t1 && !t2)
     printf("contains test ok\n");
   else
@@ -69,8 +80,8 @@ int main() {
   $WORD deflt = toWord(666);
   $WORD w = wit->__class__->get(wit,dict,toWord(100),deflt);
   printf("dict_get on existing key 100; should return 101. Returned %ld\n",fromWord(w));
-  //$WORD w2 =  wit->__class__->get(wit,dict,toWord(37),deflt);
-  //printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(w2));
+  $WORD w2 =  wit->__class__->get(wit,dict,toWord(37),deflt);
+  printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(w2));
 
   for (long j = 11; j < 200; j+=20)
      wit->_Indexed->__class__->__setitem__( wit->_Indexed,other,toWord(j),toWord(2*j));
@@ -86,7 +97,6 @@ int main() {
   }
 
   wit->__class__->update(wit,dict,dict_iterable(wit,other));
-  
   if((item = wit->__class__->popitem(wit,dict))) {
     printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
   }
@@ -94,5 +104,4 @@ int main() {
      printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
   }
   printf("size of dictionary should be 10007; is %ld\n",from$int(wit->__class__->__len__(wit,dict)));
-
 }

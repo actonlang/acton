@@ -502,6 +502,7 @@ struct Hashable$__class__ {
     $bool (*__eq__)(Hashable, $WORD, $WORD);
     $bool (*__ne__)(Hashable, $WORD, $WORD);
     $int (*__hash__)(Hashable, $WORD);
+    $int (*__keyinfo__)(Hashable);
 };
 
 struct Hashable$opaque {
@@ -1280,11 +1281,13 @@ struct Hashable$str$__class__ {
     $bool (*__eq__)(Hashable$str, $str, $str);
     $bool (*__ne__)(Hashable$str, $str, $str);
     $int (*__hash__)(Hashable$str, $str);
+    $int (*__keyinfo__)(Hashable$str);
 };
 
 $bool Hashable$str$__eq__ (Hashable$str, $str, $str);
 $bool Hashable$str$__ne__ (Hashable$str, $str, $str);
 $int Hashable$str$__hash__ (Hashable$str, $str);
+$int Hashable$str$__keyinfo__ (Hashable$str);
 
 // Integral$int ////////////////////////////////////////////////////////////
 
@@ -1443,11 +1446,13 @@ struct Hashable$int$__class__ {
     $bool (*__eq__)(Hashable$int, $int, $int);
     $bool (*__ne__)(Hashable$int, $int, $int);
     $int (*__hash__)(Hashable$int, $int);
+    $int (*__keyinfo__)(Hashable$int);
 };
 
 $bool Hashable$int$__eq__ (Hashable$int, $int, $int);
 $bool Hashable$int$__ne__ (Hashable$int, $int, $int);
 $int Hashable$int$__hash__ (Hashable$int, $int);
+$int Hashable$int$__keyinfo__ (Hashable$int);
 
 // Real$float ////////////////////////////////////////////////////////////
 
@@ -1567,10 +1572,11 @@ struct Hashable$float$__class__ {
     $bool (*__eq__)(Hashable$float, $float, $float);
     $bool (*__ne__)(Hashable$float, $float, $float);
     $int (*__hash__)(Hashable$float, $float);
+    $int (*__keyinfo__)(Hashable$float);
 };
 
 $bool Hashable$float$__eq__ (Hashable$float, $float, $float);
 $bool Hashable$float$__ne__ (Hashable$float, $float, $float);
 $int Hashable$float$__hash__ (Hashable$float, $float);
+$int Hashable$float$__keyinfo__ (Hashable$float);
 
-$WORD next(Iterator);

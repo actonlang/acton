@@ -12,6 +12,8 @@ struct $str {
 };
 
 struct $str$__methods__ {
+  None (*__serialize__)($str, $WORD*, int, $dict, $ROWLISTHEADER);
+  $str (*__deserialize__)($ROW*, $dict);
   $str (*capitalize)($str s);
   $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);

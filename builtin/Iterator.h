@@ -16,3 +16,4 @@ struct Iterator {
 
 Iterable$Iterator Iterable$Iterator_new();
 
+$WORD next(Iterator);

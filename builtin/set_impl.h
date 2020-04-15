@@ -1,3 +1,5 @@
+Hashable $set_hashwitness($set);
+
 Iterator $set_iter($set set);
 Iterator $set_iter_entry($set set);
 

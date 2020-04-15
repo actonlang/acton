@@ -10,9 +10,10 @@ all:
 	gcc ../builtin.o int_test.c -o int_test -lutf8proc
 	gcc ../builtin.o float_test.c -o float_test -lutf8proc
 clean:
+	rm *.o
 	rm slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test
 
-tests:
+runtests:
 	./slice_test
 	./sieve
 	./protocol_test
