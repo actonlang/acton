@@ -2,9 +2,6 @@ $dict $new_dict(Hashable wit);
 Hashable $dict_hashwitness($dict);
 Iterator $dict_iter($dict dict);
 
-None $dict_serialize($dict self, $WORD *prefix, int prefix_size, $dict hash, $ROWLISTHEADER accum);
-//$dict $dict_deserialize($ROW ser, $dict hash);
-
 void $dict_setitem($dict dict, $WORD key, $WORD value);
 $WORD $dict_getitem($dict dict, $WORD key);
 void $dict_delitem($dict dict,  $WORD key);

@@ -9,7 +9,6 @@
 // types //////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct $entry_struct {
-  char *GCINFO;
   long hash;
   $WORD key;
   $WORD value;  // deleted entry has value NULL
@@ -18,23 +17,111 @@ typedef struct $entry_struct {
 struct $table_struct {
   char *GCINFO;
   long tb_size;        // size of dk_indices array; must be power of 2
-  long tb_usable;      // nr of unused entries in dk_entries (deleted entries are counted as used)
-  long tb_nentries;    // nr of used entries in dk_entries
+  long tb_usable;      // nr of unused entries in tb_entries (deleted entries are counted as used)
+  long tb_nentries;    // nr of used entries in tb_entries
   int  tb_indices[];   // array of indices
                        // after this follows tb_entries array;
 };
 
-struct $dict$__methods__ $dict_struct = {/*$dict_serialize,$dict_deserialize,*/$dict_hashwitness}; 
+struct $dict$__methods__ $dict_struct = {$dict_serialize,$dict_deserialize,$dict_hashwitness}; 
 
 $dict$__methods__ $dict_methods = &$dict_struct;
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
-// #define DKIX_ERROR (-3)
-#define TB_ENTRIES(tb) \
+ #define TB_ENTRIES(tb) \
   (($entry_t)(&((int*)((tb)->tb_indices))[(tb)->tb_size]))
 
 #define PERTURB_SHIFT 5
+
+// Serialisation /////////////////////////////////////////////////////////////////////////
+
+None $dict_serialize($dict self, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $WORD deflt = NULL;
+  $PREFIX prevkey = ($PREFIX)$dict_get(done,self,deflt);
+  int this_blobsize = 5 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
+  int blob_size = prevkey ? prevkey->prefix_size : this_blobsize;
+  $ROW row = new_row(DICT_ID,prefix_size,blob_size,prefix);
+  if (prevkey) {
+    row->class_id = -DICT_ID;
+    memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
+    enqueue(accum,row);
+    return;
+  }
+  $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
+  pref->prefix_size = prefix_size;
+  memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
+  $dict_setitem(done,self,pref);
+  row->class_id = DICT_ID;
+  row->data[prefix_size] = ($WORD)self->numelements;
+  row->data[prefix_size+1] = ($WORD)from$int(self->hashwit->__class__->__keyinfo__(self->hashwit));
+  row->data[prefix_size+2] = ($WORD)self->table->tb_size;
+  row->data[prefix_size+3] = ($WORD)self->table->tb_usable;
+  row->data[prefix_size+4] = ($WORD)self->table->tb_nentries;
+  memcpy(&row->data[prefix_size+5],self->table->tb_indices,self->table->tb_size*sizeof(int));
+  enqueue(accum,row);
+  int extprefix_size = prefix_size + 1;
+  for (long i=0; i<self->table->tb_nentries; i++) {
+    $WORD extprefix[extprefix_size];
+    memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
+    extprefix[extprefix_size-1] = ($WORD)i;
+    $ROW row2 = new_row(ITEM_ID,extprefix_size,1,extprefix);
+    $entry_t entry = &TB_ENTRIES(self->table)[i];
+    row2->data[extprefix_size] = ($WORD)entry->hash;
+    enqueue(accum,row2);
+    int extprefix2_size = extprefix_size + 1;
+    $WORD extprefix2[extprefix2_size];
+    memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
+    extprefix2[extprefix2_size-1] = ($WORD)0;
+    Serializable key = (Serializable)entry->key;
+    key->__class__->__serialize__(key,extprefix2,extprefix2_size,done,accum);
+    extprefix2[extprefix2_size-1] = ($WORD)1;
+    Serializable val =  (Serializable)entry->value;
+    if (val==NULL) 
+      enqueue(accum,new_row(DUMMY_ID,extprefix2_size,0,extprefix2));
+    else 
+      val->__class__->__serialize__(val,extprefix2,extprefix2_size,done,accum);
+  }
+}
+
+$dict $dict_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
+    pref->prefix_size = this->blob_size;
+    memcpy(pref->prefix, this->data+this->prefix_size, this->blob_size*sizeof($WORD));
+    return $dict_get(done,pref,NULL);
+  } else {
+    $dict res = malloc(sizeof(struct $dict));
+    res->__class__ = $dict_methods;
+    res->numelements = (long)this->data[this->prefix_size];
+    res->hashwit = Hashable_instance((long)this->data[this->prefix_size+1]);
+    long tb_size = (long)this->data[this->prefix_size+2];
+    res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
+    res->table->tb_size = tb_size;
+    res->table->tb_usable = (long)this->data[this->prefix_size+3];
+    res->table->tb_nentries = (long)this->data[this->prefix_size+4];
+    memcpy(res->table->tb_indices,&this->data[this->prefix_size+5],tb_size*sizeof(int));
+    for (int i=0; i<res->table->tb_nentries; i++) {
+      $entry_t entry = &TB_ENTRIES(res->table)[i];
+      entry->hash = (long)(*row)->data[(*row)->prefix_size];
+      *row = (*row)->next;
+      entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(row,done);
+      if ((*row)->class_id == DUMMY_ID)
+        entry->value = NULL;
+      else {
+        entry->value = (serial$_methods[labs((*row)->class_id)])->__deserialize__(row,done);
+      }
+    }
+    $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
+    pref->prefix_size = this->prefix_size;
+    memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));
+    $dict_setitem(done,pref,res);
+    return res;
+  }
+}
+
 
 /*
 Internal routine used by dictresize() to build a hashtable of entries.
@@ -83,7 +170,6 @@ static int dictresize($dict d) {
   memset(&(newtable->tb_indices[0]), 0xff, newsize*sizeof(int));
   oldentries = TB_ENTRIES(oldtable);
   newentries = TB_ENTRIES(newtable);
-
   if (oldtable->tb_nentries == numelements) {
     memcpy(newentries, oldentries, numelements*sizeof(struct $entry_struct));
   }
@@ -96,25 +182,21 @@ static int dictresize($dict d) {
   }
   d->table = newtable;
   free(oldtable);
-  
   build_indices(newtable, newentries, numelements);
-
   return 0;
 }
 
 
 $dict $new_dict(Hashable hashwit) { 
   $dict dict =  malloc(sizeof(struct $dict));
+  dict->__class__ = $dict_methods;
   dict->numelements = 0;
   dict->hashwit = hashwit;
-  // dict->eq = eq;
-  // dict->hash = hash;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  dict->__class__ = NULL;
   return dict;
 }
 
@@ -149,7 +231,6 @@ static int lookdict($dict dict, long hash, $WORD key, $WORD *res) {
   $table table = dict->table;
   long mask = (table->tb_size)-1, i = hash & mask, perturb = hash;
   int ix;
-  //  entry_t entry0 = TB_ENTRIES(table);
   for(;;) {
     ix = table->tb_indices[i];
     if (ix == DKIX_EMPTY) {
@@ -293,12 +374,9 @@ void $dict_delitem($dict dict,  $WORD key) {
     }
     entry->value = NULL;
     dict->numelements--;
-    /*
-    downsizing does not guarantee LIFO order in popitem
-    if (10*dict->__internal__->numelements < dict->__internal__->table->tb_size) {
-      dictresize(dict->__internal__);
-    */
-  }
+    if (10*dict->numelements < dict->table->tb_size) 
+      dictresize(dict);
+    }
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////
@@ -406,7 +484,7 @@ $WORD $dict_get($dict dict, $WORD key, $WORD deflt) {
 
 $WORD $dict_popitem($dict dict) {
   $table table = dict->table;
-  int ix = table->tb_nentries;
+  int ix = table->tb_nentries-1;
   while (ix >= 0) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
     if (entry->value != NULL) {
@@ -445,5 +523,3 @@ $WORD $dict_setdefault($dict dict, $WORD key, $WORD deflt) {
   TB_ENTRIES(dict->table)[ix].value = deflt;
   return deflt;
 }
-
- 

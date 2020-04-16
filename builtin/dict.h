@@ -1,6 +1,6 @@
 typedef struct $dict$__methods__ {
-  //None(*__serialize__)($dict, $WORD*, int, $dict, $ROWLISTHEADER);
-  //$dict (*__deserialize__)($ROW*, $dict);
+  None(*__serialize__)($dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  $dict (*__deserialize__)($ROW*, $dict);
   Hashable (*__hashwitness__)($dict);
 } *$dict$__methods__;
 
@@ -13,6 +13,9 @@ struct $dict {
   Hashable hashwit;
   $table table;                   // the hashtable
 };
+
+None $dict_serialize($dict, $WORD*, int, $dict, $ROWLISTHEADER);
+$dict $dict_deserialize($ROW*, $dict);
 
 
 $dict$__methods__ $dict_methods;

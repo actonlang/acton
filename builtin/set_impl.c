@@ -1,13 +1,8 @@
-#include <stdlib.h>
-#include <stddef.h>
-#include <stdio.h>
-#include <errno.h>
 #include <string.h> /*memset*/
-
-#include "builtin.h"
 
 #define DISCARD_NOTFOUND 0
 #define DISCARD_FOUND 1
+#include "builtin.h"
 
 /* 
 This implementation of sets is an adaptation of CPython's set implementation.
@@ -16,13 +11,16 @@ This implementation of sets is an adaptation of CPython's set implementation.
 // Types ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct {
-  char *$GCINFO;
   $WORD key;
   long hash;    
 } $setentry;
 
-typedef void *$set$__methods__;       // All set methods are from protocols
+
 // Maybe we should  offer union, intersection and symmetric difference under those names.
+struct $set$__methods__ $set_struct = {$set_serialize,$set_deserialize,$set_hashwitness}; 
+
+$set$__methods__ $set_methods = &$set_struct;
+
 
 typedef struct $set {
   char *$GCINFO;
@@ -35,7 +33,7 @@ typedef struct $set {
      */
   long mask;
   long finger;                       // Search finger for pop() 
-  Hashable hashwit;             // eq and hash function used in this $set
+  Hashable hashwit;                  // eq and hash function used in this $set
   $setentry *table;                  // the hashtable
 } *$set;
 
@@ -44,6 +42,11 @@ typedef struct $set {
 
 static $WORD _dummy;
 #define dummy (&_dummy)
+
+
+Hashable $set_hashwitness($set set) {
+  return set->hashwit;
+}
 
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
     $setentry *entry;
@@ -69,7 +72,7 @@ static int $set_table_resize($set so, int minsize) {
     long oldmask = so->mask;
     long newmask;
 
-    /* Find the smallest table size > minused. */
+    /* Find the smallest table size > minsize. */
     long newsize = MIN_SIZE;
     while (newsize <= (long)minsize) {
         newsize <<= 1; // The largest possible value is PY_SSIZE_T_MAX + 1.
@@ -152,7 +155,7 @@ $set $set_new(Hashable h) {
   res->hashwit = h;
   res->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(res->table,0,MIN_SIZE*sizeof($setentry));
-  res->__class__ = NULL;
+  res->__class__ = $set_methods;
   return res; 
 }
 
@@ -162,7 +165,7 @@ static void $set_add_entry($set set, $WORD key, long hash) {
   $setentry *entry;
   long perturb;
   long mask;
-  long i;                       // Unsigned for defined overflow behavior 
+  long i;  
   mask = set->mask;
   i = hash & mask;
 
@@ -235,7 +238,6 @@ static int $set_discard_entry($set set, $WORD elem, long hash) {
   } else
     return DISCARD_NOTFOUND;
 }
-
 
 // Eq //////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -495,3 +497,92 @@ $set $set_difference($set set, $set other) {
   return res;
 }
  
+// Serialization ///////////////////////////////////////////////////////////////////////////////////
+
+None $set_serialize($set self, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $WORD deflt = NULL;
+  $PREFIX prevkey = ($PREFIX)$dict_get(done,self,deflt);
+  int blob_size = prevkey ? prevkey->prefix_size : 5;
+  $ROW row = new_row(SET_ID,prefix_size,blob_size,prefix);
+  if (prevkey) {
+    row->class_id = -SET_ID;
+    memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
+    enqueue(accum,row);
+    return;
+  }
+  $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
+  pref->prefix_size = prefix_size;
+  memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
+  $dict_setitem(done,self,pref);
+  row->class_id = SET_ID;
+  row->data[prefix_size]   = ($WORD)self->numelements;
+  row->data[prefix_size+1] = ($WORD)self->fill;
+  row->data[prefix_size+2] = ($WORD)self->mask;
+  row->data[prefix_size+3] = ($WORD)self->finger;
+  row->data[prefix_size+4] = ($WORD)from$int(self->hashwit->__class__->__keyinfo__(self->hashwit));
+  enqueue(accum,row);
+  int extprefix_size = prefix_size + 1;
+  for (long i=0; i<=self->mask; i++) {
+    $setentry *entry = &self->table[i];
+    if (entry->key != NULL) {
+      // We only store entry info for entries where key != NULL. When hash is -1, we store a DUMMY_ID row.
+      // Otherwise we store an ITEM_ID row containing the hash of the entry followed by a serialization of the key.
+      $WORD extprefix[extprefix_size];
+      memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
+      extprefix[extprefix_size-1] = ($WORD)i;
+      $ROW row2;
+      if (entry->hash==-1) {
+        row2 = new_row(DUMMY_ID,extprefix_size,0,extprefix);
+        enqueue(accum,row2);
+      } else { 
+        row2 = new_row(ITEM_ID,extprefix_size,1,extprefix);
+        row2->data[extprefix_size] = ($WORD)entry->hash;
+        enqueue(accum,row2);
+        int extprefix2_size = extprefix_size + 1;
+        $WORD extprefix2[extprefix2_size];
+        memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
+        extprefix2[extprefix2_size-1] = ($WORD)0;
+        Serializable key = (Serializable)entry->key;
+        key->__class__->__serialize__(key,extprefix2,extprefix2_size,done,accum);
+      }
+    }
+  }
+}
+
+$set $set_deserialize($ROW *row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
+    pref->prefix_size = this->blob_size;
+    memcpy(pref->prefix, this->data+this->prefix_size, this->blob_size*sizeof($WORD));
+    return $dict_get(done,pref,NULL);
+  } else {
+    $set res = malloc(sizeof(struct $set));
+    res->__class__ = $set_methods;
+    res->numelements = (long)this->data[this->prefix_size];
+    res->fill = (long)this->data[this->prefix_size+1];
+    res->mask = (long)this->data[this->prefix_size+2];
+    res->finger = (long)this->data[this->prefix_size+3];
+    res->hashwit = Hashable_instance((long)this->data[this->prefix_size+4]);
+    res->table = malloc((res->mask+1)*sizeof($setentry));
+    memset(res->table,0,(res->mask+1)*sizeof($setentry));
+    while(*row) {
+      long i = (long)(*row)->data[(*row)->prefix_size-1];
+      $setentry *entry = &res->table[i];
+      if ((*row)->class_id == DUMMY_ID) {
+        entry->key = dummy;
+        entry->hash = -1;
+      } else { //class_id = ITEM_ID
+        entry->hash = (long)(*row)->data[(*row)->prefix_size];
+        *row = (*row)->next;
+        entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(row,done);
+      }
+    }
+    $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
+    pref->prefix_size = this->prefix_size;
+    memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));
+    $dict_setitem(done,pref,res);
+    return res;
+  }
+}
