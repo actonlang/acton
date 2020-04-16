@@ -107,16 +107,9 @@ data Name       = Name SrcLoc String | Internal String Int Pass deriving (Generi
 nloc (Name l _) = l
 nloc Internal{} = NoLoc
 
-nstr (Name _ s) = shift s
-  where shift []            = []
-        shift str
-          | n == 0          = head str : shift (tail str)
-          | n <= 2          = replicate n '_' ++ shift rest
-          | otherwise       = replicate (n+1) '_' ++ shift rest
-          where (xs,rest)   = span (=='_') str
-                n           = length xs
-nstr (Internal s 0 GenPass) = s
-nstr (Internal s i p)       = s ++ "___" ++ show i ++ suffix p
+nstr (Name _ s)             = s
+nstr (Internal s 0 GenPass) = "$" ++ s
+nstr (Internal s i p)       = s ++ "$" ++ show i ++ suffix p
   where suffix ParsePass    = "p"
         suffix KindPass     = "k"
         suffix TypesPass    = "t"

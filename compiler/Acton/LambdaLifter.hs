@@ -129,8 +129,6 @@ classContext env                = case [ c | (InClass,c) <- prefix env ] of [] -
 
 -- inDef env                       = case prefix env of (InDef,_):_ -> True; _ -> False
         
--- newname env n                   = Internal (intercalate "_" (map snd (reverse (prefix env))) ++ "___" ++ nstr n) 0 GenPass
-
 liftedname env n                = case lookup n (namemap env) of
                                     Just n -> n
                                     _      -> n
