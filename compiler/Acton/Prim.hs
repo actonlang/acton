@@ -5,11 +5,11 @@ import Pretty
 import Acton.Syntax
 
 
-contKW                              = prim "___c___"
+contKW                              = prim "$_c"
 
 prim s                              = Internal s 0 GenPass
 
-nPrim                               = prim "___"
+nPrim                               = prim "PRIM"
 mPrim                               = ModName [nPrim]
 qPrim n                             = QName mPrim n
 
@@ -39,5 +39,3 @@ primRAISEFROM                       = qPrim nRAISEFROM
 primCLOS                            = qPrim nCLOS
 primCONT                            = qPrim nCONT
 primASSERT                          = qPrim nASSERT
-
-genPrimName n                       = text (nstr n)

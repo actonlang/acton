@@ -40,14 +40,14 @@ instance Gen ModName where
 
 instance Gen QName where
     gen env (QName m n)
-      | m == mPrim                  = genPrimName n
-      | otherwise                   = gen env m <> char '$' <> gen env n
+      | m == mPrim                  = text (nstr n)
+      | otherwise                   = gen env m <> text "$$" <> gen env n
     gen env (NoQual n)              = gen env n
 
 instance Gen Name where
     gen env nm
       | isCident str                = text str
-      | otherwise                   = text "___" <> text str' <> text "___"
+      | otherwise                   = text "$_" <> text str'
       where str                     = nstr nm
             str'                    = show (Data.Hashable.hash str) ++ filter isAlpha str
             isCident s@(c:cs)       = isAlpha c && all isAlphaNum cs && not (isCkeyword s)
