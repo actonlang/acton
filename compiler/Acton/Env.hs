@@ -770,6 +770,7 @@ instance Subst Type where
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l s)               = return $ TNil l s
     msubst (TRow l k n t r)         = TRow l k n <$> msubst t <*> msubst r
+    msubst (TFX l fx)               = TFX l <$> msubst fx
 
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
@@ -783,6 +784,15 @@ instance Subst Type where
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
  
+instance Subst FX where
+    msubst (FXMut t)                = FXMut <$> msubst t
+    msubst (FXAct t)                = FXAct <$> msubst t
+    msubst fx                       = return fx
+    
+    tyfree (FXMut t)                = tyfree t
+    tyfree (FXAct t)                = tyfree t
+    tyfree _                        = []
+    
 instance Subst PosPar where
     msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
