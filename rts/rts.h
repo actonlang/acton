@@ -12,15 +12,24 @@ struct $R;
 struct $Clos;
 struct $Cont;
 struct $Msg;
-struct $Actor;
+struct $ACTOR;
 struct $Catcher;
 
 typedef struct $R $R;
 typedef struct $Clos *$Clos;
 typedef struct $Cont *$Cont;
 typedef struct $Msg *$Msg;
-typedef struct $Actor *$Actor;
+typedef struct $ACTOR *$ACTOR;
 typedef struct $Catcher *$Catcher;
+
+struct $Msg$class;
+struct $ACTOR$class;
+struct $Catcher$class;
+
+extern struct $Msg$class $Msg$methods;
+extern struct $ACTOR$class $ACTOR$methods;
+extern struct $Catcher$class $Catcher$methods;
+
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -46,55 +55,96 @@ struct $Cont {
 };
 
 struct $Msg {
-    char *header;
+    struct $Msg$class *__class__;
     $Msg next;
-    $Actor to;
+    $ACTOR to;
     $Cont cont;
-    $Actor waiting;
+    $ACTOR waiting;
     time_t baseline;
     volatile atomic_flag wait_lock;
     $WORD value;
 };
-
-struct $Actor {
+struct $Msg$class {
     char *header;
-    $Actor next;
+    void (*__init__)($Msg, $ACTOR, $Cont, time_t, $WORD);
+};
+
+struct $ACTOR {
+    struct $ACTOR$class *__class__;
+    $ACTOR next;
     $Msg msg;
     $Catcher catcher;
     volatile atomic_flag msg_lock;
-    int nstate;
-    $WORD state[];
+};
+struct $ACTOR$class {
+    char *GCINFO;
+    void (*__init__)($ACTOR);
+    $WORD (*$enter)($ACTOR, $WORD);
 };
 
 struct $Catcher {
-    char *header;
+    struct $Catcher$class *__class__;
     $Catcher next;
     $Cont cont;
 };
+struct $Catcher$class {
+    char *header;
+    void (*__init__)($Catcher, $Cont);
+};
 
 #define $CONTINUATION(code, nvar, ...)  $continuation(code, nvar, __VA_ARGS__)
-#define $CONTINUE(cont, arg)            $continue(cont, ($WORD)arg)
-#define $CONTINUE_(cont, arg)           ($R){$RCONT, (cont), ($WORD)(arg)}
+#define $CONTINUE(cont, arg)            ($R){$RCONT, (cont), ($WORD)(arg)}
+#define $CONTINUE_(cont, arg)           ((cont)->__class__->$enter((cont),(WORD)arg))
+
 
 $Cont $continuation($R (*code)(), int nvar, ...);
-$R $continue($Cont cont, $WORD arg);
 
-$Msg $MSG($Actor to, $Cont cont, time_t baseline, $WORD value);
-$Actor $ACTOR(int n);
-$Catcher $CATCHER($Cont cont);
 
-$Msg $ASYNC($Actor to, $Cont c);
+$Msg $ASYNC($ACTOR to, $Cont c);
 $Msg $AFTER(time_t sec, $Cont c);
 $R $AWAIT($Msg m, $Cont th);
 
 void $PUSH($Cont Cont);
 void $POP();
 
-////////////////////////////////////////////////////////////////////////////////////////////////
+int $RTS_RUN(int argc, char **argv, $R (*root)());
 
-typedef char *$str;
-typedef int $int;
 
-#define $int_add(a,b)       ((int)a + (int)b)
-#define $int_mul(a,b)       ((int)a * (int)b)
-#define $int_neg(a)         (-(int)a)
+
+#define $NEW($T, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__); $tmp; })
+#define $NEW0($T) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp); $tmp; })
+
+#define $NEW2($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__,$c); })
+
+#define $to_time(i) (i)
+
+//////////////// $CLOS
+
+struct $CLOS;
+struct $CLOS$class;
+typedef struct $CLOS *$CLOS;
+struct $CLOS {
+    struct $CLOS$class *__class__;
+};
+struct $CLOS$class {
+    char *GCINFO;
+    void (*__init__)($CLOS);
+    $WORD (*$enter)($CLOS, $WORD);
+};
+
+//////////////// $CONT
+
+struct $CONT;
+struct $CONT$class;
+typedef struct $CONT *$CONT;
+struct $CONT {
+    union {
+        struct $CONT$class *__class__;
+        struct $CLOS super;
+    };
+};
+struct $CONT$class {
+    char *GCINFO;
+    void (*__init__)($CONT);
+    $R (*$enter)($CONT, $WORD);
+};
