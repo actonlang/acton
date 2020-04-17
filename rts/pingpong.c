@@ -215,29 +215,65 @@ def Pingpong(this, then):
 
 */
 
+////// builtins...
+
+typedef char *$str;
+typedef int $int;
+
+#define $int_add(a,b)       ((int)a + (int)b)
+#define $int_mul(a,b)       ((int)a * (int)b)
+#define $int_neg(a)         (-(int)a)
+
 #include "rts.h"
 
+struct Pingpong;
+struct Pingpong$class;
+typedef struct Pingpong *Pingpong;
+void Pingpong$__init__(Pingpong, $int);
+$R Pingpong$ping(Pingpong, $int, $Cont);
+$R Pingpong$pong(Pingpong, $int, $int, $Cont);
 
-$R pong($Actor self, $int n, $int q, $Cont then);
+struct Pingpong {
+    union {
+        struct Pingpong$class *__class__;
+        struct $ACTOR super;
+    };
+    int count;
+};
+struct Pingpong$class {
+    char *GCINFO;
+    void (*__init__)(Pingpong,$int);
+    $R (*ping)(Pingpong,int,$Cont);
+    $R (*pong)(Pingpong,int,int,$Cont);
+} Pingpong$methods = {
+    "Pingpong",
+    Pingpong$__init__,
+    Pingpong$ping,
+    Pingpong$pong
+};
 
-$R ping($Actor self, $int q, $Cont then) {
-    self->state[0] = ($WORD)$int_add(self->state[0], 1);
-    $int j = $int_mul(self->state[0], q);
-    printf("Ping %8d\n", j);
-    $AFTER(1, $CONTINUATION(pong, 3, self, self->state[0], $int_neg(q)));
-    return $CONTINUE_(then, j);
+void Pingpong$__init__(Pingpong self, $int i) {
+    $ACTOR$methods.__init__(($ACTOR)self);
+    self->count = i;
 }
 
-$R pong($Actor self, $int n, $int q, $Cont then) {
+$R Pingpong$ping(Pingpong self, $int q, $Cont then) {
+    self->count = $int_add(self->count, 1);
+    $int j = $int_mul(self->count, q);
+    printf("Ping %8d\n", j);
+    $AFTER(1, $CONTINUATION(self->__class__->pong, 3, self, self->count, $int_neg(q)));
+    return $CONTINUE(then, j);
+}
+
+$R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
     $int j = $int_mul(n, q);
     printf("     %8d Pong\n", j);
-    $AFTER(2, $CONTINUATION(ping, 2, self, $int_neg(q)));
-    return $CONTINUE_(then, $None);
+    $AFTER(2, $CONTINUATION(self->__class__->ping, 2, self, $int_neg(q)));
+    return $CONTINUE(then, $None);
 }
 
-$R Pingpong(int i, $Cont then) {
-    $Actor self = $ACTOR(1);
-    self->state[0] = 0;
-    $ASYNC(self, $CONTINUATION(ping, 2, self, i));
-    return $CONTINUE_(then, self);
+$R NEWPingpong(int i, $Cont then) {
+    Pingpong self = $NEW(Pingpong, 10);
+    $ASYNC(($ACTOR)self, $CONTINUATION(self->__class__->ping, 2, self, i));
+    return $CONTINUE(then, self);
 }

@@ -1,13 +1,17 @@
-all: pingpong
+all: rts.o Pingpong
 
-pingpong: rts.c rts.h pingpong.c
-	cc -std=c11 \
-		-Wall -Werror -Wno-int-to-void-pointer-cast \
+rts.o: rts.c rts.h
+	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-pthread \
+		-c rts.c
+	
+Pingpong: rts.o pingpong.c
+	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		rts.o \
 		pingpong.c \
-		-DROOT=Pingpong \
-		rts.c \
+		-DROOT=NEWPingpong \
+		main.c \
 		-o Pingpong
 
 clean:
-	rm -f Pingpong
+	rm -f rts.o Pingpong
