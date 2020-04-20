@@ -14,6 +14,8 @@ struct $Cont;
 struct $Msg;
 struct $ACTOR;
 struct $Catcher;
+struct $CLOS;
+struct $CONT;
 
 typedef struct $R $R;
 typedef struct $Clos *$Clos;
@@ -21,15 +23,20 @@ typedef struct $Cont *$Cont;
 typedef struct $Msg *$Msg;
 typedef struct $ACTOR *$ACTOR;
 typedef struct $Catcher *$Catcher;
+typedef struct $CLOS *$CLOS;
+typedef struct $CONT *$CONT;
 
 struct $Msg$class;
 struct $ACTOR$class;
 struct $Catcher$class;
+struct $CLOS$class;
+struct $CONT$class;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $ACTOR$class $ACTOR$methods;
 extern struct $Catcher$class $Catcher$methods;
-
+extern struct $CLOS$class $CLOS$methods;
+extern struct $CONT$class $CONT$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -42,10 +49,11 @@ struct $R {
 
 #define $None ($WORD)0
 
-#define CONT_HEADER     "Cont"
 #define MSG_HEADER      "Msg"
-#define ACTOR_HEADER    "Actor"
+#define ACTOR_HEADER    "ACTOR"
 #define CATCHER_HEADER  "Catcher"
+#define CLOS_HEADER     "CLOS"
+#define CONT_HEADER     "CONT"
 
 struct $Cont {
     char *header;
@@ -92,6 +100,27 @@ struct $Catcher$class {
     void (*__init__)($Catcher, $Cont);
 };
 
+struct $CLOS {
+    struct $CLOS$class *__class__;
+};
+struct $CLOS$class {
+    char *GCINFO;
+    void (*__init__)($CLOS);
+    $WORD (*$enter)($CLOS, $WORD);
+};
+
+struct $CONT {
+    union {
+        struct $CONT$class *__class__;
+        struct $CLOS super;
+    };
+};
+struct $CONT$class {
+    char *GCINFO;
+    void (*__init__)($CONT);
+    $R (*$enter)($CONT, $WORD);
+};
+
 #define $CONTINUATION(code, nvar, ...)  $continuation(code, nvar, __VA_ARGS__)
 #define $CONTINUE(cont, arg)            ($R){$RCONT, (cont), ($WORD)(arg)}
 #define $CONTINUE_(cont, arg)           ((cont)->__class__->$enter((cont),(WORD)arg))
@@ -111,40 +140,8 @@ int $RTS_RUN(int argc, char **argv, $R (*root)());
 
 
 
-#define $NEW($T, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__); $tmp; })
-#define $NEW0($T) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp); $tmp; })
-
-#define $NEW2($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__,$c); })
+#define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__); $tmp; })
+#define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__, $c); })
 
 #define $to_time(i) (i)
 
-//////////////// $CLOS
-
-struct $CLOS;
-struct $CLOS$class;
-typedef struct $CLOS *$CLOS;
-struct $CLOS {
-    struct $CLOS$class *__class__;
-};
-struct $CLOS$class {
-    char *GCINFO;
-    void (*__init__)($CLOS);
-    $WORD (*$enter)($CLOS, $WORD);
-};
-
-//////////////// $CONT
-
-struct $CONT;
-struct $CONT$class;
-typedef struct $CONT *$CONT;
-struct $CONT {
-    union {
-        struct $CONT$class *__class__;
-        struct $CLOS super;
-    };
-};
-struct $CONT$class {
-    char *GCINFO;
-    void (*__init__)($CONT);
-    $R (*$enter)($CONT, $WORD);
-};

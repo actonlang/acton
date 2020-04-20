@@ -136,6 +136,14 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
     c->cont = cont;
 }
 
+void $CLOS$__init__($CLOS $this) {
+    
+}
+
+void $CONT$__init__($CONT $this) {
+    
+}
+
 struct $Msg$class $Msg$methods = {
     MSG_HEADER,
     $Msg$__init__
@@ -150,6 +158,19 @@ struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
     $Catcher$__init__
 };
+
+struct $CLOS$class $CLOS$methods = {
+    CLOS_HEADER,
+    $CLOS$__init__,
+    NULL
+};
+
+struct $CONT$class $CONT$methods = {
+    CONT_HEADER,
+    $CONT$__init__,
+    NULL
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -288,6 +309,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 
+/*
 void dump_cont($Cont c) {
     if (c == NULL) {
         printf("<NULL cont>");
@@ -302,6 +324,7 @@ void dump_cont($Cont c) {
     }
     printf("\n");
 }
+*/
 
 #define _CONT(cont, value) $CONTINUE(cont, value)
 #define _DONE(value)       ($R){$RDONE, NULL,   (value)}
@@ -321,10 +344,35 @@ $R WRITE_ROOT($WORD val) {
 
 struct $Cont write_rootC = { CONT_HEADER, WRITE_ROOT, 0 };
 
+/////
+void no_init($CONT $this) {
+}
+
+$R $DONE$enter($CONT $this, $WORD val) {
+    return _DONE(val);
+}
+struct $CONT$class $DONE$methods = {
+    "$CONT",
+    no_init,
+    $DONE$enter
+};
+
+$R $WriteRoot$enter($CONT $this, $WORD val) {
+    root_actor = ($ACTOR)val;
+    return _DONE(val);
+}
+struct $CONT$class $WriteRoot$methods = {
+    "$CONT",
+    no_init,
+    $WriteRoot$enter
+};
+
+/////
+
 void BOOTSTRAP($Cont c) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    $ACTOR ancestor0 = $NEW0($ACTOR);
+    $ACTOR ancestor0 = $NEW($ACTOR);
     $Msg m = $NEW($Msg, ancestor0, c, now.tv_sec, &write_rootC);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
@@ -476,7 +524,8 @@ int $RTS_RUN(int argc, char **argv, $R (*root)()) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    BOOTSTRAP($CONTINUATION(root, 1, ($WORD)1));
+    $WORD _env_ =($WORD)10;
+    BOOTSTRAP($CONTINUATION(root, 1, _env_));
 
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);

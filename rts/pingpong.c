@@ -226,13 +226,65 @@ typedef int $int;
 
 #include "rts.h"
 
+struct lambda$1;
+struct lambda$2;
 struct Pingpong;
+
+struct lambda$1$class;
+struct lambda$2$class;
 struct Pingpong$class;
+
+typedef struct lambda$1 *lambda$1;
+typedef struct lambda$2 *lambda$2;
 typedef struct Pingpong *Pingpong;
-void Pingpong$__init__(Pingpong, $int);
+
+void lambda$1$__init__(lambda$1, Pingpong, $int, $int);
+$R lambda$1$enter (lambda$1, $Cont);
+
+void lambda$2$__init__(lambda$2, Pingpong, $int);
+$R lambda$2$enter (lambda$2, $Cont);
+
+$R Pingpong$__init__(Pingpong, $int, $Cont);
 $R Pingpong$ping(Pingpong, $int, $Cont);
 $R Pingpong$pong(Pingpong, $int, $int, $Cont);
 
+struct lambda$1 {
+    union {
+        struct lambda$1$class *__class__;
+        struct $CONT$class super;
+    };
+    Pingpong self;
+    $int count;
+    $int q;
+};
+struct lambda$1$class {
+    char *GCINFO;
+    void (*__init__)(lambda$1, Pingpong, $int, $int);
+    $R (*enter) (lambda$1, $Cont);
+} lambda$1$methods = {
+    "lambda$1",
+    lambda$1$__init__,
+    lambda$1$enter
+};
+/////////////////////////////////////////////////////////////////
+struct lambda$2 {
+    union {
+        struct lambda$2$class *__class__;
+        struct $CONT$class super;
+    };
+    Pingpong self;
+    $int q;
+};
+struct lambda$2$class {
+    char *GCINFO;
+    void (*__init__)(lambda$2, Pingpong, $int);
+    $R (*enter) (lambda$2, $Cont);
+} lambda$2$methods = {
+    "lambda$2",
+    lambda$2$__init__,
+    lambda$2$enter
+};
+/////////////////////////////////////////////////////////////////
 struct Pingpong {
     union {
         struct Pingpong$class *__class__;
@@ -242,7 +294,7 @@ struct Pingpong {
 };
 struct Pingpong$class {
     char *GCINFO;
-    void (*__init__)(Pingpong,$int);
+    $R (*__init__)(Pingpong,$int,$Cont);
     $R (*ping)(Pingpong,int,$Cont);
     $R (*pong)(Pingpong,int,int,$Cont);
 } Pingpong$methods = {
@@ -251,12 +303,34 @@ struct Pingpong$class {
     Pingpong$ping,
     Pingpong$pong
 };
-
-void Pingpong$__init__(Pingpong self, $int i) {
+/////////////////////////////////////////////////////////////////
+void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
+    $this->self = self;
+    $this->count = count;
+    $this->q = q;
+}
+$R lambda$1$enter (lambda$1 $this, $Cont then) {
+    Pingpong self = $this->self;
+    $int count = $this->count;
+    $int q = $this->q;
+    return self->__class__->pong(self, count, q, then);
+}
+/////////////////////////////////////////////////////////////////
+void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
+    $this->self = self;
+    $this->q = q;
+}
+$R lambda$2$enter (lambda$2 $this, $Cont then) {
+    Pingpong self = $this->self;
+    $int q = $this->q;
+    return self->__class__->ping(self, q, then);
+}
+/////////////////////////////////////////////////////////////////
+$R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     $ACTOR$methods.__init__(($ACTOR)self);
     self->count = i;
+    return self->__class__->ping(self, i, then);
 }
-
 $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
     self->count = $int_add(self->count, 1);
     $int j = $int_mul(self->count, q);
@@ -264,7 +338,6 @@ $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
     $AFTER(1, $CONTINUATION(self->__class__->pong, 3, self, self->count, $int_neg(q)));
     return $CONTINUE(then, j);
 }
-
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
     $int j = $int_mul(n, q);
     printf("     %8d Pong\n", j);
@@ -272,8 +345,6 @@ $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
     return $CONTINUE(then, $None);
 }
 
-$R NEWPingpong(int i, $Cont then) {
-    Pingpong self = $NEW(Pingpong, 10);
-    $ASYNC(($ACTOR)self, $CONTINUATION(self->__class__->ping, 2, self, i));
-    return $CONTINUE(then, self);
+$R NEWPingpong($WORD env, $Cont then) {
+    return $NEWCC(Pingpong, then, 10);
 }
