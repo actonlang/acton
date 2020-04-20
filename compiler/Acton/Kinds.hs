@@ -410,6 +410,14 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
+    ksubst g (TFX l fx)             = TFX l <$> ksubst g fx
+
+instance KSubst FX where
+    ksubst g FXPure                 = return FXPure
+    ksubst g (FXMut t)              = FXMut <$> ksubst g t
+    ksubst g (FXAct t)              = FXAct <$> ksubst g t
+    ksubst g FXAsync                = return FXAsync
+    ksubst g FXActor                = return FXActor
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
