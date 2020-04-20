@@ -9,7 +9,7 @@ Pingpong: rts.o pingpong.c
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		rts.o \
 		pingpong.c \
-		-DROOT=NEWPingpong \
+		-DROOT=Pingpong \
 		main.c \
 		-o Pingpong
 

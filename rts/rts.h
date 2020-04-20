@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,7 +12,7 @@ typedef void *$WORD;
 
 struct $R;
 struct $Clos;
-struct $Cont;
+//struct $Cont;
 struct $Msg;
 struct $ACTOR;
 struct $Catcher;
@@ -19,12 +21,14 @@ struct $CONT;
 
 typedef struct $R $R;
 typedef struct $Clos *$Clos;
-typedef struct $Cont *$Cont;
+//typedef struct $Cont *$Cont;
 typedef struct $Msg *$Msg;
 typedef struct $ACTOR *$ACTOR;
 typedef struct $Catcher *$Catcher;
 typedef struct $CLOS *$CLOS;
 typedef struct $CONT *$CONT;
+
+typedef $CONT $Cont;
 
 struct $Msg$class;
 struct $ACTOR$class;
@@ -55,12 +59,12 @@ struct $R {
 #define CLOS_HEADER     "CLOS"
 #define CONT_HEADER     "CONT"
 
-struct $Cont {
-    char *header;
-    $R (*code)();
-    int nvar;
-    $WORD var[];
-};
+//struct $Cont {
+//    char *header;
+//    $R (*code)();
+//    int nvar;
+//    $WORD var[];
+//};
 
 struct $Msg {
     struct $Msg$class *__class__;
@@ -126,7 +130,7 @@ struct $CONT$class {
 #define $CONTINUE_(cont, arg)           ((cont)->__class__->$enter((cont),(WORD)arg))
 
 
-$Cont $continuation($R (*code)(), int nvar, ...);
+//$Cont $continuation($R (*code)(), int nvar, ...);
 
 
 $Msg $ASYNC($ACTOR to, $Cont c);
@@ -136,12 +140,19 @@ $R $AWAIT($Msg m, $Cont th);
 void $PUSH($Cont Cont);
 void $POP();
 
-int $RTS_RUN(int argc, char **argv, $R (*root)());
+//int $RTS_RUN(int argc, char **argv, $R (*root)($WORD,$Cont));
+int $RTS_RUN(int argc, char **argv, $Cont root);
 
 
 
 #define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__); $tmp; })
 #define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__, $c); })
 
-#define $to_time(i) (i)
+////// "builtins..."
+
+#define int_add(a,b)        ((int)a + (int)b)
+#define int_mul(a,b)        ((int)a * (int)b)
+#define int_neg(a)          (-(int)a)
+
+#define $to_time(i)         (i)
 
