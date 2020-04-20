@@ -100,6 +100,7 @@ static inline void spinlock_unlock(volatile atomic_flag *f) {
 
 
 // Allocate a Cont node.
+/*
 $Cont $continuation($R (*code)(), int nvar, ...) {
     $Cont c = malloc(sizeof(struct $Cont) + nvar * sizeof($WORD));
     c->header = CONT_HEADER;
@@ -113,7 +114,7 @@ $Cont $continuation($R (*code)(), int nvar, ...) {
     va_end(ap);
     return c;
 }
-
+*/
 void $Msg$__init__($Msg m, $ACTOR to, $Cont cont, time_t baseline, $WORD value) {
     m->next = NULL;
     m->to = to;
@@ -335,26 +336,25 @@ $R DONE($WORD val) {
     return _DONE(val);
 }
 
-struct $Cont doneC = { CONT_HEADER, DONE, 0 };
+//struct $Cont doneC = { CONT_HEADER, DONE, 0 };
 
 $R WRITE_ROOT($WORD val) {
     root_actor = ($ACTOR)val;
     return _DONE($None);
 }
 
-struct $Cont write_rootC = { CONT_HEADER, WRITE_ROOT, 0 };
-
-/////
-void no_init($CONT $this) {
-}
+//struct $Cont write_rootC = { CONT_HEADER, WRITE_ROOT, 0 };
 
 $R $DONE$enter($CONT $this, $WORD val) {
     return _DONE(val);
 }
 struct $CONT$class $DONE$methods = {
     "$CONT",
-    no_init,
+    $CONT$__init__,
     $DONE$enter
+};
+struct $CONT DONE_C = {
+    &$DONE$methods
 };
 
 $R $WriteRoot$enter($CONT $this, $WORD val) {
@@ -363,17 +363,21 @@ $R $WriteRoot$enter($CONT $this, $WORD val) {
 }
 struct $CONT$class $WriteRoot$methods = {
     "$CONT",
-    no_init,
+    $CONT$__init__,
     $WriteRoot$enter
+};
+struct $CONT WriteRoot_C = {
+    &$WriteRoot$methods
 };
 
 /////
 
-void BOOTSTRAP($Cont c) {
+void BOOTSTRAP($Cont c) {                       // c == $continuation(NEWPingpong, 1, _env_)
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     $ACTOR ancestor0 = $NEW($ACTOR);
-    $Msg m = $NEW($Msg, ancestor0, c, now.tv_sec, &write_rootC);
+//    $Msg m = $NEW($Msg, ancestor0, c, now.tv_sec, &write_rootC);
+    $Msg m = $NEW($Msg, ancestor0, c, now.tv_sec, &WriteRoot_C);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
@@ -394,7 +398,8 @@ $Catcher POP_catcher($ACTOR a) {
 $Msg $ASYNC($ACTOR to, $Cont c) {
     $ACTOR self = ($ACTOR)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
-    $Msg m = $NEW($Msg, to, c, baseline, &doneC);
+//    $Msg m = $NEW($Msg, to, c, baseline, &doneC);
+    $Msg m = $NEW($Msg, to, c, baseline, &DONE_C);
     if (ENQ_msg(m, to)) {
         ENQ_ready(to);
     }
@@ -404,7 +409,8 @@ $Msg $ASYNC($ACTOR to, $Cont c) {
 $Msg $AFTER(time_t sec, $Cont c) {
     $ACTOR self = ($ACTOR)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
-    $Msg m = $NEW($Msg, self, c, baseline, &doneC);
+//    $Msg m = $NEW($Msg, self, c, baseline, &doneC);
+    $Msg m = $NEW($Msg, self, c, baseline, &DONE_C);
     ENQ_timed(m);
     return m;
 }
@@ -441,14 +447,16 @@ void *main_loop(void *arg) {
             $Cont c = m->cont;
             $WORD val = m->value;
             $R r;
-
+            
+            r = c->__class__->$enter(c, val);
+            /*
             switch (c->nvar) {
                 case 3:  r = (*(($Cont4)c->code))(c->var[0], c->var[1], c->var[2], val); break;
                 case 2:  r = (*(($Cont3)c->code))(c->var[0], c->var[1], val); break;
                 case 1:  r = (*(($Cont2)c->code))(c->var[0], val); break;
                 case 0:  r = (*(($Cont1)c->code))(val); break;
             }
-            
+            */
             switch (r.tag) {
                 case $RDONE: {
                     m->value = r.value;
@@ -508,8 +516,10 @@ void *main_loop(void *arg) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+$WORD $env = ($WORD)10;
 
-int $RTS_RUN(int argc, char **argv, $R (*root)()) {
+//int $RTS_RUN(int argc, char **argv, $R (*root)($WORD,$Cont)) {                       // root = NEWPing
+int $RTS_RUN(int argc, char **argv, $Cont root) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     printf("%ld worker threads\n", num_cores);
 
@@ -524,8 +534,9 @@ int $RTS_RUN(int argc, char **argv, $R (*root)()) {
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
     
-    $WORD _env_ =($WORD)10;
-    BOOTSTRAP($CONTINUATION(root, 1, _env_));
+//    $WORD _env_ = ($WORD)10;
+//    BOOTSTRAP($CONTINUATION(root, 1, _env_));     // BOOTSTRAP($continuation(NEWPingpong, 1, _env_));
+    BOOTSTRAP(root);
 
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);
