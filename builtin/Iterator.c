@@ -1,18 +1,11 @@
-Iterator Iterable$Iterator$__iter__(Iterable$Iterator wit, Iterator self) {
+$Iterator $Iterable$Iterator__iter__($Iterable$Iterator wit, $Iterator self) {
   return self;
 }
 
-static struct Iterable$Iterator$__class__ Iterable$Iterator_methods = {"", Iterable$Iterator$__iter__};
-static struct Iterable$Iterator Iterable$Iterator_instance = {"",&Iterable$Iterator_methods};
-static Iterable$Iterator Iterable$Iterator_witness = &Iterable$Iterator_instance;
-
-Iterable$Iterator Iterable$Iterator_new() {
-  return Iterable$Iterator_witness;
-}
-
-
-
+struct $Iterable$Iterator$class $Iterable$Iterator$methods = {"", $Iterable$Iterator__iter__};
+struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$methods};
+$Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
   
-$WORD next(Iterator it) {
-  return it->__class__->__next__(it);
+$WORD $next($Iterator it) {
+  return it->class->__next__(it);
 }

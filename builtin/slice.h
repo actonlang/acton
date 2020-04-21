@@ -1,7 +1,7 @@
-typedef struct Slice {
+typedef struct $Slice {
   int *start;
   int *stop;
   int *step;
-} *Slice;
+} *$Slice;
 
-void normalize_slice(Slice slc, int len, int *slen, int *start, int *stop, int *step);
+void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int *step);

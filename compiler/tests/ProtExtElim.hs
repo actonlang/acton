@@ -37,8 +37,10 @@ splitStmts stmts                        = sp stmts [] [] [] []  -- protocols, cl
                                         = spdecl ds stmts (p : ps) cs es ss
         spdecl (c@Class{} : ds) stmts ps cs es ss
                                         = spdecl ds stmts ps (c : cs) es ss
-        spdecl (e@Extension{} : ds) stmts ps cs es ss
+        spdecl (e@Extension{} : ds) stmts ps cs es ss  -- ignore defs
                                         = spdecl ds stmts ps cs (e : es) ss
+        spdecl (d@Def{} : ds) stmts ps cs es ss  
+                                        = spdecl ds stmts ps cs es ss
                                         
 class Transform a where
     trans                               :: TransEnv -> a -> a
@@ -51,7 +53,7 @@ instance Transform Module where
 
 instance Transform Stmt where
     trans env (Decl loc ds)             = Decl loc $ trans env ds
-    trans env (Signature loc ns t d)    = Signature loc ns (trans env{decor=d} t) (if d == StaticMethod then NoDec else d) 
+    trans env (Signature loc ns t d)    = Signature loc ns (trans env{decor=d} t) (if d == Static then NoDec else d) 
     trans env stmt                      = stmt
 
 instance Transform Decl where
@@ -76,9 +78,9 @@ instance Transform Type where
     trans env v@TVar{}                  = v
     trans env (TTuple loc p k)          = TTuple loc (trans env p) (trans env k)
     trans env (TFun loc fx p k r)       = TFun loc fx p1 (trans env k) (trans env r)
-       where p1                         = if decor env == StaticMethod
+       where p1                         = if decor env == Static
                                           then trans env p
-                                          else maybe (trans env p) (\t -> TRow loc KType (name "???") (monotype t) (trans env p)) (fstpar env)
+                                          else maybe (trans env p) (flip posRow (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t
     trans env (TRow loc k nm s r)       = TRow loc k nm (trans env s) (trans env r)
     trans env (TCon loc tc)             = maybe (TCon NoLoc (trans env tc)) (const (TExist NoLoc (trans env tc))) (lookup (noqual (tcname tc)) (protocols env))
@@ -147,7 +149,7 @@ transChain mb env e (c : cs)            = c2{dname = c2nm, dbody = sigs} : trans
          (_,ws)                         = transParams (qual e)
          c2                             = substAll ts c1
          tc                             = head (bounds c2)
-         c2nm                           = Internal (nstr (dname c2) ++ '_' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
+         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
          witType                        = maybe (tCon tc) id mb
          sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType) NoDec]) mb
                                           ++ nub (addWitnesses env ws (dbody c2))

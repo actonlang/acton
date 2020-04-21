@@ -12,7 +12,7 @@
 */
 
 
-void normalize_slice(Slice slc, int len, int *slen, int *start, int *stop, int *step) {
+void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int *step) {
   if (slc->step == NULL)
     *step = 1;
   else

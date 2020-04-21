@@ -1,17 +1,17 @@
+$None $bool_serialize($bool self, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+$bool $bool_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
-
-struct $bool$__methods__ $bool_table = {$bool_serialize, $bool_deserialize};
-$bool$__methods__ $bool_methods = &$bool_table;
+struct $bool$class $bool$methods = {"",$bool_serialize, $bool_deserialize};
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-None $bool_serialize($bool n, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $ROW row = new_row(BOOL_ID,prefix_size,1,prefix);
+$None $bool_serialize($bool n,  $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+  $ROW row = $new_row(BOOL_ID,prefix_size,1,prefix);
   row->data[prefix_size] = ($WORD)from$bool(n);
-  enqueue(accum,row);
+  $enqueue(accum,row);
 }
 
-$bool $bool_deserialize($ROW *row, $dict done) {
+$bool $bool_deserialize( $Mapping$dict notused, $ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
   return to$bool((long)this->data[this->prefix_size]);
@@ -20,7 +20,7 @@ $bool $bool_deserialize($ROW *row, $dict done) {
 
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));
-  res->__class__ = $bool_methods;
+  res->class = &$bool$methods;
   res->val = b;
   return res;
 }
@@ -29,8 +29,8 @@ long from$bool($bool b) {
   return b->val;
 }
 
-struct $bool $t = {"",&$bool_table,1L};
-struct $bool $f = {"",&$bool_table,0L};
+struct $bool $t = {&$bool$methods,1L};
+struct $bool $f = {&$bool$methods,0L};
 
 $bool $true = &$t;
 $bool $false = &$f;

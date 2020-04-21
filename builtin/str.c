@@ -10,8 +10,8 @@
 
 // String-specific methods
 
-None $str_serialize($str, $WORD*, int, $dict, $ROWLISTHEADER);
-$str $str_deserialize($ROW*, $dict);
+$None $str_serialize($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+$str $str_deserialize($Mapping$dict, $ROW*, $dict);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
@@ -33,7 +33,7 @@ $bool $str_isprintable($str s);
 $bool $str_isspace($str s);
 $bool $str_istitle($str s);
 $bool $str_isupper($str s);
-$str $str_join($str sep, Iterator iter);
+$str $str_join($str sep, $Iterator iter);
 $str $str_ljust($str s, int width, $str fill); 
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
@@ -51,13 +51,13 @@ $str $str_strip($str s,$str cs);
 $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
-static struct $str$__methods__ $str_table =
-  {$str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
+struct $str$class $str$methods =
+  {"",$str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
    $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
    $str_upper, $str_zfill};
 
-static $str$__methods__ $str_methods = &$str_table;
+//static $str$methods $str_methods = &$str_table;
 
 // Implementations of protocol methods
 
@@ -68,174 +68,175 @@ int $str_le($str,$str);
 int $str_gt($str,$str);
 int $str_ge($str,$str);
 
-Iterator $str_iter($str);
+$Iterator $str_iter($str);
 
-$str $str_fromiter(Iterator);
+$str $str_fromiter($Iterator);
 $int $str_len($str str);
 
 int $str_contains ($str, $str);
 int $str_containsnot ($str, $str);
 
 $str $str_getitem($str, int);
-$str $str_getslice($str, Slice);
+$str $str_getslice($str, $Slice);
  
 $str $str_add($str, $str);
 
 // Protocol instances
 
-$bool Ord$str$__eq__ (Ord$str wit, $str a, $str b) {
+$bool $Ord$str$__eq__ ($Ord$str wit, $str a, $str b) {
   return to$bool($str_eq(a,b));
 }
 
-$bool Ord$str$__ne__ (Ord$str wit, $str a, $str b) {
+$bool $Ord$str$__ne__ ($Ord$str wit, $str a, $str b) {
   return  to$bool($str_neq(a,b));
 }
 
-$bool Ord$str$__lt__ (Ord$str wit, $str a, $str b) {
+$bool $Ord$str$__lt__ ($Ord$str wit, $str a, $str b) {
   return to$bool($str_lt(a,b));
 }
 
-$bool Ord$str$__le__ (Ord$str wit, $str a, $str b){
+$bool $Ord$str$__le__ ($Ord$str wit, $str a, $str b){
   return to$bool($str_le(a,b));
 }
 
-$bool Ord$str$__gt__ (Ord$str wit, $str a, $str b){
+$bool $Ord$str$__gt__ ($Ord$str wit, $str a, $str b){
   return to$bool($str_gt(a,b));
 }
 
-$bool Ord$str$__ge__ (Ord$str wit, $str a, $str b){
+$bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
   return to$bool($str_ge(a,b));
 }
 
-Iterator Container$str$__iter__ (Container$str wit, $str str) {
+$Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
 }
 
-$str Container$str$__fromiter__ (Container$str wit, Iterable$opaque it) {
-  return $str_fromiter(it->__proto__->__class__->__iter__(it->__proto__,it->__impl__));
+$str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque it) {
+  return $str_fromiter(it->proto->class->__iter__(it->proto,it->impl));
 }
 
-$int Container$str$__len__ (Container$str wit, $str str) {
+$int $Container$str$__len__ ($Container$str wit, $str str) {
   return $str_len(str);
 }
 
-$bool Container$str$__contains__ (Container$str wit, $str str, $str sub) {
+$bool $Container$str$__contains__ ($Container$str wit, $str str, $str sub) {
   return to$bool($str_contains(str, sub));
 }
 
-$bool Container$str$__containsnot__ (Container$str wit, $str str, $str sub) {
+$bool $Container$str$__containsnot__ ($Container$str wit, $str str, $str sub) {
   return to$bool($str_containsnot(str, sub));
 }  
 
-$str Sliceable$str$__getitem__ (Sliceable$str wit, $str str, $int i) {
+$str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
 
-None Sliceable$str$__setitem__ (Sliceable$str wit, $str str, $int i, $str val) {
+$None $Sliceable$str$__setitem__ ($Sliceable$str wit, $str str, $int i, $str val) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-None Sliceable$str$__delitem__ (Sliceable$str wit, $str str, $int i) {
+$None $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-$str Sliceable$str$__getslice__ (Sliceable$str wit, $str str, Slice slc) {
+$str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
   return $str_getslice(str,slc);
 }
 
-None Sliceable$str$__setslice__ (Sliceable$str wit, $str str, Slice slc, Iterable$opaque it) {
+$None $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-None Sliceable$str$__delslice__ (Sliceable$str wit, $str str, Slice slc) {
+$None $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-$str Plus$str$__add__ (Plus$str wit, $str a, $str b) {
+$str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
   return $str_add(a,b);
 }
 
-$bool Hashable$str$__eq__ (Hashable$str wit, $str a, $str b) {
+$bool $Hashable$str$__eq__ ($Hashable$str wit, $str a, $str b) {
   return to$bool($str_eq(a,b));
 }
 
-$bool Hashable$str$__ne__ (Hashable$str wit, $str a, $str b) {
+$bool $Hashable$str$__ne__ ($Hashable$str wit, $str a, $str b) {
   return to$bool($str_neq(a,b));
 }
 
-$int Hashable$str$__hash__(Hashable$str wit, $str str) {
+$int $Hashable$str$__hash__($Hashable$str wit, $str str) {
   return to$int($string_hash(str->str,str->nbytes));
 }
 
-$int Hashable$str$__keyinfo__(Hashable$str wit) {
+$int $Hashable$str$__keyinfo__($Hashable$str wit) {
   return to$int(STR_ID);
 }
  
-static struct Ord$str$__class__  Ord$str_methods = {"", Ord$str$__eq__, Ord$str$__ne__, Ord$str$__lt__, Ord$str$__le__, Ord$str$__gt__, Ord$str$__ge__};
-static struct Ord$str Ord$str_instance = {"",&Ord$str_methods};
-static Ord$str Ord$str_witness = &Ord$str_instance;
+struct $Ord$str$class  $Ord$str$methods = {"", $Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
+struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
+$Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-static struct Container$str$__class__  Container$str_methods = {"", Container$str$__iter__, Container$str$__fromiter__, Container$str$__len__, Container$str$__containsnot__};
-static struct Container$str Container$str_instance = {"",&Container$str_methods,(Eq)&Ord$str_instance};
-static Container$str Container$str_witness = &Container$str_instance;
+struct $Container$str$class  $Container$str$methods = {"", $Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
+$Container$str $Container$str$witness = &$Container$str_instance;
 
-static struct Sliceable$str$__class__  Sliceable$str_methods = {"", Sliceable$str$__getitem__, Sliceable$str$__setitem__, Sliceable$str$__delitem__,
-                                                                    Sliceable$str$__getslice__, Sliceable$str$__setslice__, Sliceable$str$__delslice__};
-static struct Sliceable$str Sliceable$str_instance = {"",&Sliceable$str_methods};
-static Sliceable$str Sliceable$str_witness = &Sliceable$str_instance;
+struct $Sliceable$str$class  $Sliceable$str$methods = {"", $Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
+                                                                    $Sliceable$str$__getslice__, $Sliceable$str$__setslice__, $Sliceable$str$__delslice__};
+struct $Sliceable$str $Sliceable$str_instance = {&$Sliceable$str$methods};
+$Sliceable$str $Sliceable$str$witness = &$Sliceable$str_instance;
 
-static struct Plus$str$__class__  Plus$str_methods = {"", Plus$str$__add__};
-static struct Plus$str Plus$str_instance = {"",&Plus$str_methods};
-static Plus$str Plus$str_witness = &Plus$str_instance;
+struct $Plus$str$class  $Plus$str$methods = {"", $Plus$str$__add__};
+struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
+$Plus$str $Plus$str$witness = &$Plus$str_instance;
 
-static struct Hashable$str$__class__  Hashable$str_methods = {"", Hashable$str$__eq__, Hashable$str$__ne__, Hashable$str$__hash__,Hashable$str$__keyinfo__};
-static struct Hashable$str Hashable$str_instance = {"",&Hashable$str_methods};
-static Hashable$str Hashable$str_witness = &Hashable$str_instance;
+struct $Hashable$str$class  $Hashable$str$methods = {"", $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
+struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
+$Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
-Ord$str Ord$str_new() {
-  return Ord$str_witness;
+/*
+$Ord$str $Ord$str_new() {
+  return $Ord$str$witness;
 }
 
-Hashable$str Hashable$str_new() {
-  return Hashable$str_witness;
+$Hashable$str $Hashable$str_new() {
+  return $Hashable$str$witness;
 }
 
-Plus$str Plus$str_new() {
-  return Plus$str_witness;
+$Plus$str $Plus$str_new() {
+  return $Plus$str$witness;
 }
 
-Sliceable$str Sliceable$str_new() {
-  return Sliceable$str_witness;
+$Sliceable$str $Sliceable$str_new() {
+  return $Sliceable$str$witness;
 }
 
-Container$str Container$str_new() {
-  return Container$str_witness;
+$Container$str $Container$str_new() {
+  return $Container$str$witness;
 }
- 
+*/
 static unsigned char nul = 0;
 
-static struct $str null_struct = {"GC_NUL",&$str_table,0,0,&nul};
+static struct $str null_struct = {&$str$methods,0,0,&nul};
 
 static $str null_str = &null_struct;
 
 
 #define NEW_UNFILLED(nm,nchrs,nbtes)         \
 nm = malloc(sizeof(struct $str)); \
-(nm)->__class__ = $str_methods; \
+(nm)->class = &$str$methods; \
 (nm)->nchars = nchrs;            \
 (nm)->nbytes = nbtes;            \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
-$str fromUTF8(char *str) {
+$str from$UTF8(char *str) {
   int nbytes = 0;
   int nchars = 0;
 
@@ -244,7 +245,7 @@ $str fromUTF8(char *str) {
   while(1) {
     if (*p == '\0') {
       $str res = malloc(sizeof(struct $str));
-      res->__class__ = $str_methods;
+      res->class = &$str$methods;
       res->nbytes = nbytes;
       res->nchars = nchars;
       res->str = (unsigned char*)str;
@@ -261,7 +262,7 @@ $str fromUTF8(char *str) {
   }
 }
 
-unsigned char *toUTF8($str str) {
+unsigned char *to$UTF8($str str) {
   return str->str;
 }
 
@@ -472,7 +473,7 @@ Note: We make str instances for Indexed and Sliceable even though these protocol
 include mutating methods. These methods raise NOTIMPLEMENTED.
 */
 
-// Ord ///////////////////////////////////////////////////////////////////////////////////////////////
+// $Ord ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
 int $str_eq($str a, $str b) {
@@ -502,12 +503,12 @@ int $str_ge($str a, $str b) {
 }
  
 
-// Hashable ///////////////////////////////////////////////////////////////////////////////////
+// $Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 
 // hash function $string_hash defined in hash.c
 
-// Plus /////////////////////////////////////////////////////////////////////////////////////////////
+// $Plus /////////////////////////////////////////////////////////////////////////////////////////////
 
 $str $str_add($str s, $str t) {
   $str res;
@@ -519,7 +520,7 @@ $str $str_add($str s, $str t) {
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
-$str $str_fromiter(Iterator it) {
+$str $str_fromiter($Iterator it) {
   exception e;
   MKEXCEPTION(e,NOTIMPLEMENTED);
   RAISE(e);
@@ -532,7 +533,7 @@ $int $str_len($str s) {
   return res;
 }
 
-// Container ///////////////////////////////////////////////////////////////////////////
+// $Container ///////////////////////////////////////////////////////////////////////////
 
 int $str_contains($str s, $str sub) {
   return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
@@ -544,16 +545,16 @@ int $str_containsnot($str s, $str sub) {
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
-typedef struct Iterator$str {
-  char *$GCINFO;
+typedef struct $Iterator$str {
+  char *GCINFO;
   $WORD(*__next__)($WORD self);
   unsigned char *nxt;
   int remaining;
-} *Iterator$str; 
+} *$Iterator$str; 
  
 // this is next function for forward iteration
 static $WORD $str_iterator_next($WORD self) {
-  Iterator$str state = (Iterator$str) self;
+  $Iterator$str state = ($Iterator$str) self;
   $WORD res;
   if (state->remaining==0) {
     exception e;
@@ -568,13 +569,13 @@ static $WORD $str_iterator_next($WORD self) {
   return res;
 }
 
-Iterator $str_iter($str str) {
-  Iterator$str iter = malloc(sizeof(struct Iterator$str));
+$Iterator $str_iter($str str) {
+  $Iterator$str iter = malloc(sizeof(struct $Iterator$str));
   iter->__next__ = $str_iterator_next;
   iter->nxt = str->str;
   iter->remaining = str->nchars;
-  Iterator res = malloc(sizeof(struct Iterator));
-  res->__class__ = (Iterator$__class__)iter;
+  $Iterator res = malloc(sizeof(struct $Iterator));
+  res->class = ($Iterator$class)iter;
   return res;
 }
 
@@ -590,7 +591,7 @@ $str $str_getitem($str s, int i) {
  
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$str $str_getslice($str s, Slice slc) {
+$str $str_getslice($str s, $Slice slc) {
   int isascii = s->nchars == s->nbytes;
   int nchars = s->nchars;
   int nbytes = 0;
@@ -617,24 +618,24 @@ $str $str_getslice($str s, Slice slc) {
 
 // Serialization ////////////////////////////////////////////////////////////// 
                        
-None $str_serialize($str str, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+$None $str_serialize($str str, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
-  $ROW row = new_row(STR_ID,prefix_size,2+nWords,prefix);
+  $ROW row = $new_row(STR_ID,prefix_size,2+nWords,prefix);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
   memcpy(row->data+prefix_size,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
   long nchars = (long)str->nchars;
   memcpy(row->data+prefix_size+1,&nchars,sizeof($WORD));
   memcpy(row->data+prefix_size+2,str->str,nbytes+1);
-  enqueue(accum,row);
+  $enqueue(accum,row);
 }
 
-$str $str_deserialize($ROW *row, $dict done) {
+$str $str_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
   $str res = malloc(sizeof(struct $str));
   long nbytes;
   memcpy(&nbytes,this->data+this->prefix_size,sizeof($WORD));
-  res->__class__ = $str_methods;
+  res->class = &$str$methods;
   res->nbytes = (int)nbytes;
   long nchars;
   memcpy(&nchars,this->data+this->prefix_size+1,sizeof($WORD));
@@ -936,16 +937,16 @@ $bool $str_isupper($str s) {
 }
 
 //creates many intermediate strings...
-$str $str_join($str s, Iterator iter) {
+$str $str_join($str s, $Iterator iter) {
   $str res;
-  $str nxt  = ($str)iter->__class__->__next__(iter);
+  $str nxt  = ($str)iter->class->__next__(iter);
   //  if(!iterator_next(iter)             //BEWARE: must catch STOPITERATION!!!!
   //   res = (str_t)nxt;
   // else
   //  return null_str;
 
   while(1) {
-    nxt =  ($str)iter->__class__->__next__(iter);
+    nxt =  ($str)iter->class->__next__(iter);
     res = ($str)$str_add($str_add(res,s),nxt);
   }
   return res;

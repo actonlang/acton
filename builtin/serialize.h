@@ -98,29 +98,31 @@ typedef struct $ROWLISTHEADER {
 
 // All serializable types must have method tables as if they were subclasses of Serializable 
 
-typedef struct serial$__methods__ *serial$__methods__;
+typedef struct serial$methods *serial$methods;
 
-typedef struct Serializable {
+typedef struct $Serializable  *$Serializable;
+
+struct $Serializable {
   char *GCINFO;
-  serial$__methods__ __class__;
-} *Serializable;
+  serial$methods class;
+};
 
-struct serial$__methods__ {
-  None (*__serialize__)(Serializable, $WORD, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
-  Serializable (*__deserialize__)($ROW*, $dict);
+struct serial$methods {
+  $None (*__serialize__)($Serializable, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
+  $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
 // top-level functions for serialization of an object
 
-$ROW serialize(Serializable s, long prefix[], int prefix_size);
-void write_serialized($ROW row, char *file);
-// serialize_file just calls the above two functions
-void serialize_file(Serializable s, long prefix[], int prefix_size, char *file);
+$ROW $serialize($Serializable s, long prefix[], int prefix_size);
+void $write_serialized($ROW row, char *file);
+// $serialize_file just calls the above two functions
+void $serialize_file($Serializable s, long prefix[], int prefix_size, char *file);
 
-Serializable deserialize($ROW row, long *prefix, int *prefix_size);
-$ROW read_serialized(char *file);
+$Serializable $deserialize($ROW row, long *prefix, int *prefix_size);
+$ROW $read_serialized(char *file);
 // deserialize_file just calls the above two functions
-Serializable deserialize_file(char *file,  long *prefix, int *prefix_size);
+$Serializable $deserialize_file(char *file,  long *prefix, int *prefix_size);
 
 // Internal auxiliary types /////////////////////////////////////////////////////////////////////////////
 
@@ -131,53 +133,50 @@ struct $PREFIX {
   $WORD prefix[];
 };
 
-serial$__methods__ serial$_methods[10];
+serial$methods serial$_methods[10];
 
 // Hashable$PREFIX ////////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct Hashable$PREFIX$__class__  *Hashable$PREFIX$__class__;
 
-typedef struct Hashable$PREFIX *Hashable$PREFIX;
+typedef struct $Hashable$PREFIX *$Hashable$PREFIX;
 
-struct Hashable$PREFIX$__class__ {
+struct $Hashable$PREFIX$class {
     char *GCINFO;
-    $bool (*__eq__)(Hashable$PREFIX, $PREFIX, $PREFIX);
-    $bool (*__ne__)(Hashable$PREFIX, $PREFIX, $PREFIX);
-    $int (*__hash__)(Hashable$PREFIX, $PREFIX);
+    $bool (*__eq__)($Hashable$PREFIX, $PREFIX, $PREFIX);
+    $bool (*__ne__)($Hashable$PREFIX, $PREFIX, $PREFIX);
+    $int (*__hash__)($Hashable$PREFIX, $PREFIX);
 };
 
-struct Hashable$PREFIX {
-    char *GCINFO;
-    Hashable$PREFIX$__class__  __class__;
+struct $Hashable$PREFIX {
+    struct $Hashable$PREFIX$class *class;
 };
 
-Hashable$PREFIX Hashable$PREFIX_new();
+struct $Hashable$PREFIX$class $Hashable$PREFIX$methods;
+struct $Hashable$PREFIX *$Hashable$PREFIX$witness;
 
-// Hashable$WORD ////////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct Hashable$WORD$__class__  *Hashable$WORD$__class__;
+// $Hashable$WORD ////////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct Hashable$WORD *Hashable$WORD;
+typedef struct $Hashable$WORD *$Hashable$WORD;
 
-struct Hashable$WORD$__class__ {
+struct $Hashable$WORD$class {
     char *GCINFO;
-    $bool (*__eq__)(Hashable$WORD, $WORD, $WORD);
-    $bool (*__ne__)(Hashable$WORD, $WORD, $WORD);
-    $int (*__hash__)(Hashable$WORD, $WORD);
+    $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
+    $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
+    $int (*__hash__)($Hashable$WORD, $WORD);
 };
 
-struct Hashable$WORD {
-    char *GCINFO;
-    Hashable$WORD$__class__  __class__;
+struct $Hashable$WORD {
+    struct $Hashable$WORD$class *class;
 };
 
-Hashable$WORD Hashable$WORD_new();
+struct $Hashable$WORD$class $Hashable$WORD$methods;
+struct $Hashable$WORD *$Hashable$WORD$witness;
 
 
+$None $enqueue($ROWLISTHEADER lst, $ROW elem);
 
-None enqueue($ROWLISTHEADER lst, $ROW elem);
+$ROW $new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix);
 
-$ROW new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix);
-
-Hashable Hashable_instance(long class_id);
+$Hashable $Hashable_instance(long class_id);
 

@@ -2,18 +2,19 @@
 
 #include "__builtin__.h"
 
-struct Iterator$__class__ {
-  char *$GCINFO;
+typedef struct $Iterator$class *$Iterator$class;
+
+struct $Iterator$class {
+  char *GCINFO;
   $WORD (*__next__)($WORD);
 };
 
-typedef struct Iterator$__class__ *Iterator$__class__;
-
-struct Iterator {
-  char *$GCINFO;
-  Iterator$__class__ __class__;
+struct $Iterator {
+  struct $Iterator$class *class;
 };
 
-Iterable$Iterator Iterable$Iterator_new();
+extern struct $Iterable$Iterator$class $Iterable$Iterator$methods;
 
-$WORD next(Iterator);
+extern struct $Iterable$Iterator *$Iterable$Iterator$witness;
+
+$WORD $next($Iterator);

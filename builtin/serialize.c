@@ -1,6 +1,6 @@
 // Queue implementation //////////////////////////////////////////////////////////////////
 
-None enqueue($ROWLISTHEADER lst, $ROW elem) {
+$None $enqueue($ROWLISTHEADER lst, $ROW elem) {
   if (lst->last)
     lst->last->next = elem;
   else
@@ -8,9 +8,9 @@ None enqueue($ROWLISTHEADER lst, $ROW elem) {
   lst->last = elem;
 }
 
-// Hashable$PREFIX ////////////////////////////////////////////////////////////////////////
+// $Hashable$PREFIX ////////////////////////////////////////////////////////////////////////
 
-$bool Hashable$PREFIX_eq(Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
+$bool $Hashable$PREFIX_eq($Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
   if (a->prefix_size != b->prefix_size)
     return $false;
   for (int i=0; i< a->prefix_size; i++)
@@ -19,51 +19,42 @@ $bool Hashable$PREFIX_eq(Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
   return $true;
 }
 
-$bool Hashable$PREFIX_ne(Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
-  return to$bool( !from$bool(Hashable$PREFIX_eq(wit,a,b)));
+$bool $Hashable$PREFIX_ne($Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
+  return to$bool( !from$bool($Hashable$PREFIX_eq(wit,a,b)));
 }
 
-$int Hashable$PREFIX_hash(Hashable$PREFIX wit, $PREFIX a) {
+$int $Hashable$PREFIX_hash($Hashable$PREFIX wit, $PREFIX a) {
   return to$int($PREFIX_hash(a));
 }
 
 
-static struct Hashable$PREFIX$__class__ Hashable$PREFIX_methods = {"",Hashable$PREFIX_eq,Hashable$PREFIX_ne,Hashable$PREFIX_hash};
-static struct Hashable$PREFIX Hashable$PREFIX_instance = {"",&Hashable$PREFIX_methods};
-static Hashable$PREFIX Hashable$PREFIX_witness = &Hashable$PREFIX_instance;
+struct $Hashable$PREFIX$class $Hashable$PREFIX$methods = {"",$Hashable$PREFIX_eq,$Hashable$PREFIX_ne,$Hashable$PREFIX_hash};
+struct $Hashable$PREFIX $Hashable$PREFIX_instance = {&$Hashable$PREFIX$methods};
+struct $Hashable$PREFIX *$Hashable$PREFIX$witness = &$Hashable$PREFIX_instance;
 
  
-Hashable$PREFIX Hashable$PREFIX_new() {
-  return Hashable$PREFIX_witness;
-}
+// $Hashable_Word (for pointers) ////////////////////////////////////////////////////////////////////////
 
-// Hashable$Word (for pointers) ////////////////////////////////////////////////////////////////////////
-
-$bool Hashable$WORD_eq(Hashable$WORD wit, $WORD a, $WORD b) {
+$bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
 }
 
-$bool Hashable$WORD_ne(Hashable$WORD wit, $WORD a, $WORD b) {
+$bool $Hashable$WORD_ne($Hashable$WORD wit, $WORD a, $WORD b) {
   return  to$bool(a != b);
 }
 
-$int Hashable$WORD_hash(Hashable$WORD wit, $WORD a) {
+$int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int(pointer_hash(a));
 }
 
 
-static struct Hashable$WORD$__class__ Hashable$WORD_methods = {"",Hashable$WORD_eq,Hashable$WORD_ne,Hashable$WORD_hash};
-static struct Hashable$WORD Hashable$WORD_instance = {"",&Hashable$WORD_methods};
-static Hashable$WORD Hashable$WORD_witness = &Hashable$WORD_instance;
-
- 
-Hashable$WORD Hashable$WORD_new() {
-  return Hashable$WORD_witness;
-}
+struct $Hashable$WORD$class $Hashable$WORD$methods = {"",$Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
+struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
 
-void write_serialized($ROW row, char *file) {
+void $write_serialized($ROW row, char *file) {
   char buf[BUF_SIZE];
   char *p = buf;
   char *bufend = buf + BUF_SIZE;
@@ -104,34 +95,36 @@ void write_serialized($ROW row, char *file) {
   fclose(fileptr);
 }
  
-$ROW serialize(Serializable s, long prefix[], int prefix_size) {
+$ROW $serialize($Serializable s, long prefix[], int prefix_size) {
   $ROWLISTHEADER accum = malloc(sizeof(struct $ROWLISTHEADER));
   accum->fst = NULL;
   accum->last = NULL;
-  $dict done = $new_dict((Hashable)Hashable$WORD_new());
-  s->__class__->__serialize__(s,($WORD*)prefix,prefix_size,done,accum);
+  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
+  $dict done = wit->class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
+  s->class->__serialize__(s,wit,($WORD*)prefix,prefix_size,done,accum);
   return accum->fst;
 }
 
-void serialize_file(Serializable s, long prefix[], int prefix_size, char *file) {
-  write_serialized(serialize(s,prefix,prefix_size),file);
+void $serialize_file($Serializable s, long prefix[], int prefix_size, char *file) {
+  $write_serialized($serialize(s,prefix,prefix_size),file);
 }
 
-Serializable deserialize($ROW row, long *prefix, int *prefix_size) {
-  serial$_methods[INT_ID] = (serial$__methods__)$int_methods;
-  serial$_methods[FLOAT_ID] = (serial$__methods__)$float_methods;
-  serial$_methods[STR_ID] = (serial$__methods__)$str_methods;
-  serial$_methods[BOOL_ID] = (serial$__methods__)$bool_methods;
-  serial$_methods[LIST_ID] = (serial$__methods__)$list_methods;
-  serial$_methods[DICT_ID] = (serial$__methods__)$dict_methods;
-  serial$_methods[SET_ID] = (serial$__methods__)$set_methods;
+$Serializable $deserialize($ROW row, long *prefix, int *prefix_size) {
+  serial$_methods[INT_ID] = (serial$methods)&$int$methods;
+  serial$_methods[FLOAT_ID] = (serial$methods)&$float$methods;
+  serial$_methods[STR_ID] = (serial$methods)&$str$methods;
+  serial$_methods[BOOL_ID] = (serial$methods)&$bool$methods;
+  serial$_methods[LIST_ID] = (serial$methods)&$list$methods;
+  serial$_methods[DICT_ID] = (serial$methods)&$dict$methods;
+  serial$_methods[SET_ID] = (serial$methods)&$set$methods;
   memcpy(prefix,row->data,row->prefix_size*sizeof($WORD));
   *prefix_size = row->prefix_size;
-  $dict done = $new_dict((Hashable)Hashable$PREFIX_new());
-  return serial$_methods[row->class_id]->__deserialize__(&row,done);
+  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$PREFIX$witness);
+  $dict done = wit->class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
+  return serial$_methods[row->class_id]->__deserialize__(wit,&row,done);
 }
 
-$ROW read_serialized(char *file) {
+$ROW $read_serialized(char *file) {
   char buf[BUF_SIZE];
   char *p = buf;
   char *bufend;
@@ -171,17 +164,17 @@ $ROW read_serialized(char *file) {
     }
     memcpy(start,p,chunk_size);
     p+=chunk_size;
-    enqueue(&header,row);
+    $enqueue(&header,row);
   }
   return header.fst;
 }
        
-Serializable deserialize_file(char *file,  long *prefix, int *prefix_size) {
-  return deserialize(read_serialized(file),prefix,prefix_size);
+$Serializable $deserialize_file(char *file,  long *prefix, int *prefix_size) {
+  return $deserialize($read_serialized(file),prefix,prefix_size);
 }
 
 
-$ROW new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix) {
+$ROW $new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix) {
   $ROW res = malloc(3 * sizeof(int) + (1+prefix_size+blob_size)*sizeof($WORD));
   res->class_id = class_id;
   res->prefix_size = prefix_size;
@@ -191,14 +184,14 @@ $ROW new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix) {
   return res;
 }
   
-Hashable Hashable_instance(long class_id) {
+$Hashable $Hashable_instance(long class_id) {
   switch (class_id) {
   case INT_ID:
-    return (Hashable)Hashable$int_new();
+    return ($Hashable)$Hashable$int$witness;
   case FLOAT_ID:
-    return (Hashable)Hashable$float_new();
+    return ($Hashable)$Hashable$float$witness;
   case STR_ID:
-    return (Hashable)Hashable$str_new();
+    return ($Hashable)$Hashable$str$witness;
   default:
     fprintf(stderr,"Can't find Hashable instance for class_id %ld\n",class_id);
     exit(1);

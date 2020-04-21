@@ -1,25 +1,28 @@
-typedef struct $float$__methods__ {
-  None (*__serialize__)($float, $WORD*, int, $dict, $ROWLISTHEADER);
-  $float (*__deserialize__)($ROW*, $dict);
-} *$float$__methods__;
+struct $float$class {
+  char *GCINFO;
+  $None (*__serialize__)($float, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  $float (*__deserialize__)($Mapping$dict,$ROW*, $dict);
+};
 
-None $float_serialize($float self, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
-$float $float_deserialize($ROW *row, $dict done);
 
 struct $float {
-  char *GCINFO;
-  $float$__methods__ __class__;
+  struct $float$class *class;
   long val;
 };
 
-struct $float$__methods__ $float_table;
+extern struct $float$class $float$methods;
+
+extern struct $Real$float$class $Real$float$methods;
+extern struct $Complex$float$class $Complex$float$methods;
+extern struct $Plus$float$class $Plus$float$methods;
+extern struct $Minus$float$class $Minus$float$methods;
+extern struct $Hashable$float$class $Hashable$float$methods;
+
+extern struct $Real$float *$Real$float$witness;
+extern struct $Complex$float *$Complex$float$witness;
+extern struct $Plus$float *$Plus$float$witness;
+extern struct $Minus$float *$Minus$float$witness;
+extern struct $Hashable$float *$Hashable$float$witness;
 
 $float to$float(double x);
 double from$float($float x);
-
-Real$float Real$float_new();
-Complex$float Complex$float_new();
-Plus$float Plus$float_new();
-Minus$float Minus$float_new();
-Hashable$float Hashable$float_new();
-

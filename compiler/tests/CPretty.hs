@@ -21,15 +21,15 @@ instance CPretty a => CPretty [a] where
 instance CPretty Module where
    cpretty env (Module  _ _ ss)         =  text "#pragma once" $+$ blank $+$
                                            text "#include \"common.h\"" $+$ blank $+$
-                                           vcat (map (structdecls . cpretty env . name) ["$list","$dict","$set","$str",
-                                                "$int","$float","$complex","$bool","Iterator","Slice"] ++
+                                           vcat (map (structdecls . cpretty env . name) ["list","dict","set","str",
+                                                "int","float","complex","bool","Iterator","Slice"] ++
                                                 concat (concatMap (structs env) ss) ++
                                                 map (cpretty env) ss
                                                )
 
 structs env (Decl  _ ds)                = map strs ds
   where strs (Class _ nm qs bs ss) 
-                                        = [structdecls cnm, structdecls (cnm <> text "$__class__")] ++
+                                        = [structdecls cnm, structdecls (cnm <> text "$class")] ++
                                           case nm of
                                              Name{} -> [structdecls (cnm <> text "$opaque")]
                                              Internal{} -> []
@@ -43,14 +43,14 @@ instance CPretty Stmt where
    cpretty env (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) _)
                                         = if (isglobal env)
                                           then vcat (map (\n -> resultTuple env r <+> cpretty env n<>parens (cprettyPosRow env p) <>semi) ns)
-                                          else vcat (map (\n -> resultTuple env r <+> parens (text "*"<> cpretty env n)<>parens (cprettyPosRow env p) <>semi) ns)
-   cpretty env (Signature _ ns tsc  _)  = vcat (map (\n ->cpretty env tsc<+> cpretty env n<>semi) ns)
+                                          else vcat (map (\n -> resultTuple env{isglobal=True} r <+> parens (text "*"<> cpretty env n)<>parens (cprettyPosRow env{isglobal=True} p) <>semi) ns)
+   cpretty env (Signature _ ns tsc  _)  = vcat (map (\n ->cpretty env{isglobal=True} tsc<+> cpretty env n<>semi) ns)
    cpretty env stmt                     = empty --error ("cpretty; unexpected Stmt: "++ show stmt)
    
 instance CPretty Decl where
    cpretty env (Class _ nm qs bs ss)    = vcat (map ($+$ blank) [
                                               text "//" <+> cnm <+> text (replicate 60 '/'),
-                                              witness_struct env cnm is,
+                                              witness_struct env{isglobal=False} cnm is,
                                               class_struct env{isglobal=False} nm ms,
                                               case nm of
                                                   Name{} -> opaque_struct cnm ms
@@ -60,10 +60,6 @@ instance CPretty Decl where
            cnm                          = cpretty env nm
       
    cpretty env d                        = error ("cpretty: unexpected Decl: "++show d)
-
-substdollar []                          = []
-substdollar ('_':cs)                    = '$':substdollar cs
-substdollar (c:cs)                      = c:substdollar cs
 
 isMeth (Signature _ _ sc _)             = isFunType (sctype sc)
    where isFunType (TFun {})            = True
@@ -81,19 +77,17 @@ instance CPretty TSchema where
     cpretty env (TSchema _ _ t)         = cpretty env t
 
 instance CPretty Name where
-    cpretty env (Name _ "int")          = text "$int"
-    cpretty env (Name _ "float")        = text "$float"
-    cpretty env (Name _ "complex")      = text "$complex"
-    cpretty env (Name _ "bool")         = text "$bool"
-    cpretty env (Name _ "list")         = text "$list"
-    cpretty env (Name _ "dict")         = text "$dict"
-    cpretty env (Name _ "set")          = text "$set"
-    cpretty env (Name _ "str")          = text "$str"
-    cpretty env (Name _ ns)             = text ns
-    cpretty env (Internal str _ _)      = text (substdollar str)
+  cpretty env n@Internal{}              = text (nstr n)
+  cpretty env n
+      | isglobal env                    = text ('$' : nstr n)
+      | otherwise                       = text (nstr n)
+ 
 
+instance CPretty ModName where
+    cpretty env (ModName ns)            = hsep $ punctuate (text "$$") (map (cpretty env) ns)
+    
 instance CPretty QName where
-    cpretty env (QName _ n)             = error "cpretty for qualified name" 
+    cpretty env (QName mn n)            = cpretty env mn<>text "$$"<>cpretty env n
     cpretty env (NoQual n)              = cpretty env n
     
 instance CPretty Type where
@@ -105,53 +99,48 @@ instance CPretty Type where
       where vbarSep f                   = hsep . punctuate (space <> char '|') . map f
     cpretty env (TOpt _ t)              = cpretty env t
     cpretty env (TExist _ p)            = cpretty env p <> text "$opaque"
-    cpretty env (TNone _)               = text "None"
+    cpretty env (TNone _)               = text "$None"
     cpretty env (TWild _)               = text "_"
     cpretty env row                     = prettyKwdRow row
 
-cprettyPosRow env (TRow _ _ _ t (TNil _ _))
-                                        = cpretty env t
+cprettyPosRow env (TRow _ _ _ t TNil{}) = cpretty env t
 cprettyPosRow env (TRow _ _ _ t p)      = cpretty env t <> comma <+> cprettyPosRow env p
-cprettyPosRow env (TNil _ _)            = empty
+cprettyPosRow env TNil{}                = empty
 
 structdecls cnm                         = text "struct" <+> cnm <> semi $+$
                                           text "typedef struct" <+> cnm <+> text "*" <> cnm <> semi $+$
                                           blank
 
 witness_struct env cnm is               = text "struct" <+> cnm <+> text "{" $+$
-                                          (nest 4 $ vcat ([text "char *GCINFO;",
-                                                           cnm <> text "$__class__" <+>text" __class__"<>semi] ++
+                                          (nest 4 $ vcat ([--text "char *GCINFO;",
+                                                           cnm <> text "$class" <+>text" class"<>semi] ++
                                                            [vcat (map (cpretty env) is)])) $+$
                                            text "};"
 
-class_struct env nm ms                  = text "struct" <+> cpretty env nm<>text "$__class__" <+> text "{" $+$
+class_struct                            ::  CEnv -> Name -> [Stmt] -> Doc
+class_struct env nm ms                  = text "struct" <+> cpretty env{isglobal=True} nm<>text "$class" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty env . addparSig nm) ms)) $+$
                                           text "};"
-  where addparSig nm (n,sig@(NSig (TSchema _ _ _) Static))
-                                        = (n,sig)
-        addparSig nm (n,NSig (TSchema l2 qs (TFun l3 f p k r)) d)
-                                        =  (n,NSig (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d)
+  where addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r)) d)
+                                        =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d
 
-addFstElem nm p                         = TRow NoLoc KType (name "???") (monotype (tCon (TC (noQual (substdollar(nstr nm))) []))) p
+addFstElem nm p                         = posRow (tCon (TC (NoQual nm) [])) p
 
 opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
                                           (nest 4 $ text "char *GCINFO;" $+$
-                                          vcat [cnm <+> text "__proto__"<>semi,
-                                                text "$WORD __impl__"<>semi]) $+$
+                                          vcat [cnm <+> text "proto"<>semi,
+                                                text "$WORD impl"<>semi]) $+$
                                           text "};" $+$ blank $+$
-                                          cnm<>text "$opaque" <+> cnm<>text "$__pack__"<>parens (cnm <+>text "__proto__, $WORD __impl__") <> semi $+$
+                                          cnm<>text "$opaque" <+> cnm<>text "$pack"<>parens (cnm <+>text "proto, $WORD impl") <> semi $+$
                                           blank
 
-fun_prototypes ps nm ss                  = vcat (map proto ss)
-  where  --proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) Static)
-         --                               = vcat (map (\n -> resultTuple r <+> cpretty nm<>text "$"<>cpretty n<+>parens (cprettyPosRow p) <>semi) ns)
-         proto (ns,NSig (TSchema _ _ (TFun _ f p _ r)) _)
-                                        = resultTuple ps r <+> cpretty ps nm<>text "$"<>cpretty ps ns<+>parens (cprettyPosRow ps (addFstElem nm p)) <>semi
+fun_prototypes env nm ss                = vcat (map proto ss)
+  where proto (Signature _ ns (TSchema _ _ (TFun _ f p _ r)) _)
+                                        = vcat (map (\n -> resultTuple env r <+> cpretty env nm<>cpretty env n<+>parens (cprettyPosRow env (addFstElem nm p)) <>semi) ns)
 
 
 resultTuple env (TTuple  _ r _)          = tup 0 r
    where tup n (TNil _ _)                = text ("$tup"++show n++"_t")
-         tup n (TRow _ _ _ (TSchema _ _ _) r)
-                                        = tup (n+1) r
-         tup _ r                        = error ("cPrettyPosRow: unhandled tuple; row is "++render(pretty r))
-resultTuple env t                       = cpretty env t
+         tup n (TRow _ _ _ _ r)          = tup (n+1) r
+         tup _ r                         = error ("cPrettyPosRow: unhandled tuple; row is "++render(pretty r))
+resultTuple env t                        = cpretty env t
