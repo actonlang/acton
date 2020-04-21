@@ -787,8 +787,8 @@ instance Subst Type where
     tyfree (TWild _)                = []
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
-    tyfree (TFX _ fx)               = tyfree fx
- 
+    tyfree (TFX l fx)               = tyfree fx
+    
 instance Subst FX where
     msubst (FXMut t)                = FXMut <$> msubst t
     msubst (FXAct t)                = FXAct <$> msubst t
@@ -796,7 +796,7 @@ instance Subst FX where
     
     tyfree (FXMut t)                = tyfree t
     tyfree (FXAct t)                = tyfree t
-    tyfree _                        = []
+    tyfree _                        = []  
     
 instance Subst PosPar where
     msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
