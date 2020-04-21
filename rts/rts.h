@@ -84,7 +84,6 @@ struct $Actor {
 struct $Actor$class {
     char *GCINFO;
     void (*__init__)($Actor);
-    $WORD (*$enter)($Actor, $WORD);
 };
 
 struct $Catcher {
@@ -103,7 +102,7 @@ struct $Clos {
 struct $Clos$class {
     char *GCINFO;
     void (*__init__)($Clos);
-    $WORD (*$enter)($Clos, $WORD);
+    $WORD (*enter)($Clos, $WORD);
 };
 
 struct $Cont {
@@ -115,7 +114,7 @@ struct $Cont {
 struct $Cont$class {
     char *GCINFO;
     void (*__init__)($Cont);
-    $R (*$enter)($Cont, $WORD);
+    $R (*enter)($Cont, $WORD);
 };
 
 $Msg $ASYNC($Actor, $Cont);

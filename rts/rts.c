@@ -396,7 +396,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->cont;
             $WORD val = m->value;
             
-            $R r = cont->$class->$enter(cont, val);
+            $R r = cont->$class->enter(cont, val);
             
             switch (r.tag) {
                 case $RDONE: {
