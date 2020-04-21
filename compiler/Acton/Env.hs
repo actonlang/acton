@@ -161,7 +161,7 @@ instance Unalias QName where
     unalias env (NoQual n)          = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
                                         Just _ -> QName (defaultmod env) n
-                                        _ -> nameNotFound n
+                                        _ -> trace ("#unalias") $ nameNotFound n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -289,6 +289,9 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
 
+inBuiltin                   :: Env -> Bool
+inBuiltin env               = null $ modules env
+
 inDecl                      :: Env -> Bool
 inDecl env                  = indecl env
 
@@ -302,14 +305,16 @@ tvarScope env               = [ TV k n | (n, NTVar k _ _) <- names env ]
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
 findQName                   :: QName -> Env -> NameInfo 
-findQName (QName m n) env   = case lookup n (fromJust $ maybeFindMod (unalias env m) env) of
-                                Just (NAlias qn) -> findQName qn env
-                                Just i -> i
-                                _ -> noItem m n
+findQName (QName m n) env   = case maybeFindMod (unalias env m) env of
+                                Just te -> case lookup n te of
+                                    Just (NAlias qn) -> findQName qn env
+                                    Just i -> i
+                                    _ -> noItem m n
+                                _ -> noModule m
 findQName (NoQual n) env    = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just info -> info
-                                Nothing -> nameNotFound n
+                                Nothing -> trace ("#findQName") $ nameNotFound n
 
 findName n env              = findQName (NoQual n) env
 
@@ -319,11 +324,10 @@ maybeFindMod (ModName ns) env = f ns (names env)
         f (n:ns) te         = case lookup n te of
                                 Just (NModule te') -> f ns te'
                                 Just (NMAlias m) -> maybeFindMod m env
-                                Nothing -> Nothing
-                                Just _ -> noModule (ModName (n:ns))
+                                _ -> Nothing
 
 isMod                       :: Env -> [Name] -> Bool
-isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)
+isMod env ns                = trace ("## isMod " ++ prstrs ns) $ maybe False (const True) (maybeFindMod (ModName ns) env)
 
 
 tconKind                    :: QName -> Env -> Kind
@@ -373,7 +377,7 @@ findCon env (TC n ts)
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
-                                _ -> err1 n "Class or protocol name expected, got"
+                                i -> err1 n ("findCon: Class or protocol name expected, got " ++ show i ++ " --- ")
         tvs                 = tybound q
         s                   = tvs `zip` ts
 
@@ -399,7 +403,7 @@ instance WellFormed TCon where
       where q               = case findQName n env of
                                 NClass q us te -> q
                                 NProto q us te -> q
-                                _ -> err1 n "Class or protocol name expected, got"
+                                i -> err1 n ("wf: Class or protocol name expected, got " ++ show i ++ " --- ")
             s               = tybound q `zip` ts
 
 instance WellFormed Type where
@@ -784,7 +788,7 @@ instance Subst Type where
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
     tyfree (TFX l fx)               = tyfree fx
-    
+
 instance Subst FX where
     msubst (FXMut t)                = FXMut <$> msubst t
     msubst (FXAct t)                = FXAct <$> msubst t

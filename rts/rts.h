@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,31 +7,35 @@
 #include <stdbool.h>
 #include <time.h>
 
+#include "../builtin/builtin.h"
 
 typedef void *$WORD;
 
 struct $R;
+struct $Msg;
+struct $Actor;
+struct $Catcher;
 struct $Clos;
 struct $Cont;
-struct $Msg;
-struct $ACTOR;
-struct $Catcher;
 
 typedef struct $R $R;
+typedef struct $Msg *$Msg;
+typedef struct $Actor *$Actor;
+typedef struct $Catcher *$Catcher;
 typedef struct $Clos *$Clos;
 typedef struct $Cont *$Cont;
-typedef struct $Msg *$Msg;
-typedef struct $ACTOR *$ACTOR;
-typedef struct $Catcher *$Catcher;
 
 struct $Msg$class;
-struct $ACTOR$class;
+struct $Actor$class;
 struct $Catcher$class;
+struct $Clos$class;
+struct $Cont$class;
 
 extern struct $Msg$class $Msg$methods;
-extern struct $ACTOR$class $ACTOR$methods;
+extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-
+extern struct $Clos$class $Clos$methods;
+extern struct $Cont$class $Cont$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -40,50 +46,48 @@ struct $R {
     $WORD value;
 };
 
+#define $R_CONT(cont, arg)      ($R){$RCONT, (cont), ($WORD)(arg)}
+#define $R_DONE(value)          ($R){$RDONE, NULL,   (value)}
+#define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
+#define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
+
 #define $None ($WORD)0
 
-#define CONT_HEADER     "Cont"
 #define MSG_HEADER      "Msg"
-#define ACTOR_HEADER    "Actor"
+#define ACTOR_HEADER    "ACTOR"
 #define CATCHER_HEADER  "Catcher"
-
-struct $Cont {
-    char *header;
-    $R (*code)();
-    int nvar;
-    $WORD var[];
-};
+#define CLOS_HEADER     "CLOS"
+#define CONT_HEADER     "Cont"
 
 struct $Msg {
-    struct $Msg$class *__class__;
+    struct $Msg$class *$class;
     $Msg next;
-    $ACTOR to;
+    $Actor to;
     $Cont cont;
-    $ACTOR waiting;
+    $Actor waiting;
     time_t baseline;
     volatile atomic_flag wait_lock;
     $WORD value;
 };
 struct $Msg$class {
     char *header;
-    void (*__init__)($Msg, $ACTOR, $Cont, time_t, $WORD);
+    void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
 };
 
-struct $ACTOR {
-    struct $ACTOR$class *__class__;
-    $ACTOR next;
+struct $Actor {
+    struct $Actor$class *$class;
+    $Actor next;
     $Msg msg;
     $Catcher catcher;
     volatile atomic_flag msg_lock;
 };
-struct $ACTOR$class {
+struct $Actor$class {
     char *GCINFO;
-    void (*__init__)($ACTOR);
-    $WORD (*$enter)($ACTOR, $WORD);
+    void (*__init__)($Actor);
 };
 
 struct $Catcher {
-    struct $Catcher$class *__class__;
+    struct $Catcher$class *$class;
     $Catcher next;
     $Cont cont;
 };
@@ -92,59 +96,35 @@ struct $Catcher$class {
     void (*__init__)($Catcher, $Cont);
 };
 
-#define $CONTINUATION(code, nvar, ...)  $continuation(code, nvar, __VA_ARGS__)
-#define $CONTINUE(cont, arg)            ($R){$RCONT, (cont), ($WORD)(arg)}
-#define $CONTINUE_(cont, arg)           ((cont)->__class__->$enter((cont),(WORD)arg))
-
-
-$Cont $continuation($R (*code)(), int nvar, ...);
-
-
-$Msg $ASYNC($ACTOR to, $Cont c);
-$Msg $AFTER(time_t sec, $Cont c);
-$R $AWAIT($Msg m, $Cont th);
-
-void $PUSH($Cont Cont);
-void $POP();
-
-int $RTS_RUN(int argc, char **argv, $R (*root)());
-
-
-
-#define $NEW($T, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__); $tmp; })
-#define $NEW0($T) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp); $tmp; })
-
-#define $NEW2($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp,__VA_ARGS__,$c); })
-
-#define $to_time(i) (i)
-
-//////////////// $CLOS
-
-struct $CLOS;
-struct $CLOS$class;
-typedef struct $CLOS *$CLOS;
-struct $CLOS {
-    struct $CLOS$class *__class__;
+struct $Clos {
+    struct $Clos$class *$class;
 };
-struct $CLOS$class {
+struct $Clos$class {
     char *GCINFO;
-    void (*__init__)($CLOS);
-    $WORD (*$enter)($CLOS, $WORD);
+    void (*__init__)($Clos);
+    $WORD (*enter)($Clos, $WORD);
 };
 
-//////////////// $CONT
-
-struct $CONT;
-struct $CONT$class;
-typedef struct $CONT *$CONT;
-struct $CONT {
+struct $Cont {
     union {
-        struct $CONT$class *__class__;
-        struct $CLOS super;
+        struct $Cont$class *$class;
+        struct $Clos super;
     };
 };
-struct $CONT$class {
+struct $Cont$class {
     char *GCINFO;
-    void (*__init__)($CONT);
-    $R (*$enter)($CONT, $WORD);
+    void (*__init__)($Cont);
+    $R (*enter)($Cont, $WORD);
 };
+
+$Msg $ASYNC($Actor, $Cont);
+$Msg $AFTER(time_t, $Cont);
+$R $AWAIT($Msg, $Cont);
+
+void $PUSH($Cont);
+void $POP();
+
+#define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__); $tmp; })
+#define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__, $c); })
+
+typedef int $Env;

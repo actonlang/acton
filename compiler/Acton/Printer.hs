@@ -45,7 +45,8 @@ instance Pretty Stmt where
     pretty (Data _ Nothing b)       = text "return" <> colon $+$ prettySuite b
     pretty (VarAssign _ ps e)       = text "var" <+> (hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e])
     pretty (After _ e e')           = text "after" <+> pretty e <> colon <+> pretty e'
-    pretty (Decl _ ds)              = vcat $ map pretty ds
+    pretty (Decl _ [d])             = pretty d
+    pretty (Decl _ ds)              = text "# recursive group:" $+$ (vcat $ map pretty ds) $+$ text "# (recursive group)"
     pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc
 
 instance Pretty Decl where

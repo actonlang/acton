@@ -7,10 +7,10 @@ rts.o: rts.c rts.h
 	
 Pingpong: rts.o pingpong.c
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-lutf8proc \
 		rts.o \
+		../builtin/builtin.o \
 		pingpong.c \
-		-DROOT=NEWPingpong \
-		main.c \
 		-o Pingpong
 
 clean:
