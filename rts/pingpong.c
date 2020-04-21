@@ -18,7 +18,6 @@ struct Pingpong$class Pingpong$methods = {
     Pingpong$pong
 };
 
-/////////////////////////////////////////////////////////////////
 void lambda$1$__init__(lambda$1 $this, Pingpong self, int count, int q) {
     $this->self = self;
     $this->count = count;
@@ -30,7 +29,7 @@ $R lambda$1$enter (lambda$1 $this, $Cont then) {
     int q = $this->q;
     return self->__class__->pong(self, count, q, then);
 }
-/////////////////////////////////////////////////////////////////
+
 void lambda$2$__init__(lambda$2 $this, Pingpong self, int q) {
     $this->self = self;
     $this->q = q;
@@ -40,9 +39,9 @@ $R lambda$2$enter (lambda$2 $this, $Cont then) {
     int q = $this->q;
     return self->__class__->ping(self, q, then);
 }
-/////////////////////////////////////////////////////////////////
+
 $R Pingpong$__init__(Pingpong self, int i, $Cont then) {
-    $ACTOR$methods.__init__(($ACTOR)self);
+    $Actor$methods.__init__(($Actor)self);
     self->count = i;
     return self->__class__->ping(self, i, then);
 }
@@ -50,18 +49,12 @@ $R Pingpong$ping(Pingpong self, int q, $Cont then) {
     self->count = int_add(self->count, 1);
     int j = int_mul(self->count, q);
     printf("Ping %8d\n", j);
-//    $AFTER(1, $CONTINUATION(self->__class__->pong, 3, self, self->count, int_neg(q)));
-    $AFTER(1, ($CONT)$NEW(lambda$1, self, self->count, int_neg(q)));
-    return $CONTINUE(then, j);
+    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, int_neg(q)));
+    return $R_CONT(then, j);
 }
 $R Pingpong$pong(Pingpong self, int n, int q, $Cont then) {
     int j = int_mul(n, q);
     printf("     %8d Pong\n", j);
-//    $AFTER(2, $CONTINUATION(self->__class__->ping, 2, self, int_neg(q)));
-    $AFTER(2, ($CONT)$NEW(lambda$2, self, int_neg(q)));
-    return $CONTINUE(then, $None);
-}
-
-$R NEWPingpong($WORD env, $Cont then) {
-    return $NEWCC(Pingpong, then, 10);
+    $AFTER(2, ($Cont)$NEW(lambda$2, self, int_neg(q)));
+    return $R_CONT(then, $None);
 }
