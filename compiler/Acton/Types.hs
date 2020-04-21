@@ -12,10 +12,11 @@ import Acton.Solver
 import qualified InterfaceFiles
 
 reconstruct                             :: String -> Env -> Module -> IO (TEnv, Module, SrcInfo)
-reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env1 te)
+reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env2 te)
                                              return (te, modul', info)
   where Module m imp suite              = modul
         env1                            = reserve (bound suite) env
+        env2                            = define te env1
         ((te,suite'),info)              = runTypeM $ (,) <$> infTop env1 suite <*> getDump
         modul'                          = Module m imp suite'
 
@@ -398,8 +399,7 @@ instance InfEnv Stmt where
 
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = do solve env1 (wellformed env1 (q,t))
-                                             return ([], [(n, NSig (autoQuantize env sc) dec) | n <- ns], d)
+      | otherwise                       = return ([], [(n, NSig (autoQuantize env sc) dec) | n <- ns], d)
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
             env1                        = defineTVars q env
 
@@ -421,10 +421,11 @@ matchingDec n sc dec dec'
   | otherwise                           = decorationMismatch n sc dec
 
 
-checkAttributes env te' te
+checkAttributes te' te
   | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
   | not $ null props                    = err2 props "Property attribute cannot have a class-level definition"
-  | otherwise                           = do nsigs <- mapM newSig nterms; return (nsigs, abssigs, dom sigs)
+  | otherwise                           = do nsigs <- mapM newSig nterms; 
+                                             return (nsigs, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
@@ -461,46 +462,49 @@ instance InfEnv Decl where
       | not $ null ps                   = notYet (loc n) "Classes with direct extensions"
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 solve env1 (wellformed env1 (q,us))
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (nsigs,_,_) <- checkAttributes env1 te' te
-                                                 return (cs, [(n, NClass q as (te++nsigs))], Class l n q us b')
+                                                 (nsigs,_,_) <- checkAttributes te' te
+                                                 return (cs, [(n, NClass q as (te++nsigs))], Class l n q ps b')
                                              _ -> illegalRedef n
-      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
+      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
             (as,ps)                     = mro2 env1 us
             te'                         = parentTEnv env1 as
     infEnv env (Protocol l n q us b)
       | otherwise                       = case findName n env of
                                              NReserved -> do
-                                                 solve env1 (wellformed env1 (q,us))
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (nsigs,_,_) <- checkAttributes env1 te' te
+                                                 (nsigs,_,_) <- checkAttributes te' te
                                                  when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute lacks signature"
-                                                 return (cs, [(n, NProto q ps te)], Protocol l n q us b')
+                                                 return (cs, [(n, NProto q ps te)], Protocol l n q ps b')
                                              _ -> illegalRedef n
-      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
+      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
             ps                          = mro env1 us
             te'                         = parentTEnv env1 ps
     infEnv env (Extension l n q us b)
       | isProto n env                   = notYet (loc n) "Extension of a protocol"
       | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | not $ null overlap              = err2 overlap "An overlapping extension already exists"
-      | not $ null ws                   = notYet (loc n) "Incremental extension"
-      | otherwise                       = do solve env1 (wellformed env1 (q,us))
+--      | not $ null ws                   = notYet (loc n) "Incremental extension"
+      | otherwise                       = do traceM ("## inf ext " ++ prstr n)
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
+                                             traceM ("## te " ++ prstr n ++ ": " ++ prstrs (dom te))
+                                             traceM ("## us " ++ prstr n ++ ": " ++ prstrs us)
+                                             traceM ("## ps " ++ prstr n ++ ": " ++ prstrs ps)
+                                             traceM ("## ws " ++ prstr n ++ ": " ++ prstrs ws)
                                              popFX
-                                             (nsigs,asigs,sigs) <- checkAttributes env1 te' te
+                                             (nsigs,asigs,sigs) <- checkAttributes te' te
                                              when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute not in listed protocols"
-                                             when (not $ null asigs) $ err2 asigs "Protocol method/attribute lacks implementation"
+                                             when (not (inBuiltin env || null asigs)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              cn <- newName (nstr $ noqual n)
+                                             traceM ("## Done inf ext " ++ prstr n ++ " = " ++ prstr cn)
                                              return (cs, [(cn, NExt n q ps te)], Extension l n q ps b)
-      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ define (nSigs te') $ block (stateScope env) env
+      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             prevexts                    = extensionsOf n env
             overlap                     = [ p | (w,q',ps') <- prevexts, p <- ps', tcname p == tcname (head us) ]
             ws                          = [ TC (NoQual w) ts | (w,q,ps) <- prevexts, any connected ps, all (entail env1) (constraintsOf q env1) ]
@@ -526,6 +530,11 @@ instance Check Stmt where
                                              return (cs1++cs2, If l bs' els')
     checkEnv env cl (Decl l ds)         = do (cs,ds') <- checkEnv env cl ds
                                              return (cs, Decl l ds')
+    checkEnv env cl (Signature l ns sc dec)
+                                        = do --solve env1 (wellformed env (q,t))
+                                             return ([], Signature l ns sc dec)
+      where TSchema _ q t               = sc
+            env1                        = defineTVars q env
     checkEnv env cl s                   = return ([], s)
 
 instance Check Branch where
@@ -542,7 +551,7 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
                                              (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (csqa++csp++csk++csb)
-                                             solve env1 cs1'
+                                             --solve env1 cs1'
                                              t1 <- msubst (tFun (fxAct st) prow krow t)
                                              cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              -- TODO: checkEnv that st doesn't escape
@@ -562,7 +571,7 @@ instance Check Decl where
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                              popFX
                                              (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (csqa++csp++csk++csb++cst)
-                                             solve env1 cs1'
+                                             --solve env1 cs1'
                                              t1 <- msubst (tFun fx prow krow t)
                                              cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              return (cs2, Def l n q1 p' k' a b' d)
@@ -571,22 +580,28 @@ instance Check Decl where
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 env
 
     checkEnv env cl (Class l n q us b)  = do (cs1,b') <- checkEnv env1 True b
+                                             solve env1 (wellformed env1 (q,us))
                                              return (cs1, Class l n q us b')
-      where env1                        = defineSelf (NoQual n) q $ defineTVars q env
+      where env1                        = define (nSigs $ parentTEnv env us) $ defineSelf (NoQual n) q $ defineTVars q env
             NClass _ as te              = findName n env
 
     checkEnv env cl (Protocol l n q us b)
                                         = do (cs1,b') <- checkEnv env1 True b
+                                             --solve env1 (wellformed env1 (q,us))
                                              return (cs1, Protocol l n q us b')             -- TODO: translate into class, add Self to q
-      where env1                        = defineSelf (NoQual n) q $ defineTVars q env
+      where env1                        = define (nSigs $ parentTEnv env us) $ defineSelf (NoQual n) q $ defineTVars q env
             NProto _ ps te              = findName n env
 
     checkEnv env cl (Extension l n q us b)
                                         = do pushFX fxPure tNone
+                                             traceM ("## chk ext " ++ prstr n)
                                              (cs1,b') <- checkEnv env1 True b
+                                             traceM ("## mid chk ext " ++ prstr n)
                                              popFX
+                                             --solve env1 (wellformed env1 (q,us))
+                                             traceM ("## done chk ext " ++ prstr n)
                                              return (cs1, Class l w [] [head us] b')        -- TODO: properly mix in n and q in us......
-      where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q env
+      where env1                        = define (nSigs $ parentTEnv env us) $ defineSelf n q $ defineTVars q env
             Just (w,_,_)                = findExtension n (tcname $ head us) env
 
 
@@ -595,7 +610,9 @@ checkAssump env cl n cs sc              = do (cs1,t1) <- instantiate env sc
                                              let (cs3,cs4) = partition (any (`elem` tybound q0) . tyfree) cs2
                                              solve env0 cs3
                                              msubst cs4
-  where NDef (TSchema _ q0 t0) dec      = findName n env
+  where (q0,t0,dec)                     = case findName n env of
+                                              NDef (TSchema _ q0 t0) dec -> (q0,t0,dec)
+                                              NSig (TSchema _ q0 t0) dec -> (q0,t0,dec)
         env0                            = defineTVars q0 env
         addSelf (TFun l x p k t)
           | cl && dec /= Static         = TFun l x (posRow tSelf p) k t
