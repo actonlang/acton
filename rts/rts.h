@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <time.h>
 
+#include "../builtin/builtin.h"
 
 typedef void *$WORD;
 
@@ -59,7 +60,7 @@ struct $R {
 #define CONT_HEADER     "Cont"
 
 struct $Msg {
-    struct $Msg$class *__class__;
+    struct $Msg$class *$class;
     $Msg next;
     $Actor to;
     $Cont cont;
@@ -74,7 +75,7 @@ struct $Msg$class {
 };
 
 struct $Actor {
-    struct $Actor$class *__class__;
+    struct $Actor$class *$class;
     $Actor next;
     $Msg msg;
     $Catcher catcher;
@@ -87,7 +88,7 @@ struct $Actor$class {
 };
 
 struct $Catcher {
-    struct $Catcher$class *__class__;
+    struct $Catcher$class *$class;
     $Catcher next;
     $Cont cont;
 };
@@ -97,7 +98,7 @@ struct $Catcher$class {
 };
 
 struct $Clos {
-    struct $Clos$class *__class__;
+    struct $Clos$class *$class;
 };
 struct $Clos$class {
     char *GCINFO;
@@ -107,7 +108,7 @@ struct $Clos$class {
 
 struct $Cont {
     union {
-        struct $Cont$class *__class__;
+        struct $Cont$class *$class;
         struct $Clos super;
     };
 };
@@ -124,14 +125,7 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-#define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__); $tmp; })
-#define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->__class__ = &$T ## $methods; $tmp->__class__->__init__($tmp, ##__VA_ARGS__, $c); })
+#define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__); $tmp; })
+#define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__, $c); })
 
-////// "builtins..."
-
-#define int_add(a,b)        ((int)a + (int)b)
-#define int_mul(a,b)        ((int)a * (int)b)
-#define int_neg(a)          (-(int)a)
-
-#define $to_time(i)         (i)
-
+typedef int $Env;

@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-#include "../builtin/__builtin__.h"
 #include "rts.h"
 
 #ifdef __gnu_linux__
@@ -76,9 +75,9 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 ///////////////////////////////////////////////////////////////////////////////////////////////
 #endif
 
-int $ENV = 10;
+$Env $ENV = 10;
 
-extern $R $ROOT(int, $Cont);
+extern $R $ROOT($Env, $Cont);
 
 $Actor root_actor = NULL;
 
@@ -397,7 +396,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->cont;
             $WORD val = m->value;
             
-            $R r = cont->__class__->$enter(cont, val);
+            $R r = cont->$class->$enter(cont, val);
             
             switch (r.tag) {
                 case $RDONE: {
