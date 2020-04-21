@@ -1,126 +1,126 @@
 
-Eq$opaque Eq$__pack__(Eq __proto__, $WORD __impl__) {
-  Eq$opaque res = malloc(sizeof(struct Eq$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Eq$opaque $Eq$pack($Eq proto, $WORD impl) {
+  $Eq$opaque res = malloc(sizeof(struct $Eq$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Ord$opaque Ord$__pack__(Ord __proto__, $WORD __impl__){
-  Ord$opaque res = malloc(sizeof(struct Ord$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Ord$opaque $Ord$pack($Ord proto, $WORD impl){
+  $Ord$opaque res = malloc(sizeof(struct $Ord$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Logical$opaque Logical$__pack__(Logical __proto__, $WORD __impl__){
-  Logical$opaque res = malloc(sizeof(struct Logical$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Logical$opaque $Logical$pack($Logical proto, $WORD impl){
+  $Logical$opaque res = malloc(sizeof(struct $Logical$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Plus$opaque Plus$__pack__(Plus __proto__, $WORD __impl__){
-  Plus$opaque res = malloc(sizeof(struct Plus$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Plus$opaque $Plus$pack($Plus proto, $WORD impl){
+  $Plus$opaque res = malloc(sizeof(struct $Plus$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Minus$opaque Minus$__pack__(Minus __proto__, $WORD __impl__){
-  Minus$opaque res = malloc(sizeof(struct Minus$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Minus$opaque $Minus$pack($Minus proto, $WORD impl){
+  $Minus$opaque res = malloc(sizeof(struct $Minus$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Hashable$opaque Hashable$__pack__(Hashable __proto__, $WORD __impl__){
-  Hashable$opaque res = malloc(sizeof(struct Hashable$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Hashable$opaque $Hashable$pack($Hashable proto, $WORD impl){
+  $Hashable$opaque res = malloc(sizeof(struct $Hashable$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Iterable$opaque Iterable$__pack__(Iterable __proto__, $WORD __impl__){
-  Iterable$opaque res = malloc(sizeof(struct Iterable$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Iterable$opaque $Iterable$pack($Iterable proto, $WORD impl){
+  $Iterable$opaque res = malloc(sizeof(struct $Iterable$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Collection$opaque Collection$__pack__(Collection __proto__, $WORD __impl__){
-  Collection$opaque res = malloc(sizeof(struct Collection$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Collection$opaque $Collection$pack($Collection proto, $WORD impl){
+  $Collection$opaque res = malloc(sizeof(struct $Collection$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Indexed$opaque Indexed$__pack__(Indexed __proto__, $WORD __impl__){
-  Indexed$opaque res = malloc(sizeof(struct Indexed$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Indexed$opaque $Indexed$pack($Indexed proto, $WORD impl){
+  $Indexed$opaque res = malloc(sizeof(struct $Indexed$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Sliceable$opaque Sliceable$__pack__(Sliceable __proto__, $WORD __impl__){
-  Sliceable$opaque res = malloc(sizeof(struct Sliceable$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Sliceable$opaque $Sliceable$pack($Sliceable proto, $WORD impl){
+  $Sliceable$opaque res = malloc(sizeof(struct $Sliceable$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Sequence$opaque Sequence$__pack__(Sequence __proto__, $WORD __impl__){
-  Sequence$opaque res = malloc(sizeof(struct Sequence$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Sequence$opaque $Sequence$pack($Sequence proto, $WORD impl){
+  $Sequence$opaque res = malloc(sizeof(struct $Sequence$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Container$opaque Container$__pack__(Container __proto__, $WORD __impl__){
-  Container$opaque res = malloc(sizeof(struct Container$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Container$opaque $Container$pack($Container proto, $WORD impl){
+  $Container$opaque res = malloc(sizeof(struct $Container$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Mapping$opaque Mapping$__pack__(Mapping __proto__, $WORD __impl__){
-  Mapping$opaque res = malloc(sizeof(struct Mapping$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Mapping$opaque $Mapping$pack($Mapping proto, $WORD impl){
+  $Mapping$opaque res = malloc(sizeof(struct $Mapping$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Set$opaque Set$__pack__(Set __proto__, $WORD __impl__){
-  Set$opaque res = malloc(sizeof(struct Set$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Set$opaque $Set$pack($Set proto, $WORD impl){
+  $Set$opaque res = malloc(sizeof(struct $Set$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Complex$opaque Complex$__pack__(Complex __proto__, $WORD __impl__){
-  Complex$opaque res = malloc(sizeof(struct Complex$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Complex$opaque $Complex$pack($Complex proto, $WORD impl){
+  $Complex$opaque res = malloc(sizeof(struct $Complex$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Real$opaque Real$__pack__(Real __proto__, $WORD __impl__){
-  Real$opaque res = malloc(sizeof(struct Real$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Real$opaque $Real$pack($Real proto, $WORD impl){
+  $Real$opaque res = malloc(sizeof(struct $Real$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Rational$opaque Rational$__pack__(Rational __proto__, $WORD __impl__){
-  Rational$opaque res = malloc(sizeof(struct Rational$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Rational$opaque $Rational$pack($Rational proto, $WORD impl){
+  $Rational$opaque res = malloc(sizeof(struct $Rational$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }
 
-Integral$opaque Integral$__pack__(Integral __proto__, $WORD __impl__){
-  Integral$opaque res = malloc(sizeof(struct Integral$opaque));
-  res->__proto__ = __proto__;
-  res->__impl__ = __impl__;
+$Integral$opaque $Integral$pack($Integral proto, $WORD impl){
+  $Integral$opaque res = malloc(sizeof(struct $Integral$opaque));
+  res->proto = proto;
+  res->impl = impl;
   return res;
 }

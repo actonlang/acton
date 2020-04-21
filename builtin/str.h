@@ -1,19 +1,16 @@
- 
-
-struct $str$__methods__;
-typedef struct $str$__methods__ *$str$__methods__;
+struct $str$class;
 
 struct $str {
-  char *GCINFO;
-  $str$__methods__ __class__;
+  struct $str$class *class;
   int nbytes;              // length of str in bytes
   int nchars;              // length of str in Unicode chars
   unsigned char *str;      // str is UTF-8 encoded.
 };
 
-struct $str$__methods__ {
-  None (*__serialize__)($str, $WORD*, int, $dict, $ROWLISTHEADER);
-  $str (*__deserialize__)($ROW*, $dict);
+struct $str$class {
+  char *GCINFO;
+  $None (*__serialize__)($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  $str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $str (*capitalize)($str s);
   $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
@@ -34,7 +31,7 @@ struct $str$__methods__ {
   $bool (*isspace)($str s);
   $bool (*istitle)($str s);
   $bool (*isupper)($str s);
-  $str (*join)($str sep, Iterator iter);
+  $str (*join)($str sep, $Iterator iter);
   $str (*ljust)($str s, int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $str (*lower)($str s);
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
@@ -56,18 +53,26 @@ struct $str$__methods__ {
   $str (*$str_zfill)($str s, int width);
 };
 
+extern struct $int$class $int$methods;
+
+extern struct $Ord$str$class $Ord$strmethods;
+extern struct $Hashable$str$class $Hashable$strmethods;
+extern struct $Plus$str$class $Plus$strmethods;
+extern struct $Sliceable$str$class $Sliceable$strmethods;
+extern struct $Container$str$class $Container$strmethods;
+
+extern struct $Ord$str *$Ord$str$witness;
+extern struct $Hashable$str *$Hashable$str$witness;
+extern struct $Plus$str *$Plus$str$witness;
+extern struct $Sliceable$str *$Sliceable$str$witness;
+extern struct $Container$str *$Container$str$witness;
+
+
+
 // Constructor; str must be a null-terminated, correctly UTF-8-encoded string.
 // The constructor checks this and returns a $str value.
-$str fromUTF8(char *str);
-
+$str from$UTF8(char *str);
 // Destructor; recover the internal string.
-unsigned char *toUTF8($str str);
+unsigned char *to$UTF8($str str);
 
-// Protocol instances ////////////////////////////////////////////////////////////////////////////////////////
-
-Ord$str Ord$str_new();
-Hashable$str Hashable$str_new();
-Plus$str Plus$str_new();
-Sliceable$str Sliceable$str_new();
-Container$str Container$str_new();
 

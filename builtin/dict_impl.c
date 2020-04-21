@@ -23,9 +23,8 @@ struct $table_struct {
                        // after this follows tb_entries array;
 };
 
-struct $dict$__methods__ $dict_struct = {$dict_serialize,$dict_deserialize,$dict_hashwitness}; 
+struct $dict$class $dict$methods = {"",$dict_serialize,$dict_deserialize}; 
 
-$dict$__methods__ $dict_methods = &$dict_struct;
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
@@ -36,88 +35,86 @@ $dict$__methods__ $dict_methods = &$dict_struct;
 
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
-None $dict_serialize($dict self, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+$None $dict_serialize($dict self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $WORD deflt = NULL;
-  $PREFIX prevkey = ($PREFIX)$dict_get(done,self,deflt);
-  int this_blobsize = 5 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
+  $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
+  int this_blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
   int blob_size = prevkey ? prevkey->prefix_size : this_blobsize;
-  $ROW row = new_row(DICT_ID,prefix_size,blob_size,prefix);
+  $ROW row = $new_row(DICT_ID,prefix_size,blob_size,prefix);
   if (prevkey) {
     row->class_id = -DICT_ID;
     memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
-    enqueue(accum,row);
+    $enqueue(accum,row);
     return;
   }
   $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
   pref->prefix_size = prefix_size;
   memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
-  $dict_setitem(done,self,pref);
+  $dict_setitem(done,wit->_Hashable,self,pref);
   row->class_id = DICT_ID;
   row->data[prefix_size] = ($WORD)self->numelements;
-  row->data[prefix_size+1] = ($WORD)from$int(self->hashwit->__class__->__keyinfo__(self->hashwit));
-  row->data[prefix_size+2] = ($WORD)self->table->tb_size;
-  row->data[prefix_size+3] = ($WORD)self->table->tb_usable;
-  row->data[prefix_size+4] = ($WORD)self->table->tb_nentries;
-  memcpy(&row->data[prefix_size+5],self->table->tb_indices,self->table->tb_size*sizeof(int));
-  enqueue(accum,row);
+  row->data[prefix_size+1] = ($WORD)self->table->tb_size;
+  row->data[prefix_size+2] = ($WORD)self->table->tb_usable;
+  row->data[prefix_size+3] = ($WORD)self->table->tb_nentries;
+  memcpy(&row->data[prefix_size+4],self->table->tb_indices,self->table->tb_size*sizeof(int));
+  $enqueue(accum,row);
   int extprefix_size = prefix_size + 1;
   for (long i=0; i<self->table->tb_nentries; i++) {
     $WORD extprefix[extprefix_size];
     memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
     extprefix[extprefix_size-1] = ($WORD)i;
-    $ROW row2 = new_row(ITEM_ID,extprefix_size,1,extprefix);
+    $ROW row2 = $new_row(ITEM_ID,extprefix_size,1,extprefix);
     $entry_t entry = &TB_ENTRIES(self->table)[i];
     row2->data[extprefix_size] = ($WORD)entry->hash;
-    enqueue(accum,row2);
+    $enqueue(accum,row2);
     int extprefix2_size = extprefix_size + 1;
     $WORD extprefix2[extprefix2_size];
     memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
     extprefix2[extprefix2_size-1] = ($WORD)0;
-    Serializable key = (Serializable)entry->key;
-    key->__class__->__serialize__(key,extprefix2,extprefix2_size,done,accum);
+    $Serializable key = ($Serializable)entry->key;
+    key->class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
     extprefix2[extprefix2_size-1] = ($WORD)1;
-    Serializable val =  (Serializable)entry->value;
+    $Serializable val = ($Serializable)entry->value;
     if (val==NULL) 
-      enqueue(accum,new_row(DUMMY_ID,extprefix2_size,0,extprefix2));
+      $enqueue(accum,$new_row(DUMMY_ID,extprefix2_size,0,extprefix2));
     else 
-      val->__class__->__serialize__(val,extprefix2,extprefix2_size,done,accum);
+      val->class->__serialize__(val,wit,extprefix2,extprefix2_size,done,accum);
   }
 }
 
-$dict $dict_deserialize($ROW *row, $dict done) {
+$dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row = this->next;
   if (this->class_id < 0) {
     $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
     pref->prefix_size = this->blob_size;
     memcpy(pref->prefix, this->data+this->prefix_size, this->blob_size*sizeof($WORD));
-    return $dict_get(done,pref,NULL);
+    return $dict_get(done,wit->_Hashable,pref,NULL);
   } else {
     $dict res = malloc(sizeof(struct $dict));
-    res->__class__ = $dict_methods;
+    res->class = &$dict$methods;
     res->numelements = (long)this->data[this->prefix_size];
-    res->hashwit = Hashable_instance((long)this->data[this->prefix_size+1]);
-    long tb_size = (long)this->data[this->prefix_size+2];
+    long tb_size = (long)this->data[this->prefix_size+1];
     res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
     res->table->tb_size = tb_size;
-    res->table->tb_usable = (long)this->data[this->prefix_size+3];
-    res->table->tb_nentries = (long)this->data[this->prefix_size+4];
-    memcpy(res->table->tb_indices,&this->data[this->prefix_size+5],tb_size*sizeof(int));
+    res->table->tb_usable = (long)this->data[this->prefix_size+2];
+    res->table->tb_nentries = (long)this->data[this->prefix_size+3];
+    memcpy(res->table->tb_indices,&this->data[this->prefix_size+4],tb_size*sizeof(int));
     for (int i=0; i<res->table->tb_nentries; i++) {
       $entry_t entry = &TB_ENTRIES(res->table)[i];
       entry->hash = (long)(*row)->data[(*row)->prefix_size];
       *row = (*row)->next;
-      entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(row,done);
+      entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
       if ((*row)->class_id == DUMMY_ID)
         entry->value = NULL;
       else {
-        entry->value = (serial$_methods[labs((*row)->class_id)])->__deserialize__(row,done);
+        entry->value = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
       }
     }
     $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
     pref->prefix_size = this->prefix_size;
     memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));
-    $dict_setitem(done,pref,res);
+    $dict_setitem(done,wit->_Hashable,pref,res);
     return res;
   }
 }
@@ -187,11 +184,10 @@ static int dictresize($dict d) {
 }
 
 
-$dict $new_dict(Hashable hashwit) { 
+$dict $new_dict() { 
   $dict dict =  malloc(sizeof(struct $dict));
-  dict->__class__ = $dict_methods;
+  dict->class = &$dict$methods;
   dict->numelements = 0;
-  dict->hashwit = hashwit;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
@@ -200,9 +196,9 @@ $dict $new_dict(Hashable hashwit) {
   return dict;
 }
 
-Hashable $dict_hashwitness($dict dict) {
-  return dict->hashwit;
-}
+//$Hashable $dict_hashwitness($dict dict) {
+//  return dict->hashwit;
+//}
 
 // Search index of hash table from offset of entry table 
 static int lookdict_index($table table, long hash, int index) {
@@ -227,7 +223,7 @@ static int lookdict_index($table table, long hash, int index) {
 // Returns index into compact array where hash/key is found
 // (and returns corresponding value in *res)
 // or DKIX_EMPTY if no such entry exists
-static int lookdict($dict dict, long hash, $WORD key, $WORD *res) {
+static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *res) {
   $table table = dict->table;
   long mask = (table->tb_size)-1, i = hash & mask, perturb = hash;
   int ix;
@@ -240,7 +236,7 @@ static int lookdict($dict dict, long hash, $WORD key, $WORD *res) {
     }
     if (ix >= 0) {
       $entry_t entry = &TB_ENTRIES(table)[ix];
-      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && dict->hashwit->__class__->__eq__(dict->hashwit,key,entry->key)))) {
+      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->class->__eq__(hashwit,key,entry->key)))) {
         // found an entry with the same or equal key
         *res = entry->value;
         return ix;
@@ -269,11 +265,11 @@ static long find_empty_slot($table table, long hash) {
     return i;
 }
 
-static int insertdict($dict dict, long hash, $WORD key, $WORD value) {
+static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD value) {
   $WORD old_value;
   $table table;
   $entry_t ep;
-  int ix = lookdict(dict,hash,key,&old_value);
+  int ix = lookdict(dict,hashwit,hash,key,&old_value);
   if (ix == DKIX_EMPTY) {
     if (dict->table->tb_usable <= 0 && dictresize(dict) < 0)
         return -1;
@@ -295,17 +291,17 @@ static int insertdict($dict dict, long hash, $WORD key, $WORD value) {
 }
 // Iterable //////////////////////////////////////////////////////////////////////////////
 
-typedef struct Iterator$dict {
-  char *$GCINFO;
+typedef struct $Iterator$dict {
+  char *GCINFO;
   $WORD(*__next__)($WORD self);
   $dict src;
   int nxt;
-} *Iterator$dict; 
+} *$Iterator$dict; 
 
 
 
 static $WORD $dict_iterator_next($WORD self) {
-  Iterator$dict state = (Iterator$dict) ((Iterator)self)->__class__;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -323,31 +319,31 @@ static $WORD $dict_iterator_next($WORD self) {
   return NULL;
 }
  
-Iterator $dict_iter($dict dict) {
-  Iterator$dict iter = malloc(sizeof(struct Iterator$dict));
+$Iterator $dict_iter($dict dict) {
+  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
   iter->__next__ = $dict_iterator_next;
   iter->src = dict;
   iter->nxt = 0;
-  Iterator res = malloc(sizeof(struct Iterator));
-  res->__class__ = (Iterator$__class__)iter;
+  $Iterator res = malloc(sizeof(struct $Iterator));
+  res->class = ($Iterator$class)iter;
   return res;
 }
  
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
-void $dict_setitem($dict dict, $WORD key, $WORD value) {
-  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
-  if (insertdict(dict, hash, key, value)<0) {
+void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
+  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  if (insertdict(dict, hashwit, hash, key, value)<0) {
     exception e;
     MKEXCEPTION(e,MEMORYERROR);
     RAISE(e);
   }      
 }
 
-$WORD $dict_getitem($dict dict, $WORD key) {
-  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
+$WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
+  long hash = from$int(hashwit->class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hash,key,&res);
+  int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
     exception e;
     MKEXCEPTION(e,KEYERROR);
@@ -357,10 +353,10 @@ $WORD $dict_getitem($dict dict, $WORD key) {
 }
 
 
-void $dict_delitem($dict dict,  $WORD key) {
-  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
+void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
+  long hash = from$int(hashwit->class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hash,key,&res);
+  int ix = lookdict(dict,hashwit,hash,key,&res);
   $table table = dict->table;
   if (ix >= 0) {
     $entry_t entry = &TB_ENTRIES(table)[ix];
@@ -387,27 +383,27 @@ long $dict_len($dict dict) {
 }
 
 
-$dict $dict_fromiter(Hashable hashwit, Iterator it) {
-  $dict res = $new_dict(hashwit);
+$dict $dict_fromiter($Hashable hashwit, $Iterator it) {
+  $dict res = $new_dict();
   if (it==NULL)
     return res;
-  $dict_update(res, it);
+  $dict_update(res,hashwit,it);
   return res;
 }
 
 
 // Container_Eq /////////////////////////////////////////////////////////////////////////////
 
-int $dict_contains($dict dict, $WORD key) {
+int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
-  return lookdict(dict,from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key)),key,&res) >= 0;
+  return lookdict(dict,hashwit,from$int(hashwit->class->__hash__(hashwit,key)),key,&res) >= 0;
 }
 
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
 
 static $WORD $dict_values_iterator_next($WORD self) {
-  Iterator$dict state = (Iterator$dict) ((Iterator)self)->__class__;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -426,7 +422,7 @@ static $WORD $dict_values_iterator_next($WORD self) {
 }
 
 static $WORD $dict_items_iterator_next($WORD self) {
-  Iterator$dict state = (Iterator$dict) ((Iterator)self)->__class__;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -448,41 +444,41 @@ static $WORD $dict_items_iterator_next($WORD self) {
 }
 
 
-Iterator $dict_keys($dict dict) {
+$Iterator $dict_keys($dict dict) {
   return $dict_iter(dict);
 }
 
-Iterator $dict_values($dict dict) {
-  Iterator$dict iter = malloc(sizeof(struct Iterator$dict));
+$Iterator $dict_values($dict dict) {
+  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
   iter->__next__ = $dict_values_iterator_next;
   iter->src = dict;
   iter->nxt = 0;
-  Iterator res = malloc(sizeof(struct Iterator));
-  res->__class__ = (Iterator$__class__)iter;
+  $Iterator res = malloc(sizeof(struct $Iterator));
+  res->class = ($Iterator$class)iter;
   return res;
 }
 
-Iterator $dict_items($dict dict) {
-  Iterator$dict iter = malloc(sizeof(struct Iterator$dict));
+$Iterator $dict_items($dict dict) {
+  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
   iter->__next__ = $dict_items_iterator_next;
   iter->src = dict;
   iter->nxt = 0;
-  Iterator res = malloc(sizeof(struct Iterator));
-  res->__class__ = (Iterator$__class__)iter;
+  $Iterator res = malloc(sizeof(struct $Iterator));
+  res->class = ($Iterator$class)iter;
   return res;
 }
  
-$WORD $dict_get($dict dict, $WORD key, $WORD deflt) {
-  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
+$WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
+  long hash = from$int(hashwit->class->__hash__(hashwit,key));
   $WORD res;
-  int ix = lookdict(dict,hash,key,&res);
+  int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0) 
     return deflt;
   else
     return res;
 }
 
-$WORD $dict_popitem($dict dict) {
+$WORD $dict_popitem($dict dict, $Hashable hashwit) {
   $table table = dict->table;
   int ix = table->tb_nentries-1;
   while (ix >= 0) {
@@ -492,7 +488,7 @@ $WORD $dict_popitem($dict dict) {
       res->a = entry->key;
       res->b = entry->value;
       entry->value = NULL;
-      long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,entry->key));
+      long hash = from$int(hashwit->class->__hash__(hashwit,entry->key));
       int i = lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
@@ -507,17 +503,17 @@ $WORD $dict_popitem($dict dict) {
   return NULL;
 }
 
-void $dict_update($dict dict, Iterator it) {
+void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
   $WORD item;
-  while((item = it->__class__->__next__(it)))
-    $dict_setitem(dict,(($tup2_t)item)->a,(($tup2_t)item)->b);
+  while((item = it->class->__next__(it)))
+    $dict_setitem(dict,hashwit,(($tup2_t)item)->a,(($tup2_t)item)->b);
 }
 
-$WORD $dict_setdefault($dict dict, $WORD key, $WORD deflt) {
-  // if (!deflt) deflt = None; what is the name of None here?...
-  long hash = from$int(dict->hashwit->__class__->__hash__(dict->hashwit,key));
+$WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
+  // if (!deflt) deflt = $None; what is the name of $None here?...
+  long hash = from$int(hashwit->class->__hash__(hashwit,key));
   $WORD value;
-  int ix = lookdict(dict,hash,key,&value);
+  int ix = lookdict(dict,hashwit,hash,key,&value);
   if (ix >= 0)
     return value;
   TB_ENTRIES(dict->table)[ix].value = deflt;

@@ -56,12 +56,6 @@ class Iterator[A] ():
 class list[A] ():
   copy : () -> list[A]
 
-class dict[A,B] ():
-  pass
-
-class set[A] ():
-  pass
-
 class Msg[A] ():
   pass
 
@@ -102,6 +96,12 @@ protocol Minus:
 protocol Hashable (Eq):
   __hash__     : () -> int
 
+class dict[A(Hashable),B] ():
+  pass
+
+class set[A(Hashable)] ():
+  pass
+
 protocol Boolean:
   __bool__   : () -> bool
 
@@ -128,7 +128,7 @@ protocol Collection[A] (Iterable[A]):
   __fromiter__ : (Iterable[A]) -> Self 
   __len__      : () -> int
   
-protocol Indexed[A,B]:
+protocol Indexed[A (Eq),B]:
   __getitem__  : (A) -> B
   __setitem__  : (A,B) -> None 
   __delitem__  : (A) -> None
@@ -245,3 +245,9 @@ extension int (Hashable):pass
 
 extension float (Real):pass
 extension float (Hashable):pass
+
+## Builtin functions #####################################################
+
+def abs(x : Complex) -> Real:
+    return x.__abs__()
+    

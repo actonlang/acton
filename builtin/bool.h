@@ -1,18 +1,15 @@
-typedef struct $bool$__methods__ {
-  None (*__serialize__)($bool, $WORD*, int, $dict, $ROWLISTHEADER);
-  $bool (*__deserialize__)($ROW*, $dict);
-} *$bool$__methods__;
-
-None $bool_serialize($bool self, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
-$bool $bool_deserialize($ROW *row, $dict done);
+struct $bool$class {
+  char *GCINFO;
+  $None (*__serialize__)($bool, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  $bool (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+};
 
 struct $bool {
-  char *GCINFO;
-  $bool$__methods__ __class__;
+  struct $bool$class *class;
   long val;
 };
 
-struct $bool$__methods__ $bool_table;
+extern struct $bool$class $bool$methods;
 
 $bool to$bool(long b);
 long from$bool($bool b);
