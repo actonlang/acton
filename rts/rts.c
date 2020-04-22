@@ -515,6 +515,13 @@ void *main_loop(void *arg) {
     }
 }
 
+void serialize_rts($Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD (serialize root_actor, readyQ, timerQ and any dynamic $ENV state)
+}
+
+void deserialize_rts($Mapping$dict wit, $ROW *row, $dict done) {
+    // TBD (rebuild root_actor, readyQ, timerQ and any dynamic $ENV state)
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 

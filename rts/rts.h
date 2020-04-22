@@ -131,3 +131,6 @@ void $POP();
 #define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__, $c); })
 
 typedef int $Env;
+
+void serialize_rts($Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+void deserialize_rts($Mapping$dict, $ROW*, $dict);
