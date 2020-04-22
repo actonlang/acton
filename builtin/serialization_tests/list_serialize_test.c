@@ -6,23 +6,17 @@
  
 int main() {
   /*
-  $list lst = $list_fromiter(NULL);
-  for (long i = 3L; i < 3000000L; i += 10L)
-    $list_append(lst,to$int(i));
   long prefix[] = {9L,7L,3L};
-  $ROW row = serialize((Serializable)lst,prefix,3);
-  write_serialized(row,"test.bin");
+  $list lst = $list_fromiter(NULL);
+  for (long i = 3L; i < 100L; i += 10L)
+    $list_append(lst,to$int(i));
+  $ROW row = $serialize(($Serializable)lst,prefix,3);
+  $write_serialized(row,"test.bin");
   long prefix2[5];
   int prefix2_size;
-  $dict done = $new_dict((Hashable)Hashable$PREFIX_new());
-  $list lst2 = ($list)deserialize(&row,prefix2,&prefix2_size, done);
-  printlist(lst2); 
-  
-  $list lst = $list_fromiter(NULL);
-  for (long i = 3L; i < 3000000L; i += 10L)
-    $list_append(lst,to$int(i));
-  long prefix[] = {9L,7L,3L};
-  serialize_file((Serializable)lst,prefix,3,"test.bin");
+
+  $list lst2 = ($list)$deserialize_file("test.bin",prefix2,&prefix2_size);
+  $printlist(lst2);
   */
   $list lst2 = $list_fromiter(NULL);
   for (long i = 0L; i < TESTSIZE; i++) {
@@ -36,34 +30,34 @@ int main() {
     }
   }
   long prefix2[] = {};
-  $ROW row = serialize((Serializable)lst2,prefix2,0);
+  $ROW row = $serialize(($Serializable)lst2,prefix2,0);
   long prefix[5];
   int prefix_size;
-  write_serialized(row,"test2.bin");
-  $list lst3 = ($list)deserialize(row,prefix,&prefix_size);
-  $ROW row2 = read_serialized("test2.bin");
-  write_serialized(row2,"test3.bin");
-  /*
+  $write_serialized(row,"test2.bin");
+  $list lst3 = ($list)$deserialize(row,prefix,&prefix_size);
+  $ROW row2 = $read_serialized("test2.bin");
+  $write_serialized(row2,"test3.bin");
+  
   for (int i=0; i<$list_len(lst3); i++) {
     printf("sublist %d is ",i);
-    printlist($list_getitem(lst3,i));
+    $printlist($list_getitem(lst3,i));
   }
   $list_setitem($list_getitem(lst3,2),1,to$int(7));
   for (int i=0; i<$list_len(lst3); i++) {
     printf("sublist %d is ",i);
-    printlist($list_getitem(lst3,i));
+    $printlist($list_getitem(lst3,i));
   }
   printf("prefix is ");
   for (int i = 0; i < prefix_size; i++)
     printf("%ld,",prefix[i]);
   printf("\n");
-  $list lst4 = ($list)deserialize(row2,prefix,&prefix_size);
+  $list lst4 = ($list)$deserialize(row2,prefix,&prefix_size);
     for (int i=0; i<$list_len(lst4); i++) {
     printf("sublist %d is ",i);
-    printlist($list_getitem(lst4,i));
+    $printlist($list_getitem(lst4,i));
   }
-  */
 
+  
 }
 
 /*
