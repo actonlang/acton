@@ -107,6 +107,7 @@ struct $Serializable {
 };
 
 struct serial$methods {
+  char *GCINFO;
   $None (*__serialize__)($Serializable, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
   $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
