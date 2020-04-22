@@ -13,6 +13,8 @@ typedef struct exception *exception;
 
 void RAISE(exception e);
 
+struct $tuple$class;
+
 struct $tup1_t;
 typedef struct $tup1_t *$tup1_t;
 
@@ -22,8 +24,11 @@ typedef struct $tup2_t *$tup2_t;
 struct $tup3_t;
 typedef struct $tup3_t *$tup3_t;
 
-struct $tuple$class {
-    char *$GCINFO;
+struct $tuple;
+typedef struct $tuple *$tuple;
+
+struct $tuple {
+    struct $tuple$class *$class;
 };
 
 struct $tup1_t {
@@ -43,12 +48,6 @@ struct $tup3_t {
   $WORD b;
   $WORD c;
 };
-
-extern struct $tuple$class $tuple$methods;
-
-#define $tup1_t$methods $tuple$methods
-#define $tup2_t$methods $tuple$methods
-#define $tup3_t$methods $tuple$methods
 
 /*
 typedef struct $pair_t {
