@@ -107,8 +107,8 @@ struct $Serializable {
 };
 
 struct serial$methods {
-  char *GCINFO;
-  $None (*__serialize__)($Serializable, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
+  char *$GCINFO;
+  $None (*__serialize__)($Serializable, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
   $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -141,7 +141,7 @@ serial$methods serial$_methods[10];
 typedef struct $Hashable$PREFIX *$Hashable$PREFIX;
 
 struct $Hashable$PREFIX$class {
-    char *GCINFO;
+    char *$GCINFO;
     $bool (*__eq__)($Hashable$PREFIX, $PREFIX, $PREFIX);
     $bool (*__ne__)($Hashable$PREFIX, $PREFIX, $PREFIX);
     $int (*__hash__)($Hashable$PREFIX, $PREFIX);
@@ -160,7 +160,7 @@ struct $Hashable$PREFIX *$Hashable$PREFIX$witness;
 typedef struct $Hashable$WORD *$Hashable$WORD;
 
 struct $Hashable$WORD$class {
-    char *GCINFO;
+    char *$GCINFO;
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
     $int (*__hash__)($Hashable$WORD, $WORD);

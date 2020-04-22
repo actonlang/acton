@@ -327,7 +327,7 @@ maybeFindMod (ModName ns) env = f ns (names env)
                                 _ -> Nothing
 
 isMod                       :: Env -> [Name] -> Bool
-isMod env ns                = trace ("## isMod " ++ prstrs ns) $ maybe False (const True) (maybeFindMod (ModName ns) env)
+isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns) env)
 
 
 tconKind                    :: QName -> Env -> Kind

@@ -110,6 +110,15 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
     atomic_flag_clear(&m->wait_lock);
 }
 
+void $Msg$__serialize__($Msg self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD
+}
+
+$Msg $Msg$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
 void $Actor$__init__($Actor a) {
     a->next = NULL;
     a->msg = NULL;
@@ -117,38 +126,84 @@ void $Actor$__init__($Actor a) {
     atomic_flag_clear(&a->msg_lock);
 }
 
+void $Actor$__serialize__($Actor self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD
+}
+
+$Actor $Actor$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
 void $Catcher$__init__($Catcher c, $Cont cont) {
     c->next = NULL;
     c->cont = cont;
 }
 
+void $Catcher$__serialize__($Catcher self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD
+}
+
+$Catcher $Catcher$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
 void $Clos$__init__($Clos $this) { }
+
+void $Clos$__serialize__($Clos self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD
+}
+
+$Clos $Clos$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
 
 void $Cont$__init__($Cont $this) { }
 
+void $Cont$__serialize__($Cont self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD
+}
+
+$Cont $Cont$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
 struct $Msg$class $Msg$methods = {
     MSG_HEADER,
+    $Msg$__serialize__,
+    $Msg$__deserialize__,
     $Msg$__init__
 };
 
 struct $Actor$class $Actor$methods = {
     ACTOR_HEADER,
+    $Actor$__serialize__,
+    $Actor$__deserialize__,
     $Actor$__init__
 };
 
 struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
+    $Catcher$__serialize__,
+    $Catcher$__deserialize__,
     $Catcher$__init__
 };
 
 struct $Clos$class $Clos$methods = {
     CLOS_HEADER,
+    $Clos$__serialize__,
+    $Clos$__deserialize__,
     $Clos$__init__,
     NULL
 };
 
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
+    $Cont$__serialize__,
+    $Cont$__deserialize__,
     $Cont$__init__,
     NULL
 };
@@ -295,6 +350,8 @@ $R $DONE$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $Done$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $DONE$enter
 };
@@ -308,6 +365,8 @@ $R $NewRoot$enter ($Cont $this, $WORD val) {
 }
 struct $Cont$class $NewRoot$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $NewRoot$enter
 };
@@ -321,6 +380,8 @@ $R $WriteRoot$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $WriteRoot$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $WriteRoot$enter
 };
@@ -454,6 +515,13 @@ void *main_loop(void *arg) {
     }
 }
 
+void serialize_rts($Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+    // TBD (serialize root_actor, readyQ, timerQ and any dynamic $ENV state)
+}
+
+void deserialize_rts($Mapping$dict wit, $ROW *row, $dict done) {
+    // TBD (rebuild root_actor, readyQ, timerQ and any dynamic $ENV state)
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////
 

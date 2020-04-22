@@ -133,7 +133,7 @@ int $list_containsnot($Eq w, $list lst, $WORD elem) {
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 typedef struct $Iterator$list {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD(*__next__)($WORD self);
   $list src;
   int nxt;
@@ -343,7 +343,7 @@ $None $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_s
     memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
     extprefix[extprefix_size-1] = ($WORD)(long)i;
     $Serializable elem = ($Serializable)self->data[i];
-    elem->$class->__serialize__(elem,wit,&extprefix,extprefix_size,done,accum);
+    elem->$class->__serialize__(elem,wit,extprefix,extprefix_size,done,accum);
   }
 }
 

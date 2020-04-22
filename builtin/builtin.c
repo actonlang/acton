@@ -16,4 +16,5 @@
 #include "str.c"
 #include "set.c"
 #include "set_impl.c"
+#include "tuple.c"
 #include "serialize.c"

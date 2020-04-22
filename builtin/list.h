@@ -1,5 +1,5 @@
 struct $list$class {
-  char *GCINFO;
+  char *$GCINFO;
   $None (*__serialize__)($list, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $list(*copy)($list);

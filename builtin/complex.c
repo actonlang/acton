@@ -1,5 +1,5 @@
 struct $complex {
-  char *GCINFO;
+  char *$GCINFO;
   double re;
   double im;
 };

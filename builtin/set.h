@@ -1,5 +1,5 @@
 struct $set$class {
-  char *GCINFO;
+  char *$GCINFO;
   $None (*__serialize__)($set, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $set (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $set(*copy)($set);

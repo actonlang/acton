@@ -5,7 +5,7 @@
 typedef struct $Iterator$class *$Iterator$class;
 
 struct $Iterator$class {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD (*__next__)($WORD);
 };
 
