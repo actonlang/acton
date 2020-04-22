@@ -17,3 +17,4 @@
 #include "str.h"
 #include "set.h"
 #include "set_impl.h"
+#include "tuple.h"
