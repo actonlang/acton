@@ -3,16 +3,22 @@
 
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
+    NULL,
+    NULL,
     lambda$1$__init__,
     lambda$1$enter
 };
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
+    NULL,
+    NULL,
     lambda$2$__init__,
     lambda$2$enter
 };
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",
+    NULL,
+    NULL,
     Pingpong$__init__,
     Pingpong$ping,
     Pingpong$pong

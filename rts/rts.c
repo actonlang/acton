@@ -133,6 +133,8 @@ struct $Msg$class $Msg$methods = {
 
 struct $Actor$class $Actor$methods = {
     ACTOR_HEADER,
+    NULL,
+    NULL,
     $Actor$__init__
 };
 
@@ -143,12 +145,16 @@ struct $Catcher$class $Catcher$methods = {
 
 struct $Clos$class $Clos$methods = {
     CLOS_HEADER,
+    NULL,
+    NULL,
     $Clos$__init__,
     NULL
 };
 
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     NULL
 };
@@ -295,6 +301,8 @@ $R $DONE$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $Done$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $DONE$enter
 };
@@ -308,6 +316,8 @@ $R $NewRoot$enter ($Cont $this, $WORD val) {
 }
 struct $Cont$class $NewRoot$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $NewRoot$enter
 };
@@ -321,6 +331,8 @@ $R $WriteRoot$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $WriteRoot$methods = {
     CONT_HEADER,
+    NULL,
+    NULL,
     $Cont$__init__,
     $WriteRoot$enter
 };
