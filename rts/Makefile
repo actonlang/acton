@@ -5,7 +5,7 @@ rts.o: rts.c rts.h
 		-pthread \
 		-c rts.c
 	
-Pingpong: rts.o pingpong.c
+Pingpong: rts.o pingpong.c pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-lutf8proc \
 		rts.o \

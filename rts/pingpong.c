@@ -23,11 +23,11 @@ void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
     $this->count = count;
     $this->q = q;
 }
-$R lambda$1$enter (lambda$1 $this, $Cont then) {
+$R lambda$1$enter(lambda$1 $this, $Cont then) {
     Pingpong self = $this->self;
     $int count = $this->count;
     $int q = $this->q;
-    return self->$class->pong(self, count, q, then);
+    return self->$class->pong(self, count, $Complex$int$witness->$class->__neg__($Complex$int$witness, q), then);
 }
 
 void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
@@ -42,6 +42,7 @@ $R lambda$2$enter (lambda$2 $this, $Cont then) {
 
 $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     $Actor$methods.__init__(($Actor)self);
+    self->i = i;
     self->count = i;
     return self->$class->ping(self, i, then);
 }
@@ -49,7 +50,7 @@ $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
     self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
     $int j = $Complex$int$witness->$class->__mul__($Complex$int$witness, self->count, q);
     printf("Ping %8ld\n", j->val);
-    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, $Complex$int$witness->$class->__neg__($Complex$int$witness, q)));
+    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, q));
     return $R_CONT(then, $None);
 }
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
