@@ -95,7 +95,7 @@ $tup2_t $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
   int n = from$int(a);
   int d = from$int(b);
   $tup2_t res = malloc(sizeof(struct $tup2_t));
-  res->GCINFO = "";
+  res->$class = &$tup2_t$methods;
   res->a = to$int(n/d);
   res->b = to$int(n%d);
   return res;

@@ -112,14 +112,14 @@ structdecls cnm                         = text "struct" <+> cnm <> semi $+$
                                           blank
 
 witness_struct env cnm is               = text "struct" <+> cnm <+> text "{" $+$
-                                          (nest 4 $ vcat ([--text "char *GCINFO;",
+                                          (nest 4 $ vcat ([--text "char *$GCINFO;",
                                                            cnm <> text "$class" <+>text" class"<>semi] ++
                                                            [vcat (map (cpretty env) is)])) $+$
                                            text "};"
 
 class_struct                            ::  CEnv -> Name -> [Stmt] -> Doc
 class_struct env nm ms                  = text "struct" <+> cpretty env{isglobal=True} nm<>text "$class" <+> text "{" $+$
-                                          (nest 4 $ text "char *GCINFO;" $+$ vcat (map (cpretty env . addparSig nm) ms)) $+$
+                                          (nest 4 $ text "char *$GCINFO;" $+$ vcat (map (cpretty env . addparSig nm) ms)) $+$
                                           text "};"
   where addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r)) d)
                                         =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d
@@ -127,7 +127,7 @@ class_struct env nm ms                  = text "struct" <+> cpretty env{isglobal
 addFstElem nm p                         = posRow (tCon (TC (NoQual nm) [])) p
 
 opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
-                                          (nest 4 $ text "char *GCINFO;" $+$
+                                          (nest 4 $ text "char *$GCINFO;" $+$
                                           vcat [cnm <+> text "proto"<>semi,
                                                 text "$WORD impl"<>semi]) $+$
                                           text "};" $+$ blank $+$

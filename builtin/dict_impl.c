@@ -15,7 +15,7 @@ typedef struct $entry_struct {
 } *$entry_t;
 
 struct $table_struct {
-  char *GCINFO;
+  char *$GCINFO;
   long tb_size;        // size of dk_indices array; must be power of 2
   long tb_usable;      // nr of unused entries in tb_entries (deleted entries are counted as used)
   long tb_nentries;    // nr of used entries in tb_entries
@@ -292,7 +292,7 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
 // Iterable //////////////////////////////////////////////////////////////////////////////
 
 typedef struct $Iterator$dict {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD(*__next__)($WORD self);
   $dict src;
   int nxt;
@@ -431,6 +431,7 @@ static $WORD $dict_items_iterator_next($WORD self) {
     if (entry->value != NULL) {
       state->nxt = i+1;
       $tup2_t res = malloc(sizeof(struct $tup2_t));
+      res->$class = &$tup2_t$methods;
       res->a = entry->key;
       res->b = entry->value;
       return res;
@@ -485,6 +486,7 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
     if (entry->value != NULL) {
       $tup2_t res = malloc(sizeof(struct $tup2_t));
+      res->$class = &$tup2_t$methods;
       res->a = entry->key;
       res->b = entry->value;
       entry->value = NULL;

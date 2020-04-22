@@ -1,5 +1,5 @@
 struct $float$class {
-  char *GCINFO;
+  char *$GCINFO;
   $None (*__serialize__)($float, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $float (*__deserialize__)($Mapping$dict,$ROW*, $dict);
 };

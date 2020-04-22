@@ -1,5 +1,5 @@
 struct $bool$class {
-  char *GCINFO;
+  char *$GCINFO;
   $None (*__serialize__)($bool, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $bool (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
