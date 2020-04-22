@@ -83,6 +83,8 @@ struct $Actor {
 };
 struct $Actor$class {
     char *GCINFO;
+    void (*__serialize__)($Actor, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER);
+    $Actor (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     void (*__init__)($Actor);
 };
 
@@ -101,6 +103,8 @@ struct $Clos {
 };
 struct $Clos$class {
     char *GCINFO;
+    void (*__serialize__)($Clos, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER);
+    $Clos (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     void (*__init__)($Clos);
     $WORD (*enter)($Clos, $WORD);
 };
@@ -113,6 +117,8 @@ struct $Cont {
 };
 struct $Cont$class {
     char *GCINFO;
+    void (*__serialize__)($Cont, $Mapping$dict, $WORD, int, $dict, $ROWLISTHEADER);
+    $Cont (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     void (*__init__)($Cont);
     $R (*enter)($Cont, $WORD);
 };
