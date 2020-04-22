@@ -13,5 +13,5 @@ int main() {
   printf("hash of %f is %ld\n",-1.0,$float_hash(to$float(-1.0)));
   printf("hash of %f is %ld\n",0.75,$float_hash(to$float(0.75)));
   printf("hash of '%s' is %ld\n","test",$string_hash("test",4));
-  printf("hash of 'test' as $str is %ld\n",from$int(wit->class->__hash__(wit,from$UTF8("test"))));
+  printf("hash of 'test' as $str is %ld\n",from$int(wit->$class->__hash__(wit,from$UTF8("test"))));
 }

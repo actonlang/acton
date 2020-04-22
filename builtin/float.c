@@ -24,7 +24,7 @@ $float $float_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
   
 $float to$float(double x) {
   $float res = malloc(sizeof(struct $float));
-  res->class = &$float$methods;
+  res->$class = &$float$methods;
   res->val = x;
   return res;
 }

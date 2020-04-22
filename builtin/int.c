@@ -19,7 +19,7 @@ $int $int_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
 
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
-  res->class = &$int$methods;
+  res->$class = &$int$methods;
   res->val = i;
   return res;
 }

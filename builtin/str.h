@@ -1,7 +1,7 @@
 struct $str$class;
 
 struct $str {
-  struct $str$class *class;
+  struct $str$class *$class;
   int nbytes;              // length of str in bytes
   int nchars;              // length of str in Unicode chars
   unsigned char *str;      // str is UTF-8 encoded.

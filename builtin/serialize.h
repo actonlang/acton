@@ -103,8 +103,7 @@ typedef struct serial$methods *serial$methods;
 typedef struct $Serializable  *$Serializable;
 
 struct $Serializable {
-  char *GCINFO;
-  serial$methods class;
+  serial$methods $class;
 };
 
 struct serial$methods {
@@ -148,7 +147,7 @@ struct $Hashable$PREFIX$class {
 };
 
 struct $Hashable$PREFIX {
-    struct $Hashable$PREFIX$class *class;
+    struct $Hashable$PREFIX$class *$class;
 };
 
 struct $Hashable$PREFIX$class $Hashable$PREFIX$methods;
@@ -167,7 +166,7 @@ struct $Hashable$WORD$class {
 };
 
 struct $Hashable$WORD {
-    struct $Hashable$WORD$class *class;
+    struct $Hashable$WORD$class *$class;
 };
 
 struct $Hashable$WORD$class $Hashable$WORD$methods;

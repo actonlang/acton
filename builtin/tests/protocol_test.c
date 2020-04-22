@@ -7,18 +7,18 @@
  
 void printSequence($Sequence wit, $WORD seq) {
   printf("[");
-  long n = from$int(wit->_Collection->class->__len__(wit->_Collection, seq));
+  long n = from$int(wit->_Collection->$class->__len__(wit->_Collection, seq));
   for (long i=0; i < n-1; i++) 
-    printf("%ld, ",from$int(wit->class->__getitem__(wit,seq,to$int(i))));
+    printf("%ld, ",from$int(wit->$class->__getitem__(wit,seq,to$int(i))));
   if (n > 0) 
-    printf("%ld",from$int(wit->class->__getitem__(wit,seq,to$int(n-1))));
+    printf("%ld",from$int(wit->$class->__getitem__(wit,seq,to$int(n-1))));
   printf("]\n");
 }
 
 $list range($Sequence wit, long a, long b) {
-  $list res = wit->_Collection->class->__fromiter__(wit->_Collection,NULL);
+  $list res = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
   for (long i=a; i<b; i++)
-    wit->class->append(wit,res,to$int(i));
+    wit->$class->append(wit,res,to$int(i));
   return res;
 }
 
@@ -32,10 +32,10 @@ $list fromto(long a, long b) {
 */
 $WORD concat($Collection wit1, $Indexed wit2, $Plus wit3, $WORD s, $WORD zero) {
   $WORD res = zero;
-  $int len = wit1->class->__len__(wit1,s);
+  $int len = wit1->$class->__len__(wit1,s);
   for (long i = 0; i < from$int(len); i++) {
-    $WORD nxt = wit2->class->__getitem__(wit2,s,to$int(i));
-    res = wit3->class->__add__(wit3,res,nxt);
+    $WORD nxt = wit2->$class->__getitem__(wit2,s,to$int(i));
+    res = wit3->$class->__add__(wit3,res,nxt);
   }
   return res;
 }
@@ -50,10 +50,10 @@ Plus$class Plus$int_instance = &Plus$int_struct;
 int main() {
   $Sequence wit = ($Sequence)$Sequence$list$witness;
   // first we use concat for list concatenation
-  $WORD lst = wit->_Collection->class->__fromiter__(wit->_Collection,NULL);
-  $WORD emptylist = wit->_Collection->class->__fromiter__(wit->_Collection,NULL);
+  $WORD lst = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $WORD emptylist = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
   for (long i = 1; i< 10; i++) {
-    wit->class->append(wit,lst,range(wit,i,2*i));
+    wit->$class->append(wit,lst,range(wit,i,2*i));
   }
   printSequence(wit,concat(wit->_Collection,($Indexed)wit,wit->_Plus,lst,emptylist));
   // and then to sum a list of integers

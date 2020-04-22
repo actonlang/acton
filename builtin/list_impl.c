@@ -78,7 +78,7 @@ $list list_new(int capacity) {
   }
   lst->length = 0;
   lst->capacity = capacity;
-  lst->class = &$list$methods; 
+  lst->$class = &$list$methods; 
   return lst;
 }
 
@@ -104,7 +104,7 @@ $list $list_fromiter($Iterator iter) {
     return res;
   }
   while (1) {
-    $WORD nxt = iter->class->__next__(iter);
+    $WORD nxt = iter->$class->__next__(iter);
     $list_append(res,nxt);
   }                                         // try/except to stop loop when next raises STOPITERATION.
   return res;
@@ -119,7 +119,7 @@ long $list_len($list lst) {
 
 int $list_contains($Eq w, $list lst, $WORD elem) {
   for (int i=0; i < lst->length; i++) {
-    if (from$bool(w->class->__eq__(w,elem,lst->data[i])))
+    if (from$bool(w->$class->__eq__(w,elem,lst->data[i])))
       return 1;
   }
   return 0;
@@ -140,7 +140,7 @@ typedef struct $Iterator$list {
 } *$Iterator$list; 
 
 static $WORD $list_iterator_next($WORD self) {
-  $Iterator$list state = ($Iterator$list) (($Iterator)self)->class;
+  $Iterator$list state = ($Iterator$list) (($Iterator)self)->$class;
   if (state->nxt >= state->src->length) {
     exception e;
     MKEXCEPTION(e,STOPITERATION);
@@ -155,7 +155,7 @@ $Iterator $list_iter($list lst) {
   iter->src = lst;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
 
@@ -221,7 +221,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
   int len = lst->length;
   $list other = list_new(0);
   $WORD w;
-  while((w=it->class->__next__(it)))
+  while((w=it->$class->__next__(it)))
     $list_append(other,w);
   int olen = other->length; 
   int start, stop, step, slen;
@@ -343,7 +343,7 @@ $None $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_s
     memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
     extprefix[extprefix_size-1] = ($WORD)(long)i;
     $Serializable elem = ($Serializable)self->data[i];
-    elem->class->__serialize__(elem,wit,&extprefix,extprefix_size,done,accum);
+    elem->$class->__serialize__(elem,wit,&extprefix,extprefix_size,done,accum);
   }
 }
 

@@ -5,7 +5,7 @@ struct $bool$class {
 };
 
 struct $bool {
-  struct $bool$class *class;
+  struct $bool$class *$class;
   long val;
 };
 

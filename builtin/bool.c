@@ -20,7 +20,7 @@ $bool $bool_deserialize( $Mapping$dict notused, $ROW *row, $dict done) {
 
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));
-  res->class = &$bool$methods;
+  res->$class = &$bool$methods;
   res->val = b;
   return res;
 }

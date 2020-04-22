@@ -7,5 +7,5 @@ struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$met
 $Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
   
 $WORD $next($Iterator it) {
-  return it->class->__next__(it);
+  return it->$class->__next__(it);
 }

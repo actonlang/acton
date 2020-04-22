@@ -25,7 +25,7 @@ struct $Container$list$class $Container$list$methods = {"",($Iterator (*)($Conta
  
 $Container$list $Container$list_new($Eq _EqA) {
   $Container$list res = malloc(sizeof(struct $Container$list));
-  res->class = &$Container$list$methods;
+  res->$class = &$Container$list$methods;
   res->_Eq = _EqA;
   return res;
 }
@@ -45,7 +45,7 @@ $list $Collection$list$__fromiter__($Collection$list wit, $Iterable$opaque it) {
   if (it == NULL)
     iter = NULL;
   else
-    iter = it->proto->class->__iter__(it->proto, it->impl);
+    iter = it->proto->$class->__iter__(it->proto, it->impl);
   return $list_fromiter(iter);
 }
  
@@ -70,7 +70,7 @@ $list $Sequence$list$__getslice__($Sequence$list wit, $list self, $Slice slice) 
 }
 
 $None $Sequence$list$__setslice__($Sequence$list wit, $list self, $Slice slice, $Iterable$opaque it) {
-  $list_setslice(self,slice,it->proto->class->__iter__(it->proto,it->impl));
+  $list_setslice(self,slice,it->proto->$class->__iter__(it->proto,it->impl));
 }
 
 $None $Sequence$list$__delslice__($Sequence$list wit, $list self, $Slice slice) {
