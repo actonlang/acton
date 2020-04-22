@@ -9,7 +9,7 @@ struct $int {
   long val;
 };
 
-extern struct $int$class $int$methods;
+struct $int$class $int$methods;
 
 extern struct $Integral$int$class $Integral$int$methods;
 extern struct $Logical$int$class $Logical$int$methods;
@@ -27,3 +27,4 @@ extern struct $Hashable$int *$Hashable$int$witness;
 
 $int to$int(long n);
 long from$int($int n);
+

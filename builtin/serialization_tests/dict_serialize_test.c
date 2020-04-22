@@ -9,23 +9,24 @@ $list range(int a, int b) {
 }
 
 int main() {
-  $str a = fromUTF8("a");
-  $str b = fromUTF8("b");
-  $dict dict = $dict_fromiter((Hashable)Hashable$str_new(),NULL);
-  $list lst = range(0,100);
-  $dict_setitem(dict,a,lst);
-  $dict_setitem(dict,b,lst);
+  $Hashable wit = ($Hashable)$Hashable$str$witness;
+  $str a = from$UTF8("a");
+  $str b = from$UTF8("b");
+  $dict dict = $dict_fromiter(wit,NULL);
+  $list lst = range(0,50);
+  $dict_setitem(dict,wit, a,lst);
+  $dict_setitem(dict,wit, b,lst);
   long prefix[] = {0L};
-  serialize_file((Serializable)dict,prefix,1,"test4.bin");
+  $serialize_file(($Serializable)dict,prefix,1,"test4.bin");
 
   long prefix2[10];
   int prefix2_size;
-  $dict dict2 = ($dict)deserialize_file("test4.bin",prefix2,&prefix2_size);
-  serialize_file((Serializable)dict2,prefix,1,"test5.bin");
-  printlist($dict_getitem(dict2,a));
+  $dict dict2 = ($dict)$deserialize_file("test4.bin",prefix2,&prefix2_size);
+  $serialize_file(($Serializable)dict2,prefix,1,"test5.bin");
+  $printlist($dict_getitem(dict2,wit, a));
   $list_setitem(lst,1,to$int(7));
-  printlist($dict_getitem(dict2,b));
-  $list_setitem($dict_getitem(dict2,a),1,to$int(7));
-  printlist($dict_getitem(dict2,b));  
+  $printlist($dict_getitem(dict2,wit ,b));
+  $list_setitem($dict_getitem(dict2,wit,a),1,to$int(7));
+  $printlist($dict_getitem(dict2,wit,b));  
             
 }
