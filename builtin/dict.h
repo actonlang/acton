@@ -7,7 +7,7 @@ struct $dict$class {
 typedef struct $table_struct *$table;
 
 struct $dict {
-  struct $dict$class *class;
+  struct $dict$class *$class;
   long numelements;               // nr of elements in dictionary
   $table table;                   // the hashtable
 };

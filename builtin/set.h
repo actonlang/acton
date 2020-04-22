@@ -11,7 +11,7 @@ typedef struct {
 } $setentry;
 
 typedef struct $set {
-  struct $set$class *class;
+  struct $set$class *$class;
   long numelements;    // nr of elements in $set
   long fill;           // numelements + #dummy entries
     /* The table contains mask + 1 slots, and that's a power of 2.

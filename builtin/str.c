@@ -112,7 +112,7 @@ $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
 }
 
 $str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque it) {
-  return $str_fromiter(it->proto->class->__iter__(it->proto,it->impl));
+  return $str_fromiter(it->proto->$class->__iter__(it->proto,it->impl));
 }
 
 $int $Container$str$__len__ ($Container$str wit, $str str) {
@@ -230,7 +230,7 @@ static $str null_str = &null_struct;
 
 #define NEW_UNFILLED(nm,nchrs,nbtes)         \
 nm = malloc(sizeof(struct $str)); \
-(nm)->class = &$str$methods; \
+(nm)->$class = &$str$methods; \
 (nm)->nchars = nchrs;            \
 (nm)->nbytes = nbtes;            \
 (nm)->str = malloc((nm)->nbytes + 1);    \
@@ -245,7 +245,7 @@ $str from$UTF8(char *str) {
   while(1) {
     if (*p == '\0') {
       $str res = malloc(sizeof(struct $str));
-      res->class = &$str$methods;
+      res->$class = &$str$methods;
       res->nbytes = nbytes;
       res->nchars = nchars;
       res->str = (unsigned char*)str;
@@ -575,7 +575,7 @@ $Iterator $str_iter($str str) {
   iter->nxt = str->str;
   iter->remaining = str->nchars;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
 
@@ -635,7 +635,7 @@ $str $str_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $str res = malloc(sizeof(struct $str));
   long nbytes;
   memcpy(&nbytes,this->data+this->prefix_size,sizeof($WORD));
-  res->class = &$str$methods;
+  res->$class = &$str$methods;
   res->nbytes = (int)nbytes;
   long nchars;
   memcpy(&nchars,this->data+this->prefix_size+1,sizeof($WORD));
@@ -939,14 +939,14 @@ $bool $str_isupper($str s) {
 //creates many intermediate strings...
 $str $str_join($str s, $Iterator iter) {
   $str res;
-  $str nxt  = ($str)iter->class->__next__(iter);
+  $str nxt  = ($str)iter->$class->__next__(iter);
   //  if(!iterator_next(iter)             //BEWARE: must catch STOPITERATION!!!!
   //   res = (str_t)nxt;
   // else
   //  return null_str;
 
   while(1) {
-    nxt =  ($str)iter->class->__next__(iter);
+    nxt =  ($str)iter->$class->__next__(iter);
     res = ($str)$str_add($str_add(res,s),nxt);
   }
   return res;

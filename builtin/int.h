@@ -5,7 +5,7 @@ struct $int$class {
 };
 
 struct $int {
-  struct $int$class *class;
+  struct $int$class *$class;
   long val;
 };
 

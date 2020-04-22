@@ -380,7 +380,7 @@ typedef struct $Hashable$float$class *$Hashable$float$class;
 // $Eq ////////////////////////////////////////////////////////////
 
 struct $Eq {
-    $Eq$class  class;
+    $Eq$class $class;
 };
 
 struct $Eq$class {
@@ -401,7 +401,7 @@ $Eq$opaque $Eq$pack($Eq proto, $WORD impl);
 // $Ord ////////////////////////////////////////////////////////////
 
 struct $Ord {
-    $Ord$class  class;
+    $Ord$class $class;
 };
 
 struct $Ord$class {
@@ -426,7 +426,7 @@ $Ord$opaque $Ord$pack($Ord proto, $WORD impl);
 // $Logical ////////////////////////////////////////////////////////////
 
 struct $Logical {
-    $Logical$class  class;
+    $Logical$class $class;
 };
 
 struct $Logical$class {
@@ -448,7 +448,7 @@ $Logical$opaque $Logical$pack($Logical proto, $WORD impl);
 // $Plus ////////////////////////////////////////////////////////////
 
 struct $Plus {
-    $Plus$class  class;
+    $Plus$class $class;
 };
 
 struct $Plus$class {
@@ -468,7 +468,7 @@ $Plus$opaque $Plus$pack($Plus proto, $WORD impl);
 // $Minus ////////////////////////////////////////////////////////////
 
 struct $Minus {
-    $Minus$class  class;
+    $Minus$class $class;
 };
 
 struct $Minus$class {
@@ -488,7 +488,7 @@ $Minus$opaque $Minus$pack($Minus proto, $WORD impl);
 // $Hashable ////////////////////////////////////////////////////////////
 
 struct $Hashable {
-    $Hashable$class  class;
+    $Hashable$class $class;
 };
 
 struct $Hashable$class {
@@ -510,7 +510,7 @@ $Hashable$opaque $Hashable$pack($Hashable proto, $WORD impl);
 // $Boolean ////////////////////////////////////////////////////////////
 
 struct $Boolean {
-    $Boolean$class  class;
+    $Boolean$class $class;
 };
 
 struct $Boolean$class {
@@ -530,7 +530,7 @@ $Boolean$opaque $Boolean$pack($Boolean proto, $WORD impl);
 // $Iterable ////////////////////////////////////////////////////////////
 
 struct $Iterable {
-    $Iterable$class  class;
+    $Iterable$class $class;
 };
 
 struct $Iterable$class {
@@ -550,7 +550,7 @@ $Iterable$opaque $Iterable$pack($Iterable proto, $WORD impl);
 // $Collection ////////////////////////////////////////////////////////////
 
 struct $Collection {
-    $Collection$class  class;
+    $Collection$class $class;
 };
 
 struct $Collection$class {
@@ -572,7 +572,7 @@ $Collection$opaque $Collection$pack($Collection proto, $WORD impl);
 // $Indexed ////////////////////////////////////////////////////////////
 
 struct $Indexed {
-    $Indexed$class  class;
+    $Indexed$class $class;
     $Eq _Eq;
 };
 
@@ -595,7 +595,7 @@ $Indexed$opaque $Indexed$pack($Indexed proto, $WORD impl);
 // $Sliceable ////////////////////////////////////////////////////////////
 
 struct $Sliceable {
-    $Sliceable$class  class;
+    $Sliceable$class $class;
 };
 
 struct $Sliceable$class {
@@ -620,7 +620,7 @@ $Sliceable$opaque $Sliceable$pack($Sliceable proto, $WORD impl);
 // $Sequence ////////////////////////////////////////////////////////////
 
 struct $Sequence {
-    $Sequence$class  class;
+    $Sequence$class $class;
     $Collection _Collection;
     $Plus _Plus;
 };
@@ -651,7 +651,7 @@ $Sequence$opaque $Sequence$pack($Sequence proto, $WORD impl);
 // $Container ////////////////////////////////////////////////////////////
 
 struct $Container {
-    $Container$class  class;
+    $Container$class $class;
     $Eq _Eq;
 };
 
@@ -676,7 +676,7 @@ $Container$opaque $Container$pack($Container proto, $WORD impl);
 // $Mapping ////////////////////////////////////////////////////////////
 
 struct $Mapping {
-    $Mapping$class  class;
+    $Mapping$class $class;
     $Indexed _Indexed;
     $Eq _Eq;
 };
@@ -709,7 +709,7 @@ $Mapping$opaque $Mapping$pack($Mapping proto, $WORD impl);
 // $Set ////////////////////////////////////////////////////////////
 
 struct $Set {
-    $Set$class  class;
+    $Set$class $class;
     $Ord _Ord;
     $Logical _Logical;
     $Minus _Minus;
@@ -741,7 +741,7 @@ $Set$opaque $Set$pack($Set proto, $WORD impl);
 // $Complex ////////////////////////////////////////////////////////////
 
 struct $Complex {
-    $Complex$class  class;
+    $Complex$class $class;
     $Plus _Plus;
     $Minus _Minus;
 };
@@ -775,7 +775,7 @@ $Complex$opaque $Complex$pack($Complex proto, $WORD impl);
 // $Real ////////////////////////////////////////////////////////////
 
 struct $Real {
-    $Real$class  class;
+    $Real$class $class;
     $Complex _Complx;
 };
 
@@ -806,7 +806,7 @@ $Real$opaque $Real$pack($Real proto, $WORD impl);
 // $Rational ////////////////////////////////////////////////////////////
 
 struct $Rational {
-    $Rational$class  class;
+    $Rational$class $class;
 };
 
 struct $Rational$class {
@@ -838,7 +838,7 @@ $Rational$opaque $Rational$pack($Rational proto, $WORD impl);
 // $Integral ////////////////////////////////////////////////////////////
 
 struct $Integral {
-    $Integral$class  class;
+    $Integral$class $class;
     $Logical _Logical;
 };
 
@@ -879,7 +879,7 @@ $Integral$opaque $Integral$pack($Integral proto, $WORD impl);
 // $Boolean$int ////////////////////////////////////////////////////////////
 
 struct $Boolean$int {
-    $Boolean$int$class  class;
+    $Boolean$int$class $class;
 };
 
 struct $Boolean$int$class {
@@ -892,7 +892,7 @@ $bool $Boolean$int$__bool__ ($Boolean$int, $int);
 // $Boolean$list ////////////////////////////////////////////////////////////
 
 struct $Boolean$list {
-    $Boolean$list$class  class;
+    $Boolean$list$class $class;
 };
 
 struct $Boolean$list$class {
@@ -905,7 +905,7 @@ $bool $Boolean$list$__bool__ ($Boolean$list, $list);
 // $Sequence$list ////////////////////////////////////////////////////////////
 
 struct $Sequence$list {
-    $Sequence$list$class  class;
+    $Sequence$list$class $class;
     $Collection _Collection;
     $Plus _Plus;
 };
@@ -938,7 +938,7 @@ $None $Sequence$list$reverse ($Sequence$list, $list);
 // $Collection$list ////////////////////////////////////////////////////////////
 
 struct $Collection$list {
-    $Collection$list$class  class;
+    $Collection$list$class $class;
     $Sequence _Sequence;
 };
 
@@ -956,7 +956,7 @@ $int $Collection$list$__len__ ($Collection$list, $list);
 // $Plus$list ////////////////////////////////////////////////////////////
 
 struct $Plus$list {
-    $Plus$list$class  class;
+    $Plus$list$class $class;
     $Sequence _Sequence;
 };
 
@@ -970,7 +970,7 @@ $list $Plus$list$__add__ ($Plus$list, $list, $list);
 // $Container$list ////////////////////////////////////////////////////////////
 
 struct $Container$list {
-    $Container$list$class  class;
+    $Container$list$class $class;
     $Eq _Eq;
 };
 
@@ -992,7 +992,7 @@ $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
 // $Mapping$dict ////////////////////////////////////////////////////////////
 
 struct $Mapping$dict {
-    $Mapping$dict$class  class;
+    $Mapping$dict$class $class;
     $Hashable _Hashable;
     $Indexed _Indexed;
     $Eq _Eq;
@@ -1030,7 +1030,7 @@ $None $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 // $Indexed$dict ////////////////////////////////////////////////////////////
 
 struct $Indexed$dict {
-    $Indexed$dict$class  class;
+    $Indexed$dict$class $class;
     $Mapping _Mapping;
     $Hashable _Hashable;
     $Eq _Eq;
@@ -1050,7 +1050,7 @@ $None $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
 // $Set$set ////////////////////////////////////////////////////////////
 
 struct $Set$set {
-    $Set$set$class  class;
+    $Set$set$class $class;
     $Hashable _Hashable;
     $Ord _Ord;
     $Logical _Logical;
@@ -1084,7 +1084,7 @@ $WORD $Set$set$pop ($Set$set, $set);
 // $Ord$set ////////////////////////////////////////////////////////////
 
 struct $Ord$set {
-    $Ord$set$class  class;
+    $Ord$set$class $class;
     $Set _Set;
     $Hashable _Hashable;
 };
@@ -1109,7 +1109,7 @@ $bool $Ord$set$__ge__ ($Ord$set, $set, $set);
 // $Logical$set ////////////////////////////////////////////////////////////
 
 struct $Logical$set {
-    $Logical$set$class  class;
+    $Logical$set$class $class;
     $Set _Set;
     $Hashable _Hashable;
 };
@@ -1128,7 +1128,7 @@ $set $Logical$set$__xor__ ($Logical$set, $set, $set);
 // $Minus$set ////////////////////////////////////////////////////////////
 
 struct $Minus$set {
-    $Minus$set$class  class;
+    $Minus$set$class $class;
     $Set _Set;
     $Hashable _Hashable;
 };
@@ -1143,7 +1143,7 @@ $set $Minus$set$__sub__ ($Minus$set, $set, $set);
 // $Iterable$Iterator ////////////////////////////////////////////////////////////
 
 struct $Iterable$Iterator {
-    $Iterable$Iterator$class  class;
+    $Iterable$Iterator$class $class;
 };
 
 struct $Iterable$Iterator$class {
@@ -1156,7 +1156,7 @@ $Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
 // $Ord$str ////////////////////////////////////////////////////////////
 
 struct $Ord$str {
-    $Ord$str$class  class;
+    $Ord$str$class $class;
 };
 
 struct $Ord$str$class {
@@ -1179,7 +1179,7 @@ $bool $Ord$str$__ge__ ($Ord$str, $str, $str);
 // $Container$str ////////////////////////////////////////////////////////////
 
 struct $Container$str {
-    $Container$str$class  class;
+    $Container$str$class $class;
     $Eq _Eq;
 };
 
@@ -1201,7 +1201,7 @@ $bool $Container$str$__containsnot__ ($Container$str, $str, $str);
 // $Sliceable$str ////////////////////////////////////////////////////////////
 
 struct $Sliceable$str {
-    $Sliceable$str$class  class;
+    $Sliceable$str$class $class;
 };
 
 struct $Sliceable$str$class {
@@ -1224,7 +1224,7 @@ $None $Sliceable$str$__delslice__ ($Sliceable$str, $str, $Slice);
 // $Plus$str ////////////////////////////////////////////////////////////
 
 struct $Plus$str {
-    $Plus$str$class  class;
+    $Plus$str$class $class;
 };
 
 struct $Plus$str$class {
@@ -1237,7 +1237,7 @@ $str $Plus$str$__add__ ($Plus$str, $str, $str);
 // $Hashable$str ////////////////////////////////////////////////////////////
 
 struct $Hashable$str {
-    $Hashable$str$class  class;
+    $Hashable$str$class $class;
 };
 
 struct $Hashable$str$class {
@@ -1254,7 +1254,7 @@ $int $Hashable$str$__hash__ ($Hashable$str, $str);
 // $Integral$int ////////////////////////////////////////////////////////////
 
 struct $Integral$int {
-    $Integral$int$class  class;
+    $Integral$int$class $class;
     $Logical _Logical;
 };
 
@@ -1308,7 +1308,7 @@ $int $Integral$int$__invert__ ($Integral$int, $int);
 // $Logical$int ////////////////////////////////////////////////////////////
 
 struct $Logical$int {
-    $Logical$int$class  class;
+    $Logical$int$class $class;
     $Integral _Integral;
 };
 
@@ -1326,7 +1326,7 @@ $int $Logical$int$__xor__ ($Logical$int, $int, $int);
 // $Complex$int ////////////////////////////////////////////////////////////
 
 struct $Complex$int {
-    $Complex$int$class  class;
+    $Complex$int$class $class;
     $Integral _Integral;
     $Plus _Plus;
     $Minus _Minus;
@@ -1366,7 +1366,7 @@ $int $Complex$int$conjugate ($Complex$int, $int);
 // $Plus$int ////////////////////////////////////////////////////////////
 
 struct $Plus$int {
-    $Plus$int$class  class;
+    $Plus$int$class $class;
     $Integral _Integral;
 };
 
@@ -1380,7 +1380,7 @@ $int $Plus$int$__add__ ($Plus$int, $int, $int);
 // $Minus$int ////////////////////////////////////////////////////////////
 
 struct $Minus$int {
-    $Minus$int$class  class;
+    $Minus$int$class $class;
     $Integral _Integral;
 };
 
@@ -1394,7 +1394,7 @@ $int $Minus$int$__sub__ ($Minus$int, $int, $int);
 // $Hashable$int ////////////////////////////////////////////////////////////
 
 struct $Hashable$int {
-    $Hashable$int$class  class;
+    $Hashable$int$class $class;
 };
 
 struct $Hashable$int$class {
@@ -1411,7 +1411,7 @@ $int $Hashable$int$__hash__ ($Hashable$int, $int);
 // $Real$float ////////////////////////////////////////////////////////////
 
 struct $Real$float {
-    $Real$float$class  class;
+    $Real$float$class $class;
     $Complex _Complx;
 };
 
@@ -1445,7 +1445,7 @@ $Integral$opaque $Real$float$__round__ ($Real$float, $float);
 // $Complex$float ////////////////////////////////////////////////////////////
 
 struct $Complex$float {
-    $Complex$float$class  class;
+    $Complex$float$class $class;
     $Real _Real;
     $Plus _Plus;
     $Minus _Minus;
@@ -1485,7 +1485,7 @@ $float $Complex$float$conjugate ($Complex$float, $float);
 // $Plus$float ////////////////////////////////////////////////////////////
 
 struct $Plus$float {
-    $Plus$float$class  class;
+    $Plus$float$class $class;
     $Real _Real;
 };
 
@@ -1499,7 +1499,7 @@ $float $Plus$float$__add__ ($Plus$float, $float, $float);
 // $Minus$float ////////////////////////////////////////////////////////////
 
 struct $Minus$float {
-    $Minus$float$class  class;
+    $Minus$float$class $class;
     $Real _Real;
 };
 
@@ -1513,7 +1513,7 @@ $float $Minus$float$__sub__ ($Minus$float, $float, $float);
 // $Hashable$float ////////////////////////////////////////////////////////////
 
 struct $Hashable$float {
-    $Hashable$float$class  class;
+    $Hashable$float$class $class;
 };
 
 struct $Hashable$float$class {

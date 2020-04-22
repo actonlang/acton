@@ -103,7 +103,7 @@ static $setentry *$set_lookkey($set set, $Hashable hashwit, $WORD key, long hash
             $WORD *startkey = entry->key;
             // startkey cannot be a dummy because the dummy hash field is -1 
             // assert(startkey != dummy);
-            if (startkey == key || hashwit->class->__eq__(hashwit,startkey,key))
+            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
               return entry;
         }
         perturb >>= PERTURB_SHIFT;
@@ -128,7 +128,7 @@ $set $set_new() {
   res->finger = 0;
   res->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(res->table,0,MIN_SIZE*sizeof($setentry));
-  res->class = &$set$methods;
+  res->$class = &$set$methods;
   return res; 
 }
 
@@ -153,7 +153,7 @@ static void $set_add_entry($set set, $Hashable hashwit, $WORD key, long hash) {
     if (entry->hash == hash) {
       $WORD startkey = entry->key;
       // startkey cannot be a dummy because the dummy hash field is -1 
-      if (startkey == key || hashwit->class->__eq__(hashwit,startkey,key))
+      if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
           goto found_active;
           }
       else if (entry->hash == -1)
@@ -310,16 +310,16 @@ $set $set_symmetric_difference($Hashable hashwit, $set set, $set other) {
 // Set /////////////////////////////////////////////////////////////////////////////////////////////
 
 void $set_add($set set, $Hashable hashwit,  $WORD elem) {
-  $set_add_entry(set,hashwit,elem,from$int(hashwit->class->__hash__(hashwit,elem)));
+  $set_add_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
 
 
 void $set_discard($set set, $Hashable hashwit, $WORD elem) {
-  $set_discard_entry(set,hashwit,elem,from$int(hashwit->class->__hash__(hashwit,elem)));
+  $set_discard_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
 
 void $set_remove($set set, $Hashable hashwit, $WORD elem) {
-  long hash = from$int(hashwit->class->__hash__(hashwit,elem));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,elem));
   if($set_discard_entry(set,hashwit,elem,hash))
     return;
   else {
@@ -387,7 +387,7 @@ long $set_len($set set) {
 // Container_Eq ///////////////////////////////////////////////////////////////////////////////////////
 
 int $set_contains($set set, $Hashable hashwit, $WORD elem) {
-  return $set_contains_entry(set,hashwit,elem,from$int(hashwit->class->__hash__(hashwit,elem)));
+  return $set_contains_entry(set,hashwit,elem,from$int(hashwit->$class->__hash__(hashwit,elem)));
 }
  
 // Iterable ///////////////////////////////////////////////////////////////////////////////////////
@@ -400,7 +400,7 @@ typedef struct $Iterator$set {
 } *$Iterator$set; 
  
 static $WORD $set_iterator_next_entry($WORD self) {
-  $Iterator$set state = ($Iterator$set) (($Iterator)self)->class;
+  $Iterator$set state = ($Iterator$set) (($Iterator)self)->$class;
   $setentry *table = state->src->table;
   long n = state->src->mask;
   long i = state->nxt;
@@ -435,7 +435,7 @@ $Iterator $set_iter($set set) {
   iter->src = set;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
 
@@ -445,7 +445,7 @@ $Iterator $set_iter_entry($set set) {
   iter->src = set;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
 
@@ -509,7 +509,7 @@ $None $set_serialize($set self, $Mapping$dict wit, $WORD* prefix, int prefix_siz
         memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
         extprefix2[extprefix2_size-1] = ($WORD)0;
         $Serializable key = ($Serializable)entry->key;
-        key->class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
+        key->$class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
       }
     }
   }
@@ -525,7 +525,7 @@ $set $set_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     return $dict_get(done,wit->_Hashable,pref,NULL);
   } else {
     $set res = malloc(sizeof(struct $set));
-    res->class = &$set$methods;
+    res->$class = &$set$methods;
     res->numelements = (long)this->data[this->prefix_size];
     res->fill = (long)this->data[this->prefix_size+1];
     res->mask = (long)this->data[this->prefix_size+2];

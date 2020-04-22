@@ -20,7 +20,7 @@ $Iterator $Mapping$dict$__iter__ ($Mapping$dict wit, $dict dict) {
 $dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable$opaque it) {
   $Iterator iter = NULL;
   if (it!=NULL)
-    iter = it->proto->class->__iter__(it->proto,it->impl);
+    iter = it->proto->$class->__iter__(it->proto,it->impl);
   return $dict_fromiter(wit->_Hashable,iter);
 }
 
@@ -53,7 +53,7 @@ $Iterator $Mapping$dict$items ($Mapping$dict wit, $dict dict) {
 }
 
 $None $Mapping$dict$update ($Mapping$dict wit, $dict dict, $Iterable$opaque other) {
-  $dict_update(dict,wit->_Hashable,other->proto->class->__iter__(other->proto,other->impl));
+  $dict_update(dict,wit->_Hashable,other->proto->$class->__iter__(other->proto,other->impl));
 }
 
 $tup2_t $Mapping$dict$popitem ($Mapping$dict wit, $dict dict) {
@@ -76,11 +76,11 @@ $None $Indexed$dict$__delitem__ ($Indexed$dict wit, $dict dict, $WORD key) {
  
 struct $Mapping$dict *$Mapping$dict_new($Hashable h) {
   $Mapping$dict res = malloc(sizeof(struct $Mapping$dict));
-  res->class = &$Mapping$dict$methods;
+  res->$class = &$Mapping$dict$methods;
   $Indexed$dict res2 = malloc(sizeof(struct $Indexed$dict));
   res->_Indexed = ($Indexed)res2;
   res->_Hashable = h;
-  res2->class = &$Indexed$dict$methods;
+  res2->$class = &$Indexed$dict$methods;
   res2->_Mapping = ($Mapping)res;
   res2->_Hashable = h;
   return res;

@@ -46,16 +46,16 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     return self->$class->ping(self, i, then);
 }
 $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
-    self->count = Plus$int$witness->$class->__add__(Plus$int$witness, self->count, to$int(1));
-    $int j = Complex$int$witness->$class->__mul__(Complex$int$witness, self->count, q);
+    self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
+    $int j = $Complex$int$witness->$class->__mul__($Complex$int$witness, self->count, q);
     printf("Ping %8ld\n", j->val);
-    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, Complex$int$witness->$class->__neg__(Complex$int$witness, q)));
+    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, $Complex$int$witness->$class->__neg__($Complex$int$witness, q)));
     return $R_CONT(then, $None);
 }
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
-    $int j = Complex$int$witness->$class->__mul__(Complex$int$witness, n, q);
+    $int j = $Complex$int$witness->$class->__mul__($Complex$int$witness, n, q);
     printf("     %8ld Pong\n", j->val);
-    $AFTER(2, ($Cont)$NEW(lambda$2, self, Complex$int$witness->$class->__neg__(Complex$int$witness, q)));
+    $AFTER(2, ($Cont)$NEW(lambda$2, self, $Complex$int$witness->$class->__neg__($Complex$int$witness, q)));
     return $R_CONT(then, $None);
 }
 

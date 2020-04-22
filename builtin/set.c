@@ -25,7 +25,7 @@ $Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
 $set $Set$set$__fromiter__ ($Set$set wit, $Iterable$opaque it) {
   $Iterator iter = NULL;
   if (it!=NULL)
-    iter = it->proto->class->__iter__(it->proto,it->impl);
+    iter = it->proto->$class->__iter__(it->proto,it->impl);
   return $set_fromiter(wit->_Hashable,iter);
 }
 
@@ -98,7 +98,7 @@ $set $Logical$set$__xor__($Logical$set wit, $set a, $set b) {
  
 $Set$set $Set$set_new($Hashable h) {
   $Set$set res = malloc(sizeof(struct $Set$set));
-  res->class = &$Set$set_methods;
+  res->$class = &$Set$set_methods;
   $Ord$set res2 =  malloc(sizeof(struct $Ord$set));
   $Logical$set res3 =  malloc(sizeof(struct $Logical$set));
   $Minus$set res4 =  malloc(sizeof(struct $Minus$set));
@@ -106,13 +106,13 @@ $Set$set $Set$set_new($Hashable h) {
   res->_Logical = ($Logical)res3;
   res->_Minus = ($Minus)res4;
   res->_Hashable = h;
-  res2->class = &$Ord$set_methods;
+  res2->$class = &$Ord$set_methods;
   res2->_Set = ($Set)res;
   res2->_Hashable = h;
-  res3->class = &$Logical$set_methods;
+  res3->$class = &$Logical$set_methods;
   res3->_Set = ($Set)res;
   res3->_Hashable = h;
-  res4->class = &$Minus$set_methods;
+  res4->$class = &$Minus$set_methods;
   res4->_Set = ($Set)res;
   res4->_Hashable = h;
   return res;

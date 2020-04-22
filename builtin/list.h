@@ -8,7 +8,7 @@ struct $list$class {
 
 
 struct $list {
-  struct $list$class *class;
+  struct $list$class *$class;
   $WORD *data;
   int length;
   int capacity;

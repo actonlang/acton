@@ -6,7 +6,7 @@ struct $float$class {
 
 
 struct $float {
-  struct $float$class *class;
+  struct $float$class *$class;
   long val;
 };
 

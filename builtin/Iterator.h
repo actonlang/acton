@@ -10,7 +10,7 @@ struct $Iterator$class {
 };
 
 struct $Iterator {
-  struct $Iterator$class *class;
+  struct $Iterator$class *$class;
 };
 
 extern struct $Iterable$Iterator$class $Iterable$Iterator$methods;

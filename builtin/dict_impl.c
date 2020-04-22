@@ -72,13 +72,13 @@ $None $dict_serialize($dict self, $Mapping$dict wit, $WORD *prefix, int prefix_s
     memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
     extprefix2[extprefix2_size-1] = ($WORD)0;
     $Serializable key = ($Serializable)entry->key;
-    key->class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
+    key->$class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
     extprefix2[extprefix2_size-1] = ($WORD)1;
     $Serializable val = ($Serializable)entry->value;
     if (val==NULL) 
       $enqueue(accum,$new_row(DUMMY_ID,extprefix2_size,0,extprefix2));
     else 
-      val->class->__serialize__(val,wit,extprefix2,extprefix2_size,done,accum);
+      val->$class->__serialize__(val,wit,extprefix2,extprefix2_size,done,accum);
   }
 }
 
@@ -92,7 +92,7 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     return $dict_get(done,wit->_Hashable,pref,NULL);
   } else {
     $dict res = malloc(sizeof(struct $dict));
-    res->class = &$dict$methods;
+    res->$class = &$dict$methods;
     res->numelements = (long)this->data[this->prefix_size];
     long tb_size = (long)this->data[this->prefix_size+1];
     res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
@@ -186,7 +186,7 @@ static int dictresize($dict d) {
 
 $dict $new_dict() { 
   $dict dict =  malloc(sizeof(struct $dict));
-  dict->class = &$dict$methods;
+  dict->$class = &$dict$methods;
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
@@ -236,7 +236,7 @@ static int lookdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD *
     }
     if (ix >= 0) {
       $entry_t entry = &TB_ENTRIES(table)[ix];
-      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->class->__eq__(hashwit,key,entry->key)))) {
+      if (entry->value != NULL && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)))) {
         // found an entry with the same or equal key
         *res = entry->value;
         return ix;
@@ -301,7 +301,7 @@ typedef struct $Iterator$dict {
 
 
 static $WORD $dict_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -325,14 +325,14 @@ $Iterator $dict_iter($dict dict) {
   iter->src = dict;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
  
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
-  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   if (insertdict(dict, hashwit, hash, key, value)<0) {
     exception e;
     MKEXCEPTION(e,MEMORYERROR);
@@ -341,7 +341,7 @@ void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
 }
 
 $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
-  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
@@ -354,7 +354,7 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
 
 
 void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
-  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   $table table = dict->table;
@@ -396,14 +396,14 @@ $dict $dict_fromiter($Hashable hashwit, $Iterator it) {
 
 int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
-  return lookdict(dict,hashwit,from$int(hashwit->class->__hash__(hashwit,key)),key,&res) >= 0;
+  return lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
 }
 
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
 
 static $WORD $dict_values_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -422,7 +422,7 @@ static $WORD $dict_values_iterator_next($WORD self) {
 }
 
 static $WORD $dict_items_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->class;
+  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
   int i = state->nxt;
   $table table = state->src->table;
   int n = table->tb_nentries;
@@ -454,7 +454,7 @@ $Iterator $dict_values($dict dict) {
   iter->src = dict;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
 
@@ -464,12 +464,12 @@ $Iterator $dict_items($dict dict) {
   iter->src = dict;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
-  res->class = ($Iterator$class)iter;
+  res->$class = ($Iterator$class)iter;
   return res;
 }
  
 $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
-  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0) 
@@ -488,7 +488,7 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
       res->a = entry->key;
       res->b = entry->value;
       entry->value = NULL;
-      long hash = from$int(hashwit->class->__hash__(hashwit,entry->key));
+      long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
       int i = lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
@@ -505,13 +505,13 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
 
 void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
   $WORD item;
-  while((item = it->class->__next__(it)))
+  while((item = it->$class->__next__(it)))
     $dict_setitem(dict,hashwit,(($tup2_t)item)->a,(($tup2_t)item)->b);
 }
 
 $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
   // if (!deflt) deflt = $None; what is the name of $None here?...
-  long hash = from$int(hashwit->class->__hash__(hashwit,key));
+  long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD value;
   int ix = lookdict(dict,hashwit,hash,key,&value);
   if (ix >= 0)

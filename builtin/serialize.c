@@ -100,8 +100,8 @@ $ROW $serialize($Serializable s, long prefix[], int prefix_size) {
   accum->fst = NULL;
   accum->last = NULL;
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
-  $dict done = wit->class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
-  s->class->__serialize__(s,wit,($WORD*)prefix,prefix_size,done,accum);
+  $dict done = wit->$class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
+  s->$class->__serialize__(s,wit,($WORD*)prefix,prefix_size,done,accum);
   return accum->fst;
 }
 
@@ -120,7 +120,7 @@ $Serializable $deserialize($ROW row, long *prefix, int *prefix_size) {
   memcpy(prefix,row->data,row->prefix_size*sizeof($WORD));
   *prefix_size = row->prefix_size;
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$PREFIX$witness);
-  $dict done = wit->class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
+  $dict done = wit->$class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
   return serial$_methods[row->class_id]->__deserialize__(wit,&row,done);
 }
 
