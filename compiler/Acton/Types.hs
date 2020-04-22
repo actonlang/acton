@@ -489,20 +489,14 @@ instance InfEnv Decl where
       | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
       | not $ null overlap              = err2 overlap "An overlapping extension already exists"
 --      | not $ null ws                   = notYet (loc n) "Incremental extension"
-      | otherwise                       = do traceM ("## inf ext " ++ prstr n)
-                                             pushFX fxPure tNone
+      | otherwise                       = do pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
-                                             traceM ("## te " ++ prstr n ++ ": " ++ prstrs (dom te))
-                                             traceM ("## us " ++ prstr n ++ ": " ++ prstrs us)
-                                             traceM ("## ps " ++ prstr n ++ ": " ++ prstrs ps)
-                                             traceM ("## ws " ++ prstr n ++ ": " ++ prstrs ws)
                                              popFX
                                              (nsigs,asigs,sigs) <- checkAttributes te' te
                                              when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute not in listed protocols"
                                              when (not (inBuiltin env || null asigs)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              cn <- newName (nstr $ noqual n)
-                                             traceM ("## Done inf ext " ++ prstr n ++ " = " ++ prstr cn)
                                              return (cs, [(cn, NExt n q ps te)], Extension l n q ps b)
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             prevexts                    = extensionsOf n env
@@ -594,12 +588,9 @@ instance Check Decl where
 
     checkEnv env cl (Extension l n q us b)
                                         = do pushFX fxPure tNone
-                                             traceM ("## chk ext " ++ prstr n)
                                              (cs1,b') <- checkEnv env1 True b
-                                             traceM ("## mid chk ext " ++ prstr n)
                                              popFX
                                              --solve env1 (wellformed env1 (q,us))
-                                             traceM ("## done chk ext " ++ prstr n)
                                              return (cs1, Class l w [] [head us] b')        -- TODO: properly mix in n and q in us......
       where env1                        = define (nSigs $ parentTEnv env us) $ defineSelf n q $ defineTVars q env
             Just (w,_,_)                = findExtension n (tcname $ head us) env
