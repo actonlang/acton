@@ -20,7 +20,7 @@ Pingpong: Pingpong.c Pingpong.h
 
 clean:
 	rm -f *.o
-	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test Pingpong
+	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test Pingpong
 
 runtests:
 	./slice_test
