@@ -1,29 +1,6 @@
 #include "../../rts/rts.h"
 #include "Pingpong.h"
 
-struct lambda$1$class lambda$1$methods = {
-    "lambda$1",
-    NULL,
-    NULL,
-    lambda$1$__init__,
-    lambda$1$enter
-};
-struct lambda$2$class lambda$2$methods = {
-    "lambda$2",
-    NULL,
-    NULL,
-    lambda$2$__init__,
-    lambda$2$enter
-};
-struct Pingpong$class Pingpong$methods = {
-    "Pingpong",
-    NULL,
-    NULL,
-    Pingpong$__init__,
-    Pingpong$ping,
-    Pingpong$pong
-};
-
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
     $this->self = self;
     $this->count = count;
@@ -59,6 +36,29 @@ $R Pingpong$pong(Pingpong self, $int q, $Cont then) {
     $AFTER(2, ($Cont)$NEW(lambda$2, self));
     return $R_CONT(then, $None);
 }
+
+struct lambda$1$class lambda$1$methods = {
+    "lambda$1",
+    NULL,
+    NULL,
+    lambda$1$__init__,
+    lambda$1$enter
+};
+struct lambda$2$class lambda$2$methods = {
+    "lambda$2",
+    NULL,
+    NULL,
+    lambda$2$__init__,
+    lambda$2$enter
+};
+struct Pingpong$class Pingpong$methods = {
+    "Pingpong",
+    NULL,
+    NULL,
+    Pingpong$__init__,
+    Pingpong$ping,
+    Pingpong$pong
+};
 
 $R $ROOT($Env env, $Cont then) {
     return $NEWCC(Pingpong, then, to$int(env));

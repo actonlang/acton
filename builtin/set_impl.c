@@ -393,7 +393,7 @@ int $set_contains($set set, $Hashable hashwit, $WORD elem) {
 // Iterable ///////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct $Iterator$set {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD(*__next__)($WORD self);
   $set src;
   int nxt;

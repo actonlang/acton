@@ -8,7 +8,7 @@ struct $str {
 };
 
 struct $str$class {
-  char *GCINFO;
+  char *$GCINFO;
   $None (*__serialize__)($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $str (*capitalize)($str s);

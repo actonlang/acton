@@ -133,7 +133,7 @@ int $list_containsnot($Eq w, $list lst, $WORD elem) {
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 typedef struct $Iterator$list {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD(*__next__)($WORD self);
   $list src;
   int nxt;

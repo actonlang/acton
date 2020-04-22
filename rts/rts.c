@@ -128,6 +128,8 @@ void $Cont$__init__($Cont $this) { }
 
 struct $Msg$class $Msg$methods = {
     MSG_HEADER,
+    NULL,
+    NULL,
     $Msg$__init__
 };
 
@@ -140,6 +142,8 @@ struct $Actor$class $Actor$methods = {
 
 struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
+    NULL,
+    NULL,
     $Catcher$__init__
 };
 

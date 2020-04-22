@@ -546,7 +546,7 @@ int $str_containsnot($str s, $str sub) {
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
 typedef struct $Iterator$str {
-  char *GCINFO;
+  char *$GCINFO;
   $WORD(*__next__)($WORD self);
   unsigned char *nxt;
   int remaining;
