@@ -100,7 +100,7 @@ $ROW $serialize($Serializable s, long prefix[], int prefix_size) {
   accum->fst = NULL;
   accum->last = NULL;
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
-  $dict done = wit->$class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
+  $dict done = wit->$class->__fromiter__(wit,NULL);
   s->$class->__serialize__(s,wit,($WORD*)prefix,prefix_size,done,accum);
   return accum->fst;
 }
