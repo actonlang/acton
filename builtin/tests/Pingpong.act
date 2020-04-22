@@ -1,0 +1,245 @@
+######################################  Original:
+
+actor Pingpong(i):
+    var count = 0
+    def ping():
+        count = count + 1
+        print('{i} Ping {count}')
+        after 1: pong(-count)
+    def pong(q):
+        print('{i}      {q} Pong')
+        after 2: ping()
+    ping()
+
+######################################  Type inference:
+
+actor Pingpong(i : int) -> None:
+    var count : int = 0
+    def ping() -> None:
+        count = count + 1
+        print('{i} Ping {count}')
+        after 1: pong(-count)
+        return None
+    def pong(q : int) -> None:
+        print('{i}      {q} Pong')
+        after 2: ping()
+        return None
+    ping()
+
+######################################  Witness translation:
+
+actor Pingpong(i : int) -> None:
+    var count : int = to$int(0)
+    def ping() -> None:
+        count = Plus$int$witness.__add__(count, to$int(1))
+        print('{i} Ping {count}')
+        after to$int(1): pong(Complex$int$witness.__neg__(count))
+        return None
+    def pong(q : int) -> None:
+        print('{i}      {q} Pong')
+        after to$int(2): ping()
+        return None
+    ping()
+
+######################################  Deactorization:
+
+class Pingpong($Actor):
+    i : int
+    count : int
+    def __init__(self : Self, i : int) -> None:
+        self.i = i
+        self.count = to$int(0)
+        self.ping()
+    def ping(self : Self) -> None:
+        self.count = Plus$int$witness.__add__(self.count, to$int(1))
+        print('{self.i} Ping {self.count}')
+        $AFTER(to$int(1).val, lambda: self.pong(Complex$int$witness.__neg__(self.count)))
+    def pong(self : Self, q : int) -> None:
+        print('{self.i}      {q} Pong')
+        $AFTER(to$int(2).val, lambda: self.ping())
+
+######################################  CPS translation:
+
+class $Clos[P,R] ():
+    enter : (*P) -> R
+
+class $Cont[T] ($Clos[(T,),$R]):
+    pass
+
+class Pingpong($Actor):
+    i : int
+    count : int
+    def __init__(self : Self, i : int, then : $Cont[None]) -> $R:
+        self.i = i
+        self.count = to$int(0)
+        return self.ping(then)
+    def ping(self : Self, then : $Cont[None]) -> $R:
+        self.count = Plus$int$witness.__add__(self.count, to$int(1))
+        print('{self.i} Ping {self.count}')
+        $AFTER(to$int(1).val, lambda ($c : $Cont[None]): self.pong(Complex$int$witness.__neg__(self.count),$c))
+        return then.enter(None)
+    def pong(self : Self, q : int, then : $Cont[None]) -> $R:
+        print('{self.i}      {q} Pong')
+        $AFTER(to$int(2).val, lambda ($c : $Cont[None]): self.ping($c))
+        return then.enter(None)
+
+######################################  Lambda-lifting / closure-conversion:
+
+class lambda$1 ($Cont[$Cont[None]]):
+    self : Pingpong
+    count : int
+    def __init__($this : lambda$1, self : Pingpong, count : int):
+        $this.self = self
+        $this.count = count
+    def enter($this : lambda$1, $c : $Cont[None]) -> $R:
+        self = $this.self
+        count = $this.count
+        return self.pong(Complex$int$witness.__neg__(count),$c)
+
+class lambda$2 ($Cont[$Cont[None]]):
+    self : Pingpong
+    def __init__($this : lambda$2, self : Pingpong):
+        $this.self = self
+    def enter($this : lambda$2, $c : $Cont[None]) -> $R:
+        self = $this.self
+        return self.ping($c)
+
+class Pingpong($Actor):
+    i : int
+    count : int
+    def __init__(self : Pingpong, i : int, then : $Cont[None]) -> $R:
+        self.i = i
+        self.count = to$int(0)
+        return self.ping(then)
+    def ping(self : Pingpong, then : $Cont[None]) -> $R:
+        self.count = Plus$int$witness.__add__(self.count, to$int(1))
+        print('{self.i} Ping {self.count}')
+        $AFTER(to$int(1).val, lambda$1(self, self.count))
+        return then.enter(None)
+    def pong(self : Pingpong, q : int, then : $Cont[None]) -> $R:
+        print('{self.i}      {q} Pong')
+        $AFTER(to$int(2).val, lambda$2(self))
+        return then.enter(None)
+
+######################################  Code generation:
+
+struct lambda$1;
+struct lambda$2;
+struct Pingpong;
+
+struct lambda$1$class;
+struct lambda$2$class;
+struct Pingpong$class;
+
+typedef struct lambda$1 *lambda$1;
+typedef struct lambda$2 *lambda$2;
+typedef struct Pingpong *Pingpong;
+
+void lambda$1$__init__(lambda$1, Pingpong, $int);
+$R lambda$1$enter(lambda$1, $Cont);
+
+void lambda$2$__init__(lambda$2, Pingpong);
+$R lambda$2$enter(lambda$2, $Cont);
+
+$R Pingpong$__init__(Pingpong, $int, $Cont);
+$R Pingpong$ping(Pingpong, $Cont);
+$R Pingpong$pong(Pingpong, $int, $Cont);
+
+struct lambda$1 {
+    union {
+        struct lambda$1$class *$class;
+        struct $Cont super;
+    };
+    Pingpong self;
+    $int count;
+};
+struct lambda$1$class {
+    char *$GCINFO;
+    void (*__init__)(lambda$1, Pingpong, $int);
+    $R (*enter)(lambda$1, $Cont);
+};
+
+struct lambda$2 {
+    union {
+        struct lambda$2$class *$class;
+        struct $Cont super;
+    };
+    Pingpong self;
+};
+struct lambda$2$class {
+    char *$GCINFO;
+    void (*__init__)(lambda$2, Pingpong);
+    $R (*enter)(lambda$2, $Cont);
+};
+
+struct Pingpong {
+    union {
+        struct Pingpong$class *$class;
+        struct $Actor super;
+    };
+    $int i;
+    $int count;
+};
+struct Pingpong$class {
+    char *$GCINFO;
+    $R (*__init__)(Pingpong, $int, $Cont);
+    $R (*ping)(Pingpong, $Cont);
+    $R (*pong)(Pingpong, $int, $Cont);
+}; 
+
+struct lambda$1$class lambda$1$methods = {
+    "lambda$1",
+    lambda$1$__init__,
+    lambda$1$enter
+};
+struct lambda$2$class lambda$2$methods = {
+    "lambda$2",
+    lambda$2$__init__,
+    lambda$2$enter
+};
+struct Pingpong$class Pingpong$methods = {
+    "Pingpong",
+    Pingpong$__init__,
+    Pingpong$ping,
+    Pingpong$pong
+};
+
+void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
+    $this->self = self;
+    $this->count = count;
+}
+$R lambda$1$enter(lambda$1 $this, $Cont then) {
+    Pingpong self = $this->self;
+    $int count = $this->count;
+    return self->$class->pong(self, $Complex$int$witness->$class->__neg__($Complex$int$witness, count), then);
+}
+
+void lambda$2$__init__(lambda$2 $this, Pingpong self) {
+    $this->self = self;
+}
+$R lambda$2$enter(lambda$2 $this, $Cont then) {
+    Pingpong self = $this->self;
+    return self->$class->ping(self, then);
+}
+
+$R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
+    $Actor$methods.__init__(($Actor)self);
+    self->i = i;
+    self->count = to$int(0);
+    return self->$class->ping(self, then);
+}
+$R Pingpong$ping(Pingpong self, $Cont then) {
+    self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
+    printf("%ld Ping %ld\n", self->i->val, self->count->val);
+    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count));
+    return $R_CONT(then, $None);
+}
+$R Pingpong$pong(Pingpong self, $int q, $Cont then) {
+    printf("%ld     %ld Pong\n", self->i->val, q->val);
+    $AFTER(2, ($Cont)$NEW(lambda$2, self));
+    return $R_CONT(then, $None);
+}
+
+$R $ROOT($Env env, $Cont then) {
+    return $NEWCC(Pingpong, then, to$int(env));
+}
