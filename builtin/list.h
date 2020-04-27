@@ -1,6 +1,7 @@
 struct $list$class {
   char *$GCINFO;
-  $None (*__serialize__)($list, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  void (*__init__)($list);
+  void (*__serialize__)($list, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $list(*copy)($list);
   //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
@@ -24,4 +25,4 @@ extern struct $Sequence$list *$Sequence$list$witness;
 extern struct $Container$list *$Container$list_new($Eq); // equality is for elements
 
 void $printlist($list list); //for debugging; only for lists of ints
-void $list_init($list lst);
+

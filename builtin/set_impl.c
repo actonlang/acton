@@ -6,6 +6,7 @@
 
 /* 
 This implementation of sets is an adaptation of CPython's set implementation.
+
 */
 
 // Types ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,7 +14,7 @@ This implementation of sets is an adaptation of CPython's set implementation.
 
 
 // Maybe we should  offer union, intersection and symmetric difference under those names.
-struct $set$class $set$methods = {"",$set_serialize,$set_deserialize,$set_copy}; 
+struct $set$class $set$methods = {"",(void (*)($set))$default__init__,$set_serialize,$set_deserialize,$set_copy}; 
 
 
 #define PERTURB_SHIFT 5
@@ -466,7 +467,7 @@ $set $set_difference($Hashable hashwit, $set set, $set other) {
  
 // Serialization ///////////////////////////////////////////////////////////////////////////////////
 
-$None $set_serialize($set self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $set_serialize($set self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $WORD deflt = NULL;
   $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
   int blob_size = prevkey ? prevkey->prefix_size : 4;
@@ -541,7 +542,7 @@ $set $set_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
       } else { //class_id = ITEM_ID
         entry->hash = (long)(*row)->data[(*row)->prefix_size];
         *row = (*row)->next;
-        entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
+        entry->key = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
       }
     }
     $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));

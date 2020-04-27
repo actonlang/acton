@@ -6,7 +6,7 @@
 #include <string.h>
 
 typedef void *$WORD;
-typedef void $None;
+//typedef void $None;
 
 struct exception;
 typedef struct exception *exception;

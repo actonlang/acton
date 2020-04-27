@@ -23,7 +23,7 @@ struct $table_struct {
                        // after this follows tb_entries array;
 };
 
-struct $dict$class $dict$methods = {"",$dict_serialize,$dict_deserialize}; 
+struct $dict$class $dict$methods = {"",(void (*)($dict))$default__init__, $dict_serialize,$dict_deserialize}; 
 
 
 #define DKIX_EMPTY (-1)
@@ -35,7 +35,7 @@ struct $dict$class $dict$methods = {"",$dict_serialize,$dict_deserialize};
 
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
-$None $dict_serialize($dict self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $dict_serialize($dict self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $WORD deflt = NULL;
   $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
   int this_blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
@@ -104,11 +104,11 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
       $entry_t entry = &TB_ENTRIES(res->table)[i];
       entry->hash = (long)(*row)->data[(*row)->prefix_size];
       *row = (*row)->next;
-      entry->key = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
+      entry->key = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
       if ((*row)->class_id == DUMMY_ID)
         entry->value = NULL;
       else {
-        entry->value = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
+        entry->value = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
       }
     }
     $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
@@ -512,7 +512,7 @@ void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
 }
 
 $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
-  // if (!deflt) deflt = $None; what is the name of $None here?...
+  // if (!deflt) deflt = void; what is the name of void here?...
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   $WORD value;
   int ix = lookdict(dict,hashwit,hash,key,&value);

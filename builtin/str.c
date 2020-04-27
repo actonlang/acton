@@ -10,7 +10,7 @@
 
 // String-specific methods
 
-$None $str_serialize($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+void $str_serialize($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
 $str $str_deserialize($Mapping$dict, $ROW*, $dict);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
@@ -52,7 +52,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",$str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
+  {"",(void (*)($str))$default__init__, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
    $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
    $str_upper, $str_zfill};
@@ -131,13 +131,13 @@ $str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
 
-$None $Sliceable$str$__setitem__ ($Sliceable$str wit, $str str, $int i, $str val) {
+void $Sliceable$str$__setitem__ ($Sliceable$str wit, $str str, $int i, $str val) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-$None $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
+void $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
@@ -147,13 +147,13 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
   return $str_getslice(str,slc);
 }
 
-$None $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
+void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
 }
 
-$None $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
+void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
     exception e;
     MKEXCEPTION(e,NOTIMPLEMENTED);
     RAISE(e);
@@ -179,24 +179,24 @@ $int $Hashable$str$__keyinfo__($Hashable$str wit) {
   return to$int(STR_ID);
 }
  
-struct $Ord$str$class  $Ord$str$methods = {"", $Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
+struct $Ord$str$class  $Ord$str$methods = {"",  (void (*)($Ord$str))$default__init__,$Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
 struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
 $Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-struct $Container$str$class  $Container$str$methods = {"", $Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str$class  $Container$str$methods = {"",  (void (*)($Container$str,$Eq))$default2__init__,$Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
-struct $Sliceable$str$class  $Sliceable$str$methods = {"", $Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
+struct $Sliceable$str$class  $Sliceable$str$methods = {"",  (void (*)($Sliceable$str))$default__init__,$Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
                                                                     $Sliceable$str$__getslice__, $Sliceable$str$__setslice__, $Sliceable$str$__delslice__};
 struct $Sliceable$str $Sliceable$str_instance = {&$Sliceable$str$methods};
 $Sliceable$str $Sliceable$str$witness = &$Sliceable$str_instance;
 
-struct $Plus$str$class  $Plus$str$methods = {"", $Plus$str$__add__};
+struct $Plus$str$class  $Plus$str$methods = {"",  (void (*)($Plus$str))$default__init__,$Plus$str$__add__};
 struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
 $Plus$str $Plus$str$witness = &$Plus$str_instance;
 
-struct $Hashable$str$class  $Hashable$str$methods = {"", $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
+struct $Hashable$str$class  $Hashable$str$methods = {"",  (void (*)($Hashable$str))$default__init__, $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
 struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
@@ -618,7 +618,7 @@ $str $str_getslice($str s, $Slice slc) {
 
 // Serialization ////////////////////////////////////////////////////////////// 
                        
-$None $str_serialize($str str, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $str_serialize($str str, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
   $ROW row = $new_row(STR_ID,prefix_size,2+nWords,prefix);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 

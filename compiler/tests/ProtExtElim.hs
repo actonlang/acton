@@ -7,6 +7,7 @@ import Pretty
 import Utils
 import Acton.Syntax
 
+
 -- Transform a file containing protocol definitions, extensions and signatures.
 -- Intended use is to translate large parts of module __builtin__ to C.
 transform m@(Module nm is stmts)        = Module nm is (map (Decl NoLoc . (:[])) (trans env ps) ++
@@ -21,15 +22,16 @@ transform m@(Module nm is stmts)        = Module nm is (map (Decl NoLoc . (:[]))
  
 data TransEnv                           = TransEnv {protocols :: [(Name,Decl)],
                                                     decor :: Decoration,
-                                                    fstpar :: Maybe Type
+                                                    fstpar :: Maybe Type,
+                                                    master :: Maybe TCon
                                                    }
                                                     
-newTransEnv ps                          = TransEnv ps NoDec Nothing
+newTransEnv ps                          = TransEnv ps NoDec Nothing Nothing
 
 splitStmts stmts                        = sp stmts [] [] [] []  -- protocols, classes, extensions, signatures
   where sp [] ps cs es ss               = (reverse ps,reverse cs,reverse es,reverse ss)
         sp (Decl _ ds : stmts ) ps cs es ss
-                                        = spdecl ds stmts ps cs es ss
+                                         = spdecl ds stmts ps cs es ss
         sp (s@Signature{} : stmts) ps cs es ss
                                         = sp stmts ps cs es (s  : ss)
         spdecl [] stmts ps cs es ss     = sp stmts ps cs es ss
@@ -59,12 +61,13 @@ instance Transform Stmt where
 instance Transform Decl where
     trans env (Protocol loc n qs bs ss) = case transParents tv bs of
                                                [] -> Class loc n (tBind v:qs1) [] ss2
-                                               b:bs -> Class loc n  (tBind v:qs1) [trans env b] (addWitnesses env bs1 ss2)
+                                               b:_ -> Class loc n  (tBind v:qs1) [trans env b] (addWitnesses env bs1 ss2)
       where v                           = head (drop 15 tvarSupply Utils.\\ tybound qs)  -- we just prefer letters later in the alphabet for this type variable...
             tv                          = tVar v
             ss1                         = trans env{fstpar = Just tv} (addSigs (protocols env) bs ++ ss)
+            initSig                     = Signature NoLoc [name "__init__"] (monotype (tFun0 (map tCon (maybe [] (:[]) (master env) ++ws)) tNone)) Static
             (qs1,ws)                    = transParams qs
-            ss2                         = addWitnesses env ws ss1   
+            ss2                         = initSig : addWitnesses env ws ss1   
             cs                          = chains (protocols env) bs
             bs1                         = transParents tv (if null cs then [] else map head (tail cs))
     trans env d                         = d
@@ -136,28 +139,29 @@ transParams qs                          = trP qs [] []
 transExt                                :: TransEnv -> Decl -> [Decl]
 transExt env e@(Extension l nm qs bs ss)
          | length bs /= 1               = error "For now, an extension must implement exactly one protocol"
-         | otherwise                    = transChain Nothing env e cs
+         | otherwise                    = transChain Nothing env (head bs) e cs
          where as                       = head bs : ancestors env (noqual (tcname (head bs)))
                cs                       = chains (protocols env) as
 
-transChain                              :: Maybe Type -> TransEnv  -> Decl -> [[TCon]] -> [Decl]
-transChain _ _ _ []                     = []
-transChain mb env e (c : cs)            = c2{dname = c2nm, dbody = sigs} : transChain (Just witType) env e cs
+transChain                              :: Maybe Type -> TransEnv  -> TCon -> Decl -> [[TCon]] -> [Decl]
+transChain _ _ _ _ []                   = []
+transChain mb env b e (c : cs)          = c2{dname = c2nm, dbody = sigs} : transChain (Just witType) env{master = Just b} b e cs
    where cn                             = noqual (tcname (head c))
-         c1                             = trans env (fromJust (lookup cn (protocols env))) -- we have already translated this protocol before...
+         prot                           = fromJust (lookup cn (protocols env))
+         c1                             = trans env prot{qual = qual e ++ qual prot} 
          ts                             = trans env (tCon (mkTC (dqname e) (qual e)) : tcargs (head (bounds e)))
          (_,ws)                         = transParams (qual e)
-         c2                             = substAll ts c1
+         c2                             = substAll ts c1 
          tc                             = head (bounds c2)
-         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noqual (dqname e))) 0 GenPass  -- pass chosen just to get prettyprinting without suffix...
+         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noqual (dqname e))) 0 GenPass 
          witType                        = maybe (tCon tc) id mb
          sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType) NoDec]) mb
-                                          ++ nub (addWitnesses env ws (dbody c2))
+                                          ++ nub (dbody c2) -- nub (addWitnesses env ws (dbody c2))
 
 
 substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)
-  where s                               = tVars qs `zip` ts
-        tc                              = subst2 s (mkTC (NoQual nm) qs)
+   where s                              = tVars qs `zip` ts
+         tc                             = subst2 s (mkTC (NoQual nm) qs)
 
 
 addSigs                                 :: [(Name,Decl)] -> [TCon] -> [Stmt]

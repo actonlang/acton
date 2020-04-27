@@ -1,6 +1,7 @@
 struct $int$class {
   char *$GCINFO;
-  $None (*__serialize__)($int, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  void (*__init__)($int);
+  void (*__serialize__)($int, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $int (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -9,7 +10,7 @@ struct $int {
   long val;
 };
 
-struct $int$class $int$methods;
+extern struct $int$class $int$methods;
 
 extern struct $Integral$int$class $Integral$int$methods;
 extern struct $Logical$int$class $Logical$int$methods;

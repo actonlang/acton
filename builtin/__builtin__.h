@@ -385,6 +385,7 @@ struct $Eq {
 
 struct $Eq$class {
     char *$GCINFO;
+    void (*__init__)($Eq);
     $bool (*__eq__)($Eq, $WORD, $WORD);
     $bool (*__ne__)($Eq, $WORD, $WORD);
 };
@@ -406,6 +407,7 @@ struct $Ord {
 
 struct $Ord$class {
     char *$GCINFO;
+    void (*__init__)($Ord);
     $bool (*__eq__)($Ord, $WORD, $WORD);
     $bool (*__ne__)($Ord, $WORD, $WORD);
     $bool (*__lt__)($Ord, $WORD, $WORD);
@@ -431,6 +433,7 @@ struct $Logical {
 
 struct $Logical$class {
     char *$GCINFO;
+    void (*__init__)($Logical);
     $WORD (*__and__)($Logical, $WORD, $WORD);
     $WORD (*__or__)($Logical, $WORD, $WORD);
     $WORD (*__xor__)($Logical, $WORD, $WORD);
@@ -453,6 +456,7 @@ struct $Plus {
 
 struct $Plus$class {
     char *$GCINFO;
+    void (*__init__)($Plus);
     $WORD (*__add__)($Plus, $WORD, $WORD);
 };
 
@@ -473,6 +477,7 @@ struct $Minus {
 
 struct $Minus$class {
     char *$GCINFO;
+    void (*__init__)($Minus);
     $WORD (*__sub__)($Minus, $WORD, $WORD);
 };
 
@@ -493,6 +498,7 @@ struct $Hashable {
 
 struct $Hashable$class {
     char *$GCINFO;
+    void (*__init__)($Hashable);
     $bool (*__eq__)($Hashable, $WORD, $WORD);
     $bool (*__ne__)($Hashable, $WORD, $WORD);
     $int (*__hash__)($Hashable, $WORD);
@@ -515,6 +521,7 @@ struct $Boolean {
 
 struct $Boolean$class {
     char *$GCINFO;
+    void (*__init__)($Boolean);
     $bool (*__bool__)($Boolean, $WORD);
 };
 
@@ -535,6 +542,7 @@ struct $Iterable {
 
 struct $Iterable$class {
     char *$GCINFO;
+    void (*__init__)($Iterable);
     $Iterator (*__iter__)($Iterable, $WORD);
 };
 
@@ -555,6 +563,7 @@ struct $Collection {
 
 struct $Collection$class {
     char *$GCINFO;
+    void (*__init__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
     $WORD (*__fromiter__)($Collection, $Iterable$opaque);
     $int (*__len__)($Collection, $WORD);
@@ -578,9 +587,10 @@ struct $Indexed {
 
 struct $Indexed$class {
     char *$GCINFO;
+    void (*__init__)($Indexed, $Eq);
     $WORD (*__getitem__)($Indexed, $WORD, $WORD);
-    $None (*__setitem__)($Indexed, $WORD, $WORD, $WORD);
-    $None (*__delitem__)($Indexed, $WORD, $WORD);
+    void (*__setitem__)($Indexed, $WORD, $WORD, $WORD);
+    void (*__delitem__)($Indexed, $WORD, $WORD);
 };
 
 struct $Indexed$opaque {
@@ -600,12 +610,13 @@ struct $Sliceable {
 
 struct $Sliceable$class {
     char *$GCINFO;
+    void (*__init__)($Sliceable);
     $WORD (*__getitem__)($Sliceable, $WORD, $int);
-    $None (*__setitem__)($Sliceable, $WORD, $int, $WORD);
-    $None (*__delitem__)($Sliceable, $WORD, $int);
+    void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
+    void (*__delitem__)($Sliceable, $WORD, $int);
     $WORD (*__getslice__)($Sliceable, $WORD, $Slice);
-    $None (*__setslice__)($Sliceable, $WORD, $Slice, $Iterable$opaque);
-    $None (*__delslice__)($Sliceable, $WORD, $Slice);
+    void (*__setslice__)($Sliceable, $WORD, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sliceable, $WORD, $Slice);
 };
 
 struct $Sliceable$opaque {
@@ -627,16 +638,17 @@ struct $Sequence {
 
 struct $Sequence$class {
     char *$GCINFO;
+    void (*__init__)($Sequence);
     $WORD (*__getitem__)($Sequence, $WORD, $int);
-    $None (*__setitem__)($Sequence, $WORD, $int, $WORD);
-    $None (*__delitem__)($Sequence, $WORD, $int);
+    void (*__setitem__)($Sequence, $WORD, $int, $WORD);
+    void (*__delitem__)($Sequence, $WORD, $int);
     $WORD (*__getslice__)($Sequence, $WORD, $Slice);
-    $None (*__setslice__)($Sequence, $WORD, $Slice, $Iterable$opaque);
-    $None (*__delslice__)($Sequence, $WORD, $Slice);
+    void (*__setslice__)($Sequence, $WORD, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sequence, $WORD, $Slice);
     $Iterator (*__reversed__)($Sequence, $WORD);
-    $None (*insert)($Sequence, $WORD, $int, $WORD);
-    $None (*append)($Sequence, $WORD, $WORD);
-    $None (*reverse)($Sequence, $WORD);
+    void (*insert)($Sequence, $WORD, $int, $WORD);
+    void (*append)($Sequence, $WORD, $WORD);
+    void (*reverse)($Sequence, $WORD);
 };
 
 struct $Sequence$opaque {
@@ -657,6 +669,7 @@ struct $Container {
 
 struct $Container$class {
     char *$GCINFO;
+    void (*__init__)($Container, $Eq);
     $Iterator (*__iter__)($Container, $WORD);
     $WORD (*__fromiter__)($Container, $Iterable$opaque);
     $int (*__len__)($Container, $WORD);
@@ -683,6 +696,7 @@ struct $Mapping {
 
 struct $Mapping$class {
     char *$GCINFO;
+    void (*__init__)($Mapping, $Eq);
     $Iterator (*__iter__)($Mapping, $WORD);
     $WORD (*__fromiter__)($Mapping, $Iterable$opaque);
     $int (*__len__)($Mapping, $WORD);
@@ -692,9 +706,9 @@ struct $Mapping$class {
     $Iterator (*keys)($Mapping, $WORD);
     $Iterator (*values)($Mapping, $WORD);
     $Iterator (*items)($Mapping, $WORD);
-    $None (*update)($Mapping, $WORD, $Iterable$opaque);
+    void (*update)($Mapping, $WORD, $Iterable$opaque);
     $tup2_t (*popitem)($Mapping, $WORD);
-    $None (*setdefault)($Mapping, $WORD, $WORD, $WORD);
+    void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
 
 struct $Mapping$opaque {
@@ -718,14 +732,15 @@ struct $Set {
 
 struct $Set$class {
     char *$GCINFO;
+    void (*__init__)($Set, $Eq);
     $Iterator (*__iter__)($Set, $WORD);
     $WORD (*__fromiter__)($Set, $Iterable$opaque);
     $int (*__len__)($Set, $WORD);
     $bool (*__contains__)($Set, $WORD, $WORD);
     $bool (*__containsnot__)($Set, $WORD, $WORD);
     $bool (*isdisjoint)($Set, $WORD, $WORD);
-    $None (*add)($Set, $WORD, $WORD);
-    $None (*discard)($Set, $WORD, $WORD);
+    void (*add)($Set, $WORD, $WORD);
+    void (*discard)($Set, $WORD, $WORD);
     $WORD (*pop)($Set, $WORD);
 };
 
@@ -748,6 +763,7 @@ struct $Complex {
 
 struct $Complex$class {
     char *$GCINFO;
+    void (*__init__)($Complex);
     $bool (*__eq__)($Complex, $WORD, $WORD);
     $bool (*__ne__)($Complex, $WORD, $WORD);
     $complex (*__complx__)($Complex, $WORD);
@@ -781,6 +797,7 @@ struct $Real {
 
 struct $Real$class {
     char *$GCINFO;
+    void (*__init__)($Real);
     $bool (*__eq__)($Real, $WORD, $WORD);
     $bool (*__ne__)($Real, $WORD, $WORD);
     $bool (*__lt__)($Real, $WORD, $WORD);
@@ -811,6 +828,7 @@ struct $Rational {
 
 struct $Rational$class {
     char *$GCINFO;
+    void (*__init__)($Rational);
     $bool (*__eq__)($Rational, $WORD, $WORD);
     $bool (*__ne__)($Rational, $WORD, $WORD);
     $bool (*__lt__)($Rational, $WORD, $WORD);
@@ -844,6 +862,7 @@ struct $Integral {
 
 struct $Integral$class {
     char *$GCINFO;
+    void (*__init__)($Integral);
     $bool (*__eq__)($Integral, $WORD, $WORD);
     $bool (*__ne__)($Integral, $WORD, $WORD);
     $bool (*__lt__)($Integral, $WORD, $WORD);
@@ -884,9 +903,11 @@ struct $Boolean$int {
 
 struct $Boolean$int$class {
     char *$GCINFO;
+    void (*__init__)($Boolean$int);
     $bool (*__bool__)($Boolean$int, $int);
 };
 
+void $Boolean$int$__init__ ($Boolean$int);
 $bool $Boolean$int$__bool__ ($Boolean$int, $int);
 
 // $Boolean$list ////////////////////////////////////////////////////////////
@@ -897,9 +918,11 @@ struct $Boolean$list {
 
 struct $Boolean$list$class {
     char *$GCINFO;
+    void (*__init__)($Boolean$list);
     $bool (*__bool__)($Boolean$list, $list);
 };
 
+void $Boolean$list$__init__ ($Boolean$list);
 $bool $Boolean$list$__bool__ ($Boolean$list, $list);
 
 // $Sequence$list ////////////////////////////////////////////////////////////
@@ -912,28 +935,30 @@ struct $Sequence$list {
 
 struct $Sequence$list$class {
     char *$GCINFO;
+    void (*__init__)($Sequence$list);
     $WORD (*__getitem__)($Sequence$list, $list, $int);
-    $None (*__setitem__)($Sequence$list, $list, $int, $WORD);
-    $None (*__delitem__)($Sequence$list, $list, $int);
+    void (*__setitem__)($Sequence$list, $list, $int, $WORD);
+    void (*__delitem__)($Sequence$list, $list, $int);
     $list (*__getslice__)($Sequence$list, $list, $Slice);
-    $None (*__setslice__)($Sequence$list, $list, $Slice, $Iterable$opaque);
-    $None (*__delslice__)($Sequence$list, $list, $Slice);
+    void (*__setslice__)($Sequence$list, $list, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sequence$list, $list, $Slice);
     $Iterator (*__reversed__)($Sequence$list, $list);
-    $None (*insert)($Sequence$list, $list, $int, $WORD);
-    $None (*append)($Sequence$list, $list, $WORD);
-    $None (*reverse)($Sequence$list, $list);
+    void (*insert)($Sequence$list, $list, $int, $WORD);
+    void (*append)($Sequence$list, $list, $WORD);
+    void (*reverse)($Sequence$list, $list);
 };
 
+void $Sequence$list$__init__ ($Sequence$list);
 $WORD $Sequence$list$__getitem__ ($Sequence$list, $list, $int);
-$None $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
-$None $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
+void $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
+void $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
 $list $Sequence$list$__getslice__ ($Sequence$list, $list, $Slice);
-$None $Sequence$list$__setslice__ ($Sequence$list, $list, $Slice, $Iterable$opaque);
-$None $Sequence$list$__delslice__ ($Sequence$list, $list, $Slice);
+void $Sequence$list$__setslice__ ($Sequence$list, $list, $Slice, $Iterable$opaque);
+void $Sequence$list$__delslice__ ($Sequence$list, $list, $Slice);
 $Iterator $Sequence$list$__reversed__ ($Sequence$list, $list);
-$None $Sequence$list$insert ($Sequence$list, $list, $int, $WORD);
-$None $Sequence$list$append ($Sequence$list, $list, $WORD);
-$None $Sequence$list$reverse ($Sequence$list, $list);
+void $Sequence$list$insert ($Sequence$list, $list, $int, $WORD);
+void $Sequence$list$append ($Sequence$list, $list, $WORD);
+void $Sequence$list$reverse ($Sequence$list, $list);
 
 // $Collection$list ////////////////////////////////////////////////////////////
 
@@ -944,11 +969,13 @@ struct $Collection$list {
 
 struct $Collection$list$class {
     char *$GCINFO;
+    void (*__init__)($Collection$list, $Sequence);
     $Iterator (*__iter__)($Collection$list, $list);
     $list (*__fromiter__)($Collection$list, $Iterable$opaque);
     $int (*__len__)($Collection$list, $list);
 };
 
+void $Collection$list$__init__ ($Collection$list, $Sequence);
 $Iterator $Collection$list$__iter__ ($Collection$list, $list);
 $list $Collection$list$__fromiter__ ($Collection$list, $Iterable$opaque);
 $int $Collection$list$__len__ ($Collection$list, $list);
@@ -962,9 +989,11 @@ struct $Plus$list {
 
 struct $Plus$list$class {
     char *$GCINFO;
+    void (*__init__)($Plus$list, $Sequence);
     $list (*__add__)($Plus$list, $list, $list);
 };
 
+void $Plus$list$__init__ ($Plus$list, $Sequence);
 $list $Plus$list$__add__ ($Plus$list, $list, $list);
 
 // $Container$list ////////////////////////////////////////////////////////////
@@ -976,6 +1005,7 @@ struct $Container$list {
 
 struct $Container$list$class {
     char *$GCINFO;
+    void (*__init__)($Container$list, $Eq);
     $Iterator (*__iter__)($Container$list, $list);
     $list (*__fromiter__)($Container$list, $Iterable$opaque);
     $int (*__len__)($Container$list, $list);
@@ -983,6 +1013,7 @@ struct $Container$list$class {
     $bool (*__containsnot__)($Container$list, $list, $WORD);
 };
 
+void $Container$list$__init__ ($Container$list, $Eq);
 $Iterator $Container$list$__iter__ ($Container$list, $list);
 $list $Container$list$__fromiter__ ($Container$list, $Iterable$opaque);
 $int $Container$list$__len__ ($Container$list, $list);
@@ -993,13 +1024,14 @@ $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
 
 struct $Mapping$dict {
     $Mapping$dict$class $class;
-    $Hashable _Hashable;
     $Indexed _Indexed;
+    $Hashable _Hashable;
     $Eq _Eq;
 };
 
 struct $Mapping$dict$class {
     char *$GCINFO;
+    void (*__init__)($Mapping$dict, $Hashable, $Eq);
     $Iterator (*__iter__)($Mapping$dict, $dict);
     $dict (*__fromiter__)($Mapping$dict, $Iterable$opaque);
     $int (*__len__)($Mapping$dict, $dict);
@@ -1009,11 +1041,12 @@ struct $Mapping$dict$class {
     $Iterator (*keys)($Mapping$dict, $dict);
     $Iterator (*values)($Mapping$dict, $dict);
     $Iterator (*items)($Mapping$dict, $dict);
-    $None (*update)($Mapping$dict, $dict, $Iterable$opaque);
+    void (*update)($Mapping$dict, $dict, $Iterable$opaque);
     $tup2_t (*popitem)($Mapping$dict, $dict);
-    $None (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
+    void (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
 };
 
+void $Mapping$dict$__init__ ($Mapping$dict, $Hashable, $Eq);
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
 $dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable$opaque);
 $int $Mapping$dict$__len__ ($Mapping$dict, $dict);
@@ -1023,9 +1056,9 @@ $WORD $Mapping$dict$get ($Mapping$dict, $dict, $WORD, $WORD);
 $Iterator $Mapping$dict$keys ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$values ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$items ($Mapping$dict, $dict);
-$None $Mapping$dict$update ($Mapping$dict, $dict, $Iterable$opaque);
+void $Mapping$dict$update ($Mapping$dict, $dict, $Iterable$opaque);
 $tup2_t $Mapping$dict$popitem ($Mapping$dict, $dict);
-$None $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
+void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 
 // $Indexed$dict ////////////////////////////////////////////////////////////
 
@@ -1038,47 +1071,51 @@ struct $Indexed$dict {
 
 struct $Indexed$dict$class {
     char *$GCINFO;
+    void (*__init__)($Indexed$dict, $Mapping, $Hashable, $Eq);
     $WORD (*__getitem__)($Indexed$dict, $dict, $WORD);
-    $None (*__setitem__)($Indexed$dict, $dict, $WORD, $WORD);
-    $None (*__delitem__)($Indexed$dict, $dict, $WORD);
+    void (*__setitem__)($Indexed$dict, $dict, $WORD, $WORD);
+    void (*__delitem__)($Indexed$dict, $dict, $WORD);
 };
 
+void $Indexed$dict$__init__ ($Indexed$dict, $Mapping, $Hashable, $Eq);
 $WORD $Indexed$dict$__getitem__ ($Indexed$dict, $dict, $WORD);
-$None $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
-$None $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
+void $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
+void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
 
 // $Set$set ////////////////////////////////////////////////////////////
 
 struct $Set$set {
     $Set$set$class $class;
-    $Hashable _Hashable;
     $Ord _Ord;
     $Logical _Logical;
     $Minus _Minus;
+    $Hashable _Hashable;
     $Eq _Eq;
 };
 
 struct $Set$set$class {
     char *$GCINFO;
+    void (*__init__)($Set$set, $Hashable, $Eq);
     $Iterator (*__iter__)($Set$set, $set);
     $set (*__fromiter__)($Set$set, $Iterable$opaque);
     $int (*__len__)($Set$set, $set);
     $bool (*__contains__)($Set$set, $set, $WORD);
     $bool (*__containsnot__)($Set$set, $set, $WORD);
     $bool (*isdisjoint)($Set$set, $set, $set);
-    $None (*add)($Set$set, $set, $WORD);
-    $None (*discard)($Set$set, $set, $WORD);
+    void (*add)($Set$set, $set, $WORD);
+    void (*discard)($Set$set, $set, $WORD);
     $WORD (*pop)($Set$set, $set);
 };
 
+void $Set$set$__init__ ($Set$set, $Hashable, $Eq);
 $Iterator $Set$set$__iter__ ($Set$set, $set);
 $set $Set$set$__fromiter__ ($Set$set, $Iterable$opaque);
 $int $Set$set$__len__ ($Set$set, $set);
 $bool $Set$set$__contains__ ($Set$set, $set, $WORD);
 $bool $Set$set$__containsnot__ ($Set$set, $set, $WORD);
 $bool $Set$set$isdisjoint ($Set$set, $set, $set);
-$None $Set$set$add ($Set$set, $set, $WORD);
-$None $Set$set$discard ($Set$set, $set, $WORD);
+void $Set$set$add ($Set$set, $set, $WORD);
+void $Set$set$discard ($Set$set, $set, $WORD);
 $WORD $Set$set$pop ($Set$set, $set);
 
 // $Ord$set ////////////////////////////////////////////////////////////
@@ -1091,6 +1128,7 @@ struct $Ord$set {
 
 struct $Ord$set$class {
     char *$GCINFO;
+    void (*__init__)($Ord$set, $Set, $Hashable);
     $bool (*__eq__)($Ord$set, $set, $set);
     $bool (*__ne__)($Ord$set, $set, $set);
     $bool (*__lt__)($Ord$set, $set, $set);
@@ -1099,6 +1137,7 @@ struct $Ord$set$class {
     $bool (*__ge__)($Ord$set, $set, $set);
 };
 
+void $Ord$set$__init__ ($Ord$set, $Set, $Hashable);
 $bool $Ord$set$__eq__ ($Ord$set, $set, $set);
 $bool $Ord$set$__ne__ ($Ord$set, $set, $set);
 $bool $Ord$set$__lt__ ($Ord$set, $set, $set);
@@ -1116,11 +1155,13 @@ struct $Logical$set {
 
 struct $Logical$set$class {
     char *$GCINFO;
+    void (*__init__)($Logical$set, $Set, $Hashable);
     $set (*__and__)($Logical$set, $set, $set);
     $set (*__or__)($Logical$set, $set, $set);
     $set (*__xor__)($Logical$set, $set, $set);
 };
 
+void $Logical$set$__init__ ($Logical$set, $Set, $Hashable);
 $set $Logical$set$__and__ ($Logical$set, $set, $set);
 $set $Logical$set$__or__ ($Logical$set, $set, $set);
 $set $Logical$set$__xor__ ($Logical$set, $set, $set);
@@ -1135,9 +1176,11 @@ struct $Minus$set {
 
 struct $Minus$set$class {
     char *$GCINFO;
+    void (*__init__)($Minus$set, $Set, $Hashable);
     $set (*__sub__)($Minus$set, $set, $set);
 };
 
+void $Minus$set$__init__ ($Minus$set, $Set, $Hashable);
 $set $Minus$set$__sub__ ($Minus$set, $set, $set);
 
 // $Iterable$Iterator ////////////////////////////////////////////////////////////
@@ -1148,9 +1191,11 @@ struct $Iterable$Iterator {
 
 struct $Iterable$Iterator$class {
     char *$GCINFO;
+    void (*__init__)($Iterable$Iterator);
     $Iterator (*__iter__)($Iterable$Iterator, $Iterator);
 };
 
+void $Iterable$Iterator$__init__ ($Iterable$Iterator);
 $Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
 
 // $Ord$str ////////////////////////////////////////////////////////////
@@ -1161,6 +1206,7 @@ struct $Ord$str {
 
 struct $Ord$str$class {
     char *$GCINFO;
+    void (*__init__)($Ord$str);
     $bool (*__eq__)($Ord$str, $str, $str);
     $bool (*__ne__)($Ord$str, $str, $str);
     $bool (*__lt__)($Ord$str, $str, $str);
@@ -1169,6 +1215,7 @@ struct $Ord$str$class {
     $bool (*__ge__)($Ord$str, $str, $str);
 };
 
+void $Ord$str$__init__ ($Ord$str);
 $bool $Ord$str$__eq__ ($Ord$str, $str, $str);
 $bool $Ord$str$__ne__ ($Ord$str, $str, $str);
 $bool $Ord$str$__lt__ ($Ord$str, $str, $str);
@@ -1185,6 +1232,7 @@ struct $Container$str {
 
 struct $Container$str$class {
     char *$GCINFO;
+    void (*__init__)($Container$str, $Eq);
     $Iterator (*__iter__)($Container$str, $str);
     $str (*__fromiter__)($Container$str, $Iterable$opaque);
     $int (*__len__)($Container$str, $str);
@@ -1192,6 +1240,7 @@ struct $Container$str$class {
     $bool (*__containsnot__)($Container$str, $str, $str);
 };
 
+void $Container$str$__init__ ($Container$str, $Eq);
 $Iterator $Container$str$__iter__ ($Container$str, $str);
 $str $Container$str$__fromiter__ ($Container$str, $Iterable$opaque);
 $int $Container$str$__len__ ($Container$str, $str);
@@ -1206,20 +1255,22 @@ struct $Sliceable$str {
 
 struct $Sliceable$str$class {
     char *$GCINFO;
+    void (*__init__)($Sliceable$str);
     $str (*__getitem__)($Sliceable$str, $str, $int);
-    $None (*__setitem__)($Sliceable$str, $str, $int, $str);
-    $None (*__delitem__)($Sliceable$str, $str, $int);
+    void (*__setitem__)($Sliceable$str, $str, $int, $str);
+    void (*__delitem__)($Sliceable$str, $str, $int);
     $str (*__getslice__)($Sliceable$str, $str, $Slice);
-    $None (*__setslice__)($Sliceable$str, $str, $Slice, $Iterable$opaque);
-    $None (*__delslice__)($Sliceable$str, $str, $Slice);
+    void (*__setslice__)($Sliceable$str, $str, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sliceable$str, $str, $Slice);
 };
 
+void $Sliceable$str$__init__ ($Sliceable$str);
 $str $Sliceable$str$__getitem__ ($Sliceable$str, $str, $int);
-$None $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
-$None $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
+void $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
+void $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
 $str $Sliceable$str$__getslice__ ($Sliceable$str, $str, $Slice);
-$None $Sliceable$str$__setslice__ ($Sliceable$str, $str, $Slice, $Iterable$opaque);
-$None $Sliceable$str$__delslice__ ($Sliceable$str, $str, $Slice);
+void $Sliceable$str$__setslice__ ($Sliceable$str, $str, $Slice, $Iterable$opaque);
+void $Sliceable$str$__delslice__ ($Sliceable$str, $str, $Slice);
 
 // $Plus$str ////////////////////////////////////////////////////////////
 
@@ -1229,9 +1280,11 @@ struct $Plus$str {
 
 struct $Plus$str$class {
     char *$GCINFO;
+    void (*__init__)($Plus$str);
     $str (*__add__)($Plus$str, $str, $str);
 };
 
+void $Plus$str$__init__ ($Plus$str);
 $str $Plus$str$__add__ ($Plus$str, $str, $str);
 
 // $Hashable$str ////////////////////////////////////////////////////////////
@@ -1242,11 +1295,13 @@ struct $Hashable$str {
 
 struct $Hashable$str$class {
     char *$GCINFO;
+    void (*__init__)($Hashable$str);
     $bool (*__eq__)($Hashable$str, $str, $str);
     $bool (*__ne__)($Hashable$str, $str, $str);
     $int (*__hash__)($Hashable$str, $str);
 };
 
+void $Hashable$str$__init__ ($Hashable$str);
 $bool $Hashable$str$__eq__ ($Hashable$str, $str, $str);
 $bool $Hashable$str$__ne__ ($Hashable$str, $str, $str);
 $int $Hashable$str$__hash__ ($Hashable$str, $str);
@@ -1260,6 +1315,7 @@ struct $Integral$int {
 
 struct $Integral$int$class {
     char *$GCINFO;
+    void (*__init__)($Integral$int);
     $bool (*__eq__)($Integral$int, $int, $int);
     $bool (*__ne__)($Integral$int, $int, $int);
     $bool (*__lt__)($Integral$int, $int, $int);
@@ -1283,6 +1339,7 @@ struct $Integral$int$class {
     $int (*__invert__)($Integral$int, $int);
 };
 
+void $Integral$int$__init__ ($Integral$int);
 $bool $Integral$int$__eq__ ($Integral$int, $int, $int);
 $bool $Integral$int$__ne__ ($Integral$int, $int, $int);
 $bool $Integral$int$__lt__ ($Integral$int, $int, $int);
@@ -1314,11 +1371,13 @@ struct $Logical$int {
 
 struct $Logical$int$class {
     char *$GCINFO;
+    void (*__init__)($Logical$int, $Integral);
     $int (*__and__)($Logical$int, $int, $int);
     $int (*__or__)($Logical$int, $int, $int);
     $int (*__xor__)($Logical$int, $int, $int);
 };
 
+void $Logical$int$__init__ ($Logical$int, $Integral);
 $int $Logical$int$__and__ ($Logical$int, $int, $int);
 $int $Logical$int$__or__ ($Logical$int, $int, $int);
 $int $Logical$int$__xor__ ($Logical$int, $int, $int);
@@ -1334,6 +1393,7 @@ struct $Complex$int {
 
 struct $Complex$int$class {
     char *$GCINFO;
+    void (*__init__)($Complex$int, $Integral);
     $bool (*__eq__)($Complex$int, $int, $int);
     $bool (*__ne__)($Complex$int, $int, $int);
     $complex (*__complx__)($Complex$int, $int);
@@ -1349,9 +1409,10 @@ struct $Complex$int$class {
     $int (*conjugate)($Complex$int, $int);
 };
 
+void $Complex$int$__init__ ($Complex$int, $Integral);
 $bool $Complex$int$__eq__ ($Complex$int, $int, $int);
 $bool $Complex$int$__ne__ ($Complex$int, $int, $int);
-$complex $Complex$int$__complx__ ($Complex$int, $int);
+$complex $Complex$int__complx__ ($Complex$int, $int);
 $bool $Complex$int$__bool__ ($Complex$int, $int);
 $int $Complex$int$__mul__ ($Complex$int, $int, $int);
 $int $Complex$int$__truediv__ ($Complex$int, $int, $int);
@@ -1372,9 +1433,11 @@ struct $Plus$int {
 
 struct $Plus$int$class {
     char *$GCINFO;
+    void (*__init__)($Plus$int, $Integral);
     $int (*__add__)($Plus$int, $int, $int);
 };
 
+void $Plus$int$__init__ ($Plus$int, $Integral);
 $int $Plus$int$__add__ ($Plus$int, $int, $int);
 
 // $Minus$int ////////////////////////////////////////////////////////////
@@ -1386,9 +1449,11 @@ struct $Minus$int {
 
 struct $Minus$int$class {
     char *$GCINFO;
+    void (*__init__)($Minus$int, $Integral);
     $int (*__sub__)($Minus$int, $int, $int);
 };
 
+void $Minus$int$__init__ ($Minus$int, $Integral);
 $int $Minus$int$__sub__ ($Minus$int, $int, $int);
 
 // $Hashable$int ////////////////////////////////////////////////////////////
@@ -1399,11 +1464,13 @@ struct $Hashable$int {
 
 struct $Hashable$int$class {
     char *$GCINFO;
+    void (*__init__)($Hashable$int);
     $bool (*__eq__)($Hashable$int, $int, $int);
     $bool (*__ne__)($Hashable$int, $int, $int);
     $int (*__hash__)($Hashable$int, $int);
 };
 
+void $Hashable$int$__init__ ($Hashable$int);
 $bool $Hashable$int$__eq__ ($Hashable$int, $int, $int);
 $bool $Hashable$int$__ne__ ($Hashable$int, $int, $int);
 $int $Hashable$int$__hash__ ($Hashable$int, $int);
@@ -1417,6 +1484,7 @@ struct $Real$float {
 
 struct $Real$float$class {
     char *$GCINFO;
+    void (*__init__)($Real$float);
     $bool (*__eq__)($Real$float, $float, $float);
     $bool (*__ne__)($Real$float, $float, $float);
     $bool (*__lt__)($Real$float, $float, $float);
@@ -1430,6 +1498,7 @@ struct $Real$float$class {
     $Integral$opaque (*__round__)($Real$float, $float);
 };
 
+void $Real$float$__init__ ($Real$float);
 $bool $Real$float$__eq__ ($Real$float, $float, $float);
 $bool $Real$float$__ne__ ($Real$float, $float, $float);
 $bool $Real$float$__lt__ ($Real$float, $float, $float);
@@ -1453,6 +1522,7 @@ struct $Complex$float {
 
 struct $Complex$float$class {
     char *$GCINFO;
+    void (*__init__)($Complex$float, $Real);
     $bool (*__eq__)($Complex$float, $float, $float);
     $bool (*__ne__)($Complex$float, $float, $float);
     $complex (*__complx__)($Complex$float, $float);
@@ -1468,9 +1538,10 @@ struct $Complex$float$class {
     $float (*conjugate)($Complex$float, $float);
 };
 
+void $Complex$float$__init__ ($Complex$float, $Real);
 $bool $Complex$float$__eq__ ($Complex$float, $float, $float);
 $bool $Complex$float$__ne__ ($Complex$float, $float, $float);
-$complex $Complex$float$__complx__ ($Complex$float, $float);
+$complex $Complex$float__complx__ ($Complex$float, $float);
 $bool $Complex$float$__bool__ ($Complex$float, $float);
 $float $Complex$float$__mul__ ($Complex$float, $float, $float);
 $float $Complex$float$__truediv__ ($Complex$float, $float, $float);
@@ -1491,9 +1562,11 @@ struct $Plus$float {
 
 struct $Plus$float$class {
     char *$GCINFO;
+    void (*__init__)($Plus$float, $Real);
     $float (*__add__)($Plus$float, $float, $float);
 };
 
+void $Plus$float$__init__ ($Plus$float, $Real);
 $float $Plus$float$__add__ ($Plus$float, $float, $float);
 
 // $Minus$float ////////////////////////////////////////////////////////////
@@ -1505,9 +1578,11 @@ struct $Minus$float {
 
 struct $Minus$float$class {
     char *$GCINFO;
+    void (*__init__)($Minus$float, $Real);
     $float (*__sub__)($Minus$float, $float, $float);
 };
 
+void $Minus$float$__init__ ($Minus$float, $Real);
 $float $Minus$float$__sub__ ($Minus$float, $float, $float);
 
 // $Hashable$float ////////////////////////////////////////////////////////////
@@ -1518,12 +1593,19 @@ struct $Hashable$float {
 
 struct $Hashable$float$class {
     char *$GCINFO;
+    void (*__init__)($Hashable$float);
     $bool (*__eq__)($Hashable$float, $float, $float);
     $bool (*__ne__)($Hashable$float, $float, $float);
     $int (*__hash__)($Hashable$float, $float);
 };
 
+void $Hashable$float$__init__ ($Hashable$float);
 $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
 
+$Real$opaque $abs($Complex$opaque);
+$bool $all($Iterable$opaque);
+$bool $any($Iterable$opaque);
+$int $len($Collection$opaque);
+$str $bin($int);

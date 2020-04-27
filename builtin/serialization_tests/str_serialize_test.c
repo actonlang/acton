@@ -1,6 +1,7 @@
 #include "../builtin.h"
 
 int main() {
+  $init_serialization();
   $str str1 = from$UTF8("A plain ASCII string 123,.%");
   $str str2 = from$UTF8("Some non-ASCII öé");
   $str str3 = from$UTF8("And some very non-ASCII: 围绕疫情我们有过不和谐的声音");

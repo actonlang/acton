@@ -1,7 +1,7 @@
 
 $list list_new(int capacity);
 
-$None $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+void $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
 $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
 
 $list $list_copy($list lst);

@@ -1,4 +1,27 @@
-// Class id's //////////////////////////////////////////////////////////////////////////////////////////////
+#include <stdarg.h>
+
+/* initialization of classid generation structures.
+   Must be run before module initialization.
+   Name convention for module initialization procedures?
+*/
+
+void $init_serialization();
+
+// Fundamental class, from which all classes inherit //////////////////////////////////////////////////////
+
+typedef struct init$methods *init$methods;
+
+typedef struct $Initializable  *$Initializable;
+
+struct $Initializable {
+  init$methods $class;
+};
+
+struct init$methods {
+  char *$GCINFO;
+  void (*__init__)($Initializable,...);
+};
+
 
 // Basic unit of serialization ////////////////////////////////////////////////////////////////////////////
 
@@ -61,7 +84,6 @@ QUESTION: The prefixes are used to handle sharing, but contribute to making seri
 necessary. Each row has an integer position in the list and that unique number is enough for sharing. Is there another reason to have these prefixes
 in the serialization? If omitted and needed, the prefixes can be easily computed while parsing the serialized file. 
 
-
 We will typically build the list of rows by appending new rows at the end. For efficiency, we therefore use a list with a header node:
 */
 
@@ -72,23 +94,6 @@ typedef struct $ROWLISTHEADER {
 } *$ROWLISTHEADER;
 
 
-/*
-  Class id's are used
-    - as first component in a $ROW to indicate which type is being serialized.
-    - in Hashable witnesses to support the __keyinfo__ method needed in serialization of dicts and sets
-    - to index the serial$_methods array to choose correct instance of __deserialize__
-*/
-
-#define DUMMY_ID 0     // for dummy items in hashtables
-#define INT_ID 1
-#define FLOAT_ID 2
-#define COMPLEX_ID 3
-#define BOOL_ID 4
-#define STR_ID 5
-#define LIST_ID 6
-#define DICT_ID 7
-#define SET_ID 8
-#define ITEM_ID 9     // dict items, set elems
 
 // reading and writing from/to serialized files is done in blocks of BUF_SIZE bytes
 
@@ -108,7 +113,8 @@ struct $Serializable {
 
 struct serial$methods {
   char *$GCINFO;
-  $None (*__serialize__)($Serializable, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
+  void (*__init__)($Serializable,...);
+  void (*__serialize__)($Serializable, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
   $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -124,6 +130,37 @@ $ROW $read_serialized(char *file);
 // deserialize_file just calls the above two functions
 $Serializable $deserialize_file(char *file,  long *prefix, int *prefix_size);
 
+/*
+  Class id's are used
+    - as first component in a $ROW to indicate which type is being serialized.
+    - to index the serial$_methods array to choose correct instance of __deserialize__
+*/
+
+
+/* $set_classid generates a fresh int classid and associates this with the given method table.
+   Should be called for each class during module initialization.
+*/
+void $set_classid_force(int classid, serial$methods meths);
+void $set_classid(serial$methods meths);
+int $get_classid(serial$methods meths);
+serial$methods $get_methods(int classid);
+
+#define DUMMY_ID 0     // for dummy items in hashtables
+#define INT_ID 1
+#define FLOAT_ID 2
+#define COMPLEX_ID 3
+#define BOOL_ID 4
+#define STR_ID 5
+#define LIST_ID 6
+#define DICT_ID 7
+#define SET_ID 8
+#define MSG_ID 9
+#define ACTOR_ID 10
+#define CATCHER_ID 11
+#define CLOS_ID 12
+#define CONT_ID 13
+#define ITEM_ID 14      // dict items, set elems
+
 // Internal auxiliary types /////////////////////////////////////////////////////////////////////////////
 
 typedef struct $PREFIX  *$PREFIX;
@@ -133,7 +170,7 @@ struct $PREFIX {
   $WORD prefix[];
 };
 
-serial$methods serial$_methods[10];
+//serial$methods serial$_methods[10];
 
 // Hashable$PREFIX ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -142,6 +179,7 @@ typedef struct $Hashable$PREFIX *$Hashable$PREFIX;
 
 struct $Hashable$PREFIX$class {
     char *$GCINFO;
+    void (*__init__)($Hashable$PREFIX);
     $bool (*__eq__)($Hashable$PREFIX, $PREFIX, $PREFIX);
     $bool (*__ne__)($Hashable$PREFIX, $PREFIX, $PREFIX);
     $int (*__hash__)($Hashable$PREFIX, $PREFIX);
@@ -161,6 +199,7 @@ typedef struct $Hashable$WORD *$Hashable$WORD;
 
 struct $Hashable$WORD$class {
     char *$GCINFO;
+    void (*__init__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
     $int (*__hash__)($Hashable$WORD, $WORD);
@@ -174,9 +213,12 @@ struct $Hashable$WORD$class $Hashable$WORD$methods;
 struct $Hashable$WORD *$Hashable$WORD$witness;
 
 
-$None $enqueue($ROWLISTHEADER lst, $ROW elem);
+void $enqueue($ROWLISTHEADER lst, $ROW elem);
 
 $ROW $new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix);
 
-$Hashable $Hashable_instance(long class_id);
+//$Hashable $Hashable_instance(long class_id);
 
+void $default__init__($Initializable);
+void $default2__init__($Initializable, $WORD);
+void $default3__init__($Initializable, $WORD,$WORD);

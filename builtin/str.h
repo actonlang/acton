@@ -9,7 +9,8 @@ struct $str {
 
 struct $str$class {
   char *$GCINFO;
-  $None (*__serialize__)($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  void (*__init__)($str);
+  void (*__serialize__)($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $str (*capitalize)($str s);
   $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char

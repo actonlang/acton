@@ -3,6 +3,7 @@
 #include "../builtin.h"
 
 int main() {
+  $init_serialization();
   $Hashable wit = ($Hashable)$Hashable$int$witness;
   $set s = $set_fromiter(wit,NULL);
   for (long j = 0; j < 20; j++)

@@ -1,11 +1,11 @@
-$None $int_serialize($int self, $Mapping$dict, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+void $int_serialize($int self, $Mapping$dict, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
 $int $int_deserialize($Mapping$dict, $ROW *row, $dict done);
 
-struct $int$class $int$methods = {"",$int_serialize, $int_deserialize};
+struct $int$class $int$methods = {"",(void (*)($int))$default__init__,$int_serialize, $int_deserialize};
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-$None $int_serialize($int n, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $int_serialize($int n, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $ROW row = $new_row(INT_ID,prefix_size,1,prefix);
   row->data[prefix_size] = ($WORD)from$int(n);
   $enqueue(accum,row);
@@ -241,7 +241,7 @@ struct $Plus$int $Plus$int_instance;
 struct $Minus$int $Minus$int_instance;
 struct $Hashable$int $Hashable$int_instance;
 
-struct $Integral$int$class $Integral$int$methods = {"", $Integral$int$__eq__ , $Integral$int$__ne__ , $Integral$int$__lt__ , $Integral$int$__le__ ,
+struct $Integral$int$class $Integral$int$methods = {"", (void (*)($Integral$int))$default__init__, $Integral$int$__eq__ , $Integral$int$__ne__ , $Integral$int$__lt__ , $Integral$int$__le__ ,
                                                      $Integral$int$__gt__ , $Integral$int$__ge__ , $Integral$int$__float__ , $Integral$int$__trunc__ , $Integral$int$__floor__ ,
                                                      $Integral$int$__ceil__ , $Integral$int$__round__ , $Integral$int$numerator , $Integral$int$denominator ,
                                                      $Integral$int$__int__ , $Integral$int$__index__ , $Integral$int$__divmod__ , $Integral$int$__floordiv__ ,
@@ -250,50 +250,26 @@ struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Logical
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
 
-struct $Logical$int$class $Logical$int$methods =  {"", $Logical$int$__and__ , $Logical$int$__or__ , $Logical$int$__xor__};
+struct $Logical$int$class $Logical$int$methods =  {"",  (void (*)($Logical$int,$Integral))$default2__init__, $Logical$int$__and__ , $Logical$int$__or__ , $Logical$int$__xor__};
 struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, ($Integral)&$Integral$int_instance};
 $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
 
-struct $Complex$int$class $Complex$int$methods = {"",$Complex$int$__eq__,$Complex$int$__ne__,$Complex$int$__complx__,
+struct $Complex$int$class $Complex$int$methods = {"", (void (*)($Complex$int,$Integral))$default2__init__, $Complex$int$__eq__,$Complex$int$__ne__,$Complex$int$__complx__,
                                                $Complex$int$__bool__,$Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
                                                $Complex$int$__pos__,$Complex$int$real,$Complex$int$imag,$Complex$int$__abs__,$Complex$int$__conjugate__};
 struct $Complex$int $Complex$int_instance = {&$Complex$int$methods, ($Integral)&$Integral$int_instance, ($Plus)&$Plus$int_instance, ($Minus)&$Minus$int_instance};
 $Complex$int $Complex$int$witness = &$Complex$int_instance;
 
-struct $Plus$int$class $Plus$int$methods = {"",$Plus$int$__add__};
+struct $Plus$int$class $Plus$int$methods = {"",  (void (*)($Plus$int,$Integral))$default2__init__, $Plus$int$__add__};
 struct $Plus$int $Plus$int_instance = {&$Plus$int$methods, ($Integral)&$Integral$int_instance};
 $Plus$int $Plus$int$witness = &$Plus$int_instance;
 
-struct $Minus$int$class $Minus$int$methods = {"",$Minus$int$__sub__};
+struct $Minus$int$class $Minus$int$methods = {"", (void (*)($Minus$int,$Integral))$default2__init__, $Minus$int$__sub__};
 struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, ($Integral)&$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
 
-struct $Hashable$int$class $Hashable$int$methods = {"",$Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
+struct $Hashable$int$class $Hashable$int$methods = {"", (void (*)($Hashable$int))$default__init__, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
 struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};
 $Hashable$int $Hashable$int$witness = &$Hashable$int_instance;
-/*
-  $Integral$int $Integral$int_new() {
-  return $Integral$int$witness;
-}
 
-$Logical$int $Logical$int_new() {
-  return $Logical$int$witness;
-}
-
-$Complex$int $Complex$int_new() {
-  return $Complex$int$witness;
-}
-
-$Plus$int $Plus$int_new() {
-  return $Plus$int$witness;
-}
-
-$Minus$int $Minus$int_new() {
-  return $Minus$int$witness;
-}
-
-$Hashable$int $Hashable$int_new() {
-  return $Hashable$int$witness;
-}
-*/

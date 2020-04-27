@@ -2,7 +2,7 @@ $Iterator $Iterable$Iterator__iter__($Iterable$Iterator wit, $Iterator self) {
   return self;
 }
 
-struct $Iterable$Iterator$class $Iterable$Iterator$methods = {"", $Iterable$Iterator__iter__};
+struct $Iterable$Iterator$class $Iterable$Iterator$methods = {"",  (void (*)($Iterable$Iterator))$default__init__,$Iterable$Iterator__iter__};
 struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$methods};
 $Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
   
