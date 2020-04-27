@@ -3,22 +3,22 @@ struct $Sequence$list  $Sequence$list_instance;
 struct $Collection$list $Collection$list_instance;
 struct $Plus$list $Plus$list_instance;
 
-struct $Sequence$list$class $Sequence$list$methods = {"",$Sequence$list$__getitem__, $Sequence$list$__setitem__, $Sequence$list$__delitem__,
+struct $Sequence$list$class $Sequence$list$methods = {"",(void (*)($Sequence$list))$default__init__,$Sequence$list$__getitem__, $Sequence$list$__setitem__, $Sequence$list$__delitem__,
                                                                   $Sequence$list$__getslice__, $Sequence$list$__setslice__, $Sequence$list$__delslice__,
                                                                $Sequence$list$__reversed__,$Sequence$list$insert,$Sequence$list$append,$Sequence$list$reverse};
 struct $Sequence$list $Sequence$list_instance = {&$Sequence$list$methods, ($Collection)&$Collection$list_instance,($Plus)&$Plus$list_instance};
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
 
-struct $Collection$list$class $Collection$list$methods = {"",$Collection$list$__iter__,$Collection$list$__fromiter__,$Collection$list$__len__};
+struct $Collection$list$class $Collection$list$methods = {"",(void (*)($Collection$list,$Sequence))$default2__init__,$Collection$list$__iter__,$Collection$list$__fromiter__,$Collection$list$__len__};
 struct $Collection$list $Collection$list_instance = {&$Collection$list$methods,($Sequence)&$Sequence$list_instance};
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
 
-struct $Plus$list$class $Plus$list$methods = {"", $Plus$list$__add__};
+struct $Plus$list$class $Plus$list$methods = {"", (void (*)($Plus$list,$Sequence))$default2__init__, $Plus$list$__add__};
 struct $Plus$list $Plus$list_instance = {&$Plus$list$methods, ($Sequence)&$Sequence$list_instance};
 $Plus$list $Plus$list$witness = &$Plus$list_instance;
 
-struct $Container$list$class $Container$list$methods = {"",($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
+struct $Container$list$class $Container$list$methods = {"",(void (*)($Container$list,$Eq))$default2__init__,($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
                                                                  ($list (*)($Container$list, $Iterable$opaque))$Collection$list$__fromiter__,
                                                                  ($int (*)($Container$list, $list))$Collection$list$__len__,
                                                                   $Container$list$__contains__,$Container$list$__containsnot__};
@@ -57,11 +57,11 @@ $WORD $Sequence$list$__getitem__($Sequence$list wit, $list self, $int ix) {
   return $list_getitem(self,from$int(ix));
 }
 
-$None $Sequence$list$__setitem__($Sequence$list wit, $list self, $int ix, $WORD val) {
+void $Sequence$list$__setitem__($Sequence$list wit, $list self, $int ix, $WORD val) {
   $list_setitem(self,from$int(ix),val);
 }
 
-$None $Sequence$list$__delitem__($Sequence$list wit, $list self, $int ix) {
+void $Sequence$list$__delitem__($Sequence$list wit, $list self, $int ix) {
   $list_delitem(self,from$int(ix));
 }
 
@@ -69,11 +69,11 @@ $list $Sequence$list$__getslice__($Sequence$list wit, $list self, $Slice slice) 
   return $list_getslice(self,slice);
 }
 
-$None $Sequence$list$__setslice__($Sequence$list wit, $list self, $Slice slice, $Iterable$opaque it) {
+void $Sequence$list$__setslice__($Sequence$list wit, $list self, $Slice slice, $Iterable$opaque it) {
   $list_setslice(self,slice,it->proto->$class->__iter__(it->proto,it->impl));
 }
 
-$None $Sequence$list$__delslice__($Sequence$list wit, $list self, $Slice slice) {
+void $Sequence$list$__delslice__($Sequence$list wit, $list self, $Slice slice) {
   $list_delslice(($list)self,slice);
 }  
 

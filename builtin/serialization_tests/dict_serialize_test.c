@@ -2,6 +2,7 @@
 
 
 $list range(int a, int b) {
+  $init_serialization();
   $list res = $list_fromiter(NULL);
   for (long i=a; i<b; i++)
     $list_append(res,to$int(i));

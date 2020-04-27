@@ -1,4 +1,4 @@
-
+//void __init__($set set, 
 $Iterator $set_iter($set set);
 $Iterator $set_iter_entry($set set);
 $set $set_copy($set set);

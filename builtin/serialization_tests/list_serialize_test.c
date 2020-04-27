@@ -5,10 +5,11 @@
 #define TESTSIZE 30L
  
 int main() {
+  $init_serialization();
   /*
   long prefix[] = {9L,7L,3L};
   $list lst = $list_fromiter(NULL);
-  for (long i = 3L; i < 100L; i += 10L)
+  for (long i = 3L; i < 300L; i += 10L)
     $list_append(lst,to$int(i));
   $ROW row = $serialize(($Serializable)lst,prefix,3);
   $write_serialized(row,"test.bin");
@@ -56,8 +57,6 @@ int main() {
     printf("sublist %d is ",i);
     $printlist($list_getitem(lst4,i));
   }
-
-  
 }
 
 /*

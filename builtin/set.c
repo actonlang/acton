@@ -2,21 +2,21 @@
 #include "set_impl.h"
  
 
-$None $set_serialize($set, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+void $set_serialize($set, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
 $set $set_deserialize($Mapping$dict, $ROW*, $dict);
 
 static struct $Ord$set $Ord$set_instance;
 static struct $Minus$set $Minus$set_instance;
 static struct $Logical$set $Logical$set_instance;
 
-static struct $Set$set$class $Set$set_methods = {"", $Set$set$__iter__, $Set$set$__fromiter__, $Set$set$__len__, $Set$set$__contains__,
+static struct $Set$set$class $Set$set_methods = {"",  (void (*)($Set$set,$Hashable,$Eq))$default3__init__,$Set$set$__iter__, $Set$set$__fromiter__, $Set$set$__len__, $Set$set$__contains__,
                                                    $Set$set$__containsnot__, $Set$set$isdisjoint, $Set$set$add, $Set$set$discard, $Set$set$pop};   
 
-static struct $Ord$set$class $Ord$set_methods = {"",$Ord$set$__eq__,$Ord$set$__ne__,$Ord$set$__lt__,$Ord$set$__le__,$Ord$set$__gt__,$Ord$set$__ge__};
+static struct $Ord$set$class $Ord$set_methods = {"", (void (*)($Ord$set,$Set,$Hashable))$default3__init__,$Ord$set$__eq__,$Ord$set$__ne__,$Ord$set$__lt__,$Ord$set$__le__,$Ord$set$__gt__,$Ord$set$__ge__};
 
-static struct $Minus$set$class $Minus$set_methods = {"",$Minus$set$__sub__};
+static struct $Minus$set$class $Minus$set_methods = {"", (void (*)($Minus$set,$Set,$Hashable))$default3__init__,$Minus$set$__sub__};
 
-static struct $Logical$set$class $Logical$set_methods = {"",$Logical$set$__and__,$Logical$set$__or__,$Logical$set$__xor__};
+static struct $Logical$set$class $Logical$set_methods = {"", (void (*)($Logical$set,$Set,$Hashable))$default3__init__,$Logical$set$__and__,$Logical$set$__or__,$Logical$set$__xor__};
 
 $Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
   return $set_iter(set);
@@ -44,11 +44,11 @@ $bool $Set$set$isdisjoint ($Set$set wit, $set set, $set other) {
   return to$bool($set_isdisjoint(wit->_Hashable,set,other));
 }
 
-$None $Set$set$add ($Set$set wit, $set set, $WORD elem) {
+void $Set$set$add ($Set$set wit, $set set, $WORD elem) {
    $set_add(set,wit->_Hashable,elem);
 }
 
-$None $Set$set$discard ($Set$set wit, $set set, $WORD elem) {
+void $Set$set$discard ($Set$set wit, $set set, $WORD elem) {
   $set_discard(set,wit->_Hashable,elem);
 }
 
@@ -117,3 +117,11 @@ $Set$set $Set$set_new($Hashable h) {
   res4->_Hashable = h;
   return res;
 }
+/*
+void __init__($Set$set self, $Hashable h) {
+  self->_Ord = ;
+  self->_Logical = ;
+  self->_Minus = ;
+  self->_Hashable = ;
+}
+*/    

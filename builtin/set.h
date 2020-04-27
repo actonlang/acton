@@ -1,6 +1,7 @@
 struct $set$class {
   char *$GCINFO;
-  $None (*__serialize__)($set, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  void (*__init__)($set);
+  void (*__serialize__)($set, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
   $set (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $set(*copy)($set);
 };
@@ -14,10 +15,6 @@ typedef struct $set {
   struct $set$class *$class;
   long numelements;    // nr of elements in $set
   long fill;           // numelements + #dummy entries
-    /* The table contains mask + 1 slots, and that's a power of 2.
-     * We store the mask instead of the size because the mask is more
-     * frequently needed.
-     */
   long mask;
   long finger;                       // Search finger for pop() 
   $setentry *table;                  // the hashtable

@@ -1,11 +1,11 @@
-$None $bool_serialize($bool self, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+void $bool_serialize($bool self, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
 $bool $bool_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
-struct $bool$class $bool$methods = {"",$bool_serialize, $bool_deserialize};
+struct $bool$class $bool$methods = {"", (void (*)($bool))$default__init__, $bool_serialize, $bool_deserialize};
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-$None $bool_serialize($bool n,  $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $bool_serialize($bool n,  $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $ROW row = $new_row(BOOL_ID,prefix_size,1,prefix);
   row->data[prefix_size] = ($WORD)from$bool(n);
   $enqueue(accum,row);

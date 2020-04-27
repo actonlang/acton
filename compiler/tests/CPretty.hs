@@ -45,7 +45,7 @@ instance CPretty Stmt where
                                           then vcat (map (\n -> resultTuple env r <+> cpretty env n<>parens (cprettyPosRow env p) <>semi) ns)
                                           else vcat (map (\n -> resultTuple env{isglobal=True} r <+> parens (text "*"<> cpretty env n)<>parens (cprettyPosRow env{isglobal=True} p) <>semi) ns)
    cpretty env (Signature _ ns tsc  _)  = vcat (map (\n ->cpretty env{isglobal=True} tsc<+> cpretty env n<>semi) ns)
-   cpretty env stmt                     = empty --error ("cpretty; unexpected Stmt: "++ show stmt)
+   cpretty env stmt                     = empty 
    
 instance CPretty Decl where
    cpretty env (Class _ nm qs bs ss)    = vcat (map ($+$ blank) [
@@ -79,6 +79,8 @@ instance CPretty TSchema where
 instance CPretty Name where
   cpretty env n@Internal{}              = text (nstr n)
   cpretty env n
+      | nstr n=="_Complex"              = text "_Complx"
+      | nstr n=="__complex__"           = text "__complx__"
       | isglobal env                    = text ('$' : nstr n)
       | otherwise                       = text (nstr n)
  
@@ -99,7 +101,7 @@ instance CPretty Type where
       where vbarSep f                   = hsep . punctuate (space <> char '|') . map f
     cpretty env (TOpt _ t)              = cpretty env t
     cpretty env (TExist _ p)            = cpretty env p <> text "$opaque"
-    cpretty env (TNone _)               = text "$None"
+    cpretty env (TNone _)               = text "void"
     cpretty env (TWild _)               = text "_"
     cpretty env row                     = prettyKwdRow row
 
@@ -113,7 +115,7 @@ structdecls cnm                         = text "struct" <+> cnm <> semi $+$
 
 witness_struct env cnm is               = text "struct" <+> cnm <+> text "{" $+$
                                           (nest 4 $ vcat ([--text "char *$GCINFO;",
-                                                           cnm <> text "$class" <+>text" class"<>semi] ++
+                                                           cnm <> text "$class" <+>text"$class"<>semi] ++
                                                            [vcat (map (cpretty env) is)])) $+$
                                            text "};"
 

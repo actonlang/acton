@@ -2,7 +2,7 @@
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct $list$class $list$methods = {"",$list_serialize,$list_deserialize,$list_copy};
+struct $list$class $list$methods = {"",(void (*)($list))$default__init__, $list_serialize,$list_deserialize,$list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -320,7 +320,7 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
  
 // (De)serialization //////////////////////////////////////////////////////////////////////////
 
-$None $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
   $WORD deflt = NULL;
   $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
   int blob_size = prevkey ? prevkey->prefix_size : 1;
@@ -359,7 +359,7 @@ $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     $list res = list_new((int)(long)this->data[(int)this->prefix_size]);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
-      res->data[i] = (serial$_methods[labs((*row)->class_id)])->__deserialize__(wit,row,done);
+      res->data[i] = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
     $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
     pref->prefix_size = this->prefix_size;
     memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));

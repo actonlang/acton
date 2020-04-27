@@ -111,7 +111,7 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
 }
 
 void $Msg$__serialize__($Msg self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-    // TBD
+  // TBD
 }
 
 $Msg $Msg$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -173,38 +173,38 @@ $Cont $Cont$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
 
 struct $Msg$class $Msg$methods = {
     MSG_HEADER,
+    $Msg$__init__,
     $Msg$__serialize__,
-    $Msg$__deserialize__,
-    $Msg$__init__
+    $Msg$__deserialize__
 };
 
 struct $Actor$class $Actor$methods = {
     ACTOR_HEADER,
+    $Actor$__init__,
     $Actor$__serialize__,
-    $Actor$__deserialize__,
-    $Actor$__init__
+    $Actor$__deserialize__
 };
 
 struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
+    $Catcher$__init__,
     $Catcher$__serialize__,
-    $Catcher$__deserialize__,
-    $Catcher$__init__
+    $Catcher$__deserialize__
 };
 
 struct $Clos$class $Clos$methods = {
     CLOS_HEADER,
+    $Clos$__init__,
     $Clos$__serialize__,
     $Clos$__deserialize__,
-    $Clos$__init__,
     NULL
 };
 
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
+    $Cont$__init__,
     $Cont$__serialize__,
     $Cont$__deserialize__,
-    $Cont$__init__,
     NULL
 };
 
@@ -350,9 +350,9 @@ $R $DONE$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $Done$methods = {
     CONT_HEADER,
-    NULL,
-    NULL,
     $Cont$__init__,
+    NULL,
+    NULL,
     $DONE$enter
 };
 struct $Cont $Done$cont = {
@@ -365,9 +365,9 @@ $R $NewRoot$enter ($Cont $this, $WORD val) {
 }
 struct $Cont$class $NewRoot$methods = {
     CONT_HEADER,
-    NULL,
-    NULL,
     $Cont$__init__,
+    NULL,
+    NULL,
     $NewRoot$enter
 };
 struct $Cont $NewRoot$cont = {
@@ -380,9 +380,9 @@ $R $WriteRoot$enter($Cont $this, $WORD val) {
 }
 struct $Cont$class $WriteRoot$methods = {
     CONT_HEADER,
-    NULL,
-    NULL,
     $Cont$__init__,
+    NULL,
+    NULL,
     $WriteRoot$enter
 };
 struct $Cont $WriteRoot$cont = {
@@ -528,7 +528,6 @@ void deserialize_rts($Mapping$dict wit, $ROW *row, $dict done) {
 int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
     printf("%ld worker threads\n", num_cores);
-
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
     pthread_t threads[num_cores];

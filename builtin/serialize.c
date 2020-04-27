@@ -1,6 +1,7 @@
+
 // Queue implementation //////////////////////////////////////////////////////////////////
 
-$None $enqueue($ROWLISTHEADER lst, $ROW elem) {
+void $enqueue($ROWLISTHEADER lst, $ROW elem) {
   if (lst->last)
     lst->last->next = elem;
   else
@@ -28,7 +29,7 @@ $int $Hashable$PREFIX_hash($Hashable$PREFIX wit, $PREFIX a) {
 }
 
 
-struct $Hashable$PREFIX$class $Hashable$PREFIX$methods = {"",$Hashable$PREFIX_eq,$Hashable$PREFIX_ne,$Hashable$PREFIX_hash};
+struct $Hashable$PREFIX$class $Hashable$PREFIX$methods = {"", (void (*)($Hashable$PREFIX))$default__init__, $Hashable$PREFIX_eq,$Hashable$PREFIX_ne,$Hashable$PREFIX_hash};
 struct $Hashable$PREFIX $Hashable$PREFIX_instance = {&$Hashable$PREFIX$methods};
 struct $Hashable$PREFIX *$Hashable$PREFIX$witness = &$Hashable$PREFIX_instance;
 
@@ -48,10 +49,68 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
 }
 
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {"",$Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD$class $Hashable$WORD$methods = {"", (void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
+// classid generation and retrieval ////////////////////////////////////////////////////////
+
+int nextid = 100;
+
+$dict methods;  //key is classid; value is method table
+$dict classids; //key is method table; value is classid
+
+void $set_classid_force(int classid, serial$methods meths) {
+  // should we check whether meths is already present?
+  $int classid1 =to$int(classid);
+  $dict_setitem(methods,($Hashable)$Hashable$int$witness,classid1,meths);
+  $dict_setitem(classids,($Hashable)$Hashable$WORD$witness,meths,classid1);
+}
+    
+void $set_classid(serial$methods meths) {
+  $set_classid_force(nextid++,meths);
+}
+
+int $get_classid(serial$methods meths) {
+  $int classid = $dict_get(classids,($Hashable)$Hashable$WORD$witness,meths,NULL);
+  if (classid)
+    return (int)from$int(classid);
+  else {
+    fprintf(stderr,"Internalerror in get_classid: classid not found\n");
+    exit(-1);
+  }
+}
+
+serial$methods $get_methods(int classid)  {
+  serial$methods meths = $dict_get(methods,($Hashable)$Hashable$int$witness,to$int(classid),NULL);
+  if (meths)
+    return meths;
+  else {
+    fprintf(stderr,"Internal error in get_methods: method table not found\n");
+    exit(-1);
+  }
+}
+
+void $init_serialization() {
+  methods  = $new_dict(); 
+  classids = $new_dict();
+  $set_classid_force(INT_ID,(serial$methods)&$int$methods);
+  $set_classid_force(FLOAT_ID,(serial$methods)&$float$methods);
+  //  $set_classid_force(COMPLEX_ID,(serial$methods)&$complex$methods);
+  $set_classid_force(BOOL_ID,(serial$methods)&$bool$methods);
+  $set_classid_force(STR_ID,(serial$methods)&$str$methods);
+  $set_classid_force(LIST_ID,(serial$methods)&$list$methods);
+  $set_classid_force(DICT_ID,(serial$methods)&$dict$methods);
+  $set_classid_force(SET_ID,(serial$methods)&$set$methods);
+  /*
+  $set_classid_force(MSG_ID,(serial$methods)&$Msg$methods);
+  $set_classid_force(ACTOR_ID,(serial$methods)&$Actor$methods);
+  $set_classid_force(CATCHER_ID,(serial$methods)&$Catcher$methods);
+  $set_classid_force(CLOS_ID,(serial$methods)&$Clos$methods);
+  $set_classid_force(CONT_ID,(serial$methods)&$Cont$methods);
+  */
+}
+ 
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
 
 void $write_serialized($ROW row, char *file) {
@@ -110,18 +169,11 @@ void $serialize_file($Serializable s, long prefix[], int prefix_size, char *file
 }
 
 $Serializable $deserialize($ROW row, long *prefix, int *prefix_size) {
-  serial$_methods[INT_ID] = (serial$methods)&$int$methods;
-  serial$_methods[FLOAT_ID] = (serial$methods)&$float$methods;
-  serial$_methods[STR_ID] = (serial$methods)&$str$methods;
-  serial$_methods[BOOL_ID] = (serial$methods)&$bool$methods;
-  serial$_methods[LIST_ID] = (serial$methods)&$list$methods;
-  serial$_methods[DICT_ID] = (serial$methods)&$dict$methods;
-  serial$_methods[SET_ID] = (serial$methods)&$set$methods;
   memcpy(prefix,row->data,row->prefix_size*sizeof($WORD));
   *prefix_size = row->prefix_size;
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$PREFIX$witness);
-  $dict done = wit->$class->__fromiter__(wit,NULL);//$new_dict(($Hashable)$Hashable$WORD_new());
-  return serial$_methods[row->class_id]->__deserialize__(wit,&row,done);
+  $dict done = wit->$class->__fromiter__(wit,NULL);
+  return  $get_methods(row->class_id)->__deserialize__(wit,&row,done);
 }
 
 $ROW $read_serialized(char *file) {
@@ -183,17 +235,13 @@ $ROW $new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix) {
   memcpy(res->data,prefix,prefix_size*sizeof($WORD));
   return res;
 }
-  
-$Hashable $Hashable_instance(long class_id) {
-  switch (class_id) {
-  case INT_ID:
-    return ($Hashable)$Hashable$int$witness;
-  case FLOAT_ID:
-    return ($Hashable)$Hashable$float$witness;
-  case STR_ID:
-    return ($Hashable)$Hashable$str$witness;
-  default:
-    fprintf(stderr,"Can't find Hashable instance for class_id %ld\n",class_id);
-    exit(1);
-  }
+
+void $default__init__($Initializable s) {
+  return;
+}
+void $default2__init__($Initializable s, $WORD w) {
+  return;
+}
+void $default3__init__($Initializable s, $WORD w, $WORD w2) {
+  return;
 }
