@@ -1,14 +1,14 @@
 struct $float$class {
   char *$GCINFO;
-  void (*__init__)($float);
-  void (*__serialize__)($float, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+  void (*__init__)($float, double);
+  void (*__serialize__)($float, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
   $float (*__deserialize__)($Mapping$dict,$ROW*, $dict);
 };
 
 
 struct $float {
   struct $float$class *$class;
-  long val;
+  double val;
 };
 
 extern struct $float$class $float$methods;

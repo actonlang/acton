@@ -1,20 +1,26 @@
-void $bool_serialize($bool self, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+void $bool_init($bool self, long val);
+void $bool_serialize($bool self, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum);
 $bool $bool_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
-struct $bool$class $bool$methods = {"", (void (*)($bool))$default__init__, $bool_serialize, $bool_deserialize};
+struct $bool$class $bool$methods = {"", $bool_init, $bool_serialize, $bool_deserialize};
+
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-void $bool_serialize($bool n,  $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $ROW row = $new_row(BOOL_ID,prefix_size,1,prefix);
-  row->data[prefix_size] = ($WORD)from$bool(n);
-  $enqueue(accum,row);
+void $bool_init($bool self, long val){
+  self->val = val;
+}
+
+void $bool_serialize($bool n,  $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
+  $enqueue(accum,$new_row(BOOL_ID,start_no,1,($WORD)&n->val));
 }
 
 $bool $bool_deserialize( $Mapping$dict notused, $ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
-  return to$bool((long)this->data[this->prefix_size]);
+  long res;
+  memcpy(&res,this->blob,sizeof(long));
+  return to$bool(res);
 }
 
 

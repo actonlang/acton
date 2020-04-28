@@ -6,7 +6,7 @@ void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
     $this->count = count;
     $this->q = q;
 }
-void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -24,7 +24,7 @@ void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
     $this->self = self;
     $this->q = q;
 }
-void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -43,7 +43,7 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     self->count = i;
     return self->$class->ping(self, i, then);
 }
-void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 Pingpong Pingpong$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {

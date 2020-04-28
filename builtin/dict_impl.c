@@ -35,50 +35,32 @@ struct $dict$class $dict$methods = {"",(void (*)($dict))$default__init__, $dict_
 
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
-void $dict_serialize($dict self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $WORD deflt = NULL;
-  $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
-  int this_blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
-  int blob_size = prevkey ? prevkey->prefix_size : this_blobsize;
-  $ROW row = $new_row(DICT_ID,prefix_size,blob_size,prefix);
+void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+  $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
   if (prevkey) {
-    row->class_id = -DICT_ID;
-    memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
-    $enqueue(accum,row);
+    $enqueue(accum,$new_row(-DICT_ID,start_no,1,($WORD)&prevkey->val));
     return;
   }
-  $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
-  pref->prefix_size = prefix_size;
-  memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
-  $dict_setitem(done,wit->_Hashable,self,pref);
-  row->class_id = DICT_ID;
-  row->data[prefix_size] = ($WORD)self->numelements;
-  row->data[prefix_size+1] = ($WORD)self->table->tb_size;
-  row->data[prefix_size+2] = ($WORD)self->table->tb_usable;
-  row->data[prefix_size+3] = ($WORD)self->table->tb_nentries;
-  memcpy(&row->data[prefix_size+4],self->table->tb_indices,self->table->tb_size*sizeof(int));
+  $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
+  int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
+  $ROW row = $new_row(DICT_ID,start_no,blobsize,NULL);
+  row->blob[0] = ($WORD)self->numelements;
+  row->blob[1] = ($WORD)self->table->tb_size;
+  row->blob[2] = ($WORD)self->table->tb_usable;
+  row->blob[3] = ($WORD)self->table->tb_nentries;
+  memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
   $enqueue(accum,row);
-  int extprefix_size = prefix_size + 1;
-  for (long i=0; i<self->table->tb_nentries; i++) {
-    $WORD extprefix[extprefix_size];
-    memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
-    extprefix[extprefix_size-1] = ($WORD)i;
-    $ROW row2 = $new_row(ITEM_ID,extprefix_size,1,extprefix);
+  for (int i=0; i<self->table->tb_nentries; i++) {
     $entry_t entry = &TB_ENTRIES(self->table)[i];
-    row2->data[extprefix_size] = ($WORD)entry->hash;
-    $enqueue(accum,row2);
-    int extprefix2_size = extprefix_size + 1;
-    $WORD extprefix2[extprefix2_size];
-    memcpy(extprefix2, extprefix, extprefix_size*sizeof($WORD));
-    extprefix2[extprefix2_size-1] = ($WORD)0;
+    $Serializable hash = ($Serializable)to$int(entry->hash);
+    hash->$class->__serialize__(hash,wit,start_no,done,accum);
     $Serializable key = ($Serializable)entry->key;
-    key->$class->__serialize__(key,wit,extprefix2,extprefix2_size,done,accum);
-    extprefix2[extprefix2_size-1] = ($WORD)1;
+    key->$class->__serialize__(key,wit,start_no,done,accum);
     $Serializable val = ($Serializable)entry->value;
-    if (val==NULL) 
-      $enqueue(accum,$new_row(DUMMY_ID,extprefix2_size,0,extprefix2));
+    if (val) 
+      val->$class->__serialize__(val,wit,start_no,done,accum);
     else 
-      val->$class->__serialize__(val,wit,extprefix2,extprefix2_size,done,accum);
+      $enqueue(accum,$new_row(DUMMY_ID,start_no,0,NULL));
   }
 }
 
@@ -86,35 +68,28 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row = this->next;
   if (this->class_id < 0) {
-    $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
-    pref->prefix_size = this->blob_size;
-    memcpy(pref->prefix, this->data+this->prefix_size, this->blob_size*sizeof($WORD));
-    return $dict_get(done,wit->_Hashable,pref,NULL);
+    return $dict_get(done,wit->_Hashable,to$int((long)this->blob[0]),NULL);
   } else {
     $dict res = malloc(sizeof(struct $dict));
+    $dict_setitem(done,wit->_Hashable,to$int(this->row_no),res);
     res->$class = &$dict$methods;
-    res->numelements = (long)this->data[this->prefix_size];
-    long tb_size = (long)this->data[this->prefix_size+1];
+    res->numelements = (long)this->blob[0];
+    long tb_size = (long)this->blob[1];
     res->table = malloc(sizeof(char*) + 3*sizeof(long) + tb_size*sizeof(int) + (2*tb_size/3)*sizeof(struct $entry_struct));
     res->table->tb_size = tb_size;
-    res->table->tb_usable = (long)this->data[this->prefix_size+2];
-    res->table->tb_nentries = (long)this->data[this->prefix_size+3];
-    memcpy(res->table->tb_indices,&this->data[this->prefix_size+4],tb_size*sizeof(int));
+    res->table->tb_usable = (long)this->blob[2];
+    res->table->tb_nentries = (long)this->blob[3];
+    memcpy(res->table->tb_indices,&this->blob[4],tb_size*sizeof(int));
     for (int i=0; i<res->table->tb_nentries; i++) {
       $entry_t entry = &TB_ENTRIES(res->table)[i];
-      entry->hash = (long)(*row)->data[(*row)->prefix_size];
-      *row = (*row)->next;
-      entry->key = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
+      entry->hash = from$int(($int)$get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done));
+      entry->key = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
       if ((*row)->class_id == DUMMY_ID)
         entry->value = NULL;
       else {
-        entry->value = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
+        entry->value = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
       }
     }
-    $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
-    pref->prefix_size = this->prefix_size;
-    memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));
-    $dict_setitem(done,wit->_Hashable,pref,res);
     return res;
   }
 }
