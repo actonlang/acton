@@ -57,29 +57,22 @@ reduce' env c@(Impl w t u)
   | otherwise                   = return ()                                      -- TODO: implement, of course
 
 
-reduce' env c@(Sel (TVar _ tv) n t2)
+reduce' env c@(Sel w (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
-  | u:_ <- findClassBound tv env            = reduce' env (Sel (tCon u) n t2)
-reduce' env (Sel t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
-                                                 when (dec == Static) (noSelStatic n tc)
+  | u:_ <- findClassBound tv env            = reduce' env (Sel w (tCon u) n t2)
+reduce' env (Sel w t1@(TCon _ tc) n t2)     = do let (sc,dec) = findAttr env tc n
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduce env (Cast t' t2 : cs)
-reduce' env (Sel (TTuple _ p r) n t2)       = reduce' env (Cast r (kwdRow n t2 tWild))
-{-
-reduce' env (Sel (TExist _ p) n t2)         = do let (sc,dec) = findAttr env tc n
-                                                 when (dec==Property) (noSelInstByClass n tc)
-                                                 (cs,t) <- instantiate env (addself sc dec)
-                                                 let t' = subst [(tvSelf,tCon tc)] t
-                                                 reduce env (Cast t' t2 : cs)
-  where
-    addself sc Static                       = sc
-    addself (TSchema l q t) _               = TSchema l q (addself' t)
-    addself' (TFun l fx p r t)              = TFun l fx (posRow (monotype tSelf) p) r t
-    addself' t                              = TFun (loc t) fxNil (posRow (monotype tSelf) posNil) kwdNil t
--}
-reduce' env (Sel (TUnion _ us) n t2)        = do t <- newTVar
-                                                 reduce env (Sel t n t2 : [ Cast (mkTCon u) t | u <- us ])
+reduce' env (Sel w (TExist _ p) n t2)       = do let (sc,dec) = findAttr env p n
+                                                 (cs,t) <- instantiate env sc
+                                                 when (tvSelf `elem` tyfree t) (err1 n "Attribute not selectable from abstract type")
+                                                 reduce env (Cast t t2 : cs)
+reduce' env (Sel w (TTuple _ p r) n t2)     = reduce' env (Cast r (kwdRow n t2 tWild))
+
+
+reduce' env (Sel w (TUnion _ us) n t2)      = do t <- newTVar
+                                                 reduce env (Sel w t n t2 : [ Cast (mkTCon u) t | u <- us ])
   where mkTCon (ULit _)                     = tStr
         mkTCon (UCon c)                     = tCon (TC c [])
 
@@ -87,7 +80,7 @@ reduce' env c@(Mut (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | u:_ <- findClassBound tv env            = reduce' env (Mut (tCon u) n t2)
 reduce' env (Mut t1@(TCon _ tc) n t2)       = do let (sc,dec) = findAttr env tc n
-                                                 when (dec==Property) (noMutClass n)
+                                                 when (dec/=Property) (noMut n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
                                                  reduce env (Cast t1 tObject : Cast t' t2 : cs)
