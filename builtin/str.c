@@ -10,7 +10,8 @@
 
 // String-specific methods
 
-void $str_serialize($str, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+void $str_init($str, char*);
+void $str_serialize($str, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
 $str $str_deserialize($Mapping$dict, $ROW*, $dict);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
@@ -52,7 +53,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",(void (*)($str))$default__init__, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
+  {"",$str_init, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
    $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
    $str_upper, $str_zfill};
@@ -617,15 +618,39 @@ $str $str_getslice($str s, $Slice slc) {
 }
 
 // Serialization ////////////////////////////////////////////////////////////// 
-                       
-void $str_serialize($str str, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+
+void $str_init($str self, char *str) {
+  int nbytes = 0;
+  int nchars = 0;
+
+  unsigned char *p = (unsigned char*)str;
+  int cp, cpnbytes;
+  while(1) {
+    if (*p == '\0') {
+      self->nbytes = nbytes;
+      self->nchars = nchars;
+      self->str = (unsigned char*)str;
+      return;
+    }
+    cpnbytes = utf8proc_iterate(p,-1,&cp);
+    if (cpnbytes < 0)
+      return; //UnicodeDecodeError
+
+    nbytes += cpnbytes;
+    nchars++;
+    p += cpnbytes;
+
+  }
+}
+
+void $str_serialize($str str, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
-  $ROW row = $new_row(STR_ID,prefix_size,2+nWords,prefix);
+  $ROW row = $new_row(STR_ID,start_no,2+nWords,NULL);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
-  memcpy(row->data+prefix_size,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
+  memcpy(row->blob,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
   long nchars = (long)str->nchars;
-  memcpy(row->data+prefix_size+1,&nchars,sizeof($WORD));
-  memcpy(row->data+prefix_size+2,str->str,nbytes+1);
+  memcpy(row->blob+1,&nchars,sizeof($WORD));
+  memcpy(row->blob+2,str->str,nbytes+1);
   $enqueue(accum,row);
 }
 
@@ -634,14 +659,14 @@ $str $str_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   *row =this->next;
   $str res = malloc(sizeof(struct $str));
   long nbytes;
-  memcpy(&nbytes,this->data+this->prefix_size,sizeof($WORD));
+  memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$str$methods;
   res->nbytes = (int)nbytes;
   long nchars;
-  memcpy(&nchars,this->data+this->prefix_size+1,sizeof($WORD));
+  memcpy(&nchars,this->blob+1,sizeof($WORD));
   res->nchars = (int)nchars;
   res->str = malloc(nbytes+1);
-  memcpy(res->str,this->data+this->prefix_size+2,nbytes+1);
+  memcpy(res->str,this->blob+2,nbytes+1);
   return res;
 }
 

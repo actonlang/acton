@@ -5,21 +5,21 @@
    Name convention for module initialization procedures?
 */
 
-void $init_serialization();
+void $register_builtin();
 
 // Fundamental class, from which all classes inherit //////////////////////////////////////////////////////
 
-typedef struct init$methods *init$methods;
+typedef struct $Initializable$methods *$Initializable$methods;
 
 typedef struct $Initializable  *$Initializable;
 
-struct $Initializable {
-  init$methods $class;
-};
-
-struct init$methods {
+struct $Initializable$methods {
   char *$GCINFO;
   void (*__init__)($Initializable,...);
+};
+
+struct $Initializable {
+  struct $Initializable$methods *$class;
 };
 
 
@@ -33,10 +33,10 @@ typedef struct $ROW *$ROW;
 
 struct $ROW {
   int class_id;
-  int prefix_size;
   int blob_size;
+  long row_no;
   $ROW next;
-  $WORD data[];
+  $WORD blob[];
 };
 
 /*
@@ -103,32 +103,32 @@ typedef struct $ROWLISTHEADER {
 
 // All serializable types must have method tables as if they were subclasses of Serializable 
 
-typedef struct serial$methods *serial$methods;
+typedef struct $Serializable$methods *$Serializable$methods;
 
 typedef struct $Serializable  *$Serializable;
 
 struct $Serializable {
-  serial$methods $class;
+  struct $Serializable$methods *$class;
 };
 
-struct serial$methods {
+struct $Serializable$methods {
   char *$GCINFO;
   void (*__init__)($Serializable,...);
-  void (*__serialize__)($Serializable, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
+  void (*__serialize__)($Serializable, $Mapping$dict, long*, $dict, $ROWLISTHEADER); /* result returned in the last, accumulating param */
   $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
 // top-level functions for serialization of an object
 
-$ROW $serialize($Serializable s, long prefix[], int prefix_size);
+$ROW $serialize($Serializable s, long *start_no);
 void $write_serialized($ROW row, char *file);
 // $serialize_file just calls the above two functions
-void $serialize_file($Serializable s, long prefix[], int prefix_size, char *file);
+void $serialize_file($Serializable s, char *file);
 
-$Serializable $deserialize($ROW row, long *prefix, int *prefix_size);
+$Serializable $deserialize($ROW row);
 $ROW $read_serialized(char *file);
 // deserialize_file just calls the above two functions
-$Serializable $deserialize_file(char *file,  long *prefix, int *prefix_size);
+$Serializable $deserialize_file(char *file);
 
 /*
   Class id's are used
@@ -140,10 +140,10 @@ $Serializable $deserialize_file(char *file,  long *prefix, int *prefix_size);
 /* $set_classid generates a fresh int classid and associates this with the given method table.
    Should be called for each class during module initialization.
 */
-void $set_classid_force(int classid, serial$methods meths);
-void $set_classid(serial$methods meths);
-int $get_classid(serial$methods meths);
-serial$methods $get_methods(int classid);
+void $register_force(int classid, $Serializable$methods meths);
+void $register($Serializable$methods meths);
+int $get_classid($Serializable$methods meths);
+$Serializable$methods $get_methods(int classid);
 
 #define DUMMY_ID 0     // for dummy items in hashtables
 #define INT_ID 1
@@ -170,10 +170,9 @@ struct $PREFIX {
   $WORD prefix[];
 };
 
-//serial$methods serial$_methods[10];
 
 // Hashable$PREFIX ////////////////////////////////////////////////////////////////////////////////////////
-
+/*
 
 typedef struct $Hashable$PREFIX *$Hashable$PREFIX;
 
@@ -192,7 +191,7 @@ struct $Hashable$PREFIX {
 struct $Hashable$PREFIX$class $Hashable$PREFIX$methods;
 struct $Hashable$PREFIX *$Hashable$PREFIX$witness;
 
-
+*/
 // $Hashable$WORD ////////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct $Hashable$WORD *$Hashable$WORD;
@@ -215,7 +214,7 @@ struct $Hashable$WORD *$Hashable$WORD$witness;
 
 void $enqueue($ROWLISTHEADER lst, $ROW elem);
 
-$ROW $new_row(int class_id, int prefix_size, int blob_size, $WORD *prefix);
+$ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob);
 
 //$Hashable $Hashable_instance(long class_id);
 

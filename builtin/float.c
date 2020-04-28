@@ -1,24 +1,28 @@
 #include <math.h>
 
-void $float_serialize($float self, $Mapping$dict notused,$WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
+void $float_init($float self, double val);
+void $float_serialize($float self, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum);
 $float $float_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
-struct $float$class $float$methods = {"",(void (*)($float))$default__init__, $float_serialize, $float_deserialize};
+struct $float$class $float$methods = {"",$float_init, $float_serialize, $float_deserialize};
 
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-void $float_serialize($float x, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $ROW row = $new_row(FLOAT_ID,prefix_size,1,prefix);
-  double dx = from$float(x);
-  memcpy(row->data+prefix_size,&dx,sizeof(double)); //Here we rely on sizeof(double) = sizeof($WORD)...
-  $enqueue(accum,row);
+void $float_init($float self, double val){
+  self->val = val;
+}
+
+void $float_serialize($float x, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
+  $enqueue(accum,$new_row(FLOAT_ID,start_no,1,($WORD)&x->val));
 }
 
 $float $float_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
-  return to$float((long)this->data[this->prefix_size]);
+  double res;
+  memcpy(&res,this->blob,sizeof(long));
+  return to$float(res);
 }
 
   

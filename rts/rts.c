@@ -110,7 +110,7 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
     atomic_flag_clear(&m->wait_lock);
 }
 
-void $Msg$__serialize__($Msg self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $Msg$__serialize__($Msg self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
   // TBD
 }
 
@@ -126,7 +126,7 @@ void $Actor$__init__($Actor a) {
     atomic_flag_clear(&a->msg_lock);
 }
 
-void $Actor$__serialize__($Actor self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $Actor$__serialize__($Actor self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 
@@ -140,7 +140,7 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
     c->cont = cont;
 }
 
-void $Catcher$__serialize__($Catcher self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $Catcher$__serialize__($Catcher self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 
@@ -151,7 +151,7 @@ $Catcher $Catcher$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
 
 void $Clos$__init__($Clos $this) { }
 
-void $Clos$__serialize__($Clos self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $Clos$__serialize__($Clos self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 
@@ -162,7 +162,7 @@ $Clos $Clos$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
 
 void $Cont$__init__($Cont $this) { }
 
-void $Cont$__serialize__($Cont self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $Cont$__serialize__($Cont self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
     // TBD
 }
 

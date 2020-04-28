@@ -55,7 +55,7 @@ typedef struct $R $R;
 struct $Msg$class {
     char *$GCINFO;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
-    void (*__serialize__)($Msg, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Msg, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
     $Msg (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Msg {
@@ -72,7 +72,7 @@ struct $Msg {
 struct $Actor$class {
     char *$GCINFO;
     void (*__init__)($Actor);
-    void (*__serialize__)($Actor, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Actor, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
     $Actor (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Actor {
@@ -86,7 +86,7 @@ struct $Actor {
 struct $Catcher$class {
     char *$GCINFO;
     void (*__init__)($Catcher, $Cont);
-    void (*__serialize__)($Catcher, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Catcher, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
     $Catcher (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Catcher {
@@ -98,7 +98,7 @@ struct $Catcher {
 struct $Clos$class {
     char *$GCINFO;
     void (*__init__)($Clos);
-    void (*__serialize__)($Clos, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Clos, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
     $Clos (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $WORD (*enter)($Clos, $WORD);
 };
@@ -109,7 +109,7 @@ struct $Clos {
 struct $Cont$class {
     char *$GCINFO;
     void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Cont, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
     $Cont (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)($Cont, $WORD);
 };

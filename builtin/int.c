@@ -1,20 +1,25 @@
-void $int_serialize($int self, $Mapping$dict, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum);
-$int $int_deserialize($Mapping$dict, $ROW *row, $dict done);
+void $int_init($int, long);
+void $int_serialize($int, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+$int $int_deserialize($Mapping$dict, $ROW*, $dict);
 
-struct $int$class $int$methods = {"",(void (*)($int))$default__init__,$int_serialize, $int_deserialize};
+struct $int$class $int$methods = {"",$int_init,$int_serialize, $int_deserialize};
 
-// Serialization ///////////////////////////////////////////////////////////////////////
+// Initialization and Serialization ///////////////////////////////////////////////////////////////////////
 
-void $int_serialize($int n, $Mapping$dict notused, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $ROW row = $new_row(INT_ID,prefix_size,1,prefix);
-  row->data[prefix_size] = ($WORD)from$int(n);
-  $enqueue(accum,row);
+void $int_init($int self, long val){
+  self->val = val;
+}
+
+void $int_serialize($int n, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
+  $enqueue(accum,$new_row(INT_ID,start_no,1,($WORD)&n->val));
 }
 
 $int $int_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
   $ROW this = *row;
   *row =this->next;
-  return to$int((long)this->data[this->prefix_size]);
+  long res;
+  memcpy(&res,this->blob,sizeof(long));
+  return to$int(res);
 }
 
 $int to$int(long i) {

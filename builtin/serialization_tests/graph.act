@@ -1,0 +1,12 @@
+class Node:
+   nbors: list[Node]
+
+class IntNode (Node):
+   ival : int
+
+class FloatNode (Node):
+   fval :float
+
+class Graph:
+   nodes : list[Node]
+

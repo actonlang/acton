@@ -5,18 +5,16 @@
 #define TESTSIZE 30L
  
 int main() {
-  $init_serialization();
+  $register_builtin();
   /*
   long prefix[] = {9L,7L,3L};
   $list lst = $list_fromiter(NULL);
   for (long i = 3L; i < 300L; i += 10L)
     $list_append(lst,to$int(i));
-  $ROW row = $serialize(($Serializable)lst,prefix,3);
+  long start_no = 0;
+  $ROW row = $serialize(($Serializable)lst,&start_no);
   $write_serialized(row,"test.bin");
-  long prefix2[5];
-  int prefix2_size;
-
-  $list lst2 = ($list)$deserialize_file("test.bin",prefix2,&prefix2_size);
+  $list lst2 = ($list)$deserialize_file("test.bin");
   $printlist(lst2);
   */
   $list lst2 = $list_fromiter(NULL);
@@ -30,12 +28,10 @@ int main() {
       $list_append(lst2,sublst);
     }
   }
-  long prefix2[] = {};
-  $ROW row = $serialize(($Serializable)lst2,prefix2,0);
-  long prefix[5];
-  int prefix_size;
+  long start_no = 0;
+  $ROW row = $serialize(($Serializable)lst2,&start_no);
   $write_serialized(row,"test2.bin");
-  $list lst3 = ($list)$deserialize(row,prefix,&prefix_size);
+  $list lst3 = ($list)$deserialize(row);
   $ROW row2 = $read_serialized("test2.bin");
   $write_serialized(row2,"test3.bin");
   
@@ -48,11 +44,7 @@ int main() {
     printf("sublist %d is ",i);
     $printlist($list_getitem(lst3,i));
   }
-  printf("prefix is ");
-  for (int i = 0; i < prefix_size; i++)
-    printf("%ld,",prefix[i]);
-  printf("\n");
-  $list lst4 = ($list)$deserialize(row2,prefix,&prefix_size);
+  $list lst4 = ($list)$deserialize(row2);
     for (int i=0; i<$list_len(lst4); i++) {
     printf("sublist %d is ",i);
     $printlist($list_getitem(lst4,i));

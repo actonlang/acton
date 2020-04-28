@@ -27,6 +27,7 @@ $Iterable$opaque dict_iterable($Mapping$dict wit, $dict dict) {
 }
     
 int main() {
+  $register_builtin();
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$str$witness);
   $dict dict = wit->$class->__fromiter__(wit,NULL); 
   $dict other = wit->$class->__fromiter__(wit,NULL);
@@ -46,16 +47,13 @@ int main() {
   printf("in dict_test after summation; last value retrieved should be %ld, was %ld\n",r+1,fromWord(b));
   printf("Retrieved and summed 100000 values; sum is %ld\n",s);
   
-  long prefix[] = {3L};
-/*
-  $serialize_file(($Serializable)dict,prefix,1,"test4.bin");
+  /*
+  $serialize_file(($Serializable)dict,"test4.bin");
 
- /printf("Wrote serialized dict to test4.bin\n");
-  long prefix2[10];
-  int prefix2_size;
-  $dict dict2 = ($dict)$deserialize_file("test4.bin",prefix2,&prefix2_size);
-  serialize_file(($Serializable)dict2,prefix,1,"test5.bin");
-  */
+  printf("Wrote serialized dict to test4.bin\n");
+  $dict dict2 = ($dict)$deserialize_file("test4.bin");
+  $serialize_file(($Serializable)dict2,"test5.bin");
+  */  
   int t1 = from$bool(wit->$class->__contains__(wit,dict,toWord(678)));
   int t2 = from$bool(wit->$class->__contains__(wit,dict,toWord(-1)));
 

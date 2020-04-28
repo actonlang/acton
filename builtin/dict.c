@@ -1,6 +1,6 @@
 #include "../rts/rts.h"
 
-void $dict_serialize($dict, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+void $dict_serialize($dict, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
 $dict $dict_deserialize($Mapping$dict, $ROW*, $dict);
 
 
