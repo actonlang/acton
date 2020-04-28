@@ -1,8 +1,12 @@
+void $list_init($list self);
+void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum);
+$list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
+
 
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct $list$class $list$methods = {"",(void (*)($list))$default__init__, $list_serialize,$list_deserialize,$list_copy};
+struct $list$class $list$methods = {"",$list_init, $list_serialize,$list_deserialize,$list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -320,51 +324,45 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
  
 // (De)serialization //////////////////////////////////////////////////////////////////////////
 
-void $list_serialize($list self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
-  $WORD deflt = NULL;
-  $PREFIX prevkey = ($PREFIX)$dict_get(done,wit->_Hashable,self,deflt);
-  int blob_size = prevkey ? prevkey->prefix_size : 1;
-  $ROW row = $new_row(LIST_ID,prefix_size,blob_size,prefix);
+void $list_init($list lst) {
+  int capacity = 4;
+  lst->data = malloc(capacity*sizeof($WORD));
+  if (lst->data == NULL) {
+      exception e;
+      MKEXCEPTION(e,MEMORYERROR);
+      RAISE(e);
+  }
+  lst->length = 0;
+  lst->capacity = capacity;
+  lst->$class = &$list$methods; 
+};
+
+void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+  $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
   if (prevkey) {
-    row->class_id = -LIST_ID;
-    memcpy(row->data + prefix_size,prevkey->prefix,prevkey->prefix_size*sizeof($WORD));
-    $enqueue(accum,row);
+    $enqueue(accum,$new_row(-LIST_ID,start_no,1,($WORD)&prevkey->val));
     return;
   }
-  $PREFIX pref = malloc(sizeof(int) + prefix_size*sizeof($WORD));
-  pref->prefix_size = prefix_size;
-  memcpy(pref->prefix, prefix, prefix_size*sizeof($WORD));
-  $dict_setitem(done,wit->_Hashable,self,pref);
-  row->data[prefix_size] = ($WORD)(long)self->length;
-  $enqueue(accum,row);
-  int extprefix_size = prefix_size + 1;
+  $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
+  long len = (long)self->length;
+  $enqueue(accum,$new_row(LIST_ID,start_no,1,($WORD)&len));
   for (int i=0; i<self->length; i++) {
-    $WORD extprefix[extprefix_size];
-    memcpy(extprefix, prefix, prefix_size*sizeof($WORD));
-    extprefix[extprefix_size-1] = ($WORD)(long)i;
     $Serializable elem = ($Serializable)self->data[i];
-    elem->$class->__serialize__(elem,wit,extprefix,extprefix_size,done,accum);
+    elem->$class->__serialize__(elem,wit,start_no,done,accum);
   }
 }
-
+ 
 $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row = this->next;
   if (this->class_id < 0) {
-    $PREFIX pref = malloc(sizeof(int) + this->blob_size*sizeof($WORD));
-    pref->prefix_size = this->blob_size;
-    memcpy(pref->prefix, this->data+this->prefix_size, this->blob_size*sizeof($WORD));
-    return $dict_get(done,wit->_Hashable,pref,NULL);
+    return ($list)$dict_get(done,wit->_Hashable,to$int((long)this->blob[0]),NULL);
   } else {
-    $list res = list_new((int)(long)this->data[(int)this->prefix_size]);
+    $list res = list_new((int)(long)this->blob[0]);
+    $dict_setitem(done,wit->_Hashable,to$int(this->row_no),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
-      res->data[i] = $get_methods(labs((*row)->class_id))->__deserialize__(wit,row,done);
-    $PREFIX pref = malloc(sizeof(int) + this->prefix_size*sizeof($WORD));
-    pref->prefix_size = this->prefix_size;
-    memcpy(pref->prefix, this->data, this->prefix_size*sizeof($WORD));
-
-    $dict_setitem(done,wit->_Hashable,pref,res);
+      res->data[i] = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
     return res;
   }
 }

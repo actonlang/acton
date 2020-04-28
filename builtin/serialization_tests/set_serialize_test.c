@@ -3,15 +3,13 @@
 #include "../builtin.h"
 
 int main() {
-  $init_serialization();
+  $register_builtin();
   $Hashable wit = ($Hashable)$Hashable$int$witness;
   $set s = $set_fromiter(wit,NULL);
-  for (long j = 0; j < 20; j++)
+  for (long j = 0; j < 100; j++)
     $set_add(s,wit,to$int(j*j));
-  long prefix[10];
-  int prefix_size;
-  $serialize_file(($Serializable)s,prefix,0,"test6.bin");
-  $set s1 = ($set)$deserialize_file("test6.bin",prefix,&prefix_size);
+  $serialize_file(($Serializable)s,"test6.bin");
+  $set s1 = ($set)$deserialize_file("test6.bin");
   printf("size of s1 is %ld\n",$set_len(s1));
   long len1 = $set_len(s1);
   for (long i=0; i<len1; i++)
