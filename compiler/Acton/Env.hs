@@ -110,9 +110,9 @@ instance Subst NameInfo where
     tyfree (NSVar t)            = tyfree t
     tyfree (NDef t d)           = tyfree t
     tyfree (NSig t d)           = tyfree t
-    tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
-    tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ tybound q
-    tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ tybound q
+    tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
+    tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
+    tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NTVar k as ps)      = tyfree as ++ tyfree ps
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
@@ -214,9 +214,11 @@ sigTerms te                 = (nSigs te, nTerms te)
 
 propSigs                    :: TEnv -> TEnv
 propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
-  where isProp Property _   = True
-        isProp NoDec sc     = case sctype sc of TFun{} -> False; _ -> True
-        isProp _ _          = False
+
+isProp                      :: Decoration -> TSchema -> Bool
+isProp Property _           = True
+isProp NoDec sc             = case sctype sc of TFun{} -> False; _ -> True
+isProp _ _                  = False
 
 nSchemas                    :: TEnv -> Schemas
 nSchemas []                 = []
@@ -229,7 +231,6 @@ parentTEnv env us           = concatMap tEnv us
   where tEnv u              = case findQName (tcname u) env of
                                 NClass q _ te -> subst (tybound q `zip` tcargs u) te
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
---                                NExt _ q us' te -> 
                                 _             -> []
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
@@ -343,16 +344,16 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findExtension               :: QName -> QName -> Env -> Maybe (Name,[TBind],TCon)
-findExtension n tc env      = case [ (w,q,p) | (w,q,ps) <- extensionsOf n env, p <- ps, tc == tcname p ] of
-                                [(w,q,p)] -> Just (w,q,p)
-                                _ -> Nothing
+findExtByProto              :: QName -> QName -> Env -> Maybe (Name,[TBind],[TCon],TEnv)
+findExtByProto c_n p_n env  = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n `elem` map tcname ps ]
+
+findProtoAttr               :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
+findProtoAttr c_n a_n env   = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensionsOf c_n env, Just (NSig sc dec) <- [lookup a_n te] ]
+                                
 
 
-extensionsOf                :: QName -> Env -> [(Name,[TBind],[TCon])]
-extensionsOf n env          = [ (w,q,ps) | (w, NExt n' q ps _) <- names env, n == n' ]
-
-
+extensionsOf                :: QName -> Env -> [(Name,[TBind],[TCon],TEnv)]
+extensionsOf n env          = [ (w,q,ps,te) | (w, NExt n' q ps te) <- names env, n == n' ]
 
 constraintsOf               :: [TBind] -> Env -> Constraints
 constraintsOf q env         = [ constr u (tVar v) | TBind v us <- q, u <- us ]
@@ -419,23 +420,6 @@ instance WellFormed Type where
 instance WellFormed TBind where
     wf env (TBind v us)     = wf env us
 
-entail env (Impl w t p)     = case t of
-                                TCon _ (TC n ts) -> 
-                                  case findExtension n (tcname p) env of
-                                    Just (_,q,u) -> subst s u == p && all (entail env) (subst s $ constraintsOf q env)
-                                      where s = tybound q `zip` ts
-                                    Nothing -> err1 (Impl w t p) "No entailment"
-                                TVar _ tv -> p `elem` ps
-                                  where ps = findProtoBound tv env
-                                _ -> err1 (Impl w t p) "No entailment"
-entail env (Cast t u)       = case (t,u) of
-                                (TCon _ tc, TCon _ tc') -> tc' `elem` us
-                                  where (us,_) = findCon env tc
-                                (TVar _ tv, TCon _ tc') -> tc' `elem` us
-                                  where us = findClassBound tv env 
-                                _ -> err1 (Cast t u) "No entailment"
-entail env c                = err1 c "No entailment"
-
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 
@@ -482,17 +466,19 @@ findProtoBound tv env       = case findName (tvname tv) env of
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
 instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
-instantiate env (TSchema _ [] t)
-                            = return ([], t)
 instantiate env (TSchema _ q t)
-                            = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
+                            = do (cs, tvs) <- instQual env q
+                                 let s = tybound q `zip` tvs
+                                 return (cs, subst s t)
+
+instQual                    :: Env -> [TBind] -> TypeM (Constraints, [Type])
+instQual env q              = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
                                  let s = tybound q `zip` tvs
                                  cs <- sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
-                                 return (cs, subst s t)
+                                 return (cs, tvs)
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
-
 
 
 -- Import handling (local definitions only) ----------------------------------------------
@@ -561,21 +547,21 @@ importAll m te              = mapMaybe imp te
 data Constraint                         = Cast      Type Type
                                         | Sub       Name Type Type
                                         | Impl      Name Type TCon
-                                        | Sel       Type Name Type
+                                        | Sel       Name Type Name Type
                                         | Mut       Type Name Type
 
 instance HasLoc Constraint where
     loc (Cast _ t)                      = loc t
     loc (Sub  _ _ t)                    = loc t
     loc (Impl _ _ p)                    = loc p
-    loc (Sel _ n _)                     = loc n
+    loc (Sel _ _ n _)                   = loc n
     loc (Mut _ n _)                     = loc n
 
 instance Pretty Constraint where
     pretty (Cast t1 t2)                 = pretty t1 <+> text "<" <+> pretty t2
     pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<:" <+> pretty t2
     pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
-    pretty (Sel t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
+    pretty (Sel w t1 n t2)              = text "Sel" <+> pretty w <+> colon <+> pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
     pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":~" <+> pretty t2
 
 instance Show Constraint where
@@ -657,7 +643,15 @@ newTVars ks                             = mapM newTVarOfKind ks
 newTVar                                 = newTVarOfKind KType
 
 subst                                   :: Subst a => Substitution -> a -> a
-subst s x                               = evalState (msubst x) (initTypeState $ Map.fromList s)
+subst s x0
+  | null clash                          = evalState (msubst x0) (initTypeState $ Map.fromList s)
+  | otherwise                           = x2
+  where x1                              = evalState (msubst x0) (initTypeState $ Map.fromList (s1 ++ clash `zip` map tVar tmp))
+        x2                              = evalState (msubst x1) (initTypeState $ Map.fromList (s1 ++ tmp `zip` rng s0))
+        (s0,s1)                         = partition ((`elem` clash) . fst) s
+        clash                           = dom s `intersect` tyfree (rng s)
+        used                            = dom s ++ tyfree (rng s)                             
+        tmp                             = take (length clash) $ map (\u -> TV KWild (Internal "T" u TypesPass)) [1 ..] \\ used
 
 erase x                                 = subst s x
   where s                               = [ (tv, tWild) | tv <- nub (tyfree x) ]
@@ -691,13 +685,13 @@ instance Subst Constraint where
     msubst (Cast t1 t2)             = Cast <$> msubst t1 <*> msubst t2
     msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t1
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
-    msubst (Sel t1 n t2)            = Sel <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
-    tyfree (Sel t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
@@ -834,15 +828,15 @@ instance Subst Decl where
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                                 (subst s (subst ren a)) (subst s (subst ren ss))
 
-    tybound (Protocol l n q bs ss)  = tybound q
-    tybound (Class l n q bs ss)     = tybound q
-    tybound (Extension l n q bs ss) = tybound q
+    tybound (Protocol l n q bs ss)  = tvSelf : tybound q
+    tybound (Class l n q bs ss)     = tvSelf : tybound q
+    tybound (Extension l n q bs ss) = tvSelf : tybound q
     tybound (Def l n q p k a ss d)  = tybound q
     tybound (Actor l n q p k a ss)  = tybound q
     
-    tyfree (Protocol l n q bs ss)   = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
-    tyfree (Class l n q bs ss)      = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
-    tyfree (Extension l n q bs ss)  = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ tybound q
+    tyfree (Protocol l n q bs ss)   = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
+    tyfree (Class l n q bs ss)      = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
+    tyfree (Extension l n q bs ss)  = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
     tyfree (Def l n q p k a ss d)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
     tyfree (Actor l n q p k a ss)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
     
@@ -885,8 +879,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
-                                    | NoMutProto Name
-                                    | NoMutClass Name
+                                    | NoMut Name
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
@@ -905,8 +898,7 @@ instance HasLoc TypeError where
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
     loc (NoSelInstByClass n u)      = loc n
-    loc (NoMutProto n)              = loc n
-    loc (NoMutClass n)              = loc n
+    loc (NoMut n)                   = loc n
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
@@ -922,8 +914,7 @@ typeError err                       = (loc err,render (expl err))
                                       pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
     expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
-    expl (NoMutProto n)             = text "Protocol attribute" <+> pretty n <+> text "cannot be mutated"
-    expl (NoMutClass n)             = text "Class attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
@@ -974,8 +965,7 @@ decorationMismatch n t d            = Control.Exception.throw $ DecorationMismat
 escapingVar tvs t                   = Control.Exception.throw $ EscapingVar tvs t
 noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
 noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
-noMutProto n                        = Control.Exception.throw $ NoMutProto n
-noMutClass n                        = Control.Exception.throw $ NoMutClass n
+noMut n                             = Control.Exception.throw $ NoMut n
 lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
 lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c

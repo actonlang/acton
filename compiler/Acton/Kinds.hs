@@ -127,18 +127,18 @@ instance KCheck Stmt where
 instance KCheck Decl where
     kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*> 
                                       kchkSuite env1 b <*> return m
-      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ tvars env) env
+      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
     kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*>
                                       kchkSuite env1 b
-      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ tvars env) env
+      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
     kchk env (Class l n q us b)     = Class l n <$> kchkQual env q <*> kchkBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Extension l n q us b) = Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -256,7 +256,7 @@ instance KCheck TSchema where
     kchk env (TSchema l q t)
       | null ambig                  = TSchema l <$> kchkQual env q <*> kexp KType env1 False t
       | otherwise                   = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
-      where env1 | null q           = extvars (tyfree t \\ tvars env) env
+      where env1 | null q           = extvars (tyfree t \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
             ambig                   = tybound q \\ tyfree t
 
