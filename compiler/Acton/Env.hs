@@ -546,32 +546,6 @@ importAll m te              = mapMaybe imp te
 
 -- Type inference monad ------------------------------------------------------------------
 
-
-data Constraint                         = Cast      Type Type
-                                        | Sub       Name Type Type
-                                        | Impl      Name Type TCon
-                                        | Sel       Name Type Name Type
-                                        | Mut       Type Name Type
-
-instance HasLoc Constraint where
-    loc (Cast _ t)                      = loc t
-    loc (Sub  _ _ t)                    = loc t
-    loc (Impl _ _ p)                    = loc p
-    loc (Sel _ _ n _)                   = loc n
-    loc (Mut _ n _)                     = loc n
-
-instance Pretty Constraint where
-    pretty (Cast t1 t2)                 = pretty t1 <+> parens (pretty t2)
-    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> parens (pretty t2)
-    pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
-    pretty (Sel w t1 n t2)              = pretty w <+> colon <+> pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
-    pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":=" <+> pretty t2
-
-instance Show Constraint where
-    show                                = render . pretty
-
-type Constraints                        = [Constraint]
-
 type TVarMap                            = Map TVar Type
 
 data TypeState                          = TypeState {
