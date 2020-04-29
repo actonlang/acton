@@ -158,7 +158,7 @@ instance Unalias QName where
                                                       Just _ -> QName m' n
                                                       _ -> noItem m n
       where m'                      = unalias env m
-    unalias env (NoQual n)          = case lookup n (names env) of
+    unalias env (NoQName n)         = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
                                         Just _ -> QName (defaultmod env) n
                                         _ -> trace ("#unalias") $ nameNotFound n
@@ -312,12 +312,12 @@ findQName (QName m n) env   = case maybeFindMod (unalias env m) env of
                                     Just i -> i
                                     _ -> noItem m n
                                 _ -> noModule m
-findQName (NoQual n) env    = case lookup n (names env) of
+findQName (NoQName n) env   = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just info -> info
                                 Nothing -> trace ("#findQName") $ nameNotFound n
 
-findName n env              = findQName (NoQual n) env
+findName n env              = findQName (NoQName n) env
 
 maybeFindMod                :: ModName -> Env -> Maybe TEnv
 maybeFindMod (ModName ns) env = f ns (names env)
@@ -344,12 +344,12 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findExtByProto              :: QName -> QName -> Env -> Maybe (Name,[TBind],[TCon],TEnv)
-findExtByProto c_n p_n env  = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n `elem` map tcname ps ]
+findExt                     :: QName -> QName -> Env -> Maybe (Name,[TBind],[TCon],TEnv)
+findExt c_n p_n env         = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n == tcname (head ps) ]
 
-findProtoAttr               :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
-findProtoAttr c_n a_n env   = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensionsOf c_n env, Just (NSig sc dec) <- [lookup a_n te] ]
-                                
+findExtAttr                 :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
+findExtAttr c_n a_n env     = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensionsOf c_n env, Just (NSig sc dec) <- [lookup a_n te] ]
+
 
 
 extensionsOf                :: QName -> Env -> [(Name,[TBind],[TCon],TEnv)]
@@ -404,7 +404,7 @@ instance WellFormed TCon where
       where q               = case findQName n env of
                                 NClass q us te -> q
                                 NProto q us te -> q
-                                i -> err1 n ("wf: Class or protocol name expected, got " ++ show i ++ " --- ")
+                                i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
 
 instance WellFormed Type where
@@ -472,10 +472,13 @@ instantiate env (TSchema _ q t)
                                  return (cs, subst s t)
 
 instQual                    :: Env -> [TBind] -> TypeM (Constraints, [Type])
-instQual env q              = do tvs <- newTVars [ tvkind v | TBind v _ <- q ]
-                                 let s = tybound q `zip` tvs
-                                 cs <- sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
-                                 return (cs, tvs)
+instQual env q              = do ts <- newTVars [ tvkind v | TBind v _ <- q ]
+                                 cs <- qualConstraints env q ts
+                                 return (cs, ts)
+
+qualConstraints             :: Env -> [TBind] -> [Type] -> TypeM Constraints
+qualConstraints env q ts    = do let s = tybound q `zip` ts
+                                 sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
@@ -558,11 +561,11 @@ instance HasLoc Constraint where
     loc (Mut _ n _)                     = loc n
 
 instance Pretty Constraint where
-    pretty (Cast t1 t2)                 = pretty t1 <+> text "<" <+> pretty t2
-    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> text "<:" <+> pretty t2
+    pretty (Cast t1 t2)                 = pretty t1 <+> parens (pretty t2)
+    pretty (Sub w t1 t2)                = pretty w <+> colon <+> pretty t1 <+> parens (pretty t2)
     pretty (Impl w t u)                 = pretty w <+> colon <+> pretty t <+> parens (pretty u)
-    pretty (Sel w t1 n t2)              = text "Sel" <+> pretty w <+> colon <+> pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
-    pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":~" <+> pretty t2
+    pretty (Sel w t1 n t2)              = pretty w <+> colon <+> pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
+    pretty (Mut t1 n t2)                = pretty t1 <+> text "." <> pretty n <+> text ":=" <+> pretty t2
 
 instance Show Constraint where
     show                                = render . pretty

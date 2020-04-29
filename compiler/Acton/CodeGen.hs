@@ -42,7 +42,7 @@ instance Gen QName where
     gen env (QName m n)
       | m == mPrim                  = text (nstr n)
       | otherwise                   = gen env m <> text "$$" <> gen env n
-    gen env (NoQual n)              = gen env n
+    gen env (NoQName n)             = gen env n
 
 instance Gen Name where
     gen env nm

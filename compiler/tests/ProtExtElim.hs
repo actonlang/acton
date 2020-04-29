@@ -97,7 +97,7 @@ instance Transform TBind where
     trans env (TBind tv tcs)            = TBind tv (trans env tcs)
 
 instance Transform QName where
-    trans env (QName _ nm)              = NoQual nm
+    trans env (QName _ nm)              = NoQName nm
     trans env qn                        = qn
 
 instance Transform Name where
@@ -161,7 +161,7 @@ transChain mb env b e (c : cs)          = c2{dname = c2nm, dbody = sigs} : trans
 
 substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)
    where s                              = tVars qs `zip` ts
-         tc                             = subst2 s (mkTC (NoQual nm) qs)
+         tc                             = subst2 s (mkTC (NoQName nm) qs)
 
 
 addSigs                                 :: [(Name,Decl)] -> [TCon] -> [Stmt]

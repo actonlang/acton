@@ -121,7 +121,7 @@ instance Relabel ModName where
 
 instance Relabel QName where
   relabel (QName m n) = QName <$> relabel m <*> relabel n
-  relabel (NoQual n) = NoQual <$> relabel n
+  relabel (NoQName n) = NoQName <$> relabel n
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn

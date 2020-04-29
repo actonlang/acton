@@ -330,7 +330,7 @@ instance InfEnv Stmt where
             method BXorA                = ixorKW
             method BAndA                = iandKW
             method MMultA               = imatmulKW
-            t2e (TaVar l n)             = Var l (NoQual n)
+            t2e (TaVar l n)             = Var l (NoQName n)
             t2e (TaIndex l e ix)        = Index l e ix
             t2e (TaSlice l e sl)        = Slice l e sl
             t2e (TaDot l e n)           = Dot l e n
@@ -471,7 +471,7 @@ instance InfEnv Decl where
                                                  (nsigs,_,_) <- checkAttributes te' te
                                                  return (cs, [(n, NClass q as (te++te'++nsigs))], Class l n q ps b')
                                              _ -> illegalRedef n
-      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
+      where env1                        = reserve (bound b) $ defineSelf (NoQName n) q $ defineTVars q $ block (stateScope env) env
             (as,ps)                     = mro2 env1 us
             te'                         = parentTEnv env1 as
     infEnv env (Protocol l n q us b)
@@ -484,7 +484,7 @@ instance InfEnv Decl where
                                                  when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute lacks signature"
                                                  return (cs, [(n, NProto q ps (te++te'))], Protocol l n q ps b')
                                              _ -> illegalRedef n
-      where env1                        = reserve (bound b) $ defineSelf (NoQual n) q $ defineTVars q $ block (stateScope env) env
+      where env1                        = reserve (bound b) $ defineSelf (NoQName n) q $ defineTVars q $ block (stateScope env) env
             ps                          = mro env1 us
             te'                         = parentTEnv env1 ps
     infEnv env (Extension l n q us b)
@@ -504,7 +504,7 @@ instance InfEnv Decl where
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             prevexts                    = extensionsOf n env
             overlap                     = [ p | (_,_,ps',_) <- prevexts, p <- ps', tcname p == tcname (head us) ]
-            ws                          = [ TC (NoQual w) ts | (w,_,ps',_) <- prevexts, any connected ps' ]
+            ws                          = [ TC (NoQName w) ts | (w,_,ps',_) <- prevexts, any connected ps' ]
             connected p                 = tcname p `elem` map tcname us'
             us'                         = concat [ us' | (us',_) <- map (findCon env) us ]
             ts                          = map tVar (tybound q)
@@ -579,14 +579,14 @@ instance Check Decl where
     checkEnv env cl (Class l n q us b)  = do (cs1,b') <- checkEnv env1 True b
                                              -- solve env1 (wellformed env1 (q,us))
                                              return (cs1, Class l n q us b')
-      where env1                        = define te $ defineSelf (NoQual n) q $ defineTVars q env
+      where env1                        = define te $ defineSelf (NoQName n) q $ defineTVars q env
             NClass _ as te              = findName n env
 
     checkEnv env cl (Protocol l n q us b)
                                         = do (cs1,b') <- checkEnv env1 True b
                                              --solve env1 (wellformed env1 (q,us))
                                              return (cs1, Protocol l n q us b')             -- TODO: translate into class, add Self to q
-      where env1                        = define (nSigs te) $ defineSelf (NoQual n) q $ defineTVars q env
+      where env1                        = define (nSigs te) $ defineSelf (NoQName n) q $ defineTVars q env
             NProto _ ps te              = findName n env
 
     checkEnv env cl (Extension l n q us b)
@@ -596,7 +596,7 @@ instance Check Decl where
                                              --solve env1 (wellformed env1 (q,us))
                                              return (cs1, Class l w [] [head us] b')        -- TODO: properly mix in n and q in us......
       where env1                        = define (nSigs te) $ defineSelf n q $ defineTVars q env
-            Just (w,_,_,te)             = findExtByProto n (tcname $ head us) env
+            Just (w,_,_,te)             = findExt n (tcname $ head us) env
 
 
 checkAssump env cl n cs sc              = do (cs1,t1) <- instantiate env sc
@@ -797,7 +797,7 @@ instance Infer Expr where
                                                   (cs2,t) <- instantiate env sc
                                                   let t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                   return (cs1++cs2, t', Dot l (Var l' c) n)
-                                              Nothing -> case findProtoAttr c n env of
+                                              Nothing -> case findExtAttr c n env of
                                                   Just (w,sc,dec) -> do
                                                      (cs1,tvs) <- instQual env q
                                                      let t0 = tCon (TC c tvs)
@@ -903,7 +903,7 @@ tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]
                                              return (TTuple NoLoc (foldl (flip posRow) p ts) k, head ts, TTuple NoLoc p kwdNil)
 
 isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
-  where dotChain (Var _ (NoQual n))     = Just [n]
+  where dotChain (Var _ (NoQName n))    = Just [n]
         dotChain (Dot _ e n)            = fmap (n:) (dotChain e)
         dotChain _                      = Nothing
 
