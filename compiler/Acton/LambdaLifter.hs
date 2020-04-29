@@ -259,9 +259,9 @@ instance Lift Decl where
     
 
 instance Lift Expr where
-    ll env (Var l (NoQName n))
-      | selfRef env n                   = pure $ Dot l0 (Var l0 (NoQName selfKW)) n
-      | isSelf env n                    = pure $ Var l0 (NoQName selfKW)
+    ll env (Var l (NoQ n))
+      | selfRef env n                   = pure $ Dot l0 (Var l0 (NoQ selfKW)) n
+      | isSelf env n                    = pure $ Var l0 (NoQ selfKW)
       | Just vs <- findFree n env       = pure $ closure (liftedname env n) vs
     ll env e@Var{}                      = pure e
     ll env e@Int{}                      = pure e
@@ -273,7 +273,7 @@ instance Lift Expr where
     ll env e@Ellipsis{}                 = pure e
     ll env e@Strings{}                  = pure e
     ll env e@BStrings{}                 = pure e
-    ll env (Call l (Var _ (NoQName n)) p _k)
+    ll env (Call l (Var _ (NoQ n)) p _k)
       | Just vs <- findFree n env       = Call l (eVar (liftedname env n)) <$> ll env (extras vs p) <*> return _k
       where extras vs p                 = foldr (PosArg . eVar) p vs
     ll env (Call l e p _k)              = Call l <$> ll env e <*> ll env p <*> return _k

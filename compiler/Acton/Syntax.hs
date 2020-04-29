@@ -43,11 +43,11 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual, bounds::[TCon], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual', pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual', pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qual::Qual', bounds::[TCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual', bounds::[TCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual', bounds::[TCon], dbody::Suite }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -126,11 +126,11 @@ data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
 modName ss      = ModName (map name ss)
 
-data QName      = QName { mname::ModName, noqual::Name } | NoQName { noqual::Name } deriving (Show,Read,Eq,Generic)
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } deriving (Show,Read,Eq,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 
-noQual s        = NoQName (name s)
+noQ s           = NoQ (name s)
 
 data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
@@ -168,7 +168,7 @@ data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual, sctype::Type } deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual', sctype::Type } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -176,11 +176,13 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data TBind      = TBind { qvar::TVar, qbounds::[TCon] } deriving (Eq,Show,Read,Generic)
+data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
 
-type Qual       = [TBind]
+type Qual'      = [TBind]
+
+data Qual       = Qual [TVar] [Constraint]
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
@@ -234,7 +236,7 @@ eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
 eQVar n         = Var NoLoc n
-eVar n          = Var NoLoc (NoQName n)
+eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
 eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
@@ -354,7 +356,7 @@ instance HasLoc ModName where
     
 instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
-    loc (NoQName n)     = loc n
+    loc (NoQ n)         = loc n
     
 instance HasLoc Elem where
     loc (Elem e)        = loc e

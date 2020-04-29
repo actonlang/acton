@@ -121,7 +121,7 @@ instance Relabel ModName where
 
 instance Relabel QName where
   relabel (QName m n) = QName <$> relabel m <*> relabel n
-  relabel (NoQName n) = NoQName <$> relabel n
+  relabel (NoQ n) = NoQ <$> relabel n
 
 instance Relabel ModRef where
   relabel (ModRef (n,mbqn)) = (\m -> ModRef (n,m)) <$> relabel mbqn
@@ -209,6 +209,16 @@ instance Relabel TCon where
 
 instance Relabel TBind where
     relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
+
+instance Relabel Qual where
+    relabel (Qual vs cs) = Qual <$> relabel vs <*> relabel cs
+
+instance Relabel Constraint where
+    relabel (Cast t t') = Cast <$> relabel t <*> relabel t'
+    relabel (Sub w t t') = Sub w <$> relabel t <*> relabel t'
+    relabel (Impl w t p) = Impl w <$> relabel t <*> relabel p
+    relabel (Sel w t n t') = Sel w <$> relabel t <*> return n <*> relabel t'
+    relabel (Mut t n t') = Mut <$> relabel t <*> return n <*> relabel t'
 
 instance Relabel Type where
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
