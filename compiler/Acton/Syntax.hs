@@ -43,11 +43,11 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual', pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual', pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qual::Qual', bounds::[TCon], dbody::Suite }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual', bounds::[TCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual', bounds::[TCon], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual, bounds::[TCon], dbody::Suite }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -168,7 +168,7 @@ data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
     
 data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual', sctype::Type } deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual, sctype::Type } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -180,9 +180,7 @@ data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
 
-type Qual'      = [TBind]
-
-data Qual       = Qual [TVar] [Constraint]
+type Qual       = [TBind]
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
