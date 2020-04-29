@@ -59,9 +59,9 @@ extcons ke env                      = env { tcons = ke ++ tcons env }
 
 extvars vs env                      = env { tvars = nub vs ++ tvars env }
 
-tconKind (NoQual n) env             = case lookup n (tcons env) of
+tconKind (NoQName n) env            = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQual n) (impenv env)
+                                        Nothing -> Acton.Env.tconKind (NoQName n) (impenv env)
 tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
 
 
@@ -125,11 +125,11 @@ instance KCheck Stmt where
     kchk env (Signature l ns t d)   = Signature l ns <$> kchk env t <*> return d
 
 instance KCheck Decl where
-    kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*> 
+    kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 True t <*> 
                                       kchkSuite env1 b <*> return m
       where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
-    kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*>
+    kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 True t <*>
                                       kchkSuite env1 b
       where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
@@ -262,7 +262,7 @@ instance KCheck TSchema where
 
 kchkQual env []                     = return []
 kchkQual env (TBind v us : q)
-  | v `elem` tvars env              = Acton.Env.err1 v "Type variable already in scope:"
+  | v `elem` tvars env              = Acton.Env.err1 v "Type variable already in scope:"    -- No type variable shadowing
   | otherwise                       = do (_k,v) <- kinfer env False v
                                          us <- kchkBounds env us
                                          q <- kchkQual (extvars [v] env) q
@@ -279,7 +279,7 @@ kchkPBounds env us                  = mapM (kexp KProto env False) us
 
 
 class KInfer t where
-    kinfer                          :: KEnv -> Bool -> t -> KindM (Kind,t)
+    kinfer                          :: KEnv -> Bool -> t -> KindM (Kind,t)          -- Bool flag controls whether wildcard types are accepted or not
 
 instance (KInfer t) => KInfer (Maybe t) where
     kinfer env w Nothing            = do k <- newKVar; return (k, Nothing)
@@ -370,7 +370,7 @@ kfree _                             = []
 -- Apply kind substitution ----------------------------------------------------------------------------------------
 
 class KSubst s where
-    ksubst                          :: Bool -> s -> KindM s
+    ksubst                          :: Bool -> s -> KindM s             -- Bool flag controls whether free KVars are replaced with KType or not
 
 instance KSubst a => KSubst [a] where
     ksubst g                        = mapM (ksubst g)

@@ -126,11 +126,11 @@ data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
 modName ss      = ModName (map name ss)
 
-data QName      = QName { mname::ModName, noqual::Name } | NoQual { noqual::Name } deriving (Show,Read,Eq,Generic)
+data QName      = QName { mname::ModName, noqual::Name } | NoQName { noqual::Name } deriving (Show,Read,Eq,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 
-noQual s        = NoQual (name s)
+noQual s        = NoQName (name s)
 
 data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
@@ -176,7 +176,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
+data TBind      = TBind { qvar::TVar, qbounds::[TCon] } deriving (Eq,Show,Read,Generic)
 
 data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
 
@@ -223,7 +223,7 @@ eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
 eQVar n         = Var NoLoc n
-eVar n          = Var NoLoc (NoQual n)
+eVar n          = Var NoLoc (NoQName n)
 eDot e n        = Dot NoLoc e n
 eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
@@ -342,7 +342,7 @@ instance HasLoc ModName where
     
 instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
-    loc (NoQual n)      = loc n
+    loc (NoQName n)     = loc n
     
 instance HasLoc Elem where
     loc (Elem e)        = loc e

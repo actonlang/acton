@@ -161,7 +161,7 @@ instance Pretty ModName where
 
 instance Pretty QName where
     pretty (QName m n)              = pretty m <> dot <> pretty n
-    pretty (NoQual n)               = pretty n
+    pretty (NoQName n)              = pretty n
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n

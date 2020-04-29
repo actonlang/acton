@@ -53,8 +53,20 @@ reduce' env (Sub w t1 t2)                   = sub' env w t1 t2
 
 reduce' env c@(Impl w (TVar _ tv) u)
   | not $ skolem tv                         = defer [c]
-reduce' env c@(Impl w t u)
-  | otherwise                   = return ()                                      -- TODO: implement, of course
+  | u `elem` ps                             = return ()
+  where ps                                  = findProtoBound tv env
+reduce' env c@(Impl w (TCon _ tc) u)
+--  | Just mk <- findWitness t u env          = do (w,cs) <- instWitness env mk
+--                                                 reduce env cs
+      
+  | Just (w,q,ps,_) <- findExt (tcname tc) (tcname u) env
+                                            = let s = tybound q `zip` tcargs tc in 
+                                              if u `elem` subst s ps then do
+                                                 reduce env (subst s (constraintsOf q env)) 
+                                              else do
+                                                 noRed c
+
+
 
 
 reduce' env c@(Sel w (TVar _ tv) n t2)

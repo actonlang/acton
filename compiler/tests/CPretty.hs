@@ -90,7 +90,7 @@ instance CPretty ModName where
     
 instance CPretty QName where
     cpretty env (QName mn n)            = cpretty env mn<>text "$$"<>cpretty env n
-    cpretty env (NoQual n)              = cpretty env n
+    cpretty env (NoQName n)             = cpretty env n
     
 instance CPretty Type where
     cpretty env (TVar _ v)              = text "$WORD"
@@ -126,7 +126,7 @@ class_struct env nm ms                  = text "struct" <+> cpretty env{isglobal
   where addparSig nm (Signature l ns (TSchema l2 qs (TFun l3 f p k r)) d)
                                         =  Signature l ns (TSchema l2 qs (TFun l3 f (addFstElem nm p)  k r)) d
 
-addFstElem nm p                         = posRow (tCon (TC (NoQual nm) [])) p
+addFstElem nm p                         = posRow (tCon (TC (NoQName nm) [])) p
 
 opaque_struct  cnm ms                   = text "struct" <+> cnm<>text "$opaque" <+> text "{" $+$
                                           (nest 4 $ text "char *$GCINFO;" $+$

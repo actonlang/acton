@@ -232,12 +232,12 @@ instance Norm ModName where
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQual n)             = case elem n (local env) of
-                                         True-> return $ NoQual n
+    norm env (NoQName n)            = case elem n (local env) of
+                                         True-> return $ NoQName n
                                          False ->  case lookup n (global env) of
                                                       Just (NAlias qn) -> return qn
                                                       Just _  -> return $ QName (currentmod env) n
-                                                      Nothing -> return $ NoQual n
+                                                      Nothing -> return $ NoQName n
 
 instance Norm ModRef where
     norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn
