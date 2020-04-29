@@ -161,7 +161,7 @@ instance Pretty ModName where
 
 instance Pretty QName where
     pretty (QName m n)              = pretty m <> dot <> pretty n
-    pretty (NoQName n)              = pretty n
+    pretty (NoQ n)                  = pretty n
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
@@ -327,13 +327,30 @@ instance Pretty TCon where
       | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
 
-instance Pretty [TBind] where
+instance Pretty Qual' where
     pretty q                        = brackets (commaList q)
 
 instance Pretty TBind where
     pretty (TBind v [])             = pretty v
     pretty (TBind v cs)             = pretty v <> parens (commaList cs)
-    
+
+instance Pretty Qual where
+    pretty (Qual vs cs)
+      | null cs'                    = brackets (commaList bs)
+      | otherwise                   = brackets (commaList bs <+> text "with" <+> commaList cs')
+      where (bs,cs')                = mkBinds [] cs vs
+
+            mkBinds bs cs []        = (bs, cs)
+            mkBinds bs cs (v:vs)    = mkBinds (TBind v us : bs) cs' vs
+              where (us,cs')        = vBounds [] [] v cs
+
+            vBounds us cs v []      = (reverse us, reverse cs)
+            vBounds us cs v (Cast (TVar _ v') (TCon _ u) : cs')
+              | v == v'             = vBounds (u:us) cs v cs'
+            vBounds us cs v (Impl w (TVar _ v') u : cs')
+              | v == v'             = vBounds (u:us) cs v cs'
+            vBounds us cs v (c:cs') = vBounds us (c:cs) v cs'
+
 instance Pretty UType where
     pretty (UCon n)                 = pretty n
     pretty (ULit str)               = text str

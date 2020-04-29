@@ -48,6 +48,8 @@ newName s                           = Internal s <$> newUnique <*> return KindPa
 
 newKVar                             = KVar <$> newName "K"
 
+newWitness                          = newName "w"
+
 
 data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
 
@@ -59,9 +61,9 @@ extcons ke env                      = env { tcons = ke ++ tcons env }
 
 extvars vs env                      = env { tvars = nub vs ++ tvars env }
 
-tconKind (NoQName n) env            = case lookup n (tcons env) of
+tconKind (NoQ n) env                = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQName n) (impenv env)
+                                        Nothing -> Acton.Env.tconKind (NoQ n) (impenv env)
 tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
 
 
@@ -260,6 +262,25 @@ instance KCheck TSchema where
                  | otherwise        = extvars (tybound q) env
             ambig                   = tybound q \\ tyfree t
 
+instance KCheck Qual where
+    kchk env (Qual vs cs)           = do (_ks,vs) <- fmap unzip $ mapM (kinfer env False) vs
+                                         cs <- kchk env cs
+                                         return (Qual vs cs)
+
+instance KCheck Constraint where
+    kchk env (Cast t (TCon l c))    = do t <- kchk env t
+                                         (k,c) <- kinfer env False c
+                                         case k of
+                                            KProto -> do w <- newWitness; return (Impl w t c)
+                                            _ -> do kunify l k KType; return (Cast t $ TCon l c)
+    kchk env (Sub w t t')           = Sub w <$> kchk env t <*> kchk env t'
+    kchk env (Impl w t p)           = Impl w <$> kchk env t <*> kexp KProto env False p
+    kchk env (Sel w t n t')         = Sel n <$> kchk env t <*> return n <*> kchk env t
+    kchk env (Mut t n t')           = Mut <$> kchk env t <*> return n <*> kchk env t
+
+instance KCheck Type where
+    kchk env t                      = kexp KType env False t
+
 kchkQual env []                     = return []
 kchkQual env (TBind v us : q)
   | v `elem` tvars env              = Acton.Env.err1 v "Type variable already in scope:"    -- No type variable shadowing
@@ -398,6 +419,16 @@ instance KSubst TCon where
 
 instance KSubst TBind where
     ksubst g (TBind v cs)           = TBind <$> ksubst g v <*> ksubst g cs
+
+instance KSubst Qual where
+    ksubst g (Qual vs cs)           = Qual <$> ksubst g vs <*> ksubst g cs
+
+instance KSubst Constraint where
+    ksubst g (Cast t t')            = Cast <$> ksubst g t <*> ksubst g t'
+    ksubst g (Sub w t t')           = Sub w <$> ksubst g t <*> ksubst g t'
+    ksubst g (Impl w t p)           = Impl w <$> ksubst g t <*> ksubst g p
+    ksubst g (Sel w t n t')         = Sel w <$> ksubst g t <*> return n <*> ksubst g t'
+    ksubst g (Mut t n t')           = Mut <$> ksubst g t <*> return n <*> ksubst g t'
 
 instance KSubst Type where
     ksubst g (TVar l v)             = TVar l <$> ksubst g v

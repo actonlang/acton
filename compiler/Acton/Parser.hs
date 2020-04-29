@@ -325,7 +325,7 @@ qual_name = do
   n <- name
   ns <- many (dot *> escname)
   case n:ns of
-    [n] -> return $ S.NoQName n
+    [n] -> return $ S.NoQ n
     ns' -> return $ S.QName (S.ModName (init ns')) (last ns')
   
 
@@ -530,7 +530,7 @@ after_stmt = addLoc $ do
                 e' <- addLoc $ do
                     n <- name
                     (ps,ks) <- parens funargs
-                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQName n)) ps ks
+                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQ n)) ps ks
                 return $ S.After NoLoc e e'
 
 var_stmt :: Parser S.Stmt
@@ -638,6 +638,10 @@ optbinds :: Parser [S.TBind]
 optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
             <|>
            return []
+
+optqual :: Parser S.Qual
+optqual = mkQual <$> optbinds
+  where mkQual bs = S.Qual [ v | S.TBind v us <- bs ] [ S.Cast (S.tVar v) (S.tCon u) | S.TBind v us <- bs, u <- us ]
 
 actordef = addLoc $ do 
                 assertNotData
@@ -923,7 +927,7 @@ atom_expr = do
                            (S.StarStar <$> (starstar *> arithexpr))
 
         var = do nm <- name
-                 return (S.Var (S.nloc nm) (S.NoQName nm))
+                 return (S.Var (S.nloc nm) (S.NoQ nm))
 
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
