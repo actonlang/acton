@@ -185,7 +185,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, NULL, 0, ca->state_table_key, ca->schema, txnid, ca->db);
 
 		assert(ret == 0);
 	}
@@ -197,7 +197,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, NULL, 0, ca->state_table_key, ca->schema, txnid, ca->db);
 
 		assert(ret == 0);
 	}
@@ -224,7 +224,7 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, NULL, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, ca->queue_table_key, (WORD) dest_id, NULL, ca->db);
 
 		assert(ret == 0);
 
@@ -260,7 +260,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, txnid, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, ca->queue_table_key, (WORD) dest_id, txnid, ca->db);
 
 		assert(ret == 0);
 

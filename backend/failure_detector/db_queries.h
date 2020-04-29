@@ -48,11 +48,11 @@ typedef struct write_query
 
 typedef write_query read_response_message;
 
-write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce);
+write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce);
 write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce);
 write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce);
 write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce);
-write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce);
+write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce);
 
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce);
@@ -166,7 +166,7 @@ typedef struct queue_query_message
 
 queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
-queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
+queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce);
 queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 												int max_entries, uuid_t * txnid, long nonce);
 queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,

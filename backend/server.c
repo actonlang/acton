@@ -274,10 +274,23 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 		assert(result->no_columns > 0);
 		assert(depth==no_schema_keys);
 		copy_cell(cells, table_key,
-//					q->cell_address->keys + first_key_index, no_cell_keys,
 					key_path, depth,
 					(long *) result->column_array, result->no_columns,
 					result->version);
+
+		if(result->last_blob_size <= sizeof(long))
+			copy_cell(cells, table_key,
+					key_path, depth,
+					(long *) result->column_array, result->no_columns,
+					NULL, 0,
+					result->version);
+		else
+			copy_cell(cells, table_key,
+					key_path, depth,
+					(long *) result->column_array, result->no_columns - 1,
+					result->column_array[result->no_columns - 1], result->last_blob_size,
+					result->version);
+
 		return cells + 1;
 	}
 
@@ -310,10 +323,24 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	{
 		assert(result->no_columns > 0);
 		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
-		cell * c = init_cell(q->cell_address->table_key,
+
+		cell * c = NULL;
+		if(result->last_blob_size <= sizeof(long))
+		{
+			c = init_cell(q->cell_address->table_key,
 							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
 							(long *) result->column_array, no_columns,
+							NULL, 0,
 							result->version);
+		}
+		else
+		{
+			c = init_cell(q->cell_address->table_key,
+							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
+							(long *) result->column_array, no_columns - 1,
+							result->column_array[no_columns - 1], result->last_blob_size,
+							result->version);
+		}
 
 		m = init_range_read_response_message(c, 1, q->txnid, q->nonce);
 	}
@@ -503,9 +530,17 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 			long id = (long) result->key;
 			assert(i==0 || prev_id == (id - 1));
 			prev_id = id;
-			copy_cell(cells+i, q->cell_address->table_key,
+			if(result->last_blob_size <= sizeof(long))
+				copy_cell(cells+i, q->cell_address->table_key,
 						(long *) &result->key, 1,
 						(long *) result->column_array, no_columns,
+						NULL, 0,
+						result->version);
+			else
+				copy_cell(cells+i, q->cell_address->table_key,
+						(long *) &result->key, 1,
+						(long *) result->column_array, no_columns - 1,
+						result->column_array[no_columns - 1], result->last_blob_size,
 						result->version);
 		}
 

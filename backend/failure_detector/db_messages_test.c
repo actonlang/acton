@@ -124,7 +124,7 @@ int main (int argc, const char * argv[])
 	int no_cells = 2;
 	cell * cll = (cell *) malloc(no_cells * sizeof(cell));
 	for(int i=0;i<no_cells;i++)
-		copy_cell(cll + i, 0, (i==0)?(&key) : (&end_key), 1, (i==0)?(&column) : (&end_column), 1, vc);
+		copy_cell(cll + i, 0, (i==0)?(&key) : (&end_key), 1, (i==0)?(&column) : (&end_column), 1, NULL, 0, vc);
 	cell_address * cell_address = init_cell_address(0, &key, 1), * end_cell_address = init_cell_address(0, &end_key, 1);
 
 	// Generate dummy Write Query:

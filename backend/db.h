@@ -119,6 +119,7 @@ typedef struct db_cell {
 	skiplist_t * cells;
 	WORD * column_array;
 	int no_columns;
+	int last_blob_size;
 
 	// Queue metadata:
 	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id

@@ -33,7 +33,7 @@ write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long n
 write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
-	ca->cell = (cell != NULL)?(init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->version)):(NULL);
+	ca->cell = (cell != NULL)?(init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->last_blob, cell->last_blob_size, cell->version)):(NULL);
 	ca->msg_type = msg_type;
 	if(txnid != NULL)
 	{
@@ -48,23 +48,23 @@ write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, l
 	return ca;
 }
 
-write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce)
 {
 	int no_keys = no_primary_keys + no_clustering_keys;
 	assert(no_cols - no_keys > 0);
-	cell * c = init_cell((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, NULL);
+	cell * c = init_cell((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, blob, blob_size, NULL);
 	return init_write_query_copy(c, RPC_TYPE_WRITE, txnid, nonce);
 }
 
 write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
-	cell * c = init_cell((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL);
+	cell * c = init_cell((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
 write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
 {
-	cell * c = init_cell((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL);
+	cell * c = init_cell((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
@@ -74,7 +74,7 @@ write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD tab
 	return 0;
 }
 
-write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce)
 {
 	assert (0); // Not supported
 	return 0;
@@ -759,7 +759,9 @@ range_read_response_message * init_range_read_response_message_copy(cell * cells
 	ca->no_cells = no_cells;
 	ca->cells = (cell *) malloc(no_cells * sizeof(cell));
 	for(int i=0;i<no_cells;i++)
-		copy_cell(ca->cells + i, cells[i].table_key, cells[i].keys, cells[i].no_keys, cells[i].columns, cells[i].no_columns, cells[i].version);
+	{
+		copy_cell(ca->cells + i, cells[i].table_key, cells[i].keys, cells[i].no_keys, cells[i].columns, cells[i].no_columns, cells[i].last_blob, cells[i].last_blob_size, cells[i].version);
+	}
 	if(txnid != NULL)
 	{
 		ca->txnid = malloc(sizeof(uuid_t));
@@ -958,10 +960,10 @@ queue_query_message * init_query_message_basic(cell_address * cell_address, uuid
 	return ca;
 }
 
-queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
 {
 	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	cell * entry = init_cell_copy((long) table_key, (long *) column_values, 0, (long *) column_values, no_cols, NULL);
+	cell * entry = init_cell_copy((long) table_key, (long *) column_values, 0, (long *) column_values, no_cols, blob, blob_size, NULL);
 
 	return init_enqueue_message(c, entry, 1, txnid, nonce);
 }

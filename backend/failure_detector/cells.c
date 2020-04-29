@@ -203,7 +203,7 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff)
 
 // Cell:
 
-cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
 	ca->table_key = table_key;
@@ -211,12 +211,14 @@ cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int n
 	ca->columns = columns;
 	ca->no_keys = no_keys;
 	ca->no_columns = no_columns;
+	ca->last_blob = last_blob;
+	ca->last_blob_size = last_blob_size;
 	ca->version = version;
 
 	return ca;
 }
 
-void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
 {
 	ca->table_key = table_key;
 
@@ -225,10 +227,23 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 	for(int i=0;i<no_keys;i++)
 		ca->keys[i] = keys[i];
 
+	assert(last_blob == NULL || last_blob_size > sizeof(long));
+
 	ca->no_columns = no_columns;
 	ca->columns = (long *) malloc(no_columns * sizeof(long));
 	for(int i=0;i<no_columns;i++)
 		ca->columns[i] = columns[i];
+
+	ca->last_blob_size = last_blob_size;
+	if(last_blob != NULL)
+	{
+		ca->last_blob = malloc(sizeof(last_blob_size));
+		memcpy(ca->last_blob, last_blob, last_blob_size);
+	}
+	else
+	{
+		ca->last_blob = NULL;
+	}
 
 	if(version != NULL)
 		ca->version = copy_vc(version);
@@ -236,10 +251,10 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 		ca->version = NULL;
 }
 
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, vector_clock * version)
+cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
-	copy_cell(ca, table_key, keys, no_keys, columns, no_columns, version);
+	copy_cell(ca, table_key, keys, no_keys, columns, no_columns, last_blob, last_blob_size, version);
 	return ca;
 }
 
@@ -250,8 +265,20 @@ cell_address * get_cell_address(cell * c)
 
 void free_cell_ptrs(cell * ca)
 {
-	free(ca->keys);
-	free(ca->columns);
+	if(ca->keys != NULL)
+		free(ca->keys);
+
+	if(ca->columns != NULL)
+	{
+		free(ca->columns);
+	}
+
+	if(ca->last_blob != NULL)
+	{
+		assert(ca->last_blob_size > sizeof(long));
+		free(ca->last_blob);
+	}
+
 	free_vc(ca->version);
 }
 
@@ -268,32 +295,42 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 	msg->keys = (long *) malloc(ca->no_keys * sizeof(long));
 	for(int i=0;i<ca->no_keys;i++)
 		msg->keys[i] = ca->keys[i];
+
+//	int no_msg_columns = (ca->no_columns <= 0 || ca->last_blob_size <= sizeof(long))?(ca->no_columns):(ca->no_columns - 1);
+
 	msg->n_columns = ca->no_columns;
-	msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
+	if(ca->no_columns > 0)
+		msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
 	for(int i=0;i<ca->no_columns;i++)
 		msg->columns[i] = ca->columns[i];
+
+	if(ca->last_blob != NULL)
+	{
+		assert(ca->last_blob_size > sizeof(long));
+		msg->blob.len = ca->last_blob_size;
+		msg->blob.data = malloc(ca->last_blob_size);
+		memcpy(msg->blob.data, ca->last_blob, ca->last_blob_size);
+	}
+	else
+	{
+		msg->blob.data = NULL;
+		msg->blob.len = 0;
+	}
 
 	if(ca->version != NULL)
 	{
 		init_vc_msg(vc_msg, ca->version);
-
-//		msg->has_version = 1;
 		msg->version = vc_msg;
 	}
 	else
 	{
-//		msg->has_version = 0;
+//		msg->version = NULL;
 	}
 }
 
 cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg)
 {
-
-	copy_cell(c, msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, (msg->version != NULL)?(init_vc_from_msg(msg->version)):(NULL));
-//	if(msg->has_version)
-//	c->version = init_vc_from_msg(msg->version);
-//	else
-//		version = NULL;
+	copy_cell(c, msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->last_blob.data, msg->last_blob.len, (msg->version != NULL)?(init_vc_from_msg(msg->version)):(NULL));
 	return c;
 }
 
@@ -305,7 +342,7 @@ cell * init_cell_from_msg(VersionedCellMessage * msg)
 	vector_clock * vc = NULL;
 	if(msg->version != NULL)
 		vc = init_vc_from_msg(msg->version);
-	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, vc);
+	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->last_blob.data, msg->last_blob.len, vc);
 
 	return c;
 }
@@ -316,6 +353,8 @@ void free_cell_msg(VersionedCellMessage * msg)
 		free(msg->keys);
 	if(msg->columns != NULL)
 		free(msg->columns);
+	if(msg->blob.data != NULL && msg->blob.len > 0)
+		free(msg->blob.data);
 	if(msg->version != NULL)
 		free_vc_msg(msg->version);
 }
@@ -374,6 +413,16 @@ int equals_cell(cell * ca1, cell * ca2)
 	for(int i=0;i<ca1->no_columns;i++)
 		if(ca1->columns[i] != ca2->columns[i])
 			return 0;
+
+	if(ca1->last_blob_size != ca2->last_blob_size)
+		return 0;
+	if(ca1->last_blob_size > 0)
+	{
+		assert(ca1->last_blob != NULL && ca2->last_blob != NULL);
+
+		if(memcmp(ca1->last_blob, ca2->last_blob, ca1->last_blob_size) != 0)
+			return 0;
+	}
 
 	if(compare_vc(ca1->version, ca2->version))
 		return 0;

@@ -29,6 +29,8 @@ db_row_t * create_empty_row(WORD key)
 
 	row->no_columns=0;
 
+	row->last_blob_size = 0;
+
 	row->version = NULL;
 
 	row->_next = NULL;
@@ -41,7 +43,7 @@ db_row_t * create_empty_row(WORD key)
 
 db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
 									int * clustering_key_idxs, int no_clustering_keys,
-									int no_cols, unsigned int * fastrandstate)
+									int no_cols, int last_blob_size, unsigned int * fastrandstate)
 {
 	assert(no_primary_keys == 1);
 
@@ -60,10 +62,22 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 		if(i == no_clustering_keys - 1)
 		{
 			new_cell->no_columns = no_cols - no_primary_keys - no_clustering_keys;
+			new_cell->last_blob_size = last_blob_size;
 			new_cell->column_array = (WORD *) malloc(new_cell->no_columns * sizeof(WORD));
-			for(int j=0;j<new_cell->no_columns;j++)
+			int j=0;
+			for(;j<new_cell->no_columns - 1;j++)
 			{
 				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
+			}
+
+			if(last_blob_size <= sizeof(long)) // last column is value
+			{
+				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
+			}
+			else // last column is blob
+			{
+				new_cell->column_array[j] = malloc(last_blob_size);
+				memcpy(new_cell->column_array[j], column_values[no_primary_keys + no_clustering_keys + j], last_blob_size);
 			}
 		}
 
@@ -74,7 +88,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 }
 
 // Assumes key indexes are in order (partition keys, followed by clustering keys, followed by columns). Also assumes a single partition key:
-db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, unsigned int * fastrandstate)
+db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, int last_blob_size, unsigned int * fastrandstate)
 {
 	db_cell_t * row = create_empty_row(keys[0]);
 
@@ -91,10 +105,21 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	assert(crt_cell != NULL && crt_cell->cells == NULL);
 
 	crt_cell->no_columns = no_cols;
+	crt_cell->last_blob_size = last_blob_size;
 	crt_cell->column_array = (WORD *) malloc(crt_cell->no_columns * sizeof(WORD));
-	for(int j=0;j<crt_cell->no_columns;j++)
+	int j=0;
+	for(;j<crt_cell->no_columns - 1;j++)
 	{
 		crt_cell->column_array[j] = cols[j];
+	}
+	if(last_blob_size <= sizeof(long)) // last column is value
+	{
+		crt_cell->column_array[j] = cols[j];
+	}
+	else
+	{
+		crt_cell->column_array[j] = malloc(last_blob_size);
+		memcpy(crt_cell->column_array[j], cols[j], last_blob_size);
 	}
 
 	return row;
@@ -121,7 +146,14 @@ void free_db_cell(db_row_t * row, int depth)
 	}
 
 	if(row->column_array != NULL)
+	{
+		if(row->last_blob_size > sizeof(long) && row->no_columns > 0 && row->column_array[row->no_columns - 1] != NULL)
+		{
+			free(row->column_array[row->no_columns - 1]);
+		}
+
 		free(row->column_array);
+	}
 
 	free(row);
 }
@@ -265,7 +297,7 @@ int db_delete_table(WORD table_key, db_t * db)
 
 // Table API:
 
-int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
+int table_insert(WORD * column_values, int no_cols, int last_blob_size, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
 {
 	db_schema_t * schema = table->schema;
 
@@ -296,22 +328,6 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 			{
 				new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
 
-/*
-				// Populate columns and set version for newly created cell:
-				if(i == schema->no_clustering_keys - 1)
-				{
-					new_cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
-					new_cell->column_array = (WORD *) malloc(new_cell->no_columns * sizeof(WORD));
-					for(int j=0;j<new_cell->no_columns;j++)
-					{
-						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
-					}
-
-					new_cell->version = (version != NULL)? copy_vc(version) : NULL;
-
-				}
-				else
-*/
 				if(i < schema->no_clustering_keys - 1)
 				{
 					new_cell->cells = create_skiplist_long();
@@ -324,21 +340,6 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 			else
 			{
 				new_cell = (db_row_t *) (new_cell_node->value);
-
-/*
-				// Update columns and version for previously existing last level cell:
-				if(i == schema->no_clustering_keys - 1)
-				{
-					assert(new_cell->no_columns == (schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys));
-					for(int j=0;j<new_cell->no_columns;j++)
-					{
-						new_cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
-					}
-
-					if(version != NULL)
-						update_or_replace_vc(&(new_cell->version), version);
-				}
-*/
 			}
 		}
 
@@ -347,16 +348,27 @@ int table_insert(WORD * column_values, int no_cols, vector_clock * version, db_t
 		assert(cell != NULL && cell->cells == NULL);
 
 		cell->no_columns = schema->no_cols - schema->no_primary_keys - schema->no_clustering_keys;
+		cell->last_blob_size = last_blob_size;
 		cell->column_array = (WORD *) malloc(cell->no_columns * sizeof(WORD));
-		for(int j=0;j<cell->no_columns;j++)
+		int j=0;
+		for(;j<cell->no_columns - 1;j++)
 		{
-			cell->column_array[j] =column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+			cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+		}
+
+		if(last_blob_size <= sizeof(long)) // last column is value
+		{
+			cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
+		}
+		else // last column is blob
+		{
+			cell->column_array[j] = malloc(last_blob_size);;
+
+			memcpy(cell->column_array[j], column_values[schema->no_primary_keys + schema->no_clustering_keys + j], last_blob_size);
 		}
 
 		if(version != NULL)
 			update_or_replace_vc(&(cell->version), version);
-
-//		cell->version = (version != NULL)? copy_vc(version) : NULL;
 	}
 
 	for(int i=0;i<schema->no_index_keys;i++)

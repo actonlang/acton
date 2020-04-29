@@ -79,7 +79,8 @@ int delete_msg_callback(long nonce, remote_db_t * db);
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
 int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t * db);
 long get_nonce(remote_db_t * db);
-vector_clock * get_and_increment_lc(remote_db_t * db);
+vector_clock * get_lc(remote_db_t * db);
+vector_clock * get_and_increment_lc(remote_db_t * db, int node_id);
 int free_remote_db(remote_db_t * db);
 int close_remote_db(remote_db_t * db);
 int sockaddr_cmp(WORD a1, WORD a2);
@@ -87,8 +88,8 @@ int queue_callback_cmp(WORD e1, WORD e2);
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db);
-int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_insert_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db);
+int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db);
 int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db);
 int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clustering_keys, db_schema_t * schema, WORD table_key, uuid_t * txnid, remote_db_t * db);
 int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db);
@@ -122,7 +123,7 @@ void remote_print_long_table(WORD table_key, remote_db_t * db);
 
 int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
-int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
+int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,

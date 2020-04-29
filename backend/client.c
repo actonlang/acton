@@ -77,7 +77,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, (WORD) 0, schema, txnid, db) != 0)
+				if(remote_insert_in_txn(column_values, no_cols, NULL, 0, (WORD) 0, schema, txnid, db) != 0)
 					return -1;
 			}
 		}
@@ -265,7 +265,7 @@ int test_enqueue(remote_db_t * db, WORD queue_id, uuid_t * txnid)
 		column_values[0] = (WORD) i;
 		column_values[1] = (WORD) i + 1;
 
-		if(remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) 1, queue_id, txnid, db) != 0)
+		if(remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, (WORD) 1, queue_id, txnid, db) != 0)
 			return -1;
 	}
 

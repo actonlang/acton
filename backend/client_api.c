@@ -602,10 +602,10 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, long nonce, 
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db)
+int remote_insert_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
-	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, table_key, txnid, get_nonce(db));
+	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
 
@@ -656,7 +656,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, WORD table_key, db_s
 	return !(ok_status >= db->quorum_size);
 }
 
-int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
 	return 0;
@@ -1339,12 +1339,12 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	return !(ok_status >= db->quorum_size);
 }
 
-int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
+int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
-	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, table_key, queue_id, txnid, get_nonce(db));
+	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, blob, blob_size, table_key, queue_id, txnid, get_nonce(db));
 	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
 
 	if(db->servers->no_items < db->quorum_size)
