@@ -639,10 +639,6 @@ optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
             <|>
            return []
 
-optqual :: Parser S.Qual
-optqual = mkQual <$> optbinds
-  where mkQual bs = S.Qual [ v | S.TBind v us <- bs ] [ S.Cast (S.tVar v) (S.tCon u) | S.TBind v us <- bs, u <- us ]
-
 actordef = addLoc $ do 
                 assertNotData
                 (s,_) <- withPos (rword "actor")

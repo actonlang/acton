@@ -42,9 +42,9 @@ data NameInfo               = NVar      Type
                             | NSVar     Type
                             | NDef      TSchema Decoration
                             | NSig      TSchema Decoration
-                            | NClass    Qual' [TCon] TEnv
-                            | NProto    Qual' [TCon] TEnv
-                            | NExt      QName Qual' [TCon] TEnv
+                            | NClass    Qual [TCon] TEnv
+                            | NProto    Qual [TCon] TEnv
+                            | NExt      QName Qual [TCon] TEnv
                             | NTVar     Kind [TCon] [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
@@ -172,16 +172,6 @@ instance Unalias TCon where
 instance Unalias TBind where
     unalias env (TBind tv cs)       = TBind tv (unalias env cs)
 
-instance Unalias Qual where
-    unalias env (Qual vs cs)        = Qual vs (unalias env cs)
-
-instance Unalias Constraint where
-    unalias env (Cast t t')         = Cast (unalias env t) (unalias env t')
-    unalias env (Sub w t t')        = Sub w (unalias env t) (unalias env t')
-    unalias env (Impl w t p)        = Impl w (unalias env t) (unalias env p)
-    unalias env (Sel w t n t')      = Sel w (unalias env t) n (unalias env t')
-    unalias env (Mut t n t')        = Mut (unalias env t) n (unalias env t')
-
 instance Unalias Type where
     unalias env (TCon l c)          = TCon l (unalias env c)
     unalias env (TExist l p)        = TExist l (unalias env p)
@@ -278,13 +268,13 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 define                      :: TEnv -> Env -> Env
 define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
 
-defineTVars                 :: Qual' -> Env -> Env
+defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
 defineTVars (TBind (TV k n) us : q) env
                             = defineTVars q env{ names = (n, NTVar k as ps) : names env }
   where (as,ps)             = mro2 env us
 
-defineSelf                  :: QName -> Qual' -> Env -> Env
+defineSelf                  :: QName -> Qual -> Env -> Env
 defineSelf qn q env         = defineTVars [TBind tvSelf [tc]] env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
 
@@ -354,7 +344,7 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findExt                     :: QName -> QName -> Env -> Maybe (Name,Qual',[TCon],TEnv)
+findExt                     :: QName -> QName -> Env -> Maybe (Name,Qual,[TCon],TEnv)
 findExt c_n p_n env         = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n == tcname (head ps) ]
 
 findExtAttr                 :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
@@ -362,10 +352,10 @@ findExtAttr c_n a_n env     = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensi
 
 
 
-extensionsOf                :: QName -> Env -> [(Name,Qual',[TCon],TEnv)]
+extensionsOf                :: QName -> Env -> [(Name,Qual,[TCon],TEnv)]
 extensionsOf n env          = [ (w,q,ps,te) | (w, NExt n' q ps te) <- names env, n == n' ]
 
-constraintsOf               :: Qual' -> Env -> Constraints
+constraintsOf               :: Qual -> Env -> Constraints
 constraintsOf q env         = [ constr u (tVar v) | TBind v us <- q, u <- us ]
   where constr u t          = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u) 
 
@@ -430,16 +420,6 @@ instance WellFormed Type where
 instance WellFormed TBind where
     wf env (TBind v us)     = wf env us
 
-instance WellFormed Qual where
-    wf env (Qual vs cs)     = wf env cs
-
-instance WellFormed Constraint where
-    wf env (Cast t t')      = wf env t ++ wf env t'
-    wf env (Sub _ t t')     = wf env t ++ wf env t'
-    wf env (Impl _ t p)     = wf env t ++ wf env p
-    wf env (Sel _ t _ t')   = wf env t ++ wf env t'
-    wf env (Mut t _ t')     = wf env t ++ wf env t'
-
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 
@@ -491,12 +471,12 @@ instantiate env (TSchema _ q t)
                                  let s = tybound q `zip` tvs
                                  return (cs, subst s t)
 
-instQual                    :: Env -> Qual' -> TypeM (Constraints, [Type])
+instQual                    :: Env -> Qual -> TypeM (Constraints, [Type])
 instQual env q              = do ts <- newTVars [ tvkind v | TBind v _ <- q ]
                                  cs <- qualConstraints env q ts
                                  return (cs, ts)
 
-qualConstraints             :: Env -> Qual' -> [Type] -> TypeM Constraints
+qualConstraints             :: Env -> Qual -> [Type] -> TypeM Constraints
 qualConstraints env q ts    = do let s = tybound q `zip` ts
                                  sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
   where constr t u@(TC n _)
@@ -750,11 +730,6 @@ instance Subst TBind where
     tyfree (TBind v cs)             = tyfree cs
     tybound (TBind v cs)            = [v]
 
-instance Subst Qual where
-    msubst (Qual vs cs)             = Qual <$> msubst vs <*> msubst cs
-    tyfree (Qual vs cs)             = tyfree cs \\ vs
-    tybound (Qual vs cs)            = vs
-    
 instance Subst Type where
     msubst (TVar l v)               = do s <- getSubstitution
                                          case Map.lookup v s of
