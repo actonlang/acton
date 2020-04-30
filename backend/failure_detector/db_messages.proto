@@ -49,7 +49,7 @@ message VersionedCellMessage {
 	required int64 table_key=1;
 	repeated int64 keys=2;
 	repeated int64 columns=3;
-	optional bytes blob=4;
+	required bytes blob=4;
 	
 	optional VectorClockMessage version=5;
 //	optional int64 version_no=6;

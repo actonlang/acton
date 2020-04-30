@@ -4,11 +4,13 @@
  *      Author: aagapi
  */
 
+#ifndef BACKEND_FAILURE_DETECTOR_CELLS_H_
+#define BACKEND_FAILURE_DETECTOR_CELLS_H_
+
 #include "db_messages.pb-c.h"
 #include "vector_clock.h"
 
-#ifndef BACKEND_FAILURE_DETECTOR_CELLS_H_
-#define BACKEND_FAILURE_DETECTOR_CELLS_H_
+typedef void * WORD;
 
 typedef struct cell_address
 {
@@ -39,7 +41,7 @@ typedef struct cell
 	long * columns;
 	int no_columns;
 	WORD last_blob;
-	int last_blob_size;
+	size_t last_blob_size;
 	vector_clock * version;
 } cell;
 

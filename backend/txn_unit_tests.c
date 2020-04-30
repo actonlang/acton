@@ -186,7 +186,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, ca->state_table_key, txnid, ca->db, fastrandstate);
+		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, 0, ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 	}
@@ -198,7 +198,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, ca->state_table_key, txnid, ca->db, fastrandstate);
+		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, 0, ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 	}
@@ -225,7 +225,7 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
 
-		ret = enqueue(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, 1, ca->db, fastrandstate);
+		ret = enqueue(column_values, no_queue_cols, 0, ca->queue_table_key, (WORD) dest_id, 1, ca->db, fastrandstate);
 
 		assert(ret == 0);
 
@@ -261,7 +261,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
 
-		ret = enqueue_in_txn(column_values, no_queue_cols, ca->queue_table_key, (WORD) dest_id, txnid, ca->db, fastrandstate);
+		ret = enqueue_in_txn(column_values, no_queue_cols, 0, ca->queue_table_key, (WORD) dest_id, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 

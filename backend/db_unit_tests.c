@@ -60,7 +60,7 @@ int populate_db(db_t * db, unsigned int * fastrandstate) {
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_insert(column_values, no_cols, (WORD) 0, db, fastrandstate) != 0)
+				if(db_insert(column_values, no_cols, 0, (WORD) 0, db, fastrandstate) != 0)
 					return -1;
 			}
 		}
@@ -219,7 +219,7 @@ int test_update(db_t * db)
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 2;
 
-				if(db_update(column_idxs, no_cols, column_values, (WORD) 0, db) != 0)
+				if(db_update(column_idxs, no_cols, column_values, 0, (WORD) 0, db) != 0)
 					return -2;
 
 				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], (int*) column_idxs, no_cols, (WORD) 0, db);

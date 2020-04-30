@@ -330,7 +330,7 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 
 cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg)
 {
-	copy_cell(c, msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->last_blob.data, msg->last_blob.len, (msg->version != NULL)?(init_vc_from_msg(msg->version)):(NULL));
+	copy_cell(c, msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->blob.data, msg->blob.len, (msg->version != NULL)?(init_vc_from_msg(msg->version)):(NULL));
 	return c;
 }
 
@@ -342,7 +342,7 @@ cell * init_cell_from_msg(VersionedCellMessage * msg)
 	vector_clock * vc = NULL;
 	if(msg->version != NULL)
 		vc = init_vc_from_msg(msg->version);
-	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->last_blob.data, msg->last_blob.len, vc);
+	cell * c = init_cell_copy(msg->table_key, msg->keys, msg->n_keys, msg->columns, msg->n_columns, msg->blob.data, msg->blob.len, vc);
 
 	return c;
 }

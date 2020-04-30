@@ -23,6 +23,7 @@ typedef struct txn_write
 	int no_cols;
 	int no_primary_keys;
 	int no_clustering_keys;
+	size_t blob_size;
 
 	// For queue ops:
 
@@ -94,7 +95,7 @@ txn_state * init_txn_state();
 void free_txn_state(txn_state * ts);
 void set_version(txn_state * ts, vector_clock * vc);
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, long local_order);
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, long local_order);
 txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_primary_keys, WORD * clustering_keys, int no_clustering_keys, WORD table_key, long local_order);
 void free_txn_write(txn_write * tw);
 txn_read * get_txn_read(short query_type,
@@ -109,7 +110,7 @@ void free_txn_read(txn_read * tr);
 
 // Txn ops mgmt API:
 
-int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys,
+int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size,
 					WORD table_key, txn_state * ts, unsigned int * fastrandstate);
 int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
@@ -134,7 +135,7 @@ int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_
 
 // Queue ops:
 
-int add_enqueue_to_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
+int add_enqueue_to_txn(WORD * column_values, int no_cols, size_t blob_size, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate);
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 							long new_read_head, vector_clock * prh_version, txn_state * ts, unsigned int * fastrandstate);
 int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,

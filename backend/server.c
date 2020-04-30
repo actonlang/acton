@@ -186,7 +186,8 @@ int get_ack_packet(int status, write_query * q,
 int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate)
 {
 	int i=0;
-	int total_columns = wq->cell->no_keys + wq->cell->no_columns;
+	int total_cols = wq->cell->no_keys + wq->cell->no_columns;
+	int total_cols_plus_blob = total_cols + ((wq->cell->last_blob_size > sizeof(long))?(1):(0));
 
 	db_schema_t * schema = get_schema(db, (WORD) wq->cell->table_key);
 
@@ -196,16 +197,25 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 		{
 			assert(wq->cell->no_columns > 0);
 
-			WORD * column_values = (WORD *) malloc(total_columns * sizeof(WORD));
-			for(;i<wq->cell->no_keys;i++)
-				column_values[i] = (WORD) wq->cell->keys[i];
-			for(;i<total_columns;i++)
-				column_values[i] = (WORD) wq->cell->columns[i-wq->cell->no_keys];
+			WORD * column_values = (WORD *) malloc(total_cols_plus_blob * sizeof(WORD));
+
+			int j = 0;
+			for(;j<wq->cell->no_keys;j++)
+				column_values[j] = (WORD) wq->cell->keys[j];
+			for(;j<total_cols;j++)
+				column_values[j] = (WORD) wq->cell->columns[j-wq->cell->no_keys];
+
+			if(wq->cell->last_blob_size > sizeof(long))
+			{
+				assert(total_cols_plus_blob == total_cols + 1);
+				column_values[total_cols] = malloc(wq->cell->last_blob_size);
+				memcpy(column_values[total_cols], wq->cell->last_blob, wq->cell->last_blob_size);
+			}
 
 			if(wq->txnid == NULL) // Write out of txn
-				return db_insert_transactional(column_values, total_columns, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+				return db_insert_transactional(column_values, total_cols_plus_blob, wq->cell->last_blob_size, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
 			else // Write in txn
-				return db_insert_in_txn(column_values, total_columns, schema->no_primary_keys, schema->no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				return db_insert_in_txn(column_values, total_cols_plus_blob, schema->no_primary_keys, schema->no_clustering_keys, wq->cell->last_blob_size, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
 		}
 		case RPC_TYPE_DELETE:
 		{
@@ -273,10 +283,6 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 	{
 		assert(result->no_columns > 0);
 		assert(depth==no_schema_keys);
-		copy_cell(cells, table_key,
-					key_path, depth,
-					(long *) result->column_array, result->no_columns,
-					result->version);
 
 		if(result->last_blob_size <= sizeof(long))
 			copy_cell(cells, table_key,
@@ -603,23 +609,33 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 {
 	assert(q->no_cells > 0 && q->cells != NULL);
 
-	int total_cols = q->cells[0].no_keys + q->cells[0].no_columns;
-	long * column_values = (long *) malloc(total_cols * sizeof(long));
 	int status = -1;
 
 	for(int i=0;i<q->no_cells;i++)
 	{
+		int total_cols = q->cells[i].no_keys + q->cells[i].no_columns;
+		int total_cols_plus_blob = total_cols + ((q->cells[i].last_blob_size > sizeof(long))?(1):(0));
+
+		long * column_values = (long *) malloc(total_cols_plus_blob * sizeof(long));
+
 		int j = 0;
 		for(;j<q->cells[i].no_keys;j++)
 			column_values[j] = q->cells[i].keys[j];
 		for(;j<total_cols;j++)
 			column_values[j] = q->cells[i].columns[j-q->cells[i].no_keys];
 
+		if(q->cells[i].last_blob_size > sizeof(long))
+		{
+			assert(total_cols_plus_blob == total_cols + 1);
+			column_values[total_cols] = (long) malloc(q->cells[i].last_blob_size);
+			memcpy((WORD) column_values[total_cols], q->cells[i].last_blob, q->cells[i].last_blob_size);
+		}
+
 		// Below will automatically trigger remote consumer notifications on the queue, either immediately or upon txn commit:
 		if(q->txnid == NULL) // Enqueue out of txn
-			status = enqueue((WORD *) column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db, fastrandstate);
+			status = enqueue((WORD *) column_values, total_cols_plus_blob, q->cells[i].last_blob_size, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db, fastrandstate);
 		else // Enqueue in txn
-			status = enqueue_in_txn((WORD *) column_values, total_cols, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
+			status = enqueue_in_txn((WORD *) column_values, total_cols_plus_blob, q->cells[i].last_blob_size, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
 
 		if(status != 0)
 			break;
@@ -627,67 +643,6 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 
 	return status;
 }
-
-/*
-int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
-{
-	db_table_t * table = get_table_by_key(table_key, db);
-	int status = 0;
-
-	if(table == NULL)
-		return DB_ERR_NO_TABLE; // Table doesn't exist
-
-	snode_t * node = skiplist_search(table->rows, queue_id);
-	if(node == NULL)
-		return DB_ERR_NO_QUEUE; // Queue doesn't exist
-
-	db_row_t * db_row = (db_row_t *) (node->value);
-
-	// Notify remote subscribers if they haven't been notified:
-
-	for(snode_t * cell=HEAD(db_row->consumer_state);cell!=NULL;cell=NEXT(cell))
-	{
-		if(cell->value != NULL)
-		{
-			consumer_state * cs = (consumer_state *) (cell->value);
-
-			if(cs->callback != NULL || cs->notified > 0) // Skip local subscribers or one that have already been notified:
-				continue;
-
-			assert(cs->sockfd != NULL);
-
-			if(*(cs->sockfd) == 0)
-			{
-#if (VERBOSITY > 0)
-			printf("SERVER: Skipping notifying disconnected subscriber %ld\n", (long) cs->consumer_id);
-#endif
-			}
-
-			void * snd_buf = NULL;
-			unsigned snd_msg_len = -1;
-			status = get_queue_notification_packet(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id,
-														db_row->no_entries, 0,
-														&snd_buf, &snd_msg_len);
-			assert(status == 0);
-
-		    int n = write(*(cs->sockfd), snd_buf, snd_msg_len);
-		    if (n < 0)
-		      error("ERROR writing to socket");
-
-		    free(snd_buf);
-
-			cs->notified=1;
-
-#if (VERBOSITY > 0)
-			printf("SERVER: Notified remote subscriber %ld\n", (long) cs->consumer_id);
-#endif
-		}
-	}
-
-	return status;
-}
-*/
-
 
 int handle_read_queue(queue_query_message * q,
 						int * entries_read, long * new_read_head, vector_clock ** prh_version,

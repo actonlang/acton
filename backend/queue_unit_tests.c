@@ -64,7 +64,7 @@ int do_enqueues(db_t * db, WORD table_id, WORD queue_id, int no_enqueues, int ra
 		column_values[0] = (WORD) iid;
 		column_values[1] = (WORD) iid + 1;
 
-		int ret = enqueue(column_values, no_cols, table_id, queue_id, 1, db, fastrandstate);
+		int ret = enqueue(column_values, no_cols, 0, table_id, queue_id, 1, db, fastrandstate);
 		if(ret != 0)
 			return ret;
 

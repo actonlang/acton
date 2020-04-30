@@ -43,7 +43,7 @@ db_row_t * create_empty_row(WORD key)
 
 db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs, int no_primary_keys,
 									int * clustering_key_idxs, int no_clustering_keys,
-									int no_cols, int last_blob_size, unsigned int * fastrandstate)
+									int no_cols, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	assert(no_primary_keys == 1);
 
@@ -88,7 +88,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 }
 
 // Assumes key indexes are in order (partition keys, followed by clustering keys, followed by columns). Also assumes a single partition key:
-db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, int last_blob_size, unsigned int * fastrandstate)
+db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, WORD last_blob, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	db_cell_t * row = create_empty_row(keys[0]);
 
@@ -104,32 +104,36 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 
 	assert(crt_cell != NULL && crt_cell->cells == NULL);
 
-	crt_cell->no_columns = no_cols;
-	crt_cell->last_blob_size = last_blob_size;
-	crt_cell->column_array = (WORD *) malloc(crt_cell->no_columns * sizeof(WORD));
+	assert(last_blob == NULL || last_blob_size > sizeof(long));
+
+	int total_cols = no_cols + ((last_blob != NULL)?1:0);
+
+	crt_cell->no_columns = total_cols;
+	crt_cell->column_array = (WORD *) malloc(total_cols * sizeof(WORD));
 	int j=0;
-	for(;j<crt_cell->no_columns - 1;j++)
+	for(;j<crt_cell->no_columns;j++)
 	{
 		crt_cell->column_array[j] = cols[j];
 	}
-	if(last_blob_size <= sizeof(long)) // last column is value
+
+	crt_cell->last_blob_size = last_blob_size;
+
+	if(last_blob != NULL)
 	{
-		crt_cell->column_array[j] = cols[j];
-	}
-	else
-	{
-		crt_cell->column_array[j] = malloc(last_blob_size);
-		memcpy(crt_cell->column_array[j], cols[j], last_blob_size);
+		assert(total_cols == no_cols + 1);
+
+		crt_cell->column_array[total_cols] = malloc(last_blob_size);
+		memcpy(crt_cell->column_array[total_cols], last_blob, last_blob_size);
 	}
 
 	return row;
 }
 
-db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, unsigned int * fastrandstate)
+db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
 										schema->clustering_key_idxs, schema->no_clustering_keys,
-										schema->no_cols, fastrandstate);
+										schema->no_cols, last_blob_size, fastrandstate);
 }
 
 void free_db_cell(db_row_t * row, int depth)
@@ -297,7 +301,7 @@ int db_delete_table(WORD table_key, db_t * db)
 
 // Table API:
 
-int table_insert(WORD * column_values, int no_cols, int last_blob_size, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
+int table_insert(WORD * column_values, int no_cols, size_t last_blob_size, vector_clock * version, db_table_t * table, unsigned int * fastrandstate)
 {
 	db_schema_t * schema = table->schema;
 
@@ -310,7 +314,7 @@ int table_insert(WORD * column_values, int no_cols, int last_blob_size, vector_c
 
 	if(row_node == NULL)
 	{
-		row = create_db_row(column_values, schema, fastrandstate);
+		row = create_db_row(column_values, schema, last_blob_size, fastrandstate);
 		row->version = (version != NULL)? copy_vc(version) : NULL;
 		skiplist_insert(table->rows, column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
 	}
@@ -442,7 +446,7 @@ int table_insert_sf(WORD * column_values, int no_cols, db_table_t * table, unsig
 }
 */
 
-int table_update(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, db_table_t * table)
+int table_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, vector_clock * version, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
 
@@ -475,10 +479,22 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, vector_clock
 		row = (db_row_t *) (row_node->value);
 	}
 
-	for(int i=schema->no_primary_keys + schema->no_clustering_keys;i<no_cols;i++)
+	int i=schema->no_primary_keys + schema->no_clustering_keys;
+	for(;i<no_cols - 1;i++)
 	{
 //		printf("Updating col %d / %d to value %ld\n", col_idxs[i], i, column_values[i]);
 		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
+	}
+
+	if(last_blob_size <= sizeof(long)) // last column is value
+	{
+		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
+	}
+	else // last column is blob
+	{
+		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = malloc(last_blob_size);
+
+		memcpy(row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys], column_values[i], last_blob_size);
 	}
 
 	if(version != NULL)
@@ -927,7 +943,7 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 
 // DB API:
 
-int db_insert_transactional(WORD * column_values, int no_cols, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
+int db_insert_transactional(WORD * column_values, int no_cols, size_t last_blob_size, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 #if (VERBOSE_BACKEND > 0)
 	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", no_cols);
@@ -942,15 +958,15 @@ int db_insert_transactional(WORD * column_values, int no_cols, vector_clock * ve
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_insert(column_values, no_cols, version, table, fastrandstate);
+	return table_insert(column_values, no_cols, last_blob_size, version, table, fastrandstate);
 }
 
-int db_insert(WORD * column_values, int no_cols, WORD table_key, db_t * db, unsigned int * fastrandstate)
+int db_insert(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
-	return db_insert_transactional(column_values, no_cols, NULL, table_key, db, fastrandstate);
+	return db_insert_transactional(column_values, no_cols, last_blob_size, NULL, table_key, db, fastrandstate);
 }
 
-int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, vector_clock * version, WORD table_key, db_t * db)
+int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, vector_clock * version, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -959,12 +975,12 @@ int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, v
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_update(col_idxs, no_cols, column_values, version, table);
+	return table_update(col_idxs, no_cols, column_values, last_blob_size, version, table);
 }
 
-int db_update(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, db_t * db)
+int db_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, WORD table_key, db_t * db)
 {
-	return db_update_transactional(col_idxs, no_cols, column_values, NULL, table_key, db);
+	return db_update_transactional(col_idxs, no_cols, column_values, last_blob_size, NULL, table_key, db);
 }
 
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)

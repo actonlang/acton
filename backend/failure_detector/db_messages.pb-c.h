@@ -155,14 +155,15 @@ struct  _VersionedCellMessage
   int64_t *keys;
   size_t n_columns;
   int64_t *columns;
+  ProtobufCBinaryData blob;
   /*
-   *	optional int64 version_no=5;
+   *	optional int64 version_no=6;
    */
   VectorClockMessage *version;
 };
 #define VERSIONED_CELL_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&versioned_cell_message__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL }
+    , 0, 0,NULL, 0,NULL, {0,NULL}, NULL }
 
 
 struct  _ServerMessage
@@ -308,6 +309,9 @@ struct  _QueueQueryMessage
 {
   ProtobufCMessage base;
   CellAddressMessage *queue_address;
+  /*
+   * QUERY_TYPE_{CREATE_QUEUE, DELETE_QUEUE, SUBSCRIBE_QUEUE, UNSUBSCRIBE_QUEUE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE, NOTIFICATION}
+   */
   int32_t msg_type;
   int32_t app_id;
   int32_t shard_id;

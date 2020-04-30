@@ -24,7 +24,7 @@ int validate_txn(uuid_t * txnid, vector_clock * version, db_t * db);
 int abort_txn(uuid_t * txnid, db_t * db);
 int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int * fastrandstate);
 
-int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 
 db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 
@@ -49,11 +49,11 @@ int db_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_k
 int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
-int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+int db_update_in_txn(int * col_idxs, int no_cols, size_t blob_size, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 
 // Queue ops:
 
-int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+int enqueue_in_txn(WORD * column_values, int no_cols, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,

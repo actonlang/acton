@@ -23,7 +23,7 @@
 #define QUEUE_NOTIF_ENQUEUED 0
 #define QUEUE_NOTIF_DELETED 1
 
-int enqueue(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
+int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table_key, WORD queue_id, short use_lock, db_t * db, unsigned int * fastrandstate);
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 		int max_entries, int * entries_read, long * new_read_head, vector_clock ** prh_version,
 		snode_t** start_row, snode_t** end_row, short use_lock,

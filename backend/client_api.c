@@ -794,7 +794,8 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 	skiplist_t * roots = create_skiplist_long();
 
 	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0].keys, response->cells[0].no_keys,
-			(WORD *) response->cells[0].columns, response->cells[0].no_columns, &(db->fastrandstate));
+			(WORD *) response->cells[0].columns, response->cells[0].no_columns,
+			response->cells[0].last_blob, response->cells[0].last_blob_size, &(db->fastrandstate));
 
 	for(int i=0;i<response->no_cells;i++) // We have a deeper result than 1
 	{
@@ -806,7 +807,8 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 //			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i].keys[0]);
 
 			root_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
-					(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
+					(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+					response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 			skiplist_insert(roots, (WORD) response->cells[i].keys[0], (WORD) root_cell, &(db->fastrandstate));
 			continue;
 		}
@@ -823,7 +825,8 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 			if(new_cell_node == NULL)
 			{
 				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
-						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
+						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
 //				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
@@ -858,7 +861,8 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 		return NULL;
 
 	db_row_t* result = create_db_row_schemaless2((WORD *) response->cells[0].keys, response->cells[0].no_keys,
-			(WORD *) response->cells[0].columns, response->cells[0].no_columns, &(db->fastrandstate));
+			(WORD *) response->cells[0].columns, response->cells[0].no_columns,
+			response->cells[0].last_blob, response->cells[0].last_blob_size, &(db->fastrandstate));
 
 	for(int i=1;i<response->no_cells;i++) // We have a deeper result than 1
 	{
@@ -873,7 +877,8 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 			if(new_cell_node == NULL)
 			{
 				new_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys + j, response->cells[i].no_keys - j,
-						(WORD *) response->cells[i].columns, response->cells[i].no_columns, &(db->fastrandstate));
+						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
 //				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
 
@@ -1454,6 +1459,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
     {
     		db_row_t * row = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
     													(WORD *) response->cells[i].columns, response->cells[i].no_columns,
+													response->cells[i].last_blob, response->cells[i].last_blob_size,
 													&(db->fastrandstate)); // Note that cell versions are only kept on the server, we don't return them to the client
     		skiplist_insert(rows, (WORD) response->cells[i].keys[0], (WORD) row, &(db->fastrandstate));
     }

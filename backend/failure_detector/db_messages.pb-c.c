@@ -1689,7 +1689,7 @@ const ProtobufCMessageDescriptor cell_message__descriptor =
   (ProtobufCMessageInit) cell_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor versioned_cell_message__field_descriptors[4] =
+static const ProtobufCFieldDescriptor versioned_cell_message__field_descriptors[5] =
 {
   {
     "table_key",
@@ -1728,8 +1728,20 @@ static const ProtobufCFieldDescriptor versioned_cell_message__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "version",
+    "blob",
     4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(VersionedCellMessage, blob),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "version",
+    5,
     PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1741,15 +1753,16 @@ static const ProtobufCFieldDescriptor versioned_cell_message__field_descriptors[
   },
 };
 static const unsigned versioned_cell_message__field_indices_by_name[] = {
+  3,   /* field[3] = blob */
   2,   /* field[2] = columns */
   1,   /* field[1] = keys */
   0,   /* field[0] = table_key */
-  3,   /* field[3] = version */
+  4,   /* field[4] = version */
 };
 static const ProtobufCIntRange versioned_cell_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
 {
@@ -1759,7 +1772,7 @@ const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
   "VersionedCellMessage",
   "",
   sizeof(VersionedCellMessage),
-  4,
+  5,
   versioned_cell_message__field_descriptors,
   versioned_cell_message__field_indices_by_name,
   1,  versioned_cell_message__number_ranges,

@@ -411,7 +411,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		{
 			// Note: This also updates or creates the version of the updated / created cell:
 
-			return db_insert_transactional(tw->column_values, tw->no_cols, version, tw->table_key, db, fastrandstate);
+			return db_insert_transactional(tw->column_values, tw->no_cols, tw->blob_size, version, tw->table_key, db, fastrandstate);
 		}
 		case QUERY_TYPE_DELETE:
 		{
@@ -421,7 +421,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		}
 		case QUERY_TYPE_ENQUEUE:
 		{
-			return enqueue(tw->column_values, tw->no_cols, tw->table_key, tw->queue_id, 1, db, fastrandstate);
+			return enqueue(tw->column_values, tw->no_cols, tw->blob_size, tw->table_key, tw->queue_id, 1, db, fastrandstate);
 		}
 		case QUERY_TYPE_READ_QUEUE:
 		{
@@ -538,13 +538,13 @@ int commit_txn(uuid_t * txnid, vector_clock * version, db_t * db, unsigned int *
 }
 
 
-int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+int db_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
-	return add_write_to_txn(QUERY_TYPE_UPDATE, column_values, no_cols, no_primary_keys, no_clustering_keys, table_key, ts, fastrandstate);
+	return add_write_to_txn(QUERY_TYPE_UPDATE, column_values, no_cols, no_primary_keys, no_clustering_keys, blob_size, table_key, ts, fastrandstate);
 }
 
 db_row_t* db_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -664,7 +664,7 @@ int db_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key
 	if(ts == NULL)
 		return -2; // No such txn
 
-	return add_write_to_txn(QUERY_TYPE_DELETE, primary_keys, no_primary_keys, no_primary_keys, 0, table_key, ts, fastrandstate);
+	return add_write_to_txn(QUERY_TYPE_DELETE, primary_keys, no_primary_keys, no_primary_keys, 0, 0, table_key, ts, fastrandstate);
 }
 
 int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -673,7 +673,7 @@ int db_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_key
 	if(ts == NULL)
 		return -2; // No such txn
 
-	return add_write_to_txn(QUERY_TYPE_DELETE, keys, no_primary_keys+no_clustering_keys, no_primary_keys, no_clustering_keys, table_key, ts, fastrandstate);
+	return add_write_to_txn(QUERY_TYPE_DELETE, keys, no_primary_keys+no_clustering_keys, no_primary_keys, no_clustering_keys, 0, table_key, ts, fastrandstate);
 }
 
 int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
@@ -688,7 +688,7 @@ int db_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_
 */
 }
 
-int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+int db_update_in_txn(int * col_idxs, int no_cols, size_t blob_size, WORD * column_values, WORD table_key, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
 	assert (0); // Not supported in new schema-less model
 	return 0;
@@ -696,13 +696,13 @@ int db_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD tab
 
 // Queue ops:
 
-int enqueue_in_txn(WORD * column_values, int no_cols, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+int enqueue_in_txn(WORD * column_values, int no_cols, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
 		return -2; // No such txn
 
-	return add_enqueue_to_txn(column_values, no_cols, table_key, queue_id, ts, fastrandstate);
+	return add_enqueue_to_txn(column_values, no_cols, blob_size, table_key, queue_id, ts, fastrandstate);
 }
 
 int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
