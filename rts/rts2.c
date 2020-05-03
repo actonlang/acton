@@ -554,6 +554,7 @@ void $POP() {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void *main_loop(void *arg) {
+  int i = 0;
     while (1) {
         $Actor current = DEQ_ready();
         if (current) {
@@ -611,6 +612,17 @@ void *main_loop(void *arg) {
             } else {
 
                 // TODO: do I/O polling
+              if ((int)arg==0) {
+                i++;         
+                if (i== 3) {
+                  $write_serialized($serialize_rts(),"rts.bin");
+                }
+                if (i == 20) {
+                  $ROW row = $read_serialized("rts.bin");
+                  $deserialize_rts(&row);
+                  i = 0;
+                }
+              }
               static struct timespec idle_wait = { 0, 500000000 };  // 500ms
               nanosleep(&idle_wait, NULL);
             }
