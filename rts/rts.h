@@ -28,6 +28,7 @@ extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
 extern struct $Clos$class $Clos$methods;
 extern struct $Cont$class $Cont$methods;
+extern struct $Cont$class $Done$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -55,7 +56,7 @@ typedef struct $R $R;
 struct $Msg$class {
     char *$GCINFO;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
-    void (*__serialize__)($Msg, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Msg, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Msg (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Msg {
@@ -72,7 +73,7 @@ struct $Msg {
 struct $Actor$class {
     char *$GCINFO;
     void (*__init__)($Actor);
-    void (*__serialize__)($Actor, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Actor, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Actor (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Actor {
@@ -86,7 +87,7 @@ struct $Actor {
 struct $Catcher$class {
     char *$GCINFO;
     void (*__init__)($Catcher, $Cont);
-    void (*__serialize__)($Catcher, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Catcher, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Catcher (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 struct $Catcher {
@@ -98,7 +99,7 @@ struct $Catcher {
 struct $Clos$class {
     char *$GCINFO;
     void (*__init__)($Clos);
-    void (*__serialize__)($Clos, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Clos, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Clos (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $WORD (*enter)($Clos, $WORD);
 };
@@ -109,7 +110,7 @@ struct $Clos {
 struct $Cont$class {
     char *$GCINFO;
     void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Cont, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Cont (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)($Cont, $WORD);
 };
@@ -132,5 +133,8 @@ void $POP();
 
 typedef int $Env;
 
-void serialize_rts($Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
-void deserialize_rts($Mapping$dict, $ROW*, $dict);
+$ROW $serialize_rts();
+void $deserialize_rts($ROW*);
+
+
+void $register_rts();
