@@ -467,10 +467,10 @@ $set $set_difference($Hashable hashwit, $set set, $set other) {
  
 // Serialization ///////////////////////////////////////////////////////////////////////////////////
 
-void $set_serialize($set self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+void $set_serialize($set self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
   $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
   if (prevkey) {
-    $enqueue(accum,$new_row(-LIST_ID,start_no,1,($WORD)&prevkey->val));
+      $val_serialize(-SET_ID,&prevkey->val,start_no,accum);
     return;
   }
   $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
@@ -482,16 +482,8 @@ void $set_serialize($set self, $Mapping$dict wit, long *start_no, $dict done, $R
   $enqueue(accum,row);
   for (long i=0; i<=self->mask; i++) {
     $setentry *entry = &self->table[i];
-    if (entry->key == NULL) {
-        $enqueue(accum, $new_row(DUMMY_ID,start_no,0,NULL));
-    } else {
-      // When key is NULL we store a DUMMY_ID row.
-      // Otherwise we serialize the hash followed by a serialization of the key.
-      $Serializable hash = ($Serializable)to$int(entry->hash);
-      hash->$class->__serialize__(hash,wit,start_no,done,accum);
-      $Serializable key = ($Serializable)entry->key;
-      key->$class->__serialize__(key,wit,start_no,done,accum);
-    }
+    $step_serialize(($Serializable)to$int(entry->hash),wit,start_no,done,accum);
+    $step_serialize(entry->key,wit,start_no,done,accum);
   }
 }
  
@@ -512,15 +504,10 @@ $set $set_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     memset(res->table,0,(res->mask+1)*sizeof($setentry));
     for (int i=0; i<=res->mask;i++) {
       $setentry *entry = &res->table[i];
-      if ((*row)->class_id == DUMMY_ID) {
-         *row = (*row)->next;
-      } else { 
-        entry->hash = (long)(*row)->blob[0];
-        *row = (*row)->next;
-        entry->key = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
+      entry->hash = from$int(($int)$step_deserialize(wit,row,done));
+      entry->key = $step_deserialize(wit,row,done);
         if (entry->hash==-1)
           entry->key = dummy;
-      }
     }
     return res;
   }

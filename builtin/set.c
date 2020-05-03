@@ -2,7 +2,7 @@
 #include "set_impl.h"
  
 
-void $set_serialize($set, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+void $set_serialize($set, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
 $set $set_deserialize($Mapping$dict, $ROW*, $dict);
 
 static struct $Ord$set $Ord$set_instance;

@@ -35,10 +35,10 @@ struct $dict$class $dict$methods = {"",(void (*)($dict))$default__init__, $dict_
 
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
-void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
   $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
   if (prevkey) {
-    $enqueue(accum,$new_row(-DICT_ID,start_no,1,($WORD)&prevkey->val));
+    $val_serialize(-DICT_ID,&prevkey->val,start_no,accum);
     return;
   }
   $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
@@ -52,15 +52,9 @@ void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, 
   $enqueue(accum,row);
   for (int i=0; i<self->table->tb_nentries; i++) {
     $entry_t entry = &TB_ENTRIES(self->table)[i];
-    $Serializable hash = ($Serializable)to$int(entry->hash);
-    hash->$class->__serialize__(hash,wit,start_no,done,accum);
-    $Serializable key = ($Serializable)entry->key;
-    key->$class->__serialize__(key,wit,start_no,done,accum);
-    $Serializable val = ($Serializable)entry->value;
-    if (val) 
-      val->$class->__serialize__(val,wit,start_no,done,accum);
-    else 
-      $enqueue(accum,$new_row(DUMMY_ID,start_no,0,NULL));
+    $step_serialize(($Serializable)to$int(entry->hash),wit,start_no,done,accum);
+    $step_serialize(entry->key,wit,start_no,done,accum);
+    $step_serialize(entry->value,wit,start_no,done,accum);
   }
 }
 
@@ -82,13 +76,9 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     memcpy(res->table->tb_indices,&this->blob[4],tb_size*sizeof(int));
     for (int i=0; i<res->table->tb_nentries; i++) {
       $entry_t entry = &TB_ENTRIES(res->table)[i];
-      entry->hash = from$int(($int)$get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done));
-      entry->key = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
-      if ((*row)->class_id == DUMMY_ID)
-        entry->value = NULL;
-      else {
-        entry->value = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
-      }
+      entry->hash = from$int(($int)$step_deserialize(wit,row,done));
+      entry->key =  $step_deserialize(wit,row,done);
+      entry->value = $step_deserialize(wit,row,done);
     }
     return res;
   }

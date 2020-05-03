@@ -1,6 +1,6 @@
 struct $tuple$class {
     char *$GCINFO;
-    void (*__serialize__)($tuple, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($tuple, $Mapping$dict, $WORD*, int, $dict, struct $ROWLISTHEADER*);
     $tuple (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 

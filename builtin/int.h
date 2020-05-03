@@ -1,7 +1,7 @@
 struct $int$class {
   char *$GCINFO;
   void (*__init__)($int, long);
-  void (*__serialize__)($int, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+  void (*__serialize__)($int, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $int (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 

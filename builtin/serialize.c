@@ -1,7 +1,8 @@
+#define BUF_SIZE 8192
 
 // Queue implementation //////////////////////////////////////////////////////////////////
 
-void $enqueue($ROWLISTHEADER lst, $ROW elem) {
+void $enqueue(struct $ROWLISTHEADER *lst, $ROW elem) {
   if (lst->last)
     lst->last->next = elem;
   else
@@ -10,7 +11,17 @@ void $enqueue($ROWLISTHEADER lst, $ROW elem) {
 }
 
 /*
-// $Hashable$PREFIX ////////////////////////////////////////////////////////////////////////
+// Internal auxiliary types /////////////////////////////////////////////////////////////////////////////
+
+typedef struct $PREFIX  *$PREFIX;
+
+struct $PREFIX {
+  int prefix_size;
+  $WORD prefix[];
+};
+
+
+// $Hashable$PREFIX 
 
 $bool $Hashable$PREFIX_eq($Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
   if (a->prefix_size != b->prefix_size)
@@ -34,8 +45,8 @@ struct $Hashable$PREFIX$class $Hashable$PREFIX$methods = {"", (void (*)($Hashabl
 struct $Hashable$PREFIX $Hashable$PREFIX_instance = {&$Hashable$PREFIX$methods};
 struct $Hashable$PREFIX *$Hashable$PREFIX$witness = &$Hashable$PREFIX_instance;
 */
- 
-// $Hashable_Word (for pointers) ////////////////////////////////////////////////////////////////////////
+
+
 
 $bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
@@ -49,69 +60,51 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int(pointer_hash(a));
 }
 
-
 struct $Hashable$WORD$class $Hashable$WORD$methods = {"", (void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
-// classid generation and retrieval ////////////////////////////////////////////////////////
+// Null methods for serialization of NULL ///////////////////////////////////////
 
-int nextid = 100;
-
-$dict methods;  //key is classid; value is method table
-$dict classids; //key is method table; value is classid
-
-void $register_force(int classid, $Serializable$methods meths) {
-  // should we check whether meths is already present?
-  $int classid1 =to$int(classid);
-  $dict_setitem(methods,($Hashable)$Hashable$int$witness,classid1,meths);
-  $dict_setitem(classids,($Hashable)$Hashable$WORD$witness,meths,classid1);
-}
-    
-void $register($Serializable$methods meths) {
-  $register_force(nextid++,meths);
+void $Null__serialize__($Serializable self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+  $enqueue(accum,$new_row(NULL_ID,start_no,0,NULL));
 }
 
-int $get_classid($Serializable$methods meths) {
-  $int classid = $dict_get(classids,($Hashable)$Hashable$WORD$witness,meths,NULL);
-  if (classid)
-    return (int)from$int(classid);
-  else {
-    fprintf(stderr,"Internalerror in get_classid: classid not found\n");
-    exit(-1);
-  }
+$Serializable $Null__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
+  *row = (*row)->next;
+  return NULL;
 }
 
-$Serializable$methods $get_methods(int classid)  {
-  $Serializable$methods meths = $dict_get(methods,($Hashable)$Hashable$int$witness,to$int((long)classid),NULL);
-  if (meths)
-    return meths;
-  else {
-    fprintf(stderr,"Internal error in get_methods: method table not found for classid %d\n",classid);
-    exit(-1);
-  }
+struct $Serializable$methods $Null$methods = {"",(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
+
+// small-step functions for (de)serializing the next object /////////////////////////////////////////////////
+
+
+void $step_serialize($Serializable self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+  if (self)
+    self->$class->__serialize__(self,wit,start_no,done,accum);
+  else
+    $Null__serialize__(self,wit,start_no,done,accum);
 }
 
-void $register_builtin() {
-  methods  = $new_dict(); 
-  classids = $new_dict();
-  $register_force(INT_ID,($Serializable$methods)&$int$methods);
-  $register_force(FLOAT_ID,($Serializable$methods)&$float$methods);
-  //  $register_force(COMPLEX_ID,($Serializable$methods)&$complex$methods);
-  $register_force(BOOL_ID,($Serializable$methods)&$bool$methods);
-  $register_force(STR_ID,($Serializable$methods)&$str$methods);
-  $register_force(LIST_ID,($Serializable$methods)&$list$methods);
-  $register_force(DICT_ID,($Serializable$methods)&$dict$methods);
-  $register_force(SET_ID,($Serializable$methods)&$set$methods);
-  /*
-  $register_force(MSG_ID,($Serializable$methods)&$Msg$methods);
-  $register_force(ACTOR_ID,($Serializable$methods)&$Actor$methods);
-  $register_force(CATCHER_ID,($Serializable$methods)&$Catcher$methods);
-  $register_force(CLOS_ID,($Serializable$methods)&$Clos$methods);
-  $register_force(CONT_ID,($Serializable$methods)&$Cont$methods);
-  */
+$Serializable $step_deserialize($Mapping$dict wit,$ROW *row,$dict done) {
+    return $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
 }
- 
+
+void $val_serialize(int class_id, $WORD val, long *start_no, struct $ROWLISTHEADER *accum) { 
+  $ROW row = $new_row(class_id,start_no,1,NULL);
+  memcpy(row->blob,val,sizeof($WORD));
+  $enqueue(accum,row);
+}
+
+$WORD $val_deserialize($ROW *row) {
+  $WORD res;
+  memcpy(&res,(*row)->blob,sizeof($WORD));
+  *row = (*row)->next;
+  return res;
+}
+
+
 // Serialization methods ///////////////////////////////////////////////////////////////////////////////
 
 void $write_serialized($ROW row, char *file) {
@@ -155,13 +148,11 @@ void $write_serialized($ROW row, char *file) {
 }
  
 $ROW $serialize($Serializable s, long *start_no) {
-  $ROWLISTHEADER accum = malloc(sizeof(struct $ROWLISTHEADER));
-  accum->fst = NULL;
-  accum->last = NULL;
+  struct $ROWLISTHEADER accum = {NULL,NULL}; //malloc(sizeof(struct $ROWLISTHEADER));
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
   $dict done = $new_dict(); //wit->$class->__fromiter__(wit,NULL);
-  s->$class->__serialize__(s,wit,start_no,done,accum);
-  return accum->fst;
+  s->$class->__serialize__(s,wit,start_no,done,&accum);
+  return accum.fst;
 }
 
 void $serialize_file($Serializable s, char *file) {
@@ -172,7 +163,7 @@ void $serialize_file($Serializable s, char *file) {
 $Serializable $deserialize($ROW row) {
   $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$int$witness);
   $dict done = wit->$class->__fromiter__(wit,NULL);
-  return  $get_methods(row->class_id)->__deserialize__(wit,&row,done);
+  return  $step_deserialize(wit,&row,done);
 }
 
 $ROW $read_serialized(char *file) {
@@ -228,7 +219,7 @@ $Serializable $deserialize_file(char *file) {
 $ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob) {
   $ROW res = malloc(2 * sizeof(int) + (2+blob_size)*sizeof($WORD));
   res->class_id = class_id;
-  res->row_no = (*start_no)++;;
+  res->row_no = (*start_no)++;
   res->blob_size = blob_size;
   if (blob)
     memcpy(res->blob,blob,blob_size*sizeof($WORD));

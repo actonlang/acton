@@ -1,7 +1,7 @@
 struct $bool$class {
   char *$GCINFO;
   void (*__init__)($bool, long);
-  void (*__serialize__)($bool, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+  void (*__serialize__)($bool, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $bool (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 

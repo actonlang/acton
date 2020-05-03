@@ -1,5 +1,5 @@
 void $list_init($list self);
-void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum);
+void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
 $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
 
 
@@ -337,18 +337,17 @@ void $list_init($list lst) {
   lst->$class = &$list$methods; 
 };
 
-void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
   $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
   if (prevkey) {
-    $enqueue(accum,$new_row(-LIST_ID,start_no,1,($WORD)&prevkey->val));
+    $val_serialize(-LIST_ID,&prevkey->val,start_no,accum);
     return;
   }
   $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
   long len = (long)self->length;
-  $enqueue(accum,$new_row(LIST_ID,start_no,1,($WORD)&len));
+  $val_serialize(LIST_ID,&len,start_no,accum);
   for (int i=0; i<self->length; i++) {
-    $Serializable elem = ($Serializable)self->data[i];
-    elem->$class->__serialize__(elem,wit,start_no,done,accum);
+    $step_serialize(self->data[i],wit,start_no,done,accum);
   }
 }
  

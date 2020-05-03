@@ -1,5 +1,5 @@
 void $int_init($int, long);
-void $int_serialize($int, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+void $int_serialize($int, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
 $int $int_deserialize($Mapping$dict, $ROW*, $dict);
 
 struct $int$class $int$methods = {"",$int_init,$int_serialize, $int_deserialize};
@@ -10,16 +10,12 @@ void $int_init($int self, long val){
   self->val = val;
 }
 
-void $int_serialize($int n, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
-  $enqueue(accum,$new_row(INT_ID,start_no,1,($WORD)&n->val));
+void $int_serialize($int n, $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+  $val_serialize(INT_ID,&n->val,start_no,accum);
 }
 
 $int $int_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
-  $ROW this = *row;
-  *row =this->next;
-  long res;
-  memcpy(&res,this->blob,sizeof(long));
-  return to$int(res);
+  return to$int((long)$val_deserialize(row));
 }
 
 $int to$int(long i) {

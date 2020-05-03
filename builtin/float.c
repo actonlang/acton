@@ -1,7 +1,7 @@
 #include <math.h>
 
 void $float_init($float self, double val);
-void $float_serialize($float self, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum);
+void $float_serialize($float self, $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
 $float $float_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
 struct $float$class $float$methods = {"",$float_init, $float_serialize, $float_deserialize};
@@ -13,15 +13,14 @@ void $float_init($float self, double val){
   self->val = val;
 }
 
-void $float_serialize($float x, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
-  $enqueue(accum,$new_row(FLOAT_ID,start_no,1,($WORD)&x->val));
+void $float_serialize($float x, $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+  $val_serialize(FLOAT_ID,&x->val,start_no,accum);
 }
 
 $float $float_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
-  $ROW this = *row;
-  *row =this->next;
   double res;
-  memcpy(&res,this->blob,sizeof(long));
+  memcpy(&res,(*row)->blob,sizeof(long));
+  *row = (*row)->next;
   return to$float(res);
 }
 

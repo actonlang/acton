@@ -1,6 +1,4 @@
-#include "../rts/rts.h"
-
-void $dict_serialize($dict, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+void $dict_serialize($dict, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
 $dict $dict_deserialize($Mapping$dict, $ROW*, $dict);
 
 

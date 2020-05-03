@@ -11,7 +11,7 @@
 // String-specific methods
 
 void $str_init($str, char*);
-void $str_serialize($str, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+void $str_serialize($str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
 $str $str_deserialize($Mapping$dict, $ROW*, $dict);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
@@ -643,7 +643,7 @@ void $str_init($str self, char *str) {
   }
 }
 
-void $str_serialize($str str, $Mapping$dict wit, long *start_no, $dict done, $ROWLISTHEADER accum) {
+void $str_serialize($str str, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
   $ROW row = $new_row(STR_ID,start_no,2+nWords,NULL);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
