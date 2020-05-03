@@ -1,7 +1,7 @@
 struct $list$class {
   char *$GCINFO;
   void (*__init__)($list);
-  void (*__serialize__)($list, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+  void (*__serialize__)($list, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $list(*copy)($list);
   //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));

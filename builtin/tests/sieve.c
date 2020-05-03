@@ -94,25 +94,23 @@ void printSequence($Sequence$list wit, $WORD seq) {
 
 
 $list sieveS($Sequence$list wit, int n) {
-  $int false = to$int(0);
-  $int true = to$int(1);
   $WORD w;
   $list isPrime = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
-  wit->$class->append(wit,isPrime,false); 
-  wit->$class->append(wit,isPrime,false);
+  wit->$class->append(wit,isPrime,$false); 
+  wit->$class->append(wit,isPrime,$false);
   for (int i=2; i < n; i++) 
-    wit->$class->append(wit,isPrime,true);
+    wit->$class->append(wit,isPrime,$true);
   for (int i=2; i < floor(sqrt(n)); i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$int(w)) {
       for (int k=i*i; k<n; k+=i)
-        wit->$class->__setitem__(wit,isPrime,to$int(k),false);
+        wit->$class->__setitem__(wit,isPrime,to$int(k),$false);
     }
   }
   $list primes = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
   for (int i=0; i<n; i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
-    if (from$int(w)) {
+    if (from$bool(w)) {
       wit->$class->append(wit,primes,to$int(i));
     }
   }

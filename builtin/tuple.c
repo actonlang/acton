@@ -1,4 +1,4 @@
-void $tuple_serialize($tuple self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void $tuple_serialize($tuple self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, struct $ROWLISTHEADER *accum) {
     
 }
 

@@ -1,5 +1,5 @@
 void $bool_init($bool self, long val);
-void $bool_serialize($bool self, $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum);
+void $bool_serialize($bool self, $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
 $bool $bool_deserialize($Mapping$dict notused, $ROW *row, $dict done);
 
 struct $bool$class $bool$methods = {"", $bool_init, $bool_serialize, $bool_deserialize};
@@ -11,8 +11,8 @@ void $bool_init($bool self, long val){
   self->val = val;
 }
 
-void $bool_serialize($bool n,  $Mapping$dict notused, long *start_no, $dict done, $ROWLISTHEADER accum) {
-  $enqueue(accum,$new_row(BOOL_ID,start_no,1,($WORD)&n->val));
+void $bool_serialize($bool n,  $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+  $val_serialize(BOOL_ID,&n->val,start_no,accum);
 }
 
 $bool $bool_deserialize( $Mapping$dict notused, $ROW *row, $dict done) {

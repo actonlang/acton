@@ -9,7 +9,7 @@ typedef struct $Node *$Node;
 struct $Node$class {
     char *$GCINFO;
     void (*__init__)($Node, $list);
-    void (*__serialize__)($Node, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Node, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Node (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -29,7 +29,7 @@ typedef struct $IntNode *$IntNode;
 struct $IntNode$class {
     char *$GCINFO;
   void (*__init__)($IntNode, $list, $int);
-    void (*__serialize__)($IntNode, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($IntNode, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $IntNode (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -50,7 +50,7 @@ typedef struct $FloatNode *$FloatNode;
 struct $FloatNode$class {
     char *$GCINFO;
   void (*__init__)($FloatNode, $list, $float);
-    void (*__serialize__)($FloatNode, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($FloatNode, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $FloatNode (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 
@@ -69,7 +69,7 @@ typedef struct $Graph *$Graph;
 struct $Graph$class {
     char *$GCINFO;
     void (*__init__)($Graph, $list);
-    void (*__serialize__)($Graph, $Mapping$dict, long*, $dict, $ROWLISTHEADER);
+    void (*__serialize__)($Graph, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
     $Graph (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
 

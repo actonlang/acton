@@ -195,6 +195,8 @@ long $string_hash(void *src, int len) {
    https://bugs.python.org/issue9685 
 */
 
+/*
+
 long $PREFIX_hash($PREFIX v) {
     int i, len = v->prefix_size;
 
@@ -218,7 +220,7 @@ long $PREFIX_hash($PREFIX v) {
     }
     return acc;
 }
-
+*/
 /*
  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
     From 3.8 the xxHash-based algorithm above is used.
