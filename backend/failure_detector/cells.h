@@ -45,9 +45,9 @@ typedef struct cell
 	vector_clock * version;
 } cell;
 
-cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version);
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version);
-void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version);
+cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
+cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
+void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
 cell_address * get_cell_address(cell * c);
 cell * init_cell_from_msg(VersionedCellMessage * msg);
 cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg);

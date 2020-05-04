@@ -244,6 +244,7 @@ void * comm_thread_loop(void * args)
 						fprintf(stderr, "CLIENT: No local subscriber subscriber %ld/%ld/%ld exists for queue %ld/%ld!\n",
 																		(long) qqm->consumer_id, (long) qqm->shard_id, (long) qqm->app_id,
 																		(long) notif_table_key, (long) notif_queue_id);
+						continue;
 			    		}
 
 					queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);

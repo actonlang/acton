@@ -111,7 +111,7 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	crt_cell->no_columns = total_cols;
 	crt_cell->column_array = (WORD *) malloc(total_cols * sizeof(WORD));
 	int j=0;
-	for(;j<crt_cell->no_columns;j++)
+	for(;j<no_cols;j++)
 	{
 		crt_cell->column_array[j] = cols[j];
 	}
@@ -122,8 +122,8 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	{
 		assert(total_cols == no_cols + 1);
 
-		crt_cell->column_array[total_cols] = malloc(last_blob_size);
-		memcpy(crt_cell->column_array[total_cols], last_blob, last_blob_size);
+		crt_cell->column_array[no_cols] = malloc(last_blob_size);
+		memcpy(crt_cell->column_array[no_cols], last_blob, last_blob_size);
 	}
 
 	return row;
@@ -718,6 +718,8 @@ void print_long_row(db_row_t* row)
 
 void long_row_to_string(db_row_t* row, char * to_string, int * len)
 {
+	#define PRINT_BLOBS 1
+
 	sprintf(to_string, "{ %ld, ", (long) row->key);
 
 	if(row->cells != NULL)
@@ -735,7 +737,17 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len)
 	{
 		sprintf(to_string + strlen(to_string), "[ ");
 		for(int i=0; i<row->no_columns; i++)
+		{
+#if (PRINT_BLOBS > 0)
+			if(i<(row->no_columns - 1) || row->last_blob_size <= 0)
+				sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+			else
+				sprintf(to_string + strlen(to_string), "%s, ", (char *) row->column_array[i]);
+
+#else
 			sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+#endif
+		}
 		sprintf(to_string + strlen(to_string), " ]");
 	}
 

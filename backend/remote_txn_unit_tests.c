@@ -96,12 +96,14 @@ db_schema_t* create_state_schema()
 	clustering_key_idxs[1]=2;
 	int index_key_idx=3;
 
-	int * col_types = (int *) malloc(no_state_cols * sizeof(int));
+	int * col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
 
 	for(int i=0;i<no_state_cols;i++)
 		col_types[i] = DB_TYPE_INT32;
 
-	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
+	col_types[no_state_cols] = DB_TYPE_BLOB; // Include blob
+
+	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
 
@@ -172,9 +174,13 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 	return read_status;
 }
 
+char digits[10][10] = { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
+
 int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	int ret = 0;
+
+	assert(no_state_cols == 4);
 
 	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(WORD));
 
@@ -184,8 +190,9 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[1] = (WORD) COLLECTION_ID_0;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
+		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, NULL, 0, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, (WORD) str_value, 10, ca->state_table_key, ca->schema, txnid, ca->db); // strnlen((const char *) str_value, 10) + 1
 
 		assert(ret == 0);
 	}
@@ -196,8 +203,9 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[1] = (WORD) COLLECTION_ID_1;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
+		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, NULL, 0, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, (WORD) str_value, 10, ca->state_table_key, ca->schema, txnid, ca->db); // strnlen((const char *) str_value, 10) + 1
 
 		assert(ret == 0);
 	}
@@ -217,14 +225,17 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 
 	*msgs_sent=0;
 
+	assert(no_queue_cols == 2);
+
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
 
 	for(int i=0;i<no_outgoing_counters;i++)
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
+		char * str_value = (i < 9)?(digits[i]):"NaN";
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, ca->queue_table_key, (WORD) dest_id, NULL, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, 10, ca->queue_table_key, (WORD) dest_id, NULL, ca->db); // strnlen((const char *) str_value, 10) + 1
 
 		assert(ret == 0);
 
@@ -251,6 +262,8 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 		printf("ACTOR %ld: Sending %d msgs to ACTOR %ld.\n", (long) ca->consumer_id, no_outgoing_counters, dest_id);
 */
 
+	assert(no_queue_cols == 2);
+
 	*msgs_sent=0;
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
@@ -259,8 +272,9 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
+		char * str_value = (outgoing_counters[i] < 9)?(digits[outgoing_counters[i]]):"NaN";
 
-		ret = remote_enqueue_in_txn(column_values, no_queue_cols, NULL, 0, ca->queue_table_key, (WORD) dest_id, txnid, ca->db);
+		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, 10, ca->queue_table_key, (WORD) dest_id, txnid, ca->db); // strnlen((const char *) str_value, 10) + 1
 
 		assert(ret == 0);
 
@@ -295,11 +309,12 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 //		print_long_row(db_row);
 
 		long queue_entry_id = (long) db_row->key;
-		assert(db_row->no_columns == 2);
+		assert(db_row->no_columns == 3);
 		long sender_id = (long) db_row->column_array[0];
 		int counter_val = (int) db_row->column_array[1];
+		char * str_value = (char *) db_row->column_array[2];
 
-		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d)\n", (long) ca->consumer_id, queue_entry_id, sender_id, counter_val);
+		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d, str=%s)\n", (long) ca->consumer_id, queue_entry_id, sender_id, counter_val, str_value);
 
 //					skiplist_search(ca->rcv_counters, COLLECTION_ID_0, (WORD) entries_read);
 
@@ -539,11 +554,11 @@ int main(int argc, char **argv) {
     no_actors = atoi(argv[3]);
     no_items = atoi(argv[4]);
 
-    remote_db_t * db = get_remote_db(3);
+    remote_db_t * db = get_remote_db(1);
 
     add_server_to_membership(hostname, portno, db, &seed);
-    add_server_to_membership(hostname, portno+1, db, &seed);
-    add_server_to_membership(hostname, portno+2, db, &seed);
+//    add_server_to_membership(hostname, portno+1, db, &seed);
+//    add_server_to_membership(hostname, portno+2, db, &seed);
 
 	// Create state table:
 

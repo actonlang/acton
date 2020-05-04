@@ -203,7 +203,7 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff)
 
 // Cell:
 
-cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
+cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
 	ca->table_key = table_key;
@@ -218,7 +218,7 @@ cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int n
 	return ca;
 }
 
-void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
+void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	ca->table_key = table_key;
 
@@ -237,7 +237,7 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 	ca->last_blob_size = last_blob_size;
 	if(last_blob != NULL)
 	{
-		ca->last_blob = malloc(sizeof(last_blob_size));
+		ca->last_blob = malloc(last_blob_size);
 		memcpy(ca->last_blob, last_blob, last_blob_size);
 	}
 	else
@@ -251,7 +251,7 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 		ca->version = NULL;
 }
 
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, int last_blob_size, vector_clock * version)
+cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
 	copy_cell(ca, table_key, keys, no_keys, columns, no_columns, last_blob, last_blob_size, version);
