@@ -469,7 +469,7 @@ instance InfEnv Decl where
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  (nsigs,_,_) <- checkAttributes te' te
-                                                 return (cs, [(n, NClass q as (te++te'++nsigs))], Class l n q ps b')
+                                                 return (cs, [(n, NClass q as (te++te'++nsigs))], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQ n) q $ defineTVars q $ block (stateScope env) env
             (as,ps)                     = mro2 env1 us
@@ -482,10 +482,10 @@ instance InfEnv Decl where
                                                  popFX
                                                  (nsigs,_,_) <- checkAttributes te' te
                                                  when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute lacks signature"
-                                                 return (cs, [(n, NProto q ps (te++te'))], Protocol l n q ps b')
+                                                 return (cs, [(n, NProto q ps (te++te'))], Protocol l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQ n) q $ defineTVars q $ block (stateScope env) env
-            ps                          = mro env1 us
+            ps                          = mro1 env1 us
             te'                         = parentTEnv env1 ps
     infEnv env (Extension l n q us b)
       | isProto n env                   = notYet (loc n) "Extension of a protocol"
@@ -500,15 +500,15 @@ instance InfEnv Decl where
                                              when (not (inBuiltin env || null asigs)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              cn <- newName (nstr $ noq n)
-                                             return (cs, [(cn, NExt n q ps (te++te'))], Extension l n q ps b)
+                                             return (cs, [(cn, NExt n q ps (te++te'))], Extension l n q us b)
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             prevexts                    = extensionsOf n env
-            overlap                     = [ p | (_,_,ps',_) <- prevexts, p <- ps', tcname p == tcname (head us) ]
+            overlap                     = [ p | (_,_,ps',_) <- prevexts, (_,p) <- ps', tcname p == tcname (head us) ]
             ws                          = [ TC (NoQ w) ts | (w,_,ps',_) <- prevexts, any connected ps' ]
-            connected p                 = tcname p `elem` map tcname us'
-            us'                         = concat [ us' | (us',_) <- map (findCon env) us ]
+            connected (_,p)             = tcname p `elem` map tcname us'
+            us'                         = concat [ map snd us' | (us',_) <- map (findCon env) us ]
             ts                          = map tVar (tybound q)
-            ps                          = mro env1 (head us : ws ++ tail us)
+            ps                          = mro1 env1 (head us : ws ++ tail us)
             te'                         = parentTEnv env1 ps
 
 

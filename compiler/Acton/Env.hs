@@ -42,9 +42,9 @@ data NameInfo               = NVar      Type
                             | NSVar     Type
                             | NDef      TSchema Decoration
                             | NSig      TSchema Decoration
-                            | NClass    Qual [TCon] TEnv
-                            | NProto    Qual [TCon] TEnv
-                            | NExt      QName Qual [TCon] TEnv
+                            | NClass    Qual [WTCon] TEnv
+                            | NProto    Qual [WTCon] TEnv
+                            | NExt      QName Qual [WTCon] TEnv
                             | NTVar     Kind [TCon] [TCon]
                             | NAlias    QName
                             | NMAlias   ModName
@@ -52,6 +52,8 @@ data NameInfo               = NVar      Type
                             | NReserved
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
+
+type WTCon                              = ([Maybe QName],TCon)
 
 instance Data.Binary.Binary NameInfo
 
@@ -86,6 +88,10 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
     pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
 
+instance Pretty WTCon where
+--    pretty (ws,u)               = pretty u
+    pretty (ws,u)               = dotCat pretty (catMaybes ws) <+> colon <+> pretty u
+
 instance Subst Env where
     msubst env                  = do ne <- msubst (names env)
                                      return env{ names = ne }
@@ -119,6 +125,11 @@ instance Subst NameInfo where
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
     tyfree NReserved            = []
     tyfree NBlocked             = []
+
+instance Subst WTCon where
+    msubst (w,u)                = (,) <$> return w <*> msubst u
+    
+    tyfree (w,u)                = tyfree u
 
 msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
@@ -195,6 +206,9 @@ instance Unalias NameInfo where
     unalias env NReserved           = NReserved
     unalias env NBlocked            = NBlocked
 
+instance Unalias WTCon where
+    unalias env (w,u)               = (unalias env w, unalias env u)
+
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
     
@@ -226,9 +240,9 @@ nSchemas ((n,NVar t):te)    = (n, monotype t) : nSchemas te
 nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
-parentTEnv                  :: Env -> [TCon] -> TEnv
+parentTEnv                  :: Env -> [WTCon] -> TEnv
 parentTEnv env us           = concatMap tEnv us
-  where tEnv u              = case findQName (tcname u) env of
+  where tEnv (w,u)          = case findQName (tcname u) env of
                                 NClass q _ te -> subst (tybound q `zip` tcargs u) te
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
                                 _             -> []
@@ -271,7 +285,7 @@ define te env               = env{ names = reverse te ++ prune (dom te) (names e
 defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
 defineTVars (TBind (TV k n) us : q) env
-                            = defineTVars q env{ names = (n, NTVar k as ps) : names env }
+                            = defineTVars q env{ names = (n, NTVar k (map snd as) (map snd ps)) : names env }
   where (as,ps)             = mro2 env us
 
 defineSelf                  :: QName -> Qual -> Env -> Env
@@ -344,15 +358,15 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findExt                     :: QName -> QName -> Env -> Maybe (Name,Qual,[TCon],TEnv)
-findExt c_n p_n env         = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n == tcname (head ps) ]
+findExt                     :: QName -> QName -> Env -> Maybe (Name,Qual,[WTCon],TEnv)
+findExt c_n p_n env         = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n == tcname (snd (head ps)) ]
 
 findExtAttr                 :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
 findExtAttr c_n a_n env     = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensionsOf c_n env, Just (NSig sc dec) <- [lookup a_n te] ]
 
 
 
-extensionsOf                :: QName -> Env -> [(Name,Qual,[TCon],TEnv)]
+extensionsOf                :: QName -> Env -> [(Name,Qual,[WTCon],TEnv)]
 extensionsOf n env          = [ (w,q,ps,te) | (w, NExt n' q ps te) <- names env, n == n' ]
 
 constraintsOf               :: Qual -> Env -> Constraints
@@ -364,13 +378,13 @@ constraintsOf q env         = [ constr u (tVar v) | TBind v us <- q, u <- us ]
 
 findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)
 findAttr env tc n           = findIn (te ++ concat tes)
-  where (us,te)             = findCon env tc
-        tes                 = [ te' | u <- us, let (_,te') = findCon env u ]
+  where (wus,te)            = findCon env tc
+        tes                 = [ te' | (w,u) <- wus, let (_,te') = findCon env u ]
         findIn te1          = case lookup n te1 of
                                 Just (NSig sc d)      -> (sc,NoDec)
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> ([TCon],TEnv)
+findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
@@ -428,27 +442,34 @@ mro2 env (u:us)
   | isProto (tcname u) env              = ([], mro env (u:us))
   | otherwise                           = (mro env [u], mro env us)
 
-mro env us                              = merge [] $ linearizations us ++ [us]
-  where merge out lists
-          | null heads                  = reverse out
-          | h:_ <- good                 = merge (h:out) [ if equal hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
-          | otherwise                   = err2 heads "Inconsistent resolution order for"
-          where (heads,tails)           = unzip [ (hd,tl) | hd:tl <- lists ]
-                good                    = [ h | h <- heads, all (absent (tcname h)) tails]
+mro1 env us                             = mro env us
 
-        equal u1 u2
-          | u1 == u2                    = True
-          | tcname u1 == tcname u2      = err2 [u1,u2] "Inconsistent protocol instantiations"
-          | otherwise                   = False
+mro                                     :: Env -> [TCon] -> [WTCon]
+mro env us                              = merge [] $ map lin us' ++ [us']
+  where
+    us'                                 = case us of [] -> []; u:us -> ([Nothing],u) : [ ([Just (tcname u)],u) | u <- us ]
+    
+    lin                                 :: WTCon -> [WTCon]
+    lin (w,u)                           = (w,u) : [ (w++w',u') | (w',u') <- us' ]
+      where (us',_)                     = findCon env u
 
-        absent n []                     = True
-        absent n (u:us)
-          | n == tcname u               = False
-          | otherwise                   = absent n us
+    merge                               :: [WTCon] -> [[WTCon]] -> [WTCon]
+    merge out lists
+      | null heads                      = reverse out
+      | h:_ <- good                     = merge (h:out) [ if equal hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+      | otherwise                       = err2 (map snd heads) "Inconsistent resolution order for"
+      where (heads,tails)               = unzip [ (hd,tl) | hd:tl <- lists ]
+            good                        = [ h | h <- heads, all (absent h) tails]
 
-        linearizations []               = []
-        linearizations (u : us)         = (u:us') : linearizations us
-          where (us',_)                 = findCon env u
+    equal                               :: WTCon -> WTCon -> Bool
+    equal (w1,u1) (w2,u2)
+      | u1 == u2                        = True
+      | tcname u1 == tcname u2          = err2 [u1,u2] "Inconsistent protocol instantiations"
+      | otherwise                       = False
+
+    absent                              :: WTCon -> [WTCon] -> Bool
+    absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
+
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
