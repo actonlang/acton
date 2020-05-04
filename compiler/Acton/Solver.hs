@@ -61,7 +61,7 @@ reduce' env c@(Impl w (TCon _ tc) u)
       
   | Just (w,q,ps,_) <- findExt (tcname tc) (tcname u) env
                                             = let s = tybound q `zip` tcargs tc in 
-                                              if u `elem` subst s ps then do
+                                              if u `elem` subst s (map snd ps) then do
                                                  reduce env (subst s (constraintsOf q env)) 
                                               else do
                                                  noRed c
@@ -135,7 +135,7 @@ cast' env (TCon _ c1) (TCon _ c2)
   | not $ null sup                          = mapM_ (uncurry $ cast env) ((head sup `zip` tcargs c2) ++ (tcargs c2 `zip` head sup))     -- TODO: use polarities
   where NClass q as te                      = findQName (tcname c1) env
         s                                   = tybound q `zip` tcargs c1
-        sup                                 = [ subst s (tcargs c) | c <- as, tcname c == tcname c2 ]
+        sup                                 = [ subst s (tcargs c) | (w,c) <- as, tcname c == tcname c2 ]
 
 
 cast' env (TExist _ p1) (TExist l p2)
@@ -217,7 +217,7 @@ sub' env w (TExist _ p1) (TExist l p2)
   | not $ null sup                          = mapM_ (uncurry $ cast env) ((head sup `zip` tcargs p2) ++ (tcargs p2 `zip` head sup))     -- TODO: use polarities
   where NProto q as te                      = findQName (tcname p1) env
         s                                   = tybound q `zip` tcargs p1
-        sup                                 = [ subst s (tcargs c) | c <- as, tcname c == tcname p2 ]
+        sup                                 = [ subst s (tcargs c) | (w',c) <- as, tcname c == tcname p2 ]
 
 --           as declared           as called
 sub' env w (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
