@@ -232,12 +232,12 @@ instance Norm ModName where
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQual n)             = case elem n (local env) of
-                                         True-> return $ NoQual n
+    norm env (NoQ n)                = case elem n (local env) of
+                                         True-> return $ NoQ n
                                          False ->  case lookup n (global env) of
                                                       Just (NAlias qn) -> return qn
                                                       Just _  -> return $ QName (currentmod env) n
-                                                      Nothing -> return $ NoQual n
+                                                      Nothing -> return $ NoQ n
 
 instance Norm ModRef where
     norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn
@@ -344,6 +344,16 @@ instance Norm TCon where
 
 instance Norm TBind where
     norm env (TBind v cs)           = TBind <$> norm env v <*> norm env cs
+
+instance Norm Qual where
+    norm env (Qual vs cs)           = Qual <$> norm env vs <*> norm env cs
+
+instance Norm Constraint where
+    norm env (Cast t t')            = Cast <$> norm env t <*> norm env t'
+    norm env (Sub w t t')           = Sub w <$> norm env t <*> norm env t'
+    norm env (Impl w t p)           = Impl w <$> norm env t <*> norm env p
+    norm env (Sel w t n t')         = Sel w <$> norm env t <*> return n <*> norm env t'
+    norm env (Mut t n t')           = Mut <$> norm env t <*> return n <*> norm env t'
 
 instance Norm Type where
     norm env (TVar l v)             = TVar l <$> norm env v

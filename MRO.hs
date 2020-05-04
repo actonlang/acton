@@ -1,57 +1,94 @@
 module MRO where
-    
-type Graph = [(String,[String])]
+
+type Name                       = String
+type Bases                      = [Name]
+type ClassDef                   = (Name,Bases)
+type Graph                      = [ClassDef]
+
+type WName                      = ([Maybe Name],Name)
+type WBases                     = [WName]
+type WClassDef                  = (Name,WBases)
+type WGraph                     = [WClassDef]
+
+
+
+-- With witnesses:
 
 mro                             :: Graph -> IO ()
 mro graph                       = do mapM (putStrLn . uncurry showclass) graph
                                      putStrLn "----"
                                      mro' [] graph
 
-mro'                            :: Graph -> Graph -> IO ()
+mro'                            :: WGraph -> Graph -> IO ()
 mro' lins []                    = return ()
-mro' lins ((c,bases):graph)     = case merge [] (map lin bases ++ [bases]) of
+mro' lins ((c,bases):graph)     = case merge [] (map lin wbases ++ [wbases]) of
                                     Right cs -> do
                                         putStrLn (showlin c cs)
                                         mro' ((c,cs):lins) graph
                                     Left err -> putStrLn err
-  where lin a                   = case lookup a lins of
-                                    Just la -> a:la
-                                    Nothing -> error ("Forward ref from " ++ c ++ " to " ++ a)
+  where
+    wbases                      = case bases of [] -> []; n:ns -> ([Nothing],n) : [ ([Just n],n) | n <- ns ]
+    
+    lin                         :: WName -> WBases
+    lin (is,n)                  = case lookup n lins of
+                                    Just la -> (is,n) : [ (is++w,x) | (w,x) <- la ]
+                                    Nothing -> error ("Forward ref from " ++ c ++ " to " ++ n)
 
-        merge out lists
-          | null heads          = Right $ reverse out
-          | h:_ <- good         = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
-          | otherwise           = Left (">>>>>> " ++ showlin c (reverse out) ++ 
-                                      " ++ merge(" ++ commasep (map showlist lists) ++ ") <<<<<<<")
-          where (heads,tails)   = unzip [ (hd,tl) | hd:tl <- lists ]
-                good            = [ h | h <- heads, all (h `notElem`) tails ]
+    merge                       :: WBases -> [WBases] -> Either String WBases
+    merge out lists
+      | null heads              = Right $ reverse out
+      | h:_ <- good             = merge (h:out) [ if snd hd == snd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+      | otherwise               = Left (">>>>>> " ++ showlin c (reverse out) ++ 
+                                        " ++ merge(" ++ commasep id (map showlist lists) ++ ") <<<<<<<")
+      where (heads,tails)       = unzip [ (hd,tl) | hd:tl <- lists ]
+            good                = [ h | h <- heads, all (snd h `notElem`) (map (map snd) tails) ]
 
-type Name                       = String
-type Env                        = [(Name,[Name])]
+showlin                         :: Name -> WBases -> String
+showlin c cs                    = "L(" ++ c ++ ") = " ++ showlist cs
 
-linearize                       :: Env -> (Name,[Name]) -> (Name,[Name])
-linearize env (c,bases)         = (c, merge [] (map findlin bases ++ [bases]))
-  where findlin a               = a : case lookup a env of Just la -> la
-        merge out lists
-          | null heads          = reverse out
-          | h:_ <- good         = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
-          | otherwise           = error (">>>>>> " ++ showlin c (reverse out) ++ 
-                                      " ++ merge(" ++ commasep (map showlist lists) ++ ") <<<<<<<")
-          where (heads,tails)   = unzip [ (hd,tl) | hd:tl <- lists ]
-                good            = [ h | h <- heads, all (h `notElem`) (tails::[[Name]]) ]
+showlist cs                     = "[" ++ commasep wshow cs ++ "]"
+
+wshow (w,x)                     = wsh w ++ ":" ++ x
+  where wsh []                  = ""
+        wsh [n]                 = wsh' n
+        wsh (n:w)               = wsh' n ++ "." ++ wsh w
+        wsh' Nothing            = "_"
+        wsh' (Just n)           = n
+
+commasep f []                   = ""
+commasep f [x]                  = f x
+commasep f (x:xs)               = f x ++ "," ++ commasep f xs
+
+showclass c bases               = c ++ "(" ++ commasep id bases ++ ")"
+
+
+-- Alternative formulation:
+
+type Env                        = [WClassDef]
+
+linearize                       :: Env -> ClassDef -> WClassDef
+linearize env (c,bases)         = (c, merge [] (map lin wbases ++ [wbases]))
+  where 
+    wbases                      = case bases of [] -> []; n:ns -> ([Nothing],n) : [ ([Just n],n) | n <- ns ]
+
+    lin                         :: WName -> WBases
+    lin (w,a)                   = (w,a) : case lookup a env of Just la -> [ (w++w',x) | (w',x) <- la ]
+
+    merge                       :: WBases -> [WBases] -> WBases
+    merge out lists
+      | null heads              = reverse out
+      | h:_ <- good             = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+      | otherwise               = error (">>>>>> " ++ showlin c (reverse out) ++ 
+                                      " ++ merge(" ++ commasep id (map showlist lists) ++ ") <<<<<<<")
+      where (heads,tails)       = unzip [ (hd,tl) | hd:tl <- lists ]
+            good                = [ h | h <- heads, all (snd h `notElem`) (map (map snd) tails) ]
 
 mro2                            :: Env -> Graph -> IO ()
 mro2 env []                     = mapM (putStrLn . uncurry showlin) (reverse env) >> return ()
 mro2 env (g:graph)              = mro2 (lmap:env) graph
   where lmap                    = linearize env g
 
-commasep []                     = ""
-commasep [x]                    = x
-commasep (x:xs)                 = x ++ "," ++ commasep xs
 
-showlin c cs                    = "L(" ++ c ++ ") = " ++ showlist (c:cs)
-showclass c bases               = c ++ "(" ++ commasep bases ++ ")"
-showlist cs                     = "[" ++ commasep cs ++ "]"
 
 -- Examples from https://www.python.org/download/releases/2.3/mro/
 
@@ -265,5 +302,11 @@ ex18  = [("A",[]), ("B",["A"]), ("C",["A"]),
          ("str_A",["A"]),
          ("str_B",["B"]), 
          ("str_C",["C"]), 
-         ("str_tot",["str_C","str_B","str_A"])]                                         -- str_tot,str_C,C,str_B,B,str_A,A  <--- bad, picks C before str_B...
+         ("str_tot",["str_C","str_B","str_A"])]                                        -- str_tot,str_C,C,str_B,B,str_A,A  <--- bad, picks C before str_B...
          
+
+ex20a = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"])]
+
+ex20b = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"]), ("E",["D"])]
+
+ex20c = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"]), ("E",[]), ("F",["D","E"])]

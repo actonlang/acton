@@ -86,7 +86,7 @@ instance Transform Type where
                                           else maybe (trans env p) (flip posRow (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t
     trans env (TRow loc k nm s r)       = TRow loc k nm (trans env s) (trans env r)
-    trans env (TCon loc tc)             = maybe (TCon NoLoc (trans env tc)) (const (TExist NoLoc (trans env tc))) (lookup (noqual (tcname tc)) (protocols env))
+    trans env (TCon loc tc)             = maybe (TCon NoLoc (trans env tc)) (const (TExist NoLoc (trans env tc))) (lookup (noq (tcname tc)) (protocols env))
     trans env (TExist _ tc)             = TExist NoLoc (trans env tc)
     trans env t                         = t
 
@@ -97,7 +97,7 @@ instance Transform TBind where
     trans env (TBind tv tcs)            = TBind tv (trans env tcs)
 
 instance Transform QName where
-    trans env (QName _ nm)              = NoQual nm
+    trans env (QName _ nm)              = NoQ nm
     trans env qn                        = qn
 
 instance Transform Name where
@@ -105,13 +105,13 @@ instance Transform Name where
 
 -- adds witnesses to superprotocols other than the first mentioned.
 addWitnesses env ws ss                  = map mkSig ws ++ ss
-  where mkSig tc                         = Signature NoLoc [name ('_' : nstr (noqual (tcname tc)))] (monotype (tCon (trans env tc))) NoDec
+  where mkSig tc                         = Signature NoLoc [name ('_' : nstr (noq (tcname tc)))] (monotype (tCon (trans env tc))) NoDec
 
 transParents tv bs                      = map addP bs
    where addP (TC qn ts)                = TC qn (tv : ts)
 
 -- transforms [A(Eq), B, C(Hashable)] into ([A,B,C],[Eq[A],Hashable[C]])
-transParams                             :: [TBind] -> ([TBind],[TCon])
+transParams                             :: Qual -> (Qual,[TCon])
 transParams qs                          = trP qs [] []
    where trP [] ws qs1                  = (reverse qs1,reverse ws)
          trP (TBind tv cs:qs) ws qs1    = trP qs ([TC nm [tVar tv] | TC nm _ <- cs]++ws) (tBind tv : qs1) 
@@ -140,34 +140,34 @@ transExt                                :: TransEnv -> Decl -> [Decl]
 transExt env e@(Extension l nm qs bs ss)
          | length bs /= 1               = error "For now, an extension must implement exactly one protocol"
          | otherwise                    = transChain Nothing env (head bs) e cs
-         where as                       = head bs : ancestors env (noqual (tcname (head bs)))
+         where as                       = head bs : ancestors env (noq (tcname (head bs)))
                cs                       = chains (protocols env) as
 
 transChain                              :: Maybe Type -> TransEnv  -> TCon -> Decl -> [[TCon]] -> [Decl]
 transChain _ _ _ _ []                   = []
 transChain mb env b e (c : cs)          = c2{dname = c2nm, dbody = sigs} : transChain (Just witType) env{master = Just b} b e cs
-   where cn                             = noqual (tcname (head c))
+   where cn                             = noq (tcname (head c))
          prot                           = fromJust (lookup cn (protocols env))
          c1                             = trans env prot{qual = qual e ++ qual prot} 
          ts                             = trans env (tCon (mkTC (dqname e) (qual e)) : tcargs (head (bounds e)))
          (_,ws)                         = transParams (qual e)
          c2                             = substAll ts c1 
          tc                             = head (bounds c2)
-         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noqual (dqname e))) 0 GenPass 
+         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noq (dqname e))) 0 GenPass 
          witType                        = maybe (tCon tc) id mb
-         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noqual nm))] (monotype witType) NoDec]) mb
+         sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noq nm))] (monotype witType) NoDec]) mb
                                           ++ nub (dbody c2) -- nub (addWitnesses env ws (dbody c2))
 
 
 substAll ts (Class l nm qs bs ss)       = Class l nm (nub $ map tBind (tyfree ts)) [tc] (subst2 s ss)
    where s                              = tVars qs `zip` ts
-         tc                             = subst2 s (mkTC (NoQual nm) qs)
+         tc                             = subst2 s (mkTC (NoQ nm) qs)
 
 
 addSigs                                 :: [(Name,Decl)] -> [TCon] -> [Stmt]
 addSigs ps []                           = []
 addSigs ps (TC n qs : _)                = addSigs ps (subst2 s (bounds p)) ++ subst2 s methodSigs
-  where p                               = fromJust (lookup (noqual n) ps)
+  where p                               = fromJust (lookup (noq n) ps)
         s                               = tVars (qual p) `zip` qs
         methodSigs                      = [sig | sig@(Signature _ _ sc _) <- dbody p, isFunSchema sc ] 
           where isFunSchema sc          = isFunType (sctype sc)
@@ -188,17 +188,17 @@ tVars qs                                = map (\(TBind tv _) -> tv) qs
  
 protocolsOf (Module _ _ ss)             = [(dname p,p) |  Decl _ ds <- ss, p@(Protocol{}) <- ds]
 
-parentsOf p                             = map (noqual . tcname) (bounds p)
+parentsOf p                             = map (noq . tcname) (bounds p)
 
 ancestors                               ::  TransEnv -> Name -> [TCon]
-ancestors env n                         = ps ++ concatMap (ancestors env) (map (noqual . tcname) ps)
+ancestors env n                         = ps ++ concatMap (ancestors env) (map (noq . tcname) ps)
     where ps                            = bounds (fromJust (lookup n (protocols env)))
   
 chains                                  :: [(Name,Decl)] -> [TCon] -> [[TCon]]
 chains ps []                            = []
 chains ps (b:bs)                        = cs : chains ps [ b | b@(TC qn ts) <- bs, qn `notElem` map tcname cs ]
    where cs                             = fstParents ps b
-         fstParents ps b@(TC qn ts)     = case lookup (noqual qn) ps of
+         fstParents ps b@(TC qn ts)     = case lookup (noq qn) ps of
                                              Just (Protocol _ _ _ bs _) -> case bs of
                                                                         [] -> [b]
                                                                         p:_ -> b : fstParents ps p

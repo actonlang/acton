@@ -89,8 +89,8 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                          (bint,sext) <- withStore (deact (env1 n') b)
                                          let (ssigs,sext') = partition isSig sext
                                              _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
-                                             create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQual n')) (parToArg p) KwdNil)
-                                             copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQual selfKW)) selfKW) n) | n <- consts ]
+                                             create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQ n')) (parToArg p) KwdNil)
+                                             copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQ selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
                                              _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoDec
                                              (ds,ss) = partition isDecl bint
@@ -98,7 +98,7 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                              intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)
                                          return [intern, extern]
   where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
-        selfPat n                   = TaDot l0 (Var l0 (NoQual selfKW)) n
+        selfPat n                   = TaDot l0 (Var l0 (NoQ selfKW)) n
         isSig Signature{}           = True
         isSig _                     = False
         isDecl Decl{}               = True
@@ -107,10 +107,10 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
 addSelf p                           = PosPar selfKW Nothing Nothing p
 
 parToArg PosNIL                     = PosNil
-parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQual n)) (parToArg p)
+parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQ n)) (parToArg p)
 
 asyncCall env n p                   = Call l0 (Var l0 primASYNC) (PosArg selfSelf (PosArg clos PosNil)) KwdNil
-  where selfSelf                    = Dot l0 (Var l0 (NoQual selfKW)) selfKW
+  where selfSelf                    = Dot l0 (Var l0 (NoQ selfKW)) selfKW
         meth                        = Dot l0 selfSelf n
         clos                        = Lambda l0 PosNIL KwdNIL $ Call l0 meth (parToArg p) KwdNil
 
@@ -124,8 +124,8 @@ instance Deact Decl where
     deact env (Extension l n q u b) = Extension l n q u <$> deact env b
 
 instance Deact Expr where
-    deact env (Var l (NoQual n))
-      | selfRef n env               = return $ Dot l (Var l (NoQual selfKW)) n
+    deact env (Var l (NoQ n))
+      | selfRef n env               = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)             = return $ Var l n
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (eQVar primAWAIT) (PosArg e' PosNil) KwdNil
@@ -164,7 +164,7 @@ instance Deact Pattern where
 
 instance Deact Target where
     deact env (TaVar l n)
-      | selfRef n env               = return $ TaDot l (Var l (NoQual selfKW)) n
+      | selfRef n env               = return $ TaDot l (Var l (NoQ selfKW)) n
     deact env (TaVar l n)           = return $ TaVar l n
     deact env (TaIndex l e ix)      = TaIndex l <$> deact env e <*> deact env ix
     deact env (TaSlice l e sl)      = TaSlice l <$> deact env e <*> deact env sl

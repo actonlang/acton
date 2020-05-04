@@ -325,7 +325,7 @@ qual_name = do
   n <- name
   ns <- many (dot *> escname)
   case n:ns of
-    [n] -> return $ S.NoQual n
+    [n] -> return $ S.NoQ n
     ns' -> return $ S.QName (S.ModName (init ns')) (last ns')
   
 
@@ -530,7 +530,7 @@ after_stmt = addLoc $ do
                 e' <- addLoc $ do
                     n <- name
                     (ps,ks) <- parens funargs
-                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQual n)) ps ks
+                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQ n)) ps ks
                 return $ S.After NoLoc e e'
 
 var_stmt :: Parser S.Stmt
@@ -923,7 +923,7 @@ atom_expr = do
                            (S.StarStar <$> (starstar *> arithexpr))
 
         var = do nm <- name
-                 return (S.Var (S.nloc nm) (S.NoQual nm))
+                 return (S.Var (S.nloc nm) (S.NoQ nm))
 
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
@@ -1098,7 +1098,7 @@ tschema = addLoc $
 ttype :: Parser S.Type
 ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
-        <|> (S.TVar NoLoc . S.TV S.KWild) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
+        <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)

@@ -135,11 +135,11 @@ instance Vars Stmt where
     bound _                         = []
 
 instance Vars Decl where
-    free (Def _ n q ps ks ann b md) = (free ps ++ free ks ++ free b) \\ (n : bound ps ++ bound ks ++ bound b)
-    free (Actor _ n q ps ks ann b)  = (free ps ++ free ks ++ free b) \\ (n : self : bound ps ++ bound ks ++ bound b)
-    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound b)
-    free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound b)
-    free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ bound b
+    free (Def _ n q ps ks ann b md) = (free ps ++ free ks ++ free b) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
+    free (Actor _ n q ps ks ann b)  = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ bound b)
+    free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ bound b)
+    free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound q ++ bound b)
+    free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ (bound q ++ bound b)
 
     bound (Def _ n _ _ _ _ _ _)     = [n]
     bound (Actor _ n _ _ _ _ _)     = [n]
@@ -156,7 +156,7 @@ instance Vars Handler where
     bound (Handler ex ss)           = bound ss ++ bound ex
 
 instance Vars Expr where
-    free (Var _ (NoQual n))         = [n]
+    free (Var _ (NoQ n))            = [n]
     free (Var _ (QName m n))        = [n]
       where ModName (n:ns)          = m
     free (Int _ _ str)              = []
@@ -198,7 +198,7 @@ instance Vars ModName where
 
 instance Vars QName where
     free (QName m n)                = free m
-    free (NoQual n)                 = free n
+    free (NoQ n)                    = free n
 
 instance Vars Exception where
     free (Exception e1 e2)          = free e1 ++ free e2
@@ -358,7 +358,6 @@ instance Vars FX where
     free (FXMut t)                  = free t
     free (FXAct t)                  = free t
     free _                          = []
-
 
 -----------------
 

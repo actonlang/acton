@@ -48,6 +48,8 @@ newName s                           = Internal s <$> newUnique <*> return KindPa
 
 newKVar                             = KVar <$> newName "K"
 
+newWitness                          = newName "w"
+
 
 data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
 
@@ -59,9 +61,9 @@ extcons ke env                      = env { tcons = ke ++ tcons env }
 
 extvars vs env                      = env { tvars = nub vs ++ tvars env }
 
-tconKind (NoQual n) env             = case lookup n (tcons env) of
+tconKind (NoQ n) env                = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQual n) (impenv env)
+                                        Nothing -> Acton.Env.tconKind (NoQ n) (impenv env)
 tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
 
 
@@ -125,20 +127,20 @@ instance KCheck Stmt where
     kchk env (Signature l ns t d)   = Signature l ns <$> kchk env t <*> return d
 
 instance KCheck Decl where
-    kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*> 
+    kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 True t <*> 
                                       kchkSuite env1 b <*> return m
-      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ tvars env) env
+      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
-    kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 False t <*>
+    kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 True t <*>
                                       kchkSuite env1 b
-      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ tvars env) env
+      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
     kchk env (Class l n q us b)     = Class l n <$> kchkQual env q <*> kchkBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Extension l n q us b) = Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
+      where env1                    = extvars (tvSelf : tybound q) env
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -256,13 +258,16 @@ instance KCheck TSchema where
     kchk env (TSchema l q t)
       | null ambig                  = TSchema l <$> kchkQual env q <*> kexp KType env1 False t
       | otherwise                   = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
-      where env1 | null q           = extvars (tyfree t \\ tvars env) env
+      where env1 | null q           = extvars (tyfree t \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
             ambig                   = tybound q \\ tyfree t
 
+instance KCheck Type where
+    kchk env t                      = kexp KType env False t
+
 kchkQual env []                     = return []
 kchkQual env (TBind v us : q)
-  | v `elem` tvars env              = Acton.Env.err1 v "Type variable already in scope:"
+  | v `elem` tvars env              = Acton.Env.err1 v "Type variable already in scope:"    -- No type variable shadowing
   | otherwise                       = do (_k,v) <- kinfer env False v
                                          us <- kchkBounds env us
                                          q <- kchkQual (extvars [v] env) q
@@ -279,7 +284,7 @@ kchkPBounds env us                  = mapM (kexp KProto env False) us
 
 
 class KInfer t where
-    kinfer                          :: KEnv -> Bool -> t -> KindM (Kind,t)
+    kinfer                          :: KEnv -> Bool -> t -> KindM (Kind,t)          -- Bool flag controls whether wildcard types are accepted or not
 
 instance (KInfer t) => KInfer (Maybe t) where
     kinfer env w Nothing            = do k <- newKVar; return (k, Nothing)
@@ -370,7 +375,7 @@ kfree _                             = []
 -- Apply kind substitution ----------------------------------------------------------------------------------------
 
 class KSubst s where
-    ksubst                          :: Bool -> s -> KindM s
+    ksubst                          :: Bool -> s -> KindM s             -- Bool flag controls whether free KVars are replaced with KType or not
 
 instance KSubst a => KSubst [a] where
     ksubst g                        = mapM (ksubst g)
