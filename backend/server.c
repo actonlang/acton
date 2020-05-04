@@ -192,7 +192,7 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 {
 	int i=0;
 	int total_cols = wq->cell->no_keys + wq->cell->no_columns;
-	int total_cols_plus_blob = total_cols + ((wq->cell->last_blob_size > sizeof(long))?(1):(0));
+	int total_cols_plus_blob = total_cols + ((wq->cell->last_blob_size > 0)?(1):(0));
 
 	db_schema_t * schema = get_schema(db, (WORD) wq->cell->table_key);
 
@@ -210,7 +210,7 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 			for(;j<total_cols;j++)
 				column_values[j] = (WORD) wq->cell->columns[j-wq->cell->no_keys];
 
-			if(wq->cell->last_blob_size > sizeof(long))
+			if(wq->cell->last_blob_size > 0)
 			{
 				assert(total_cols_plus_blob == total_cols + 1);
 				column_values[total_cols] = malloc(wq->cell->last_blob_size);
@@ -289,7 +289,7 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 		assert(result->no_columns > 0);
 		assert(depth==no_schema_keys);
 
-		if(result->last_blob_size <= sizeof(long))
+		if(result->last_blob_size <= 0)
 			copy_cell(cells, table_key,
 					key_path, depth,
 					(long *) result->column_array, result->no_columns,
@@ -336,7 +336,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
 
 		cell * c = NULL;
-		if(result->last_blob_size <= sizeof(long))
+		if(result->last_blob_size <= 0)
 		{
 			c = init_cell(q->cell_address->table_key,
 							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
@@ -541,7 +541,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 			long id = (long) result->key;
 			assert(i==0 || prev_id == (id - 1));
 			prev_id = id;
-			if(result->last_blob_size <= sizeof(long))
+			if(result->last_blob_size <= 0)
 				copy_cell(cells+i, q->cell_address->table_key,
 						(long *) &result->key, 1,
 						(long *) result->column_array, no_columns,
@@ -619,7 +619,7 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 	for(int i=0;i<q->no_cells;i++)
 	{
 		int total_cols = q->cells[i].no_keys + q->cells[i].no_columns;
-		int total_cols_plus_blob = total_cols + ((q->cells[i].last_blob_size > sizeof(long))?(1):(0));
+		int total_cols_plus_blob = total_cols + ((q->cells[i].last_blob_size > 0)?(1):(0));
 
 		long * column_values = (long *) malloc(total_cols_plus_blob * sizeof(long));
 
@@ -629,7 +629,7 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 		for(;j<total_cols;j++)
 			column_values[j] = q->cells[i].columns[j-q->cells[i].no_keys];
 
-		if(q->cells[i].last_blob_size > sizeof(long))
+		if(q->cells[i].last_blob_size > 0)
 		{
 			assert(total_cols_plus_blob == total_cols + 1);
 			column_values[total_cols] = (long) malloc(q->cells[i].last_blob_size);

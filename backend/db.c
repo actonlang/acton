@@ -70,7 +70,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
 			}
 
-			if(last_blob_size <= sizeof(long)) // last column is value
+			if(last_blob_size <= 0) // last column is value
 			{
 				new_cell->column_array[j] = column_values[no_primary_keys + no_clustering_keys + j];
 			}
@@ -104,7 +104,7 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 
 	assert(crt_cell != NULL && crt_cell->cells == NULL);
 
-	assert(last_blob == NULL || last_blob_size > sizeof(long));
+	assert(last_blob == NULL || last_blob_size > 0);
 
 	int total_cols = no_cols + ((last_blob != NULL)?1:0);
 
@@ -151,7 +151,7 @@ void free_db_cell(db_row_t * row, int depth)
 
 	if(row->column_array != NULL)
 	{
-		if(row->last_blob_size > sizeof(long) && row->no_columns > 0 && row->column_array[row->no_columns - 1] != NULL)
+		if(row->last_blob_size > 0 && row->no_columns > 0 && row->column_array[row->no_columns - 1] != NULL)
 		{
 			free(row->column_array[row->no_columns - 1]);
 		}
@@ -360,7 +360,7 @@ int table_insert(WORD * column_values, int no_cols, size_t last_blob_size, vecto
 			cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
 		}
 
-		if(last_blob_size <= sizeof(long)) // last column is value
+		if(last_blob_size <= 0) // last column is value
 		{
 			cell->column_array[j] = column_values[schema->no_primary_keys + schema->no_clustering_keys + j];
 		}
@@ -486,7 +486,7 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_
 		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
 	}
 
-	if(last_blob_size <= sizeof(long)) // last column is value
+	if(last_blob_size <= 0) // last column is value
 	{
 		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
 	}

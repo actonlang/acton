@@ -227,7 +227,7 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 	for(int i=0;i<no_keys;i++)
 		ca->keys[i] = keys[i];
 
-	assert(last_blob == NULL || last_blob_size > sizeof(long));
+	assert(last_blob == NULL || last_blob_size > 0);
 
 	ca->no_columns = no_columns;
 	ca->columns = (long *) malloc(no_columns * sizeof(long));
@@ -275,7 +275,7 @@ void free_cell_ptrs(cell * ca)
 
 	if(ca->last_blob != NULL)
 	{
-		assert(ca->last_blob_size > sizeof(long));
+		assert(ca->last_blob_size > 0);
 		free(ca->last_blob);
 	}
 
@@ -296,8 +296,6 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 	for(int i=0;i<ca->no_keys;i++)
 		msg->keys[i] = ca->keys[i];
 
-//	int no_msg_columns = (ca->no_columns <= 0 || ca->last_blob_size <= sizeof(long))?(ca->no_columns):(ca->no_columns - 1);
-
 	msg->n_columns = ca->no_columns;
 	if(ca->no_columns > 0)
 		msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
@@ -306,7 +304,7 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 
 	if(ca->last_blob != NULL)
 	{
-		assert(ca->last_blob_size > sizeof(long));
+		assert(ca->last_blob_size > 0);
 		msg->blob.len = ca->last_blob_size;
 		msg->blob.data = malloc(ca->last_blob_size);
 		memcpy(msg->blob.data, ca->last_blob, ca->last_blob_size);
