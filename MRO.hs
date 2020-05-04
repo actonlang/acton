@@ -67,21 +67,28 @@ showclass c bases               = c ++ "(" ++ commasep id bases ++ ")"
 type Env                        = [WClassDef]
 
 linearize                       :: Env -> ClassDef -> WClassDef
-linearize env (c,bases)         = (c, merge [] (map lin wbases ++ [wbases]))
+linearize env (c,bases)         = (c, merge [] $ map lin wbases ++ [wbases])
   where 
     wbases                      = case bases of [] -> []; n:ns -> ([Nothing],n) : [ ([Just n],n) | n <- ns ]
 
-    lin                         :: WName -> WBases
-    lin (w,a)                   = (w,a) : case lookup a env of Just la -> [ (w++w',x) | (w',x) <- la ]
+    lin                         :: WName -> [WName]
+    lin (w,a)                   = (w,a) : [ (w++w',x) | (w',x) <- la ]
+      where Just la             = lookup a env
 
-    merge                       :: WBases -> [WBases] -> WBases
+    merge                       :: [WName] -> [[WName]] -> [WName]
     merge out lists
       | null heads              = reverse out
-      | h:_ <- good             = merge (h:out) [ if hd==h then tl else hd:tl | (hd,tl) <- zip heads tails ]
+      | h:_ <- good             = merge (h:out) [ if equal hd h then tl else hd:tl | (hd,tl) <- zip heads tails ]
       | otherwise               = error (">>>>>> " ++ showlin c (reverse out) ++ 
-                                      " ++ merge(" ++ commasep id (map showlist lists) ++ ") <<<<<<<")
+                                         " ++ merge(" ++ commasep id (map showlist lists) ++ ") <<<<<<<")
       where (heads,tails)       = unzip [ (hd,tl) | hd:tl <- lists ]
-            good                = [ h | h <- heads, all (snd h `notElem`) (map (map snd) tails) ]
+            good                = [ h | h <- heads, all (absent h) tails ]
+    
+    equal                       :: WName -> WName -> Bool
+    equal (_,a) (_,b)           = a == b
+    
+    absent                      :: WName -> [WName] -> Bool
+    absent (_,h) tl             = h `notElem` map snd tl
 
 mro2                            :: Env -> Graph -> IO ()
 mro2 env []                     = mapM (putStrLn . uncurry showlin) (reverse env) >> return ()
