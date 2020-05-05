@@ -186,7 +186,8 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, 0, ca->state_table_key, txnid, ca->db, fastrandstate);
+		ret = db_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys, 0,
+								ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 	}
@@ -198,7 +199,8 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 
-		ret = db_insert_in_txn(column_values, no_state_cols, 1, no_state_clustering_keys, 0, ca->state_table_key, txnid, ca->db, fastrandstate);
+		ret = db_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys, 0,
+								ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 	}

@@ -77,7 +77,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, NULL, 0, (WORD) 0, schema, txnid, db) != 0)
+				if(remote_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, NULL, 0, (WORD) 0, txnid, db) != 0)
 					return -1;
 			}
 		}
@@ -92,7 +92,7 @@ int delete_test(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 	printf("TEST: delete_test\n");
 
 	WORD row_key = (WORD) no_actors - 1;
-	return remote_delete_row_in_txn(&row_key, 1, (WORD) 0, schema, txnid, db);
+	return remote_delete_row_in_txn(&row_key, schema->no_primary_keys, (WORD) 0, txnid, db);
 }
 
 int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned int * fastrandstate)
@@ -102,7 +102,7 @@ int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned 
 
 	int ret = 0;
 	for(long aid = 0; aid<no_actors; aid++)
-		ret |= remote_delete_row_in_txn((WORD *) &aid, 1, (WORD) 0, schema, txnid, db);
+		ret |= remote_delete_row_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
 
 	return ret;
 }
@@ -115,7 +115,7 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 
 	for(long aid=0;aid<no_actors;aid++)
 	{
-		db_row_t * row = remote_search_in_txn((WORD *) &aid, 1, (WORD) 0, txnid, db);
+		db_row_t * row = remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
 
 		if(txnid != NULL && row == NULL)
 			continue;
@@ -148,7 +148,7 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 	{
 		for(long cid=0;cid<no_collections;cid++)
 		{
-			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, schema, txnid, db);
+			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, (WORD) 0, txnid, db);
 
 			if(txnid != NULL && row == NULL)
 				continue;
@@ -188,7 +188,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
 
-				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, cks, 2, (WORD) 0, schema, txnid, db);
+				db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, cks, 2, (WORD) 0, txnid, db);
 
 				if(txnid != NULL && row == NULL)
 					continue;

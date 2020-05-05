@@ -190,11 +190,12 @@ int get_ack_packet(int status, write_query * q,
 
 int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate)
 {
-	int i=0;
 	int total_cols = wq->cell->no_keys + wq->cell->no_columns;
 	int total_cols_plus_blob = total_cols + ((wq->cell->last_blob_size > 0)?(1):(0));
 
 	db_schema_t * schema = get_schema(db, (WORD) wq->cell->table_key);
+
+	int no_clustering_keys = wq->cell->no_keys - schema->no_primary_keys;
 
 	switch(wq->msg_type)
 	{
@@ -217,10 +218,11 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 				memcpy(column_values[total_cols], wq->cell->last_blob, wq->cell->last_blob_size);
 			}
 
+
 			if(wq->txnid == NULL) // Write out of txn
-				return db_insert_transactional(column_values, total_cols_plus_blob, wq->cell->last_blob_size, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+				return db_insert_transactional(column_values, total_cols_plus_blob, no_clustering_keys, wq->cell->last_blob_size, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
 			else // Write in txn
-				return db_insert_in_txn(column_values, total_cols_plus_blob, schema->no_primary_keys, schema->no_clustering_keys, wq->cell->last_blob_size, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				return db_insert_in_txn(column_values, total_cols_plus_blob, schema->no_primary_keys, no_clustering_keys, wq->cell->last_blob_size, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
 		}
 		case RPC_TYPE_DELETE:
 		{
@@ -236,7 +238,7 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 				if(wq->cell->no_keys == schema->no_primary_keys)
 					return db_delete_row_in_txn((WORD *) wq->cell->keys, wq->cell->no_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
 				else
-					return db_delete_cell_in_txn((WORD *) wq->cell->keys, schema->no_primary_keys, schema->no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+					return db_delete_cell_in_txn((WORD *) wq->cell->keys, schema->no_primary_keys, no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
 				// TO DO: To support db_delete_by_index_in_txn (in RPCs and backend)
 			}
 		}
@@ -259,7 +261,7 @@ vector_clock * get_local_vc(int my_id)
 
 // Read (regular and range) message handlers:
 
-int count_cells(db_row_t* result)
+int count_cells(db_row_t* result, int * max_depth)
 {
 	if(result == NULL)
 		return 0;
@@ -267,11 +269,13 @@ int count_cells(db_row_t* result)
 	if(result->cells == NULL || result->cells->no_items == 0)
 		return 1;
 
+	*max_depth = *max_depth + 1;
+
 	int no_cells = 0;
 	for(snode_t * crt_cell = HEAD(result->cells); crt_cell != NULL; crt_cell = NEXT(crt_cell))
 	{
 		db_row_t * child = (db_row_t*) crt_cell->value;
-		no_cells += count_cells(child);
+		no_cells += count_cells(child, max_depth);
 	}
 
 	return no_cells;
@@ -287,7 +291,7 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 	if(result->cells == NULL || result->cells->no_items == 0)
 	{
 		assert(result->no_columns > 0);
-		assert(depth==no_schema_keys);
+		assert(depth >= no_schema_keys);
 
 		if(result->last_blob_size <= 0)
 			copy_cell(cells, table_key,
@@ -320,9 +324,6 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 
 int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len)
 {
-	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys;
-	int no_keys = schema_keys - q->cell_address->no_keys + 1;
-	int no_columns = schema->no_cols - schema_keys;
 	range_read_response_message * m = NULL;
 
 	if(result == NULL)
@@ -333,6 +334,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	// Return a single cell read result
 	{
 		assert(result->no_columns > 0);
+		assert(result->no_columns >= schema->no_cols);
 		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
 
 		cell * c = NULL;
@@ -340,7 +342,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		{
 			c = init_cell(q->cell_address->table_key,
 							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-							(long *) result->column_array, no_columns,
+							(long *) result->column_array, result->no_columns,
 							NULL, 0,
 							result->version);
 		}
@@ -348,8 +350,8 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 		{
 			c = init_cell(q->cell_address->table_key,
 							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-							(long *) result->column_array, no_columns - 1,
-							result->column_array[no_columns - 1], result->last_blob_size,
+							(long *) result->column_array, result->no_columns - 1,
+							result->column_array[result->no_columns - 1], result->last_blob_size,
 							result->version);
 		}
 
@@ -358,13 +360,18 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	else
 	// Return a multi-cell read result; traverse db_row downwards and get all child cells recursively:
 	{
-		int no_results = count_cells(result);
+		int schema_keys = schema->no_primary_keys + schema->no_clustering_keys; // We only use this schema data for sanity checking of read back results
+//		int no_keys = schema_keys - q->cell_address->no_keys + 1;
+
+		int max_depth = 1;
+
+		int no_results = count_cells(result, &max_depth);
 
 		cell * cells = malloc(no_results * sizeof(cell));
 
-		long * key_path = (long *) malloc(no_keys * sizeof(long));
+		long * key_path = (long *) malloc(max_depth * sizeof(long));
 
-		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, no_keys);
+		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, schema_keys); // no_keys
 
 		assert(last_cell_ptr - cells == no_results);
 
@@ -405,12 +412,8 @@ db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, un
 
 int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len)
 {
-//	int no_keys = schema->no_primary_keys + schema->no_clustering_keys;
-//	int no_columns = schema->no_cols - no_keys;
-
-	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys;
-	int no_keys = schema_keys - q->start_cell_address->no_keys + 1;
-	int no_columns = schema->no_cols - schema_keys;
+	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys; // We only use this schema data for sanity checking of read back results
+//	int no_keys = schema_keys - q->start_cell_address->no_keys + 1;
 	range_read_response_message * m = NULL;
 
 	if(no_results == 0)
@@ -421,24 +424,27 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 	{
 		assert(start_row != NULL);
 
+		int max_range_depth = 0;
 		int no_cells = 0, i=0;
 		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
 		{
 			db_row_t* result = (db_row_t* ) crt_row->value;
 //			print_long_row(result);
-			no_cells += count_cells(result);
+			int max_depth = 1;
+			no_cells += count_cells(result, &max_depth);
+			max_range_depth = (max_depth > max_range_depth)?max_depth:max_range_depth;
 		}
 
 		cell * cells = malloc(no_cells * sizeof(cell));
 
-		long * key_path = (long *) malloc(no_keys * sizeof(long));
+		long * key_path = (long *) malloc(max_range_depth * sizeof(long));
 
 		i=0;
 		cell * last_cell_ptr = cells;
 		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
 		{
 			db_row_t* result = (db_row_t* ) crt_row->value;
-			last_cell_ptr = serialize_cells(result, last_cell_ptr, q->start_cell_address->table_key, key_path, 1, schema_keys);
+			last_cell_ptr = serialize_cells(result, last_cell_ptr, q->start_cell_address->table_key, key_path, 1, schema_keys); // no_keys
 		}
 
 		assert(last_cell_ptr - cells == no_cells);
@@ -469,15 +475,6 @@ int handle_range_read_query(range_read_query * q,
 	assert(q->start_cell_address->no_keys == q->end_cell_address->no_keys);
 
 	*schema = get_schema(db, (WORD) q->start_cell_address->table_key);
-
-/*
-	if(q->start_cell_address->no_keys == 0)
-	// Query the full table:
-	{
-		assert(q->end_cell_address->no_keys == 0);
-		return db_range_search(NULL, NULL, start_row, end_row, (WORD) q->start_cell_address->table_key, db);
-	}
-*/
 
 	int no_clustering_keys = q->start_cell_address->no_keys - (*schema)->no_primary_keys;
 
@@ -519,8 +516,6 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 									queue_query_message * q,
 									void ** snd_buf, unsigned * snd_msg_len)
 {
-	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys;
-	int no_columns = schema->no_cols - schema_keys;
 	queue_query_message * m = NULL;
 
 	if(no_results == 0)
@@ -544,14 +539,14 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 			if(result->last_blob_size <= 0)
 				copy_cell(cells+i, q->cell_address->table_key,
 						(long *) &result->key, 1,
-						(long *) result->column_array, no_columns,
+						(long *) result->column_array, result->no_columns,
 						NULL, 0,
 						result->version);
 			else
 				copy_cell(cells+i, q->cell_address->table_key,
 						(long *) &result->key, 1,
-						(long *) result->column_array, no_columns - 1,
-						result->column_array[no_columns - 1], result->last_blob_size,
+						(long *) result->column_array, result->no_columns - 1,
+						result->column_array[result->no_columns - 1], result->last_blob_size,
 						result->version);
 		}
 

@@ -184,7 +184,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(WORD));
 
-	for(snode_t * node = HEAD(ca->rcv_counters);node != NULL;node = NEXT(node))
+	for(snode_t * node = HEAD(ca->rcv_counters); node != NULL;node = NEXT(node))
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) COLLECTION_ID_0;
@@ -192,7 +192,9 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[3] = node->value;
 		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys,
+									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
+									ca->state_table_key, txnid, ca->db);
 
 		assert(ret == 0);
 	}
@@ -205,7 +207,9 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[3] = node->value;
 		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->state_table_key, ca->schema, txnid, ca->db);
+		ret = remote_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys,
+									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
+									ca->state_table_key, txnid, ca->db);
 
 		assert(ret == 0);
 	}

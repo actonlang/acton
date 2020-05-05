@@ -88,19 +88,18 @@ int queue_callback_cmp(WORD e1, WORD e2);
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db);
+int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db);
 int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db);
-int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db);
-int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clustering_keys, db_schema_t * schema, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, uuid_t * txnid, remote_db_t * db);
+int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db);
 int remote_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, remote_db_t * db);
 
 // Read ops:
 
 db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key,
-		uuid_t * txnid, remote_db_t * db);
-db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
-														WORD table_key, db_schema_t * schema, uuid_t * txnid,
-														remote_db_t * db);
+								uuid_t * txnid, remote_db_t * db);
+db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+											WORD table_key, uuid_t * txnid, remote_db_t * db);
 db_row_t* remote_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
 									WORD* col_keys, int no_columns, WORD table_key,
 									uuid_t * txnid, remote_db_t * db);

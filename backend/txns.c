@@ -411,7 +411,7 @@ int persist_write(txn_write * tw, vector_clock * version, db_t * db, unsigned in
 		{
 			// Note: This also updates or creates the version of the updated / created cell:
 
-			return db_insert_transactional(tw->column_values, tw->no_cols, tw->blob_size, version, tw->table_key, db, fastrandstate);
+			return db_insert_transactional(tw->column_values, tw->no_cols, tw->no_clustering_keys, tw->blob_size, version, tw->table_key, db, fastrandstate);
 		}
 		case QUERY_TYPE_DELETE:
 		{

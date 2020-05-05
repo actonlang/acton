@@ -603,10 +603,10 @@ int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, long nonce, 
 
 // Write ops:
 
-int remote_insert_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db)
+int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
-	write_query * wq = build_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
+	write_query * wq = build_insert_in_txn(column_values, no_cols, no_primary_keys, no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
 
@@ -663,10 +663,10 @@ int remote_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD
 	return 0;
 }
 
-int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, db_schema_t * schema, uuid_t * txnid, remote_db_t * db)
+int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
-	write_query * wq = build_delete_row_in_txn(column_values, schema->no_primary_keys, table_key, txnid, get_nonce(db));
+	write_query * wq = build_delete_row_in_txn(column_values, no_primary_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
 
@@ -717,10 +717,10 @@ int remote_delete_row_in_txn(WORD * column_values, int no_cols, WORD table_key, 
 	return !(ok_status >= db->quorum_size);
 }
 
-int remote_delete_cell_in_txn(WORD * column_values, int no_cols, int no_clustering_keys, db_schema_t * schema, WORD table_key, uuid_t * txnid, remote_db_t * db)
+int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
-	write_query * wq = build_delete_cell_in_txn(column_values, schema->no_primary_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
+	write_query * wq = build_delete_cell_in_txn(column_values, no_primary_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
 	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
 
@@ -960,14 +960,14 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 }
 
 
-db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys,
-														WORD table_key, db_schema_t * schema, uuid_t * txnid,
+db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys,
+														WORD table_key, uuid_t * txnid,
 														remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
 
-	read_query * q = build_search_clustering_in_txn(primary_keys, schema->no_primary_keys, clustering_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
+	read_query * q = build_search_clustering_in_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
 
 	if(db->servers->no_items < db->quorum_size)

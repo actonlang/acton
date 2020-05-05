@@ -60,7 +60,7 @@ int populate_db(db_t * db, unsigned int * fastrandstate) {
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_insert(column_values, no_cols, 0, (WORD) 0, db, fastrandstate) != 0)
+				if(db_insert(column_values, no_cols, no_clustering_keys, 0, (WORD) 0, db, fastrandstate) != 0)
 					return -1;
 			}
 		}

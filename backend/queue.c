@@ -181,7 +181,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 	for(long i=2;i<no_cols + 2;i++)
 		queue_column_values[i]=column_values[i-2];
 
-	int status = table_insert(queue_column_values, no_cols+2, last_blob_size, NULL, table, fastrandstate);
+	int status = table_insert(queue_column_values, no_cols+2, 1, last_blob_size, NULL, table, fastrandstate);
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Inserted queue entry %ld in queue %ld/%ld, status=%d\n", entry_id, (long) table_key, (long) queue_id, status);
@@ -725,7 +725,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	for(long i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 
-	int status = table_insert(queue_column_values, schema->no_cols, 0, NULL, table, fastrandstate); // version?
+	int status = table_insert(queue_column_values, schema->no_cols, 1, 0, NULL, table, fastrandstate); // version?
 
 	if(status)
 	{
