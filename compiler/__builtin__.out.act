@@ -1,0 +1,490 @@
+## Built-in types ##################################################################################
+
+class int:
+  pass
+
+class float:
+  pass
+
+class complex:
+  pass
+
+class bool:
+  pass
+
+class str:
+  capitalize   : () -> str
+  center       : (int,str) -> str
+  count        : (str,int,int) -> int
+  ends$wselfh     : (str,int,int) -> bool
+  expandtabs   : (int) -> str
+  find         : (str,int,int) -> int
+  index        : (str,int,int) -> int
+  isalnum      : () -> bool
+  isalpha      : () -> bool
+  isascii      : () -> bool
+  isdecimal    : () -> bool
+  islower      : () -> bool
+  isprintable  : () -> bool
+  isspace      : () -> bool
+  istitle      : () -> bool
+  isupper      : () -> bool
+  join         : (Iterator[str]) -> str
+  ljust        : (int,str) -> str
+  lower        : () -> str
+  lstrip       : (str) -> str
+  partition    : (str) -> (str,str,str)
+  replace      : (str,str,int) -> str
+  rfind        : (str,int,int) -> int
+  rindex       : (str,int,int) -> int
+  rjust        : (int,str) -> str
+  rpartition   : (str) -> (str,str,str)
+  rstrip       : (str) -> str
+  split        : (str,int) -> list[str]
+  splitlines   : () -> list[str]
+  starts$wselfh   : (str,int,int) -> bool
+  strip        : (str) -> str
+  upper        : () -> str
+  str_zfill    : (str,int) -> str
+
+class Slice:
+  pass
+  
+class Iterator[A] ():
+  next : () -> A
+  
+class list[A] ():
+  copy : () -> list[A]
+
+class Msg[A] ():
+  pass
+
+## General protocols ###############################################################################
+
+class Eq[S] ():
+  __eq__       : (S,S) -> bool
+  __ne__       : (S,S) -> bool            # has default defn
+
+class Ord[S] (Eq[S]):
+  __lt__       : (S,S) -> bool
+  __le__       : (S,S) -> bool
+  __gt__       : (S,S) -> bool            # has default defn
+  __ge__       : (S,S) -> bool            # has default defn
+      
+class Logical[S] ():
+  __and__     : (S,S) -> S
+  __or__      : (S,S) -> S
+  __xor__     : (S,S) -> S
+
+class Plus[S] ():
+  __add__      : (S,S) -> S
+
+class Minus[S] ():
+  __sub__      : (S,S) -> S
+
+class Hashable[S] (Eq[S]):
+  __hash__     : (S) -> int
+
+class dict[A,B] ():                     # Note: A(Hashable) removed here
+  pass
+
+class set[A] ():                        # Note: A(Hashable) removed here
+  pass
+
+class Boolean[S] ():
+  __bool__   : (S) -> bool
+
+class $Boolean$int (Boolean[int]):
+  def __init__($wself):
+      pass
+  def __bool__($wself, self):
+    return $Eq$int$witness.__ne__(self,0)
+
+class $Boolean$list[A] (Boolean[list[A]]):
+  def __init__($wself):
+      pass
+  def __bool__($wself, self):
+    return $Ord$int$witness.__gt__($Collection$list$witness.__len__(self,0))
+
+
+## Collection protocols ############################################################################
+
+class Indexed[S,A,B] ():
+  @property
+  w$Eq_A       : Eq[A]
+  
+  __getitem__  : (S,A) -> B
+  __setitem__  : (S,A,B) -> None 
+  __delitem__  : (S,A) -> None
+  
+class Sliceable[S,A] (Indexed[S,int,A]):
+  __getslice__ : (S,Slice) -> S
+  __setslice__ : (S,Slice,Iterable$opaque[A]) -> None
+  __delslice__ : (S,Slice) -> None
+  
+class Iterable[S,A] ():
+  __iter__     : (S) -> Iterator[A]
+
+class Iterable$opaque[A] ():            # Exists S:
+    $proto     : Iterable[S,A]
+    $impl      : S
+
+class Collection[S,A] (Iterable[S,A]):
+  __fromiter__ : (Iterable$opaque[A]) -> S
+  __len__      : (S) -> int
+  
+class Container[S,A]] (Collection[S,A]):
+  w$Eq_A          : Eq[A]
+  
+  __contains__    : (S,A) -> bool  
+  __containsnot__ : (S,A) -> bool
+
+
+#   Indexed         Iterable
+#    |               |
+#    |               |
+#   Sliceable       Collection      Plus
+#    |               |               |
+#    |               |               |
+#   Sequence <-------- <--------------
+
+class Sequence[S,A] (Sliceable[S,A]):
+  @property
+  w$Collection_Sequence : Collection[S,A]
+  @property
+  w$Plus_Sequence       : Plus[S]:
+  
+  __reversed__ : (S) -> Iterator[A] 
+  insert      : (S,int,A) -> None
+  append      : (S,A) -> None   
+  reverse     : (S,) -> None       
+
+  # Mirroring Collection:
+  __fromiter__ : (Iterable$opaque[A]) -> S
+  __len__      : (S) -> int
+  __iter__     : (S) -> Iterator[A]
+
+  # Mirroring Plus:
+  __add__      : (S,S) -> S
+
+
+#   Iterable
+#    |
+#    |
+#   Collection
+#    |
+#    |
+#   Container       Indexed
+#    |               |
+#    |               |
+#   Mapping <---------
+
+class Mapping[S,A,B] (Container[S,A]):
+  @property
+  w$Indexed_Mapping   : Indexed[S,A,B])
+  @property
+  w$Eq_A              : Eq[A]
+  
+  get         : (S,A,B) -> B
+  keys        : (S) -> Iterator[A]
+  values      : (S) -> Iterator[B]
+  items       : (S) -> Iterator[(A,B)]
+  update      : (S,Iterable$opaque[(A,B)]) -> None  
+  popitem     : (S) -> (A,B)
+  setdefault  : (S,A,B) -> None
+
+  # Mirroring Indexed:
+  __getitem__  : (S,A) -> B
+  __setitem__  : (S,A,B) -> None 
+  __delitem__  : (S,A) -> None
+
+
+#   Iterable
+#    |
+#    |
+#   Collection      Eq
+#    |               |
+#    |               |
+#   Container       Ord             Logical         Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Set <------------- <-------------- <--------------
+
+class Set[S,A] (Container[S,A]):
+  @property
+  w$Ord_Set       : Ord[S]
+  @property
+  w$Logical_Set   : Logical[S]
+  @property
+  w$Minus_Set     : Minus[S]
+  @property
+  w$Eq_A          : Eq[A]
+  
+  isdisjoint  : (S,S) -> bool
+  add         : (S,A) -> None  
+  discard     : (S,A) -> None  
+  pop         : (S) -> A 
+
+  # Mirroring Ord:
+  __eq__       : (S,S) -> bool
+  __ne__       : (S,S) -> bool            # has default defn
+  __lt__       : (S,S) -> bool
+  __le__       : (S,S) -> bool
+  __gt__       : (S,S) -> bool            # has default defn
+  __ge__       : (S,S) -> bool            # has default defn
+
+  # Mirroring Logical:
+  __and__     : (S,S) -> S
+  __or__      : (S,S) -> S
+  __xor__     : (S,S) -> S
+
+  # Mirroring Sub:
+  __sub__      : (S,S) -> S
+  
+
+## Number protocols ################################################################################
+
+#   Eq ______________               Plus            Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Ord             Complex <--------- <--------------
+#    |               |
+#    |               |
+#   Real <------------
+#    |
+#    |
+#   Rational        Logical
+#    |               |
+#    |               |
+#   Integral <--------
+
+class Complex[S] (Eq[S]):
+  @property
+  w$Plus_Complex   : Plus[S]
+  @property
+  w$Minus_Complex  : Minus[S]
+  
+  __complex__  : (S) -> complex
+  __bool__     : (S) -> bool
+
+  __mul__      : (S,S) -> S
+  __truediv__  : (S,S) -> S
+  __pow__      : (S,S) -> S
+
+  __neg__      : (S) -> S
+  __pos__      : (S) -> S
+  
+  real         : (S) -> Real$opaque
+  imag         : (S) -> Real$opaque
+  __abs__      : (S) -> Real$opaque
+
+  conjugate    : (S) -> S
+
+  # Mirroring Plus:
+  __add__      : (S,S) -> S
+  
+  # Mirroring Minus:
+  __sub__      : (S,S) -> S
+
+class Complex$opaque ():            # Exists S:
+  $proto       : Complex[S]
+  $impl        : S
+
+class Real[S] (Ord[S]):
+  @property
+  w$Complex_Real : Complex[S]  # Eq implemented in both parents!
+  
+  __float__    : (S) -> float
+
+  __trunc__    : (S) -> Integral$opaque
+  __floor__    : (S) -> Integral$opaque
+  __ceil__     : (S) -> Integral$opaque
+  __round__    : (S) -> Integral$opaque
+
+  # Mirroring Complex:
+  __complex__  : (S) -> complex
+  __bool__     : (S) -> bool
+  __mul__      : (S,S) -> S
+  __truediv__  : (S,S) -> S
+  __pow__      : (S,S) -> S
+  __neg__      : (S) -> S
+  __pos__      : (S) -> S
+  real         : (S) -> Real$opaque
+  imag         : (S) -> Real$opaque
+  __abs__      : (S) -> Real$opaque
+  conjugate    : (S) -> S
+  __add__      : (S,S) -> S
+  __sub__      : (S,S) -> S
+
+class Real$opaque ():           # Exists S:
+  @property
+  $proto       : Real[S]
+  @property
+  $impl        : S
+
+class Rational[S] (Real[S]):
+  numerator    : (S) -> Integral$opaque
+  denominator  : (S) -> Integral$opaque
+
+class Integral[S] (Rational[S]):
+  @property
+  w$Logical_Integral : Logical[S]
+  
+  __int__      : (S) -> int
+  __index__    : (S) -> int
+
+  __divmod__   : (S,S) -> (S,S)
+  __floordiv__ : (S,S) -> S
+  __mod__      : (S,S) -> S
+
+  __lshift__   : (S,S) -> S
+  __rshift__   : (S,S) -> S
+
+  __invert__   : (S) -> S
+
+  # Mirroring Logical:
+  __and__     : (S,S) -> S
+  __or__      : (S,S) -> S
+  __xor__     : (S,S) -> S
+
+class Integral$opaque ():       # Exists S:
+  @property
+  $proto       : Integral[S]
+  @property
+  $impl        : S
+
+
+## Extensions ######################################################################################
+
+class $Sequence$list[A] (Sequence[list[A],A]):
+    class $Collection$list (Collection[list[A],A]):
+        @property
+        w$Sequence_list : $Sequence$list[A]
+        def __init__($wself, w1):
+            $wself.w$Sequence_list = w1
+    class $Plus$list (Plus[list[A],A]):
+        @property
+        w$Sequence_list : $Sequence$list[A]
+        def __init__($wself, w1):
+            $wself.w$Sequence_list = w1
+    def __init__($wself):
+        $wself.w$Eq_A = w$Eq$int
+        $wself.w$Collection_Sequence = $Collection$list($wself)
+        $wself.w$Plus_Sequence = $Plus$list($wself)
+
+$Sequence$list$witness = $Sequence$list()
+$Collection$list$witness = $Sequence$list$witness.w$Collection_Sequence
+$Plus$list$witness = $Sequence$list$witness.w$Plus_Sequence
+
+class $Container$list[A(Eq)] (Container[A]):
+    def __init__($wself, w1 : Eq[A]):
+        $wself.w$Eq_A = w1
+
+class $Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):
+    class $Indexed$dict (Indexed[dict[A,B],A,B]):
+        @property
+        w$Mapping_dict : $Mapping$dict[A,B]
+        def __init__($wself, w1 : $Mapping$dict[A,B], w2 : Eq[A]):
+            $wself.w$Mapping_dict = w1
+            $wself.w$Eq_A = w2
+    @property
+    w$Hashable_A : Hashable[A]
+    def __init__($wself, w1 : Hashable[A]):
+        $wself.w$Indexed_Mapping = $Indexed$dict($wself, w1)
+        $wself.w$Hashable_A = w1
+
+class $Set$set[A] (Set[set[A],A]):
+    class $Ord$set (Ord[set[A]]):
+        @property
+        w$Set_set : $Set$set[A]
+        def __init__($wself, w1):
+            $wself.w$Set_set = w1
+    class $Locical$set (Logical[set[A]]):
+        @property
+        w$Set_set : $Set$set[A]
+        def __init__($wself, w1):
+            $wself.w$Set_set = w1
+    class $Minus$set (Minus[set[A]]):
+        @property
+        w$Set_set : $Set$set[A]
+        def __init__($wself, w1):
+            $wself.w$Set_set = w1
+    @property
+    w$Hashable_A : Hashable[A]
+    def __init__($wself, w1 : Hashable[A]):
+        $wself.w$Ord_Set = $Ord$set($wself)
+        $wself.w$Logical_set = $Logical$set($wself)
+        $wself.w$Minus_set = $Minus$set($wself)
+        $wself.w$Hashable_A = w1
+
+class $Iterable$Iterator[A] (Iterable[Iterator[A],A]):
+    def __init__($wself):
+        pass
+
+class $Ord$str (Ord[str]):
+    def __init__($wself):
+        pass
+
+class $Container$str (Container[str,str]):
+    def __init__($wself):
+        pass
+
+class $Sliceable$str (Sliceable[str,str]):
+    def __init__($wself):
+        $wself.w$Eq_A = w$Eq$int
+
+class $Plus$str (Plus[str]):
+    def __init__($wself):
+        pass
+
+class $Hashable$str (Hashable[str]): pass
+    def __init__($wself):
+        pass
+
+class $Integral$int (Integral[int]):
+    class $Logical$int (Logical[int]):
+        @property
+        w$Integral_int : $Integral$int
+        def __init__($wself, w1):
+            $wself.w$Integral_int = w1
+    class $Complex$int (Complex[int]):
+        @property
+        w$Integral_int : $Integral$int
+        def __init__($wself, w1):
+            $wself.w$Integral_int = w1
+    def __init__($wself):
+        $wself.w$Logical_Integral = $Logical$int($wself)
+        $wself.w$Complex_Integral = $Complex$int($wself)
+
+##########
+$Integral$int$witness = $Integral$int()
+$Rational$int$witness = $Integral$int$witness
+$Logical$int$witness = $Integral$int$witness.w$Logical_Integral
+$Real$int$witness = $Rational$int$witness
+$Ord$int$witness = $Real$int$witness
+$Complex$int$witness = $Real$int$witness.w$Complex_Real
+$Eq$int$witness = $Ord$int$witness
+##########
+
+class $Hashable$int (Hashable[int]):
+    def __init__($wself):
+        pass
+
+class $Real$float (Real[float]):
+    class $Complex$float (Complex[float]):
+        @property
+        w$Real_float : $Real$float
+        def __init__($wself, w1):
+            $wself.w$Real_float = w1
+    def __init__($wself):
+        $wself.w$Complex_Integral = $Complex$float($wself)
+
+class $Hashable$float (Hashable[float]):
+    def __init__($wself):
+        pass
+
+## Builtin functions #####################################################
+
+def abs(x : Complex$opaque) -> Real$opaque:
+    return x.$proto.__abs__(x.$impl)
+    
