@@ -120,14 +120,6 @@ extension list[A] (Boolean):
 
 ## Collection protocols ############################################################################
 
-protocol Iterable[A]:
-  __iter__     : () -> Iterator[A]
-  
-protocol Collection[A] (Iterable[A]):
-  @staticmethod
-  __fromiter__ : (Iterable[A]) -> Self 
-  __len__      : () -> int
-  
 protocol Indexed[A (Eq),B]:
   __getitem__  : (A) -> B
   __setitem__  : (A,B) -> None 
@@ -138,15 +130,42 @@ protocol Sliceable[A] (Indexed[int,A]):
   __setslice__ : (Slice,Iterable[A]) -> None
   __delslice__ : (Slice) -> None
   
+protocol Iterable[A]:
+  __iter__     : () -> Iterator[A]
+  
+protocol Collection[A] (Iterable[A]):
+  @staticmethod
+  __fromiter__ : (Iterable[A]) -> Self 
+  __len__      : () -> int
+  
+protocol Container[A(Eq)] (Collection[A]):
+  __contains__    : (A) -> bool  
+  __containsnot__ : (A) -> bool
+
+#   Indexed         Iterable
+#    |               |
+#    |               |
+#   Sliceable       Collection      Plus
+#    |               |               |
+#    |               |               |
+#   Sequence <-------- <--------------
+
 protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   __reversed__ : () -> Iterator[A] 
   insert      : (int,A) -> None
   append      : (A) -> None   
   reverse     : () -> None       
 
-protocol Container[A(Eq)] (Collection[A]):
-  __contains__    : (A) -> bool  
-  __containsnot__ : (A) -> bool
+#   Iterable
+#    |
+#    |
+#   Collection
+#    |
+#    |
+#   Container       Indexed
+#    |               |
+#    |               |
+#   Mapping <---------
 
 protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
   get         : (A,B) -> B
@@ -157,6 +176,17 @@ protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
   popitem     : () -> (A,B)
   setdefault  : (A,B) -> None
 
+#   Iterable
+#    |
+#    |
+#   Collection      Eq
+#    |               |
+#    |               |
+#   Container       Ord             Logical         Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Set <------------- <-------------- <--------------
+
 protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
   @staticmethod
   isdisjoint  : (Self,Self) -> bool
@@ -165,6 +195,20 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
   pop         : () -> A 
 
 ## Number protocols ################################################################################
+
+#   Eq ______________               Plus            Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Ord             Complex <--------- <--------------
+#    |               |
+#    |               |
+#   Real <------------
+#    |
+#    |
+#   Rational        Logical
+#    |               |
+#    |               |
+#   Integral <--------
 
 protocol Complex (Eq,Plus,Minus):
   __complex__  : () -> complex
