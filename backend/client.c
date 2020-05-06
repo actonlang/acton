@@ -77,7 +77,7 @@ int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(remote_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->no_clustering_keys, NULL, 0, (WORD) 0, txnid, db) != 0)
+				if(remote_insert_in_txn(column_values, no_cols, schema->no_primary_keys, schema->min_no_clustering_keys, NULL, 0, (WORD) 0, txnid, db) != 0)
 					return -1;
 			}
 		}

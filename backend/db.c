@@ -132,29 +132,29 @@ db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int 
 	return row;
 }
 
+/*
 db_row_t * create_db_row(WORD * column_values, db_schema_t * schema, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
 										schema->clustering_key_idxs, schema->no_clustering_keys, schema->no_clustering_keys,
 										schema->no_cols, last_blob_size, fastrandstate);
 }
+*/
 
-db_row_t * create_db_row_sf(WORD * column_values, db_schema_t * schema, int no_clustering_keys, size_t last_blob_size, unsigned int * fastrandstate)
+db_row_t * create_db_row_sf(WORD * column_values, db_schema_t * schema, int no_clustering_keys, int no_cols, size_t last_blob_size, unsigned int * fastrandstate)
 {
 	return create_db_row_schemaless(column_values, schema->primary_key_idxs, schema->no_primary_keys,
-										schema->clustering_key_idxs, no_clustering_keys, schema->no_clustering_keys,
-										schema->no_cols, last_blob_size, fastrandstate);
+										schema->clustering_key_idxs, no_clustering_keys, schema->min_no_clustering_keys,
+										no_cols, last_blob_size, fastrandstate);
 }
 
-void free_db_cell(db_row_t * row, int depth)
+void free_db_cell(db_row_t * row)
 {
-	if(depth > 0)
+	if(row->cells != NULL)
 	{
-		assert(row->cells != NULL);
-
 		for(snode_t * cell=HEAD(row->cells);cell!=NULL;cell=NEXT(cell))
 			if(cell->value != NULL)
-				free_db_cell(cell->value, depth-1);
+				free_db_cell(cell->value);
 
 		skiplist_free(row->cells);
 	}
@@ -174,9 +174,7 @@ void free_db_cell(db_row_t * row, int depth)
 
 void free_db_row(db_row_t * row, db_schema_t * schema)
 {
-	assert(schema->no_primary_keys == 1);
-
-	free_db_cell(row, schema->no_clustering_keys);
+	free_db_cell(row);
 }
 
 db_t * get_db()
@@ -217,17 +215,22 @@ db_schema_t* db_create_schema(int * col_types, int no_cols, int * primary_key_id
 
 	db_schema_t * schema = (db_schema_t *) malloc(sizeof(db_schema_t));
 
-	schema->col_types = (int *) malloc(no_cols * sizeof(int));
-	schema->no_cols = no_cols;
-	for(int i=0;i<no_cols;i++)
-		schema->col_types[i] = col_types[i];
+	schema->min_no_cols = no_cols;
+	schema->col_types = NULL;
+
+	if(col_types != NULL)
+	{
+		schema->col_types = (int *) malloc(no_cols * sizeof(int));
+		for(int i=0;i<no_cols;i++)
+			schema->col_types[i] = col_types[i];
+	}
 
 	schema->primary_key_idxs = (int *) malloc(no_primary_keys * sizeof(int));
 	schema->no_primary_keys = no_primary_keys;
 	for(int i=0;i<no_primary_keys;i++)
 		schema->primary_key_idxs[i] = primary_key_idxs[i];
 
-	schema->no_clustering_keys = no_clustering_keys;
+	schema->min_no_clustering_keys = no_clustering_keys;
 	if(no_clustering_keys > 0)
 	{
 		schema->clustering_key_idxs = (int *) malloc(no_clustering_keys * sizeof(int));
@@ -248,11 +251,16 @@ db_schema_t* db_create_schema(int * col_types, int no_cols, int * primary_key_id
 
 void free_schema(db_schema_t * schema)
 {
-	free(schema->col_types);
-	free(schema->primary_key_idxs);
-	if(schema->no_clustering_keys > 0)
+	if(schema == NULL)
+		return;
+
+	if(schema->col_types != NULL)
+		free(schema->col_types);
+	if(schema->primary_key_idxs != NULL)
+		free(schema->primary_key_idxs);
+	if(schema->clustering_key_idxs != NULL)
 		free(schema->clustering_key_idxs);
-	if(schema->no_index_keys > 0)
+	if(schema->index_key_idxs != NULL)
 		free(schema->index_key_idxs);
 	free(schema);
 }
@@ -265,7 +273,7 @@ int db_create_table(WORD table_key, db_schema_t* schema, db_t * db, unsigned int
 
 	// Deep copy of schema (to allow caller to free his copy):
 
-	table->schema = db_create_schema(schema->col_types, schema->no_cols, schema->primary_key_idxs, schema->no_primary_keys, schema->clustering_key_idxs, schema->no_clustering_keys, schema->index_key_idxs, schema->no_index_keys);
+	table->schema = db_create_schema(schema->col_types, schema->min_no_cols, schema->primary_key_idxs, schema->no_primary_keys, schema->clustering_key_idxs, schema->min_no_clustering_keys, schema->index_key_idxs, schema->no_index_keys);
 
 	table->rows = create_skiplist_long();
 
@@ -317,9 +325,9 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	if(no_clustering_keys < schema->no_clustering_keys)
+	if(no_clustering_keys < schema->min_no_clustering_keys)
 	{
-		fprintf(stderr, "SERVER: Row insert must contain at least %d schema clustering keys, only has %d keys\n", schema->no_clustering_keys, no_clustering_keys);
+		fprintf(stderr, "SERVER: Row insert must contain at least %d schema clustering keys, only has %d keys\n", schema->min_no_clustering_keys, no_clustering_keys);
 		assert(0);
 	}
 
@@ -330,7 +338,7 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 
 	if(row_node == NULL)
 	{
-		row = create_db_row_sf(column_values, schema, no_clustering_keys, last_blob_size, fastrandstate);
+		row = create_db_row_sf(column_values, schema, no_clustering_keys, no_cols, last_blob_size, fastrandstate);
 		row->version = (version != NULL)? copy_vc(version) : NULL;
 		skiplist_insert(table->rows, column_values[schema->primary_key_idxs[0]], (WORD) row, fastrandstate);
 	}
@@ -342,11 +350,13 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 
 		for(int i=0;i<no_clustering_keys;i++, cell = new_cell)
 		{
-			snode_t * new_cell_node = skiplist_search(cell->cells, column_values[schema->clustering_key_idxs[i]]);
+			int col_index = (i < schema->min_no_clustering_keys)?(schema->clustering_key_idxs[i]):(i);
+
+			snode_t * new_cell_node = skiplist_search(cell->cells, column_values[col_index]);
 
 			if(new_cell_node == NULL)
 			{
-				new_cell = create_empty_row(column_values[schema->clustering_key_idxs[i]]);
+				new_cell = create_empty_row(column_values[col_index]);
 
 				if(i < no_clustering_keys - 1)
 				{
@@ -355,7 +365,7 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 
 //				printf("Inserting into cell at level %d\n", i);
 
-				skiplist_insert(cell->cells, column_values[schema->clustering_key_idxs[i]], (WORD) new_cell, fastrandstate);
+				skiplist_insert(cell->cells, column_values[col_index], (WORD) new_cell, fastrandstate);
 			}
 			else
 			{
@@ -392,25 +402,30 @@ int table_insert(WORD * column_values, int no_cols, int no_clustering_keys, size
 	}
 
 	for(int i=0;i<schema->no_index_keys;i++)
-		skiplist_insert(table->indexes[i], column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
+	{
+		if(schema->index_key_idxs[i] < no_cols)
+			skiplist_insert(table->indexes[i], column_values[schema->index_key_idxs[i]], (WORD) row, fastrandstate);
+	}
 
 	return 0;
 }
 
 
-int table_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, vector_clock * version, db_table_t * table)
+int table_update(WORD * column_values, int no_cols, int no_clustering_keys, size_t last_blob_size, int * col_idxs, vector_clock * version, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
 
 	assert(schema->no_primary_keys == 1 && "Compound primary keys unsupported for now");
 
-	assert(no_cols > schema->no_primary_keys + schema->no_clustering_keys && "Empty update");
+	assert(no_clustering_keys >= schema->min_no_clustering_keys);
+
+	assert(no_cols > schema->no_primary_keys + no_clustering_keys && "Empty update");
 
 	assert(col_idxs[0] == schema->primary_key_idxs[0] && "Update must contain primary key as first element");
 
-	for(int i=0;i<schema->no_clustering_keys;i++)
+	for(int i=0;i<schema->min_no_clustering_keys;i++)
 	{
-		assert(col_idxs[i+1] == schema->clustering_key_idxs[i] && "Update must contain all clustering keys in the right order, right after primary key");
+		assert(col_idxs[i+1] == schema->clustering_key_idxs[i] && "Update must contain all minimal clustering keys in the right order, right after primary key");
 	}
 
 	db_row_t * row = NULL;
@@ -421,7 +436,7 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_
 
 	row = (db_row_t *) row_node->value;
 
-	for(int i=0;i<schema->no_clustering_keys;i++)
+	for(int i=0;i<no_clustering_keys;i++)
 	{
 		row_node = skiplist_search(row->cells, column_values[schema->clustering_key_idxs[i]]);
 
@@ -431,22 +446,22 @@ int table_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_
 		row = (db_row_t *) (row_node->value);
 	}
 
-	int i=schema->no_primary_keys + schema->no_clustering_keys;
+	int i=schema->no_primary_keys + no_clustering_keys;
 	for(;i<no_cols - 1;i++)
 	{
 //		printf("Updating col %d / %d to value %ld\n", col_idxs[i], i, column_values[i]);
-		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
+		row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys] = column_values[i];
 	}
 
 	if(last_blob_size <= 0) // last column is value
 	{
-		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = column_values[i];
+		row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys] = column_values[i];
 	}
 	else // last column is blob
 	{
-		row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys] = malloc(last_blob_size);
+		row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys] = malloc(last_blob_size);
 
-		memcpy(row->column_array[col_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys], column_values[i], last_blob_size);
+		memcpy(row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys], column_values[i], last_blob_size);
 	}
 
 	if(version != NULL)
@@ -548,7 +563,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 
 	assert(no_clustering_keys > 0 && "No clustering keys given");
 
-	assert(no_clustering_keys <= schema->no_clustering_keys && "Too many clustering keys given");
+//	assert(no_clustering_keys <= schema->min_no_clustering_keys && "Too many clustering keys given");
 
 	db_row_t* row = table_search(primary_keys, table);
 
@@ -605,7 +620,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 
 	assert(no_clustering_keys > 0 && "No clustering keys given");
 
-	assert(no_clustering_keys <= schema->no_clustering_keys && "Too many clustering keys given");
+//	assert(no_clustering_keys <= schema->min_no_clustering_keys && "Too many clustering keys given");
 
 	db_row_t* row = table_search(primary_keys, table);
 
@@ -759,30 +774,32 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 }
 
 
-WORD* table_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, db_table_t * table)
+WORD* table_search_columns(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, int* column_idxs, int no_columns, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
 
 	assert(no_columns > 0 && "No column indexes given");
+	assert(no_clustering_keys >= schema->min_no_clustering_keys && "Not enough clustering keys given");
 
-	db_row_t* row = table_search_clustering(primary_keys, clustering_keys, schema->no_clustering_keys, table);
+	db_row_t* row = table_search_clustering(primary_keys, clustering_keys, no_clustering_keys, table);
 
 	if(row == NULL)
 		return NULL;
+
+	assert(row->column_array != NULL && row->no_columns > 0);
 
 	WORD* results = (WORD*) malloc(no_columns * sizeof(WORD));
 
 	for(int i=0;i<no_columns;i++)
 	{
-		assert(column_idxs[i] <= schema->no_cols && "Column index doesn't exist in schema");
-		assert(column_idxs[i] <= row->no_columns + schema->no_primary_keys + schema->no_clustering_keys && "Column index doesn't exist in backend (DB corrupted?)");
+		assert(column_idxs[i] <= row->no_columns + schema->no_primary_keys + no_clustering_keys && "Column index doesn't exist in backend (DB corrupted?)");
 
 		if(column_idxs[i] < schema->no_primary_keys)
 			results[i] = primary_keys[column_idxs[i]];
-		else if(column_idxs[i] < schema->no_primary_keys + schema->no_clustering_keys)
+		else if(column_idxs[i] < schema->no_primary_keys + no_clustering_keys)
 			results[i] = clustering_keys[column_idxs[i] - schema->no_primary_keys];
 		else
-			results[i] = row->column_array[column_idxs[i] - schema->no_primary_keys - schema->no_clustering_keys];
+			results[i] = row->column_array[column_idxs[i] - schema->no_primary_keys - no_clustering_keys];
 	}
 
 	return results;
@@ -910,8 +927,8 @@ int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table)
 int db_insert_transactional(WORD * column_values, int no_cols, int no_clustering_keys, size_t last_blob_size, vector_clock * version, WORD table_key, db_t * db, unsigned int * fastrandstate)
 {
 #if (VERBOSE_BACKEND > 0)
-	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", no_cols);
-	for(int i=0;i<no_cols;i++)
+	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", min_no_cols);
+	for(int i=0;i<min_no_cols;i++)
 		printf("column_values[%d] = %ld\n", i, (long) column_values[i]);
 #endif
 
@@ -930,7 +947,7 @@ int db_insert(WORD * column_values, int no_cols, int no_clustering_keys, size_t 
 	return db_insert_transactional(column_values, no_cols, no_clustering_keys, last_blob_size, NULL, table_key, db, fastrandstate);
 }
 
-int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, vector_clock * version, WORD table_key, db_t * db)
+int db_update_transactional(WORD * column_values, int no_cols, int no_clustering_keys, size_t last_blob_size, int * col_idxs, vector_clock * version, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -939,12 +956,12 @@ int db_update_transactional(int * col_idxs, int no_cols, WORD * column_values, s
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_update(col_idxs, no_cols, column_values, last_blob_size, version, table);
+	return table_update(column_values, no_cols, no_clustering_keys, last_blob_size, col_idxs, version, table);
 }
 
-int db_update(int * col_idxs, int no_cols, WORD * column_values, size_t last_blob_size, WORD table_key, db_t * db)
+int db_update(WORD * column_values, int no_cols, int no_clustering_keys, size_t last_blob_size, int * col_idxs, WORD table_key, db_t * db)
 {
-	return db_update_transactional(col_idxs, no_cols, column_values, last_blob_size, NULL, table_key, db);
+	return db_update_transactional(column_values, no_cols, no_clustering_keys, last_blob_size, col_idxs, NULL, table_key, db);
 }
 
 db_row_t* db_search(WORD* primary_keys, WORD table_key, db_t * db)
@@ -1047,7 +1064,7 @@ int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* 
 }
 
 
-WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_idxs, int no_columns, WORD table_key, db_t * db)
+WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int no_clustering_keys, int* column_idxs, int no_columns, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -1056,7 +1073,7 @@ WORD* db_search_columns(WORD* primary_keys, WORD* clustering_keys, int* column_i
 
 	db_table_t * table = (db_table_t *) (node->value);
 
-	return table_search_columns(primary_keys, clustering_keys, column_idxs, no_columns, table);
+	return table_search_columns(primary_keys, clustering_keys, no_clustering_keys, column_idxs, no_columns, table);
 }
 
 db_row_t* db_search_index(WORD index_key, int idx_idx, WORD table_key, db_t * db)

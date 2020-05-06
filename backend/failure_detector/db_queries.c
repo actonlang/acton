@@ -51,7 +51,7 @@ write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, l
 write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce)
 {
 	int no_keys = no_primary_keys + no_clustering_keys;
-	assert(no_cols - no_keys > 0);
+	assert(no_cols > no_keys || (blob != NULL && blob_size > 0));
 	cell * c = init_cell((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, blob, blob_size, NULL);
 	return init_write_query_copy(c, RPC_TYPE_WRITE, txnid, nonce);
 }

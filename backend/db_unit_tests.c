@@ -90,7 +90,7 @@ int test_search_column(db_t * db) {
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], (int*) column_idxs, no_cols, (WORD) 0, db);
+				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], 2, (int*) column_idxs, no_cols, (WORD) 0, db);
 
 				for(int i=0;i<no_cols;i++)
 				{
@@ -219,10 +219,10 @@ int test_update(db_t * db)
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 2;
 
-				if(db_update(column_idxs, no_cols, column_values, 0, (WORD) 0, db) != 0)
+				if(db_update(column_values, no_cols, 2, 0, column_idxs, (WORD) 0, db) != 0)
 					return -2;
 
-				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], (int*) column_idxs, no_cols, (WORD) 0, db);
+				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], 2, (int*) column_idxs, no_cols, (WORD) 0, db);
 
 				for(int i=0;i<no_cols;i++)
 				{

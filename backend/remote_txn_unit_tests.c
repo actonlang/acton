@@ -19,15 +19,17 @@
 #include "fastrand.h"
 
 
-#define COLLECTION_ID_0 0
-#define COLLECTION_ID_1 1
+#define COLLECTION_ID_0 0 // rcv_counters map
+#define COLLECTION_ID_1 1 // snd_counters map
+#define COLLECTION_ID_2 2 // local counter variable as int
+#define COLLECTION_ID_3 3 // local counter variable as char blob
 
 int no_actors = 2;
 int no_items = 20;
 
-int no_state_cols = 4;
+int min_no_state_cols = 3;
 int no_state_primary_keys = 1;
-int no_state_clustering_keys = 2;
+int min_state_clustering_keys = 1;
 int no_state_index_keys = 1;
 
 int no_queue_cols = 2;
@@ -96,14 +98,19 @@ db_schema_t* create_state_schema()
 	clustering_key_idxs[1]=2;
 	int index_key_idx=3;
 
-	int * col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
+	int * col_types = NULL;
+
+	//	Col types are not enforced:
+	/*
+	col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
 
 	for(int i=0;i<no_state_cols;i++)
 		col_types[i] = DB_TYPE_INT32;
 
 	col_types[no_state_cols] = DB_TYPE_BLOB; // Include blob
+	*/
 
-	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
+	db_schema_t* db_schema = db_create_schema(col_types, min_no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, min_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
 
@@ -180,19 +187,20 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 {
 	int ret = 0;
 
-	assert(no_state_cols == 4);
+	WORD * column_values = (WORD *) malloc(4 * sizeof(WORD));
 
-	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(WORD));
+	column_values[0] = ca->consumer_id;
+
+	// Checkpoint the 2 maps:
 
 	for(snode_t * node = HEAD(ca->rcv_counters); node != NULL;node = NEXT(node))
 	{
-		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) COLLECTION_ID_0;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys,
+		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
 									ca->state_table_key, txnid, ca->db);
 
@@ -201,18 +209,34 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 	for(snode_t * node = HEAD(ca->snd_counters);node != NULL;node = NEXT(node))
 	{
-		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) COLLECTION_ID_1;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
 		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
 
-		ret = remote_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys,
+		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
 									ca->state_table_key, txnid, ca->db);
 
 		assert(ret == 0);
 	}
+
+	// Checkpoint the standalone counter variable, once in an int column, once in a char blob column:
+
+	column_values[1] = (WORD) COLLECTION_ID_2;
+	column_values[2] = (WORD) ca->total_rcv;
+
+	ret = remote_insert_in_txn(column_values, 3, no_state_primary_keys, 1,
+								NULL, 0,
+								ca->state_table_key, txnid, ca->db);
+
+	char * str_value = ((int) ca->total_rcv < 9)?(digits[(int) ca->total_rcv]):"NaN";
+
+	column_values[1] = (WORD) COLLECTION_ID_3;
+
+	ret = remote_insert_in_txn(column_values, 2, no_state_primary_keys, 1,
+								(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
+								ca->state_table_key, txnid, ca->db);
 
 	free(column_values);
 

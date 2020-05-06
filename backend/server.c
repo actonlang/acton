@@ -29,26 +29,9 @@
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
 
-/*
-int no_cols = 4;
-int no_primary_keys = 1;
-int no_clustering_keys = 2;
-int no_index_keys = 1;
-
-int no_actors = 2;
-int no_collections = 2;
-int no_items = 2;
-*/
-
-#define COLLECTION_ID_0 0
-#define COLLECTION_ID_1 1
-
-int no_actors = 5;
-int no_items = 20;
-
 int no_state_cols = 4;
 int no_state_primary_keys = 1;
-int no_state_clustering_keys = 2;
+int min_state_clustering_keys = 1;
 int no_state_index_keys = 1;
 
 int no_queue_cols = 2;
@@ -109,15 +92,20 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 	clustering_key_idxs[1]=2;
 	int index_key_idx=3;
 
-	int * col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
+	int * col_types = NULL;
+
+//	Col types are not enforced:
+
+/*
+	col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
 
 	for(int i=0;i<no_state_cols;i++)
 		col_types[i] = DB_TYPE_INT32;
 
 	col_types[no_state_cols] = DB_TYPE_BLOB; // Include blob
+*/
 
-
-	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
+	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, min_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
 
@@ -143,14 +131,6 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 	int ret = create_queue_table(queue_table_key, no_queue_cols + 1, col_types, db,  fastrandstate);
 	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
 
-	// Create input queues for all actors:
-/*
-	for(long queue_id=0;queue_id<no_actors;queue_id++)
-	{
-		ret = create_queue(queue_table_key, (WORD) queue_id, NULL, 1, db, fastrandstate);
-		printf("Test %s - %s (%d)\n", "create_queue", ret==0?"OK":"FAILED", ret);
-	}
-*/
 	return ret;
 }
 
@@ -201,7 +181,7 @@ int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate
 	{
 		case RPC_TYPE_WRITE:
 		{
-			assert(wq->cell->no_columns > 0);
+			assert(wq->cell->no_columns > 0 || (wq->cell->last_blob != NULL && wq->cell->last_blob_size > 0));
 
 			WORD * column_values = (WORD *) malloc(total_cols_plus_blob * sizeof(WORD));
 
@@ -334,7 +314,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	// Return a single cell read result
 	{
 		assert(result->no_columns > 0);
-		assert(result->no_columns >= schema->no_cols);
+		assert(result->no_columns >= schema->min_no_cols);
 		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
 
 		cell * c = NULL;
@@ -360,7 +340,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	else
 	// Return a multi-cell read result; traverse db_row downwards and get all child cells recursively:
 	{
-		int schema_keys = schema->no_primary_keys + schema->no_clustering_keys; // We only use this schema data for sanity checking of read back results
+		int schema_keys = schema->no_primary_keys + schema->min_no_clustering_keys; // We only use this schema data for sanity checking of read back results
 //		int no_keys = schema_keys - q->cell_address->no_keys + 1;
 
 		int max_depth = 1;
@@ -412,7 +392,7 @@ db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, un
 
 int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len)
 {
-	int schema_keys = schema->no_primary_keys + schema->no_clustering_keys; // We only use this schema data for sanity checking of read back results
+	int schema_keys = schema->no_primary_keys + schema->min_no_clustering_keys; // We only use this schema data for sanity checking of read back results
 //	int no_keys = schema_keys - q->start_cell_address->no_keys + 1;
 	range_read_response_message * m = NULL;
 
