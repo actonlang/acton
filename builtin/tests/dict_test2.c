@@ -28,20 +28,20 @@ $Iterable$opaque dict_iterable($Mapping$dict wit, $dict dict) {
     
 int main() {
   $register_builtin();
-  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$str$witness);
+  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$str$witness);
   $dict dict = wit->$class->__fromiter__(wit,NULL); 
   $dict other = wit->$class->__fromiter__(wit,NULL);
   int j;
 
   for (long i=1; i < 1000000; i++)
-    wit->_Indexed->$class->__setitem__(wit->_Indexed,dict,toWord(i),toWord(i+1));
+    wit->w$Indexed$Mapping->$class->__setitem__(wit->w$Indexed$Mapping,dict,toWord(i),toWord(i+1));
   
   $WORD b;
   long r = 17;
   long s = 0;
   for (int j=1; j < 100000; j++) {
     r = r*r % 100000;
-    b = wit->_Indexed->$class->__getitem__(wit->_Indexed,dict,toWord(r));
+    b = wit->w$Indexed$Mapping->$class->__getitem__(wit->w$Indexed$Mapping,dict,toWord(r));
     s += fromWord(b);
   }
   printf("in dict_test after summation; last value retrieved should be %ld, was %ld\n",r+1,fromWord(b));
@@ -65,7 +65,7 @@ int main() {
   $WORD res = NULL;
   for (long i=1; i<1000000; i++)
     if (i%100 > 0)
-       wit->_Indexed->$class->__delitem__( wit->_Indexed,dict,toWord(i));
+       wit->w$Indexed$Mapping->$class->__delitem__( wit->w$Indexed$Mapping,dict,toWord(i));
   printf("Size of dict after popping is %ld\n",from$int(wit->$class->__len__(wit,dict)));
   
   $Iterator iter = wit->$class->__iter__(wit,dict);
@@ -82,7 +82,7 @@ int main() {
   printf("dict_get on non-existing key; should return default value 666. Returned %ld\n",fromWord(w2));
 
   for (long j = 11; j < 200; j+=20)
-     wit->_Indexed->$class->__setitem__( wit->_Indexed,other,toWord(j),toWord(2*j));
+     wit->w$Indexed$Mapping->$class->__setitem__( wit->w$Indexed$Mapping,other,toWord(j),toWord(2*j));
 
   $Iterator items = wit->$class->items(wit,dict);
   $WORD item;

@@ -23,7 +23,7 @@ struct $table_struct {
                        // after this follows tb_entries array;
 };
 
-struct $dict$class $dict$methods = {"",(void (*)($dict))$default__init__, $dict_serialize,$dict_deserialize}; 
+struct $dict$class $dict$methods = {"", NULL, $dict_init, $dict_serialize,$dict_deserialize}; 
 
 
 #define DKIX_EMPTY (-1)
@@ -36,12 +36,12 @@ struct $dict$class $dict$methods = {"",(void (*)($dict))$default__init__, $dict_
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
 void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
   if (prevkey) {
     $val_serialize(-DICT_ID,&prevkey->val,start_no,accum);
     return;
   }
-  $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
   int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
   $ROW row = $new_row(DICT_ID,start_no,blobsize,NULL);
   row->blob[0] = ($WORD)self->numelements;
@@ -62,10 +62,10 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row = this->next;
   if (this->class_id < 0) {
-    return $dict_get(done,wit->_Hashable,to$int((long)this->blob[0]),NULL);
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
   } else {
     $dict res = malloc(sizeof(struct $dict));
-    $dict_setitem(done,wit->_Hashable,to$int(this->row_no),res);
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
     res->$class = &$dict$methods;
     res->numelements = (long)this->blob[0];
     long tb_size = (long)this->blob[1];
@@ -149,16 +149,18 @@ static int dictresize($dict d) {
 }
 
 
-$dict $new_dict() { 
-  $dict dict =  malloc(sizeof(struct $dict));
-  dict->$class = &$dict$methods;
+void $dict_init($dict dict, $Hashable hashwit, $Iterable$opaque it) { 
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  return dict;
+  if (it) {
+    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+    
+    //try iterate and insert into dict, catching StopIteration
+  }
 }
 
 //$Hashable $dict_hashwitness($dict dict) {
@@ -258,6 +260,7 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
 
 typedef struct $Iterator$dict {
   char *$GCINFO;
+  $Super$class $superclass;
   $WORD(*__next__)($WORD self);
   $dict src;
   int nxt;
@@ -287,6 +290,7 @@ static $WORD $dict_iterator_next($WORD self) {
 $Iterator $dict_iter($dict dict) {
   $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
   iter->__next__ = $dict_iterator_next;
+  iter->$superclass = ($Super$class)$Iterator$witness;
   iter->src = dict;
   iter->nxt = 0;
   $Iterator res = malloc(sizeof(struct $Iterator));
@@ -348,12 +352,8 @@ long $dict_len($dict dict) {
 }
 
 
-$dict $dict_fromiter($Hashable hashwit, $Iterator it) {
-  $dict res = $new_dict();
-  if (it==NULL)
-    return res;
-  $dict_update(res,hashwit,it);
-  return res;
+$dict $dict_fromiter($Hashable hashwit, $Iterable$opaque it) {
+  return $NEW($dict,hashwit,it);
 }
 
 
@@ -416,6 +416,7 @@ $Iterator $dict_keys($dict dict) {
 
 $Iterator $dict_values($dict dict) {
   $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
+  iter->$superclass = ($Super$class)$Iterator$witness;
   iter->__next__ = $dict_values_iterator_next;
   iter->src = dict;
   iter->nxt = 0;
@@ -426,6 +427,7 @@ $Iterator $dict_values($dict dict) {
 
 $Iterator $dict_items($dict dict) {
   $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
+  iter->$superclass = ($Super$class)$Iterator$witness;
   iter->__next__ = $dict_items_iterator_next;
   iter->src = dict;
   iter->nxt = 0;
@@ -470,9 +472,10 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
   return NULL;
 }
 
-void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
+void $dict_update($dict dict,  $Hashable hashwit, $Iterable$opaque it) {
+  $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
   $WORD item;
-  while((item = it->$class->__next__(it)))
+  while((item = iter->$class->__next__(iter)))
     $dict_setitem(dict,hashwit,(($tup2_t)item)->a,(($tup2_t)item)->b);
 }
 

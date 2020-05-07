@@ -51,8 +51,8 @@ $Serializable$methods $get_methods(int classid)  {
  * special main and handling of $ROOT. Doing so would complicate testing of builtin types significantly.
  */
 void $register_builtin() {
-  methods  = $new_dict(); 
-  classids = $new_dict();
+  methods  = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
+  classids = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   $register_force(NULL_ID,($Serializable$methods)&$Null$methods);
   $register_force(INT_ID,($Serializable$methods)&$int$methods);
   $register_force(FLOAT_ID,($Serializable$methods)&$float$methods);

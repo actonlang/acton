@@ -1,6 +1,7 @@
 struct $list$class {
   char *$GCINFO;
-  void (*__init__)($list);
+  $Super$class $superclass;
+  void (*__init__)($list, $Iterable$opaque);
   void (*__serialize__)($list, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
   $list(*copy)($list);

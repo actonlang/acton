@@ -1,5 +1,5 @@
 
-$list list_new(int capacity);
+$list list_init($list lst, $Iterable$opaque it);
 
 $list $list_copy($list lst);
 

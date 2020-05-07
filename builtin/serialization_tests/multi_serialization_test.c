@@ -7,8 +7,8 @@ int main() {
   $list lst = $list_fromiter(NULL);
   $list_append(lst,a);
   $list_append(lst,b);
-  $dict done = $new_dict();
-  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
+  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
+  $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   struct $ROWLISTHEADER accum = {NULL,NULL};
   long start_no = 0;
   $step_serialize(($Serializable)a,wit,&start_no,done,&accum);
@@ -17,8 +17,8 @@ int main() {
   $step_serialize(($Serializable)lst,wit,&start_no,done,&accum);
   $write_serialized(accum.fst,"test7.bin");
   $ROW row = $read_serialized("test7.bin");
-  done = $new_dict();
-  wit = $Mapping$dict_new(($Hashable)$Hashable$int$witness);
+  done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
+  wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
   $int a1 = ($int)$step_deserialize(wit,&row,done);
   $list lst1 = ($list)$step_deserialize(wit,&row,done);
   $int b1 = ($int)$step_deserialize(wit,&row,done);
