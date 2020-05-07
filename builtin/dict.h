@@ -1,6 +1,7 @@
 struct $dict$class {
   char *$GCINFO;
-  void(*__init__)($dict);
+  $Super$class $superclass;
+  void(*__init__)($dict, $Hashable, $Iterable$opaque);
   void (*__serialize__)($dict, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $dict (*__deserialize__)($Mapping$dict, $ROW*, $dict);
 };
@@ -18,4 +19,4 @@ extern struct $dict$class $dict$methods;
 extern struct  $Mapping$dict$class $Mapping$dict$methods;
 extern struct  $Indexed$dict$class $Indexed$dict$methods;
 
-extern struct $Mapping$dict *$Mapping$dict_new($Hashable);
+

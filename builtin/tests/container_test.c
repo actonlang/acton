@@ -4,7 +4,7 @@
 
  
 $list range($Sequence$list wit, long a, long b) {
-  $list res = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $list res = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
   for (long i=a; i<b; i++)
     wit->$class->append(wit,res,to$int(i));
   return res;
@@ -12,7 +12,7 @@ $list range($Sequence$list wit, long a, long b) {
  
 int main() {
   $list lst = range($Sequence$list$witness,1,100);
-  $Container$list wit2 = $Container$list_new(($Eq)$Hashable$int$witness);
+  $Container$list wit2 = $NEW($Container$list,($Eq)$Hashable$int$witness);
   $bool b = wit2->$class->__contains__(wit2,lst,to$int(17));
   $bool c = wit2->$class->__contains__(wit2,lst,to$int(171));
   $bool d = wit2->$class->__contains__(wit2,lst,to$int(100));

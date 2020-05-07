@@ -1,8 +1,8 @@
 //void __init__($set set, 
 $Iterator $set_iter($set set);
 $Iterator $set_iter_entry($set set);
-$set $set_copy($set set);
-$set $set_fromiter($Hashable hashwit, $Iterator it);
+$set $set_copy($set set, $Hashable hashwit);
+$set $set_fromiter($Hashable hashwit, $Iterable$opaque it);
 long $set_len($set set);
 
 int $set_contains($set set, $Hashable hashwit, $WORD elem);

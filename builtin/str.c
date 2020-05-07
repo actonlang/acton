@@ -53,7 +53,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",$str_init, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
+  {"",NULL,$str_init, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
    $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
    $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
    $str_upper, $str_zfill};
@@ -180,26 +180,30 @@ $int $Hashable$str$__keyinfo__($Hashable$str wit) {
   return to$int(STR_ID);
 }
  
-struct $Ord$str$class  $Ord$str$methods = {"",  (void (*)($Ord$str))$default__init__,$Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
+struct $Ord$str$class  $Ord$str$methods = {"",  NULL,(void (*)($Ord$str))$default__init__,$Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
 struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
 $Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-struct $Container$str$class  $Container$str$methods = {"",  (void (*)($Container$str,$Eq))$default2__init__,$Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str$class  $Container$str$methods = {"", NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
-struct $Sliceable$str$class  $Sliceable$str$methods = {"",  (void (*)($Sliceable$str))$default__init__,$Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
+struct $Sliceable$str$class  $Sliceable$str$methods = {"", NULL,(void (*)($Sliceable$str))$default__init__,$Sliceable$str$__getitem__, $Sliceable$str$__setitem__, $Sliceable$str$__delitem__,
                                                                     $Sliceable$str$__getslice__, $Sliceable$str$__setslice__, $Sliceable$str$__delslice__};
 struct $Sliceable$str $Sliceable$str_instance = {&$Sliceable$str$methods};
 $Sliceable$str $Sliceable$str$witness = &$Sliceable$str_instance;
 
-struct $Plus$str$class  $Plus$str$methods = {"",  (void (*)($Plus$str))$default__init__,$Plus$str$__add__};
+struct $Plus$str$class  $Plus$str$methods = {"", NULL,(void (*)($Plus$str))$default__init__,$Plus$str$__add__};
 struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
 $Plus$str $Plus$str$witness = &$Plus$str_instance;
 
-struct $Hashable$str$class  $Hashable$str$methods = {"",  (void (*)($Hashable$str))$default__init__, $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
+struct $Hashable$str$class  $Hashable$str$methods = {"", NULL,(void (*)($Hashable$str))$default__init__, $Hashable$str$__eq__, $Hashable$str$__ne__, $Hashable$str$__hash__};
 struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
+
+void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A) {
+  wit->w$Eq$A = w$Eq$A;
+}
 
 /*
 $Ord$str $Ord$str_new() {
@@ -548,6 +552,7 @@ int $str_containsnot($str s, $str sub) {
 
 typedef struct $Iterator$str {
   char *$GCINFO;
+  $Super$class $superclass;
   $WORD(*__next__)($WORD self);
   unsigned char *nxt;
   int remaining;
@@ -572,6 +577,7 @@ static $WORD $str_iterator_next($WORD self) {
 
 $Iterator $str_iter($str str) {
   $Iterator$str iter = malloc(sizeof(struct $Iterator$str));
+  iter->$superclass = ($Super$class)$Iterator$witness;
   iter->__next__ = $str_iterator_next;
   iter->nxt = str->str;
   iter->remaining = str->nchars;

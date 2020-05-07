@@ -49,16 +49,23 @@ struct $tup3_t {
   $WORD c;
 };
 
-/*
-typedef struct $pair_t {
-  char *$GCINFO;
-  $WORD fst;
-  $WORD snd;
-} *$pair_t;
-*/
-
 enum  exc {INDEXERROR, VALUEERROR, KEYERROR, STOPITERATION, TYPEERROR, MEMORYERROR, NOTIMPLEMENTED};
 
 typedef enum exc exc;
 
 #define MKEXCEPTION(e,sube) e=0;
+
+struct $Super$class;
+typedef struct $Super$class *$Super$class;
+
+struct $Super;
+typedef struct $Super *$Super;
+
+struct $Super$class {
+  char *$GCINFO;
+  $Super$class $superclass;
+};
+
+struct $Super {
+  $Super$class $class;
+};

@@ -32,7 +32,7 @@ int main() {
     $list lst = s->$class->split(s,from$UTF8("/"),NULL);
     printf("list has been split");
     $Sequence$list wit4 = $Sequence$list$witness;
-    $int len = wit4->_Collection->$class->__len__(wit4->_Collection,lst);
+    $int len = wit4->w$Collection$Sequence->$class->__len__(wit4->w$Collection$Sequence,lst);
     for (long i=0; i < from$int(len); i++) {
       $Sequence$list wit5 = $Sequence$list$witness;
       printf("  '%s'\n",to$UTF8(wit5->$class->__getitem__(wit5,lst,to$int(i))));

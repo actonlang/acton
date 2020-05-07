@@ -1,5 +1,6 @@
 struct $int$class {
   char *$GCINFO;
+  $Super$class $superclass;
   void (*__init__)($int, long);
   void (*__serialize__)($int, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $int (*__deserialize__)($Mapping$dict, $ROW*, $dict);

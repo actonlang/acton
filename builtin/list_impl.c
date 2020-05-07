@@ -1,4 +1,4 @@
-void $list_init($list self);
+void $list_init($list self, $Iterable$opaque it);
 void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
 $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
 
@@ -6,7 +6,7 @@ $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct $list$class $list$methods = {"",$list_init, $list_serialize,$list_deserialize,$list_copy};
+struct $list$class $list$methods = {"",NULL, $list_init, $list_serialize,$list_deserialize,$list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,6 +138,7 @@ int $list_containsnot($Eq w, $list lst, $WORD elem) {
 // Iterable ///////////////////////////////////////////////////////////////////////////
 typedef struct $Iterator$list {
   char *$GCINFO;
+  $Super$class $superclass;
   $WORD(*__next__)($WORD self);
   $list src;
   int nxt;
@@ -155,6 +156,7 @@ static $WORD $list_iterator_next($WORD self) {
 
 $Iterator $list_iter($list lst) {
   $Iterator$list iter = malloc(sizeof(struct $Iterator$list));
+  iter->$superclass = ($Super$class)$Iterator$witness;
   iter->__next__ = $list_iterator_next;
   iter->src = lst;
   iter->nxt = 0;
@@ -324,7 +326,7 @@ int list_sort(list_t lst, int (*cmp)(WORD,WORD)) {
  
 // (De)serialization //////////////////////////////////////////////////////////////////////////
 
-void $list_init($list lst) {
+void $list_init($list lst, $Iterable$opaque it) {
   int capacity = 4;
   lst->data = malloc(capacity*sizeof($WORD));
   if (lst->data == NULL) {
@@ -334,16 +336,19 @@ void $list_init($list lst) {
   }
   lst->length = 0;
   lst->capacity = capacity;
-  lst->$class = &$list$methods; 
+  if (it) {
+    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+    // try iterate and append to list, catching StopIteration.
+  }
 };
 
 void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $int prevkey = ($int)$dict_get(done,wit->_Hashable,self,NULL);
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
   if (prevkey) {
     $val_serialize(-LIST_ID,&prevkey->val,start_no,accum);
     return;
   }
-  $dict_setitem(done,wit->_Hashable,self,to$int(*start_no));
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
   long len = (long)self->length;
   $val_serialize(LIST_ID,&len,start_no,accum);
   for (int i=0; i<self->length; i++) {
@@ -355,10 +360,10 @@ $list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
   $ROW this = *row;
   *row = this->next;
   if (this->class_id < 0) {
-    return ($list)$dict_get(done,wit->_Hashable,to$int((long)this->blob[0]),NULL);
+    return ($list)$dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
   } else {
     $list res = list_new((int)(long)this->blob[0]);
-    $dict_setitem(done,wit->_Hashable,to$int(this->row_no),res);
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
       res->data[i] = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);

@@ -60,7 +60,7 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int(pointer_hash(a));
 }
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {"", (void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD$class $Hashable$WORD$methods = {"",NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
@@ -75,7 +75,7 @@ $Serializable $Null__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
   return NULL;
 }
 
-struct $Serializable$methods $Null$methods = {"",(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
+struct $Serializable$methods $Null$methods = {"",NULL,(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
@@ -149,8 +149,8 @@ void $write_serialized($ROW row, char *file) {
  
 $ROW $serialize($Serializable s, long *start_no) {
   struct $ROWLISTHEADER accum = {NULL,NULL}; //malloc(sizeof(struct $ROWLISTHEADER));
-  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$WORD$witness);
-  $dict done = $new_dict(); //wit->$class->__fromiter__(wit,NULL);
+  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
+  $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   s->$class->__serialize__(s,wit,start_no,done,&accum);
   return accum.fst;
 }
@@ -161,8 +161,8 @@ void $serialize_file($Serializable s, char *file) {
 }
 
 $Serializable $deserialize($ROW row) {
-  $Mapping$dict wit = $Mapping$dict_new(($Hashable)$Hashable$int$witness);
-  $dict done = wit->$class->__fromiter__(wit,NULL);
+  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
+  $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
   return  $step_deserialize(wit,&row,done);
 }
 

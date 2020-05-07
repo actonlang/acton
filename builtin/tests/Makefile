@@ -9,6 +9,7 @@ all:
 	gcc ../builtin.o set_test.c -o set_test -lutf8proc
 	gcc ../builtin.o int_test.c -o int_test -lutf8proc
 	gcc ../builtin.o float_test.c -o float_test -lutf8proc
+	gcc ../builtin.o iterator_test.c -o iterator_test -lutf8proc
 
 Pingpong: Pingpong.c Pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
@@ -33,5 +34,7 @@ runtests:
 	./set_test
 	./int_test
 	./float_test
+	./iterator_test
+
 
 

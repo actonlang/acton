@@ -7,7 +7,7 @@
  
 void printSequence($Sequence wit, $WORD seq) {
   printf("[");
-  long n = from$int(wit->_Collection->$class->__len__(wit->_Collection, seq));
+  long n = from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence, seq));
   for (long i=0; i < n-1; i++) 
     printf("%ld, ",from$int(wit->$class->__getitem__(wit,seq,to$int(i))));
   if (n > 0) 
@@ -16,7 +16,7 @@ void printSequence($Sequence wit, $WORD seq) {
 }
 
 $list range($Sequence wit, long a, long b) {
-  $list res = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $list res = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
   for (long i=a; i<b; i++)
     wit->$class->append(wit,res,to$int(i));
   return res;
@@ -50,15 +50,15 @@ Plus$class Plus$int_instance = &Plus$int_struct;
 int main() {
   $Sequence wit = ($Sequence)$Sequence$list$witness;
   // first we use concat for list concatenation
-  $WORD lst = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
-  $WORD emptylist = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $WORD lst = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
+  $WORD emptylist = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
   for (long i = 1; i< 10; i++) {
     wit->$class->append(wit,lst,range(wit,i,2*i));
   }
-  printSequence(wit,concat(wit->_Collection,($Indexed)wit,wit->_Plus,lst,emptylist));
+  printSequence(wit,concat(wit->w$Collection$Sequence,($Indexed)wit,wit->w$Plus$Sequence,lst,emptylist));
   // and then to sum a list of integers
   $WORD lst2 = range(wit,1,100);
-  printf("1+2+...+99 = %ld\n",from$int(concat(wit->_Collection,($Indexed)wit,($Plus)$Plus$int$witness,lst2,to$int(0))));
+  printf("1+2+...+99 = %ld\n",from$int(concat(wit->w$Collection$Sequence,($Indexed)wit,($Plus)$Plus$int$witness,lst2,to$int(0))));
   // and finally as a very complicated identity function for strings
   printf("result is '%s'\n",to$UTF8(concat(($Collection)$Container$str$witness,($Indexed)$Sliceable$str$witness,($Plus)$Plus$str$witness,from$UTF8("Complicated identity function"),from$UTF8(""))));
 }
