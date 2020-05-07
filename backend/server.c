@@ -842,12 +842,14 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				assert(0);
     			}
     			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
+    			free_write_query((write_query *) q);
     			break;
     		}
     		case RPC_TYPE_READ:
     		{
     			db_row_t* result = handle_read_query((read_query *) q, &schema, db, fastrandstate);
     			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    			free_read_query((read_query *) q);
     			break;
     		}
     		case RPC_TYPE_RANGE_READ:
@@ -855,6 +857,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     			snode_t * start_row = NULL, * end_row = NULL;
     			int no_results = handle_range_read_query((range_read_query *) q, &start_row, &end_row, &schema, db, fastrandstate);
     			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    			free_range_read_query((range_read_query *) q);
     			break;
     		}
     		case RPC_TYPE_QUEUE:
@@ -927,6 +930,8 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				}
     			}
 
+    			free_queue_message(qm);
+
     			break;
     		}
     		case RPC_TYPE_TXN:
@@ -968,6 +973,8 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     					break;
     				}
     			}
+
+    			free_txn_message(tm);
 
     			break;
     		}
