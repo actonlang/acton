@@ -60,30 +60,30 @@ class Pingpong($Actor):
 
 ######################################  CPS translation:
 
+class Pingpong($Actor):
+    i : int
+    count : int
+    def __init__(self : Self, i : int, then : (None)->$R) -> $R:
+        self.i = i
+        self.count = to$int(0)
+        return self.ping(then)
+    def ping(self : Self, then : (None)->$R) -> $R:
+        self.count = Plus$int$witness.__add__(self.count, to$int(1))
+        print('{self.i} Ping {self.count}')
+        $AFTER(to$int(1).val, lambda ($c : (None)->$R): self.pong(Complex$int$witness.__neg__(self.count),$c))
+        return then(None)
+    def pong(self : Self, q : int, then : (None)->$R) -> $R:
+        print('{self.i}      {q} Pong')
+        $AFTER(to$int(2).val, lambda ($c : (None)->$R): self.ping($c))
+        return then(None)
+
+######################################  Lambda-lifting / closure-conversion:
+
 class $Clos[P,R] ():
     enter : (*P) -> R
 
 class $Cont[T] ($Clos[(T,),$R]):
     pass
-
-class Pingpong($Actor):
-    i : int
-    count : int
-    def __init__(self : Self, i : int, then : $Cont[None]) -> $R:
-        self.i = i
-        self.count = to$int(0)
-        return self.ping(then)
-    def ping(self : Self, then : $Cont[None]) -> $R:
-        self.count = Plus$int$witness.__add__(self.count, to$int(1))
-        print('{self.i} Ping {self.count}')
-        $AFTER(to$int(1).val, lambda ($c : $Cont[None]): self.pong(Complex$int$witness.__neg__(self.count),$c))
-        return then.enter(None)
-    def pong(self : Self, q : int, then : $Cont[None]) -> $R:
-        print('{self.i}      {q} Pong')
-        $AFTER(to$int(2).val, lambda ($c : $Cont[None]): self.ping($c))
-        return then.enter(None)
-
-######################################  Lambda-lifting / closure-conversion:
 
 class lambda$1 ($Cont[$Cont[None]]):
     self : Pingpong
@@ -178,6 +178,10 @@ struct Pingpong {
     $int i;
     $int count;
 };
+
+extern struct lambda$1$class lambda$1$methods;
+extern struct lambda$1$class lambda$1$methods;
+extern struct Pingpong$class Pingpong$methods;
 
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
     $this->self = self;
