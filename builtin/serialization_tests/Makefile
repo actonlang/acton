@@ -7,9 +7,18 @@ all:
 	gcc -c graph.c
 	gcc ../builtin.o graph.o graph_serialize_test.c -o graph_serialize_test -lutf8proc
 
+ActorRing: ActorRing.c ActorRing.h
+	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-lutf8proc \
+		../../rts/rts.o \
+		../builtin.o \
+		ActorRing.c \
+		-o ActorRing
+
 clean:
-	rm *.o
-	rm  list_serialize_test dict_serialize_test str_serialize_test set_serialize_test multi_serialization_test graph_serialize_test
+	rm -f *.o
+	rm -f list_serialize_test dict_serialize_test str_serialize_test set_serialize_test multi_serialization_test graph_serialize_test
+	rm -f ActorRing
 
 runtests:
 	./list_serialize_test
