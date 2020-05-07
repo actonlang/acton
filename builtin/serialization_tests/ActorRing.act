@@ -1,0 +1,664 @@
+######################################  Original:
+
+no_actors = 5
+total_msgs = 20
+
+actor Act(i):
+    var local_cnt = 0
+    var rcv_dict = {}
+    var snd_dict = {}
+
+    def act(from, table):
+        if local_cnt < total_msgs:
+            local_cnt += 1
+            to = (i + 1) % no_actors
+            rcv_dict[from] += 1
+            snd_dict[to] += 1
+            table[to].act(i, table)
+            
+actor Root(_ignore):
+    table = []
+
+    for i in range(no_actors):
+        table.append(Act(i))
+    
+    table[0].act(-1, table)
+
+######################################  Type inference:
+
+no_actors : int = 5
+total_msgs : int = 20
+
+actor Act(i : int):
+    var local_cnt : int = 0
+    var rcv_dict : dict[int,int] = {}
+    var snd_dict : dict[int,int] = {}
+
+    def act(from : int, table : list[Act]) -> None:
+        if local_cnt < total_msgs:
+            local_cnt += 1
+            to : int = (i + 1) % no_actors
+            rcv_dict[from] += 1
+            snd_dict[to] += 1
+            table[to].act(i, table)
+            
+actor Root(_ignore : int):
+    table : list[Act] = []
+
+    for i : int in range(no_actors):
+        table.append(Act(i))
+    
+    table[0].act(-1, table)
+
+######################################  Witness translation:
+
+$Mapping$dict$witness : $Mapping$dict[int,int] = $Mapping$dict($Hashable$int$witness)
+$Indexed$dict$witness : $Indexed$dict[int,int] = $Mapping$dict$witness._Indexed
+
+no_actors : int = to$int(5)
+total_msgs : int = to$int(20)
+
+actor Act(i : int):
+    var local_cnt : int = to$int(0)
+    var rcv_dict : dict[int,int] = dict(None)
+    var snd_dict : dict[int,int] = dict(None)
+
+    def _act(from : int, table : list[Act]) -> None:
+        if $Ord$int$witness.__lt__(local_cnt, total_msgs):
+            local_cnt = $Plus$int$witness.__add__(local_cnt, to$int(1))
+            to : int = $Integral$int$witness.__mod__($Plus$int$witness.__add__(i, to$int(1)), no_actors)
+            $Indexed$dict$witness.__setitem__(rcv_dict, from, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(rcv_dict, from), to$int(1)))
+            $Indexed$dict$witness.__setitem__(snd_dict, to, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(snd_dict, to), to$int(1)))
+            $Sequence$list$witness.__getitem__(table,to).act(i, table)
+    
+    def act(from : int, table : list[Act]) -> Msg[None]:
+        return $ASYNC(self, lambda: _act(from, table))
+            
+actor Root(_ignore : int):
+    table : list[Act] = list(None)
+
+    iter$1 : Iterator[int] = $range(no_actors)
+    i : int = iter$1.__next__()
+    while i is not None:
+        $Sequence$list$witness.append(table, Act(i))
+        i = iter$1.__next__()
+    
+    $Sequence$list$witness.__getitem__(table, to$int(0)).act(to$int(-1), table)
+
+######################################  Deactorization:
+
+$Mapping$dict$witness : $Mapping$dict[int,int] = $Mapping$dict($Hashable$int$witness)
+$Indexed$dict$witness : $Indexed$dict[int,int] = $Mapping$dict$witness._Indexed
+
+no_actors : int = to$int(5)
+total_msgs : int = to$int(20)
+
+class Act ($Actor):
+    i : int
+    local_cnt : int
+    rcv_dict : dict[int,int]
+    snd_dict : dict[int,int]
+    
+    def __init__(self : Act, i : int) -> None:
+        $Actor.__init__(self)
+        self.i = i
+        self.local_cnt = to$int(0)
+        self.rcv_dict = dict(None)
+        self.snd_dict = dict(None)
+        return None
+
+    def _act(self : Act, from : int, table : list[Act]) -> None:
+        if $Ord$int$witness.__lt__(self.local_cnt, total_msgs):
+            self.local_cnt = $Plus$int$witness.__add__(self.local_cnt, to$int(1))
+            to : int = $Integral$int$witness.__mod__($Plus$int$witness.__add__(self.i, to$int(1)), no_actors)
+            $Indexed$dict$witness.__setitem__(self.rcv_dict, from, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.rcv_dict, from), to$int(1)))
+            $Indexed$dict$witness.__setitem__(self.snd_dict, to, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.snd_dict, to), to$int(1)))
+            $Sequence$list$witness.__getitem__(table,to).act(self.i, table)
+        return None
+    
+    def act(self : Act, from : int, table : list[Act]) -> Msg[None]:
+        return $ASYNC(self, lambda: self._act(from, table))
+            
+class Root ($Actor):
+    table : list[Act]
+
+    def __init__(self : Root, _ignore : int) -> None:
+        $Actor.__init__(self)
+        self.table = list(None)
+        
+        iter$1 : Iterator[int] = range(no_actors)
+        while True:
+            i : int = iter$1.__next__()
+            if i is None:
+                break;
+            $Sequence$list$witness.append(self.table, Act(i))
+    
+        $Sequence$list$witness.__getitem__(self.table, to$int(0)).act(to$int(-1), self.table)
+        return None
+
+######################################  CPS translation:
+
+$Mapping$dict$witness : $Mapping$dict[int,int] = $Mapping$dict($Hashable$int$witness)
+$Indexed$dict$witness : $Indexed$dict[int,int] = $Mapping$dict$witness._Indexed
+
+no_actors : int = to$int(5)
+total_msgs : int = to$int(20)
+
+class Act ($Actor):
+    i : int
+    local_cnt : int
+    rcv_dict : dict[int,int]
+    snd_dict : dict[int,int]
+    
+    def __init__(self : Act, i : int, $cont : (None)->$R) -> $R:
+        $Actor.__init__(self)
+        self.i = i
+        self.local_cnt = to$int(0)
+        self.rcv_dict = dict(None)
+        self.snd_dict = dict(None)
+        return $cont(None)
+
+    def _act(self : Act, from : int, table : list[Act], $cont : (None)->$R) -> $R:
+        if $Ord$int$witness.__lt__(self.local_cnt, total_msgs):
+            self.local_cnt = $Plus$int$witness.__add__(self.local_cnt, to$int(1))
+            to : int = $Integral$int$witness.__mod__($Plus$int$witness.__add__(self.i, to$int(1)), no_actors)
+            $Indexed$dict$witness.__setitem__(self.rcv_dict, from, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.rcv_dict, from), to$int(1)))
+            $Indexed$dict$witness.__setitem__(self.snd_dict, to, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.snd_dict, to), to$int(1)))
+            return $Sequence$list$witness.__getitem__(table,to).act(self.i, table, lambda (_ignore : Msg[None]): $cont(None))
+        return $cont(None)
+    
+    def act(self : Act, from : int, table : list[Act], $cont : (Msg[None])->$R) -> $R:
+        return $cont($ASYNC(self, lambda ($c : (None)->$R): self._act(from, table, $c)))
+            
+class Root ($Actor):
+    table : list[Act]
+
+    def __init__(self : Root, _ignore : int, $cont : (None)->$R) -> $R:
+        $Actor.__init__(self)
+        self.table = list(None)
+        iter$1 : Iterator[int] = range(no_actors)
+        def loop$1(_ignore : None) -> $R:
+            i : int = iter$1.__next__()
+            if i is None:
+                return join$1(None)
+            return Act(i, cont$1)
+        def cont$1($res : Act) -> $R:
+            $Sequence$list$witness.append(self.table, $res)
+            return loop$1(None)
+        def join$1(_ignore : None) -> $R:
+            return $Sequence$list$witness.__getitem__(self.table, to$int(0)).act(to$int(-1), self.table, lambda (_ignore : Msg[None]): $cont(None))
+        return loop$1(None)
+
+######################################  Lambda-lifting (free variable elimination):
+
+$Mapping$dict$witness : $Mapping$dict[int,int] = $Mapping$dict($Hashable$int$witness)
+$Indexed$dict$witness : $Indexed$dict[int,int] = $Mapping$dict$witness._Indexed
+
+no_actors : int = to$int(5)
+total_msgs : int = to$int(20)
+
+class Act ($Actor):
+    i : int
+    local_cnt : int
+    rcv_dict : dict[int,int]
+    snd_dict : dict[int,int]
+    
+    def __init__(self : Act, i : int, $cont : $Cont[None]) -> $R:
+        $Actor.__init__(self)
+        self.i = i
+        self.local_cnt = to$int(0)
+        self.rcv_dict = dict(None)
+        self.snd_dict = dict(None)
+        return $cont.enter(None)
+
+    def _act(self : Act, from : int, table : list[Act], $cont : $Cont[None]) -> $R:
+        if $Ord$int$witness.__lt__(self.local_cnt, total_msgs):
+            self.local_cnt = $Plus$int$witness.__add__(self.local_cnt, to$int(1))
+            to : int = $Integral$int$witness.__mod__($Plus$int$witness.__add__(self.i, to$int(1)), no_actors)
+            $Indexed$dict$witness.__setitem__(self.rcv_dict, from, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.rcv_dict, from), to$int(1)))
+            $Indexed$dict$witness.__setitem__(self.snd_dict, to, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.snd_dict, to), to$int(1)))
+            return $Sequence$list$witness.__getitem__(table,to).act(self.i, table, lambda (_ignore : Msg[None]): $cont.enter(None))
+        return $cont.enter(None)
+    
+    def act(self : Act, from : int, table : list[Act], $cont : $Cont[Msg[None]]) -> $R:
+        return $cont.enter($ASYNC(self, lambda ($c : $Cont[None]): self._act(from, table, $c)))
+            
+class Root ($Actor):
+    table : list[Act]
+
+    def __init__(self : Root, _ignore : int, $cont : $Cont[None]) -> $R:
+        $Actor.__init__(self)
+        self.table = list(None)
+        iter$1 : Iterator[int] = range(no_actors)
+        def loop$1(self : Root, iter$1 : Iterator[int], $cont : $Cont[None], _ignore : None) -> $R:
+            i : int = iter$1.__next__()
+            if i is None:
+                return join$1(self, $cont, None)
+            return Act(i, lambda ($res : Act): cont$1(self, iter$1, $cont, $res))
+        def cont$1(self : Root, iter$1 : Iterator[int], $cont : $Cont[None], $res : Act) -> $R:
+            $Sequence$list$witness.append(self.table, $res)
+            return loop$1(self, iter$1, $cont, None)
+        def join$1(self : Root, $cont : $Cont[None], _ignore : None) -> $R:
+            return $Sequence$list$witness.__getitem__(self.table, to$int(0)).act(to$int(-1), self.table, lambda (_ignore : Msg[None]): $cont.enter(None))
+        return loop$1(self, iter$1, $cont, None)
+
+######################################  Lambda-lifting (closure conversion):
+
+$Mapping$dict$witness : $Mapping$dict[int,int] = $Mapping$dict($Hashable$int$witness)
+$Indexed$dict$witness : $Indexed$dict[int,int] = $Mapping$dict$witness._Indexed
+
+no_actors : int = to$int(5)
+total_msgs : int = to$int(20)
+
+class lambda$1 ($Cont[Msg[None]]):
+    $cont : $Cont[None]
+    def enter($this: lambda$1, _ignore: Msg[None]) -> $R:
+        return $this.$cont.enter(None)
+
+class lambda$2 ($Cont[$Cont[None]]):
+    self : Act
+    from : int
+    table : list[Act]
+    def enter($this : lambda$2, $c : $Cont[None]) -> $R:
+        return $this.self._act($this.from, $this.table, $c)
+
+class Act ($Actor):
+    i : int
+    local_cnt : int
+    rcv_dict : dict[int,int]
+    snd_dict : dict[int,int]
+    
+    def __init__(self : Act, i : int, $cont : $Cont[None]) -> $R:
+        $Actor.__init__(self)
+        self.i = i
+        self.local_cnt = to$int(0)
+        self.rcv_dict = dict(None)
+        self.snd_dict = dict(None)
+        return $cont.enter(None)
+
+    def _act(self : Act, from : int, table : list[Act], $cont : $Cont[None]) -> $R:
+        if $Ord$int$witness.__lt__(self.local_cnt, total_msgs):
+            self.local_cnt = $Plus$int$witness.__add__(self.local_cnt, to$int(1))
+            to : int = $Integral$int$witness.__mod__($Plus$int$witness.__add__(self.i, to$int(1)), no_actors)
+            $Indexed$dict$witness.__setitem__(self.rcv_dict, from, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.rcv_dict, from), to$int(1)))
+            $Indexed$dict$witness.__setitem__(self.snd_dict, to, $Plus$int$witness.__add__($Indexed$dict$witness.__getitem__(self.snd_dict, to), to$int(1)))
+            return $Sequence$list$witness.__getitem__(table,to).act(self.i, table, lambda$1($cont))
+        return $cont.enter(None)
+    
+    def act(self : Act, from : int, table : list[Act], $cont : $Cont[Msg[None]]) -> $R:
+        return $cont.enter($ASYNC(self, lambda$2(self, from, table))
+
+class lambda$3 ($Cont[Act]):
+    self : Root
+    iter$1 : Iterator[int]
+    $cont : $Cont[None]
+    def enter($this: lambda$3, $res: Act) -> $R:
+        return cont$1($this.self, $this.iter$1, $this.$cont, None)
+
+class lambda$4 ($Cont[None]):
+    $cont : $Cont[None]
+    def enter($this: lambda$4, _ignore: None) -> $R:
+        return $cont.enter(None)
+
+def loop$1(self : Root, iter$1 : Iterator[int], $cont : $Cont[None], _ignore : None) -> $R:
+    i : int = iter$1.__next__()
+    if is is None:
+        return join$1(self, $cont, None)
+    return Act(i, lambda$3(self, iter$1, $cont))
+
+def cont$1(self : Root, iter$1 : Iterator[int], $cont : $Cont[None], $res : Act) -> $R:
+    $Sequence$list$witness.append(self.table, $res)
+    return loop$1(self, iter$1, $cont, None)
+
+def join$1(self : Root, $cont : $Cont[None], _ignore : None) -> $R:
+    return $Sequence$list$witness.__getitem__(self.table, to$int(0)).act(to$int(-1), self.table, lambda$4($cont))
+    
+class Root ($Actor):
+    table : list[Act]
+
+    def __init__(self : Root, _ignore : int, $cont : $Cont[None]) -> $R:
+        $Actor.__init__(self)
+        self.table = list(None)
+        iter$1 : Iterator[int] = range(no_actors)
+        return loop$1(self, iter$1, $cont, None)
+
+######################################  Code generation:
+
+struct lambda$1;
+struct lambda$2;
+struct Act;
+struct lambda$3;
+struct lambda$4;
+struct Root;
+
+typedef struct lambda$1 *lambda$1;
+typedef struct lambda$2 *lambda$2;
+typedef struct Act *Act;
+typedef struct lambda$3 *lambda$3;
+typedef struct lambda$4 *lambda$4;
+typedef struct Root *Root;
+
+struct lambda$1$class {
+    char *$GCINFO;
+    void (*__init__)(lambda$1, $Cont);
+    void (*__serialize__)(lambda$1, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    lambda$1 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*enter)(lambda$1, $Msg);    
+};
+struct lambda$1 {
+    struct lambda$1$class *$class;
+    $Cont $cont;    
+};
+
+struct lambda$2$class {
+    char *$GCINFO;
+    void (*__init__)(lambda$2, Act, $int, $list);
+    void (*__serialize__)(lambda$2, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    lambda$2 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*enter)(lambda$2, $Cont);    
+};
+struct lambda$2 {
+    struct lambda$2$class *$class;
+    Act self;
+    $int from;
+    $list table;
+};
+
+struct Act$class {
+    char *GCINFO;
+    $R (*__init__)(Act, $int, $Cont);
+    void (*__serialize__)(Act, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    Act (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*_act)(Act, $int, $list, $Cont);
+    $R (*act)(Act, $int, $list, $Cont);
+};
+struct Act {
+    union {
+        struct Act$class *$class;
+        struct $Actor super;
+    };
+    $int i;
+    $int local_cnt;
+    $dict rcv_dict;
+    $dict snd_dict;
+};
+
+struct lambda$3$class {
+    char *GCINFO;
+    void (*__init__)(lambda$3, Root, $Iterator, $Cont);
+    void (*__serialize__)(lambda$3, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    lambda$3 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*enter)(lambda$3, Act);
+};
+struct lambda$3 {
+    struct lambda$3$class *$class;
+    Root self;
+    $Iterator iter$1;
+    $Cont $cont;
+};
+
+struct lambda$4$class {
+    char *GCINFO;
+    void (*__init__)(lambda$4, $Cont);
+    void (*__serialize__)(lambda$4, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    lambda$4 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*enter)(lambda$4, $WORD);
+};
+struct lambda$4 {
+    struct lambda$4$class *$class;
+    $Cont $cont;
+};
+
+struct Root$class {
+    char *GCINFO;
+    $R (*__init__)(Root, $int, $Cont);
+    void (*__serialize__)(Root, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
+    Root (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+};
+struct Root {
+    union {
+        struct Root$class *$class;
+        struct $Actor super;
+    };
+    $list table;
+};
+
+$R loop$1(Root, $Iterator, $Cont, $WORD);
+$R cont$1(Root, $Iterator, $Cont, Act);
+$R join$1(Root, $Cont, $WORD);
+
+extern struct lambda$1$class lambda$1$methods;
+extern struct lambda$2$class lambda$2$methods;
+extern struct Act$class Act$methods;
+extern struct lambda$3$class lambda$3$methods;
+extern struct lambda$4$class lambda$4$methods;
+extern struct Root$class Root$methods;
+
+extern $Mapping $Mapping$dict$witness;
+extern $Indexed $Indexed$dict$witness;
+
+extern $int no_actors;
+extern $int total_msgs;
+
+
+/// lambda$1
+
+void lambda$1$__init__(lambda$1 $this, $Cont $cont) {
+    $this->$cont = $cont;
+}
+
+void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+$R lambda$1$enter(lambda$1 $this, $Msg _ignore) {
+    return $this->$cont->$class->enter($this->$cont, $None);
+}
+
+struct lambda$1$class lambda$1$methods = {
+    "lambda$1",
+    lambda$1$__init__,
+    lambda$1$__serialize__,
+    lambda$1$__deserialize__,
+    lambda$1$enter
+};
+
+/// lambda$2
+
+void lambda$2$__init__(lambda$2 $this, Act self, $int from, $list table) {
+    $this->self = self;
+    $this->from = from;
+    $this->table = table;
+}
+
+void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+$R lambda$2$enter(lambda$2 $this, $Cont $c) {
+    return $this->self->$class->_act($this->self, $this->from, $this->table, $c);
+}
+
+struct lambda$2$class lambda$2$methods = {
+    "lambda$2",
+    lambda$2$__init__,
+    lambda$2$__serialize__,
+    lambda$2$__deserialize__,
+    lambda$2$enter
+};
+
+/// Act
+
+$R Act$__init__(Act self, $int i, $Cont $cont) {
+    $Actor$methods.__init__(($Actor)self);
+    self->i = i;
+    self->local_cnt = to$int(0);
+    self->rcv_dict = $NEW($dict);
+    self->snd_dict = $NEW($dict);
+    return $R_CONT($cont, $None);
+}
+
+void Act$__serialize__(Act self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+Act Act$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+$R Act$_act(Act self, $int from, $list table, $Cont $cont) {
+    if ($Integral$int$witness->$class->__lt__($Integral$int$witness, self->local_cnt, total_msgs)) {
+        self->local_cnt = $Plus$int$witness->$class->__add__($Plus$int$witness, self->local_cnt, to$int(1));
+        $int to = $Integral$int$witness->$class->__mod__($Integral$int$witness, $Plus$int$witness->$class->__add__($Plus$int$witness, self->i, to$int(1)), no_actors);
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->rcv_dict, from, $Plus$int$witness->$class->__add__($Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->rcv_dict, from), to$int(1)));
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->snd_dict, to, $Plus$int$witness->$class->__add__($Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->snd_dict, to), to$int(1)));
+        Act tmp$1 = $Sequence$list$witness->$class->__getitem__($Sequence$list$witness, table, to);
+        return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, $cont));
+    }
+    return $R_CONT($cont, $None);
+}
+    
+$R Act$act(Act self, $int from, $list table, $Cont $cont) {
+    return $R_CONT($cont, $ASYNC(($Actor)self, ($Cont)$NEW(lambda$2, self, from, table)));
+}
+
+struct Act$class Act$methods = {
+    "Act",
+    Act$__init__,
+    Act$__serialize__,
+    Act$__deserialize__,
+    Act$_act,
+    Act$act
+};
+
+/// lambda$3
+
+void lambda$3$__init__(lambda$3 $this, Root self, $Iterator iter$1, $Cont $cont) {
+    $this->self = self;
+    $this->iter$1 = iter$1;
+    $this->$cont = $cont;
+}
+
+void lambda$3$__serialize__(lambda$3 self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+lambda$3 lambda$3$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+$R lambda$3$enter(lambda$3 $this, Act $res) {
+    return cont$1($this->self, $this->iter$1, $this->$cont, $res);
+}
+
+struct lambda$3$class lambda$3$methods = {
+    "lambda$3",
+    lambda$3$__init__,
+    lambda$3$__serialize__,
+    lambda$3$__deserialize__,
+    lambda$3$enter
+};
+
+/// lambda$4
+
+void lambda$4$__init__(lambda$4 $this, $Cont $cont) {
+    $this->$cont = $cont;
+}
+
+void lambda$4$__serialize__(lambda$4 self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+lambda$4 lambda$4$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+$R lambda$4$enter(lambda$4 $this, $WORD _ignore) {
+    return $this->$cont->$class->enter($this->$cont, $None);
+}
+
+struct lambda$4$class lambda$4$methods = {
+    "lambda$4",
+    lambda$4$__init__,
+    lambda$4$__serialize__,
+    lambda$4$__deserialize__,
+    lambda$4$enter
+};
+
+
+/// Root
+
+$R loop$1(Root self, $Iterator iter$1, $Cont $cont, $WORD _ignore) {
+    $int i = iter$1->$class->__next__(iter$1);
+    if (i == $None) {
+        return join$1(self, $cont, $None);
+    }
+    return $NEWCC(Act, ($Cont)$NEW(lambda$3, self, iter$1, $cont), i);
+}
+
+$R cont$1(Root self, $Iterator iter$1, $Cont $cont, Act $res) {
+    $Sequence$list$witness->$class->append($Sequence$list$witness, self->table, $res);
+    return loop$1(self, iter$1, $cont, $None);
+}
+
+$R join$1(Root self, $Cont $cont, $WORD _ignore) {
+    Act tmp$2 = $Sequence$list$witness->$class->__getitem__($Sequence$list$witness, self->table, to$int(0));
+    return tmp$2->$class->act(tmp$2, to$int(-1), self->table, ($Cont)$NEW(lambda$4, $cont));
+}
+
+$R Root$__init__(Root self, $int _ignore, $Cont $cont) {
+    $Actor$methods.__init__(($Actor)self);
+    self->table = $NEW($list);
+    $Iterator iter$1 = range(no_actors);
+    return loop$1(self, iter$1, $cont, $None);
+}
+
+void Root$__serialize__(Root self, $Mapping$dict wit, $WORD* prefix, $int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
+    // TBD
+}
+
+Root Root$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+    // TBD
+    return NULL;
+}
+
+struct Root$class Root$methods = {
+    "Root",
+    Root$__init__,
+    Root$__serialize__,
+    Root$__deserialize__
+};
+
+/// Initialization
+
+$Mapping $Mapping$dict$witness;
+$Indexed $Indexed$dict$witness;
+
+$int no_actors;
+$int total_msgs;
+
+void $init_module() {
+    $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, $Hashable$int$witness);
+    $Indexed$dict$witness = $Mapping$dict$witness->_Indexed;
+
+    no_actors = to$int(5);
+    total_msgs = to$int(20);
+}
+
+$R $ROOT($Env env, $Cont $cont) {
+    $init_module();
+    return $NEWCC(Root, $cont, to$int(env));
+}
