@@ -70,20 +70,46 @@ long _get_nonce(unsigned int * fastrandstate)
 #endif
 }
 
+#define PROPOSAL_STATUS_NON_EXISTING 0
+#define PROPOSAL_STATUS_ACTIVE 1
+#define PROPOSAL_STATUS_ACCEPTED 2
+#define PROPOSAL_STATUS_AMMENDED 3
+#define PROPOSAL_STATUS_REJECTED 4
+
 typedef struct membership
 {
 	skiplist_t * local_peers;
 	skiplist_t * agreed_peers;
+	skiplist_t * stable_peers;
+
 	vector_clock * view_id;
+
+	int my_id;
+
+	skiplist_t * outstanding_proposal;
+	long outstanding_proposal_nonce;
+	vector_clock * outstanding_view_id;
+	int outstanding_proposal_acks;
+	short proposal_status;
+	skiplist_t * merged_responses;
 } membership;
 
-membership * get_membership()
+membership * get_membership(int my_id)
 {
 	membership * m = (membership *) malloc(sizeof(membership));
 
 	m->local_peers = create_skiplist(&sockaddr_cmp);
 	m->agreed_peers = create_skiplist(&sockaddr_cmp);
+	m->stable_peers = create_skiplist(&sockaddr_cmp);
 	m->view_id = NULL;
+	m->my_id = my_id;
+
+	m->outstanding_proposal = create_skiplist(&sockaddr_cmp);
+	m->outstanding_view_id = NULL;
+	m->outstanding_proposal_acks = 0;
+	m->outstanding_proposal_nonce = -1;
+	m->proposal_status = PROPOSAL_STATUS_NON_EXISTING;
+	m->merged_responses = create_skiplist(&sockaddr_cmp);
 
 	return m;
 }
@@ -92,8 +118,20 @@ void free_membership(membership * m)
 {
 	free_skiplist(m->local_peers);
 	free_skiplist(m->agreed_peers);
+	free_skiplist(m->stable_peers);
+
 	if(m->view_id != NULL)
 		free_vc(m->view_id);
+
+	if(m->outstanding_proposal != NULL)
+		free_skiplist(m->outstanding_proposal);
+
+	if(m->outstanding_view_id != NULL)
+		free_vc(m->outstanding_view_id);
+
+	if(m->merged_responses != NULL)
+		free_skiplist(m->merged_responses);
+
 	free(m);
 }
 
@@ -1170,7 +1208,7 @@ int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
 	return ret;
 }
 
-membership_state * get_membership_state_from_server_list(skiplist_t * servers, vector_clock * my_vc)
+membership_state * get_membership_state_from_server_list(skiplist_t * servers, vector_clock * my_lc)
 {
 	if(servers->no_items == 0)
 		return NULL;
@@ -1184,26 +1222,47 @@ membership_state * get_membership_state_from_server_list(skiplist_t * servers, v
 		copy_node_description(nds+i, (rs->sockfd >= 0), get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
 	}
 
-	return init_membership(servers->no_items, nds, my_vc);
+	return init_membership(servers->no_items, nds, my_lc);
 }
 
-int propose_local_membership(membership * m, unsigned int * fastrandstate, vector_clock * my_vc)
+int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate)
 {
     void * tmp_out_buf = NULL;
     unsigned snd_msg_len;
 
-	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->local_peers, my_vc),
-												_get_nonce(fastrandstate), &tmp_out_buf, &snd_msg_len, my_vc);
+    if(m->outstanding_view_id != NULL)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[256];
+		fprintf(stderr, "SERVER: Proposing new view, aborting already outstanding view proposal %s!\n",
+							to_string_vc(m->outstanding_view_id, msg_buf));
+#endif
+		skiplist_free(m->outstanding_proposal);
+		free_vc(m->outstanding_view_id);
+    }
+
+    m->outstanding_proposal = skiplist_clone(m->local_peers, fastrandstate);
+    m->outstanding_view_id = vc_copy(my_vc);
+    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
+    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
+    m->outstanding_proposal_acks = 0;
+	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses to "my response"
+
+	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_view_id),
+												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, m->outstanding_view_id);
 
 	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 	{
 		remote_server * rs = (remote_server *) crt->value;
-		if(rs->sockfd > 0)
+
+		if(rs->status == NODE_LIVE && rs->sockfd > 0 && get_node_id((struct sockaddr *) &(rs->serveraddr)) != m->my_id) // skip myself, and nodes that are "down" in membership
 		{
 			int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
 
 			if (n < 0)
 			  error("ERROR writing to socket");
+
+			m->outstanding_proposal_acks++;
 		}
 	}
 
@@ -1212,29 +1271,9 @@ int propose_local_membership(membership * m, unsigned int * fastrandstate, vecto
 	return 0;
 }
 
-
-int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skiplist_t * merged_list, vector_clock * my_lc, unsigned int * fastrandstate)
 {
-#if (VERBOSE_RPC > 0)
-	char msg_buf[256];
-#endif
-
-	if(compare_vc(m->view_id, ma->vc) > 0)
-	{
-#if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Rejecting proposed view %s because it is older than my installed view %s!\n",
-							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
-#endif
-
-		*merged_membership = NULL;
-
-		return 1;
-	}
-
-	*merged_membership = clone_membership(m);
-
-	// Copy local view to merged list:
-	skiplist_t * merged_list = skiplist_clone(m->local_peers);
+	int memberships_differ = 0;
 
 	for(int i=0;i<ma->membership->no_nodes;i++)
 	{
@@ -1247,6 +1286,8 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 
 		if(node == NULL) // I just learned about this node
 		{
+			memberships_differ = 1;
+
 			int status = connect_remote_server(rs);
 
 			if(status != 0)
@@ -1274,26 +1315,202 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 				{
 					rs_local->status = nd.status;
 				}
+
+				memberships_differ = 1;
 			}
 		}
 	}
 
-	return 0;
+	return memberships_differ;
 }
 
-int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, unsigned int * fastrandstate)
-{
 
+int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[256];
+	printf("SERVER: Received new view proposal %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
+#endif
+
+	if(compare_vc(m->view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Rejecting proposed view %s because it is older than my installed view %s!\n",
+							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
+#endif
+
+		*merged_membership = NULL;
+
+		return PROPOSAL_STATUS_REJECTED;
+	}
+
+	// Copy local view to merged list:
+	skiplist_t * merged_list = skiplist_clone(m->local_peers);
+
+	// Merge it with proposed view:
+	int memberships_differ = merge_membership_agreement_msg_to_list(ma, merged_list, my_lc, fastrandstate);
+
+	*merged_membership = get_membership_state_from_server_list(merged_list, my_lc);
+
+	return memberships_differ?PROPOSAL_STATUS_AMMENDED:PROPOSAL_STATUS_ACCEPTED;
 }
 
-int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
+int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
 {
+#if (VERBOSE_RPC > 0)
+	char msg_buf[256];
+	printf("SERVER: Received agreement response message %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
+#endif
 
+	*merged_membership = NULL;
+
+    if(m->outstanding_view_id == NULL)
+    {
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Received Agreement Response message, but no outstanding view proposal is active!\n");
+#endif
+		return -2;
+    }
+
+    if(m->outstanding_proposal_nonce != ma->nonce)
+    {
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Received Agreement Response message, but nonce (%ld) does not match outstanding view proposal nonce (%ld)!\n",
+							ma->nonce, m->outstanding_proposal_nonce);
+#endif
+		return -1;
+    }
+
+	m->outstanding_proposal_acks--;
+
+    if(ma->ack_status == PROPOSAL_STATUS_ACCEPTED) // view identical with proposed one
+    {
+    		if(m->outstanding_proposal_acks == 0 && m->proposal_status == PROPOSAL_STATUS_ACTIVE)
+    		{
+    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+
+    			m->proposal_status = PROPOSAL_STATUS_ACCEPTED; // my proposal was accepted
+    		}
+    }
+    else if(ma->ack_status == PROPOSAL_STATUS_AMMENDED)
+    {
+    		int memberships_differ = merge_membership_agreement_msg_to_list(ma, m->merged_responses, my_lc, fastrandstate);
+
+    		assert(memberships_differ);
+
+    		if(m->proposal_status != PROPOSAL_STATUS_REJECTED)
+    			m->proposal_status = PROPOSAL_STATUS_AMMENDED; // my proposal was ammended
+
+    		if(m->proposal_status == PROPOSAL_STATUS_AMMENDED && m->outstanding_proposal_acks == 0)
+    		{
+    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+    		}
+    }
+    else
+    {
+    		assert(ma->ack_status == PROPOSAL_STATUS_REJECTED);
+
+    		m->proposal_status = PROPOSAL_STATUS_REJECTED; // my proposal was rejected
+    }
+
+    return m->proposal_status;
+}
+
+int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[256];
+#endif
+
+	if(compare_vc(m->view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
+#endif
+
+		return 1;
+	}
+
+	// If servers are already connected in local membership, copy their entries from there into agreed membership. Otherwise create new connections for them:
+
+	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
+
+	int install_failed = 0;
+
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, 0);
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this node
+		{
+			int status = connect_remote_server(rs);
+
+			if(status != 0)
+			{
+				rs->sockfd = 0;
+				rs->status = NODE_DEAD;
+				install_failed = 1;
+			}
+
+			status = add_remote_server_to_list(rs, m->local_peers, fastrandstate);
+			assert(status == 0);
+
+			status = add_remote_server_to_list(rs, new_membership, fastrandstate);
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			{
+				long local_counter = get_component_vc(my_lc, nd.node_id);
+				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+
+				if(proposed_counter > local_counter)
+				{
+					rs_local->status = nd.status;
+				}
+
+				install_failed = 1;
+			}
+
+			int status = add_remote_server_to_list(rs_local, new_membership, fastrandstate);
+			assert(status == 0);
+		}
+	}
+
+	if(!install_failed)
+	{
+		if(m->agreed_peers != NULL)
+		{
+			skiplist_free(m->agreed_peers);
+	//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
+		}
+
+		m->agreed_peers = new_membership;
+
+		update_or_replace_vc(&(m->view_id), ma->vc);
+	}
+	else
+	{
+		skiplist_free(new_membership);
+	}
+
+	return install_failed;
 }
 
 int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
 {
-
+	return 0;
 }
 
 
@@ -1322,7 +1539,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		// If we were multi-threaded, we'd have to protect this snippet:
 
     	    	update_vc(my_lc, lc_read);
-    	    	increment_vc(my_lc, my_id);
+    	    	increment_vc(my_lc, m->my_id);
     	    	free_vc(lc_read);
 	}
 #endif
@@ -1338,14 +1555,36 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		}
 		case MEMBERSHIP_AGREEMENT_RESPONSE:
 		{
-			status = handle_agreement_response_message(ma, &merged_membership, m, db, fastrandstate);
+			status = handle_agreement_response_message(ma, &merged_membership, m, db, my_lc, fastrandstate);
 //			assert(status == 0);
-			status = get_agreement_notify_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			if(m->outstanding_proposal_acks == 0)
+			{
+				assert(merged_membership != NULL);
+				if(m->proposal_status == PROPOSAL_STATUS_ACCEPTED)
+				{
+					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+				}
+				else if(m->proposal_status == PROPOSAL_STATUS_AMMENDED) // re-propose merged membership from previous round
+				{
+				    m->outstanding_proposal = skiplist_clone(m->merged_responses, fastrandstate);
+				    m->outstanding_view_id = vc_copy(my_lc);
+				    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
+				    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
+				    m->outstanding_proposal_acks = 0;
+
+					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_view_id),
+																m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, m->outstanding_view_id);
+				}
+			}
+			else
+			{
+				output_packet = 0;
+			}
 			break;
 		}
 		case MEMBERSHIP_AGREEMENT_NOTIFY:
 		{
-			status = handle_agreement_notify_message(ma, m, db, fastrandstate);
+			status = handle_agreement_notify_message(ma, m, db, my_lc, fastrandstate);
 //			assert(status == 0);
 			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, my_lc);
 			break;
@@ -1368,10 +1607,30 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
     if(output_packet)
     {
-		int n = write(childfd, tmp_out_buf, snd_msg_len);
+    		if(ma->msg_type == MEMBERSHIP_AGREEMENT_RESPONSE) // multicast notifications
+    		{
+    			assert(merged_membership != NULL);
 
-		if (n < 0)
-		  error("ERROR writing to socket");
+			for(snode_t * crt = HEAD(m->merged_responses); crt!=NULL; crt = NEXT(crt))
+			{
+				remote_server * rs = (remote_server *) crt->value;
+
+				if(rs->status == NODE_LIVE && rs->sockfd > 0 && get_node_id((struct sockaddr *) &(rs->serveraddr)) != m->my_id) // skip myself, and nodes that are "down" in membership
+				{
+					int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
+
+					if (n < 0)
+						error("ERROR writing to socket");
+				}
+			}
+    		}
+    		else // unicast back response
+    		{
+			int n = write(childfd, tmp_out_buf, snd_msg_len);
+
+			if (n < 0)
+			  error("ERROR writing to socket");
+    		}
 
 		free(tmp_out_buf);
     }
@@ -1460,7 +1719,6 @@ int main(int argc, char **argv) {
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
 //  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
-  membership * m = get_membership();
 
 /*
   if (argc != 2) {
@@ -1499,7 +1757,10 @@ int main(int argc, char **argv) {
   serveraddr.sin_port = htons((unsigned short) portno);
 
   int my_id = get_node_id((struct sockaddr *) &serveraddr);
+
   vector_clock * my_lc = init_local_vc_id(my_id);
+
+  membership * m = get_membership(my_id);
 
   // Set up main gossip socket:
 
