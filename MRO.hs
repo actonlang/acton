@@ -48,7 +48,7 @@ showlin c cs                    = "L(" ++ c ++ ") = " ++ showlist cs
 
 showlist cs                     = "[" ++ commasep wshow cs ++ "]"
 
-wshow (w,x)                     = wsh w ++ ":" ++ x
+wshow (w,x)                     = wsh w ++ ": " ++ x
   where wsh []                  = ""
         wsh [n]                 = wsh' n
         wsh (n:w)               = wsh' n ++ "." ++ wsh w
@@ -57,7 +57,7 @@ wshow (w,x)                     = wsh w ++ ":" ++ x
 
 commasep f []                   = ""
 commasep f [x]                  = f x
-commasep f (x:xs)               = f x ++ "," ++ commasep f xs
+commasep f (x:xs)               = f x ++ ", " ++ commasep f xs
 
 showclass c bases               = c ++ "(" ++ commasep id bases ++ ")"
 
@@ -317,3 +317,24 @@ ex20a = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"])]
 ex20b = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"]), ("E",["D"])]
 
 ex20c = [("A",[]), ("B",["A"]), ("C",["A"]), ("D",["B","C"]), ("E",[]), ("F",["D","E"])]
+
+
+---------------
+
+ex21a = [("Eq",[]), ("Ord",["Eq"]),
+         ("Eq$set",["Eq"]), 
+         ("Ord$set",["Ord","Eq$set"])]
+
+ex21b = [("Eq",[]), ("Ord",["Eq"]),
+         ("Eq$set",["Eq"]), 
+         ("Ord$set",["Eq$set","Ord"])]
+
+ex21c = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]),
+         ("Eq$set",["Eq"]), 
+         ("Ord$set",["Ord","Eq$set"]),
+         ("Set$set",["Set","Ord$set"])]
+
+ex21d = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]),
+         ("Eq$set",["Eq"]), 
+         ("Ord$set",["Eq$set","Ord"]),
+         ("Set$set",["Ord$set","Set"])]
