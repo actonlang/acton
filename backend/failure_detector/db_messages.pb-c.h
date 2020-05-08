@@ -178,10 +178,11 @@ struct  _ServerMessage
   RangeReadQueryMessage *rrm;
   QueueQueryMessage *qm;
   TxnMessage *tm;
+  VectorClockMessage *vc;
 };
 #define SERVER_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&server_message__descriptor) \
-    , 0, NULL, NULL, NULL, NULL, NULL }
+    , 0, NULL, NULL, NULL, NULL, NULL, NULL }
 
 
 struct  _ClientMessage
@@ -196,10 +197,11 @@ struct  _ClientMessage
   RangeReadResponseMessage *rrrm;
   QueueQueryMessage *qm;
   TxnMessage *tm;
+  VectorClockMessage *vc;
 };
 #define CLIENT_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&client_message__descriptor) \
-    , 0, NULL, NULL, NULL, NULL, NULL }
+    , 0, NULL, NULL, NULL, NULL, NULL, NULL }
 
 
 struct  _WriteQueryMessage

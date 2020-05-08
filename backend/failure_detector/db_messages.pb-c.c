@@ -1779,7 +1779,7 @@ const ProtobufCMessageDescriptor versioned_cell_message__descriptor =
   (ProtobufCMessageInit) versioned_cell_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor server_message__field_descriptors[6] =
+static const ProtobufCFieldDescriptor server_message__field_descriptors[7] =
 {
   {
     "mtype",
@@ -1853,6 +1853,18 @@ static const ProtobufCFieldDescriptor server_message__field_descriptors[6] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "vc",
+    7,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ServerMessage, vc),
+    &vector_clock_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned server_message__field_indices_by_name[] = {
   0,   /* field[0] = mtype */
@@ -1860,12 +1872,13 @@ static const unsigned server_message__field_indices_by_name[] = {
   2,   /* field[2] = rm */
   3,   /* field[3] = rrm */
   5,   /* field[5] = tm */
+  6,   /* field[6] = vc */
   1,   /* field[1] = wm */
 };
 static const ProtobufCIntRange server_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor server_message__descriptor =
 {
@@ -1875,14 +1888,14 @@ const ProtobufCMessageDescriptor server_message__descriptor =
   "ServerMessage",
   "",
   sizeof(ServerMessage),
-  6,
+  7,
   server_message__field_descriptors,
   server_message__field_indices_by_name,
   1,  server_message__number_ranges,
   (ProtobufCMessageInit) server_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor client_message__field_descriptors[6] =
+static const ProtobufCFieldDescriptor client_message__field_descriptors[7] =
 {
   {
     "mtype",
@@ -1956,6 +1969,18 @@ static const ProtobufCFieldDescriptor client_message__field_descriptors[6] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "vc",
+    7,
+    PROTOBUF_C_LABEL_OPTIONAL,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(ClientMessage, vc),
+    &vector_clock_message__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned client_message__field_indices_by_name[] = {
   1,   /* field[1] = am */
@@ -1963,12 +1988,13 @@ static const unsigned client_message__field_indices_by_name[] = {
   4,   /* field[4] = qm */
   3,   /* field[3] = rrrm */
   5,   /* field[5] = tm */
+  6,   /* field[6] = vc */
   2,   /* field[2] = wm */
 };
 static const ProtobufCIntRange client_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 7 }
 };
 const ProtobufCMessageDescriptor client_message__descriptor =
 {
@@ -1978,7 +2004,7 @@ const ProtobufCMessageDescriptor client_message__descriptor =
   "ClientMessage",
   "",
   sizeof(ClientMessage),
-  6,
+  7,
   client_message__field_descriptors,
   client_message__field_indices_by_name,
   1,  client_message__number_ranges,

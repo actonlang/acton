@@ -301,6 +301,19 @@ int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
 {
 	printf("TEST: txn\n");
 
+	int node_ids[] = {0,1};
+	long counters[] = {0,0};
+
+	vector_clock * vc = init_vc(2, node_ids, counters, 0), * vc_r = NULL;
+	add_component_vc(vc, 2, 0);
+	increment_vc(vc, 0);
+	increment_vc(vc, 0);
+	increment_vc(vc, 1);
+	increment_vc(vc, 2);
+	increment_vc(vc, 2);
+
+	update_vc(db->my_lc, vc);
+
 	uuid_t * txnid = remote_new_txn(db);
 
 	assert(txnid != NULL);
@@ -329,18 +342,7 @@ int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
 	status = test_consume_queue(db, (WORD) 1, (WORD) 1, txnid);
 	printf("Test %s - %s (%d)\n", "consume_queue_txn", status==0?"OK":"FAILED", status);
 
-	int node_ids[] = {0,1};
-	long counters[] = {0,0};
-
-	vector_clock * vc = init_vc(2, node_ids, counters, 0), * vc_r = NULL;
-	add_component_vc(vc, 2, 0);
-	increment_vc(vc, 0);
-	increment_vc(vc, 0);
-	increment_vc(vc, 1);
-	increment_vc(vc, 2);
-	increment_vc(vc, 2);
-
-	status = remote_commit_txn(txnid, vc, db);
+	status = remote_commit_txn(txnid, db);
 	printf("Test %s - %s (%d)\n", "commit_txn", status==0?"OK":"FAILED", status);
 
 	return 0;

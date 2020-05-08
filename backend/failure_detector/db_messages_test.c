@@ -75,7 +75,7 @@ int main (int argc, const char * argv[])
 	unsigned char buf_r[MAX_MSG_SIZE_VC];
 //	void * buf_r = malloc(MAX_MSG_SIZE_VC);
 	unsigned len_r;
-	char err_msg [100];
+	char err_msg[1024], err_msg2[1024];
 
 	// Generate a dummy VC message:
 
@@ -120,7 +120,6 @@ int main (int argc, const char * argv[])
 	uuid_t txnid;
 	uuid_generate(txnid);
 
-//	cell * cell = init_cell(0, &key, 1, &column, 1, vc);
 	int no_cells = 2;
 	cell * cll = (cell *) malloc(no_cells * sizeof(cell));
 	for(int i=0;i<no_cells;i++)
@@ -131,200 +130,262 @@ int main (int argc, const char * argv[])
 
 	short mtype = -1;
 	write_query * wquery = init_write_query(cll, RPC_TYPE_WRITE, &txnid, 3), * wquery_r = NULL;
-	serialize_write_query(wquery, &buf_w, &len_w, 1);
-//	assert(((int *) buf_w)[0] == len_w - sizeof(int));
-//	deserialize_server_message(((int *) buf_w + 1), len_w - sizeof(int), (void *) &wquery_r, &mtype);
-//	assert(mtype == RPC_TYPE_WRITE);
+	serialize_write_query(wquery, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-//	printf("len_w=%d, len_r=%d, memcmp=%d\n", len_w, len_r, memcmp((const void *) buf_w, (const void *) buf_r, len_w));
 	assert(((int *) buf_r)[0] == len_r - sizeof(int));
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &wquery_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &wquery_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_WRITE);
 
-	printf("Write query: %s\n", to_string_write_query(wquery, err_msg));
+	printf("Write query: %s (%s)\n", to_string_write_query(wquery, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_write_query(wquery, wquery_r))
 	{
 		printf("Write query read mismatch (%s)!\n", to_string_write_query(wquery_r, err_msg));
 		assert(0);
 	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
+		assert(0);
+	}
+
 
 	// Generate dummy Read Query:
 
 	read_query * rquery = init_read_query(cell_address, &txnid, 3), * rquery_r = NULL;
-	serialize_read_query(rquery, &buf_w, &len_w);
+	serialize_read_query(rquery, &buf_w, &len_w, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rquery_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rquery_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_READ);
 
-	printf("Read query: %s\n", to_string_read_query(rquery, err_msg));
+	printf("Read query: %s (%s)\n", to_string_read_query(rquery, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_read_query(rquery, rquery_r))
 	{
 		printf("Read query read mismatch (%s)!\n", to_string_read_query(rquery_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Ack Message:
 
 	ack_message * am = init_ack_message(cell_address, 1, &txnid, 3), * am_r = NULL;
-	serialize_ack_message(am, &buf_w, &len_w);
+	serialize_ack_message(am, &buf_w, &len_w, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &am_r, &mtype);
+	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &am_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_ACK);
 
-	printf("Ack message: %s\n", to_string_ack_message(am, err_msg));
+	printf("Ack message: %s (%s)\n", to_string_ack_message(am, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_ack_message(am, am_r))
 	{
 		printf("Ack message read mismatch (%s)!\n", to_string_ack_message(am_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Range read query:
 
 	range_read_query * rrq = init_range_read_query(cell_address, end_cell_address, &txnid, 3), * rrq_r = NULL;
-	serialize_range_read_query(rrq, &buf_w, &len_w);
+	serialize_range_read_query(rrq, &buf_w, &len_w, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rrq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rrq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_RANGE_READ);
 
-	printf("Range Read Query: %s\n", to_string_range_read_query(rrq, err_msg));
+	printf("Range Read Query: %s (%s)\n", to_string_range_read_query(rrq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_range_read_query(rrq, rrq_r))
 	{
 		printf("Range Read Query read mismatch (%s)!\n", to_string_range_read_query(rrq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Range read response:
 
 	range_read_response_message * rrm = init_range_read_response_message(cll, no_cells, &txnid, 3), * rrm_r = NULL;
-	serialize_range_read_response_message(rrm, &buf_w, &len_w);
+	serialize_range_read_response_message(rrm, &buf_w, &len_w, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rrm_r, &mtype);
+	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &rrm_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_RANGE_READ_RESPONSE);
 
-	printf("Range Read Response: %s\n", to_string_range_read_response_message(rrm, err_msg));
+	printf("Range Read Response: %s (%s)\n", to_string_range_read_response_message(rrm, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_range_read_response_message(rrm, rrm_r))
 	{
 		printf("Range Read Response read mismatch (%s)!\n", to_string_range_read_response_message(rrm_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Create queue message:
 
 	queue_query_message * cq = init_create_queue_message(cell_address, &txnid, 3), * cq_r = NULL;
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Create Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Create Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Create Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Delete queue message:
 
 	cq = init_delete_queue_message(cell_address, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Delete Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Delete Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Delete Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Subscribe queue message:
 
 	cq = init_subscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Subscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Subscribe Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Subscribe Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Unsubscribe queue message:
 
 	cq = init_unsubscribe_queue_message(cell_address, 1, 2, 3, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Unsubscribe Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Unsubscribe Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Unsubscribe Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Enqueue message:
 
 	cq = init_enqueue_message(cell_address, cll, no_cells, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Enqueue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Enqueue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Enqueue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Read queue message:
 
 	cq = init_read_queue_message(cell_address, 1, 2, 3, 2, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Read Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Read Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Read Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Consume queue message:
 
 	cq = init_consume_queue_message(cell_address, 1, 2, 3, 1, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 1);
+	serialize_queue_message(cq, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Consume Queue: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Consume Queue: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Consume Queue read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
 	// Read queue response message:
 
 	cq = init_read_queue_response(cell_address, cll, no_cells, 1, 2, 3, 2, 1, &txnid, 3);
-	serialize_queue_message(cq, &buf_w, &len_w, 0);
+	serialize_queue_message(cq, &buf_w, &len_w, 0, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype);
+	deserialize_client_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &cq_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_QUEUE);
 
-	printf("Read Queue Response: %s\n", to_string_queue_message(cq, err_msg));
+	printf("Read Queue Response: %s (%s)\n", to_string_queue_message(cq, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_queue_message(cq, cq_r))
 	{
 		printf("Read Queue Response read mismatch (%s)!\n", to_string_queue_message(cq_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 
@@ -336,15 +397,20 @@ int main (int argc, const char * argv[])
 									cll, 2,
 									cll, 2,
 									&txnid, vc, 3), * tm_r = NULL;
-	serialize_txn_message(tm, &buf_w, &len_w, 1);
+	serialize_txn_message(tm, &buf_w, &len_w, 1, vc);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &tm_r, &mtype);
+	deserialize_server_message(((int *) buf_r + 1), len_r - sizeof(int), (void *) &tm_r, &mtype, &vc_r);
 	assert(mtype == RPC_TYPE_TXN);
 
-	printf("Txn Message: %s\n", to_string_txn_message(tm, err_msg));
+	printf("Txn Message: %s (%s)\n", to_string_txn_message(tm, err_msg), to_string_vc(vc_r, err_msg2));
 	if(!equals_txn_message(tm, tm_r))
 	{
 		printf("Txn Message read mismatch (%s)!\n", to_string_txn_message(tm_r, err_msg));
+		assert(0);
+	}
+	if(compare_vc(vc, vc_r) != 0)
+	{
+		printf("VC read mismatch (%s)!\n", to_string_vc(vc_r, err_msg));
 		assert(0);
 	}
 }

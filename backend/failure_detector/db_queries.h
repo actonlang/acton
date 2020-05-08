@@ -33,10 +33,8 @@
 #define CLIENT_ERR_SUBSCRIPTION_EXISTS 1
 #define CLIENT_ERR_NO_SUBSCRIPTION_EXISTS 2
 
-int deserialize_server_message(void * buf, unsigned msg_len, void ** sm, short * mtype);
-// char * to_string_server_message(void * sm, char * msg_buff);
-int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short * mtype);
-// char * to_string_client_message(void * cm, char * msg_buff);
+int deserialize_server_message(void * buf, unsigned msg_len, void ** sm, short * mtype, vector_clock ** vc);
+int deserialize_client_message(void * buf, unsigned msg_len, void ** cm, short * mtype, vector_clock ** vc);
 
 typedef struct write_query
 {
@@ -57,7 +55,7 @@ write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_val
 write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce);
 void free_write_query(write_query * ca);
-int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server);
+int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc);
 int deserialize_write_query(void * buf, unsigned msg_len, write_query ** ca);
 char * to_string_write_query(write_query * ca, char * msg_buff);
 int equals_write_query(write_query * ca1, write_query * ca2);
@@ -77,7 +75,7 @@ read_query * build_search_index_in_txn(WORD index_key, int idx_idx, WORD table_k
 read_query * init_read_query(cell_address * cell_address, uuid_t * txnid, long nonce);
 read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, long nonce);
 void free_read_query(read_query * ca);
-int serialize_read_query(read_query * ca, void ** buf, unsigned * len);
+int serialize_read_query(read_query * ca, void ** buf, unsigned * len, vector_clock * vc);
 int deserialize_read_query(void * buf, unsigned msg_len, read_query ** ca);
 char * to_string_read_query(read_query * ca, char * msg_buff);
 int equals_read_query(read_query * ca1, read_query * ca2);
@@ -93,7 +91,7 @@ typedef struct ack_message
 
 ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t * txnid, long nonce);
 void free_ack_message(ack_message * ca);
-int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len);
+int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len, vector_clock * vc);
 int deserialize_ack_message(void * buf, unsigned msg_len, ack_message ** ca);
 char * to_string_ack_message(ack_message * ca, char * msg_buff);
 int equals_ack_message(ack_message * ca1, ack_message * ca2);
@@ -115,7 +113,7 @@ range_read_query * build_wildcard_range_search_in_txn(WORD table_key, uuid_t * t
 range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce);
 range_read_query * init_range_read_query_copy(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce);
 void free_range_read_query(range_read_query * ca);
-int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len);
+int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len, vector_clock * vc);
 int deserialize_range_read_query(void * buf, unsigned msg_len, range_read_query ** ca);
 char * to_string_range_read_query(range_read_query * ca, char * msg_buff);
 int equals_range_read_query(range_read_query * ca1, range_read_query * ca2);
@@ -131,7 +129,7 @@ typedef struct range_read_response_message
 
 range_read_response_message * init_range_read_response_message(cell * cells, int no_cells, uuid_t * txnid, long nonce);
 void free_range_read_response_message(range_read_response_message * ca);
-int serialize_range_read_response_message(range_read_response_message * ca, void ** buf, unsigned * len);
+int serialize_range_read_response_message(range_read_response_message * ca, void ** buf, unsigned * len, vector_clock * vc);
 int deserialize_range_read_response_message(void * buf, unsigned msg_len, range_read_response_message ** ca);
 char * to_string_range_read_response_message(range_read_response_message * ca, char * msg_buff);
 int equals_range_read_response_message(range_read_response_message * ca1, range_read_response_message * ca2);
@@ -184,7 +182,7 @@ queue_query_message * init_consume_queue_message(cell_address * cell_address, in
 queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, uuid_t * txnid, long nonce);
 queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_no_entries, short status, uuid_t * txnid, long nonce);
 void free_queue_message(queue_query_message * ca);
-int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server);
+int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc);
 int deserialize_queue_message(void * buf, unsigned msg_len, queue_query_message ** ca);
 char * to_string_queue_message(queue_query_message * ca, char * msg_buff);
 int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2);
@@ -223,7 +221,7 @@ txn_message * init_txn_message_copy(int type,
 		cell * complete_write_set, int no_complete_write_set,
 		uuid_t * txnid, vector_clock * version, long nonce);
 void free_txn_message(txn_message * ca);
-int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server);
+int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc);
 int deserialize_txn_message(void * buf, unsigned msg_len, txn_message ** ca);
 char * to_string_txn_message(txn_message * ca, char * msg_buff);
 int equals_txn_message(txn_message * ca1, txn_message * ca2);

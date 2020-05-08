@@ -81,6 +81,7 @@ int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t *
 long get_nonce(remote_db_t * db);
 vector_clock * get_lc(remote_db_t * db);
 vector_clock * get_and_increment_lc(remote_db_t * db, int node_id);
+int update_lc_protected(remote_db_t * db, vector_clock * vc_in);
 int free_remote_db(remote_db_t * db);
 int close_remote_db(remote_db_t * db);
 int sockaddr_cmp(WORD a1, WORD a2);
@@ -153,9 +154,9 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 // Txn mgmt:
 
 uuid_t * remote_new_txn(remote_db_t * db);
-int remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db);
+int remote_validate_txn(uuid_t * txnid, remote_db_t * db);
 int remote_abort_txn(uuid_t * txnid, remote_db_t * db);
-int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db);
+int remote_commit_txn(uuid_t * txnid, remote_db_t * db);
 
 // Txn state handling client-side:
 

@@ -209,13 +209,20 @@ void * comm_thread_loop(void * args)
 				db_schema_t * schema;
 				long nonce = -1;
 
-			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0);
+				vector_clock * lc_read = NULL;
+			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0, &lc_read);
 
 			    if(status != 0)
 			    {
 			    		fprintf(stderr, "ERROR decoding server response!\n");
 			    		continue;
 			    		assert(0);
+			    }
+
+			    if(lc_read != NULL)
+			    {
+			    		update_lc_protected(db, lc_read);
+			    		free_vc(lc_read);
 			    }
 
 			    if(nonce > 0) // A server reply
@@ -449,6 +456,17 @@ vector_clock * get_lc(remote_db_t * db)
 	return copy_vc(db->my_lc);
 }
 
+int update_lc_protected(remote_db_t * db, vector_clock * vc_in)
+{
+	pthread_mutex_lock(db->lc_lock);
+
+	int ret = update_vc(db->my_lc, vc_in);
+
+	pthread_mutex_unlock(db->lc_lock);
+
+	return ret;
+}
+
 int close_remote_db(remote_db_t * db)
 {
 	db->stop_comm = 1;
@@ -608,7 +626,7 @@ int remote_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys,
 	unsigned len = 0;
 	write_query * wq = build_insert_in_txn(column_values, no_cols, no_primary_keys, no_clustering_keys, blob, blob_size, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
-	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -668,7 +686,7 @@ int remote_delete_row_in_txn(WORD * column_values, int no_primary_keys, WORD tab
 	unsigned len = 0;
 	write_query * wq = build_delete_row_in_txn(column_values, no_primary_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
-	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -722,7 +740,7 @@ int remote_delete_cell_in_txn(WORD * column_values, int no_primary_keys, int no_
 	unsigned len = 0;
 	write_query * wq = build_delete_cell_in_txn(column_values, no_primary_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
 	void * tmp_out_buf = NULL;
-	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_write_query(wq, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -908,7 +926,7 @@ db_row_t* remote_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD tab
 	void * tmp_out_buf = NULL;
 
 	read_query * q = build_search_in_txn(primary_keys, no_primary_keys, table_key, txnid, get_nonce(db));
-	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
+	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -968,7 +986,7 @@ db_row_t* remote_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	void * tmp_out_buf = NULL;
 
 	read_query * q = build_search_clustering_in_txn(primary_keys, no_primary_keys, clustering_keys, no_clustering_keys, table_key, txnid, get_nonce(db));
-	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len);
+	int success = serialize_read_query(q, (void **) &tmp_out_buf, &len, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1042,7 +1060,7 @@ int remote_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys,
 	void * tmp_out_buf = NULL;
 
 	range_read_query * q = build_range_search_in_txn(start_primary_keys, end_primary_keys, no_primary_keys, table_key, txnid, get_nonce(db));
-	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1104,7 +1122,7 @@ int remote_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_key
 	range_read_query * q = build_range_search_clustering_in_txn(primary_keys, no_primary_keys,
 															start_clustering_keys, end_clustering_keys, no_clustering_keys,
 															table_key, txnid, get_nonce(db));
-	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1170,7 +1188,7 @@ int remote_read_full_table_in_txn(snode_t** start_row, snode_t** end_row,
 	void * tmp_out_buf = NULL;
 
 	range_read_query * q = build_wildcard_range_search_in_txn(table_key, txnid, get_nonce(db));
-	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len);
+	int success = serialize_range_read_query(q, (void **) &tmp_out_buf, &len, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1241,7 +1259,7 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_create_queue_in_txn(table_key, queue_id, txnid, get_nonce(db));
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1296,7 +1314,7 @@ int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_delete_queue_in_txn(table_key, queue_id, txnid, get_nonce(db));
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1351,7 +1369,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_enqueue_in_txn(column_values, no_cols, blob, blob_size, table_key, queue_id, txnid, get_nonce(db));
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1409,7 +1427,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_read_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, max_entries, txnid, get_nonce(db));
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1487,7 +1505,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_consume_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, new_consume_head, txnid, get_nonce(db));
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1544,7 +1562,7 @@ int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_subscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1605,7 +1623,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	void * tmp_out_buf = NULL;
 
 	queue_query_message * q = build_unsubscribe_queue_in_txn(consumer_id, shard_id, app_id, table_key, queue_id, NULL, get_nonce(db)); // txnid
-	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_queue_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1772,7 +1790,7 @@ uuid_t * remote_new_txn(remote_db_t * db)
 	{
 		txnid = new_client_txn(db, &(db->fastrandstate));
 		txn_message * q = build_new_txn(txnid, get_nonce(db));
-		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1);
+		int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 #if CLIENT_VERBOSITY > 0
 		char print_buff[1024];
@@ -1809,6 +1827,10 @@ uuid_t * remote_new_txn(remote_db_t * db)
 #endif
 		}
 
+		// TO DO: Update my_lc from each ACK reply received from servers:
+
+
+
 		delete_msg_callback(mc->nonce, db);
 
 		status = !(ok_status >= db->quorum_size);
@@ -1825,7 +1847,7 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 	void * tmp_out_buf = NULL;
 
 	txn_message * q = build_validate_txn(txnid, version, get_nonce(db));
-	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, version);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1874,10 +1896,15 @@ int _remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_server *
 	return !(ok_status >= db->quorum_size);
 }
 
-int remote_validate_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
+int remote_validate_txn(uuid_t * txnid, remote_db_t * db)
 {
-	return _remote_validate_txn(txnid, version, NULL, db);
+	vector_clock * version = get_lc(db);
 
+	int ret = _remote_validate_txn(txnid, get_lc(db), NULL, db);
+
+	free_vc(version);
+
+	return ret;
 }
 
 int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
@@ -1886,7 +1913,7 @@ int _remote_abort_txn(uuid_t * txnid, remote_server * rs_in, remote_db_t * db)
 	void * tmp_out_buf = NULL;
 
 	txn_message * q = build_abort_txn(txnid, get_nonce(db));
-	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, NULL);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1946,7 +1973,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 	void * tmp_out_buf = NULL;
 
 	txn_message * q = build_commit_txn(txnid, version, get_nonce(db));
-	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1);
+	int success = serialize_txn_message(q, (void **) &tmp_out_buf, &len, 1, version);
 
 	if(db->servers->no_items < db->quorum_size)
 	{
@@ -1995,7 +2022,7 @@ int _remote_persist_txn(uuid_t * txnid, vector_clock * version, remote_server * 
 	return !(ok_status >= db->quorum_size);
 }
 
-int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
+int remote_commit_txn(uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -2015,7 +2042,9 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 	}
 	remote_server * rs = (remote_server *) (HEAD(db->servers))->value;
 
-	int val_res = _remote_validate_txn(txnid, version, rs, db);
+	vector_clock * commit_stamp = get_lc(db);
+
+	int val_res = _remote_validate_txn(txnid, commit_stamp, rs, db);
 
 #if (CLIENT_VERBOSITY > 1)
 	printf("CLIENT: validate txn %s from server %s returned %d\n", uuid_str, rs->id, val_res);
@@ -2026,7 +2055,7 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 		int persist_status = -2;
 		while(persist_status != 0)
 		{
-			persist_status = _remote_persist_txn(txnid, version, rs, db);
+			persist_status = _remote_persist_txn(txnid, commit_stamp, rs, db);
 
 #if (CLIENT_VERBOSITY > 0)
 			printf("CLIENT: persist txn %s from server %s returned %d\n", uuid_str, rs->id, persist_status);
@@ -2051,6 +2080,8 @@ int remote_commit_txn(uuid_t * txnid, vector_clock * version, remote_db_t * db)
 	{
 		assert(0);
 	}
+
+	free_vc(commit_stamp);
 
 	return val_res;
 }

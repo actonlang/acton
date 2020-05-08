@@ -457,7 +457,7 @@ void * actor(void * cargs)
 			if(debug)
 				printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (long) ca->consumer_id, (long) ca->read_head);
 
-			ret = remote_commit_txn(txnid, get_lc(ca->db), ca->db);
+			ret = remote_commit_txn(txnid, ca->db);
 
 			if(debug)
 				printf("ACTOR %ld: Commit returned %d.\n", (long) ca->consumer_id, ret);
@@ -525,7 +525,7 @@ void * actor(void * cargs)
 				if(debug)
 					printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (long) ca->consumer_id, (long) ca->read_head);
 
-				ret = remote_commit_txn(txnid, get_lc(ca->db), ca->db);
+				ret = remote_commit_txn(txnid, ca->db);
 
 				if(debug)
 					printf("ACTOR %ld: Commit returned %d.\n", (long) ca->consumer_id, ret);

@@ -74,7 +74,7 @@ int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WO
 	printf("Sending queue notification message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0);
+	int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0, NULL);
 
 	assert(ret == 0);
 

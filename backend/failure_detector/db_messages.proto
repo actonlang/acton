@@ -65,6 +65,8 @@ message ServerMessage {
 	optional RangeReadQueryMessage rrm=4;
 	optional QueueQueryMessage qm=5;
 	optional TxnMessage tm=6;
+	
+	optional VectorClockMessage vc=7;
 }
 
 message ClientMessage {
@@ -75,6 +77,8 @@ message ClientMessage {
 	optional RangeReadResponseMessage rrrm=4;
 	optional QueueQueryMessage qm=5;
 	optional TxnMessage tm=6;
+
+	optional VectorClockMessage vc=7;
 }
 
 message WriteQueryMessage {

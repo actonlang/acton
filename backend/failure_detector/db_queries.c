@@ -119,7 +119,7 @@ void free_write_query_msg(WriteQueryMessage * msg)
 		free_cell_msg(msg->cell);
 }
 
-int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server)
+int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc)
 {
 	WriteQueryMessage msg = WRITE_QUERY_MESSAGE__INIT;
 	VersionedCellMessage vcell_msg = VERSIONED_CELL_MESSAGE__INIT;
@@ -140,6 +140,17 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		sm.qm = NULL;
 		sm.tm = NULL;
 
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			sm.vc = &lc_msg;
+		}
+		else
+		{
+			sm.vc = NULL;
+		}
+
 		*len = server_message__get_packed_size (&sm);
 		*len = (*len) + sizeof(int);
 		*buf = malloc (*len);
@@ -158,6 +169,17 @@ int serialize_write_query(write_query * ca, void ** buf, unsigned * len, short f
 		cm.rrrm = NULL;
 		cm.qm = NULL;
 		cm.tm = NULL;
+
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			cm.vc = &lc_msg;
+		}
+		else
+		{
+			cm.vc = NULL;
+		}
 
 		*len = client_message__get_packed_size (&cm);
 		*len = (*len) + sizeof(int);
@@ -316,7 +338,7 @@ void free_read_query_msg(ReadQueryMessage * msg)
 //		free(msg->txnid.data);
 }
 
-int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
+int serialize_read_query(read_query * ca, void ** buf, unsigned * len, vector_clock * vc)
 {
 	ReadQueryMessage msg = READ_QUERY_MESSAGE__INIT;
 	CellAddressMessage cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
@@ -332,6 +354,17 @@ int serialize_read_query(read_query * ca, void ** buf, unsigned * len)
 	sm.rrm = NULL;
 	sm.qm = NULL;
 	sm.tm = NULL;
+
+	if(vc != NULL)
+	{
+		VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+		init_vc_msg(&lc_msg, vc);
+		sm.vc = &lc_msg;
+	}
+	else
+	{
+		sm.vc = NULL;
+	}
 
 	*len = server_message__get_packed_size (&sm);
 	*len = (*len) + sizeof(int);
@@ -497,7 +530,7 @@ void free_range_read_query_msg(RangeReadQueryMessage * msg)
 //		free(msg->txnid.data);
 }
 
-int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len)
+int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * len, vector_clock * vc)
 {
 	RangeReadQueryMessage msg = RANGE_READ_QUERY_MESSAGE__INIT;
 	CellAddressMessage start_cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
@@ -515,6 +548,17 @@ int serialize_range_read_query(range_read_query * ca, void ** buf, unsigned * le
 	sm.rrm = &msg;
 	sm.qm = NULL;
 	sm.tm = NULL;
+
+	if(vc != NULL)
+	{
+		VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+		init_vc_msg(&lc_msg, vc);
+		sm.vc = &lc_msg;
+	}
+	else
+	{
+		sm.vc = NULL;
+	}
 
 	*len = server_message__get_packed_size (&sm);
 	*len = (*len) + sizeof(int);
@@ -655,7 +699,7 @@ void free_ack_message_msg(AckMessage * msg)
 //		free(msg->txnid.data);
 }
 
-int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
+int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len, vector_clock * vc)
 {
 	AckMessage msg = ACK_MESSAGE__INIT;
 	CellAddressMessage cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
@@ -672,6 +716,17 @@ int serialize_ack_message(ack_message * ca, void ** buf, unsigned * len)
 	cm.rrrm = NULL;
 	cm.qm = NULL;
 	cm.tm = NULL;
+
+	if(vc != NULL)
+	{
+		VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+		init_vc_msg(&lc_msg, vc);
+		cm.vc = &lc_msg;
+	}
+	else
+	{
+		cm.vc = NULL;
+	}
 
 	*len = client_message__get_packed_size (&cm);
 	*len = (*len) + sizeof(int);
@@ -839,7 +894,7 @@ void free_range_read_response_message(range_read_response_message * ca)
 	free(ca);
 }
 
-int serialize_range_read_response_message(range_read_response_message * ca, void ** buf, unsigned * len)
+int serialize_range_read_response_message(range_read_response_message * ca, void ** buf, unsigned * len, vector_clock * vc)
 {
 	RangeReadResponseMessage msg = RANGE_READ_RESPONSE_MESSAGE__INIT;
 
@@ -853,6 +908,17 @@ int serialize_range_read_response_message(range_read_response_message * ca, void
 	cm.rrrm = &msg;
 	cm.qm = NULL;
 	cm.tm = NULL;
+
+	if(vc != NULL)
+	{
+		VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+		init_vc_msg(&lc_msg, vc);
+		cm.vc = &lc_msg;
+	}
+	else
+	{
+		cm.vc = NULL;
+	}
 
 	*len = client_message__get_packed_size (&cm);
 	*len = (*len) + sizeof(int);
@@ -1238,7 +1304,7 @@ void free_queue_message_msg(QueueQueryMessage * msg)
 }
 
 
-int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server)
+int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc)
 {
 	QueueQueryMessage msg = QUEUE_QUERY_MESSAGE__INIT;
 	CellAddressMessage cell_address_msg = CELL_ADDRESS_MESSAGE__INIT;
@@ -1256,6 +1322,17 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		sm.rrm = NULL;
 		sm.qm = &msg;
 		sm.tm = NULL;
+
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			sm.vc = &lc_msg;
+		}
+		else
+		{
+			sm.vc = NULL;
+		}
 
 		*len = server_message__get_packed_size (&sm);
 		*len = (*len) + sizeof(int);
@@ -1275,6 +1352,17 @@ int serialize_queue_message(queue_query_message * ca, void ** buf, unsigned * le
 		cm.rrrm = NULL;
 		cm.qm = &msg;
 		cm.tm = NULL;
+
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			cm.vc = &lc_msg;
+		}
+		else
+		{
+			cm.vc = NULL;
+		}
 
 		*len = client_message__get_packed_size (&cm);
 		*len = (*len) + sizeof(int);
@@ -1682,7 +1770,7 @@ void free_txn_message_msg(TxnMessage * msg)
 		free_vc_msg(msg->version);
 }
 
-int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server)
+int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short for_server, vector_clock * vc)
 {
 	TxnMessage msg = TXN_MESSAGE__INIT;
 	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
@@ -1699,6 +1787,17 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		sm.rrm = NULL;
 		sm.qm = NULL;
 		sm.tm = &msg;
+
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			sm.vc = &lc_msg;
+		}
+		else
+		{
+			sm.vc = NULL;
+		}
 
 		*len = server_message__get_packed_size (&sm);
 		*len = (*len) + sizeof(int);
@@ -1718,6 +1817,17 @@ int serialize_txn_message(txn_message * ca, void ** buf, unsigned * len, short f
 		cm.rrrm = NULL;
 		cm.qm = NULL;
 		cm.tm = &msg;
+
+		if(vc != NULL)
+		{
+			VectorClockMessage lc_msg = VECTOR_CLOCK_MESSAGE__INIT;
+			init_vc_msg(&lc_msg, vc);
+			cm.vc = &lc_msg;
+		}
+		else
+		{
+			cm.vc = NULL;
+		}
 
 		*len = client_message__get_packed_size (&cm);
 		*len = (*len) + sizeof(int);
@@ -1889,9 +1999,12 @@ void free_server_msg(ServerMessage * sm)
 			assert(0);
 		}
 	}
+
+	if(sm->vc != NULL)
+		free_vc_msg(sm->vc);
 }
 
-int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype)
+int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, vector_clock ** vc)
 {
 	ServerMessage * sm = server_message__unpack (NULL, msg_len, buf);
 
@@ -1944,6 +2057,8 @@ int deserialize_server_message(void * buf, unsigned msg_len, void ** dest_buf, s
 
 	*mtype = sm->mtype;
 
+	*vc = (sm->vc != NULL)?(init_vc_from_msg(sm->vc)):(NULL);
+
 	printf("Deserialized message of type %d\n", sm->mtype);
 
 	server_message__free_unpacked(sm, NULL);
@@ -1991,9 +2106,12 @@ void free_client_msg(ClientMessage * cm)
 			assert(0);
 		}
 	}
+
+	if(cm->vc != NULL)
+		free_vc_msg(cm->vc);
 }
 
-int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype)
+int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, short * mtype, vector_clock ** vc)
 {
 	ClientMessage * cm = client_message__unpack (NULL, msg_len, buf);
 
@@ -2008,31 +2126,31 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 		case RPC_TYPE_ACK:
 		{
 			assert(cm->am != NULL);
-			*dest_buf = (ack_message *) init_ack_message_from_msg(cm->am);
+			*dest_buf = init_ack_message_from_msg(cm->am);
 			break;
 		}
 		case RPC_TYPE_WRITE:
 		{
 			assert(cm->wm != NULL);
-			*dest_buf = (write_query *) init_write_query_from_msg(cm->wm);
+			*dest_buf = init_write_query_from_msg(cm->wm);
 			break;
 		}
 		case RPC_TYPE_RANGE_READ_RESPONSE:
 		{
 			assert(cm->rrrm != NULL);
-			*dest_buf = (range_read_response_message *) init_range_read_response_message_from_msg(cm->rrrm);
+			*dest_buf = init_range_read_response_message_from_msg(cm->rrrm);
 			break;
 		}
 		case RPC_TYPE_QUEUE:
 		{
 			assert(cm->qm != NULL);
-			*dest_buf = (queue_query_message *) init_queue_message_from_msg(cm->qm);
+			*dest_buf = init_queue_message_from_msg(cm->qm);
 			break;
 		}
 		case RPC_TYPE_TXN:
 		{
 			assert(cm->tm != NULL);
-			*dest_buf = (txn_message *) init_txn_message_from_msg(cm->tm);
+			*dest_buf = init_txn_message_from_msg(cm->tm);
 			break;
 		}
 		default:
@@ -2044,6 +2162,8 @@ int deserialize_client_message(void * buf, unsigned msg_len, void ** dest_buf, s
 	}
 
 	*mtype = cm->mtype;
+
+	*vc = (cm->vc != NULL)?(init_vc_from_msg(cm->vc)):(NULL);
 
 	client_message__free_unpacked(cm, NULL);
 

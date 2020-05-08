@@ -171,7 +171,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 	return 1;
 }
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server, vector_clock ** vc)
 {
 	read_query * rq;
 	range_read_query * rrq;
@@ -188,7 +188,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 
 	if(is_server) // RPCs received by server
 	{
-		status = deserialize_server_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type);
+		status = deserialize_server_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type, vc);
 
 		if(status == 0)
 		{
@@ -253,7 +253,7 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	}
 	else // RPCs received by client
 	{
-		status = deserialize_client_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type);
+		status = deserialize_client_message(rcv_buf, rcv_msg_len, out_msg, out_msg_type, vc);
 
 		if(status == 0)
 		{

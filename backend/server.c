@@ -151,7 +151,7 @@ db_schema_t * get_schema(db_t * db, WORD table_key)
 // Write message handlers:
 
 int get_ack_packet(int status, write_query * q,
-					void ** snd_buf, unsigned * snd_msg_len)
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	ack_message * ack = init_ack_message(get_cell_address(q->cell), status, q->txnid, q->nonce);
 
@@ -161,7 +161,7 @@ int get_ack_packet(int status, write_query * q,
 	printf("Sending ack message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
 
 	free_ack_message(ack);
 
@@ -302,7 +302,7 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 	return cells_ptr;
 }
 
-int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len)
+int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	range_read_response_message * m = NULL;
 
@@ -364,7 +364,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	printf("Sending range read response message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+	int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
 
 	free_range_read_response_message(m);
 
@@ -390,7 +390,9 @@ db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, un
 	}
 }
 
-int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len)
+int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q,
+									db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len,
+									vector_clock * vc)
 {
 	int schema_keys = schema->no_primary_keys + schema->min_no_clustering_keys; // We only use this schema data for sanity checking of read back results
 //	int no_keys = schema_keys - q->start_cell_address->no_keys + 1;
@@ -438,7 +440,7 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		printf("Sending range read response message: %s\n", print_buff);
 #endif
 
-		int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len);
+		int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
 
 		free_range_read_response_message(m);
 
@@ -474,7 +476,7 @@ int handle_range_read_query(range_read_query * q,
 // Queue message handlers:
 
 int get_queue_ack_packet(int status, queue_query_message * q,
-					void ** snd_buf, unsigned * snd_msg_len)
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	ack_message * ack = init_ack_message(q->cell_address, status, q->txnid, q->nonce);
 
@@ -484,7 +486,7 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 	printf("Sending queue ack message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
 
 	free_ack_message(ack);
 
@@ -494,7 +496,7 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results,
 									long new_read_head, int status, db_schema_t * schema,
 									queue_query_message * q,
-									void ** snd_buf, unsigned * snd_msg_len)
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	queue_query_message * m = NULL;
 
@@ -539,7 +541,7 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		printf("Sending read queue response message: %s\n", print_buff);
 #endif
 
-		int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0);
+		int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0, vc);
 
 		free_queue_message(m);
 
@@ -658,7 +660,7 @@ int handle_consume_queue(queue_query_message * q, db_t * db, unsigned int * fast
 // Txn messages handlers:
 
 int get_txn_ack_packet(int status, txn_message * q,
-					void ** snd_buf, unsigned * snd_msg_len)
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	ack_message * ack = init_ack_message(NULL, status, q->txnid, q->nonce);
 
@@ -668,7 +670,7 @@ int get_txn_ack_packet(int status, txn_message * q,
 	printf("Sending txn ack message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len);
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
 
 	free_ack_message(ack);
 
@@ -814,7 +816,7 @@ int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname
     return 0;
 }
 
-int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate)
+int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int my_id)
 {
     void * tmp_out_buf = NULL, * q = NULL;
     unsigned snd_msg_len;
@@ -822,13 +824,24 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
 	db_schema_t * schema;
 	long nonce = -1;
 
-    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1);
+	vector_clock * lc_read = NULL;
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1, &lc_read);
 
     if(status != 0)
     {
 //    		error("ERROR decoding client request");
     		fprintf(stderr, "ERROR decoding client request");
     		return -1;
+    }
+
+    if(lc_read != NULL)
+    {
+    		// If we were multi-threaded, we'd have to protect this snippet:
+
+    		update_vc(my_lc, lc_read);
+    		increment_vc(my_lc, my_id);
+
+    		free_vc(lc_read);
     }
 
     switch(msg_type)
@@ -841,28 +854,38 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				printf("ERROR: handle_write_query returned %d!", status);
     				assert(0);
     			}
-    			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len);
+    		    vector_clock * vc = (((write_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+    			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
     			free_write_query((write_query *) q);
     			break;
     		}
     		case RPC_TYPE_READ:
     		{
     			db_row_t* result = handle_read_query((read_query *) q, &schema, db, fastrandstate);
-    			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    		    vector_clock * vc = (((read_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+    			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
     			free_read_query((read_query *) q);
     			break;
     		}
     		case RPC_TYPE_RANGE_READ:
     		{
     			snode_t * start_row = NULL, * end_row = NULL;
+    		    vector_clock * vc = (((range_read_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
     			int no_results = handle_range_read_query((range_read_query *) q, &start_row, &end_row, &schema, db, fastrandstate);
-    			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len);
+    			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
     			free_range_read_query((range_read_query *) q);
     			break;
     		}
     		case RPC_TYPE_QUEUE:
     		{
     			queue_query_message * qm = (queue_query_message *) q;
+    		    vector_clock * vc = (qm->txnid != NULL)?(copy_vc(my_lc)):(NULL);
 
     			switch(qm->msg_type)
     			{
@@ -870,14 +893,14 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_create_queue(qm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
     				case QUERY_TYPE_DELETE_QUEUE:
     				{
     					status = handle_delete_queue(qm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
     				case QUERY_TYPE_SUBSCRIBE_QUEUE:
@@ -885,21 +908,21 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     					long prev_read_head = -1, prev_consume_head = -1;
     					status = handle_subscribe_queue(qm, &childfd, &prev_read_head, &prev_consume_head, db, fastrandstate);
     					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
     				case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
     				{
     					status = handle_unsubscribe_queue(qm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
     				case QUERY_TYPE_ENQUEUE:
     				{
     					status = handle_enqueue(qm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
@@ -913,7 +936,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
     													&start_row, &end_row, &schema, db, fastrandstate);
     					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
-    					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
@@ -921,7 +944,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_consume_queue(qm, db, fastrandstate);
 //    					assert(status == (int) qm->queue_index);
-    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
     				default:
@@ -930,6 +953,8 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				}
     			}
 
+    			if(vc != NULL)
+    				free_vc(vc);
     			free_queue_message(qm);
 
     			break;
@@ -937,6 +962,8 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     		case RPC_TYPE_TXN:
     		{
     			txn_message * tm = (txn_message *) q;
+    			assert(tm->txnid != NULL);
+    		    vector_clock * vc = copy_vc(my_lc);
 
     			switch(tm->type)
     			{
@@ -944,7 +971,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_new_txn(tm, db, fastrandstate);
     					assert(status == 0 || status == -2);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
@@ -952,7 +979,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_validate_txn(tm, db, fastrandstate);
     					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
@@ -960,7 +987,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_commit_txn(tm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
@@ -968,12 +995,14 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				{
     					status = handle_abort_txn(tm, db, fastrandstate);
     					assert(status == 0);
-    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
 
     					break;
     				}
     			}
 
+    			if(vc != NULL)
+    				free_vc(vc);
     			free_txn_message(tm);
 
     			break;
@@ -1000,7 +1029,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     return 0;
 }
 
-int handle_server_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate)
+int handle_server_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate, vector_clock * vc)
 {
 	return 0;
 }
@@ -1139,7 +1168,8 @@ int main(int argc, char **argv) {
   serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
   serveraddr.sin_port = htons((unsigned short)portno);
 
-  vector_clock * my_lc = init_local_vc((struct sockaddr *) &serveraddr);
+  int my_id = get_node_id((struct sockaddr *) &serveraddr);
+  vector_clock * my_lc = init_local_vc_id(my_id);
 
   printf("SERVER: Started %s:%d, my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), serveraddr.sin_port, to_string_vc(my_lc, msg_buf));
 
@@ -1237,7 +1267,7 @@ int main(int argc, char **argv) {
 				if(read_full_packet(&(rs->sockfd), &msg_len))
 					continue;
 
-			    if(handle_client_message(childfd, msg_len, db, &seed))
+			    if(handle_client_message(childfd, msg_len, db, &seed, my_lc, my_id))
 			    		continue;
 			}
 		}
@@ -1254,7 +1284,7 @@ int main(int argc, char **argv) {
 				if(read_full_packet(&(rs->sockfd), &msg_len))
 					continue;
 
-			    if(handle_server_message(childfd, msg_len, db, &seed))
+			    if(handle_server_message(childfd, msg_len, db, &seed, my_lc))
 			    		continue;
 			}
 		}
