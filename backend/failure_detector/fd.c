@@ -111,17 +111,21 @@ char * to_string_gs(gossip_state * gs, char * msg_buff)
 
 /* Node description: */
 
-node_description * alloc_node_description()
-{
-	return (node_description *) malloc(sizeof(node_description));
-}
-
-void init_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id)
+void copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id)
 {
 	nd->status = status;
 	nd->node_id = node_id;
 	nd->rack_id = rack_id;
 	nd->dc_id = dc_id;
+}
+
+node_description * alloc_node_description(int status, int node_id, int rack_id, int dc_id)
+{
+	node_description * nd = (node_description *) malloc(sizeof(node_description));
+
+	copy_node_description(nd, status, node_id, rack_id, dc_id);
+
+	return nd;
 }
 
 void free_node_description(node_description * vc)
@@ -168,9 +172,12 @@ void free_membership_msg(MembershipViewMessage * msg)
 	free(msg->membership);
 }
 
-void init_membership_msg(MembershipViewMessage * msg, membership_state * m)
+void init_membership_msg(MembershipViewMessage * msg, membership_state * m, VectorClockMessage * view_id_msg)
 {
 	NodeStateMessage **membership_v = (NodeStateMessage **) malloc (m->no_nodes * sizeof (NodeStateMessage*));
+
+	msg->view_id = view_id_msg;
+
 	for(int i = 0; i < m->no_nodes; i++)
 	{
 		membership_v[i] = malloc (sizeof (NodeStateMessage));
@@ -185,11 +192,10 @@ void init_membership_msg(MembershipViewMessage * msg, membership_state * m)
 int serialize_membership(membership_state * m, void ** buf, unsigned * len)
 {
 	MembershipViewMessage msg = MEMBERSHIP_VIEW_MESSAGE__INIT;
-	VectorClockMessage vc_msg = VECTOR_CLOCK_MESSAGE__INIT;
-	init_vc_msg(&vc_msg, m->view_id);
-	msg.view_id = &vc_msg;
+	VectorClockMessage view_id_msg = VECTOR_CLOCK_MESSAGE__INIT;
+	init_vc_msg(&view_id_msg, m->view_id);
 
-	init_membership_msg(&msg, m);
+	init_membership_msg(&msg, m, &view_id_msg);
 
 	*len = membership_view_message__get_packed_size (&msg);
 	*buf = malloc (*len);
@@ -207,7 +213,7 @@ membership_state * init_membership_from_msg(MembershipViewMessage * msg)
 
 	node_description * membership = (node_description *) malloc(msg->n_membership * sizeof(node_description));
 	for(int i=0;i<msg->n_membership;i++)
-		init_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id);
+		copy_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id);
 	return init_membership(msg->n_membership, membership, view_id);
 }
 
@@ -233,9 +239,9 @@ int equals_membership(membership_state * gs1, membership_state * gs2)
 
 	for(int i=0;i<gs1->no_nodes;i++)
 		if(!equals_node_description(gs1->membership + i, gs2->membership + i))
-			return 1;
+			return 0;
 
-	return 0;
+	return 1;
 }
 
 char * to_string_membership(membership_state * gs, char * msg_buff)
@@ -290,7 +296,9 @@ int serialize_membership_agreement_msg(membership_agreement_msg * ma, void ** bu
 	msg.vc = &vc_msg;
 
 	MembershipViewMessage mview_msg = MEMBERSHIP_VIEW_MESSAGE__INIT;
-	init_membership_msg(&mview_msg, ma->membership);
+	VectorClockMessage view_id_msg = VECTOR_CLOCK_MESSAGE__INIT;
+	init_vc_msg(&view_id_msg, ma->membership->view_id);
+	init_membership_msg(&mview_msg, ma->membership, &view_id_msg);
 	msg.view = &mview_msg;
 
 	msg.msg_type = ma->msg_type;
@@ -323,6 +331,20 @@ int deserialize_membership_agreement_msg(void * buf, unsigned msg_len, membershi
 	return 0;
 }
 
+int equals_membership_agreement_msg(membership_agreement_msg * ma1, membership_agreement_msg * ma2)
+{
+	if(ma1->msg_type != ma2->msg_type || ma1->ack_status != ma2->ack_status)
+		return 0;
+
+	if(!equals_membership(ma1->membership, ma2->membership))
+		return 0;
+
+	if(compare_vc(ma1->vc, ma2->vc) != 0)
+		return 0;
+
+	return 1;
+}
+
 char * to_string_membership_agreement_msg(membership_agreement_msg * ma, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
@@ -340,5 +362,6 @@ char * to_string_membership_agreement_msg(membership_agreement_msg * ma, char * 
 
 	return msg_buff;
 }
+
 
 

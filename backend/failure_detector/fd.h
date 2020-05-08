@@ -39,8 +39,8 @@ typedef struct node_description
 	int dc_id;
 } node_description;
 
-node_description * alloc_node_description();
-void init_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id);
+node_description * init_node_description(int status, int node_id, int rack_id, int dc_id);
+void copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id);
 void free_node_description(node_description * vc);
 int equals_node_description(node_description * nd1, node_description * nd2);
 char * to_string_node_description(node_description * nd, char * msg_buff);
@@ -86,6 +86,7 @@ void free_membership_agreement(membership_agreement_msg * ma);
 void free_membership_agreement_msg(MembershipAgreementMessage * msg);
 int serialize_membership_agreement_msg(membership_agreement_msg * gs, void ** buf, unsigned * len);
 int deserialize_membership_agreement_msg(void * buf, unsigned msg_len, membership_agreement_msg ** ma);
+int equals_membership_agreement_msg(membership_agreement_msg * ma1, membership_agreement_msg * ma2);
 char * to_string_membership_agreement_msg(membership_agreement_msg * gs, char * msg_buff);
 
 #endif /* BACKEND_FAILURE_DETECTOR_FD_H_ */

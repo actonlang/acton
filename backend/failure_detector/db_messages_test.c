@@ -113,6 +113,39 @@ int main (int argc, const char * argv[])
 		assert(0);
 	}
 
+	// Generate dummy Membership State message:
+
+	node_description * nds = (node_description *) malloc(3 * sizeof(node_description));
+	copy_node_description(&nds[0], 0, 0, 0, 0);
+	copy_node_description(&nds[1], 0, 1, 0, 0);
+	copy_node_description(&nds[2], 1, 2, 0, 0);
+
+	membership_state * ms = init_membership(3, nds, vc), * ms_r = NULL;
+	serialize_membership(ms, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_membership(buf_r, len_r, &ms_r);
+
+	printf("MembershipState message: %s\n", to_string_membership(ms, err_msg));
+	if(!equals_membership(ms, ms_r))
+	{
+		printf("MembershipState read mismatch (%s)!\n", to_string_membership(ms_r, err_msg));
+		assert(0);
+	}
+
+	// Generate dummy Membership Agreement message:
+
+	membership_agreement_msg * ma = init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_PROPOSE, 0, ms, vc), * ma_r = NULL;
+	serialize_membership_agreement_msg(ma, &buf_w, &len_w);
+	write_read_from_file(buf_w, len_w, buf_r, &len_r);
+	deserialize_membership_agreement_msg(buf_r, len_r, &ma_r);
+
+	printf("MembershipAgreement message: %s\n", to_string_membership_agreement_msg(ma, err_msg));
+	if(!equals_membership_agreement_msg(ma, ma_r))
+	{
+		printf("MembershipAgreement read mismatch (%s)!\n", to_string_membership_agreement_msg(ma_r, err_msg));
+		assert(0);
+	}
+
 	// Generate a dummy Cell and CellAddress:
 
 	long key = 1, end_key = 3;
