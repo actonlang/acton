@@ -101,6 +101,18 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
     return 0;
 }
 
+skiplist_t * skiplist_clone(skiplist_t * list, unsigned int * seedptr)
+{
+	skiplist_t * dst_list = create_skiplist(list->cmp);
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		skiplist_insert(dst_list, crt->key, crt->value, seedptr);
+	}
+
+	return dst_list;
+}
+
 snode_t *skiplist_search(skiplist_t *list, WORD key) {
     snode_t *x = list->header;
     for (int i = list->level; i >= 0; i--) {

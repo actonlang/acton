@@ -148,6 +148,18 @@ int add_component_vc(vector_clock * vc, int node_id, int initial_counter)
 	return 0;
 }
 
+long get_component_vc(vector_clock * vc, int node_id)
+{
+	// Binary search node_id:
+	int found_idx = 0, exact_match = 0;
+	BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match);
+
+	if(exact_match)
+		return vc->node_ids[found_idx].counter;
+	else
+		return -1;
+}
+
 // S'd never call this in principle:
 
 int remove_component_vc(vector_clock * vc, int node_id)

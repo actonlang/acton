@@ -6,8 +6,10 @@ syntax = "proto2";
 message NodeStateMessage {
 	required int32 status=1;	// 0 - dead, 1 - ready, 2 - alive but not ready
 	required int32 node_id=2;
-	required int32 rack_id=3;
-	required int32 dc_id=4;
+	required bytes hostname=3;
+	required int32 port=4;
+	required int32 rack_id=5;
+	required int32 dc_id=6;
 }
 
 message VectorClockMessage {
@@ -28,8 +30,9 @@ message MembershipViewMessage {
 message MembershipAgreementMessage {
 	required int32 msg_type=1;		// 0 - PROPOSE, 1 - RESPONSE, 2 - NOTIFY, 3 - RETRY_LINK, 4 - NOTIFY_ACK
 	required int32 ack_status=2;		// 0 - ACK, 1 - NACK, 2 - UNINIT
- 	required MembershipViewMessage view=3; 
- 	required VectorClockMessage vc=4;
+ 	optional MembershipViewMessage view=3; 
+ 	required int64 nonce=4;
+ 	required VectorClockMessage vc=5;
 }
 
 // DB cells and Queue entries:

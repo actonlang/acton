@@ -31,6 +31,7 @@ skiplist_t * create_skiplist_long();
 skiplist_t *create_skiplist_uuid();
 skiplist_t * create_skiplist(int (*cmp)(WORD, WORD));
 skiplist_t * skiplist_init(skiplist_t *list, int (*cmp)(WORD, WORD));
+skiplist_t * skiplist_clone(skiplist_t * list, unsigned int * seedptr);
 int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedptr);
 snode_t * skiplist_search(skiplist_t *list, WORD key);
 snode_t *skiplist_search_higher(skiplist_t *list, WORD key);

@@ -324,7 +324,36 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	return 1;
 }
 
-int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int (*handle_socket_close)(int * sockfd))
+int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc)
+{
+	membership_agreement_msg * ma = NULL;
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[4096];
+#endif
+	int status = deserialize_membership_agreement_msg(rcv_buf, rcv_msg_len, ma);
+
+	if(status == 0)
+	{
+		*nonce = (*ma)->nonce;
+		*vc = (*ma)->vc;
+
+#if (VERBOSE_RPC > 0)
+		to_string_membership_agreement_msg((*ma), (char *) print_buff);
+		printf("Received gossip message: %s\n", print_buff);
+#endif
+	}
+	else
+	{
+		*ma = NULL;
+		*vc = NULL;
+		*nonce = -1;
+	}
+
+	return status;
+}
+
+int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int * statusp, int (*handle_socket_close)(int * sockfd, int * status))
 {
 	int announced_msg_len = -1;
 	int read_buf_offset = 0;
@@ -350,7 +379,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 			}
 			else if (size_len == 0)
 			{
-				handle_socket_close(sockfd);
+				handle_socket_close(sockfd, statusp);
 				status = 1;
 				break;
 			}
@@ -381,7 +410,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 	    }
 		else if(*msg_len == 0) // client closed socket
 	    {
-			handle_socket_close(sockfd);
+			handle_socket_close(sockfd, statusp);
 			status = 1;
 	        break;
 	    }
@@ -441,10 +470,11 @@ int sockaddr_cmp(WORD a1, WORD a2)
 
 // Remote server struct fctns:
 
-remote_server * get_remote_server(char *hostname, int portno)
+remote_server * get_remote_server(char *hostname, int portno, int do_connect)
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
+    rs->status = NODE_LIVE;
 
 	rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (rs->sockfd < 0)
@@ -468,11 +498,14 @@ remote_server * get_remote_server(char *hostname, int portno)
 	  (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
     rs->serveraddr.sin_port = htons(portno);
 
-    if (connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in)) < 0)
+    if(do_connect)
     {
-    		fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
-        free_remote_server(rs);
-        return NULL;
+		if(connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in)) < 0)
+		{
+				fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
+			free_remote_server(rs);
+			return NULL;
+		}
     }
 
 	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));
@@ -480,7 +513,22 @@ remote_server * get_remote_server(char *hostname, int portno)
 
     snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
 
+    strncpy(&(rs->hostname), hostname, strnlen(hostname, 256) + 1);
+    rs->portno = portno;
+
 	return rs;
+}
+
+int connect_remote_server(remote_server * rs)
+{
+	int ret = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+
+	if(ret < 0)
+	{
+		fprintf(stderr, "ERROR connecting to %s:%d\n", rs->hostname, rs->portno);
+	}
+
+	return ret;
 }
 
 void free_remote_server(remote_server * rs)

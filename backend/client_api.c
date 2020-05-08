@@ -290,7 +290,7 @@ void * comm_thread_loop(void * args)
 
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr)
 {
-    remote_server * rs = get_remote_server(hostname, portno);
+    remote_server * rs = get_remote_server(hostname, portno, 1);
 
     if(rs == NULL)
     {

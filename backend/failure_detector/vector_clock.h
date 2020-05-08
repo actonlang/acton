@@ -60,6 +60,8 @@ int update_or_replace_vc(vector_clock ** vc_dest, vector_clock * vc_src);
 
 int add_component_vc(vector_clock * vc, int node_id, int initial_counter);
 
+long get_component_vc(vector_clock * vc, int node_id);
+
 int remove_component_vc(vector_clock * vc, int node_id);
 
 vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids);

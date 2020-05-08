@@ -8,6 +8,7 @@
 
 #include "db.h"
 #include "failure_detector/db_queries.h"
+#include "failure_detector/fd.h"
 #include "comm.h"
 #include "fastrand.h"
 
@@ -23,8 +24,11 @@
 #include <sys/time.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <argp.h>
 
 #define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
+
+// #define UPDATE_LC_ON_GOSSIP
 
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
@@ -46,6 +50,52 @@ void error(char *msg) {
 }
 
 #define SERVER_VERBOSITY 1
+
+#define DEFAULT_DATA_PORT 32000
+#define DEFAULT_GOSSIP_PORT 34000
+
+#define RANDOM_NONCES
+long requests = 0;
+
+long _get_nonce(unsigned int * fastrandstate)
+{
+#ifdef RANDOM_NONCES
+	unsigned int randno1, randno2;
+	long randlong;
+	FASTRAND(fastrandstate, randno1);
+	FASTRAND(fastrandstate, randno2);
+	return ((long) randno1 << 32) | ((long) randno2 & 0xFFFFFFFFL);
+#else
+	return ++requests;
+#endif
+}
+
+typedef struct membership
+{
+	skiplist_t * local_peers;
+	skiplist_t * agreed_peers;
+	vector_clock * view_id;
+} membership;
+
+membership * get_membership()
+{
+	membership * m = (membership *) malloc(sizeof(membership));
+
+	m->local_peers = create_skiplist(&sockaddr_cmp);
+	m->agreed_peers = create_skiplist(&sockaddr_cmp);
+	m->view_id = NULL;
+
+	return m;
+}
+
+void free_membership(membership * m)
+{
+	free_skiplist(m->local_peers);
+	free_skiplist(m->agreed_peers);
+	if(m->view_id != NULL)
+		free_vc(m->view_id);
+	free(m);
+}
 
 /*
 int create_state_schema(db_t * db, unsigned int * fastrandstate) {
@@ -727,7 +777,7 @@ int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 	return abort_txn(q->txnid, db);
 }
 
-int handle_socket_close(int * childfd)
+int handle_socket_close(int * childfd, int * status)
 {
 	struct sockaddr_in address;
 	int addrlen;
@@ -740,12 +790,38 @@ int handle_socket_close(int * childfd)
 	close(*childfd);
 	*childfd = 0;
 
+	*status = NODE_DEAD;
+
 	return 0;
 }
 
-int add_peer_to_membership(char *hostname, int portno, skiplist_t * peers, unsigned int * seedptr)
+int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsigned int * seedptr)
 {
-    remote_server * rs = get_remote_server(hostname, portno);
+    if(skiplist_search(peer_list, &rs->serveraddr) != NULL)
+    {
+		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", rs->hostname, rs->portno);
+		return -1;
+    }
+
+    int status = skiplist_insert(peer_list, &rs->serveraddr, rs, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", rs->hostname, rs->portno);
+		return -2;
+    }
+
+    return 0;
+}
+
+int add_remote_server_to_membership(remote_server * rs, membership * m, short agreed, unsigned int * seedptr)
+{
+    return add_remote_server_to_list(rs, (agreed)?(m->agreed_peers):(m->local_peers), seedptr);
+}
+
+int add_peer_to_membership(char *hostname, int portno, membership * m, short agreed, unsigned int * seedptr)
+{
+    remote_server * rs = get_remote_server(hostname, portno, 1);
 
     if(rs == NULL)
     {
@@ -753,23 +829,14 @@ int add_peer_to_membership(char *hostname, int portno, skiplist_t * peers, unsig
     		return 1;
     }
 
-    if(skiplist_search(peers, &rs->serveraddr) != NULL)
-    {
-		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", hostname, portno);
-		free_remote_server(rs);
-		return -1;
-    }
-
-    int status = skiplist_insert(peers, &rs->serveraddr, rs, seedptr);
+    int status = add_remote_server_to_membership(rs, m, agreed, seedptr);
 
     if(status != 0)
     {
-		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
-		free_remote_server(rs);
-		return -2;
+    		free_remote_server(rs);
     }
 
-    return 0;
+    return status;
 }
 
 typedef struct client_descriptor
@@ -1029,18 +1096,333 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     return 0;
 }
 
-int handle_server_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate, vector_clock * vc)
+// Gossip message handling:
+
+int get_agreement_propose_packet(int status, membership_state * membership, long nonce,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
+	membership_agreement_msg * amr = get_membership_propose_msg(status, membership, nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Propose message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(amr);
+
+	return ret;
+}
+
+int get_agreement_response_packet(int status, membership_state * membership, membership_agreement_msg * am,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_response_msg(status, membership, am->nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Response message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(amr);
+
+	return ret;
+}
+
+int get_agreement_notify_packet(int status, membership_state * membership, membership_agreement_msg * am,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_notify_msg(status, membership, am->nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Notify message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(amr);
+
+	return ret;
+}
+
+int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_notify_ack_msg(status, am->nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Notify ACK message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(amr);
+
+	return ret;
+}
+
+membership_state * get_membership_state_from_server_list(skiplist_t * servers, vector_clock * my_vc)
+{
+	if(servers->no_items == 0)
+		return NULL;
+
+	node_description * nds = (node_description *) malloc(servers->no_items * sizeof(node_description));
+
+	int i = 0;
+	for(snode_t * crt = HEAD(servers); crt!=NULL; crt = NEXT(crt), i++)
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		copy_node_description(nds+i, (rs->sockfd >= 0), get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
+	}
+
+	return init_membership(servers->no_items, nds, my_vc);
+}
+
+int propose_local_membership(membership * m, unsigned int * fastrandstate, vector_clock * my_vc)
+{
+    void * tmp_out_buf = NULL;
+    unsigned snd_msg_len;
+
+	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->local_peers, my_vc),
+												_get_nonce(fastrandstate), &tmp_out_buf, &snd_msg_len, my_vc);
+
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		if(rs->sockfd > 0)
+		{
+			int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
+
+			if (n < 0)
+			  error("ERROR writing to socket");
+		}
+	}
+
+	free(tmp_out_buf);
+
+	return 0;
+}
+
+
+int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[256];
+#endif
+
+	if(compare_vc(m->view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Rejecting proposed view %s because it is older than my installed view %s!\n",
+							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
+#endif
+
+		*merged_membership = NULL;
+
+		return 1;
+	}
+
+	*merged_membership = clone_membership(m);
+
+	// Copy local view to merged list:
+	skiplist_t * merged_list = skiplist_clone(m->local_peers);
+
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, 0);
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this node
+		{
+			int status = connect_remote_server(rs);
+
+			if(status != 0)
+			{
+				rs->sockfd = 0;
+				rs->status = NODE_DEAD;
+			}
+
+			status = add_remote_server_to_list(rs, merged_list, fastrandstate);
+
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			{
+				long local_counter = get_component_vc(my_lc, nd.node_id);
+				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+
+				if(proposed_counter > local_counter)
+				{
+					rs_local->status = nd.status;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
+{
+
+}
+
+
+
+int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc)
+{
+    void * tmp_out_buf = NULL;
+    unsigned snd_msg_len;
+    membership_agreement_msg * ma = NULL;
+	long nonce = -1;
+	vector_clock * lc_read = NULL;
+	short output_packet = 1;
+	membership_state * merged_membership = NULL;
+
+	int status = parse_gossip_message(in_buf + sizeof(int), msg_len, &ma, &nonce, &lc_read);
+
+	if(status != 0)
+	{
+		fprintf(stderr, "ERROR decoding client request");
+    	    	return -1;
+	}
+
+#ifdef UPDATE_LC_ON_GOSSIP
+	if(lc_read != NULL)
+	{
+		// If we were multi-threaded, we'd have to protect this snippet:
+
+    	    	update_vc(my_lc, lc_read);
+    	    	increment_vc(my_lc, my_id);
+    	    	free_vc(lc_read);
+	}
+#endif
+
+	switch(ma->msg_type)
+	{
+		case MEMBERSHIP_AGREEMENT_PROPOSE:
+		{
+			status = handle_agreement_propose_message(ma, &merged_membership, m, db, my_lc, fastrandstate);
+//			assert(status == 0);
+			status = get_agreement_response_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_RESPONSE:
+		{
+			status = handle_agreement_response_message(ma, &merged_membership, m, db, fastrandstate);
+//			assert(status == 0);
+			status = get_agreement_notify_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_NOTIFY:
+		{
+			status = handle_agreement_notify_message(ma, m, db, fastrandstate);
+//			assert(status == 0);
+			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_RETRY_LINK:
+		{
+			assert(0);
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_NOTIFY_ACK:
+		{
+			status = handle_agreement_notify_ack_message(ma, m, db, fastrandstate);
+//			assert(status == 0);
+			output_packet = 0;
+			break;
+		}
+	}
+
+    assert(status == 0);
+
+    if(output_packet)
+    {
+		int n = write(childfd, tmp_out_buf, snd_msg_len);
+
+		if (n < 0)
+		  error("ERROR writing to socket");
+
+		free(tmp_out_buf);
+    }
+
+    if(merged_membership != NULL)
+    		free_membership(merged_membership);
+
+	return 0;
+}
+
+typedef struct argp_arguments
+{
+  int verbosity;
+  int portno;
+  int gportno;
+} argp_arguments;
+
+error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
+	argp_arguments * arguments = (argp_arguments *) state->input;
+
+	switch (key)
+	{
+	  case 'v':
+		  arguments->verbosity = 2;
+		  break;
+	  case 'q':
+		  arguments->verbosity = 0;
+		  break;
+	  case 'p':
+		  arguments->portno = atoi(arg);
+		  break;
+	  case 'm':
+		  arguments->gportno = atoi(arg);
+		  break;
+	  case ARGP_KEY_ARG:
+  	  case ARGP_KEY_END:
+		  argp_usage (state);
+		  break;
+  	  default:
+	  	return ARGP_ERR_UNKNOWN;
+	}
+
 	return 0;
 }
 
 int main(int argc, char **argv) {
-  int parentfd;
-  int childfd;
-  int portno;
+  int parentfd, gparentfd, childfd;
+  int portno, gportno;
   int clientlen;
-  struct sockaddr_in serveraddr;
-  struct sockaddr_in clientaddr;
+  struct sockaddr_in serveraddr, gserveraddr, clientaddr;
   struct hostent *hostp;
   char *hostaddrp;
   int optval; /* flag value for setsockopt */
@@ -1052,15 +1434,44 @@ int main(int argc, char **argv) {
   unsigned int seed;
   int ret = 0;
   char msg_buf[256];
+  int verbosity = SERVER_VERBOSITY;
+
+  const char *argp_program_version = "ddb server 1.0";
+
+  struct argp_option options[] =
+  {
+    {"verbose",  'v', 0,      0,  "Produce verbose output" },
+    {"quiet",    'q', 0,      0,  "Don't produce any output" },
+    {"port",   	 'p', "PORT", 0,  "Port for client data requests" },
+    {"mport",   	 'm', "MPORT", 0,  "Port for server gossip packets" },
+    { 0 }
+  };
+
+  static struct argp argp = { options, parse_opt, NULL, (char []) "ddb - standalone server module" };
+
+  argp_arguments arguments;
+
+  /* Default values. */
+  arguments.verbosity = 1;
+  arguments.portno = DEFAULT_DATA_PORT;
+  arguments.gportno = DEFAULT_GOSSIP_PORT;
+
+  argp_parse (&argp, argc, argv, 0, 0, &arguments);
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
-  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
+//  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
+  membership * m = get_membership();
 
+/*
   if (argc != 2) {
     fprintf(stderr, "usage: %s <port>\n", argv[0]);
     exit(1);
   }
   portno = atoi(argv[1]);
+*/
+  portno = arguments.portno;
+  gportno = arguments.gportno;
+  verbosity = arguments.verbosity;
 
   GET_RANDSEED(&seed, 0); // thread_id
 
@@ -1074,28 +1485,47 @@ int main(int argc, char **argv) {
   ret = create_queue_schema(db, &seed);
   printf("Test %s - %s\n", "create_queue_schema", ret==0?"OK":"FAILED");
 
+  // Set up main data socket:
+
   parentfd = socket(AF_INET, SOCK_STREAM, 0);
   if (parentfd < 0)
     error("ERROR opening socket");
 
   optval = 1;
   setsockopt(parentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
-
   bzero((char *) &serveraddr, sizeof(serveraddr));
   serveraddr.sin_family = AF_INET;
   serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-  serveraddr.sin_port = htons((unsigned short)portno);
+  serveraddr.sin_port = htons((unsigned short) portno);
 
   int my_id = get_node_id((struct sockaddr *) &serveraddr);
   vector_clock * my_lc = init_local_vc_id(my_id);
 
-  printf("SERVER: Started %s:%d, my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), serveraddr.sin_port, to_string_vc(my_lc, msg_buf));
+  // Set up main gossip socket:
+
+  gparentfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (gparentfd < 0)
+    error("ERROR opening gossip socket");
+
+  setsockopt(gparentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
+  bzero((char *) &gserveraddr, sizeof(serveraddr));
+  gserveraddr.sin_family = AF_INET;
+  gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  gserveraddr.sin_port = htons((unsigned short) gportno);
+
+  printf("SERVER: Started %s:[%d, %d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), serveraddr.sin_port, gserveraddr.sin_port, to_string_vc(my_lc, msg_buf));
 
   if (bind(parentfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
-    error("ERROR on binding");
+    error("ERROR on binding client socket");
 
   if (listen(parentfd, 100) < 0) /* allow 100 requests to queue up */
-    error("ERROR on listen");
+    error("ERROR on listen client socket");
+
+  if (bind(gparentfd, (struct sockaddr *) &gserveraddr, sizeof(serveraddr)) < 0)
+    error("ERROR on binding gossip socket");
+
+  if (listen(gparentfd, 100) < 0) /* allow 100 requests to queue up */
+    error("ERROR on listen gossip socket");
 
   clientlen = sizeof(clientaddr);
 
@@ -1103,10 +1533,11 @@ int main(int argc, char **argv) {
   {
 		FD_ZERO(&readfds);
 
-		// Add parent socket to read set:
+		// Add parent sockets to read set:
 
 		FD_SET(parentfd, &readfds);
-		int max_fd = parentfd;
+		FD_SET(gparentfd, &readfds);
+		int max_fd = (parentfd>gparentfd)?(parentfd):(gparentfd);
 
 		// Add active clients to read set:
 
@@ -1127,7 +1558,7 @@ int main(int argc, char **argv) {
 
 		// Add active peers to read set:
 
-		for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+		for(snode_t * crt = HEAD(m->agreed_peers); crt!=NULL; crt = NEXT(crt))
 		{
 			remote_server * rs = (remote_server *) crt->value;
 			if(rs->sockfd > 0)
@@ -1142,7 +1573,7 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		int status = select(max_fd + 1 , &readfds , NULL , NULL , &timeout);
+		int status = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
 
 		if ((status < 0) && (errno!=EINTR))
 		{
@@ -1152,7 +1583,7 @@ int main(int argc, char **argv) {
 
 		// Check if there's a new connection attempt from a client:
 
-		if (FD_ISSET(parentfd, &readfds))
+		if(FD_ISSET(parentfd, &readfds))
 		{
 			  childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
 			  if (childfd < 0)
@@ -1166,10 +1597,34 @@ int main(int argc, char **argv) {
 			  if (hostaddrp == NULL)
 			    error("ERROR on inet_ntoa\n");
 
-#if SERVER_VERBOSITY > 0
-			  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
-#endif
+			  if(verbosity > 0)
+				  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
+
 			  ret = add_client_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, clients, &seed); // hostp->h_name
+
+//			  assert(ret == 0);
+		}
+
+		// Check if there's a new connection attempt from a peer server:
+
+		if(FD_ISSET(gparentfd, &readfds))
+		{
+			  childfd = accept(gparentfd, (struct sockaddr *) &clientaddr, &clientlen);
+			  if (childfd < 0)
+			    error("ERROR on accept");
+
+			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
+						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+			  if (hostp == NULL)
+			    error("ERROR on gethostbyaddr");
+			  hostaddrp = inet_ntoa(clientaddr.sin_addr);
+			  if (hostaddrp == NULL)
+			    error("ERROR on inet_ntoa\n");
+
+			  if(verbosity > 0)
+				  printf("SERVER: accepted connection from peer: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
+
+			  ret = add_peer_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, m, 0, &seed);
 
 //			  assert(ret == 0);
 		}
@@ -1182,7 +1637,7 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this client:
 			{
-				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &handle_socket_close))
+				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &ret, &handle_socket_close))
 					continue;
 
 			    if(handle_client_message(childfd, msg_len, db, &seed, my_lc, my_id))
@@ -1192,17 +1647,17 @@ int main(int argc, char **argv) {
 
 		// Check if there are messages from peer servers:
 
-		for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+		for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 		{
 			remote_server * rs = (remote_server *) crt->value;
 
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &handle_socket_close))
+				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close))
 					continue;
 
-			    if(handle_server_message(childfd, msg_len, db, &seed, my_lc))
+			    if(handle_server_message(childfd, msg_len, m, db, &seed, my_lc))
 			    		continue;
 			}
 		}
@@ -1219,7 +1674,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	for(snode_t * crt = HEAD(peers); crt!=NULL; crt = NEXT(crt))
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 	{
 		remote_server * rs = (remote_server *) crt->value;
 		if(rs->sockfd > 0)

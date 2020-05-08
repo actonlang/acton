@@ -101,7 +101,7 @@ int main (int argc, const char * argv[])
 
 	// Generate dummy GS message:
 
-	gossip_state * gs = init_gossip_state(0, 0, 0, 0, vc), * gs_r = NULL;
+	gossip_state * gs = init_gossip_state(0, 0, 0, 0, "localhost", 32000, vc), * gs_r = NULL;
 	serialize_gs(gs, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_gs(buf_r, len_r, &gs_r);
@@ -116,9 +116,9 @@ int main (int argc, const char * argv[])
 	// Generate dummy Membership State message:
 
 	node_description * nds = (node_description *) malloc(3 * sizeof(node_description));
-	copy_node_description(&nds[0], 0, 0, 0, 0);
-	copy_node_description(&nds[1], 0, 1, 0, 0);
-	copy_node_description(&nds[2], 1, 2, 0, 0);
+	copy_node_description(&nds[0], 0, 0, 0, 0, "localhost", 32000);
+	copy_node_description(&nds[1], 0, 1, 0, 0, "localhost", 32001);
+	copy_node_description(&nds[2], 1, 2, 0, 0, "localhost", 32002);
 
 	membership_state * ms = init_membership(3, nds, vc), * ms_r = NULL;
 	serialize_membership(ms, &buf_w, &len_w);

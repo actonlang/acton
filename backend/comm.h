@@ -22,28 +22,34 @@
 
 #define BUFSIZE 4096
 
+#define NODE_LIVE 0
+#define NODE_DEAD 1
+
 // Comm loop fctns:
 
 int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server, vector_clock ** vc);
-int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int (*handle_socket_close)(int * sockfd));
+int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc);
+int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int * statusp, int (*handle_socket_close)(int * sockfd, int * status));
 int sockaddr_cmp(WORD a1, WORD a2);
 
 // Remote server mgmt fctns:
 
 typedef struct remote_server
 {
-	char * hostname;
+	char hostname[256];
 	int portno;
 	int sockfd;
     pthread_mutex_t* sockfd_lock;
 	struct sockaddr_in serveraddr;
 	struct hostent *server;
 	char id[256];
+	int status;
 	char in_buf[BUFSIZE];
 //	char out_buf[BUFSIZE];
 } remote_server;
 
-remote_server * get_remote_server(char *hostname, int portno);
+remote_server * get_remote_server(char *hostname, int portno, int do_connect);
+int connect_remote_server(remote_server * rs);
 void free_remote_server(remote_server * rs);
 void free_remote_server_ptr(WORD ptr);
 
