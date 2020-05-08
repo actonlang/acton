@@ -3,33 +3,25 @@ struct $Sequence$list  $Sequence$list_instance;
 struct $Collection$list $Collection$list_instance;
 struct $Plus$list $Plus$list_instance;
 
-struct $Sequence$list$class $Sequence$list$methods = {"",(void (*)($Sequence$list))$default__init__,$Sequence$list$__getitem__, $Sequence$list$__setitem__, $Sequence$list$__delitem__,
+struct $Sequence$list$class $Sequence$list$methods = {"", NULL,$Sequence$list$__init__,$Sequence$list$__getitem__, $Sequence$list$__setitem__, $Sequence$list$__delitem__,
                                                                   $Sequence$list$__getslice__, $Sequence$list$__setslice__, $Sequence$list$__delslice__,
                                                                $Sequence$list$__reversed__,$Sequence$list$insert,$Sequence$list$append,$Sequence$list$reverse};
-struct $Sequence$list $Sequence$list_instance = {&$Sequence$list$methods, ($Collection)&$Collection$list_instance,($Plus)&$Plus$list_instance};
+struct $Sequence$list $Sequence$list_instance = {&$Sequence$list$methods, &$Collection$list_instance,&$Plus$list_instance};
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
 
-struct $Collection$list$class $Collection$list$methods = {"",(void (*)($Collection$list,$Sequence))$default2__init__,$Collection$list$__iter__,$Collection$list$__fromiter__,$Collection$list$__len__};
-struct $Collection$list $Collection$list_instance = {&$Collection$list$methods,($Sequence)&$Sequence$list_instance};
+struct $Collection$list$class $Collection$list$methods = {"", NULL,$Collection$list$__init__,$Collection$list$__iter__,$Collection$list$__fromiter__,$Collection$list$__len__};
+struct $Collection$list $Collection$list_instance = {&$Collection$list$methods,&$Sequence$list_instance};
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
 
-struct $Plus$list$class $Plus$list$methods = {"", (void (*)($Plus$list,$Sequence))$default2__init__, $Plus$list$__add__};
-struct $Plus$list $Plus$list_instance = {&$Plus$list$methods, ($Sequence)&$Sequence$list_instance};
+struct $Plus$list$class $Plus$list$methods = {"", NULL,$Plus$list$__init__, $Plus$list$__add__};
+struct $Plus$list $Plus$list_instance = {&$Plus$list$methods, &$Sequence$list_instance};
 $Plus$list $Plus$list$witness = &$Plus$list_instance;
 
-struct $Container$list$class $Container$list$methods = {"",(void (*)($Container$list,$Eq))$default2__init__,($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
+struct $Container$list$class $Container$list$methods = {"", NULL,$Container$list$__init__,($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
                                                                  ($list (*)($Container$list, $Iterable$opaque))$Collection$list$__fromiter__,
                                                                  ($int (*)($Container$list, $list))$Collection$list$__len__,
                                                                   $Container$list$__contains__,$Container$list$__containsnot__};
- 
-$Container$list $Container$list_new($Eq _EqA) {
-  $Container$list res = malloc(sizeof(struct $Container$list));
-  res->$class = &$Container$list$methods;
-  res->_Eq = _EqA;
-  return res;
-}
-
 
 
 $list $Plus$list$__add__ ($Plus$list wit, $list a, $list b) {
@@ -78,11 +70,11 @@ void $Sequence$list$__delslice__($Sequence$list wit, $list self, $Slice slice) {
 }  
 
 $bool $Container$list$__contains__($Container$list wit, $list self, $WORD elem) {
-  return to$bool($list_contains(wit->_Eq,self,elem));
+  return to$bool($list_contains(wit->w$Eq$A,self,elem));
 }
                  
 $bool $Container$list$__containsnot__($Container$list wit, $list self, $WORD elem) {
-  return to$bool($list_containsnot(wit->_Eq,self,elem));
+  return to$bool($list_containsnot(wit->w$Eq$A,self,elem));
 }
 
 $Iterator $Iterable$list$reversed__iter__($Iterable wit, $WORD lst) {
@@ -105,3 +97,19 @@ void $Sequence$list$reverse($Sequence$list wit, $list self) {
   $list_reverse(self);
 }
 
+void $Container$list$__init__($Container$list self, $Eq w$Eq$A) {
+  self->w$Eq$A = w$Eq$A;
+}
+
+void $Collection$list$__init__($Collection$list self, $Sequence$list master) {
+  self->w$Sequence$list = master;
+}
+
+void $Plus$list$__init__($Plus$list self, $Sequence$list master) {
+  self->w$Sequence$list = master;
+}
+
+void $Sequence$list$__init__($Sequence$list self) {
+  self->w$Collection$Sequence = $NEW($Collection$list, self);
+  self->w$Plus$Sequence = $NEW($Plus$list, self);
+}

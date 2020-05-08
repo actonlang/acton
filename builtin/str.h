@@ -9,6 +9,7 @@ struct $str {
 
 struct $str$class {
   char *$GCINFO;
+  $Super$class $superclass;
   void (*__init__)($str, char*);
   void (*__serialize__)($str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
   $str (*__deserialize__)($Mapping$dict, $ROW*, $dict);

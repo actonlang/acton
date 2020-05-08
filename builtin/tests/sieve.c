@@ -84,7 +84,7 @@ $list sieve(int n) {
 /* prints a $Sequence of ints */
 void printSequence($Sequence$list wit, $WORD seq) {
   printf("[");
-  long n = from$int(wit->_Collection->$class->__len__(wit->_Collection, seq));
+  long n = from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence, seq));
   for (long i=0; i < n-1; i++) 
     printf("%ld, ",from$int(wit->$class->__getitem__(wit,seq,to$int(i))));
   if (n > 0) 
@@ -95,7 +95,7 @@ void printSequence($Sequence$list wit, $WORD seq) {
 
 $list sieveS($Sequence$list wit, int n) {
   $WORD w;
-  $list isPrime = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $list isPrime = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
   wit->$class->append(wit,isPrime,$false); 
   wit->$class->append(wit,isPrime,$false);
   for (int i=2; i < n; i++) 
@@ -107,7 +107,7 @@ $list sieveS($Sequence$list wit, int n) {
         wit->$class->__setitem__(wit,isPrime,to$int(k),$false);
     }
   }
-  $list primes = wit->_Collection->$class->__fromiter__(wit->_Collection,NULL);
+  $list primes = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
   for (int i=0; i<n; i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$bool(w)) {
@@ -123,5 +123,5 @@ int main() {
 
   $Sequence$list wit = $Sequence$list$witness;
   $list primes = sieveS(wit,1000000);
-  printf("%ld\n",from$int(wit->_Collection->$class->__len__(wit->_Collection,primes)));
+  printf("%ld\n",from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence,primes)));
 }

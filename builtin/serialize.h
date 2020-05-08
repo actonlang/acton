@@ -8,6 +8,7 @@ typedef struct $Initializable  *$Initializable;
 
 struct $Initializable$methods {
   char *$GCINFO;
+  //  struct $Initializable$methods *superclass;
   void (*__init__)($Initializable,...);
 };
 
@@ -51,6 +52,7 @@ typedef struct $Serializable  *$Serializable;
 
 struct $Serializable$methods {
   char *$GCINFO;
+  $Super$class $superclass;
   void (*__init__)($Serializable,...);
   void (*__serialize__)($Serializable, $Mapping$dict, long*, $dict,struct  $ROWLISTHEADER*); /* result returned in the last, accumulating param */
   $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
@@ -95,6 +97,7 @@ typedef struct $Hashable$WORD *$Hashable$WORD;
 
 struct $Hashable$WORD$class {
     char *$GCINFO;
+    $Super$class *superclass;
     void (*__init__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
