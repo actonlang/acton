@@ -25,7 +25,7 @@ struct lambda$1$class {
 };
 struct lambda$1 {
     struct lambda$1$class *$class;
-    $Cont $cont;    
+    $Cont cont$0;    
 };
 
 struct lambda$2$class {
@@ -47,7 +47,7 @@ struct Act$class {
     $R (*__init__)(Act, $int, $Cont);
     void (*__serialize__)(Act, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     Act (*__deserialize__)($Mapping$dict, $ROW*, $dict);
-    $R (*_act)(Act, $int, $list, $Cont);
+    $R (*act$local)(Act, $int, $list, $Cont);
     $R (*act)(Act, $int, $list, $Cont);
 };
 struct Act {
@@ -72,7 +72,7 @@ struct lambda$3 {
     struct lambda$3$class *$class;
     Root self;
     $Iterator iter$1;
-    $Cont $cont;
+    $Cont cont$0;
 };
 
 struct lambda$4$class {
@@ -84,7 +84,7 @@ struct lambda$4$class {
 };
 struct lambda$4 {
     struct lambda$4$class *$class;
-    $Cont $cont;
+    $Cont cont$0;
 };
 
 struct Root$class {
