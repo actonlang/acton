@@ -10,7 +10,7 @@ void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$1 lambda$1$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -39,7 +39,7 @@ void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$2 lambda$2$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -71,7 +71,7 @@ void Act$__serialize__(Act self, $Mapping$dict wit, $WORD* prefix, $int prefix_s
     // TBD
 }
 
-Act Act$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+Act Act$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -113,7 +113,7 @@ void lambda$3$__serialize__(lambda$3 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$3 lambda$3$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$3 lambda$3$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -140,7 +140,7 @@ void lambda$4$__serialize__(lambda$4 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$4 lambda$4$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$4 lambda$4$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -181,7 +181,7 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
 $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
     self->table = $NEW($list, $None);
-    $Iterator iter$1 = $range(no_actors, $None);
+    $Iterator iter$1 = $range(no_actors, $None, $None);
     return loop$1(self, iter$1, cont$0, $None);
 }
 
@@ -189,7 +189,7 @@ void Root$__serialize__(Root self, $Mapping$dict wit, $WORD* prefix, $int prefix
     // TBD
 }
 
-Root Root$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+Root Root$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }

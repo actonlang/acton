@@ -77,7 +77,7 @@ actor Act(i : int):
 actor Root(_ignore : int):
     table : list[Act] = list(None)
 
-    iter$1 : Iterator[int] = range(no_actors)
+    iter$1 : Iterator[int] = range(no_actors, None, None)
     i : int = iter$1.__next__()
     while i is not None:
         Sequence$list$witness.append(table, Act(i))
@@ -126,7 +126,7 @@ class Root ($Actor):
         $Actor.__init__(self)
         self.table = list(None)
         
-        iter$1 : Iterator[int] = range(no_actors)
+        iter$1 : Iterator[int] = range(no_actors, None, None)
         while True:
             i : int = iter$1.__next__()
             if i is None:
@@ -176,7 +176,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : (None)->$R) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors)
+        iter$1 : Iterator[int] = range(no_actors, None, None)
         def loop$1(_ignore : None) -> $R:
             i : int = iter$1.__next__()
             if i is None:
@@ -229,7 +229,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : $Cont[None]) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors)
+        iter$1 : Iterator[int] = range(no_actors, None, None)
         def loop$1(self : Root, iter$1 : Iterator[int], cont$0 : $Cont[None], _ignore : None) -> $R:
             i : int = iter$1.__next__()
             if i is None:
@@ -319,7 +319,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : $Cont[None]) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors)
+        iter$1 : Iterator[int] = range(no_actors, None, None)
         return loop$1(self, iter$1, cont$0, None)
 
 ######################################  Code generation:
@@ -451,7 +451,7 @@ void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$1 lambda$1$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -480,7 +480,7 @@ void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$2 lambda$2$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -503,8 +503,8 @@ $R Act$__init__(Act self, $int i, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
     self->i = i;
     self->local_cnt = to$int(0);
-    self->rcv_dict = $NEW($dict);
-    self->snd_dict = $NEW($dict);
+    self->rcv_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
+    self->snd_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
     return $R_CONT(cont$0, $None);
 }
 
@@ -512,17 +512,17 @@ void Act$__serialize__(Act self, $Mapping$dict wit, $WORD* prefix, $int prefix_s
     // TBD
 }
 
-Act Act$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+Act Act$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
 
 $R Act$act$local(Act self, $int from, $list table, $Cont cont$0) {
-    if (Integral$int$witness->$class->__lt__($Integral$int$witness, self->local_cnt, total_msgs)) {
-        self->local_cnt = Plus$int$witness->$class->__add__(Plus$int$witness, self->local_cnt, to$int(1));
-        $int to = $Integral$int$witness->$class->__mod__($Integral$int$witness, Plus$int$witness->$class->__add__(Plus$int$witness, self->i, to$int(1)), no_actors);
-        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->rcv_dict, from, Plus$int$witness->$class->__add__(Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->rcv_dict, from), to$int(1)));
-        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->snd_dict, to, Plus$int$witness->$class->__add__(Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->snd_dict, to), to$int(1)));
+    if ($Integral$int$witness->$class->__lt__($Integral$int$witness, self->local_cnt, total_msgs)) {
+        self->local_cnt = $Plus$int$witness->$class->__add__($Plus$int$witness, self->local_cnt, to$int(1));
+        $int to = $Integral$int$witness->$class->__mod__($Integral$int$witness, $Plus$int$witness->$class->__add__($Plus$int$witness, self->i, to$int(1)), no_actors);
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->rcv_dict, from, $Plus$int$witness->$class->__add__($Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->rcv_dict, from), to$int(1)));
+        $Indexed$dict$witness->$class->__setitem__($Indexed$dict$witness, self->snd_dict, to, $Plus$int$witness->$class->__add__($Plus$int$witness, $Indexed$dict$witness->$class->__getitem__($Indexed$dict$witness, self->snd_dict, to), to$int(1)));
         Act tmp$1 = $Sequence$list$witness->$class->__getitem__($Sequence$list$witness, table, to);
         return tmp$1->$class->act(tmp$1, self->i, table, ($Cont)$NEW(lambda$1, cont$0));
     }
@@ -554,7 +554,7 @@ void lambda$3$__serialize__(lambda$3 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$3 lambda$3$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$3 lambda$3$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -581,7 +581,7 @@ void lambda$4$__serialize__(lambda$4 self, $Mapping$dict wit, $WORD* prefix, $in
     // TBD
 }
 
-lambda$4 lambda$4$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+lambda$4 lambda$4$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -621,8 +621,8 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
 
 $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
-    self->table = $NEW($list);
-    $Iterator iter$1 = range(no_actors);
+    self->table = $NEW($list, $None);
+    $Iterator iter$1 = $range(no_actors, $None, $None);
     return loop$1(self, iter$1, cont$0, $None);
 }
 
@@ -630,7 +630,7 @@ void Root$__serialize__(Root self, $Mapping$dict wit, $WORD* prefix, $int prefix
     // TBD
 }
 
-Root Root$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+Root Root$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -651,8 +651,8 @@ $int no_actors;
 $int total_msgs;
 
 void $init_module() {
-    $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, Hashable$int$witness);
-    $Indexed$dict$witness = $Indexed$dict$witness->_Indexed;
+    $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, ($Hashable)$Hashable$int$witness);
+    $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed$Mapping;
 
     no_actors = to$int(5);
     total_msgs = to$int(20);
