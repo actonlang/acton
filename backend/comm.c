@@ -324,6 +324,87 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	return 1;
 }
 
+int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int (*handle_socket_close)(int * sockfd))
+{
+	int announced_msg_len = -1;
+	int read_buf_offset = 0;
+	int status = 0;
+
+	while(1) // Loop until reading complete packet:
+	{
+		assert(read_buf_offset < inbuf_size - sizeof(int));
+
+		if(read_buf_offset == 0)
+		{
+			// Read msg len header from packet:
+
+			bzero(inbuf, inbuf_size);
+			*msg_len = -1;
+
+			int size_len = read(*sockfd, inbuf, sizeof(int));
+
+			if (size_len < 0)
+			{
+				fprintf(stderr, "ERROR reading from socket\n");
+				continue;
+			}
+			else if (size_len == 0)
+			{
+				handle_socket_close(sockfd);
+				status = 1;
+				break;
+			}
+
+			announced_msg_len = *((int *)inbuf);
+
+			*((int *)inbuf) = 0; // 0 back buffer
+
+			read_buf_offset = 0;
+		}
+
+		if(announced_msg_len <= 0)
+		{
+			read_buf_offset = 0;
+			continue;
+		}
+
+	    *msg_len = read(*sockfd, inbuf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
+
+#if SERVER_VERBOSITY > 1
+		printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, *msg_len, read_buf_offset);
+#endif
+
+	    if (*msg_len < 0)
+	    {
+	    		fprintf(stderr, "ERROR reading from socket\n");
+			continue;
+	    }
+		else if(*msg_len == 0) // client closed socket
+	    {
+			handle_socket_close(sockfd);
+			status = 1;
+	        break;
+	    }
+		else if(*msg_len < announced_msg_len - read_buf_offset)
+		{
+			read_buf_offset += *msg_len;
+			continue; // Continue reading socket until full packet length
+		}
+
+	    break;
+	}
+
+    assert(status != 0 || announced_msg_len == *msg_len);
+
+//    read_buf_offset = 0; // Reset
+
+#if SERVER_VERBOSITY > 1
+    printf("server received %d / %d bytes\n", announced_msg_len, *msg_len);
+#endif
+
+	return status;
+}
+
 int sockaddr_cmp(WORD a1, WORD a2)
 {
 	struct sockaddr * x = (struct sockaddr *) a1;

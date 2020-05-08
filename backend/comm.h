@@ -25,6 +25,7 @@
 // Comm loop fctns:
 
 int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server, vector_clock ** vc);
+int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int (*handle_socket_close)(int * sockfd));
 int sockaddr_cmp(WORD a1, WORD a2);
 
 // Remote server mgmt fctns:
