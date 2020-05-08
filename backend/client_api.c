@@ -290,11 +290,13 @@ void * comm_thread_loop(void * args)
 
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr)
 {
-    remote_server * rs = get_remote_server(hostname, portno, 1);
+	struct sockaddr_in dummy_serveraddr;
+
+    remote_server * rs = get_remote_server(hostname, portno, dummy_serveraddr, -2, 1);
 
     if(rs == NULL)
     {
-		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+		printf("ERROR: Failed joining server %s:%d (DNS/network problem?)!\n", hostname, portno);
     		return 1;
     }
 
@@ -312,6 +314,12 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
 		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", hostname, portno);
 		free_remote_server(rs);
 		return -2;
+    }
+
+    if(rs->status == NODE_DEAD)
+    {
+		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		return 1;
     }
 
     return 0;

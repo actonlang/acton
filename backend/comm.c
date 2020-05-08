@@ -470,42 +470,59 @@ int sockaddr_cmp(WORD a1, WORD a2)
 
 // Remote server struct fctns:
 
-remote_server * get_remote_server(char *hostname, int portno, int do_connect)
+remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in serveraddr, int serverfd, int do_connect)
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
     rs->status = NODE_LIVE;
 
-	rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (rs->sockfd < 0)
+    if(serverfd > 0 || serverfd == -1) // For own node (-1), use provided serveraddr
     {
-        fprintf(stderr, "ERROR opening socket!\n");
-        free_remote_server(rs);
-        return NULL;
+    		memcpy(&(rs->serveraddr), &serveraddr, sizeof(struct sockaddr_in));
+    		rs->sockfd = serverfd;
+    		rs->server = gethostbyname(hostname);
+    		assert(rs->server != NULL);
     }
-
-    rs->server = gethostbyname(hostname);
-    if (rs->server == NULL)
+    else
     {
-        fprintf(stderr, "ERROR, no such host %s\n", hostname);
-        free_remote_server(rs);
-        return NULL;
-    }
+    		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (rs->sockfd < 0)
+        {
+            fprintf(stderr, "ERROR opening socket!\n");
+            free_remote_server(rs);
+            return NULL;
+        }
 
-//    bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
-    rs->serveraddr.sin_family = AF_INET;
-    bcopy((char *)rs->server->h_addr,
-	  (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
-    rs->serveraddr.sin_port = htons(portno);
+    		rs->server = gethostbyname(hostname);
+        if (rs->server == NULL)
+        {
+            fprintf(stderr, "ERROR, no such host %s\n", hostname);
+            free_remote_server(rs);
+            return NULL;
+        }
 
-    if(do_connect)
-    {
-		if(connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in)) < 0)
-		{
+        //    bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
+        rs->serveraddr.sin_family = AF_INET;
+        bcopy((char *)rs->server->h_addr,
+        	(char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+        rs->serveraddr.sin_port = htons(portno);
+
+        if(do_connect)
+        {
+        		int connect_success = -1;
+        		for(int connect_retries = 0; connect_success != 0 && connect_retries < MAX_CONNECT_RETRIES; connect_retries++)
+        		{
+        			connect_success = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+        		}
+			if(connect_success != 0)
+			{
 				fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
-			free_remote_server(rs);
-			return NULL;
-		}
+				rs->status = NODE_DEAD;
+				rs->sockfd = 0;
+//				free_remote_server(rs);
+//				return NULL;
+			}
+        }
     }
 
 	rs->sockfd_lock = (pthread_mutex_t*) malloc (sizeof(pthread_mutex_t));

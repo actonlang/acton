@@ -857,9 +857,9 @@ int add_remote_server_to_membership(remote_server * rs, membership * m, short ag
     return add_remote_server_to_list(rs, (agreed)?(m->agreed_peers):(m->local_peers), seedptr);
 }
 
-int add_peer_to_membership(char *hostname, int portno, membership * m, short agreed, unsigned int * seedptr)
+int add_peer_to_membership(char *hostname, int portno, struct sockaddr_in serveraddr, int serverfd, int do_connect, membership * m, short agreed, unsigned int * seedptr)
 {
-    remote_server * rs = get_remote_server(hostname, portno, 1);
+    remote_server * rs = get_remote_server(hostname, portno, serveraddr, serverfd, do_connect);
 
     if(rs == NULL)
     {
@@ -1274,12 +1274,13 @@ int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int 
 int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skiplist_t * merged_list, vector_clock * my_lc, unsigned int * fastrandstate)
 {
 	int memberships_differ = 0;
+	struct sockaddr_in dummy_serveraddr;
 
 	for(int i=0;i<ma->membership->no_nodes;i++)
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
@@ -1437,12 +1438,13 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
 
 	int install_failed = 0;
+	struct sockaddr_in dummy_serveraddr;
 
 	for(int i=0;i<ma->membership->no_nodes;i++)
 	{
 		node_description nd = ma->membership->membership[i];
 
-		remote_server * rs = get_remote_server(nd.hostname, nd.portno, 0);
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
 		rs->status = nd.status;
 
 		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
@@ -1646,11 +1648,15 @@ typedef struct argp_arguments
   int verbosity;
   int portno;
   int gportno;
+  char ** seeds;
+  int * seed_ports;
+  int no_seeds;
 } argp_arguments;
 
 error_t parse_opt (int key, char *arg, struct argp_state *state)
 {
 	argp_arguments * arguments = (argp_arguments *) state->input;
+	char tmp_buff[10];
 
 	switch (key)
 	{
@@ -1666,6 +1672,38 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 	  case 'm':
 		  arguments->gportno = atoi(arg);
 		  break;
+	  case 's':
+	  {
+		  assert(strnlen(arg, 256) > 1);
+		  arguments->no_seeds = 1;
+		  for(char * end_ptr = strchr(arg, ',');end_ptr != NULL;end_ptr = strchr(end_ptr + 1, ','), arguments->no_seeds++);
+		  arguments->seeds = (char **) malloc(arguments->no_seeds * sizeof(char *));
+		  arguments->seed_ports = (int *) malloc(arguments->no_seeds * sizeof(int));
+		  char * start_ptr = arg, * end_ptr = NULL;
+		  int stop = 0;
+		  for(int i = 0;!stop;i++)
+		  {
+			  end_ptr = strchrnul(start_ptr, ',');
+			  if(*end_ptr == '\0')
+			  {
+				  stop = 1;
+			  }
+			  else
+			  {
+				  *end_ptr = '\0';
+			  }
+
+			  char * separator_ptr = strchr(start_ptr, ':');
+			  assert(separator_ptr != NULL);
+			  *separator_ptr = '\0';
+
+			  arguments->seeds[i] = strndup(start_ptr, separator_ptr - start_ptr);
+			  arguments->seed_ports[i] = atoi(separator_ptr + 1);
+
+			  start_ptr = end_ptr + 1;
+		  }
+		  break;
+	  }
 	  case ARGP_KEY_ARG:
   	  case ARGP_KEY_END:
 		  argp_usage (state);
@@ -1703,6 +1741,7 @@ int main(int argc, char **argv) {
     {"quiet",    'q', 0,      0,  "Don't produce any output" },
     {"port",   	 'p', "PORT", 0,  "Port for client data requests" },
     {"mport",   	 'm', "MPORT", 0,  "Port for server gossip packets" },
+    {"seeds",   	 's', "SEEDS", 0,  "Seeds, comma-separated" },
     { 0 }
   };
 
@@ -1716,6 +1755,12 @@ int main(int argc, char **argv) {
   arguments.gportno = DEFAULT_GOSSIP_PORT;
 
   argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+  printf("SERVER: Using args: portno=%d, gportno=%d, verbosity=%d, seeds:\n", arguments.portno, arguments.gportno, arguments.verbosity);
+  for(int i=0;i<arguments.no_seeds;i++)
+  {
+	  printf("SERVER: %s:%d\n", arguments.seeds[i], arguments.seed_ports[i]);
+  }
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
 //  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
@@ -1787,6 +1832,35 @@ int main(int argc, char **argv) {
 
   if (listen(gparentfd, 100) < 0) /* allow 100 requests to queue up */
     error("ERROR on listen gossip socket");
+
+  // Add myself to local membership:
+
+  ret = add_peer_to_membership(inet_ntoa(gserveraddr.sin_addr), gserveraddr.sin_port, gserveraddr, -1, 0, m, 0, &seed);
+
+  // Now add seed servers:
+
+  struct sockaddr_in dummy_serveraddr;
+
+  for(int i=0;i<arguments.no_seeds;i++)
+  {
+	  // Skip connecting to myself:
+	  if(strncmp(arguments.seeds[i], inet_ntoa(gserveraddr.sin_addr), 256) == 0 && arguments.seed_ports[i] == gserveraddr.sin_port)
+	  {
+		  printf("SERVER: Skipping connecting to seed %s:%d (myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
+		  continue;
+	  }
+
+	  // Also skip connecting to seed nodes with IPs bigger (lexicographycally) than myself (they will connect to me as they come up):
+	  if(strncmp(arguments.seeds[i], inet_ntoa(gserveraddr.sin_addr), 256) >= 0)
+	  {
+		  printf("SERVER: Skipping connecting to seed %s:%d (> myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
+		  continue;
+	  }
+
+	  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
+
+	  printf("SERVER: Connecting to %s:%d returned %d\n", arguments.seeds[i], arguments.seed_ports[i], ret);
+  }
 
   clientlen = sizeof(clientaddr);
 
@@ -1885,7 +1959,7 @@ int main(int argc, char **argv) {
 			  if(verbosity > 0)
 				  printf("SERVER: accepted connection from peer: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
 
-			  ret = add_peer_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, m, 0, &seed);
+			  ret = add_peer_to_membership(hostp->h_name, clientaddr.sin_port, clientaddr, childfd, 0, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
 
 //			  assert(ret == 0);
 		}
