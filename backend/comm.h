@@ -26,6 +26,7 @@
 #define NODE_LIVE 0
 #define NODE_DEAD 1
 #define NODE_UNKNOWN 2
+#define NODE_PREJOINED 3
 
 // Comm loop fctns:
 
@@ -38,7 +39,7 @@ int sockaddr_cmp(WORD a1, WORD a2);
 typedef struct remote_server
 {
 	char hostname[256];
-	int portno;
+	unsigned short portno;
 	int sockfd;
     pthread_mutex_t* sockfd_lock;
 	struct sockaddr_in serveraddr;
@@ -49,7 +50,8 @@ typedef struct remote_server
 //	char out_buf[BUFSIZE];
 } remote_server;
 
-remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in serveraddr, int serverfd, int do_connect);
+remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect);
+int update_listen_socket(remote_server * rs, char *hostname, unsigned short portno, int do_connect);
 int connect_remote_server(remote_server * rs);
 void free_remote_server(remote_server * rs);
 void free_remote_server_ptr(WORD ptr);

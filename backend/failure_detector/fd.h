@@ -21,12 +21,12 @@ typedef struct node_description
 	int dc_id;
 
 	char * hostname;
-	short portno;
+	unsigned short portno;
 	struct sockaddr_in address;
 } node_description;
 
-node_description * init_node_description(int status, int node_id, int rack_id, int dc_idm, char * hostname, short portno);
-int copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, short portno);
+node_description * init_node_description(int status, int node_id, int rack_id, int dc_idm, char * hostname, unsigned short portno);
+int copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno);
 void free_node_description(node_description * vc);
 int equals_node_description(node_description * nd1, node_description * nd2);
 char * to_string_node_description(node_description * nd, char * msg_buff);
@@ -39,7 +39,7 @@ typedef struct gossip_state
 	vector_clock * vc;
 } gossip_state;
 
-gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, short portno, vector_clock * vc);
+gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno, vector_clock * vc);
 void free_gossip_state(gossip_state * vc);
 int serialize_gs(gossip_state * gs, void ** buf, unsigned * len);
 int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs);
@@ -69,6 +69,7 @@ char * to_string_membership_state(membership_state * gs, char * msg_buff);
 #define MEMBERSHIP_AGREEMENT_NOTIFY 2
 #define MEMBERSHIP_AGREEMENT_RETRY_LINK 3
 #define MEMBERSHIP_AGREEMENT_NOTIFY_ACK 4
+#define MEMBERSHIP_AGREEMENT_JOIN 5
 
 #define ACK 0
 #define NACK 1
@@ -87,6 +88,7 @@ membership_agreement_msg * get_membership_propose_msg(int ack_status, membership
 membership_agreement_msg * get_membership_response_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc);
 membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc);
 membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, long nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce, vector_clock * vc);
 membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, long nonce, vector_clock * vc);
 void free_membership_agreement(membership_agreement_msg * ma);
 void free_membership_agreement_msg(MembershipAgreementMessage * msg);

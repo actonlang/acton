@@ -32,7 +32,7 @@ void init_ns_msg_from_description(NodeStateMessage * ns_msg, node_description * 
 	memcpy(ns_msg->hostname.data, nd->hostname, ns_msg->hostname.len);
 }
 
-int copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, short portno)
+int copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno)
 {
 	nd->status = status;
 	nd->node_id = node_id;
@@ -63,7 +63,7 @@ int copy_node_description(node_description * nd, int status, int node_id, int ra
 	return 0;
 }
 
-node_description * init_node_description(int status, int node_id, int rack_id, int dc_id, char * hostname, short portno)
+node_description * init_node_description(int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno)
 {
 	node_description * nd = (node_description *) malloc(sizeof(node_description));
 
@@ -93,7 +93,7 @@ char * to_string_node_description(node_description * nd, char * msg_buff)
 
 /* Gossip state: */
 
-gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, short portno, vector_clock * vc)
+gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, unsigned short portno, vector_clock * vc)
 {
 	gossip_state * gs = (gossip_state *) malloc(sizeof(struct gossip_state));
 	bzero(gs, sizeof(struct gossip_state));
@@ -259,7 +259,7 @@ membership_state * init_membership_from_msg(MembershipViewMessage * msg)
 	node_description * membership = (node_description *) malloc(msg->n_membership * sizeof(node_description));
 	for(int i=0;i<msg->n_membership;i++)
 		copy_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id,
-								msg->membership[i]->hostname.data, msg->membership[i]->port);
+								msg->membership[i]->hostname.data, (unsigned short) msg->membership[i]->port);
 	return init_membership_state(msg->n_membership, membership, view_id);
 }
 
@@ -339,6 +339,17 @@ membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_
 membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, long nonce, vector_clock * vc)
 {
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_NOTIFY_ACK, ack_status, NULL, nonce, vc);
+}
+
+membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce, vector_clock * vc)
+{
+	node_description * nd = init_node_description(status, -1, rack_id, dc_id, hostname, portno);
+
+	nd->node_id = get_node_id((struct sockaddr *) &(nd->address));
+
+	membership_state * membership = init_membership_state(1, nd, copy_vc(vc));
+
+	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_JOIN, status, membership, nonce, vc);
 }
 
 void free_membership_agreement(membership_agreement_msg * ma)

@@ -442,7 +442,7 @@ int sockaddr_cmp(WORD a1, WORD a2)
 
 // Remote server struct fctns:
 
-remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in serveraddr, int serverfd, int do_connect)
+remote_server * get_remote_server(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect)
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
@@ -466,10 +466,9 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
             return NULL;
         }
 
-        //    bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
+        bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
         rs->serveraddr.sin_family = AF_INET;
-        bcopy((char *)rs->server->h_addr,
-        	(char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+        bcopy((char *)rs->server->h_addr_list[0], (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
         rs->serveraddr.sin_port = htons(portno);
 
         if(do_connect)
@@ -493,7 +492,7 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
         		}
 			if(connect_success != 0)
 			{
-				fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
+				fprintf(stderr, "get_remote_server: ERROR connecting to %s:%d\n", hostname, portno);
 				rs->status = NODE_DEAD;
 				rs->sockfd = 0;
 			}
@@ -511,16 +510,93 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
 	return rs;
 }
 
-int connect_remote_server(remote_server * rs)
+int update_listen_socket(remote_server * rs, char *hostname, unsigned short portno, int do_connect)
 {
-	int ret = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+	struct hostent * old_hostent = rs->server;
 
-	if(ret < 0)
+	rs->server = gethostbyname(hostname);
+	if (rs->server == NULL)
 	{
-		fprintf(stderr, "ERROR connecting to %s:%d\n", rs->hostname, rs->portno);
+		fprintf(stderr, "ERROR, no such host %s\n", hostname);
+		rs->server = old_hostent;
+		return -1;
 	}
 
-	return ret;
+//	if(old_hostent != NULL)
+//		free(old_hostent);
+
+	bzero((void *) &rs->serveraddr, sizeof(struct sockaddr_in));
+	rs->serveraddr.sin_family = AF_INET;
+	bcopy((char *)rs->server->h_addr_list[0], (char *)&(rs->serveraddr.sin_addr.s_addr), rs->server->h_length);
+	rs->serveraddr.sin_port = htons(portno);
+
+	if(do_connect)
+	{
+		int old_sockfd = rs->sockfd;
+		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+		if (rs->sockfd < 0)
+		{
+			fprintf(stderr, "ERROR opening socket!\n");
+			rs->sockfd = old_sockfd;
+			return -2;
+		}
+
+		int connect_success = -1;
+		for(int connect_retries = 0; connect_success != 0 && connect_retries < MAX_CONNECT_RETRIES; connect_retries++)
+		{
+			connect_success = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+			if(connect_success != 0)
+				sleep(2);
+		}
+		if(connect_success != 0)
+		{
+			fprintf(stderr, "update_listen_socket: ERROR connecting to %s:%d\n", hostname, portno);
+			rs->status = NODE_DEAD;
+			rs->sockfd = 0;
+		}
+	}
+
+    snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
+
+    strncpy((char *) &(rs->hostname), hostname, strnlen(hostname, 256) + 1);
+
+    rs->portno = portno;
+
+    return 0;
+}
+
+int connect_remote_server(remote_server * rs)
+{
+	if(rs->sockfd > 0)
+	{
+		fprintf(stderr, "connect_remote_server: Skipping connect, server %s:%d already connected!\n", rs->hostname, rs->portno);
+		return 0;
+	}
+
+	rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (rs->sockfd < 0)
+	{
+		fprintf(stderr, "connect_remote_server: ERROR opening socket!\n");
+		return -1;
+	}
+
+	int connect_success = -1;
+	for(int connect_retries = 0; connect_success != 0 && connect_retries < MAX_CONNECT_RETRIES; connect_retries++)
+	{
+		connect_success = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+		if(connect_success != 0)
+			sleep(2);
+	}
+
+	if(connect_success != 0)
+	{
+		fprintf(stderr, "connect_remote_server: ERROR connecting to %s:%d\n", rs->hostname, rs->portno);
+		rs->status = NODE_DEAD;
+		rs->sockfd = 0;
+	}
+
+	return connect_success;
 }
 
 void free_remote_server(remote_server * rs)
