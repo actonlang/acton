@@ -69,7 +69,19 @@ void $register_builtin() {
   $register_force(VALUESITERATOR_ID,($Serializable$methods)&$Iterator$dict$values$methods);
   $register_force(ITEMSITERATOR_ID,($Serializable$methods)&$Iterator$dict$items$methods);
   $register_force(SETITERATOR_ID,($Serializable$methods)&$Iterator$set$methods);
-  $register_force(RANGEITERATOR_ID,($Serializable$methods)&$Iterator$range$methods);
+  $register_force(BASEEXCEPTION_ID,($Serializable$methods)&$BaseException$methods);
+  $register_force(SYSTEMEXIT_ID,($Serializable$methods)&$SystemExit$methods);
+  $register_force(KEYBOARDINTERRUPT_ID,($Serializable$methods)&$KeyboardInterrupt$methods);
+  $register_force(EXCEPTION_ID,($Serializable$methods)&$Exception$methods);
+  $register_force(ASSERTIONERROR_ID,($Serializable$methods)&$AssertionError$methods);
+  $register_force(LOOKUPERROR_ID,($Serializable$methods)&$LookupError$methods);
+  $register_force(INDEXERROR_ID,($Serializable$methods)&$IndexError$methods);
+  $register_force(KEYERROR_ID,($Serializable$methods)&$KeyError$methods);
+  $register_force(MEMORYERROR_ID,($Serializable$methods)&$MemoryError$methods);
+  $register_force(OSERROR_ID,($Serializable$methods)&$OSError$methods);
+  $register_force(RUNTIMEERROR_ID,($Serializable$methods)&$RuntimeError$methods);
+  $register_force(NOTIMPLEMENTEDERROR_ID,($Serializable$methods)&$NotImplementedError$methods);
+  $register_force(VALUEERROR_ID,($Serializable$methods)&$ValueError$methods);
 }
 
 #define RANGE_ID 15

@@ -95,10 +95,6 @@ struct $Iterator$range$class $Iterator$range$methods = {"",($Super$class)&$Itera
 struct $Iterator$range $Iterator$range$instance = {&$Iterator$range$methods};
 struct $Iterator$range *$Iterator$range$witness = &$Iterator$range$instance;
 
-//$Iterator $range_iter($range rng) {
-//  return ($Iterator)$NEW($Iterator$range,rng);
-//}
-
 void $Iterable$range$__init__ ($Iterable$range wit){
   return;
 }

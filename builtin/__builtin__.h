@@ -35,6 +35,84 @@ typedef struct $Iterator *$Iterator;
 struct $Slice;
 typedef struct $Slice *$Slice;
 
+struct $BaseException;
+typedef struct $BaseException *$BaseException;
+
+struct $BaseException$class;
+typedef struct $BaseException$class *$BaseException$class;
+
+struct $SystemExit;
+typedef struct $SystemExit *$SystemExit;
+
+struct $SystemExit$class;
+typedef struct $SystemExit$class *$SystemExit$class;
+
+struct $KeyboardInterrupt;
+typedef struct $KeyboardInterrupt *$KeyboardInterrupt;
+
+struct $KeyboardInterrupt$class;
+typedef struct $KeyboardInterrupt$class *$KeyboardInterrupt$class;
+
+struct $Exception;
+typedef struct $Exception *$Exception;
+
+struct $Exception$class;
+typedef struct $Exception$class *$Exception$class;
+
+struct $AssertionError;
+typedef struct $AssertionError *$AssertionError;
+
+struct $AssertionError$class;
+typedef struct $AssertionError$class *$AssertionError$class;
+
+struct $LookupError;
+typedef struct $LookupError *$LookupError;
+
+struct $LookupError$class;
+typedef struct $LookupError$class *$LookupError$class;
+
+struct $IndexError;
+typedef struct $IndexError *$IndexError;
+
+struct $IndexError$class;
+typedef struct $IndexError$class *$IndexError$class;
+
+struct $KeyError;
+typedef struct $KeyError *$KeyError;
+
+struct $KeyError$class;
+typedef struct $KeyError$class *$KeyError$class;
+
+struct $MemoryError;
+typedef struct $MemoryError *$MemoryError;
+
+struct $MemoryError$class;
+typedef struct $MemoryError$class *$MemoryError$class;
+
+struct $OSError;
+typedef struct $OSError *$OSError;
+
+struct $OSError$class;
+typedef struct $OSError$class *$OSError$class;
+
+struct $RuntimeError;
+typedef struct $RuntimeError *$RuntimeError;
+
+struct $RuntimeError$class;
+typedef struct $RuntimeError$class *$RuntimeError$class;
+
+struct $NotImplementedError;
+typedef struct $NotImplementedError *$NotImplementedError;
+
+struct $NotImplementedError$class;
+typedef struct $NotImplementedError$class *$NotImplementedError$class;
+
+struct $ValueError;
+typedef struct $ValueError *$ValueError;
+
+struct $ValueError$class;
+typedef struct $ValueError$class *$ValueError$class;
+
 struct $Eq;
 typedef struct $Eq *$Eq;
 
