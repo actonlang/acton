@@ -11,21 +11,6 @@
 
 #define MAX_MSG_SIZE_GS (MAX_MSG_SIZE_VC + 16)
 
-/* Gossip state: */
-
-typedef struct gossip_state
-{
-	node_description nd;
-	vector_clock * vc;
-} gossip_state;
-
-gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, short portno, vector_clock * vc);
-void free_gossip_state(gossip_state * vc);
-int serialize_gs(gossip_state * gs, void ** buf, unsigned * len);
-int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs);
-int equals_gs(gossip_state * gs1, gossip_state * gs2);
-char * to_string_gs(gossip_state * gs, char * msg_buff);
-
 /* Node description: */
 
 typedef struct node_description
@@ -41,10 +26,25 @@ typedef struct node_description
 } node_description;
 
 node_description * init_node_description(int status, int node_id, int rack_id, int dc_idm, char * hostname, short portno);
-void copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, short portno);
+int copy_node_description(node_description * nd, int status, int node_id, int rack_id, int dc_id, char * hostname, short portno);
 void free_node_description(node_description * vc);
 int equals_node_description(node_description * nd1, node_description * nd2);
 char * to_string_node_description(node_description * nd, char * msg_buff);
+
+/* Gossip state: */
+
+typedef struct gossip_state
+{
+	node_description nd;
+	vector_clock * vc;
+} gossip_state;
+
+gossip_state * init_gossip_state(int status, int node_id, int rack_id, int dc_id, char * hostname, short portno, vector_clock * vc);
+void free_gossip_state(gossip_state * vc);
+int serialize_gs(gossip_state * gs, void ** buf, unsigned * len);
+int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs);
+int equals_gs(gossip_state * gs1, gossip_state * gs2);
+char * to_string_gs(gossip_state * gs, char * msg_buff);
 
 /* Membership view: */
 
@@ -55,12 +55,12 @@ typedef struct membership_state
 	vector_clock * view_id;
 } membership_state;
 
-membership_state * init_membership(int no_nodes, node_description * membership, vector_clock * view_id);
-void free_membership(membership_state * vc);
-int serialize_membership(membership_state * gs, void ** buf, unsigned * len);
-int deserialize_membership(void * buf, unsigned msg_len, membership_state ** gs);
-int equals_membership(membership_state * gs1, membership_state * gs2);
-char * to_string_membership(membership_state * gs, char * msg_buff);
+membership_state * init_membership_state(int no_nodes, node_description * membership, vector_clock * view_id);
+void free_membership_state(membership_state * vc);
+int serialize_membership_state(membership_state * gs, void ** buf, unsigned * len);
+int deserialize_membership_state(void * buf, unsigned msg_len, membership_state ** gs);
+int equals_membership_state(membership_state * gs1, membership_state * gs2);
+char * to_string_membership_state(membership_state * gs, char * msg_buff);
 
 /* Membership agreement messages: */
 

@@ -106,7 +106,7 @@ server: server.c libdb failure_detector
 	 -L $(LIBDIR) -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
 
-remote_txn_unit_tests: remote_txn_unit_tests.c libdb libdbclient
+remote_txn_unit_tests: remote_txn_unit_tests.c libdb libdbclient failure_detector
 	cc remote_txn_unit_tests.c \
 	 $(CFLAGS) \
 	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \

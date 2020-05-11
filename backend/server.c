@@ -25,10 +25,11 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <argp.h>
+#include <string.h>
 
 #define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
 
-// #define UPDATE_LC_ON_GOSSIP
+#define UPDATE_LC_ON_GOSSIP
 
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
@@ -116,21 +117,21 @@ membership * get_membership(int my_id)
 
 void free_membership(membership * m)
 {
-	free_skiplist(m->local_peers);
-	free_skiplist(m->agreed_peers);
-	free_skiplist(m->stable_peers);
+	skiplist_free(m->local_peers);
+	skiplist_free(m->agreed_peers);
+	skiplist_free(m->stable_peers);
 
 	if(m->view_id != NULL)
 		free_vc(m->view_id);
 
 	if(m->outstanding_proposal != NULL)
-		free_skiplist(m->outstanding_proposal);
+		skiplist_free(m->outstanding_proposal);
 
 	if(m->outstanding_view_id != NULL)
 		free_vc(m->outstanding_view_id);
 
 	if(m->merged_responses != NULL)
-		free_skiplist(m->merged_responses);
+		skiplist_free(m->merged_responses);
 
 	free(m);
 }
@@ -1147,9 +1148,9 @@ int get_agreement_propose_packet(int status, membership_state * membership, long
 	printf("Sending Membership Propose message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
 
-	free_ack_message(amr);
+	free_membership_agreement(amr);
 
 	return ret;
 }
@@ -1157,7 +1158,7 @@ int get_agreement_propose_packet(int status, membership_state * membership, long
 int get_agreement_response_packet(int status, membership_state * membership, membership_agreement_msg * am,
 									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
-	membership_agreement_msg * amr = get_membership_response_msg(status, membership, am->nonce, vc);
+	membership_agreement_msg * amr = get_membership_response_msg(status, membership, am->nonce, copy_vc(vc));
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
@@ -1165,9 +1166,9 @@ int get_agreement_response_packet(int status, membership_state * membership, mem
 	printf("Sending Membership Response message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
 
-	free_ack_message(amr);
+	free_membership_agreement(amr);
 
 	return ret;
 }
@@ -1175,7 +1176,7 @@ int get_agreement_response_packet(int status, membership_state * membership, mem
 int get_agreement_notify_packet(int status, membership_state * membership, membership_agreement_msg * am,
 									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
-	membership_agreement_msg * amr = get_membership_notify_msg(status, membership, am->nonce, vc);
+	membership_agreement_msg * amr = get_membership_notify_msg(status, membership, am->nonce, copy_vc(vc));
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
@@ -1183,9 +1184,9 @@ int get_agreement_notify_packet(int status, membership_state * membership, membe
 	printf("Sending Membership Notify message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
 
-	free_ack_message(amr);
+	free_membership_agreement(amr);
 
 	return ret;
 }
@@ -1193,7 +1194,7 @@ int get_agreement_notify_packet(int status, membership_state * membership, membe
 int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
 									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
-	membership_agreement_msg * amr = get_membership_notify_ack_msg(status, am->nonce, vc);
+	membership_agreement_msg * amr = get_membership_notify_ack_msg(status, am->nonce, copy_vc(vc));
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
@@ -1201,9 +1202,9 @@ int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
 	printf("Sending Membership Notify ACK message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len, vc);
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
 
-	free_ack_message(amr);
+	free_membership_agreement(amr);
 
 	return ret;
 }
@@ -1219,10 +1220,10 @@ membership_state * get_membership_state_from_server_list(skiplist_t * servers, v
 	for(snode_t * crt = HEAD(servers); crt!=NULL; crt = NEXT(crt), i++)
 	{
 		remote_server * rs = (remote_server *) crt->value;
-		copy_node_description(nds+i, (rs->sockfd >= 0), get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
+		copy_node_description(nds+i, rs->status, get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
 	}
 
-	return init_membership(servers->no_items, nds, my_lc);
+	return init_membership_state(servers->no_items, nds, my_lc);
 }
 
 int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate)
@@ -1233,7 +1234,7 @@ int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int 
     if(m->outstanding_view_id != NULL)
     {
 #if (VERBOSE_RPC > 0)
-		char msg_buf[256];
+		char msg_buf[1024];
 		fprintf(stderr, "SERVER: Proposing new view, aborting already outstanding view proposal %s!\n",
 							to_string_vc(m->outstanding_view_id, msg_buf));
 #endif
@@ -1242,14 +1243,14 @@ int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int 
     }
 
     m->outstanding_proposal = skiplist_clone(m->local_peers, fastrandstate);
-    m->outstanding_view_id = vc_copy(my_vc);
+    m->outstanding_view_id = copy_vc(my_vc);
     m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
     m->proposal_status = PROPOSAL_STATUS_ACTIVE;
     m->outstanding_proposal_acks = 0;
 	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses to "my response"
 
-	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_view_id),
-												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, m->outstanding_view_id);
+	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
 
 	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 	{
@@ -1329,7 +1330,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > 0)
-	char msg_buf[256];
+	char msg_buf[1024];
 	printf("SERVER: Received new view proposal %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
@@ -1346,7 +1347,7 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 	}
 
 	// Copy local view to merged list:
-	skiplist_t * merged_list = skiplist_clone(m->local_peers);
+	skiplist_t * merged_list = skiplist_clone(m->local_peers, fastrandstate);
 
 	// Merge it with proposed view:
 	int memberships_differ = merge_membership_agreement_msg_to_list(ma, merged_list, my_lc, fastrandstate);
@@ -1359,7 +1360,7 @@ int handle_agreement_propose_message(membership_agreement_msg * ma, membership_s
 int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > 0)
-	char msg_buf[256];
+	char msg_buf[1024];
 	printf("SERVER: Received agreement response message %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
 #endif
 
@@ -1420,7 +1421,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
 int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > 0)
-	char msg_buf[256];
+	char msg_buf[1024];
 #endif
 
 	if(compare_vc(m->view_id, ma->vc) > 0)
@@ -1515,7 +1516,30 @@ int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membershi
 	return 0;
 }
 
+int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc)
+{
+	int status = deserialize_membership_agreement_msg(rcv_buf, rcv_msg_len, ma);
 
+	if(status == 0)
+	{
+		*nonce = (*ma)->nonce;
+		*vc = (*ma)->vc;
+
+#if (VERBOSE_RPC > 0)
+		char print_buff[4096];
+		to_string_membership_agreement_msg((*ma), (char *) print_buff);
+		printf("Received gossip message: %s\n", print_buff);
+#endif
+	}
+	else
+	{
+		*ma = NULL;
+		*vc = NULL;
+		*nonce = -1;
+	}
+
+	return status;
+}
 
 int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc)
 {
@@ -1550,32 +1574,32 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 	{
 		case MEMBERSHIP_AGREEMENT_PROPOSE:
 		{
-			status = handle_agreement_propose_message(ma, &merged_membership, m, db, my_lc, fastrandstate);
+			status = handle_agreement_propose_message(ma, &merged_membership, m, db, copy_vc(my_lc), fastrandstate);
 //			assert(status == 0);
-			status = get_agreement_response_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			status = get_agreement_response_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
 			break;
 		}
 		case MEMBERSHIP_AGREEMENT_RESPONSE:
 		{
-			status = handle_agreement_response_message(ma, &merged_membership, m, db, my_lc, fastrandstate);
+			status = handle_agreement_response_message(ma, &merged_membership, m, db, copy_vc(my_lc), fastrandstate);
 //			assert(status == 0);
 			if(m->outstanding_proposal_acks == 0)
 			{
 				assert(merged_membership != NULL);
 				if(m->proposal_status == PROPOSAL_STATUS_ACCEPTED)
 				{
-					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
 				}
 				else if(m->proposal_status == PROPOSAL_STATUS_AMMENDED) // re-propose merged membership from previous round
 				{
 				    m->outstanding_proposal = skiplist_clone(m->merged_responses, fastrandstate);
-				    m->outstanding_view_id = vc_copy(my_lc);
+				    m->outstanding_view_id = copy_vc(my_lc);
 				    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
 				    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
 				    m->outstanding_proposal_acks = 0;
 
-					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, m->outstanding_view_id),
-																m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, m->outstanding_view_id);
+					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+																m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
 				}
 			}
 			else
@@ -1586,9 +1610,9 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		}
 		case MEMBERSHIP_AGREEMENT_NOTIFY:
 		{
-			status = handle_agreement_notify_message(ma, m, db, my_lc, fastrandstate);
+			status = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), fastrandstate);
 //			assert(status == 0);
-			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, my_lc);
+			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
 			break;
 		}
 		case MEMBERSHIP_AGREEMENT_RETRY_LINK:
@@ -1605,7 +1629,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		}
 	}
 
-    assert(status == 0);
+//    assert(status == 0);
 
     if(output_packet)
     {
@@ -1623,6 +1647,8 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 					if (n < 0)
 						error("ERROR writing to socket");
+
+					m->outstanding_proposal_acks;
 				}
 			}
     		}
@@ -1637,8 +1663,8 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		free(tmp_out_buf);
     }
 
-    if(merged_membership != NULL)
-    		free_membership(merged_membership);
+//    if(merged_membership != NULL)
+//    		free_membership_state(merged_membership);
 
 	return 0;
 }
@@ -1683,8 +1709,8 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 		  int stop = 0;
 		  for(int i = 0;!stop;i++)
 		  {
-			  end_ptr = strchrnul(start_ptr, ',');
-			  if(*end_ptr == '\0')
+			  end_ptr = strchr(start_ptr, ',');
+			  if(end_ptr == NULL)
 			  {
 				  stop = 1;
 			  }
@@ -1706,7 +1732,7 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 	  }
 	  case ARGP_KEY_ARG:
   	  case ARGP_KEY_END:
-		  argp_usage (state);
+//		  argp_usage (state);
 		  break;
   	  default:
 	  	return ARGP_ERR_UNKNOWN;
@@ -1730,12 +1756,12 @@ int main(int argc, char **argv) {
   timeout.tv_usec = 0;
   unsigned int seed;
   int ret = 0;
-  char msg_buf[256];
+  char msg_buf[1024];
   int verbosity = SERVER_VERBOSITY;
 
   const char *argp_program_version = "ddb server 1.0";
 
-  struct argp_option options[] =
+  static struct argp_option options[] =
   {
     {"verbose",  'v', 0,      0,  "Produce verbose output" },
     {"quiet",    'q', 0,      0,  "Don't produce any output" },
@@ -1745,7 +1771,7 @@ int main(int argc, char **argv) {
     { 0 }
   };
 
-  static struct argp argp = { options, parse_opt, NULL, (char []) "ddb - standalone server module" };
+  static struct argp argp = { options, parse_opt, NULL, "ddb - standalone server module" };
 
   argp_arguments arguments;
 
@@ -1819,7 +1845,7 @@ int main(int argc, char **argv) {
   gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
   gserveraddr.sin_port = htons((unsigned short) gportno);
 
-  printf("SERVER: Started %s:[%d, %d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), serveraddr.sin_port, gserveraddr.sin_port, to_string_vc(my_lc, msg_buf));
+  printf("SERVER: Started %s:[%d, %d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), ntohs(gserveraddr.sin_port), to_string_vc(my_lc, msg_buf));
 
   if (bind(parentfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
     error("ERROR on binding client socket");
@@ -1835,7 +1861,7 @@ int main(int argc, char **argv) {
 
   // Add myself to local membership:
 
-  ret = add_peer_to_membership(inet_ntoa(gserveraddr.sin_addr), gserveraddr.sin_port, gserveraddr, -1, 0, m, 0, &seed);
+  ret = add_peer_to_membership(inet_ntoa(gserveraddr.sin_addr), ntohs(gserveraddr.sin_port), gserveraddr, -1, 0, m, 0, &seed);
 
   // Now add seed servers:
 
@@ -1843,15 +1869,17 @@ int main(int argc, char **argv) {
 
   for(int i=0;i<arguments.no_seeds;i++)
   {
+	  int cmp_res = strncmp(arguments.seeds[i], inet_ntoa(gserveraddr.sin_addr), 256);
+
 	  // Skip connecting to myself:
-	  if(strncmp(arguments.seeds[i], inet_ntoa(gserveraddr.sin_addr), 256) == 0 && arguments.seed_ports[i] == gserveraddr.sin_port)
+	  if(cmp_res == 0 && arguments.seed_ports[i] == ntohs(gserveraddr.sin_port))
 	  {
 		  printf("SERVER: Skipping connecting to seed %s:%d (myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
 		  continue;
 	  }
 
-	  // Also skip connecting to seed nodes with IPs bigger (lexicographycally) than myself (they will connect to me as they come up):
-	  if(strncmp(arguments.seeds[i], inet_ntoa(gserveraddr.sin_addr), 256) >= 0)
+	  // Also skip connecting to seed nodes with IP:port bigger (lexicographycally) than myself (they will connect to me as they come up):
+	  if(cmp_res > 0 || ((cmp_res == 0) && (arguments.seed_ports[i] > ntohs(gserveraddr.sin_port))) )
 	  {
 		  printf("SERVER: Skipping connecting to seed %s:%d (> myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
 		  continue;
@@ -1860,6 +1888,11 @@ int main(int argc, char **argv) {
 	  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
 
 	  printf("SERVER: Connecting to %s:%d returned %d\n", arguments.seeds[i], arguments.seed_ports[i], ret);
+  }
+
+  if(m->local_peers->no_items > 1)
+  {
+	  ret = propose_local_membership(m, copy_vc(my_lc), &seed);
   }
 
   clientlen = sizeof(clientaddr);
@@ -1893,7 +1926,7 @@ int main(int argc, char **argv) {
 
 		// Add active peers to read set:
 
-		for(snode_t * crt = HEAD(m->agreed_peers); crt!=NULL; crt = NEXT(crt))
+		for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
 		{
 			remote_server * rs = (remote_server *) crt->value;
 			if(rs->sockfd > 0)
@@ -1933,9 +1966,9 @@ int main(int argc, char **argv) {
 			    error("ERROR on inet_ntoa\n");
 
 			  if(verbosity > 0)
-				  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
+				  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port));
 
-			  ret = add_client_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), clientaddr.sin_port, clients, &seed); // hostp->h_name
+			  ret = add_client_to_membership(clientaddr, childfd, inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), clients, &seed); // hostp->h_name
 
 //			  assert(ret == 0);
 		}
@@ -1957,11 +1990,13 @@ int main(int argc, char **argv) {
 			    error("ERROR on inet_ntoa\n");
 
 			  if(verbosity > 0)
-				  printf("SERVER: accepted connection from peer: %s (%s:%d)\n", hostp->h_name, hostaddrp, clientaddr.sin_port);
+				  printf("SERVER: accepted connection from peer: %s (%s:%d)\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port));
 
-			  ret = add_peer_to_membership(hostp->h_name, clientaddr.sin_port, clientaddr, childfd, 0, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
+			  ret = add_peer_to_membership(inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), clientaddr, childfd, 0, m, 0, &seed); // hostp->h_name
 
 //			  assert(ret == 0);
+
+			  continue;
 		}
 
 		// Check if there are messages from existing clients:
@@ -1989,6 +2024,8 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
+//				printf("Reeceived a message from a peer!\n");
+
 				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close))
 					continue;
 

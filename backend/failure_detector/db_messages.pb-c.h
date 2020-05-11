@@ -58,12 +58,14 @@ struct  _NodeStateMessage
    */
   int32_t status;
   int32_t node_id;
+  ProtobufCBinaryData hostname;
+  int32_t port;
   int32_t rack_id;
   int32_t dc_id;
 };
 #define NODE_STATE_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&node_state_message__descriptor) \
-    , 0, 0, 0, 0 }
+    , 0, 0, {0,NULL}, 0, 0, 0 }
 
 
 struct  _VectorClockMessage
@@ -114,11 +116,12 @@ struct  _MembershipAgreementMessage
    */
   int32_t ack_status;
   MembershipViewMessage *view;
+  int64_t nonce;
   VectorClockMessage *vc;
 };
 #define MEMBERSHIP_AGREEMENT_MESSAGE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&membership_agreement_message__descriptor) \
-    , 0, 0, NULL, NULL }
+    , 0, 0, NULL, 0, NULL }
 
 
 struct  _CellAddressMessage

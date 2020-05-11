@@ -1267,7 +1267,7 @@ void   consume_queue_response_message__free_unpacked
   assert(message->base.descriptor == &consume_queue_response_message__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor node_state_message__field_descriptors[4] =
+static const ProtobufCFieldDescriptor node_state_message__field_descriptors[6] =
 {
   {
     "status",
@@ -1294,8 +1294,32 @@ static const ProtobufCFieldDescriptor node_state_message__field_descriptors[4] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "rack_id",
+    "hostname",
     3,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_BYTES,
+    0,   /* quantifier_offset */
+    offsetof(NodeStateMessage, hostname),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "port",
+    4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(NodeStateMessage, port),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "rack_id",
+    5,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -1307,7 +1331,7 @@ static const ProtobufCFieldDescriptor node_state_message__field_descriptors[4] =
   },
   {
     "dc_id",
-    4,
+    6,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
@@ -1319,15 +1343,17 @@ static const ProtobufCFieldDescriptor node_state_message__field_descriptors[4] =
   },
 };
 static const unsigned node_state_message__field_indices_by_name[] = {
-  3,   /* field[3] = dc_id */
+  5,   /* field[5] = dc_id */
+  2,   /* field[2] = hostname */
   1,   /* field[1] = node_id */
-  2,   /* field[2] = rack_id */
+  3,   /* field[3] = port */
+  4,   /* field[4] = rack_id */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange node_state_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor node_state_message__descriptor =
 {
@@ -1337,7 +1363,7 @@ const ProtobufCMessageDescriptor node_state_message__descriptor =
   "NodeStateMessage",
   "",
   sizeof(NodeStateMessage),
-  4,
+  6,
   node_state_message__field_descriptors,
   node_state_message__field_indices_by_name,
   1,  node_state_message__number_ranges,
@@ -1497,7 +1523,7 @@ const ProtobufCMessageDescriptor membership_view_message__descriptor =
   (ProtobufCMessageInit) membership_view_message__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor membership_agreement_message__field_descriptors[4] =
+static const ProtobufCFieldDescriptor membership_agreement_message__field_descriptors[5] =
 {
   {
     "msg_type",
@@ -1526,7 +1552,7 @@ static const ProtobufCFieldDescriptor membership_agreement_message__field_descri
   {
     "view",
     3,
-    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_LABEL_OPTIONAL,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
     offsetof(MembershipAgreementMessage, view),
@@ -1536,8 +1562,20 @@ static const ProtobufCFieldDescriptor membership_agreement_message__field_descri
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "vc",
+    "nonce",
     4,
+    PROTOBUF_C_LABEL_REQUIRED,
+    PROTOBUF_C_TYPE_INT64,
+    0,   /* quantifier_offset */
+    offsetof(MembershipAgreementMessage, nonce),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "vc",
+    5,
     PROTOBUF_C_LABEL_REQUIRED,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1551,13 +1589,14 @@ static const ProtobufCFieldDescriptor membership_agreement_message__field_descri
 static const unsigned membership_agreement_message__field_indices_by_name[] = {
   1,   /* field[1] = ack_status */
   0,   /* field[0] = msg_type */
-  3,   /* field[3] = vc */
+  3,   /* field[3] = nonce */
+  4,   /* field[4] = vc */
   2,   /* field[2] = view */
 };
 static const ProtobufCIntRange membership_agreement_message__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor membership_agreement_message__descriptor =
 {
@@ -1567,7 +1606,7 @@ const ProtobufCMessageDescriptor membership_agreement_message__descriptor =
   "MembershipAgreementMessage",
   "",
   sizeof(MembershipAgreementMessage),
-  4,
+  5,
   membership_agreement_message__field_descriptors,
   membership_agreement_message__field_indices_by_name,
   1,  membership_agreement_message__number_ranges,

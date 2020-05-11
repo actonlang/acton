@@ -7,6 +7,7 @@
 #include "comm.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
 {
@@ -324,35 +325,6 @@ int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * o
 	return 1;
 }
 
-int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc)
-{
-	membership_agreement_msg * ma = NULL;
-
-#if (VERBOSE_RPC > 0)
-	char print_buff[4096];
-#endif
-	int status = deserialize_membership_agreement_msg(rcv_buf, rcv_msg_len, ma);
-
-	if(status == 0)
-	{
-		*nonce = (*ma)->nonce;
-		*vc = (*ma)->vc;
-
-#if (VERBOSE_RPC > 0)
-		to_string_membership_agreement_msg((*ma), (char *) print_buff);
-		printf("Received gossip message: %s\n", print_buff);
-#endif
-	}
-	else
-	{
-		*ma = NULL;
-		*vc = NULL;
-		*nonce = -1;
-	}
-
-	return status;
-}
-
 int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int * statusp, int (*handle_socket_close)(int * sockfd, int * status))
 {
 	int announced_msg_len = -1;
@@ -513,6 +485,8 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
         		for(int connect_retries = 0; connect_success != 0 && connect_retries < MAX_CONNECT_RETRIES; connect_retries++)
         		{
         			connect_success = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
+        			if(connect_success != 0)
+        				sleep(2);
         		}
 			if(connect_success != 0)
 			{
@@ -530,7 +504,7 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
 
     snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
 
-    strncpy(&(rs->hostname), hostname, strnlen(hostname, 256) + 1);
+    strncpy((char *) &(rs->hostname), hostname, strnlen(hostname, 256) + 1);
     rs->portno = portno;
 
 	return rs;

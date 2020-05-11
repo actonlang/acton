@@ -9,7 +9,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 /* Node description: */
 
@@ -112,7 +116,7 @@ void free_gossip_msg(GossipMessage * msg)
 
 void init_ns_msg(NodeStateMessage * ns_msg, gossip_state * gs)
 {
-	init_ns_msg_from_description(ns_msg, gs->nd);
+	init_ns_msg_from_description(ns_msg, &(gs->nd));
 }
 
 int serialize_gs(gossip_state * gs, void ** buf, unsigned * len)
@@ -156,7 +160,7 @@ int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs)
 
 int equals_gs(gossip_state * gs1, gossip_state * gs2)
 {
-	return equals_node_description(gs1->nd, gs2->nd) &&
+	return equals_node_description(&(gs1->nd), &(gs2->nd)) &&
 			gs1->nd.status == gs2->nd.status &&
 			compare_vc(gs1->vc, gs2->vc) == 0;
 }
@@ -174,7 +178,7 @@ char * to_string_gs(gossip_state * gs, char * msg_buff)
 
 /* Membership: */
 
-membership_state * init_membership(int no_nodes, node_description * membership, vector_clock * view_id)
+membership_state * init_membership_state(int no_nodes, node_description * membership, vector_clock * view_id)
 {
 	membership_state * ms = (membership_state *) malloc(sizeof(membership_state));
 	ms->no_nodes = no_nodes;
@@ -196,7 +200,7 @@ membership_state * clone_membership(membership_state * m)
 	return ms;
 }
 
-void free_membership(membership_state * ms)
+void free_membership_state(membership_state * ms)
 {
 	free(ms->membership);
 	free_vc(ms->view_id);
@@ -230,7 +234,7 @@ void init_membership_msg(MembershipViewMessage * msg, membership_state * m, Vect
 	msg->membership = membership_v;
 }
 
-int serialize_membership(membership_state * m, void ** buf, unsigned * len)
+int serialize_membership_state(membership_state * m, void ** buf, unsigned * len)
 {
 	MembershipViewMessage msg = MEMBERSHIP_VIEW_MESSAGE__INIT;
 	VectorClockMessage view_id_msg = VECTOR_CLOCK_MESSAGE__INIT;
@@ -256,10 +260,10 @@ membership_state * init_membership_from_msg(MembershipViewMessage * msg)
 	for(int i=0;i<msg->n_membership;i++)
 		copy_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id,
 								msg->membership[i]->hostname.data, msg->membership[i]->port);
-	return init_membership(msg->n_membership, membership, view_id);
+	return init_membership_state(msg->n_membership, membership, view_id);
 }
 
-int deserialize_membership(void * buf, unsigned msg_len, membership_state ** ms)
+int deserialize_membership_state(void * buf, unsigned msg_len, membership_state ** ms)
 {
 	MembershipViewMessage * msg = membership_view_message__unpack(NULL, msg_len, buf);
 
@@ -274,7 +278,7 @@ int deserialize_membership(void * buf, unsigned msg_len, membership_state ** ms)
 	return 0;
 }
 
-int equals_membership(membership_state * gs1, membership_state * gs2)
+int equals_membership_state(membership_state * gs1, membership_state * gs2)
 {
 	if(gs1->no_nodes != gs2->no_nodes)
 		return 0;
@@ -286,7 +290,7 @@ int equals_membership(membership_state * gs1, membership_state * gs2)
 	return 1;
 }
 
-char * to_string_membership(membership_state * gs, char * msg_buff)
+char * to_string_membership_state(membership_state * gs, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 	sprintf(crt_ptr, "Membership(");
@@ -334,13 +338,13 @@ membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_
 
 membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, long nonce, vector_clock * vc)
 {
-	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_NOTIFY_ACK, ack_status, nonce, vc);
+	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_NOTIFY_ACK, ack_status, NULL, nonce, vc);
 }
 
 void free_membership_agreement(membership_agreement_msg * ma)
 {
 	if(ma->membership != NULL)
-		free_membership(ma->membership);
+		free_membership_state(ma->membership);
 	if(ma->vc != NULL)
 		free_vc(ma->vc);
 	free(ma);
@@ -381,9 +385,11 @@ int serialize_membership_agreement_msg(membership_agreement_msg * ma, void ** bu
 	msg.nonce = ma->nonce;
 
 	*len = membership_agreement_message__get_packed_size (&msg);
+	*len = (*len) + sizeof(int);
 	*buf = malloc (*len);
-	membership_agreement_message__pack (&msg, *buf);
-
+	memset(*buf, 0 , *len);
+	*((int *)(*buf)) = (*len) - sizeof(int);
+	membership_agreement_message__pack (&msg, (void *) ((int *)(*buf) + 1));
 	free_membership_agreement_msg(&msg);
 
 	return 0;
@@ -414,7 +420,7 @@ int equals_membership_agreement_msg(membership_agreement_msg * ma1, membership_a
 
 	if((ma1->membership != NULL && ma2->membership == NULL) ||
 		(ma1->membership == NULL && ma2->membership != NULL) ||
-		!equals_membership(ma1->membership, ma2->membership))
+		!equals_membership_state(ma1->membership, ma2->membership))
 		return 0;
 
 	if(compare_vc(ma1->vc, ma2->vc) != 0)
@@ -431,7 +437,7 @@ char * to_string_membership_agreement_msg(membership_agreement_msg * ma, char * 
 
 	if(ma->membership != NULL)
 	{
-		to_string_membership(ma->membership, crt_ptr);
+		to_string_membership_state(ma->membership, crt_ptr);
 		crt_ptr += strlen(crt_ptr);
 		sprintf(crt_ptr, ", ");
 		crt_ptr += 2;

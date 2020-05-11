@@ -120,21 +120,21 @@ int main (int argc, const char * argv[])
 	copy_node_description(&nds[1], 0, 1, 0, 0, "localhost", 32001);
 	copy_node_description(&nds[2], 1, 2, 0, 0, "localhost", 32002);
 
-	membership_state * ms = init_membership(3, nds, vc), * ms_r = NULL;
-	serialize_membership(ms, &buf_w, &len_w);
+	membership_state * ms = init_membership_state(3, nds, vc), * ms_r = NULL;
+	serialize_membership_state(ms, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
-	deserialize_membership(buf_r, len_r, &ms_r);
+	deserialize_membership_state(buf_r, len_r, &ms_r);
 
-	printf("MembershipState message: %s\n", to_string_membership(ms, err_msg));
-	if(!equals_membership(ms, ms_r))
+	printf("MembershipState message: %s\n", to_string_membership_state(ms, err_msg));
+	if(!equals_membership_state(ms, ms_r))
 	{
-		printf("MembershipState read mismatch (%s)!\n", to_string_membership(ms_r, err_msg));
+		printf("MembershipState read mismatch (%s)!\n", to_string_membership_state(ms_r, err_msg));
 		assert(0);
 	}
 
 	// Generate dummy Membership Agreement message:
 
-	membership_agreement_msg * ma = init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_PROPOSE, 0, ms, vc), * ma_r = NULL;
+	membership_agreement_msg * ma = init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_PROPOSE, 0, ms, 0, vc), * ma_r = NULL;
 	serialize_membership_agreement_msg(ma, &buf_w, &len_w);
 	write_read_from_file(buf_w, len_w, buf_r, &len_r);
 	deserialize_membership_agreement_msg(buf_r, len_r, &ma_r);
