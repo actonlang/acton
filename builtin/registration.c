@@ -62,4 +62,22 @@ void $register_builtin() {
   $register_force(LIST_ID,($Serializable$methods)&$list$methods);
   $register_force(DICT_ID,($Serializable$methods)&$dict$methods);
   $register_force(SET_ID,($Serializable$methods)&$set$methods);
+  $register_force(RANGE_ID,($Serializable$methods)&$range$methods);
+  $register_force(STRITERATOR_ID,($Serializable$methods)&$Iterator$str$methods);
+  $register_force(LISTITERATOR_ID,($Serializable$methods)&$Iterator$list$methods);
+  $register_force(DICTITERATOR_ID,($Serializable$methods)&$Iterator$dict$methods);
+  $register_force(VALUESITERATOR_ID,($Serializable$methods)&$Iterator$dict$values$methods);
+  $register_force(ITEMSITERATOR_ID,($Serializable$methods)&$Iterator$dict$items$methods);
+  $register_force(SETITERATOR_ID,($Serializable$methods)&$Iterator$set$methods);
+  $register_force(RANGEITERATOR_ID,($Serializable$methods)&$Iterator$range$methods);
 }
+
+#define RANGE_ID 15
+#define ITEM_ID 16
+#define STRITERATOR_ID 17
+#define LISTITERATOR_ID 18
+#define DICTITERATOR_ID 19
+#define VALUESITERATOR_ID 20
+#define ITEMSITERATOR_ID 21
+#define SETITERATOR_ID 22
+#define RANGEITERATOR_ID 23

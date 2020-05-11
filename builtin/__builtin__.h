@@ -26,6 +26,9 @@ typedef struct $complex *$complex;
 struct $bool;
 typedef struct $bool *$bool;
 
+struct $range;
+typedef struct $range *$range;
+
 struct $Iterator;
 typedef struct $Iterator *$Iterator;
 
@@ -376,6 +379,12 @@ typedef struct $Hashable$float *$Hashable$float;
 
 struct $Hashable$float$class;
 typedef struct $Hashable$float$class *$Hashable$float$class;
+
+struct $Iterable$range;
+typedef struct $Iterable$range *$Iterable$range;
+
+struct $Iterable$range$class;
+typedef struct $Iterable$range$class *$Iterable$range$class;
 
 // $Eq ////////////////////////////////////////////////////////////
 
@@ -1647,3 +1656,18 @@ $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
 
+// $Iterable$range ////////////////////////////////////////////////////////////
+
+struct $Iterable$range {
+    $Iterable$range$class $class;
+};
+
+struct $Iterable$range$class {
+    char *$GCINFO;
+    $Super $superclass;
+    void (*__init__)($Iterable$range);
+    $Iterator (*__iter__)($Iterable$range, $range);
+};
+
+void $Iterable$range$__init__ ($Iterable$range);
+$Iterator $Iterable$range$__iter__ ($Iterable$range, $range);

@@ -77,4 +77,23 @@ $str from$UTF8(char *str);
 // Destructor; recover the internal string.
 unsigned char *to$UTF8($str str);
 
+// Iterators over strs ///////////////////////////////////////////////////////
 
+typedef struct $Iterator$str *$Iterator$str; ;
+
+struct $Iterator$str$class {
+  char *$GCINFO;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$str, $str);
+  void (*__serialize__)($Iterator$str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
+  $Iterator$str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  $str (*__next__)($Iterator$str);
+};
+
+struct $Iterator$str {
+  struct $Iterator$str$class *$class;
+  $str src;
+  int nxt;
+};
+
+extern struct  $Iterator$str$class  $Iterator$str$methods;

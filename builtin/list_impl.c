@@ -133,36 +133,50 @@ int $list_containsnot($Eq w, $list lst, $WORD elem) {
   return !$list_contains(w,lst,elem);
 }
 
-  
-
 // Iterable ///////////////////////////////////////////////////////////////////////////
-typedef struct $Iterator$list {
-  char *$GCINFO;
-  $Super$class $superclass;
-  $WORD(*__next__)($WORD self);
-  $list src;
-  int nxt;
-} *$Iterator$list; 
 
-static $WORD $list_iterator_next($WORD self) {
-  $Iterator$list state = ($Iterator$list) (($Iterator)self)->$class;
-  if (state->nxt >= state->src->length) {
-    exception e;
-    MKEXCEPTION(e,STOPITERATION);
-    RAISE(e);
-  }
-  return state->src->data[state->nxt++];
+
+static $WORD $Iterator$list_next($Iterator$list self) {
+  return self->nxt >= self->src->length ? NULL : self->src->data[self->nxt++];
 }
 
+void $Iterator$list_init($Iterator$list self, $list lst) {
+  self->src = lst;
+  self->nxt = 0;
+}
+
+void $Iterator$list_serialize($Iterator$list self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-LISTITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
+  }
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(LISTITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$list $Iterator$list$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$list res = malloc(sizeof(struct $Iterator$list));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$list$methods;
+    res->src = ($list)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+struct $Iterator$list$class $Iterator$list$methods = {"",($Super$class)&$Iterator$methods, $Iterator$list_init,
+                                                      $Iterator$list_serialize, $Iterator$list$_deserialize, $Iterator$list_next};
+
 $Iterator $list_iter($list lst) {
-  $Iterator$list iter = malloc(sizeof(struct $Iterator$list));
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->__next__ = $list_iterator_next;
-  iter->src = lst;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+  return ($Iterator)$NEW($Iterator$list,lst);
 }
 
 // Indexed ///////////////////////////////////////////////////////////////////////////

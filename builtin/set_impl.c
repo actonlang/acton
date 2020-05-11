@@ -24,6 +24,9 @@ struct $set$class $set$methods = {"",NULL,$set_init,$set_serialize,$set_deserial
 static $WORD _dummy;
 #define dummy (&_dummy)
 
+static $Iterator $set_iter_entry($set set);
+
+
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
     $setentry *entry;
     long perturb = hash;
@@ -385,65 +388,78 @@ int $set_contains($set set, $Hashable hashwit, $WORD elem) {
  
 // Iterable ///////////////////////////////////////////////////////////////////////////////////////
 
-typedef struct $Iterator$set {
-  char *$GCINFO;
-  $Super$class $superclass;
-  $WORD(*__next__)($WORD self);
-  $set src;
-  int nxt;
-} *$Iterator$set; 
- 
-static $WORD $set_iterator_next_entry($WORD self) {
-  $Iterator$set state = ($Iterator$set) (($Iterator)self)->$class;
-  $setentry *table = state->src->table;
-  long n = state->src->mask;
-  long i = state->nxt;
+static $WORD $Iterator$set_next_entry($Iterator$set self) {
+  $setentry *table = self->src->table;
+  long n = self->src->mask;
+  long i = self->nxt;
   while (i <= n) {
     $setentry *entry = &table[i];
     if (entry->key != NULL && entry->key != dummy) {
-      state->nxt = i+1;
+      self->nxt = i+1;
       return entry;
     }
     i++;
   }
-  exception e;
-  MKEXCEPTION(e,STOPITERATION);
-  RAISE(e);
   return NULL;
 }
 
-$WORD $set_iterator_next($WORD self) {
+static $Iterator $set_iter_entry($set set) {
+  $Iterator$set iter =  malloc(sizeof(struct $Iterator$set));
+  struct $Iterator$set$class *methods = malloc(sizeof(struct $Iterator$set$class));
+  iter->$class = methods;
+  methods->__next__ =  $Iterator$set_next_entry;
+  iter->src = set;
+  iter->nxt = 0;
+  return ($Iterator)iter;
+}
+                                            
+static $WORD $Iterator$set_next($Iterator$set self) {
   $WORD res;
-  if((res = $set_iterator_next_entry(self))) {
+  if((res = $Iterator$set_next_entry(self))) {
     return (($setentry*)res)->key;
   } 
-  exception e;
-  MKEXCEPTION(e,STOPITERATION);
-  RAISE(e);
   return NULL;
 }
 
+void $Iterator$set_init($Iterator$set self, $set set) {
+  self->src = set;
+  self->nxt = 0;
+}
+
+void $Iterator$set_serialize($Iterator$set self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-SETITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
+  }
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(SETITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$set $Iterator$set$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$set res = malloc(sizeof(struct $Iterator$set));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$set$methods;
+    res->src = ($set)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+struct $Iterator$set$class $Iterator$set$methods = {"",($Super$class)&$Iterator$methods, $Iterator$set_init,
+                                                      $Iterator$set_serialize, $Iterator$set$_deserialize, $Iterator$set_next};
+
+
 $Iterator $set_iter($set set) {
-  $Iterator$set iter = malloc(sizeof(struct $Iterator$set));
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->__next__ = $set_iterator_next;
-  iter->src = set;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+  return ($Iterator)$NEW($Iterator$set,set);
 }
-
-$Iterator $set_iter_entry($set set) {
-  $Iterator$set iter = malloc(sizeof(struct $Iterator$set));
-  iter->__next__ = $set_iterator_next_entry;
-  iter->src = set;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
-}
-
  
 // Minus ///////////////////////////////////////////////////////////////////////////////////////////
 

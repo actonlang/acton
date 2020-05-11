@@ -25,7 +25,16 @@
 #define CLOS_ID 12
 #define CONT_ID 13
 #define DONE_ID 14
-#define ITEM_ID 15  // used for cases 
+#define RANGE_ID 15
+#define ITEM_ID 16
+#define STRITERATOR_ID 17
+#define LISTITERATOR_ID 18
+#define DICTITERATOR_ID 19
+#define VALUESITERATOR_ID 20
+#define ITEMSITERATOR_ID 21
+#define SETITERATOR_ID 22
+#define RANGEITERATOR_ID 23
+
 
 /* 
  * Register the builtin classes (those with the above class id's). This must be the first registration call,

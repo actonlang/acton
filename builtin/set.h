@@ -30,3 +30,24 @@ extern struct $Minus$set$class $Minus$set$methods;
 extern struct $Logical$set$class $Logical$set$methods;
 
 extern struct $Set$set *$Set$set_new($Hashable);
+
+// Iterators over sets ///////////////////////////////////////////////////////
+
+typedef struct $Iterator$set *$Iterator$set; ;
+
+struct $Iterator$set$class {
+  char *$GCINFO;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$set, $set);
+  void (*__serialize__)($Iterator$set, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
+  $Iterator$set (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  $WORD(*__next__)($Iterator$set);
+};
+
+struct $Iterator$set {
+  struct $Iterator$set$class *$class;
+  $set src;
+  int nxt;
+};
+
+extern struct  $Iterator$set$class  $Iterator$set$methods;
