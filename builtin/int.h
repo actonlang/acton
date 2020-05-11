@@ -29,5 +29,3 @@ extern struct $Hashable$int *$Hashable$int$witness;
 
 $int to$int(long n);
 long from$int($int n);
-
-$Iterator $range($int, $int, $int);
