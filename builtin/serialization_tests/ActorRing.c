@@ -181,7 +181,7 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
 $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
     self->table = $NEW($list, $None);
-    $Iterator iter$1 = $range(no_actors, $None, $None);
+    $Iterator iter$1 = $Iterable$range$witness->$class->__iter__($Iterable$range$witness, $NEW($range, no_actors, $None, $None));
     return loop$1(self, iter$1, cont$0, $None);
 }
 
