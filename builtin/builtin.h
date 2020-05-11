@@ -20,5 +20,6 @@
 #include "set_impl.h"
 #include "tuple.h"
 #include "range.h"
+#include "exceptions.h"
 #include "../rts/rts.h"
 

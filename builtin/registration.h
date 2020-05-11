@@ -35,6 +35,19 @@
 #define SETITERATOR_ID 22
 #define RANGEITERATOR_ID 23
 
+#define BASEEXCEPTION_ID                        24
+#define     SYSTEMEXIT_ID                       25
+#define     KEYBOARDINTERRUPT_ID                26
+#define     EXCEPTION_ID                        27
+#define         ASSERTIONERROR_ID               28
+#define         LOOKUPERROR_ID                  29
+#define             INDEXERROR_ID               30
+#define             KEYERROR_ID                 31
+#define         MEMORYERROR_ID                  32
+#define         OSERROR_ID                      33
+#define         RUNTIMEERROR_ID                 34
+#define             NOTIMPLEMENTEDERROR_ID      35
+#define         VALUEERROR_ID                   36
 
 /* 
  * Register the builtin classes (those with the above class id's). This must be the first registration call,
