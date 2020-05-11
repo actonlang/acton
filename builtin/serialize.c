@@ -221,6 +221,7 @@ $ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob) {
   res->class_id = class_id;
   res->row_no = (*start_no)++;
   res->blob_size = blob_size;
+  res->next = NULL;
   if (blob)
     memcpy(res->blob,blob,blob_size*sizeof($WORD));
   return res;

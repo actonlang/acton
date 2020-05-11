@@ -83,13 +83,3 @@ void $register_builtin() {
   $register_force(NOTIMPLEMENTEDERROR_ID,($Serializable$methods)&$NotImplementedError$methods);
   $register_force(VALUEERROR_ID,($Serializable$methods)&$ValueError$methods);
 }
-
-#define RANGE_ID 15
-#define ITEM_ID 16
-#define STRITERATOR_ID 17
-#define LISTITERATOR_ID 18
-#define DICTITERATOR_ID 19
-#define VALUESITERATOR_ID 20
-#define ITEMSITERATOR_ID 21
-#define SETITERATOR_ID 22
-#define RANGEITERATOR_ID 23
