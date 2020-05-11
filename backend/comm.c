@@ -446,7 +446,7 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
 {
 	remote_server * rs = (remote_server *) malloc(sizeof(remote_server));
     bzero(rs, sizeof(remote_server));
-    rs->status = NODE_LIVE;
+    rs->status = NODE_UNKNOWN;
 
     if(serverfd > 0 || serverfd == -1) // For own node (-1), use provided serveraddr
     {
@@ -454,17 +454,10 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
     		rs->sockfd = serverfd;
     		rs->server = gethostbyname(hostname);
     		assert(rs->server != NULL);
+    	    rs->status = NODE_LIVE;
     }
     else
     {
-    		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-        if (rs->sockfd < 0)
-        {
-            fprintf(stderr, "ERROR opening socket!\n");
-            free_remote_server(rs);
-            return NULL;
-        }
-
     		rs->server = gethostbyname(hostname);
         if (rs->server == NULL)
         {
@@ -481,6 +474,16 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
 
         if(do_connect)
         {
+            rs->status = NODE_LIVE;
+
+        		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
+			if (rs->sockfd < 0)
+			{
+				fprintf(stderr, "ERROR opening socket!\n");
+				free_remote_server(rs);
+				return NULL;
+			}
+
         		int connect_success = -1;
         		for(int connect_retries = 0; connect_success != 0 && connect_retries < MAX_CONNECT_RETRIES; connect_retries++)
         		{
@@ -493,8 +496,6 @@ remote_server * get_remote_server(char *hostname, int portno, struct sockaddr_in
 				fprintf(stderr, "ERROR connecting to %s:%d\n", hostname, portno);
 				rs->status = NODE_DEAD;
 				rs->sockfd = 0;
-//				free_remote_server(rs);
-//				return NULL;
 			}
         }
     }

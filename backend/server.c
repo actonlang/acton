@@ -1174,19 +1174,17 @@ int get_agreement_response_packet(int status, membership_state * membership, mem
 }
 
 int get_agreement_notify_packet(int status, membership_state * membership, membership_agreement_msg * am,
-									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+								membership_agreement_msg ** amr,	void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
-	membership_agreement_msg * amr = get_membership_notify_msg(status, membership, am->nonce, copy_vc(vc));
+	*amr = get_membership_notify_msg(status, membership, am->nonce, copy_vc(vc));
 
 #if (VERBOSE_RPC > 0)
 	char print_buff[1024];
-	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	to_string_membership_agreement_msg(*amr, (char *) print_buff);
 	printf("Sending Membership Notify message: %s\n", print_buff);
 #endif
 
-	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
-
-	free_membership_agreement(amr);
+	int ret = serialize_membership_agreement_msg(*amr, snd_buf, snd_msg_len);
 
 	return ret;
 }
@@ -1226,10 +1224,78 @@ membership_state * get_membership_state_from_server_list(skiplist_t * servers, v
 	return init_membership_state(servers->no_items, nds, my_lc);
 }
 
+int no_live_nodes(skiplist_t * list)
+{
+	int no_nodes = 0;
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		if(rs->status == NODE_LIVE)
+			no_nodes++;
+	}
+
+	return no_nodes;
+}
+
+int no_live_or_unknown_nodes(skiplist_t * list)
+{
+	int no_nodes = 0;
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		if(rs->status == NODE_LIVE || rs->status == NODE_UNKNOWN)
+			no_nodes++;
+	}
+
+	return no_nodes;
+}
+
+int mark_live(membership * m, int sender_id)
+{
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		rs->status = NODE_LIVE;
+
+		return 0;
+	}
+
+	return 1;
+}
+
+int mark_dead(membership * m, int sender_id)
+{
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		rs->status = NODE_DEAD;
+
+		return 0;
+	}
+
+	return 1;
+}
+
+
 int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate)
 {
     void * tmp_out_buf = NULL;
     unsigned snd_msg_len;
+
+    if(no_live_nodes(m->local_peers) <= 1)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: Skipping proposing new view, as no other nodes are live in local membership!\n");
+#endif
+		return -1;
+    }
 
     if(m->outstanding_view_id != NULL)
     {
@@ -1308,7 +1374,11 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 			remote_server * rs_local = (remote_server *) node->value;
 
-			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
 				long local_counter = get_component_vc(my_lc, nd.node_id);
 				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
@@ -1325,7 +1395,6 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 	return memberships_differ;
 }
-
 
 int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
 {
@@ -1418,7 +1487,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     return m->proposal_status;
 }
 
-int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
 {
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
@@ -1426,9 +1495,9 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 
 	if(compare_vc(m->view_id, ma->vc) > 0)
 	{
-#if (VERBOSE_RPC > 0)
+#if (VERBOSE_RPC > -1)
 		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
-							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
+							to_string_vc(ma->vc, msg_buf), to_string_vc(m->view_id, msg_buf));
 #endif
 
 		return 1;
@@ -1438,7 +1507,7 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 
 	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
 
-	int install_failed = 0;
+	int local_view_disagrees = 0;
 	struct sockaddr_in dummy_serveraddr;
 
 	for(int i=0;i<ma->membership->no_nodes;i++)
@@ -1458,7 +1527,7 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 			{
 				rs->sockfd = 0;
 				rs->status = NODE_DEAD;
-				install_failed = 1;
+				local_view_disagrees = 1;
 			}
 
 			status = add_remote_server_to_list(rs, m->local_peers, fastrandstate);
@@ -1473,7 +1542,11 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 
 			remote_server * rs_local = (remote_server *) node->value;
 
-			if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
 				long local_counter = get_component_vc(my_lc, nd.node_id);
 				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
@@ -1482,8 +1555,10 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 				{
 					rs_local->status = nd.status;
 				}
-
-				install_failed = 1;
+				else
+				{
+					local_view_disagrees = 1;
+				}
 			}
 
 			int status = add_remote_server_to_list(rs_local, new_membership, fastrandstate);
@@ -1491,24 +1566,28 @@ int handle_agreement_notify_message(membership_agreement_msg * ma, membership * 
 		}
 	}
 
-	if(!install_failed)
+	if(m->agreed_peers != NULL)
 	{
-		if(m->agreed_peers != NULL)
-		{
-			skiplist_free(m->agreed_peers);
-	//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
-		}
-
-		m->agreed_peers = new_membership;
-
-		update_or_replace_vc(&(m->view_id), ma->vc);
-	}
-	else
-	{
-		skiplist_free(new_membership);
+		skiplist_free(m->agreed_peers);
+//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
 	}
 
-	return install_failed;
+	m->agreed_peers = new_membership;
+
+	update_or_replace_vc(&(m->view_id), ma->vc);
+
+#if (VERBOSE_RPC > -1)
+	printf("SERVER: Installed new agreed view %s, local_view_disagrees=%d\n",
+					to_string_membership_agreement_msg(ma, msg_buf),
+					local_view_disagrees);
+#endif
+
+	return local_view_disagrees;
+}
+
+int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+	return install_agreed_view(ma, m, my_lc, fastrandstate);
 }
 
 int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
@@ -1541,7 +1620,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 	return status;
 }
 
-int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc)
+int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int sender_id)
 {
     void * tmp_out_buf = NULL;
     unsigned snd_msg_len;
@@ -1564,9 +1643,20 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 	{
 		// If we were multi-threaded, we'd have to protect this snippet:
 
+#if (VERBOSE_RPC > 2)
+    	    	char msg_buf[1024];
+		printf("SERVER: Received message with LC %s.\n", to_string_vc(lc_read, msg_buf));
+		printf("SERVER: My LC before update is %s.\n", to_string_vc(my_lc, msg_buf));
+#endif
+
+		mark_live(m, sender_id);
     	    	update_vc(my_lc, lc_read);
+
+#if (VERBOSE_RPC > 2)
+		printf("SERVER: Updated local LC to %s.\n", to_string_vc(my_lc, msg_buf));
+#endif
+
     	    	increment_vc(my_lc, m->my_id);
-    	    	free_vc(lc_read);
 	}
 #endif
 
@@ -1588,7 +1678,20 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 				assert(merged_membership != NULL);
 				if(m->proposal_status == PROPOSAL_STATUS_ACCEPTED)
 				{
-					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
+					membership_agreement_msg * amr = NULL;
+
+					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
+
+					int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), fastrandstate);
+
+					free_membership_agreement(amr);
+
+					//	if(local_view_disagrees)
+					//	{
+					//		propose_local_membership(m, copy_vc(my_lc), fastrandstate);
+					//		output_packet = 0;
+					//	}
+					//
 				}
 				else if(m->proposal_status == PROPOSAL_STATUS_AMMENDED) // re-propose merged membership from previous round
 				{
@@ -1610,8 +1713,11 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 		}
 		case MEMBERSHIP_AGREEMENT_NOTIFY:
 		{
-			status = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), fastrandstate);
-//			assert(status == 0);
+			int local_view_disagrees = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), fastrandstate);
+
+//			if(local_view_disagrees)
+//				propose_local_membership(m, copy_vc(my_lc), fastrandstate);
+
 			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
 			break;
 		}
@@ -1665,6 +1771,9 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
 
 //    if(merged_membership != NULL)
 //    		free_membership_state(merged_membership);
+
+    if(ma != NULL)
+    		free_membership_agreement(ma);
 
 	return 0;
 }
@@ -1879,21 +1988,21 @@ int main(int argc, char **argv) {
 	  }
 
 	  // Also skip connecting to seed nodes with IP:port bigger (lexicographycally) than myself (they will connect to me as they come up):
+	  int do_connect = 1;
 	  if(cmp_res > 0 || ((cmp_res == 0) && (arguments.seed_ports[i] > ntohs(gserveraddr.sin_port))) )
 	  {
 		  printf("SERVER: Skipping connecting to seed %s:%d (> myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
-		  continue;
+		  do_connect = 0;
+	  }
+	  else
+	  {
+		  printf("SERVER: Connecting to %s:%d..\n", arguments.seeds[i], arguments.seed_ports[i]);
 	  }
 
-	  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
-
-	  printf("SERVER: Connecting to %s:%d returned %d\n", arguments.seeds[i], arguments.seed_ports[i], ret);
+	  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, do_connect, m, 0, &seed); // inet_ntoa(clientaddr.sin_addr)
   }
 
-  if(m->local_peers->no_items > 1)
-  {
-	  ret = propose_local_membership(m, copy_vc(my_lc), &seed);
-  }
+  ret = propose_local_membership(m, copy_vc(my_lc), &seed);
 
   clientlen = sizeof(clientaddr);
 
@@ -2024,12 +2133,12 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-//				printf("Reeceived a message from a peer!\n");
-
 				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close))
 					continue;
 
-			    if(handle_server_message(childfd, msg_len, m, db, &seed, my_lc))
+				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+
+			    if(handle_server_message(childfd, msg_len, m, db, &seed, my_lc, sender_id))
 			    		continue;
 			}
 		}

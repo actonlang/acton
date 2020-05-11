@@ -68,24 +68,25 @@ int compare_vc(vector_clock * vc1, vector_clock * vc2)
 
 int update_vc(vector_clock * vc_dest, vector_clock * vc_src)
 {
-	int dest_idx=0;
+	int dest_idx = 0;
+	int status = 0;
 
 	for(int i=0;i<vc_src->no_nodes;i++)
 	{
+		dest_idx = 0;
+
 		while(vc_dest->node_ids[dest_idx].node_id < vc_src->node_ids[i].node_id && dest_idx < vc_dest->no_nodes)
 			dest_idx++;
 
-		if(vc_dest->node_ids[dest_idx].node_id > vc_src->node_ids[i].node_id)
+		if(dest_idx < vc_dest->no_nodes && vc_dest->node_ids[dest_idx].node_id == vc_src->node_ids[i].node_id) // We have found the i'th component. Update it to the maximum of the 2 vectors:
 		{
-			// Source vector has a component that dest vector doesn't. Add that component to the dest vector:
-
-			add_component_vc(vc_dest, vc_src->node_ids[i].node_id, vc_src->node_ids[i].counter);
-		}
-		else
-		{
-			// Update dest counter of this component with the maximum of the 2:
 			if(vc_src->node_ids[i].counter > vc_dest->node_ids[dest_idx].counter)
 				vc_dest->node_ids[dest_idx].counter = vc_src->node_ids[i].counter;
+		}
+		else	 // Source vector has a component that dest vector doesn't. Add that component to the dest vector:
+		{
+			status = add_component_vc(vc_dest, vc_src->node_ids[i].node_id, vc_src->node_ids[i].counter);
+			assert(status == 0);
 		}
 	}
 
@@ -137,11 +138,11 @@ int add_component_vc(vector_clock * vc, int node_id, int initial_counter)
 	// Insert component in its location and shift rest to keep vector sorted
 	// Note that this is a rare operation:
 
-	for(int idx = vc->no_nodes;idx>found_idx;idx--)
+	for(int idx = vc->no_nodes;idx>found_idx+1;idx--)
 		vc->node_ids[idx] = vc->node_ids[idx-1];
 
-	vc->node_ids[found_idx].node_id = node_id;
-	vc->node_ids[found_idx].counter = (initial_counter > 0)?initial_counter:0;
+	vc->node_ids[found_idx+1].node_id = node_id;
+	vc->node_ids[found_idx+1].counter = (initial_counter > 0)?initial_counter:0;
 
 	vc->no_nodes++;
 
@@ -347,7 +348,7 @@ char * to_string_vc(vector_clock * vc, char * msg_buff)
 
 	for(int i=0;i<vc->no_nodes;i++)
 	{
-		sprintf(crt_ptr, "%d:%ld, ", vc->node_ids->node_id, vc->node_ids->counter);
+		sprintf(crt_ptr, "%d:%ld, ", vc->node_ids[i].node_id, vc->node_ids[i].counter);
 		crt_ptr += strlen(crt_ptr);
 	}
 

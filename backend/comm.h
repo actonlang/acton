@@ -25,6 +25,7 @@
 
 #define NODE_LIVE 0
 #define NODE_DEAD 1
+#define NODE_UNKNOWN 2
 
 // Comm loop fctns:
 
