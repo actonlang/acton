@@ -45,7 +45,7 @@ actor Act(i : int):
 actor Root(_ignore : int):
     table : list[Act] = []
 
-    for i : int in range(no_actors):
+    for i : int in range(no_actors).__iter__():
         table.append(Act(i))
     
     table[0].act(-1, table)
@@ -77,7 +77,7 @@ actor Act(i : int):
 actor Root(_ignore : int):
     table : list[Act] = list(None)
 
-    iter$1 : Iterator[int] = range(no_actors, None, None)
+    iter$1 : Iterator[int] = Iterable$range$witness.__iter__(range(no_actors, None, None))
     i : int = iter$1.__next__()
     while i is not None:
         Sequence$list$witness.append(table, Act(i))
@@ -126,7 +126,7 @@ class Root ($Actor):
         $Actor.__init__(self)
         self.table = list(None)
         
-        iter$1 : Iterator[int] = range(no_actors, None, None)
+        iter$1 : Iterator[int] = Iterable$range$witness.__iter__(range(no_actors, None, None))
         while True:
             i : int = iter$1.__next__()
             if i is None:
@@ -176,7 +176,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : (None)->$R) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors, None, None)
+        iter$1 : Iterator[int] = Iterable$range$witness.__iter__(range(no_actors, None, None))
         def loop$1(_ignore : None) -> $R:
             i : int = iter$1.__next__()
             if i is None:
@@ -229,7 +229,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : $Cont[None]) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors, None, None)
+        iter$1 : Iterator[int] = Iterable$range$witness.__iter__(range(no_actors, None, None))
         def loop$1(self : Root, iter$1 : Iterator[int], cont$0 : $Cont[None], _ignore : None) -> $R:
             i : int = iter$1.__next__()
             if i is None:
@@ -319,7 +319,7 @@ class Root ($Actor):
     def __init__(self : Root, _ignore : int, cont$0 : $Cont[None]) -> $R:
         $Actor.__init__(self)
         self.table = list(None)
-        iter$1 : Iterator[int] = range(no_actors, None, None)
+        iter$1 : Iterator[int] = Iterable$range$witness.__iter__(range(no_actors, None, None))
         return loop$1(self, iter$1, cont$0, None)
 
 ######################################  Code generation:
@@ -622,7 +622,7 @@ $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
 $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
     $Actor$methods.__init__(($Actor)self);
     self->table = $NEW($list, $None);
-    $Iterator iter$1 = $range(no_actors, $None, $None);
+    $Iterator iter$1 = $Iterable$range$witness->$class->__iter__($Iterable$range$witness, $NEW($range, no_actors, $None, $None));
     return loop$1(self, iter$1, cont$0, $None);
 }
 

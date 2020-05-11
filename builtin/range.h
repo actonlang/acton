@@ -16,9 +16,6 @@ struct $range {
 
 extern struct $range$class $range$methods;
 
-extern struct $Iterable$range$class $Iterable$range$methods;
-extern struct $Iterable$range *$Iterable$range$witness;
-
 //extern struct $Sequence$range$class $Sequence$range$methods;
 //extern struct $Container$range$class $Container$range$methods; 
 
@@ -43,4 +40,10 @@ struct $Iterator$range {
   $range src;
   int nxt;
 };
+
+extern struct $Iterator$range$class  $Iterator$range$methods;
+extern $Iterator$range $Iterator$range$witness;
+
+extern struct $Iterable$range$class $Iterable$range$methods;
+extern $Iterable$range $Iterable$range$witness;
 
