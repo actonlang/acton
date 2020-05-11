@@ -44,3 +44,7 @@ struct $Iterator$range {
 };
 
 extern struct $Iterator$range$class  $Iterator$range$methods;
+extern $Iterator$range $Iterator$range$witness;
+
+extern struct $Iterable$range$class $Iterable$range$methods;
+extern $Iterable$range $Iterable$range$witness;
