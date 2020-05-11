@@ -2,9 +2,9 @@
 
 #include "common.h"
 #include "__builtin__.h"
-#include "Iterator.h"
 #include "serialize.h"
 #include "registration.h"
+#include "Iterator.h"
 #include "complex.h"
 #include "int.h"
 #include "slice.h"
@@ -19,5 +19,6 @@
 #include "set.h"
 #include "set_impl.h"
 #include "tuple.h"
+#include "range.h"
 #include "../rts/rts.h"
 

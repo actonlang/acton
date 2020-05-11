@@ -17,5 +17,6 @@
 #include "set.c"
 #include "set_impl.c"
 #include "tuple.c"
+#include "range.c"
 #include "serialize.c"
 #include "registration.c"

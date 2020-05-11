@@ -257,47 +257,61 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
   return 0;
 }
 // Iterable //////////////////////////////////////////////////////////////////////////////
-
-typedef struct $Iterator$dict {
-  char *$GCINFO;
-  $Super$class $superclass;
-  $WORD(*__next__)($WORD self);
-  $dict src;
-  int nxt;
-} *$Iterator$dict; 
-
-
-
-static $WORD $dict_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
-  int i = state->nxt;
-  $table table = state->src->table;
+ 
+static $WORD $Iterator$dict_next($Iterator$dict self) {
+  int i = self->nxt;
+  $table table = self->src->table;
   int n = table->tb_nentries;
   while (i < n) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
-      state->nxt = i+1;
+      self->nxt = i+1;
       return entry->key;
     }
     i++;
   }
-  exception e;
-  MKEXCEPTION(e,KEYERROR);
-  RAISE(e);
   return NULL;
 }
  
-$Iterator $dict_iter($dict dict) {
-  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
-  iter->__next__ = $dict_iterator_next;
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->src = dict;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+void $Iterator$dict_init($Iterator$dict self, $dict dict) {
+  self->src = dict;
+  self->nxt = 0;
 }
- 
+
+void $Iterator$dict_serialize($Iterator$dict self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-DICTITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
+  }
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(DICTITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$dict $Iterator$dict$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$dict res = malloc(sizeof(struct $Iterator$dict));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$dict$methods;
+    res->src = ($dict)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+struct $Iterator$dict$class $Iterator$dict$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict_init,
+                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_next};
+
+$Iterator $dict_iter($dict dict) {
+  return ($Iterator)$NEW($Iterator$dict,dict);
+}
+
 // Indexed ///////////////////////////////////////////////////////////////////////////////
 
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
@@ -367,34 +381,68 @@ int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
 
-static $WORD $dict_values_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
-  int i = state->nxt;
-  $table table = state->src->table;
+// values iterator
+
+static $WORD $Iterator$dict$values_next($Iterator$dict$values self) {
+  int i = self->nxt;
+  $table table = self->src->table;
   int n = table->tb_nentries;
   while (i < n) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
-      state->nxt = i+1;
+      self->nxt = i+1;
       return entry->value;
     }
     i++;
   }
-  exception e;
-  MKEXCEPTION(e,STOPITERATION);
-  RAISE(e);
   return NULL;
 }
+ 
+void $Iterator$dict$values_init($Iterator$dict$values self, $dict dict) {
+  self->src = dict;
+  self->nxt = 0;
+}
 
-static $WORD $dict_items_iterator_next($WORD self) {
-  $Iterator$dict state = ($Iterator$dict) (($Iterator)self)->$class;
-  int i = state->nxt;
-  $table table = state->src->table;
+void $Iterator$dict$values_serialize($Iterator$dict$values self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-VALUESITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
+  }
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(VALUESITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$dict$values $Iterator$dict$values_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$dict$values res = malloc(sizeof(struct $Iterator$dict$values));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$dict$values$methods;
+    res->src = ($dict)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
+                                                      $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_next};
+
+// items iterator
+
+static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
+  int i = self->nxt;
+  $table table = self->src->table;
   int n = table->tb_nentries;
   while (i < n) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
-      state->nxt = i+1;
+      self->nxt = i+1;
       $tup2_t res = malloc(sizeof(struct $tup2_t));
       res->$class = &$tup2_t$methods;
       res->a = entry->key;
@@ -403,11 +451,43 @@ static $WORD $dict_items_iterator_next($WORD self) {
     }
     i++;
   }
-  exception e;
-  MKEXCEPTION(e,STOPITERATION);
-  RAISE(e);
   return NULL;
 }
+ 
+void $Iterator$dict$items_init($Iterator$dict$items self, $dict dict) {
+  self->src = dict;
+  self->nxt = 0;
+}
+
+void $Iterator$dict$items_serialize($Iterator$dict$items self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-ITEMSITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
+  }
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(ITEMSITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$dict$items $Iterator$dict$items_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$dict$items res = malloc(sizeof(struct $Iterator$dict$items));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$dict$items$methods;
+    res->src = ($dict)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
+                                                      $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize, $Iterator$dict$items_next};
 
 
 $Iterator $dict_keys($dict dict) {
@@ -415,25 +495,11 @@ $Iterator $dict_keys($dict dict) {
 }
 
 $Iterator $dict_values($dict dict) {
-  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->__next__ = $dict_values_iterator_next;
-  iter->src = dict;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+  return ($Iterator)$NEW($Iterator$dict$values, dict);
 }
 
 $Iterator $dict_items($dict dict) {
-  $Iterator$dict iter = malloc(sizeof(struct $Iterator$dict));
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->__next__ = $dict_items_iterator_next;
-  iter->src = dict;
-  iter->nxt = 0;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+  return  ($Iterator)$NEW($Iterator$dict$items, dict);
 }
  
 $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {

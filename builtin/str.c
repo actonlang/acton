@@ -550,41 +550,54 @@ int $str_containsnot($str s, $str sub) {
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
-typedef struct $Iterator$str {
-  char *$GCINFO;
-  $Super$class $superclass;
-  $WORD(*__next__)($WORD self);
-  unsigned char *nxt;
-  int remaining;
-} *$Iterator$str; 
- 
-// this is next function for forward iteration
-static $WORD $str_iterator_next($WORD self) {
-  $Iterator$str state = ($Iterator$str) self;
-  $WORD res;
-  if (state->remaining==0) {
-    exception e;
-    MKEXCEPTION(e,STOPITERATION);
-    RAISE(e);
-    return NULL;
-  } else {
-    res = ($WORD)mk_char(state->nxt);
-    state->nxt +=byte_length2(*state->nxt);
-    state->remaining--;
+void $Iterator$str_init($Iterator$str self, $str str) {
+  self->src = str;
+  self->nxt = 0;
+}
+
+void $Iterator$str_serialize($Iterator$str self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
+  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+  if (prevkey) {
+    $val_serialize(-STRITERATOR_ID,&prevkey->val,start_no,accum);
+    return;
   }
-  return res;
+  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $enqueue(accum,$new_row(STRITERATOR_ID,start_no,0,NULL));
+  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
+  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+}
+
+$Iterator$str $Iterator$str$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+  } else {
+    $Iterator$str res = malloc(sizeof(struct $Iterator$str));
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    res->$class = &$Iterator$str$methods;
+    res->src = ($str)$step_deserialize(wit,row,done);
+    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
+    return res;
+  }
+}
+
+// this is next function for forward iteration
+static $str $Iterator$str_next($Iterator$str self) {
+  unsigned char *p = &self->src->str[self->nxt];
+  if (*p != 0) {
+    self->nxt +=byte_length2(*p);
+    return mk_char(p);
+  }
+  return NULL;
 }
 
 $Iterator $str_iter($str str) {
-  $Iterator$str iter = malloc(sizeof(struct $Iterator$str));
-  iter->$superclass = ($Super$class)$Iterator$witness;
-  iter->__next__ = $str_iterator_next;
-  iter->nxt = str->str;
-  iter->remaining = str->nchars;
-  $Iterator res = malloc(sizeof(struct $Iterator));
-  res->$class = ($Iterator$class)iter;
-  return res;
+  return ($Iterator)$NEW($Iterator$str,str);
 }
+
+struct $Iterator$str$class $Iterator$str$methods = {"",($Super$class)&$Iterator$methods, $Iterator$str_init,
+                                                      $Iterator$str_serialize, $Iterator$str$_deserialize, $Iterator$str_next};
 
 
 // Indexed ///////////////////////////////////////////////////////////////////////////
