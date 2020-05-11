@@ -320,7 +320,7 @@ class range_iterator ():
             return next
         else:
             return None
-*/
+
 
 struct range_iterator;
 typedef struct range_iterator *range_iterator;
@@ -388,3 +388,4 @@ struct range_iterator$class range_iterator$methods = {
 $Iterator $range($int fst, $int snd, $int step) {
     return ($Iterator)$NEW(range_iterator, fst, snd, step);
 }
+*/
