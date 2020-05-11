@@ -253,7 +253,7 @@ static int insertdict($dict dict, $Hashable hashwit, long hash, $WORD key, $WORD
     return 0;
   }
   if (old_value != value)  //eq ??
-    TB_ENTRIES(table)[ix].value = value;
+    TB_ENTRIES(dict->table)[ix].value = value;
   return 0;
 }
 // Iterable //////////////////////////////////////////////////////////////////////////////
