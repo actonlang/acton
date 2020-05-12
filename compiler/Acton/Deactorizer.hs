@@ -2,27 +2,24 @@ module Acton.Deactorizer where
 
 import Acton.Syntax
 import Acton.Names
-import Acton.Env hiding (newName)
+import Acton.Env
 import Acton.Prim
 import Acton.Builtin
 import Utils
 import Control.Monad.State.Lazy
 
 deactorize                          :: Env -> Module -> IO Module
-deactorize env0 m                   = return $ evalState (deact env m) ([1..], [])
+deactorize env0 m                   = return $ evalState (deact env m) []
   where env                         = deactEnv env0
 
 -- Deactorizing monad
-type DeactM a                       = State ([Int],[Stmt]) a
-
-newName                             :: String -> DeactM Name
-newName s                           = state (\(uniq:supply, stmts) -> (Internal s uniq DeactPass, (supply, stmts)))
+type DeactM a                       = State [Stmt] a
 
 store                               :: [Stmt] -> DeactM ()
-store ss                            = state (\(supply, stmts) -> ((), (supply, reverse ss ++ stmts)))
+store ss                            = state (\stmts -> ((), reverse ss ++ stmts))
 
 swapStore                           :: [Stmt] -> DeactM [Stmt]
-swapStore ss                        = state (\(supply, stmts) -> (stmts, (supply, ss)))
+swapStore ss                        = state (\stmts -> (stmts, ss))
 
 withStore                           :: DeactM a -> DeactM (a,[Stmt])
 withStore m                         = do ss0 <- swapStore []
@@ -85,8 +82,7 @@ deactD env []                       = return []
 deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds
 deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 
-deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
-                                         (bint,sext) <- withStore (deact (env1 n') b)
+deactA env (Actor l n q p k t b)    = do (bint,sext) <- withStore (deact env1 b)
                                          let (ssigs,sext') = partition isSig sext
                                              _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
                                              create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQ n')) (parToArg p) KwdNil)
@@ -97,12 +93,13 @@ deactA env (Actor l n q p k t b)    = do n' <- newName (nstr n)
                                              extern = Class l n q [] (reverse sext' ++ [Decl l0 [_init_]])
                                              intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)
                                          return [intern, extern]
-  where env1 n'                     = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
+  where env1                        = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
         selfPat n                   = TaDot l0 (Var l0 (NoQ selfKW)) n
         isSig Signature{}           = True
         isSig _                     = False
         isDecl Decl{}               = True
         isDecl _                    = False
+        n'                          = Derived n "local"
 
 addSelf p                           = PosPar selfKW Nothing Nothing p
 

@@ -32,7 +32,7 @@ structs env (Decl  _ ds)                = map strs ds
                                         = [structdecls cnm, structdecls (cnm <> text "$class")] ++
                                           case nm of
                                              Name{} -> [structdecls (cnm <> text "$opaque")]
-                                             Internal{} -> []
+                                             _ -> []
            where cnm                    = cpretty env nm
         strs _                          = []
 structs _ _                             = []
@@ -54,7 +54,7 @@ instance CPretty Decl where
                                               class_struct env{isglobal=False} nm ms,
                                               case nm of
                                                   Name{} -> opaque_struct cnm ms
-                                                  Internal{} -> fun_prototypes env nm ms
+                                                  _ -> fun_prototypes env nm ms
                                            ])
      where (ms,is)                      = partition isMeth ss
            cnm                          = cpretty env nm

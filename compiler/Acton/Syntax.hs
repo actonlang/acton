@@ -99,16 +99,16 @@ data Target     = TaVar         { taloc::SrcLoc, tn::Name}
 
                 deriving (Show)
 
-data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | GenPass 
+data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | NoPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
-data Name       = Name SrcLoc String | Internal String Int Pass deriving (Generic)
+data Name       = Name SrcLoc String | Derived Name String | Internal String Int Pass deriving (Generic)
 
 nloc (Name l _) = l
-nloc Internal{} = NoLoc
+nloc _          = NoLoc
 
 nstr (Name _ s)             = s
-nstr (Internal s 0 GenPass) = "$" ++ s
+nstr (Derived n s)          = nstr n ++ "$" ++ s
 nstr (Internal s i p)       = s ++ "$" ++ show i ++ suffix p
   where suffix ParsePass    = "p"
         suffix KindPass     = "k"
@@ -118,7 +118,7 @@ nstr (Internal s i p)       = s ++ "$" ++ show i ++ suffix p
         suffix DeactPass    = "d"
         suffix LLiftPass    = "l"
         suffix CPass        = "C"
-        suffix GenPass      = ""
+        suffix NoPass       = ""
 
 name            = Name NoLoc
 
@@ -211,8 +211,8 @@ data Constraint = Cast  Type Type
 type Constraints = [Constraint]
 
 skolem (TV k n) = case n of
-                    Name{}     -> True
-                    Internal{} -> False
+                    Name{} -> True
+                    _      -> False
 
 dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec
 
@@ -466,13 +466,17 @@ instance Eq Expr where
 
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
+    Derived n1 s1       == Derived n2 s2        = n1 == n2 && s1 == s2
     Internal s1 i1 p1   == Internal s2 i2 p2    = s1 == s2 && i1 == i2 && p1 == p2
     _                   == _                    = False
 
 instance Ord Name where
     Name _ s1           <= Name _ s2            = s1 <= s2
+    Derived n1 s1       <= Derived n2 s2        = (n1,s1) <= (n2,s2)
     Internal s1 i1 p1   <= Internal s2 i2 p2    = (s1,i1,p1) <= (s2,i2,p2)
+    Name{}              <= Derived{}            = True
     Name{}              <= Internal{}           = True
+    Derived{}           <= Internal{}           = True
     _                   <= _                    = False
 
 instance Eq a => Eq (Op a) where

@@ -36,7 +36,13 @@ type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
-data Env                    = Env { names :: TEnv, modules :: [(ModName,TEnv)], defaultmod :: ModName, indecl :: Bool } deriving Show
+data Env                    = Env {
+                                names      :: TEnv,
+                                wits       :: [(QName,[Wit])],
+                                modules    :: [(ModName,TEnv)],
+                                defaultmod :: ModName,
+                                indecl     :: Bool }
+                            deriving (Show)
 
 data NameInfo               = NVar      Type
                             | NSVar     Type
@@ -53,7 +59,11 @@ data NameInfo               = NVar      Type
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
-type WTCon                              = ([Maybe QName],TCon)
+data Wit                    = WClass    { generated_name :: QName, extension_qual :: Qual, base_protos :: [WTCon], extension_tenv :: TEnv }
+--                            | WInst     Expr TCon TCon
+                            deriving (Show)
+
+type WTCon                  = ([Maybe QName],TCon)
 
 instance Data.Binary.Binary NameInfo
 
@@ -245,6 +255,7 @@ parentTEnv env us           = concatMap tEnv us
   where tEnv (w,u)          = case findQName (tcname u) env of
                                 NClass q _ te -> subst (tybound q `zip` tcargs u) te
                                 NProto q _ te -> subst (tybound q `zip` tcargs u) te
+                                NExt n q _ te -> subst (tybound q `zip` tcargs u) te
                                 _             -> []
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
@@ -255,13 +266,15 @@ splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
-                                then return $ Env{names = [], modules = [], defaultmod = mBuiltin, indecl = False}
+                                then return $ Env{names = [], wits = [], modules = [], defaultmod = mBuiltin, indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
-                                        let autoImp = importAll mBuiltin envBuiltin
-                                            env0    = Env{names = [(nBuiltin,NModule envBuiltin)], modules = [(mBuiltin,envBuiltin)],
-                                                          defaultmod = mBuiltin, indecl = False}
-                                            env     = define autoImp env0
+                                        let env0    = Env{names = [(nBuiltin,NModule envBuiltin)],
+                                                          wits = [],
+                                                          modules = [(mBuiltin,envBuiltin)],
+                                                          defaultmod = mBuiltin,
+                                                          indecl = False}
+                                            env     = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
                                         
 setDefaultMod               :: ModName -> Env -> Env
@@ -269,6 +282,11 @@ setDefaultMod m env         = env{ defaultmod = m }
 
 setInDecl                   :: Env -> Env
 setInDecl env               = env{ indecl = True }
+
+addWit                      :: QName -> Wit -> Env -> Env
+addWit c w env              = case lookup c (wits env) of
+                                Just ws -> env{ wits = (c,w:ws) : wits env }
+                                Nothing -> env{ wits = (c,[w]) : wits env }
 
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
@@ -358,25 +376,32 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findExt                     :: QName -> QName -> Env -> Maybe (Name,Qual,[WTCon],TEnv)
-findExt c_n p_n env         = listToMaybe [ x | x@(_,_,ps,_) <- extensionsOf c_n env, p_n == tcname (snd (head ps)) ]
+findWits                    :: QName -> Env -> [Wit]
+findWits n env              = case lookup (unalias env n) $ wits env of
+                                Just ws -> ws
+                                Nothing -> []
 
-findExtAttr                 :: QName -> Name -> Env -> Maybe (Name,TSchema,Decoration)
-findExtAttr c_n a_n env     = listToMaybe [ (w,sc,dec) | x@(w,_,_,te) <- extensionsOf c_n env, Just (NSig sc dec) <- [lookup a_n te] ]
+findWit                     :: TCon -> TCon -> Env -> Maybe (Expr,Qual)
+findWit c p env             = listToMaybe [ (foldl f (eQVar w) ws, q) | WClass w q ps _ <- findWits (tcname c) env,
+                                                                        let s = tybound q `zip` tcargs c,
+                                                                        (ws,p') <- ps, p == subst s p' ]
+  where f e Nothing         = e
+        f e (Just w)        = eDot e (noq w)
+
+findPrevExts                :: QName -> [QName] -> Env -> [QName]
+findPrevExts n ns env       = [ w | WClass w q ps _ <- findWits n env, any connected ps ]
+  where connected (w,p)     = tcname p `elem` ns
 
 
+findExtAttr                 :: QName -> Name -> Env -> Maybe (Expr,TSchema,Decoration)
+findExtAttr c_n a_n env     = listToMaybe [ (eQVar w,sc,dec) | WClass w _ _ te <- findWits c_n env,
+                                                               Just (NSig sc dec) <- [lookup a_n te] ]
 
-extensionsOf                :: QName -> Env -> [(Name,Qual,[WTCon],TEnv)]
-extensionsOf n env          = [ (w,q,ps,te) | (w, NExt n' q ps te) <- names env, n == n' ]
-
-constraintsOf               :: Qual -> Env -> Constraints
-constraintsOf q env         = [ constr u (tVar v) | TBind v us <- q, u <- us ]
-  where constr u t          = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u) 
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)
+findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)          -- Solver.reduce...
 findAttr env tc n           = findIn (te ++ concat tes)
   where (wus,te)            = findCon env tc
         tes                 = [ te' | (w,u) <- wus, let (_,te') = findCon env u ]
@@ -384,7 +409,7 @@ findAttr env tc n           = findIn (te ++ concat tes)
                                 Just (NSig sc d)      -> (sc,NoDec)
                                 Nothing               -> err1 n "Attribute not found:"
 
-findCon                     :: Env -> TCon -> ([WTCon],TEnv)
+findCon                     :: Env -> TCon -> ([WTCon],TEnv)                        --
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
@@ -414,13 +439,14 @@ instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
     wf env (a,b)            = wf env a ++ wf env b
 
 instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ subst s (constraintsOf q env)
+    wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | TBind v us <- q, u <- us ]
       where q               = case findQName n env of
                                 NClass q us te -> q
                                 NProto q us te -> q
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
-
+            constr u t      = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u)
+            
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc
     wf env (TExist _ tc)    = wf env tc
@@ -522,10 +548,10 @@ impModule ps env (Import _ ms)  = imp env ms
                                      imp env2 is
 impModule ps env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp ps env m
-                                     return $ define (importSome items m te) env1
+                                     return $ importSome items m te $ importWits m te $ env1
 impModule ps env (FromImportAll _ (ModRef (0,Just m)))
                                 = do (env1,te) <- doImp ps env m
-                                     return $ define (importAll m te) env1
+                                     return $ importAll m te $ importWits m te $ env1
 impModule _ _ i                 = illegalImport (loc i)
 
 
@@ -545,16 +571,19 @@ doImp (p,sysp) env m            = case lookup m (modules env) of
         mpath (ModName ns)      = map nstr ns
 
 
-importSome                  :: [ImportItem] -> ModName -> TEnv -> TEnv
-importSome items m te       = map pick items
+importSome                  :: [ImportItem] -> ModName -> TEnv -> Env -> Env
+importSome items m te env   = define (map pick items) env
   where 
-    te1                     = importAll m te
+    te1                     = impNames m te
     pick (ImportItem n mbn) = case lookup n te1 of
                                     Just i  -> (maybe n id mbn, i) 
                                     Nothing -> noItem m n
 
-importAll                   :: ModName -> TEnv -> TEnv
-importAll m te              = mapMaybe imp te
+importAll                   :: ModName -> TEnv -> Env -> Env
+importAll m te env          = define (impNames m te) env
+
+impNames                    :: ModName -> TEnv -> TEnv
+impNames m te               = mapMaybe imp te
   where 
     imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
@@ -563,6 +592,11 @@ importAll m te              = mapMaybe imp te
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
     imp (n, NDef t d)       = Just (n, NAlias (QName m n))
     imp _                   = Nothing                               -- cannot happen
+
+importWits                  :: ModName -> TEnv -> Env -> Env
+importWits m te env         = foldl addW env ws
+  where ws                  = [ (c, WClass (QName m n) q ps te') | (n, NExt c q ps te') <- te ]
+        addW env (c,w)      = addWit c w env
 
 
 -- Type inference monad ------------------------------------------------------------------
@@ -613,7 +647,7 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = state $ \st -> (deferred st, st)
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv@(TV _ Internal{}) t       = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+substitute tv t                         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
@@ -629,7 +663,7 @@ newName s                               = Internal s <$> newUnique <*> return Ty
 
 newWitness                              = newName "w"
 
-newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return GenPass)
+newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return NoPass)
   where str KType                       = "V"
         str KFX                         = "X"
         str PRow                        = "P"
