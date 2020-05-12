@@ -18,7 +18,7 @@ rts2.o: rts2.c rts.h
 		-pthread \
 		-c rts2.c
 
-pingpong2: rts.o pingpong2.c pingpong.h
+pingpong2: rts2.o pingpong2.c pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-lutf8proc \
 		rts2.o \
