@@ -25,6 +25,7 @@
 #define CLOS_ID 12
 #define CONT_ID 13
 #define DONE_ID 14
+#define RETNEW_ID 37
 #define RANGE_ID 15
 #define ITEM_ID 16
 #define STRITERATOR_ID 17
