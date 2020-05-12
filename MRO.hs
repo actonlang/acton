@@ -338,3 +338,7 @@ ex21d = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]
          ("Eq$set",["Eq"]), 
          ("Ord$set",["Eq$set","Ord"]),
          ("Set$set",["Ord$set","Set"])]
+
+ex21e = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]),
+         ("Ord$set",["Ord"]),
+         ("Ord$set$2",["Ord$set","Ord"])]                                               -- Succeeds... Acceptable? Or detect by a separate check?
