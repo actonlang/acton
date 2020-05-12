@@ -268,12 +268,13 @@ void $RetNew$__serialize__($RetNew self, $Mapping$dict wit, long *start_no, $dic
 }
 
 $RetNew $RetNew$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-    if ((*row)->class_id < 0) {
-      return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)(*row)->blob[0]),NULL);
-    } else {
+      $ROW this = *row;
+      *row = this->next;
+      if (this->class_id < 0) {
+          return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+      } else {
       $RetNew res = malloc(sizeof(struct $RetNew));
-      $dict_setitem(done,wit->w$Hashable$Mapping,to$int((*row)->row_no),res);
-      *row = (*row)->next;
+      $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
       res->$class = &$RetNew$methods;
       res->cont = ($Cont)$step_deserialize(wit,row,done);
       res->act = ($Actor)$step_deserialize(wit,row,done);
@@ -697,28 +698,28 @@ $ROW $serialize_rts() {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   long start_no = 0;
-  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // leads to a crash...
+  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   $step_serialize(($Serializable)readyQ,wit,&start_no,done,&accum);
   $step_serialize(($Serializable)timerQ,wit,&start_no,done,&accum);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
+  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
   return accum.fst;
 }
 
 void $deserialize_rts($ROW *row) {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  //root_actor = ($Actor)$step_deserialize(wit,row,done);   // leads to a crash...
+  root_actor = ($Actor)$step_deserialize(wit,row,done);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   readyQ = ($Actor)$step_deserialize(wit,row,done);
   timerQ = ($Msg)$step_deserialize(wit,row,done);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  root_actor = ($Actor)$step_deserialize(wit,row,done);   // works...
+  //root_actor = ($Actor)$step_deserialize(wit,row,done);   // works...
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

@@ -22,12 +22,13 @@ void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, long *start_no, $d
 }
 
 lambda$1 lambda$1$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  if ((*row)->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)(*row)->blob[0]),NULL);
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
   } else {
     lambda$1 res = malloc(sizeof(struct lambda$1));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int((*row)->row_no),res);
-    *row = (*row)->next;
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
     res->$class = &lambda$1$methods;
     res->self = (Pingpong)$step_deserialize(wit,row,done);
     res->count = ($int)$step_deserialize(wit,row,done);
@@ -64,12 +65,13 @@ void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, long *start_no, $d
 }
 
 lambda$2 lambda$2$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  if ((*row)->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)(*row)->blob[0]),NULL);
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
   } else {
     lambda$2 res = malloc(sizeof(struct lambda$2));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int((*row)->row_no),res);
-    *row = (*row)->next;
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
     res->$class = &lambda$2$methods;
     res->self = (Pingpong)$step_deserialize(wit,row,done);
     res->q = ($int)$step_deserialize(wit,row,done);
@@ -107,12 +109,13 @@ void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, long *start_no, $d
 }
 
 Pingpong Pingpong$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  if ((*row)->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)(*row)->blob[0]),NULL);
+  $ROW this = *row;
+  *row = this->next;
+  if (this->class_id < 0) {
+    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
   } else {
     Pingpong res = malloc(sizeof(struct Pingpong));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int((*row)->row_no),res);
-    *row = (*row)->next;
+    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
     res->$class = &Pingpong$methods;
     res->i = ($int)$step_deserialize(wit,row,done);
     res->count = ($int)$step_deserialize(wit,row,done);
