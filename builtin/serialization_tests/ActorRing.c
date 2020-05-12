@@ -333,9 +333,16 @@ $int total_msgs;
 void $init_module() {
     $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, ($Hashable)$Hashable$int$witness);
     $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed$Mapping;
-
+    
     no_actors = to$int(5);
     total_msgs = to$int(20);
+    $register_builtin();
+    $register(($Serializable$methods)&lambda$1$methods);
+    $register(($Serializable$methods)&lambda$2$methods);
+    $register(($Serializable$methods)&lambda$3$methods);
+    $register(($Serializable$methods)&lambda$4$methods);
+    $register(($Serializable$methods)&Root$methods);
+    $register(($Serializable$methods)&Act$methods);
 }
 
 $R $ROOT($Env env, $Cont cont$0) {
