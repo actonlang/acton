@@ -153,7 +153,7 @@ transChain mb env b e (c : cs)          = c2{dname = c2nm, dbody = sigs} : trans
          (_,ws)                         = transParams (qual e)
          c2                             = substAll ts c1 
          tc                             = head (bounds c2)
-         c2nm                           = Internal (nstr (dname c2) ++ '$' : nstr (noq (dqname e))) 0 GenPass 
+         c2nm                           = Derived [nstr (dname c2), nstr (noq (dqname e))]
          witType                        = maybe (tCon tc) id mb
          sigs                           = maybe [] (\(TCon _ (TC nm _))->[Signature NoLoc [name ('_':nstr (noq nm))] (monotype witType) NoDec]) mb
                                           ++ nub (dbody c2) -- nub (addWitnesses env ws (dbody c2))

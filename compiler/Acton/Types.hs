@@ -490,26 +490,28 @@ instance InfEnv Decl where
     infEnv env (Extension l n q us b)
       | isProto n env                   = notYet (loc n) "Extension of a protocol"
       | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
-      | not $ null overlap              = err2 overlap "An overlapping extension already exists"
---      | not $ null ws                   = notYet (loc n) "Incremental extension"
       | otherwise                       = do pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
                                              (nsigs,asigs,sigs) <- checkAttributes te' te
                                              when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute not in listed protocols"
-                                             when (not (inBuiltin env || null asigs)) $ err2 asigs "Protocol method/attribute lacks implementation"
+                                             when (not (null asigs || inBuiltin env)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             cn <- newName (nstr $ noq n)
-                                             return (cs, [(cn, NExt n q ps (te++te'))], Extension l n q us b)
+                                             return (cs, [(extensionName n us, NExt n q ps (te++te'))], Extension l n q us b)
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
-            prevexts                    = extensionsOf n env
-            overlap                     = [ p | (_,_,ps',_) <- prevexts, (_,p) <- ps', tcname p == tcname (head us) ]
-            ws                          = [ TC (NoQ w) ts | (w,_,ps',_) <- prevexts, any connected ps' ]
-            connected (_,p)             = tcname p `elem` map tcname us'
-            us'                         = concat [ map snd us' | (us',_) <- map (findCon env) us ]
+            ps                          = mro1 env1 us
+            us'                         = [ TC w ts | w <- findPrevExts n (map (tcname . snd) ps) env ]
+            ps'                         = mro1 env1 (us'++us)
+            te'                         = parentTEnv env ps'
             ts                          = map tVar (tybound q)
-            ps                          = mro1 env1 (head us : ws ++ tail us)
-            te'                         = parentTEnv env1 ps
+
+extensionName                           :: QName -> [TCon] -> Name
+extensionName c ps                      = Derived (deriveQ $ tcname $ head ps) (nstr $ deriveQ c)
+
+deriveQ (NoQ n)                 = n
+deriveQ (QName (ModName m) n)   = deriveMod n m
+deriveMod n0 []                 = n0
+deriveMod n0 (n:m)              = deriveMod (Derived n0 (nstr n)) m
 
 
 class Check a where
@@ -547,14 +549,14 @@ instance Check Decl where
                                              (csk,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              popFX
-                                             (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (csqa++csp++csk++csb)
+                                             (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (cswf++csp++csk++csb)
                                              --solve env1 cs1'
                                              t1 <- msubst (tFun (fxAct st) prow krow t)
                                              cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              -- TODO: checkEnv that st doesn't escape
                                              return (cs2, Actor l n q1 p' k' a b')
       where q1                          = autoQuant env q p k a
-            csqa                        = wellformed env (q,a)
+            cswf                        = wellformed env (q,a)
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ block (stateScope env) env
 
@@ -567,13 +569,13 @@ instance Check Decl where
                                              (csb,_,b') <- infSuiteEnv (define te1 (define te0 env1)) b
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                              popFX
-                                             (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (csqa++csp++csk++csb++cst)
+                                             (cs1',cs1) <- partition (any (`elem` tybound q1) . tyfree) <$> simplify env1 (cswf++csp++csk++csb++cst)
                                              --solve env1 cs1'
                                              t1 <- msubst (tFun fx prow krow t)
                                              cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              return (cs2, Def l n q1 p' k' a b' d)
       where q1                          = autoQuant env q p k a
-            csqa                        = wellformed env (q,a)
+            cswf                        = wellformed env (q,a)
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 env
 
     checkEnv env cl (Class l n q us b)  = do (cs1,b') <- checkEnv env1 True b
@@ -594,9 +596,10 @@ instance Check Decl where
                                              (cs1,b') <- checkEnv env1 True b
                                              popFX
                                              --solve env1 (wellformed env1 (q,us))
-                                             return (cs1, Class l w [] [head us] b')        -- TODO: properly mix in n and q in us......
+                                             return (cs1, Class l n' [] [head us] b')       -- TODO: properly mix in n and q in us......
       where env1                        = define (nSigs te) $ defineSelf n q $ defineTVars q env
-            Just (w,_,_,te)             = findExt n (tcname $ head us) env
+            n'                          = extensionName n us
+            NExt n q ps te              = findName n' env
 
 
 checkAssump env cl n cs sc              = do (cs1,t1) <- instantiate env sc
@@ -803,7 +806,7 @@ instance Infer Expr where
                                                      let t0 = tCon (TC c tvs)
                                                      (cs2,t) <- instantiate env sc
                                                      let t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                     return (cs1++cs2, t', eDot (eVar w) n)
+                                                     return (cs1++cs2, t', eDot w n)
                                                   Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = case lookup n $ nSigs te of
                                               Nothing -> err1 l "Attribute not found"

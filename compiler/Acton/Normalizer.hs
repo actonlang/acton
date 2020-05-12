@@ -221,8 +221,7 @@ instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 
 instance Norm Name where
-    norm env (Name l s)             = return $ Name l s
-    norm env (Internal s i p)       = return $ Internal s i p
+    norm env n                      = return n
 
 instance Norm ModName where
     norm env m@(ModName [n])        = case lookup n (global env) of
