@@ -18,6 +18,7 @@ typedef struct Root *Root;
 
 struct lambda$1$class {
     char *$GCINFO;
+    $Super$class $superclass;
     void (*__init__)(lambda$1, $Cont);
     void (*__serialize__)(lambda$1, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     lambda$1 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
@@ -30,6 +31,7 @@ struct lambda$1 {
 
 struct lambda$2$class {
     char *$GCINFO;
+    $Super$class $superclass;
     void (*__init__)(lambda$2, Act, $int, $list);
     void (*__serialize__)(lambda$2, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     lambda$2 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
@@ -43,7 +45,8 @@ struct lambda$2 {
 };
 
 struct Act$class {
-    char *GCINFO;
+    char *$GCINFO;
+    $Super$class $superclass;
     $R (*__init__)(Act, $int, $Cont);
     void (*__serialize__)(Act, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     Act (*__deserialize__)($Mapping$dict, $ROW*, $dict);
@@ -56,13 +59,14 @@ struct Act {
         struct $Actor super;
     };
     $int i;
-    $int local_cnt;
+    $int count;
     $dict rcv_dict;
     $dict snd_dict;
 };
 
 struct lambda$3$class {
-    char *GCINFO;
+    char *$GCINFO;
+    $Super$class $superclass;
     void (*__init__)(lambda$3, Root, $Iterator, $Cont);
     void (*__serialize__)(lambda$3, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     lambda$3 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
@@ -76,8 +80,9 @@ struct lambda$3 {
 };
 
 struct lambda$4$class {
-    char *GCINFO;
-    void (*__init__)(lambda$4, $Cont);
+    char *$GCINFO;
+    $Super$class $superclass;
+    void (*__init__)(lambda$4, $Cont, Root);
     void (*__serialize__)(lambda$4, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     lambda$4 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)(lambda$4, $WORD);
@@ -85,10 +90,12 @@ struct lambda$4$class {
 struct lambda$4 {
     struct lambda$4$class *$class;
     $Cont cont$0;
+    Root self;
 };
 
 struct Root$class {
-    char *GCINFO;
+    char *$GCINFO;
+    $Super$class $superclass;
     $R (*__init__)(Root, $int, $Cont);
     void (*__serialize__)(Root, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     Root (*__deserialize__)($Mapping$dict, $ROW*, $dict);
