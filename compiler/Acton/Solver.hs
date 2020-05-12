@@ -55,20 +55,10 @@ reduce' env c@(Impl w (TVar _ tv) u)
   | not $ skolem tv                         = defer [c]
   | u `elem` ps                             = return ()
   where ps                                  = findProtoBound tv env
-reduce' env c@(Impl w (TCon _ tc) u)
---  | Just mk <- findWitness t u env          = do (w,cs) <- instWitness env mk
---                                                 reduce env cs
-      
-  | Just (w,q,ps,_) <- findExt (tcname tc) (tcname u) env
-                                            = let s = tybound q `zip` tcargs tc in 
-                                              if u `elem` subst s (map snd ps) then do
-                                                 reduce env (subst s (constraintsOf q env)) 
-                                              else do
-                                                 noRed c
-
-
-
-
+reduce' env (Impl w (TCon _ c) p)
+  | Just (w,q) <- findWit c p env           = do cs <- qualConstraints env q (tcargs c)
+                                                 let w' = eCall w [ eVar w' | Impl w' _ _ <- cs ]
+                                                 reduce env cs
 reduce' env c@(Sel w (TVar _ tv) n t2)
   | not $ skolem tv                         = defer [c]
   | u:_ <- findClassBound tv env            = reduce' env (Sel w (tCon u) n t2)

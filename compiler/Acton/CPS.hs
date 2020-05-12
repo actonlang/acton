@@ -22,6 +22,8 @@ type CpsState                           = ([Int], [Stmt])
 runCpsM                                 :: CpsM a -> a
 runCpsM m                               = evalState m ([1..], [])
 
+contKW                                  = Internal "cont" 0 CPSPass
+
 newName                                 :: String -> CpsM Name
 newName s                               = state (\(uniq:supply, stmts) -> (Internal s uniq CPSPass, (supply, stmts)))
 

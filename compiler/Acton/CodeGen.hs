@@ -40,18 +40,19 @@ instance Gen ModName where
 
 instance Gen QName where
     gen env (QName m n)
-      | m == mPrim                  = text (nstr n)
+      | m == mPrim                  = char '$' <> text (nstr n)
+      | m == mBuiltin               = char '$' <> text (nstr n)
       | otherwise                   = gen env m <> text "$$" <> gen env n
     gen env (NoQ n)                 = gen env n
 
 instance Gen Name where
     gen env nm
       | isCident str                = text str
-      | otherwise                   = text "$_" <> text str'
+      | otherwise                   = text "_$" <> text str'
       where str                     = nstr nm
             str'                    = show (Data.Hashable.hash str) ++ filter isAlpha str
             isCident s@(c:cs)       = isAlpha c && all isAlphaNum cs && not (isCkeyword s)
-            isAlpha c               = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'
+            isAlpha c               = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
             isAlphaNum c            = isAlpha c || c `elem` ['0'..'9']
             isCkeyword x            = x `Data.Set.member` rws
             rws                     = Data.Set.fromDistinctAscList [
@@ -65,7 +66,7 @@ instance Gen Name where
 
 genQName env n                      = gen env (thismodule env) <> char '$' <> gen env n
 
-word                                = text "WORD"
+word                                = text "$WORD"
 
 genSuite env ss                     = nest 4 $ vcat $ map (gen env) ss
 
@@ -94,7 +95,7 @@ genElse env b                       = (text "else" <+> char '{') $+$ genSuite en
 instance Gen Decl where
     gen env (Def _ n q ps ks a b m) = (gen env a <+> genQName env n <+> parens (gen env ps) <+> char '{')
                                       $+$ genSuite env b $+$ char '}'
-    gen env (Class _ n q a b)       = text "class" <+> gen env n <+> nonEmpty brackets commaList q <+>
+    gen env (Class _ n q a b)       = text "class" <+> genQName env n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b
 
 
