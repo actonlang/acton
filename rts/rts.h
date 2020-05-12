@@ -16,12 +16,14 @@ struct $Actor;
 struct $Catcher;
 struct $Clos;
 struct $Cont;
+struct $RetNew;
 
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
 typedef struct $Clos *$Clos;
 typedef struct $Cont *$Cont;
+typedef struct $RetNew *$RetNew;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
@@ -29,6 +31,7 @@ extern struct $Catcher$class $Catcher$methods;
 extern struct $Clos$class $Clos$methods;
 extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
+extern struct $RetNew$class $RetNew$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -126,6 +129,20 @@ struct $Cont {
     };
 };
 
+struct $RetNew$class {
+    char *$GCINFO;
+    $Super$class $superclass;
+    void (*__init__)($RetNew, $Cont, $Actor);
+    void (*__serialize__)($RetNew, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
+    $RetNew (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $R (*enter)($RetNew, $WORD);
+};
+struct $RetNew {
+    struct $RetNew$class *$class;
+    $Cont cont;
+    $Actor act;
+};
+
 $Msg $ASYNC($Actor, $Cont);
 $Msg $AFTER(time_t, $Cont);
 $R $AWAIT($Msg, $Cont);
@@ -133,8 +150,14 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-#define $NEW($T, ...)       ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__); $tmp; })
-#define $NEWCC($T, $c, ...) ({ $T $tmp = malloc(sizeof(struct $T)); $tmp->$class = &$T ## $methods; $tmp->$class->__init__($tmp, ##__VA_ARGS__, $c); })
+#define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
+                               $t->$class = &$T ## $methods; \
+                               $t->$class->__init__($t, ##__VA_ARGS__); \
+                               $t; })
+
+#define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
+                               $x->$class = &$X ## $methods; \
+                               $x->$class->__init__($x, ##__VA_ARGS__, ($Cont)$NEW($RetNew,$c,($Actor)$x)); })
 
 typedef int $Env;
 

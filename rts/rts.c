@@ -230,7 +230,7 @@ void $Clos$__serialize__($Clos self, $Mapping$dict wit, long *start_no, $dict do
     // TBD
 }
 
-$Clos $Clos$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+$Clos $Clos$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
 }
@@ -242,9 +242,48 @@ void $Cont$__serialize__($Cont self, $Mapping$dict wit, long *start_no, $dict do
     // TBD
 }
 
-$Cont $Cont$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
+$Cont $Cont$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
     // TBD
     return NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+
+void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
+    $this->cont = cont;
+    $this->act = act;
+}
+
+void $RetNew$__serialize__($RetNew self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+    int class_id = $get_classid(($Serializable$methods)self->$class);
+    $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+    if (prevkey) {
+      $val_serialize(-class_id,&prevkey->val,start_no,accum);
+    } else {
+      $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+      $enqueue(accum,$new_row(class_id,start_no,0,NULL));
+      $step_serialize(($Serializable)self->cont,wit,start_no,done,accum);
+      $step_serialize(($Serializable)self->act,wit,start_no,done,accum);
+    }
+}
+
+$RetNew $RetNew$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
+    if ((*row)->class_id < 0) {
+      return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)(*row)->blob[0]),NULL);
+    } else {
+      $RetNew res = malloc(sizeof(struct $RetNew));
+      $dict_setitem(done,wit->w$Hashable$Mapping,to$int((*row)->row_no),res);
+      *row = (*row)->next;
+      res->$class = &$RetNew$methods;
+      res->cont = ($Cont)$step_deserialize(wit,row,done);
+      res->act = ($Actor)$step_deserialize(wit,row,done);
+      return res;
+    }
+}
+
+$R $RetNew$enter($RetNew $this, $WORD _ignore) {
+    $Cont cont = $this->cont;
+    return cont->$class->enter(cont, $this->act);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -291,6 +330,14 @@ struct $Cont$class $Cont$methods = {
     NULL
 };
 
+struct $RetNew$class $RetNew$methods = {
+    "$RetNew",
+    NULL,
+    $RetNew$__init__,
+    $RetNew$__serialize__,
+    $RetNew$__deserialize__,
+    $RetNew$enter
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -464,7 +511,7 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $DONE$enter
 };
-struct $Cont $Done$cont = {
+struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -481,7 +528,7 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     $NewRoot$enter
 };
-struct $Cont $NewRoot$cont = {
+struct $Cont $NewRoot$instance = {
     &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -498,7 +545,7 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     $WriteRoot$enter
 };
-struct $Cont $WriteRoot$cont = {
+struct $Cont $WriteRoot$instance = {
     &$WriteRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -506,9 +553,9 @@ struct $Cont $WriteRoot$cont = {
 void BOOTSTRAP() {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    $Cont cont = &$NewRoot$cont;
+    $Cont cont = &$NewRoot$instance;
     $Actor ancestor0 = $NEW($Actor);
-    $Msg m = $NEW($Msg, ancestor0, cont, now.tv_sec, &$WriteRoot$cont);
+    $Msg m = $NEW($Msg, ancestor0, cont, now.tv_sec, &$WriteRoot$instance);
     if (ENQ_msg(m, ancestor0)) {
         ENQ_ready(ancestor0);
     }
@@ -529,7 +576,7 @@ $Catcher POP_catcher($Actor a) {
 $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
-    $Msg m = $NEW($Msg, to, cont, baseline, &$Done$cont);
+    $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
     if (ENQ_msg(m, to)) {
         ENQ_ready(to);
     }
@@ -539,7 +586,7 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 $Msg $AFTER(time_t sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
-    $Msg m = $NEW($Msg, self, cont, baseline, &$Done$cont);
+    $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     ENQ_timed(m);
     return m;
 }
@@ -562,6 +609,9 @@ void $POP() {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void *main_loop(void *arg) {
+#ifdef EXPERIMENT
+    int i = 0;
+#endif
     while (1) {
         $Actor current = DEQ_ready();
         if (current) {
@@ -617,7 +667,21 @@ void *main_loop(void *arg) {
                     ENQ_ready(m->to);
                 }
             } else {
-
+#ifdef EXPERIMENT
+                if ((int)arg==0) {
+                  i++;         
+                  if (i== 3) {
+                      printf("# Serializing root = %ld\n", (long)root_actor);
+                    $write_serialized($serialize_rts(),"rts.bin");
+                  }
+                  if (i == 20) {
+                      printf("# Deserializing\n");
+                    $ROW row = $read_serialized("rts.bin");
+                    $deserialize_rts(&row);
+                    i = 0;
+                  }
+                }
+#endif
                 // TODO: do I/O polling
               static struct timespec idle_wait = { 0, 500000000 };  // 500ms
               nanosleep(&idle_wait, NULL);
@@ -633,26 +697,28 @@ $ROW $serialize_rts() {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   long start_no = 0;
-  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);
+  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   $step_serialize(($Serializable)readyQ,wit,&start_no,done,&accum);
   $step_serialize(($Serializable)timerQ,wit,&start_no,done,&accum);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
+  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
   return accum.fst;
 }
 
 void $deserialize_rts($ROW *row) {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  root_actor = ($Actor)$step_deserialize(wit,row,done);
+  //root_actor = ($Actor)$step_deserialize(wit,row,done);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   readyQ = ($Actor)$step_deserialize(wit,row,done);
   timerQ = ($Msg)$step_deserialize(wit,row,done);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
+  root_actor = ($Actor)$step_deserialize(wit,row,done);   // works...
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -664,12 +730,17 @@ void $register_rts () {
   $register_force(CLOS_ID,($Serializable$methods)&$Clos$methods);
   $register_force(CONT_ID,($Serializable$methods)&$Cont$methods);
   $register_force(DONE_ID,($Serializable$methods)&$Done$methods);
+  $register_force(RETNEW_ID,($Serializable$methods)&$RetNew$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char **argv) {
+#ifdef EXPERIMENT
+    long num_cores = 1;    
+#else
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
     printf("%ld worker threads\n", num_cores);
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
@@ -681,6 +752,8 @@ int main(int argc, char **argv) {
         CPU_SET(idx, &cpu_set);
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
+    $register_builtin();
+    $register_rts();
     
     BOOTSTRAP();
 
