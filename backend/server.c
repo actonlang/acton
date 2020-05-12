@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <sys/select.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <argp.h>
 #include <string.h>
@@ -31,6 +32,7 @@
 #define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
 
 #define UPDATE_LC_ON_GOSSIP
+#define DO_HIERARCHICAL_CONNECT 0
 
 char in_buf[SERVER_BUFSIZE];
 char out_buf[SERVER_BUFSIZE];
@@ -821,14 +823,29 @@ int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
 	return abort_txn(q->txnid, db);
 }
 
+
+int handle_socket_nop(int * childfd, int * status)
+{
+	struct sockaddr_in address;
+	int addrlen;
+	getpeername(*childfd, (struct sockaddr*)&address,
+				(socklen_t*)&addrlen);
+	printf("Host disconnected, ip %s , port %d, status=%d, fd, NOP %d\n" ,
+      inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
+
+	*status = NODE_DEAD;
+
+	return 0;
+}
+
 int handle_socket_close(int * childfd, int * status)
 {
 	struct sockaddr_in address;
 	int addrlen;
 	getpeername(*childfd, (struct sockaddr*)&address,
 				(socklen_t*)&addrlen);
-	printf("Host disconnected , ip %s , port %d \n" ,
-      inet_ntoa(address.sin_addr) , ntohs(address.sin_port));
+	printf("Host disconnected, ip %s, port %d, old_status=%d, closing fd %d\n" ,
+      inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
 
 	//Close the socket and mark as 0 for reuse:
 	close(*childfd);
@@ -844,6 +861,7 @@ int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsign
     if(skiplist_search(peer_list, &rs->serveraddr) != NULL)
     {
 		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", rs->hostname, rs->portno);
+		assert(0);
 		return -1;
     }
 
@@ -852,6 +870,7 @@ int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsign
     if(status != 0)
     {
 		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", rs->hostname, rs->portno);
+		assert(0);
 		return -2;
     }
 
@@ -891,6 +910,7 @@ int add_peer_to_membership(char *hostname, unsigned short portno, struct sockadd
 
     if(status != 0)
     {
+    		assert(0);
     		free_remote_server(*rs);
     		*rs = NULL;
     }
@@ -1303,7 +1323,7 @@ int is_min_live_node(int id, skiplist_t * list)
 	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
 	{
 		remote_server * rs = (remote_server *) crt->value;
-		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));;
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
 		if(node_id == id)
 			id_in_list = 1;
 
@@ -1328,9 +1348,13 @@ int mark_live(membership * m, int sender_id)
 	{
 		remote_server * rs = (remote_server *) crt->value;
 
-		rs->status = NODE_LIVE;
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+		if(node_id == sender_id)
+		{
+			rs->status = NODE_LIVE;
 
-		return 0;
+			return 0;
+		}
 	}
 
 	return 1;
@@ -1342,9 +1366,13 @@ int mark_dead(membership * m, int sender_id)
 	{
 		remote_server * rs = (remote_server *) crt->value;
 
-		rs->status = NODE_DEAD;
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+		if(node_id == sender_id)
+		{
+			rs->status = NODE_DEAD;
 
-		return 0;
+			return 0;
+		}
 	}
 
 	return 1;
@@ -1468,6 +1496,11 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 		if(node == NULL) // I just learned about this node
 		{
+#if (VERBOSE_RPC > 0)
+			char msg_buf[1024];
+			printf("SERVER: merge_membership_agreement_msg_to_list: Learned about node %s from proposal, status=%d.\n", rs->id, rs->status);
+#endif
+
 			int status = connect_remote_server(rs);
 
 			if(status != 0)
@@ -1491,6 +1524,10 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 			if(rs_local->status == NODE_UNKNOWN)
 			{
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from NODE_UNKNOWN to %d.\n", rs->id, nd.status);
+#endif
+
 				rs_local->status = nd.status;
 			}
 			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
@@ -1500,10 +1537,18 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 
 				if(proposed_counter > local_counter)
 				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
 					rs_local->status = nd.status;
 				}
 				else
 				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
 					memberships_differ = 1;
 				}
 			}
@@ -1547,7 +1592,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
 {
 #if (VERBOSE_RPC > 0)
 	char msg_buf[1024];
-	printf("SERVER: Received agreement response message %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
+	printf("SERVER: Received agreement response message %s, outstanding_proposal_acks=%d!\n", to_string_membership_agreement_msg(ma, msg_buf), m->outstanding_proposal_acks);
 #endif
 
 	*merged_membership = NULL;
@@ -1729,7 +1774,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 		*nonce = (*ma)->nonce;
 		*vc = (*ma)->vc;
 
-#if (VERBOSE_RPC > 2)
+#if (VERBOSE_RPC > 0)
 		char print_buff[4096];
 		to_string_membership_agreement_msg((*ma), (char *) print_buff);
 		printf("Received gossip message: %s\n", print_buff);
@@ -1750,7 +1795,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
     membership_agreement_msg * ma = NULL;
 	long nonce = -1;
 	vector_clock * lc_read = NULL;
-	short local_membership_changed = 1;
+	int local_membership_changed = 0;
 
 	int status = parse_gossip_message(in_buf + sizeof(int), msg_len, &ma, &nonce, &lc_read);
 
@@ -1794,18 +1839,34 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 
 			free_remote_server(old_rs_local);
 		}
-		else // I knew of this peer, and entry is the same. Nothing changes in local membership, except for possibly marking that node as live and updating socketfd:
+		else // I knew of this peer, and entry is the same. Nothing changes in local membership, except for possibly marking that node as live and updating socketfd, of node was previously dead:
 		{
 			int old_status = old_rs_local->status;
 
-			old_rs_local->status = NODE_LIVE;
+			if(old_status == NODE_DEAD)
+			{
+				assert(old_rs_local->sockfd <= 0);
 
-			old_rs_local->sockfd = rs->sockfd;
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: Peer %s came back up. Updating its sockfd from %d to %d, old_status=%d, and marking node live!\n", old_rs_local->id, old_rs_local->sockfd, rs->sockfd, old_rs_local->status);
+#endif
 
-			if(old_rs_local->status != old_status) // Propose new membership if local membership changed
-				propose_local_membership(m, copy_vc(my_lc), fastrandstate);
+				old_rs_local->status = NODE_LIVE;
 
-			return 0;
+				old_rs_local->sockfd = rs->sockfd;
+			}
+			else
+			{
+				assert(old_rs_local->sockfd > 0);
+
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: I am already connected to peer %s (status = %d). NOT updating its sockfd from %d to %d, and closing new socket!\n", old_rs_local->id, old_rs_local->status, old_rs_local->sockfd, rs->sockfd);
+#endif
+
+//				close(rs->sockfd);
+			}
+
+			return old_rs_local->status != old_status; // We s'd propose new membership if local membership changed
 		}
 	}
 
@@ -1818,10 +1879,7 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
     if(ma != NULL)
     		free_membership_agreement(ma);
 
-    // Local membership changed, propose new membership:
-    propose_local_membership(m, copy_vc(my_lc), fastrandstate);
-
-	return 0;
+	return 1;
 }
 
 
@@ -2134,15 +2192,7 @@ int main(int argc, char **argv) {
   }
 
   skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
-//  skiplist_t * peers = create_skiplist(&sockaddr_cmp); // List of peers
 
-/*
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <port>\n", argv[0]);
-    exit(1);
-  }
-  portno = atoi(argv[1]);
-*/
   portno = arguments.portno;
   gportno = arguments.gportno;
   verbosity = arguments.verbosity;
@@ -2217,7 +2267,6 @@ int main(int argc, char **argv) {
   // Now add seed servers:
 
   struct sockaddr_in dummy_serveraddr;
-  int join_sent = 0;
 
   for(int i=0;i<arguments.no_seeds;i++)
   {
@@ -2230,6 +2279,7 @@ int main(int argc, char **argv) {
 		  continue;
 	  }
 
+#if (DO_HIERARCHICAL_CONNECT > 0)
 	  // Also skip connecting to seed nodes with IP:port bigger (lexicographycally) than myself (they will connect to me as they come up):
 	  if(cmp_res > 0 || ((cmp_res == 0) && (arguments.seed_ports[i] > my_port)) )
 	  {
@@ -2237,16 +2287,16 @@ int main(int argc, char **argv) {
 	  }
 	  else
 	  {
-		  printf("SERVER: Connecting to %s:%d..\n", arguments.seeds[i], arguments.seed_ports[i]);
+#endif
+	  	  printf("SERVER: Connecting to %s:%d..\n", arguments.seeds[i], arguments.seed_ports[i]);
 		  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, LOCAL_PEERS, &rsp, &seed);
-		  if(ret == 0 && !join_sent)
+		  if(ret == 0 && rsp->status == NODE_LIVE)
 		  {
 			  ret = send_join_message(0, 0, my_address, my_port, my_lc, rsp, &seed);
-
-			  if(ret == 0)
-				  join_sent = 1;
 		  }
+#if (DO_HIERARCHICAL_CONNECT > 0)
 	  }
+#endif
   }
 
   ret = propose_local_membership(m, copy_vc(my_lc), &seed);
@@ -2287,6 +2337,12 @@ int main(int argc, char **argv) {
 			remote_server * rs = (remote_server *) crt->value;
 			if(rs->sockfd > 0)
 			{
+				if(verbosity > 3)
+				{
+					ret = fcntl(rs->sockfd, F_GETFL);
+					printf("active peer %s, sockfd=%d, status=%d, flags=%d\n", rs->id, rs->sockfd, rs->status, ret);
+				}
+
 //				printf("SERVER: Listening to peer socket %s..\n", rs->id);
 				FD_SET(rs->sockfd, &readfds);
 				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
@@ -2302,8 +2358,14 @@ int main(int argc, char **argv) {
 		for(snode_t * crt = HEAD(m->connected_peers); crt!=NULL; crt = NEXT(crt))
 		{
 			remote_server * rs = (remote_server *) crt->value;
-			if(rs->sockfd > 0)
+			if(rs->sockfd > 0 && rs->status == NODE_PREJOINED)
 			{
+				if(verbosity > 3)
+				{
+					ret = fcntl(rs->sockfd, F_GETFL);
+					printf("pre-joined peer %s, sockfd=%d, status=%d, flags=%d\n", rs->id, rs->sockfd, rs->status, ret);
+				}
+
 //				printf("SERVER: Listening to peer socket %s..\n", rs->id);
 				FD_SET(rs->sockfd, &readfds);
 				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
@@ -2314,13 +2376,17 @@ int main(int argc, char **argv) {
 			}
 		}
 
-		int status = select(max_fd + 1, &readfds, NULL, NULL, &timeout);
+		int status = select(max_fd + 1, &readfds, NULL, NULL, NULL); // &timeout
 
 		if ((status < 0) && (errno != EINTR) && (errno != EBADF))
 		{
 			printf("select error %d/%d!\n", status, errno);
+
 			assert(0);
 		}
+
+		if(verbosity > 3)
+			printf("select returned %d/%d!\n", status, errno);
 
 		// Check if there's a new connection attempt from a client:
 
@@ -2363,7 +2429,7 @@ int main(int argc, char **argv) {
 			    error("ERROR on inet_ntoa\n");
 
 			  if(verbosity > 0)
-				  printf("SERVER: accepted connection from peer: %s (%s:%d)\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port));
+				  printf("SERVER: accepted connection from peer: %s (%s:%d), sockfd=%d\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port), childfd);
 
 			  ret = add_peer_to_membership(hostaddrp, ntohs(clientaddr.sin_port), clientaddr, childfd, 0, m, CONNECTED_PEERS, &rsp, &seed); // hostp->h_name
 			  rsp->status = NODE_PREJOINED;
@@ -2398,13 +2464,16 @@ int main(int argc, char **argv) {
 			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
+				if(verbosity > 3)
+					printf("active peer %s, sockfd=%d, status=%d is ready for reading\n", rs->id, rs->sockfd, rs->status);
+
 				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close);
 
 				if(rs->status == NODE_DEAD || rs->sockfd <= 0) // If peer closed socket, propose it removed from agreed membership
+				{
 					propose_local_membership(m, copy_vc(my_lc), &seed);
-
-				if(ret)
 					continue;
+				}
 
 				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
 				if(handle_server_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id))
@@ -2421,7 +2490,10 @@ int main(int argc, char **argv) {
 			if(rs->status == NODE_PREJOINED && rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
 			// Received a msg from this server:
 			{
-				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close);
+				if(verbosity > 3)
+					printf("pre-joined peer %s, sockfd=%d, status=%d is ready for reading\n", rs->id, rs->sockfd, rs->status);
+
+				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_nop);
 
 				// TO DO: If peer closed socket before it sent join packet (rs->status == NODE_DEAD || rs->sockfd <= 0), also remove it from connected list to save some space
 
@@ -2429,8 +2501,21 @@ int main(int argc, char **argv) {
 					continue;
 
 				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
-				if(handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, rs))
+				if((ret=handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, rs)) < 0)
 			    		continue;
+
+				if(ret > 0) // local membership changed
+				{
+					if(verbosity > 0)
+						printf("Membership changed after %s/%d/%d joined, proposing new membership\n", rs->id, rs->sockfd, rs->status);
+
+					propose_local_membership(m, copy_vc(my_lc), &seed);
+				}
+				else
+				{
+					if(verbosity > 0)
+						printf("Membership did not change after %s/%d/%d joined, NOT proposing new membership\n", rs->id, rs->sockfd, rs->status);
+				}
 			}
 		}
   }

@@ -371,7 +371,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 
 	    *msg_len = read(*sockfd, inbuf + sizeof(int) + read_buf_offset, announced_msg_len - read_buf_offset);
 
-#if SERVER_VERBOSITY > 1
+#if COMM_VERBOSITY > 2
 		printf("announced_msg_len=%d, msg_len=%d, read_buf_offset=%d\n", announced_msg_len, *msg_len, read_buf_offset);
 #endif
 
@@ -399,7 +399,7 @@ int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_le
 
 //    read_buf_offset = 0; // Reset
 
-#if SERVER_VERBOSITY > 1
+#if COMM_VERBOSITY > 2
     printf("server received %d / %d bytes\n", announced_msg_len, *msg_len);
 #endif
 
@@ -488,7 +488,7 @@ remote_server * get_remote_server(char *hostname, unsigned short portno, struct 
         		{
         			connect_success = connect(rs->sockfd, (struct sockaddr *) &rs->serveraddr, sizeof(struct sockaddr_in));
         			if(connect_success != 0)
-        				sleep(2);
+        				sleep(1);
         		}
 			if(connect_success != 0)
 			{
@@ -536,7 +536,7 @@ int update_listen_socket(remote_server * rs, char *hostname, unsigned short port
 		rs->sockfd = socket(AF_INET, SOCK_STREAM, 0);
 		if (rs->sockfd < 0)
 		{
-			fprintf(stderr, "ERROR opening socket!\n");
+			fprintf(stderr, "update_listen_socket: ERROR opening socket!\n");
 			rs->sockfd = old_sockfd;
 			return -2;
 		}
@@ -554,7 +554,13 @@ int update_listen_socket(remote_server * rs, char *hostname, unsigned short port
 			rs->status = NODE_DEAD;
 			rs->sockfd = 0;
 		}
+		else
+		{
+			printf("SERVER: Updated listen socket of %s/%s:%d (%s:%d) from %d to %d\n", rs->id, rs->hostname, rs->portno, hostname, portno, old_sockfd, rs->sockfd);
+		}
 	}
+
+	printf("SERVER: Updating listen socket of %s/%s:%d (%d) to %s:%d\n", rs->id, rs->hostname, rs->portno, rs->sockfd, hostname, portno);
 
     snprintf((char *) &rs->id, 256, "%s:%d", hostname, portno);
 

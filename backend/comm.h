@@ -19,6 +19,7 @@
 #include <netdb.h>
 
 #define VERBOSE_RPC 1
+#define COMM_VERBOSITY 2
 
 #define BUFSIZE 4096
 #define MAX_CONNECT_RETRIES 5
