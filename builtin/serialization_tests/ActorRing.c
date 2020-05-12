@@ -103,7 +103,7 @@ $R Act$__init__(Act self, $int i, $Cont cont$0) {
     self->count = to$int(0);
     self->rcv_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
     self->snd_dict = $NEW($dict, ($Hashable)$Hashable$int$witness, $None);
-    return $R_CONT(cont$0, self);
+    return $R_CONT(cont$0, $None);
 }
 
 void Act$__serialize__(Act self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
@@ -216,9 +216,8 @@ struct lambda$3$class lambda$3$methods = {
 
 /// lambda$4
 
-void lambda$4$__init__(lambda$4 $this, $Cont cont$0, Root self) {
+void lambda$4$__init__(lambda$4 $this, $Cont cont$0) {
     $this->cont$0 = cont$0;
-    $this->self = self;
 }
 
 void lambda$4$__serialize__(lambda$4 self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
@@ -249,7 +248,7 @@ lambda$4 lambda$4$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
 }
 
 $R lambda$4$enter(lambda$4 $this, $WORD _ignore) {
-    return $this->cont$0->$class->enter($this->cont$0, $this->self);
+    return $this->cont$0->$class->enter($this->cont$0, $None);
 }
 
 struct lambda$4$class lambda$4$methods = {
@@ -279,7 +278,7 @@ $R cont$1(Root self, $Iterator iter$1, $Cont cont$0, Act $res) {
 
 $R join$1(Root self, $Cont cont$0, $WORD _ignore) {
     Act tmp$2 = $Sequence$list$witness->$class->__getitem__($Sequence$list$witness, self->table, to$int(0));
-    return tmp$2->$class->act(tmp$2, no_actors, self->table, ($Cont)$NEW(lambda$4, cont$0, self));
+    return tmp$2->$class->act(tmp$2, no_actors, self->table, ($Cont)$NEW(lambda$4, cont$0));
 }
 
 $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {

@@ -12,9 +12,10 @@ typedef struct Pingpong *Pingpong;
 
 struct lambda$1$class {
     char *$GCINFO;
-    void (*__serialize__)(lambda$1, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
-    lambda$1 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $Super$class $superclass;
     void (*__init__)(lambda$1, Pingpong, $int);
+    void (*__serialize__)(lambda$1, $Mapping$dict, $WORD*, int, $dict, struct $ROWLISTHEADER);
+    lambda$1 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)(lambda$1, $Cont);
 };
 struct lambda$1 {
@@ -28,9 +29,10 @@ struct lambda$1 {
 
 struct lambda$2$class {
     char *$GCINFO;
-    void (*__serialize__)(lambda$2, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
-    lambda$2 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $Super$class $superclass;
     void (*__init__)(lambda$2, Pingpong);
+    void (*__serialize__)(lambda$2, $Mapping$dict, $WORD*, int, $dict, struct $ROWLISTHEADER);
+    lambda$2 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)(lambda$2, $Cont);
 };
 struct lambda$2 {
@@ -43,9 +45,10 @@ struct lambda$2 {
 
 struct Pingpong$class {
     char *$GCINFO;
-    void (*__serialize__)(Pingpong, $Mapping$dict, $WORD*, int, $dict, $ROWLISTHEADER);
-    Pingpong (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    $Super$class $superclass;
     $R (*__init__)(Pingpong, $int, $Cont);
+    void (*__serialize__)(Pingpong, $Mapping$dict, $WORD*, int, $dict, struct $ROWLISTHEADER);
+    Pingpong (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*ping)(Pingpong, $Cont);
     $R (*pong)(Pingpong, $int, $Cont);
 }; 
