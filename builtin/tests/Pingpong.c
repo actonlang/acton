@@ -5,7 +5,7 @@ void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
     $this->self = self;
     $this->count = count;
 }
-void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
     // TBD
 }
 lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -21,7 +21,7 @@ $R lambda$1$enter(lambda$1 $this, $Cont then) {
 void lambda$2$__init__(lambda$2 $this, Pingpong self) {
     $this->self = self;
 }
-void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
     // TBD
 }
 lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -45,7 +45,7 @@ $R Pingpong$ping(Pingpong self, $Cont then) {
     $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count));
     return $R_CONT(then, $None);
 }
-void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, $ROWLISTHEADER accum) {
+void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
     // TBD
 }
 Pingpong Pingpong$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
@@ -60,23 +60,26 @@ $R Pingpong$pong(Pingpong self, $int q, $Cont then) {
 
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
+    NULL,
+    lambda$1$__init__,
     lambda$1$__serialize__,
     lambda$1$__deserialize__,
-    lambda$1$__init__,
     lambda$1$enter
 };
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
+    NULL,
+    lambda$2$__init__,
     lambda$2$__serialize__,
     lambda$2$__deserialize__,
-    lambda$2$__init__,
     lambda$2$enter
 };
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",
+    NULL,
+    Pingpong$__init__,
     Pingpong$__serialize__,
     Pingpong$__deserialize__,
-    Pingpong$__init__,
     Pingpong$ping,
     Pingpong$pong
 };

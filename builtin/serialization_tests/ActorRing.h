@@ -82,7 +82,7 @@ struct lambda$3 {
 struct lambda$4$class {
     char *$GCINFO;
     $Super$class $superclass;
-    void (*__init__)(lambda$4, $Cont, Root);
+    void (*__init__)(lambda$4, $Cont);
     void (*__serialize__)(lambda$4, $Mapping$dict, $WORD*, $int, $dict, struct $ROWLISTHEADER);
     lambda$4 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
     $R (*enter)(lambda$4, $WORD);
@@ -90,7 +90,6 @@ struct lambda$4$class {
 struct lambda$4 {
     struct lambda$4$class *$class;
     $Cont cont$0;
-    Root self;
 };
 
 struct Root$class {
