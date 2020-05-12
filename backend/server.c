@@ -1790,7 +1790,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 	return status;
 }
 
-int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int old_id, remote_server * rs)
+int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int old_id, int my_id, remote_server * rs)
 {
     membership_agreement_msg * ma = NULL;
 	long nonce = -1;
@@ -1842,13 +1842,18 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 		else // I knew of this peer, and entry is the same. Nothing changes in local membership, except for possibly marking that node as live and updating socketfd, of node was previously dead:
 		{
 			int old_status = old_rs_local->status;
+			int new_joiner_id = get_node_id((struct sockaddr *) &(old_rs_local->serveraddr));
 
-			if(old_status == NODE_DEAD)
+			assert(my_id != new_joiner_id);
+
+			if(old_status == NODE_DEAD || my_id < new_joiner_id)
 			{
-				assert(old_rs_local->sockfd <= 0);
+				assert(old_rs_local->sockfd <= 0 || my_id < new_joiner_id);
 
 #if (VERBOSE_RPC > 0)
-				printf("SERVER: Peer %s came back up. Updating its sockfd from %d to %d, old_status=%d, and marking node live!\n", old_rs_local->id, old_rs_local->sockfd, rs->sockfd, old_rs_local->status);
+				printf("SERVER: Peer %s %s. Updating its sockfd from %d to %d, old_status=%d, and marking node live!\n",
+												old_rs_local->id, (old_status == NODE_DEAD)?"came back up":"sent join request",
+												old_rs_local->sockfd, rs->sockfd, old_rs_local->status);
 #endif
 
 				old_rs_local->status = NODE_LIVE;
@@ -1860,7 +1865,8 @@ int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, uns
 				assert(old_rs_local->sockfd > 0);
 
 #if (VERBOSE_RPC > 0)
-				printf("SERVER: I am already connected to peer %s (status = %d). NOT updating its sockfd from %d to %d, and closing new socket!\n", old_rs_local->id, old_rs_local->status, old_rs_local->sockfd, rs->sockfd);
+				printf("SERVER: I am already connected to peer %s (status = %d), and my id > his id. NOT updating its sockfd from %d to %d, and closing new socket!\n",
+										old_rs_local->id, old_rs_local->status, old_rs_local->sockfd, rs->sockfd);
 #endif
 
 //				close(rs->sockfd);
@@ -2501,7 +2507,7 @@ int main(int argc, char **argv) {
 					continue;
 
 				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
-				if((ret=handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, rs)) < 0)
+				if((ret=handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, my_id, rs)) < 0)
 			    		continue;
 
 				if(ret > 0) // local membership changed
