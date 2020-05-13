@@ -698,28 +698,26 @@ $ROW $serialize_rts() {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
   long start_no = 0;
-  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // leads to a crash...
+  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   $step_serialize(($Serializable)readyQ,wit,&start_no,done,&accum);
   $step_serialize(($Serializable)timerQ,wit,&start_no,done,&accum);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
   return accum.fst;
 }
 
 void $deserialize_rts($ROW *row) {
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
   $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  root_actor = ($Actor)$step_deserialize(wit,row,done);   // leads to a crash...
+  root_actor = ($Actor)$step_deserialize(wit,row,done);
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   readyQ = ($Actor)$step_deserialize(wit,row,done);
   timerQ = ($Msg)$step_deserialize(wit,row,done);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  //root_actor = ($Actor)$step_deserialize(wit,row,done);   // works...
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
