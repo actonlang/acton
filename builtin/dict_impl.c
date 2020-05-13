@@ -28,44 +28,45 @@ struct $dict$class $dict$methods = {"", NULL, $dict_init, $dict_serialize,$dict_
 
 #define DKIX_EMPTY (-1)
 #define DKIX_DUMMY (-2)  /* Used internally */
- #define TB_ENTRIES(tb) \
+#define TB_ENTRIES(tb) \
   (($entry_t)(&((int*)((tb)->tb_indices))[(tb)->tb_size]))
 
 #define PERTURB_SHIFT 5
 
 // Serialisation /////////////////////////////////////////////////////////////////////////
 
-void $dict_serialize($dict self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+void $dict_serialize($dict self,$Serial$state state) {
+  $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
   if (prevkey) {
-    $val_serialize(-DICT_ID,&prevkey->val,start_no,accum);
+    $val_serialize(-DICT_ID,&prevkey->val,state);
     return;
   }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
   int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
-  $ROW row = $new_row(DICT_ID,start_no,blobsize,NULL);
+  $ROW row = $new_row(DICT_ID,&state->row_no,blobsize,NULL);
   row->blob[0] = ($WORD)self->numelements;
   row->blob[1] = ($WORD)self->table->tb_size;
   row->blob[2] = ($WORD)self->table->tb_usable;
   row->blob[3] = ($WORD)self->table->tb_nentries;
   memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
-  $enqueue(accum,row);
+  $enqueue(state,row);
   for (int i=0; i<self->table->tb_nentries; i++) {
     $entry_t entry = &TB_ENTRIES(self->table)[i];
-    $step_serialize(($Serializable)to$int(entry->hash),wit,start_no,done,accum);
-    $step_serialize(entry->key,wit,start_no,done,accum);
-    $step_serialize(entry->value,wit,start_no,done,accum);
+    $step_serialize(to$int(entry->hash),state);
+    $step_serialize(entry->key,state);
+    $step_serialize(entry->value,state);
   }
 }
 
-$dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
+$dict $dict_deserialize($Serial$state state) {
+  $ROW this = state->row;
+  state->row = this->next;
+  state->row_no++;
   if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+    return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
     $dict res = malloc(sizeof(struct $dict));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &$dict$methods;
     res->numelements = (long)this->blob[0];
     long tb_size = (long)this->blob[1];
@@ -76,9 +77,9 @@ $dict $dict_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
     memcpy(res->table->tb_indices,&this->blob[4],tb_size*sizeof(int));
     for (int i=0; i<res->table->tb_nentries; i++) {
       $entry_t entry = &TB_ENTRIES(res->table)[i];
-      entry->hash = from$int(($int)$step_deserialize(wit,row,done));
-      entry->key =  $step_deserialize(wit,row,done);
-      entry->value = $step_deserialize(wit,row,done);
+      entry->hash = from$int(($int)$step_deserialize(state));
+      entry->key =  $step_deserialize(state);
+      entry->value = $step_deserialize(state);
     }
     return res;
   }
@@ -158,6 +159,10 @@ void $dict_init($dict dict, $Hashable hashwit, $Iterable$opaque it) {
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
   if (it) {
     $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+    $tup2_t nxt;
+    while((nxt = ($tup2_t)iter->$class->__next__(iter))) {
+      $dict_setitem(dict,hashwit,nxt->a,nxt->b);
+    }
     
     //try iterate and insert into dict, catching StopIteration
   }
@@ -278,32 +283,19 @@ void $Iterator$dict_init($Iterator$dict self, $dict dict) {
   self->nxt = 0;
 }
 
-void $Iterator$dict_serialize($Iterator$dict self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-DICTITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(DICTITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$dict_serialize($Iterator$dict self, $Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$dict $Iterator$dict$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$dict res = malloc(sizeof(struct $Iterator$dict));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$dict$methods;
-    res->src = ($dict)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+
+$Iterator$dict $Iterator$dict$_deserialize($Serial$state state) {
+   $Iterator$dict res = $DNEW( $Iterator$dict,state);
+   res->src = ($dict)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
+
 
 struct $Iterator$dict$class $Iterator$dict$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict_init,
                                                       $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_next};
@@ -403,32 +395,19 @@ void $Iterator$dict$values_init($Iterator$dict$values self, $dict dict) {
   self->nxt = 0;
 }
 
-void $Iterator$dict$values_serialize($Iterator$dict$values self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-VALUESITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(VALUESITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$dict$values_serialize($Iterator$dict$values self, $Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$dict$values $Iterator$dict$values_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$dict$values res = malloc(sizeof(struct $Iterator$dict$values));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$dict$values$methods;
-    res->src = ($dict)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+$Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
+   $Iterator$dict$values res = $DNEW($Iterator$dict$values,state);
+   res->src = ($dict)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
+
+
 
 struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
                                                       $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_next};
@@ -459,39 +438,26 @@ void $Iterator$dict$items_init($Iterator$dict$items self, $dict dict) {
   self->nxt = 0;
 }
 
-void $Iterator$dict$items_serialize($Iterator$dict$items self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-ITEMSITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(ITEMSITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$dict$items_serialize($Iterator$dict$items self, $Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$dict$items $Iterator$dict$items_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$dict$items res = malloc(sizeof(struct $Iterator$dict$items));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$dict$items$methods;
-    res->src = ($dict)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+$Iterator$dict$items $Iterator$dict$items_deserialize($Serial$state state) {
+   $Iterator$dict$items res = $DNEW($Iterator$dict$items,state);
+   res->src = ($dict)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
+
+
 
 struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
                                                       $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize, $Iterator$dict$items_next};
 
 
 $Iterator $dict_keys($dict dict) {
-  return $dict_iter(dict);
+  return ($Iterator)$NEW($Iterator$dict,dict);
 }
 
 $Iterator $dict_values($dict dict) {
@@ -532,9 +498,6 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
     }
     ix--;
   }
-  exception e;
-  MKEXCEPTION(e,KEYERROR);
-  RAISE(e);
   return NULL;
 }
 

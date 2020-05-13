@@ -14,8 +14,8 @@ struct lambda$1$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)(lambda$1, Pingpong, $int, $int);
-    void (*__serialize__)(lambda$1, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    lambda$1 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)(lambda$1, $Serial$state);
+    lambda$1 (*__deserialize__)($Serial$state);
     $R (*enter)(lambda$1, $Cont);
 };
 struct lambda$1 {
@@ -32,8 +32,8 @@ struct lambda$2$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)(lambda$2, Pingpong, $int);
-    void (*__serialize__)(lambda$2, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    lambda$2 (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)(lambda$2, $Serial$state);
+    lambda$2 (*__deserialize__)($Serial$state);
     $R (*enter)(lambda$2, $Cont);
 };
 struct lambda$2 {
@@ -49,8 +49,8 @@ struct Pingpong$class {
     char *$GCINFO;
     $Super$class $superclass;
     $R (*__init__)(Pingpong, $int, $Cont);
-    void (*__serialize__)(Pingpong, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    Pingpong (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)(Pingpong, $Serial$state);
+    Pingpong (*__deserialize__)($Serial$state);
     $R (*ping)(Pingpong, $int, $Cont);
     $R (*pong)(Pingpong, $int, $int, $Cont);
 };

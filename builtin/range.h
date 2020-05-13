@@ -2,8 +2,8 @@ struct $range$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($range, $int, $int, $int);
-  void (*__serialize__)($range, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $range (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($range,$Serial$state);
+  $range (*__deserialize__)($Serial$state);
 };
 
 struct $range {
@@ -33,8 +33,8 @@ struct $Iterator$range$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$range, $range);
-  void (*__serialize__)($Iterator$range, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$range (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$range,$Serial$state);
+  $Iterator$range (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$range);
 };
 

@@ -11,8 +11,8 @@
 // String-specific methods
 
 void $str_init($str, char*);
-void $str_serialize($str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-$str $str_deserialize($Mapping$dict, $ROW*, $dict);
+void $str_serialize($str,$Serial$state);
+$str $str_deserialize($Serial$state);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
@@ -555,32 +555,19 @@ void $Iterator$str_init($Iterator$str self, $str str) {
   self->nxt = 0;
 }
 
-void $Iterator$str_serialize($Iterator$str self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-STRITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(STRITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$str_serialize($Iterator$str self,$Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$str $Iterator$str$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$str res = malloc(sizeof(struct $Iterator$str));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$str$methods;
-    res->src = ($str)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+
+$Iterator$str $Iterator$str$_deserialize($Serial$state state) {
+   $Iterator$str res = $DNEW($Iterator$str,state);
+   res->src = ($str)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
+
 
 // this is next function for forward iteration
 static $str $Iterator$str_next($Iterator$str self) {
@@ -662,20 +649,21 @@ void $str_init($str self, char *str) {
   }
 }
 
-void $str_serialize($str str, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+void $str_serialize($str str,$Serial$state state) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
-  $ROW row = $new_row(STR_ID,start_no,2+nWords,NULL);
+  $ROW row = $new_row(STR_ID,&state->row_no,2+nWords,NULL);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
   memcpy(row->blob,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
   long nchars = (long)str->nchars;
   memcpy(row->blob+1,&nchars,sizeof($WORD));
   memcpy(row->blob+2,str->str,nbytes+1);
-  $enqueue(accum,row);
+  $enqueue(state,row);
 }
 
-$str $str_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
-  $ROW this = *row;
-  *row =this->next;
+$str $str_deserialize($Serial$state state) {
+  $ROW this = state->row;
+  state->row =this->next;
+  state->row_no++;
   $str res = malloc(sizeof(struct $str));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));

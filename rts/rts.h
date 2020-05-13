@@ -60,8 +60,8 @@ struct $Msg$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
-    void (*__serialize__)($Msg, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Msg (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Msg, $Serial$state);
+    $Msg (*__deserialize__)($Serial$state);
 };
 struct $Msg {
     struct $Msg$class *$class;
@@ -78,8 +78,8 @@ struct $Actor$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Actor);
-    void (*__serialize__)($Actor, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Actor (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Actor, $Serial$state);
+    $Actor (*__deserialize__)($Serial$state);
 };
 struct $Actor {
     struct $Actor$class *$class;
@@ -93,8 +93,8 @@ struct $Catcher$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Catcher, $Cont);
-    void (*__serialize__)($Catcher, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Catcher (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Catcher, $Serial$state);
+    $Catcher (*__deserialize__)($Serial$state);
 };
 struct $Catcher {
     struct $Catcher$class *$class;
@@ -106,8 +106,8 @@ struct $Clos$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Clos);
-    void (*__serialize__)($Clos, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Clos (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Clos, $Serial$state);
+    $Clos (*__deserialize__)($Serial$state);
     $WORD (*enter)($Clos, $WORD);
 };
 struct $Clos {
@@ -118,8 +118,8 @@ struct $Cont$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Cont);
-    void (*__serialize__)($Cont, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Cont (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Cont, $Serial$state);
+    $Cont (*__deserialize__)($Serial$state);
     $R (*enter)($Cont, $WORD);
 };
 struct $Cont {
@@ -133,8 +133,8 @@ struct $RetNew$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($RetNew, $Cont, $Actor);
-    void (*__serialize__)($RetNew, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $RetNew (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($RetNew, $Serial$state);
+    $RetNew (*__deserialize__)($Serial$state);
     $R (*enter)($RetNew, $WORD);
 };
 struct $RetNew {
@@ -150,19 +150,10 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-#define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
-                               $t->$class = &$T ## $methods; \
-                               $t->$class->__init__($t, ##__VA_ARGS__); \
-                               $t; })
-
-#define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
-                               $x->$class = &$X ## $methods; \
-                               $x->$class->__init__($x, ##__VA_ARGS__, ($Cont)$NEW($RetNew,$c,($Actor)$x)); })
-
 typedef int $Env;
 
 $ROW $serialize_rts();
-void $deserialize_rts($ROW*);
+void $deserialize_rts($ROW);
 
 
 void $register_rts();

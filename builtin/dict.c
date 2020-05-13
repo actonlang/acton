@@ -1,5 +1,5 @@
-void $dict_serialize($dict, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-$dict $dict_deserialize($Mapping$dict, $ROW*, $dict);
+void $dict_serialize($dict,$Serial$state);
+$dict $dict_deserialize($Serial$state);
 
 
 struct  $Mapping$dict$class $Mapping$dict$methods = {"",NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__, $Mapping$dict$__fromiter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,

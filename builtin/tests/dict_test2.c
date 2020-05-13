@@ -27,15 +27,15 @@ $Iterable$opaque dict_iterable($Mapping$dict wit, $dict dict) {
 }
     
 int main() {
-  $register_builtin();
+  //$register_builtin();
   $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$str$witness);
   $dict dict = wit->$class->__fromiter__(wit,NULL); 
   $dict other = wit->$class->__fromiter__(wit,NULL);
   int j;
 
-  for (long i=1; i < 1000000; i++)
+  for (long i=1; i < 1000000; i++) {
     wit->w$Indexed$Mapping->$class->__setitem__(wit->w$Indexed$Mapping,dict,toWord(i),toWord(i+1));
-  
+  }
   $WORD b;
   long r = 17;
   long s = 0;

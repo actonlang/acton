@@ -7,34 +7,18 @@ void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
     $this->q = q;
 }
 
-void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->self,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->count,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->q,wit,start_no,done,accum);
-  }
+void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
+    $step_serialize(self->self,state);
+    $step_serialize(self->count,state);
+    $step_serialize(self->q,state);
 }
 
-lambda$1 lambda$1$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    lambda$1 res = malloc(sizeof(struct lambda$1));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &lambda$1$methods;
-    res->self = (Pingpong)$step_deserialize(wit,row,done);
-    res->count = ($int)$step_deserialize(wit,row,done);
-    res->q = ($int)$step_deserialize(wit,row,done);
+lambda$1 lambda$1$__deserialize__($Serial$state state) {
+    lambda$1 res = $DNEW(lambda$1,state);
+    res->self = (Pingpong)$step_deserialize(state);
+    res->count = ($int)$step_deserialize(state);
+    res->q = ($int)$step_deserialize(state);
     return res;
-  }
 }
 
 $R lambda$1$enter(lambda$1 $this, $Cont then) {
@@ -51,32 +35,17 @@ void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
     $this->q = q;
 }
 
-void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->self,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->q,wit,start_no,done,accum);
-  }
+void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
+    $step_serialize(self->self,state);
+    $step_serialize(self->q,state);
 }
 
-lambda$2 lambda$2$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    lambda$2 res = malloc(sizeof(struct lambda$2));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &lambda$2$methods;
-    res->self = (Pingpong)$step_deserialize(wit,row,done);
-    res->q = ($int)$step_deserialize(wit,row,done);
+
+lambda$2 lambda$2$__deserialize__($Serial$state state) {
+    lambda$2 res = $DNEW(lambda$2,state);
+    res->self = (Pingpong)$step_deserialize(state);
+    res->q = ($int)$step_deserialize(state);
     return res;
-  }
 }
 
 
@@ -95,32 +64,16 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     return self->$class->ping(self, i, then);
 }
 
-void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->i,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->count,wit,start_no,done,accum);
-  }
+void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
+    $step_serialize(self->i,state);
+    $step_serialize(self->count,state);
 }
 
-Pingpong Pingpong$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    Pingpong res = malloc(sizeof(struct Pingpong));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &Pingpong$methods;
-    res->i = ($int)$step_deserialize(wit,row,done);
-    res->count = ($int)$step_deserialize(wit,row,done);
+Pingpong Pingpong$__deserialize__($Serial$state state) {
+  Pingpong res = $DNEW(Pingpong,state);
+    res->i = ($int)$step_deserialize(state);
+    res->count = ($int)$step_deserialize(state);
     return res;
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

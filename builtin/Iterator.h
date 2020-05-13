@@ -4,8 +4,8 @@ struct $Iterator$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator);
-  void (*__serialize__)($Iterator, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator,$Serial$state);
+  $Iterator (*__deserialize__)($Serial$state);
   $WORD (*__next__)($Iterator);
 };
 

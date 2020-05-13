@@ -2,8 +2,8 @@
 #include "set_impl.h"
  
 
-void $set_serialize($set, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-$set $set_deserialize($Mapping$dict, $ROW*, $dict);
+void $set_serialize($set, $Serial$state);
+$set $set_deserialize($Serial$state);
 
 struct $Ord$set $Ord$set_instance;
 struct $Minus$set $Minus$set_instance;

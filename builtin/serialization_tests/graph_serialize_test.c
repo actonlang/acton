@@ -8,14 +8,15 @@ int main() {
   $register_graph();
   /*
   First simple test: a graph with two nodes, with links to each other.
-  $list nodes = $NEW($list);
+  
+  $list nodes = $NEW($list,NULL);
   $Graph g = $NEW($Graph,nodes);
 
-  $list nbors1 = $NEW($list);
+  $list nbors1 = $NEW($list,NULL);
   $int ival1 = $NEW($int,7);
   $IntNode node1 = $NEW($IntNode,nbors1,ival1);
 
-  $list nbors2 = $NEW($list);
+  $list nbors2 = $NEW($list,NULL);
   $float fval2 = $NEW($float,3.14);
   $FloatNode node2 = $NEW($FloatNode,nbors2,fval2);
 
@@ -67,5 +68,5 @@ int main() {
   $Node n1 = wit->$class->__getitem__(wit,n2->nbors,to$int(2));      // get its nbor nr 2 (if SIZE is even and > 4, this is node[2]
   $int a = (($IntNode)n1)->ival;
   printf("a=%ld\n",a->val);                                          // should print 2
-                                                                     // check that graph.bin and graph2.bin are identical.
+                                                                // check that graph.bin and graph2.bin are identical.
 }

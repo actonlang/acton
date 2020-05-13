@@ -1,12 +1,10 @@
 
 void $range$__init__($range self, $int start, $int stop, $int step) {
-  if (stop) {
+  if (start) 
       self->start = from$int(start);
-      self->stop = from$int(stop);
-  } else {
+  else 
       self->start = 0;
-      self->stop = from$int(start);
-  }
+  self->stop = from$int(stop);
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
@@ -20,33 +18,24 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
     self->step = 1;
 }
 
-void $range$__serialize__($range self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-RANGE_ID,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(RANGE_ID,start_no,0,NULL));
-    $step_serialize(($Serializable)to$int(self->start),wit,start_no,done,accum);
-    $step_serialize(($Serializable)to$int(self->step),wit,start_no,done,accum);
-    $step_serialize(($Serializable)to$int(self->stop),wit,start_no,done,accum);
-  }
+void $range$__serialize__($range self, $Serial$state state) {
+  $ROW row = $new_row(RANGE_ID,&state->row_no,3,NULL);
+  row->blob[0] = ($WORD)(long)self->start;
+  row->blob[1] = ($WORD)(long)self->stop;
+  row->blob[2] = ($WORD)(long)self->step;
+  $enqueue(state,row);
 }
 
-$range $range$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $range res = malloc(sizeof(struct $range));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$range$methods;
-    res->start = from$int(($int)$step_deserialize(wit,row,done));
-    res->stop = from$int(($int)$step_deserialize(wit,row,done));
-    res->step = from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+$range $range$__deserialize__($Serial$state state) {
+  $ROW this = state->row;
+  state->row = this->next;
+  state->row_no++;
+  $range res = malloc(sizeof(struct $range));
+  res->$class = &$range$methods;
+  res->start = (int)this->blob[0];
+  res->stop = (int)this->blob[1];
+  res->step = (int)this->blob[2];
+  return res;
 }
 
 static $WORD $Iterator$range_next($Iterator$range self) {
@@ -62,32 +51,18 @@ void $Iterator$range_init($Iterator$range self, $range rng) {
   self->nxt = 0;
 }                                    
 
-void $Iterator$range_serialize($Iterator$range self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-RANGEITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(RANGEITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$range_serialize($Iterator$range self, $Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$range $Iterator$range$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$range res = malloc(sizeof(struct $Iterator$range));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$range$methods;
-    res->src = ($range)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+$Iterator$range $Iterator$range$_deserialize($Serial$state state) {
+   $Iterator$range res = $DNEW($Iterator$range,state);
+   res->src = ($range)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
+
 
 struct $range$class $range$methods = {"",NULL,$range$__init__,$range$__serialize__,$range$__deserialize__};
 
