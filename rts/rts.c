@@ -110,42 +110,26 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
     atomic_flag_clear(&m->wait_lock);
 }
 
-void $Msg$__serialize__($Msg self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->next,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->to,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->cont,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->waiting,wit,start_no,done,accum);
-    $val_serialize(ITEM_ID,&self->baseline,start_no,accum);
-    $step_serialize(($Serializable)self->value,wit,start_no,done,accum);
-  }
+void $Msg$__serialize__($Msg self, $Serial$state state) {
+    $step_serialize(self->next,state);
+    $step_serialize(self->to,state);
+    $step_serialize(self->cont,state);
+    $step_serialize(self->waiting,state);
+    $val_serialize(ITEM_ID,&self->baseline,state);
+    $step_serialize(self->value,state);
 }
 
 
-$Msg $Msg$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Msg res = malloc(sizeof(struct $Msg));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Msg$methods;
-    res->next = ($Msg)$step_deserialize(wit,row,done);
-    res->to = ($Actor)$step_deserialize(wit,row,done);
-    res->cont = ($Cont)$step_deserialize(wit,row,done);
-    res->waiting = ($Actor)$step_deserialize(wit,row,done);
-    res->baseline = (time_t)$val_deserialize(row);
-    res->value = ($WORD)$get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
+$Msg $Msg$__deserialize__($Serial$state state) {
+  $Msg res = $DNEW($Msg,state);
+    res->next = ($Msg)$step_deserialize(state);
+    res->to = ($Actor)$step_deserialize(state);
+    res->cont = ($Cont)$step_deserialize(state);
+    res->waiting = ($Actor)$step_deserialize(state);
+    res->baseline = (time_t)$val_deserialize(state);
+    res->value = ($WORD)$step_deserialize(state);
     atomic_flag_clear(&res->wait_lock);
     return res;
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -157,35 +141,19 @@ void $Actor$__init__($Actor a) {
     atomic_flag_clear(&a->msg_lock);
 }
 
-void $Actor$__serialize__($Actor self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->next,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->msg,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->catcher,wit,start_no,done,accum);
-  }
+void $Actor$__serialize__($Actor self, $Serial$state state) {
+    $step_serialize(self->next,state);
+    $step_serialize(self->msg,state);
+    $step_serialize(self->catcher,state);
 }
 
-$Actor $Actor$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Actor res = malloc(sizeof(struct $Actor));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Actor$methods;
-    res->next = ($Actor)$step_deserialize(wit,row,done);
-    res->msg = ($Msg)$step_deserialize(wit,row,done);
-    res->catcher = ($Catcher)$step_deserialize(wit,row,done);
+$Actor $Actor$__deserialize__($Serial$state state) {
+  $Actor res = $DNEW($Actor,state);
+    res->next = ($Actor)$step_deserialize(state);
+    res->msg = ($Msg)$step_deserialize(state);
+    res->catcher = ($Catcher)$step_deserialize(state);
     atomic_flag_clear(&res->msg_lock);
     return res;
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -195,42 +163,26 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
     c->cont = cont;
 }
 
-void $Catcher$__serialize__($Catcher self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-    $step_serialize(($Serializable)self->next,wit,start_no,done,accum);
-    $step_serialize(($Serializable)self->cont,wit,start_no,done,accum);
-  }
+void $Catcher$__serialize__($Catcher self, $Serial$state state) {
+    $step_serialize(self->next,state);
+    $step_serialize(self->cont,state);
 }
 
-$Catcher $Catcher$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Catcher res = malloc(sizeof(struct $Catcher));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Catcher$methods;
-    res->next = ($Catcher)$step_deserialize(wit,row,done);
-    res->cont = ($Cont)$step_deserialize(wit,row,done);
+$Catcher $Catcher$__deserialize__($Serial$state state) {
+    $Catcher res = $DNEW($Catcher,state);
+    res->next = ($Catcher)$step_deserialize(state);
+    res->cont = ($Cont)$step_deserialize(state);
     return res;
-  }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Clos$__init__($Clos $this) { }
 
-void $Clos$__serialize__($Clos self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+void $Clos$__serialize__($Clos self, $Serial$state state) {
     // TBD
 }
 
-$Clos $Clos$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
+$Clos $Clos$__deserialize__($Serial$state state) {
     // TBD
     return NULL;
 }
@@ -238,11 +190,11 @@ $Clos $Clos$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
 
 void $Cont$__init__($Cont $this) { }
 
-void $Cont$__serialize__($Cont self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
+void $Cont$__serialize__($Cont self, $Serial$state state) {
     // TBD
 }
 
-$Cont $Cont$__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
+$Cont $Cont$__deserialize__($Serial$state state) {
     // TBD
     return NULL;
 }
@@ -254,32 +206,16 @@ void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
     $this->act = act;
 }
 
-void $RetNew$__serialize__($RetNew self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-    int class_id = $get_classid(($Serializable$methods)self->$class);
-    $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-    if (prevkey) {
-      $val_serialize(-class_id,&prevkey->val,start_no,accum);
-    } else {
-      $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-      $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-      $step_serialize(($Serializable)self->cont,wit,start_no,done,accum);
-      $step_serialize(($Serializable)self->act,wit,start_no,done,accum);
-    }
+void $RetNew$__serialize__($RetNew self, $Serial$state state) {
+      $step_serialize(self->cont,state);
+      $step_serialize(self->act,state);
 }
 
-$RetNew $RetNew$__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-      $ROW this = *row;
-      *row = this->next;
-      if (this->class_id < 0) {
-          return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-      } else {
-      $RetNew res = malloc(sizeof(struct $RetNew));
-      $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-      res->$class = &$RetNew$methods;
-      res->cont = ($Cont)$step_deserialize(wit,row,done);
-      res->act = ($Actor)$step_deserialize(wit,row,done);
-      return res;
-    }
+$RetNew $RetNew$__deserialize__($Serial$state state) {
+    $RetNew res = $DNEW($RetNew,state);
+    res->cont = ($Cont)$step_deserialize(state);
+    res->act = ($Actor)$step_deserialize(state);
+    return res;
 }
 
 $R $RetNew$enter($RetNew $this, $WORD _ignore) {
@@ -480,28 +416,14 @@ $R $DONE$enter($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
-void $Done__serialize__($Cont self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  int class_id = $get_classid(($Serializable$methods)self->$class);
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-class_id,&prevkey->val,start_no,accum);
-  } else {
-    $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-    $enqueue(accum,$new_row(class_id,start_no,0,NULL));
-  }
+void $Done__serialize__($Cont self, $Serial$state state) {
+  return;
 }
 
-$Cont $Done__deserialize__($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Cont res = malloc(sizeof(struct $Cont));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Done$methods;
-    return res;
-  }
+$Cont $Done__deserialize__($Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$Done$methods;
+  return res;
 }
 
 struct $Cont$class $Done$methods = {
@@ -678,7 +600,8 @@ void *main_loop(void *arg) {
                   if (i == 20) {
                       printf("# Deserializing\n");
                     $ROW row = $read_serialized("rts.bin");
-                    $deserialize_rts(&row);
+                    $deserialize_rts(row);
+                    $write_serialized($serialize_rts(),"rts2.bin");
                     i = 0;
                   }
                 }
@@ -694,30 +617,35 @@ void *main_loop(void *arg) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 $ROW $serialize_rts() {
-  struct $ROWLISTHEADER accum = {NULL,NULL};
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
-  $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
-  long start_no = 0;
-  $step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
+  state->row_no = 0;
+  state->fst = NULL;
+  state->row = NULL;
+  $step_serialize(root_actor,state);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
-  $step_serialize(($Serializable)readyQ,wit,&start_no,done,&accum);
-  $step_serialize(($Serializable)timerQ,wit,&start_no,done,&accum);
+  $step_serialize(readyQ,state);
+  $step_serialize(timerQ,state);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  return accum.fst;
+  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
+  return state->fst;
 }
 
-void $deserialize_rts($ROW *row) {
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
-  $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  root_actor = ($Actor)$step_deserialize(wit,row,done);
+void $deserialize_rts($ROW row) {
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
+  state->row_no = 0;
+  state->row = row;
+  root_actor = ($Actor)$step_deserialize(state);   // leads to a crash...
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
-  readyQ = ($Actor)$step_deserialize(wit,row,done);
-  timerQ = ($Msg)$step_deserialize(wit,row,done);
+  readyQ = ($Actor)$step_deserialize(state);
+  timerQ = ($Msg)$step_deserialize(state);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
+  //root_actor = ($Actor)$step_deserialize(state);   // works...
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

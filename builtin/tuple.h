@@ -1,7 +1,7 @@
 struct $tuple$class {
     char *$GCINFO;
-    void (*__serialize__)($tuple, $Mapping$dict, $WORD*, int, $dict, struct $ROWLISTHEADER*);
-    $tuple (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($tuple,$Serial$state);
+    $tuple (*__deserialize__)($Serial$state);
 };
 
 extern struct $tuple$class $tuple$methods;

@@ -28,8 +28,7 @@ int main() {
       $list_append(lst2,sublst);
     }
   }
-  long start_no = 0;
-  $ROW row = $serialize(($Serializable)lst2,&start_no);
+  $ROW row = $serialize(($Serializable)lst2);
   $write_serialized(row,"test2.bin");
   $list lst3 = ($list)$deserialize(row);
   $ROW row2 = $read_serialized("test2.bin");

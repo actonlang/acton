@@ -10,8 +10,8 @@ struct $Node$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Node, $list);
-    void (*__serialize__)($Node, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Node (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Node, $Serial$state);
+    $Node (*__deserialize__)($Serial$state);
 };
 
 struct $Node {
@@ -31,8 +31,8 @@ struct $IntNode$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($IntNode, $list, $int);
-    void (*__serialize__)($IntNode, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $IntNode (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($IntNode, $Serial$state);
+    $IntNode (*__deserialize__)($Serial$state);
 };
 
 struct $IntNode {
@@ -53,8 +53,8 @@ struct $FloatNode$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($FloatNode, $list, $float);
-    void (*__serialize__)($FloatNode, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $FloatNode (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($FloatNode,$Serial$state);
+    $FloatNode (*__deserialize__)($Serial$state);
 };
 
 struct $FloatNode {
@@ -73,8 +73,8 @@ struct $Graph$class {
     char *$GCINFO;
     $Super$class $superclass;
     void (*__init__)($Graph, $list);
-    void (*__serialize__)($Graph, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-    $Graph (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+    void (*__serialize__)($Graph, $Serial$state);
+    $Graph (*__deserialize__)($Serial$state);
 };
 
 struct $Graph {

@@ -2,8 +2,8 @@ struct $set$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($set, $Hashable, $Iterable$opaque);
-  void (*__serialize__)($set, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $set (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($set, $Serial$state);
+  $set (*__deserialize__)($Serial$state);
   $set(*copy)($set, $Hashable);
 };
 
@@ -39,8 +39,8 @@ struct $Iterator$set$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$set, $set);
-  void (*__serialize__)($Iterator$set, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$set (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$set, $Serial$state);
+  $Iterator$set (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$set);
 };
 

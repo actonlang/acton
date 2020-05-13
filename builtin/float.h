@@ -2,8 +2,8 @@ struct $float$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($float, double);
-  void (*__serialize__)($float, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $float (*__deserialize__)($Mapping$dict,$ROW*, $dict);
+  void (*__serialize__)($float,$Serial$state);
+  $float (*__deserialize__)($Serial$state);
 };
 
 

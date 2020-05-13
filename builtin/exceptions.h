@@ -2,8 +2,8 @@ struct $BaseException$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($BaseException,$str);
-  void (*__serialize__)($BaseException, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $BaseException (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($BaseException, $Serial$state);
+  $BaseException (*__deserialize__)($Serial$state);
 };
 
 struct $BaseException {
@@ -17,8 +17,8 @@ struct $SystemExit$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($SystemExit,$str);
-  void (*__serialize__)($SystemExit, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $SystemExit (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($SystemExit,$Serial$state);
+  $SystemExit (*__deserialize__)($Serial$state);
 };
 
 struct $SystemExit {
@@ -32,8 +32,8 @@ struct $KeyboardInterrupt$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($KeyboardInterrupt,$str);
-  void (*__serialize__)($KeyboardInterrupt, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $KeyboardInterrupt (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($KeyboardInterrupt,$Serial$state);
+  $KeyboardInterrupt (*__deserialize__)($Serial$state);
 };
 
 struct $KeyboardInterrupt {
@@ -47,8 +47,8 @@ struct $Exception$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Exception,$str);
-  void (*__serialize__)($Exception, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Exception (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Exception,$Serial$state);
+  $Exception (*__deserialize__)($Serial$state);
 };
 
 struct $Exception {
@@ -62,8 +62,8 @@ struct $AssertionError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($AssertionError,$str);
-  void (*__serialize__)($AssertionError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $AssertionError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($AssertionError,$Serial$state);
+  $AssertionError (*__deserialize__)($Serial$state);
 };
 
 struct $AssertionError {
@@ -77,8 +77,8 @@ struct $LookupError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($LookupError,$str);
-  void (*__serialize__)($LookupError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $LookupError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($LookupError,$Serial$state);
+  $LookupError (*__deserialize__)($Serial$state);
 };
 
 struct $LookupError {
@@ -92,8 +92,8 @@ struct $IndexError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($IndexError,$str);
-  void (*__serialize__)($IndexError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $IndexError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($IndexError, $Serial$state);
+  $IndexError (*__deserialize__)($Serial$state);
 };
 
 struct $IndexError {
@@ -107,8 +107,8 @@ struct $KeyError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($KeyError,$str);
-  void (*__serialize__)($KeyError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $KeyError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($KeyError,$Serial$state);
+  $KeyError (*__deserialize__)($Serial$state);
 };
 
 struct $KeyError {
@@ -122,8 +122,8 @@ struct $MemoryError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($MemoryError,$str);
-  void (*__serialize__)($MemoryError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $MemoryError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($MemoryError, $Serial$state);
+  $MemoryError (*__deserialize__)($Serial$state);
 };
 
 struct $MemoryError {
@@ -137,8 +137,8 @@ struct $OSError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($OSError,$str);
-  void (*__serialize__)($OSError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $OSError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($OSError, $Serial$state);
+  $OSError (*__deserialize__)($Serial$state);
 };
 
 struct $OSError {
@@ -152,8 +152,8 @@ struct $RuntimeError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($RuntimeError,$str);
-  void (*__serialize__)($RuntimeError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $RuntimeError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($RuntimeError, $Serial$state);
+  $RuntimeError (*__deserialize__)($Serial$state);
 };
 
 struct $RuntimeError {
@@ -167,8 +167,8 @@ struct $NotImplementedError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($NotImplementedError,$str);
-  void (*__serialize__)($NotImplementedError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $NotImplementedError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($NotImplementedError,$Serial$state);
+  $NotImplementedError (*__deserialize__)($Serial$state);
 };
 
 struct $NotImplementedError {
@@ -182,8 +182,8 @@ struct $ValueError$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($ValueError,$str);
-  void (*__serialize__)($ValueError, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $ValueError (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($ValueError, $Serial$state);
+  $ValueError (*__deserialize__)($Serial$state);
 };
 
 struct $ValueError {

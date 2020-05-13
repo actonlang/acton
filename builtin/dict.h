@@ -2,8 +2,8 @@ struct $dict$class {
   char *$GCINFO;
   $Super$class $superclass;
   void(*__init__)($dict, $Hashable, $Iterable$opaque);
-  void (*__serialize__)($dict, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $dict (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($dict,$Serial$state);
+  $dict (*__deserialize__)($Serial$state);
 };
 
 typedef struct $table_struct *$table;
@@ -29,8 +29,8 @@ struct $Iterator$dict$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict, $dict);
-  void (*__serialize__)($Iterator$dict, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$dict (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$dict,$Serial$state);
+  $Iterator$dict (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$dict);
 };
 
@@ -50,8 +50,8 @@ struct $Iterator$dict$values$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$values, $dict);
-  void (*__serialize__)($Iterator$dict$values, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$dict$values (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$dict$values,$Serial$state);
+  $Iterator$dict$values (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$dict$values);
 };
 
@@ -71,8 +71,8 @@ struct $Iterator$dict$items$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$items, $dict);
-  void (*__serialize__)($Iterator$dict$items, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$dict$items (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$dict$items,$Serial$state);
+  $Iterator$dict$items (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$dict$items);
 };
 

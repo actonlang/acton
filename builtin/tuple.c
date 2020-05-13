@@ -1,7 +1,7 @@
-void $tuple_serialize($tuple self, $Mapping$dict wit, $WORD *prefix, int prefix_size, $dict done, struct $ROWLISTHEADER *accum) {
+void $tuple_serialize($tuple self, $Serial$state state) {
 }
 
-$tuple $tuple_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
+$tuple $tuple_deserialize($Serial$state state) {
     return NULL;
 }
 

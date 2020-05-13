@@ -8,7 +8,8 @@ typedef struct $Initializable  *$Initializable;
 
 struct $Initializable$methods {
   char *$GCINFO;
-  //  struct $Initializable$methods *superclass;
+  int $class_id;
+  struct $Super$class $superclass;
   void (*__init__)($Initializable,...);
 };
 
@@ -44,6 +45,18 @@ struct $ROWLISTHEADER {
   $ROW last;
 };
 
+typedef struct $Serial$state *$Serial$state;
+
+struct $Serial$state {
+  char *$GCINFO;
+  $dict done;
+  long row_no;
+  $ROW row;
+  $ROW fst; //not used in deserialization
+};
+
+  
+  
 // All serializable types must have method tables as if they were subclasses of Serializable 
 
 typedef struct $Serializable$methods *$Serializable$methods;
@@ -54,8 +67,8 @@ struct $Serializable$methods {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Serializable,...);
-  void (*__serialize__)($Serializable, $Mapping$dict, long*, $dict,struct  $ROWLISTHEADER*); /* result returned in the last, accumulating param */
-  $Serializable (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Serializable, $Serial$state);
+  $Serializable (*__deserialize__)($Serial$state);
 };
 
 struct $Serializable {
@@ -65,21 +78,21 @@ struct $Serializable {
 
 // small-step helpers for defining serializations //////////////////////////////////////////////////
 
-void $step_serialize($Serializable self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
-$Serializable $step_deserialize($Mapping$dict wit,$ROW *row, $dict done);
+void $step_serialize($WORD self, $Serial$state state);
+$Serializable $step_deserialize($Serial$state state);
 
-void $val_serialize(int class_id,  $WORD val, long *start_no, struct $ROWLISTHEADER *accum);
-$WORD $val_deserialize($ROW *row);
+void $val_serialize(int class_id, $WORD val, $Serial$state state);
+$WORD $val_deserialize($Serial$state state);
 
 // the next two functions are mainly used in serialization of builtin types
 
-void $enqueue(struct $ROWLISTHEADER *lst, $ROW elem);
+void $enqueue($Serial$state state, $ROW elem);
 $ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob);
 
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 
-$ROW $serialize($Serializable s, long *start_no);
+$ROW $serialize($Serializable s);
 void $write_serialized($ROW row, char *file);
 // $serialize_file just calls the above two functions
 void $serialize_file($Serializable s, char *file);

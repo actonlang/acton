@@ -11,8 +11,8 @@ struct $str$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($str, char*);
-  void (*__serialize__)($str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($str,$Serial$state);
+  $str (*__deserialize__)($Serial$state);
   $str (*capitalize)($str s);
   $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
@@ -85,8 +85,8 @@ struct $Iterator$str$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$str, $str);
-  void (*__serialize__)($Iterator$str, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$str (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$str,$Serial$state);
+  $Iterator$str (*__deserialize__)($Serial$state);
   $str (*__next__)($Iterator$str);
 };
 

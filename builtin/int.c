@@ -1,6 +1,6 @@
 void $int_init($int, long);
-void $int_serialize($int, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-$int $int_deserialize($Mapping$dict, $ROW*, $dict);
+void $int_serialize($int,$Serial$state);
+$int $int_deserialize($Serial$state);
 
 struct $int$class $int$methods = {"",NULL,$int_init,$int_serialize, $int_deserialize};
 
@@ -10,12 +10,12 @@ void $int_init($int self, long val){
   self->val = val;
 }
 
-void $int_serialize($int n, $Mapping$dict notused, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $val_serialize(INT_ID,&n->val,start_no,accum);
+void $int_serialize($int n,$Serial$state state) {
+  $val_serialize(INT_ID,&n->val,state);
 }
 
-$int $int_deserialize($Mapping$dict notused, $ROW *row, $dict done) {
-  return to$int((long)$val_deserialize(row));
+$int $int_deserialize($Serial$state state) {
+  return to$int((long)$val_deserialize(state));
 }
 
 $int to$int(long i) {

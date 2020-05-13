@@ -1,6 +1,6 @@
 void $list_init($list self, $Iterable$opaque it);
-void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum);
-$list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done);
+void $list_serialize($list self,  $Serial$state state);
+$list $list_deserialize( $Serial$state state);
 
 
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -145,31 +145,16 @@ void $Iterator$list_init($Iterator$list self, $list lst) {
   self->nxt = 0;
 }
 
-void $Iterator$list_serialize($Iterator$list self, $Mapping$dict wit, long* start_no, $dict done, struct $ROWLISTHEADER* accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
-  if (prevkey) {
-    $val_serialize(-LISTITERATOR_ID,&prevkey->val,start_no,accum);
-    return;
-  }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
-  $enqueue(accum,$new_row(LISTITERATOR_ID,start_no,0,NULL));
-  $step_serialize(($Serializable)self->src,wit,start_no,done,accum);
-  $step_serialize(($Serializable)to$int(self->nxt),wit,start_no,done,accum);
+void $Iterator$list_serialize($Iterator$list self,$Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$list $Iterator$list$_deserialize($Mapping$dict wit, $ROW* row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
-  if (this->class_id < 0) {
-    return $dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
-  } else {
-    $Iterator$list res = malloc(sizeof(struct $Iterator$list));
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
-    res->$class = &$Iterator$list$methods;
-    res->src = ($list)$step_deserialize(wit,row,done);
-    res->nxt = (int)from$int(($int)$step_deserialize(wit,row,done));
-    return res;
-  }
+$Iterator$list $Iterator$list$_deserialize($Serial$state state) {
+   $Iterator$list res = $DNEW($Iterator$list,state);
+   res->src = ($list)$step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
 }
 
 struct $Iterator$list$class $Iterator$list$methods = {"",($Super$class)&$Iterator$methods, $Iterator$list_init,
@@ -352,35 +337,39 @@ void $list_init($list lst, $Iterable$opaque it) {
   lst->capacity = capacity;
   if (it) {
     $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-    // try iterate and append to list, catching StopIteration.
+    $WORD nxt;
+    while((nxt = iter->$class->__next__(iter))) {
+      $list_append(lst,nxt);
+    }
   }
 };
 
-void $list_serialize($list self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $int prevkey = ($int)$dict_get(done,wit->w$Hashable$Mapping,self,NULL);
+void $list_serialize($list self,$Serial$state state) {
+  $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
   if (prevkey) {
-    $val_serialize(-LIST_ID,&prevkey->val,start_no,accum);
+    $val_serialize(-LIST_ID,&prevkey->val,state);
     return;
   }
-  $dict_setitem(done,wit->w$Hashable$Mapping,self,to$int(*start_no));
+  $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
   long len = (long)self->length;
-  $val_serialize(LIST_ID,&len,start_no,accum);
+  $val_serialize(LIST_ID,&len,state);
   for (int i=0; i<self->length; i++) {
-    $step_serialize(self->data[i],wit,start_no,done,accum);
+    $step_serialize(self->data[i],state);
   }
 }
  
-$list $list_deserialize($Mapping$dict wit, $ROW *row, $dict done) {
-  $ROW this = *row;
-  *row = this->next;
+$list $list_deserialize($Serial$state state) {
+  $ROW this = state->row;
+  state->row = this->next;
+  state->row_no++;
   if (this->class_id < 0) {
-    return ($list)$dict_get(done,wit->w$Hashable$Mapping,to$int((long)this->blob[0]),NULL);
+    return ($list)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
     $list res = list_new((int)(long)this->blob[0]);
-    $dict_setitem(done,wit->w$Hashable$Mapping,to$int(this->row_no),res);
+    $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
-      res->data[i] = $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
+      res->data[i] = $get_methods(abs((state->row)->class_id))->__deserialize__(state);
     return res;
   }
 }

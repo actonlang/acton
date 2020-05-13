@@ -2,8 +2,8 @@ struct $list$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($list, $Iterable$opaque);
-  void (*__serialize__)($list, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($list,$Serial$state);
+  $list (*__deserialize__)($Serial$state);
   $list(*copy)($list);
   //  $int (*sort)($list self, int (*cmp)($WORD,$WORD));
 };
@@ -34,8 +34,8 @@ struct $Iterator$list$class {
   char *$GCINFO;
   $Super$class $superclass;
   void (*__init__)($Iterator$list, $list);
-  void (*__serialize__)($Iterator$list, $Mapping$dict, long*, $dict, struct $ROWLISTHEADER*);
-  $Iterator$list (*__deserialize__)($Mapping$dict, $ROW*, $dict);
+  void (*__serialize__)($Iterator$list,$Serial$state);
+  $Iterator$list (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$list);
 };
 

@@ -2,12 +2,19 @@
 
 // Queue implementation //////////////////////////////////////////////////////////////////
 
-void $enqueue(struct $ROWLISTHEADER *lst, $ROW elem) {
-  if (lst->last)
-    lst->last->next = elem;
+void $enqueue($Serial$state state, $ROW elem) {
+  if (state->row)
+    state->row->next = elem;
   else
-    lst->fst = elem;
-  lst->last = elem;
+    state->fst = elem;
+  state->row = elem;
+}
+void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
+  if (header->last)
+    header->last->next = elem;
+  else
+    header->fst = elem;
+  header->last = elem;
 }
 
 /*
@@ -66,12 +73,13 @@ struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
 // Null methods for serialization of NULL ///////////////////////////////////////
 
-void $Null__serialize__($Serializable self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  $enqueue(accum,$new_row(NULL_ID,start_no,0,NULL));
+void $Null__serialize__($Serializable self, $Serial$state state) {
+  $enqueue(state,$new_row(NULL_ID,&state->row_no,0,NULL));
 }
 
-$Serializable $Null__deserialize__($Mapping$dict wit, $ROW *row, $dict done) {
-  *row = (*row)->next;
+$Serializable $Null__deserialize__( $Serial$state state) {
+  state->row = state->row->next;
+  state->row_no++;
   return NULL;
 }
 
@@ -79,28 +87,50 @@ struct $Serializable$methods $Null$methods = {"",NULL,(void (*)($Serializable,..
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
-
-void $step_serialize($Serializable self, $Mapping$dict wit, long *start_no, $dict done, struct $ROWLISTHEADER *accum) {
-  if (self)
-    self->$class->__serialize__(self,wit,start_no,done,accum);
-  else
-    $Null__serialize__(self,wit,start_no,done,accum);
+void $step_serialize($WORD self, $Serial$state state) {
+  if (self) {
+    int class_id = $get_classid((($Serializable)self)->$class);
+    if (class_id > 10) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
+      $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+      if (prevkey) {
+        $val_serialize(-class_id,&prevkey->val,state);
+      } else {
+        $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+        $enqueue(state,$new_row(class_id,&state->row_no,0,NULL));
+        (($Serializable)self)->$class->__serialize__(self,state);
+      }
+    } else 
+       (($Serializable)self)->$class->__serialize__(self,state);
+  } else
+      $enqueue(state,$new_row(NULL_ID,&state->row_no,0,NULL));
 }
 
-$Serializable $step_deserialize($Mapping$dict wit,$ROW *row,$dict done) {
-    return $get_methods(abs((*row)->class_id))->__deserialize__(wit,row,done);
+$Serializable $step_deserialize($Serial$state state) {
+  if (abs(state->row->class_id) > 10) {
+    $ROW this = state->row;
+    state->row = this->next;
+    state->row_no++;
+    if (this->class_id < 0) 
+      return ($Serializable)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
+    else 
+      return $get_methods(this->class_id)->__deserialize__(state);
+  } else
+    return $get_methods(abs(state->row->class_id))->__deserialize__(state);
 }
 
-void $val_serialize(int class_id, $WORD val, long *start_no, struct $ROWLISTHEADER *accum) { 
-  $ROW row = $new_row(class_id,start_no,1,NULL);
+
+
+void $val_serialize(int class_id, $WORD val,$Serial$state state) { 
+  $ROW row = $new_row(class_id,&state->row_no,1,NULL);
   memcpy(row->blob,val,sizeof($WORD));
-  $enqueue(accum,row);
+  $enqueue(state,row);
 }
 
-$WORD $val_deserialize($ROW *row) {
+$WORD $val_deserialize($Serial$state state) {
   $WORD res;
-  memcpy(&res,(*row)->blob,sizeof($WORD));
-  *row = (*row)->next;
+  memcpy(&res,(state->row)->blob,sizeof($WORD));
+  state->row = state->row->next;
+  state->row_no++;
   return res;
 }
 
@@ -147,23 +177,28 @@ void $write_serialized($ROW row, char *file) {
   fclose(fileptr);
 }
  
-$ROW $serialize($Serializable s, long *start_no) {
-  struct $ROWLISTHEADER accum = {NULL,NULL}; //malloc(sizeof(struct $ROWLISTHEADER));
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$WORD$witness);
-  $dict done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
-  s->$class->__serialize__(s,wit,start_no,done,&accum);
-  return accum.fst;
+$ROW $serialize($Serializable s) {
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state-> done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
+  state->row_no=0;
+  state->row = NULL;
+  state->fst = NULL;
+  $step_serialize(s,state);
+  return state->fst;
 }
 
 void $serialize_file($Serializable s, char *file) {
-  long start_no = 0;
-  $write_serialized($serialize(s,&start_no),file);
+  $write_serialized($serialize(s),file);
 }
 
 $Serializable $deserialize($ROW row) {
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
+  $Serial$state state = malloc(sizeof(struct $Serial$state));
+  state-> done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
+  state->row_no=0;
+  state->row = row;
+  state->fst = NULL;
   $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  return  $step_deserialize(wit,&row,done);
+  return $step_deserialize(state);
 }
 
 $ROW $read_serialized(char *file) {
@@ -206,7 +241,7 @@ $ROW $read_serialized(char *file) {
     }
     memcpy(start,p,chunk_size);
     p+=chunk_size;
-    $enqueue(&header,row);
+    $enqueue2(&header,row);
   }
   return header.fst;
 }

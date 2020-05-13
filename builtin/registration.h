@@ -10,6 +10,7 @@
  * by being the same piece of software.
  */
 
+#define UNASSIGNED -1
 #define NULL_ID 0  
 #define INT_ID 1
 #define FLOAT_ID 2
@@ -19,15 +20,15 @@
 #define LIST_ID 6
 #define DICT_ID 7
 #define SET_ID 8
-#define MSG_ID 9
-#define ACTOR_ID 10
-#define CATCHER_ID 11
-#define CLOS_ID 12
-#define CONT_ID 13
-#define DONE_ID 14
+#define RANGE_ID 9
+#define ITEM_ID 10
+#define MSG_ID 11
+#define ACTOR_ID 12
+#define CATCHER_ID 13
+#define CLOS_ID 14
+#define CONT_ID 15
+#define DONE_ID 16
 #define RETNEW_ID 37
-#define RANGE_ID 15
-#define ITEM_ID 16
 #define STRITERATOR_ID 17
 #define LISTITERATOR_ID 18
 #define DICTITERATOR_ID 19
@@ -79,4 +80,3 @@ int $get_classid($Serializable$methods meths);
  * During deserialization, the method table is retrieved by calling get_methods.
  */
 $Serializable$methods $get_methods(int classid);
-
