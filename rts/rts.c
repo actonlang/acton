@@ -601,7 +601,6 @@ void *main_loop(void *arg) {
                       printf("# Deserializing\n");
                     $ROW row = $read_serialized("rts.bin");
                     $deserialize_rts(row);
-                    $write_serialized($serialize_rts(),"rts2.bin");
                     i = 0;
                   }
                 }
