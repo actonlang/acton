@@ -49,6 +49,7 @@ typedef void *WORD;
 #define QUERY_TYPE_QUEUE_NOTIFICATION 17
 
 #define VERBOSE_BACKEND 0
+#define MAX_PRINT_BUFF 4096
 
 typedef struct db_schema {
 	int * col_types;
@@ -191,7 +192,7 @@ db_row_t * create_db_row_schemaless(WORD * column_values, int * primary_key_idxs
 // Assumes key indexes are in order (rartition keys, followed by clustering keys, followed by columns). Also assumes a single partition key
 db_row_t * create_db_row_schemaless2(WORD * keys, int no_keys, WORD * cols, int no_cols, WORD last_blob, size_t last_blob_size, unsigned int * fastrandstate);
 void free_db_row(db_row_t * row, db_schema_t * schema);
-void long_row_to_string(db_row_t* row, char * to_string, int * len);
+void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_offset);
 void print_long_db(db_t * db);
 void print_long_table(db_table_t * table);
 void print_long_row(db_row_t* row);

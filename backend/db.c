@@ -675,15 +675,15 @@ void print_long_table(db_table_t * table)
 
 void print_long_row(db_row_t* row)
 {
-	char to_string[512];
+	char to_string[MAX_PRINT_BUFF];
 	int len = 0;
 
-	long_row_to_string(row, (char *) to_string, &len);
+	long_row_to_string(row, (char *) to_string, &len, (char *) to_string);
 
 	printf("DB_ROW [%d cells]: %s\n", (row->cells != NULL)?(row->cells->no_items):(0), to_string);
 }
 
-void long_row_to_string(db_row_t* row, char * to_string, int * len)
+void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_offset)
 {
 	#define PRINT_BLOBS 1
 
@@ -695,8 +695,14 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len)
 
 		for(snode_t* node = HEAD(row->cells); node != NULL; node = NEXT(node))
 		{
+			if(to_string + strlen(to_string) - orig_offset > MAX_PRINT_BUFF - 10)
+			{
+				sprintf(to_string + strlen(to_string), "..");
+				break;
+			}
+
 			db_row_t * subrow = (db_row_t *) node->value;
-			long_row_to_string(subrow, to_string + strlen(to_string), len);
+			long_row_to_string(subrow, to_string + strlen(to_string), len, orig_offset);
 		}
 	}
 
@@ -705,6 +711,12 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len)
 		sprintf(to_string + strlen(to_string), "[ ");
 		for(int i=0; i<row->no_columns; i++)
 		{
+			if(to_string + strlen(to_string) - orig_offset > MAX_PRINT_BUFF - 10)
+			{
+				sprintf(to_string + strlen(to_string), "..");
+				break;
+			}
+
 #if (PRINT_BLOBS > 0)
 			if(i<(row->no_columns - 1) || row->last_blob_size <= 0)
 				sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);

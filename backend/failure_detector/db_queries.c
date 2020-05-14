@@ -13,8 +13,6 @@
 #include <limits.h>
 #include <assert.h>
 
-#define MAX_PRINT_BUFF 512
-
 void free_server_msg(ServerMessage * m);
 void free_client_msg(ClientMessage * m);
 
