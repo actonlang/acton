@@ -11,16 +11,18 @@
 
 #define COLLECTION_ID_0 0
 #define COLLECTION_ID_1 1
+#define COLLECTION_ID_2 2 // local counter variable as int
+#define COLLECTION_ID_3 3 // local counter variable as char blob
 
 int no_actors = 2;
-int no_items = 20;
+int no_items = 10;
 
-int no_state_cols = 4;
+int min_no_state_cols = 3;
 int no_state_primary_keys = 1;
-int no_state_clustering_keys = 2;
+int min_state_clustering_keys = 1;
 int no_state_index_keys = 1;
 
-int no_queue_cols = 2;
+int no_queue_cols = 3;
 
 WORD state_table_key = (WORD) 0;
 WORD queue_table_key = (WORD) 1;
@@ -85,12 +87,18 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 	clustering_key_idxs[1]=2;
 	int index_key_idx=3;
 
+	//	Col types are not enforced:
+
+	int * col_types = NULL;
+
+	/*
 	int * col_types = (int *) malloc(no_state_cols * sizeof(int));
 
 	for(int i=0;i<no_state_cols;i++)
 		col_types[i] = DB_TYPE_INT32;
+	 */
 
-	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, no_state_clustering_keys, &index_key_idx, no_state_index_keys);
+	db_schema_t* db_schema = db_create_schema(col_types, min_no_state_cols, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, min_state_clustering_keys, &index_key_idx, no_state_index_keys);
 
 	assert(db_schema != NULL && "Schema creation failed");
 
@@ -105,13 +113,16 @@ int create_state_schema(db_t * db, unsigned int * fastrandstate)
 
 int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 {
-	assert(no_queue_cols == 2);
+	assert(no_queue_cols == 3);
+
+	// Note: Col types are not enforced in the schema-less model. You still need to provide a "col_types" array of size "no_columns" at table creation time (currently):
 
 	int * col_types = (int *) malloc(no_queue_cols * sizeof(int));
 	col_types[0] = DB_TYPE_INT64;
 	col_types[1] = DB_TYPE_INT32;
+	col_types[2] = DB_TYPE_BLOB;
 
-	int ret = create_queue_table(queue_table_key, no_queue_cols, col_types, db,  fastrandstate);
+	int ret = create_queue_table(queue_table_key, no_queue_cols, col_types, db, fastrandstate);
 	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
 
 	// Create input queues for all actors:
@@ -173,20 +184,26 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 	return read_status;
 }
 
+char digits[10][10] = { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
+
 int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastrandstate)
 {
 	int ret = 0;
 
-	WORD * column_values = (WORD *) malloc(no_state_cols * sizeof(WORD));
+	WORD * column_values = (WORD *) malloc(5 * sizeof(WORD));
+
+	column_values[0] = ca->consumer_id;
 
 	for(snode_t * node = HEAD(ca->rcv_counters);node != NULL;node = NEXT(node))
 	{
-		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) COLLECTION_ID_0;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
+		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
+		column_values[4] = str_value; // For backend local API, when there is a blob, place blob pointer as the last col value, and set the corresponding blob_size in the insert call below
 
-		ret = db_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys, 0,
+		ret = db_insert_in_txn(column_values, 5, no_state_primary_keys, 2,
+								strnlen((const char *) str_value, 10) + 1, // blob size
 								ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
@@ -194,16 +211,36 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 
 	for(snode_t * node = HEAD(ca->snd_counters);node != NULL;node = NEXT(node))
 	{
-		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) COLLECTION_ID_1;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
+		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
+		column_values[4] = str_value; // For backend local API, when there is a blob, place blob pointer as the last col value, and set the corresponding blob_size in the insert call below
 
-		ret = db_insert_in_txn(column_values, no_state_cols, no_state_primary_keys, no_state_clustering_keys, 0,
+		ret = db_insert_in_txn(column_values, 5, no_state_primary_keys, 2,
+								strnlen((const char *) str_value, 10) + 1, // blob size
 								ca->state_table_key, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 	}
+
+	// Checkpoint the standalone counter variable, once in an int column, once in a char blob column:
+
+	column_values[1] = (WORD) COLLECTION_ID_2;
+	column_values[2] = (WORD) ca->total_rcv; // Note that there is no blob here (blob_size == 0 below)
+
+	ret = db_insert_in_txn(column_values, 3, no_state_primary_keys, 1,
+								0, // blob size
+								ca->state_table_key, txnid, ca->db, fastrandstate);
+
+	char * str_value = ((int) ca->total_rcv < 9)?(digits[(int) ca->total_rcv]):"NaN";
+
+	column_values[1] = (WORD) COLLECTION_ID_3;
+	column_values[2] = (WORD) str_value; // For backend local API, when there is a blob, place blob pointer as the last col value, and set the corresponding blob_size in the insert call below
+
+	ret = db_insert_in_txn(column_values, 3, no_state_primary_keys, 1,
+								strnlen((const char *) str_value, 10) + 1, // blob size
+								ca->state_table_key, txnid, ca->db, fastrandstate);
 
 	free(column_values);
 
@@ -218,6 +255,8 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 
 	int no_outgoing_counters = 2;
 
+	assert(no_queue_cols == 3);
+
 	*msgs_sent=0;
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
@@ -226,8 +265,10 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
+		char * str_value = (i < 9)?(digits[i]):"NaN";
+		column_values[2] = (WORD) str_value;
 
-		ret = enqueue(column_values, no_queue_cols, 0, ca->queue_table_key, (WORD) dest_id, 1, ca->db, fastrandstate);
+		ret = enqueue(column_values, no_queue_cols, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, 1, ca->db, fastrandstate);
 
 		assert(ret == 0);
 
@@ -254,6 +295,8 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 		printf("ACTOR %ld: Sending %d msgs to ACTOR %ld.\n", (long) ca->consumer_id, no_outgoing_counters, dest_id);
 */
 
+	assert(no_queue_cols == 3);
+
 	*msgs_sent=0;
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
@@ -262,8 +305,10 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
+		char * str_value = (outgoing_counters[i] < 9)?(digits[outgoing_counters[i]]):"NaN";
+		column_values[2] = (WORD) str_value;
 
-		ret = enqueue_in_txn(column_values, no_queue_cols, 0, ca->queue_table_key, (WORD) dest_id, txnid, ca->db, fastrandstate);
+		ret = enqueue_in_txn(column_values, no_queue_cols, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, txnid, ca->db, fastrandstate);
 
 		assert(ret == 0);
 
@@ -298,11 +343,12 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 //		print_long_row(db_row);
 
 		long queue_entry_id = (long) db_row->key;
-		assert(db_row->no_columns == 2);
+		assert(db_row->no_columns == 3);
 		long sender_id = (long) db_row->column_array[0];
 		int counter_val = (int) db_row->column_array[1];
+		char * str_value = (char *) db_row->column_array[2];
 
-		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d)\n", (long) ca->consumer_id, queue_entry_id, sender_id, counter_val);
+		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d, str=%s)\n", (long) ca->consumer_id, queue_entry_id, sender_id, counter_val, str_value);
 
 //					skiplist_search(ca->rcv_counters, COLLECTION_ID_0, (WORD) entries_read);
 
@@ -532,6 +578,14 @@ void * actor(void * cargs)
 int main(int argc, char **argv) {
 	unsigned int seed;
 	int ret = 0;
+
+    if (argc != 3) {
+       fprintf(stderr,"usage: %s <no_actors> <no_enqueues>\n", argv[0]);
+       exit(0);
+    }
+
+    no_actors = atoi(argv[1]);
+    no_items = atoi(argv[2]);
 
 	GET_RANDSEED(&seed, 0); // thread_id
 
