@@ -82,9 +82,7 @@ $Iterator $Iterable$range$__iter__ ($Iterable$range wit, $range rng) {
   return ($Iterator)$NEW($Iterator$range,rng);
 }
 
-struct $Iterable$range$class $Iterable$range$methods = {"",NULL, $Iterable$range$__init__, $Iterable$range$__iter__};
-struct $Iterable$range $Iterable$range$instance = {&$Iterable$range$methods};
-struct $Iterable$range *$Iterable$range$witness = &$Iterable$range$instance;
+struct $Iterable$range$class $Iterable$range$methods = {"",NULL,$Iterable$range$__init__,$Iterable$range$__iter__};
 
 struct $Iterable$range $Iterable$range_instance = {&$Iterable$range$methods};
 $Iterable$range $Iterable$range$witness = &$Iterable$range_instance;

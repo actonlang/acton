@@ -814,7 +814,7 @@ instance Subst Type where
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
     tyfree (TFX l fx)               = tyfree fx
-    
+
 instance Subst FX where
     msubst (FXMut t)                = FXMut <$> msubst t
     msubst (FXAct t)                = FXAct <$> msubst t

@@ -622,14 +622,13 @@ $ROW $serialize_rts() {
   state->row_no = 0;
   state->fst = NULL;
   state->row = NULL;
-  $step_serialize(root_actor,state);   // leads to a crash...
+  $step_serialize(root_actor,state);
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   $step_serialize(readyQ,state);
   $step_serialize(timerQ,state);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  //$step_serialize(($Serializable)root_actor,wit,&start_no,done,&accum);   // works...
   return state->fst;
 }
 
@@ -638,14 +637,13 @@ void $deserialize_rts($ROW row) {
   state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
   state->row_no = 0;
   state->row = row;
-  root_actor = ($Actor)$step_deserialize(state);   // leads to a crash...
+  root_actor = ($Actor)$step_deserialize(state);
   spinlock_lock(&readyQ_lock);
   spinlock_lock(&timerQ_lock);
   readyQ = ($Actor)$step_deserialize(state);
   timerQ = ($Msg)$step_deserialize(state);
   spinlock_unlock(&timerQ_lock);
   spinlock_unlock(&readyQ_lock);
-  //root_actor = ($Actor)$step_deserialize(state);   // works...
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
