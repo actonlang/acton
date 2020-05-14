@@ -1038,7 +1038,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				case QUERY_TYPE_CREATE_QUEUE:
     				{
     					status = handle_create_queue(qm, db, fastrandstate);
-    					assert(status == 0);
+//    					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
     					break;
     				}
