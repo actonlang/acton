@@ -1,0 +1,2551 @@
+/*
+ * server.c
+ *
+ *      Author: aagapi
+ */
+
+// Server:
+
+#include "db.h"
+#include "failure_detector/db_queries.h"
+#include "failure_detector/fd.h"
+#include "comm.h"
+#include "fastrand.h"
+
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <argp.h>
+#include <string.h>
+#include <limits.h>
+
+#define SERVER_BUFSIZE 8 * 1024 // (1024 * 1024)
+
+#define UPDATE_LC_ON_GOSSIP
+#define DO_HIERARCHICAL_CONNECT 0
+
+char in_buf[SERVER_BUFSIZE];
+char out_buf[SERVER_BUFSIZE];
+
+int no_state_cols = 4;
+int no_state_primary_keys = 1;
+int min_state_clustering_keys = 1;
+int no_state_index_keys = 1;
+
+int no_queue_cols = 2;
+
+WORD state_table_key = (WORD) 0;
+WORD queue_table_key = (WORD) 1;
+
+
+void error(char *msg) {
+  perror(msg);
+  assert(0);
+  exit(1);
+}
+
+#define SERVER_VERBOSITY 1
+
+#define DEFAULT_DATA_PORT 32000
+#define DEFAULT_GOSSIP_PORT 34000
+
+#define RANDOM_NONCES
+long requests = 0;
+
+long _get_nonce(unsigned int * fastrandstate)
+{
+#ifdef RANDOM_NONCES
+	unsigned int randno1, randno2;
+	long randlong;
+	FASTRAND(fastrandstate, randno1);
+	FASTRAND(fastrandstate, randno2);
+	return ((long) randno1 << 32) | ((long) randno2 & 0xFFFFFFFFL);
+#else
+	return ++requests;
+#endif
+}
+
+#define PROPOSAL_STATUS_NON_EXISTING 0
+#define PROPOSAL_STATUS_ACTIVE 1
+#define PROPOSAL_STATUS_ACCEPTED 2
+#define PROPOSAL_STATUS_AMMENDED 3
+#define PROPOSAL_STATUS_REJECTED 4
+
+typedef struct membership
+{
+	skiplist_t * connected_peers;
+	skiplist_t * local_peers;
+	skiplist_t * agreed_peers;
+	skiplist_t * stable_peers;
+
+	vector_clock * view_id;
+
+	int my_id;
+
+	skiplist_t * outstanding_proposal;
+	long outstanding_proposal_nonce;
+	vector_clock * outstanding_view_id;
+	int outstanding_proposal_acks;
+	short proposal_status;
+	skiplist_t * merged_responses;
+} membership;
+
+membership * get_membership(int my_id)
+{
+	membership * m = (membership *) malloc(sizeof(membership));
+
+	m->connected_peers = create_skiplist(&sockaddr_cmp);
+	m->local_peers = create_skiplist(&sockaddr_cmp);
+	m->agreed_peers = create_skiplist(&sockaddr_cmp);
+	m->stable_peers = create_skiplist(&sockaddr_cmp);
+	m->view_id = NULL;
+	m->my_id = my_id;
+
+	m->outstanding_proposal = create_skiplist(&sockaddr_cmp);
+	m->outstanding_view_id = NULL;
+	m->outstanding_proposal_acks = 0;
+	m->outstanding_proposal_nonce = -1;
+	m->proposal_status = PROPOSAL_STATUS_NON_EXISTING;
+	m->merged_responses = create_skiplist(&sockaddr_cmp);
+
+	return m;
+}
+
+void free_membership(membership * m)
+{
+	skiplist_free(m->connected_peers);
+	skiplist_free(m->local_peers);
+	skiplist_free(m->agreed_peers);
+	skiplist_free(m->stable_peers);
+
+	if(m->view_id != NULL)
+		free_vc(m->view_id);
+
+	if(m->outstanding_proposal != NULL)
+		skiplist_free(m->outstanding_proposal);
+
+	if(m->outstanding_view_id != NULL)
+		free_vc(m->outstanding_view_id);
+
+	if(m->merged_responses != NULL)
+		skiplist_free(m->merged_responses);
+
+	free(m);
+}
+
+/*
+int create_state_schema(db_t * db, unsigned int * fastrandstate) {
+	int primary_key_idx = 0;
+	int clustering_key_idxs[2];
+	clustering_key_idxs[0]=1;
+	clustering_key_idxs[1]=2;
+	int index_key_idx=3;
+
+	int * col_types = (int *) malloc(no_cols * sizeof(int));
+
+	for(int i=0;i<no_cols;i++)
+		col_types[i] = DB_TYPE_INT32;
+
+	db_schema_t* db_schema = db_create_schema(col_types, no_cols, &primary_key_idx, no_primary_keys, clustering_key_idxs, no_clustering_keys, &index_key_idx, no_index_keys);
+
+	assert(db_schema != NULL && "Schema creation failed");
+
+	// Create table:
+
+	return db_create_table((WORD) 0, db_schema, db, fastrandstate);;
+}
+
+int create_queue_schema(db_t * db, unsigned int * fastrandstate)
+{
+	int no_queue_cols = 2;
+
+	int * col_types = (int *) malloc(no_queue_cols * sizeof(int));
+	col_types[0] = DB_TYPE_INT64;
+	col_types[1] = DB_TYPE_INT32;
+
+	int ret = create_queue_table((WORD) 1, no_queue_cols, col_types, db,  fastrandstate);
+	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
+}
+*/
+
+int create_state_schema(db_t * db, unsigned int * fastrandstate)
+{
+	int primary_key_idx = 0;
+	int clustering_key_idxs[2];
+	clustering_key_idxs[0]=1;
+	clustering_key_idxs[1]=2;
+	int index_key_idx=3;
+
+	int * col_types = NULL;
+
+//	Col types are not enforced:
+
+/*
+	col_types = (int *) malloc((no_state_cols+1) * sizeof(int));
+
+	for(int i=0;i<no_state_cols;i++)
+		col_types[i] = DB_TYPE_INT32;
+
+	col_types[no_state_cols] = DB_TYPE_BLOB; // Include blob
+*/
+
+	db_schema_t* db_schema = db_create_schema(col_types, no_state_cols + 1, &primary_key_idx, no_state_primary_keys, clustering_key_idxs, min_state_clustering_keys, &index_key_idx, no_state_index_keys);
+
+	assert(db_schema != NULL && "Schema creation failed");
+
+	// Create table:
+
+	int ret = db_create_table((WORD) 0, db_schema, db, fastrandstate);
+
+	printf("Test %s - %s (%d)\n", "create_state_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
+}
+
+int create_queue_schema(db_t * db, unsigned int * fastrandstate)
+{
+	assert(no_queue_cols == 2);
+
+	int * col_types = (int *) malloc((no_queue_cols + 1) * sizeof(int));
+	col_types[0] = DB_TYPE_INT64;
+	col_types[1] = DB_TYPE_INT32;
+
+	col_types[no_queue_cols] = DB_TYPE_BLOB; // Include blob
+
+	int ret = create_queue_table(queue_table_key, no_queue_cols + 1, col_types, db,  fastrandstate);
+	printf("Test %s - %s (%d)\n", "create_queue_table", ret==0?"OK":"FAILED", ret);
+
+	return ret;
+}
+
+
+
+db_schema_t * get_schema(db_t * db, WORD table_key)
+{
+	snode_t * node = skiplist_search(db->tables, table_key);
+
+	if(node == NULL)
+		return NULL;
+
+	db_table_t * table = (db_table_t *) (node->value);
+
+	return table->schema;
+}
+
+// Write message handlers:
+
+int get_ack_packet(int status, write_query * q,
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	ack_message * ack = init_ack_message(get_cell_address(q->cell), status, q->txnid, q->nonce);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Sending ack message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(ack);
+
+	return ret;
+}
+
+int handle_write_query(write_query * wq, db_t * db, unsigned int * fastrandstate)
+{
+	int total_cols = wq->cell->no_keys + wq->cell->no_columns;
+	int total_cols_plus_blob = total_cols + ((wq->cell->last_blob_size > 0)?(1):(0));
+
+	db_schema_t * schema = get_schema(db, (WORD) wq->cell->table_key);
+
+	int no_clustering_keys = wq->cell->no_keys - schema->no_primary_keys;
+
+	switch(wq->msg_type)
+	{
+		case RPC_TYPE_WRITE:
+		{
+			assert(wq->cell->no_columns > 0 || (wq->cell->last_blob != NULL && wq->cell->last_blob_size > 0));
+
+			WORD * column_values = (WORD *) malloc(total_cols_plus_blob * sizeof(WORD));
+
+			int j = 0;
+			for(;j<wq->cell->no_keys;j++)
+				column_values[j] = (WORD) wq->cell->keys[j];
+			for(;j<total_cols;j++)
+				column_values[j] = (WORD) wq->cell->columns[j-wq->cell->no_keys];
+
+			if(wq->cell->last_blob_size > 0)
+			{
+				assert(total_cols_plus_blob == total_cols + 1);
+				column_values[total_cols] = malloc(wq->cell->last_blob_size);
+				memcpy(column_values[total_cols], wq->cell->last_blob, wq->cell->last_blob_size);
+			}
+
+
+			if(wq->txnid == NULL) // Write out of txn
+				return db_insert_transactional(column_values, total_cols_plus_blob, no_clustering_keys, wq->cell->last_blob_size, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+			else // Write in txn
+				return db_insert_in_txn(column_values, total_cols_plus_blob, schema->no_primary_keys, no_clustering_keys, wq->cell->last_blob_size, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+		}
+		case RPC_TYPE_DELETE:
+		{
+			if(wq->txnid == NULL) // Delete out of txn
+			{
+				if(wq->cell->no_keys == schema->no_primary_keys)
+					return db_delete_row_transactional((WORD *) wq->cell->keys, wq->cell->version, (WORD) wq->cell->table_key, db, fastrandstate);
+				else
+					assert(0); // db_delete_cell not implemented yet
+			}
+			else
+			{
+				if(wq->cell->no_keys == schema->no_primary_keys)
+					return db_delete_row_in_txn((WORD *) wq->cell->keys, wq->cell->no_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				else
+					return db_delete_cell_in_txn((WORD *) wq->cell->keys, schema->no_primary_keys, no_clustering_keys, (WORD) wq->cell->table_key, wq->txnid, db, fastrandstate);
+				// TO DO: To support db_delete_by_index_in_txn (in RPCs and backend)
+			}
+		}
+	}
+
+	return 1;
+}
+
+vector_clock * get_empty_vc()
+{
+	return init_vc(0, NULL, NULL, 0);
+}
+
+vector_clock * get_local_vc(int my_id)
+{
+	int node_ids[] = {my_id};
+	long counters[] = {0};
+	return init_vc(1, node_ids, counters, 0);
+}
+
+// Read (regular and range) message handlers:
+
+int count_cells(db_row_t* result, int * max_depth)
+{
+	if(result == NULL)
+		return 0;
+
+	if(result->cells == NULL || result->cells->no_items == 0)
+		return 1;
+
+	*max_depth = *max_depth + 1;
+
+	int no_cells = 0;
+	for(snode_t * crt_cell = HEAD(result->cells); crt_cell != NULL; crt_cell = NEXT(crt_cell))
+	{
+		db_row_t * child = (db_row_t*) crt_cell->value;
+		no_cells += count_cells(child, max_depth);
+	}
+
+	return no_cells;
+}
+
+cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * key_path, int depth, int no_schema_keys)
+{
+	if(result == NULL)
+		return cells;
+
+	key_path[depth-1] = (long) result->key;
+
+	if(result->cells == NULL || result->cells->no_items == 0)
+	{
+		assert(result->no_columns > 0);
+		assert(depth >= no_schema_keys);
+
+		if(result->last_blob_size <= 0)
+			copy_cell(cells, table_key,
+					key_path, depth,
+					(long *) result->column_array, result->no_columns,
+					NULL, 0,
+					result->version);
+		else
+			copy_cell(cells, table_key,
+					key_path, depth,
+					(long *) result->column_array, result->no_columns - 1,
+					result->column_array[result->no_columns - 1], result->last_blob_size,
+					result->version);
+
+		return cells + 1;
+	}
+
+//	printf("serialize_cells:\n");
+//	print_long_row(result);
+
+	cell * cells_ptr = cells;
+	for(snode_t * crt_cell = HEAD(result->cells); crt_cell != NULL; crt_cell = NEXT(crt_cell))
+	{
+		db_row_t * child = (db_row_t*) crt_cell->value;
+		cells_ptr = serialize_cells(child, cells_ptr, table_key, key_path, depth+1, no_schema_keys);
+	}
+
+	return cells_ptr;
+}
+
+int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	range_read_response_message * m = NULL;
+
+	if(result == NULL)
+	{
+		m = init_range_read_response_message(NULL, 0, q->txnid, q->nonce);
+	}
+	else if(result->cells == NULL || result->cells->no_items == 0)
+	// Return a single cell read result
+	{
+		assert(result->no_columns > 0);
+		assert(result->no_columns >= schema->min_no_cols);
+		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
+
+		cell * c = NULL;
+		if(result->last_blob_size <= 0)
+		{
+			c = init_cell(q->cell_address->table_key,
+							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
+							(long *) result->column_array, result->no_columns,
+							NULL, 0,
+							result->version);
+		}
+		else
+		{
+			c = init_cell(q->cell_address->table_key,
+							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
+							(long *) result->column_array, result->no_columns - 1,
+							result->column_array[result->no_columns - 1], result->last_blob_size,
+							result->version);
+		}
+
+		m = init_range_read_response_message(c, 1, q->txnid, q->nonce);
+	}
+	else
+	// Return a multi-cell read result; traverse db_row downwards and get all child cells recursively:
+	{
+		int schema_keys = schema->no_primary_keys + schema->min_no_clustering_keys; // We only use this schema data for sanity checking of read back results
+//		int no_keys = schema_keys - q->cell_address->no_keys + 1;
+
+		int max_depth = 1;
+
+		int no_results = count_cells(result, &max_depth);
+
+		cell * cells = malloc(no_results * sizeof(cell));
+
+		long * key_path = (long *) malloc(max_depth * sizeof(long));
+
+		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, schema_keys); // no_keys
+
+		assert(last_cell_ptr - cells == no_results);
+
+		m = init_range_read_response_message(cells, no_results, q->txnid, q->nonce);
+	}
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[4096];
+	to_string_range_read_response_message(m, (char *) print_buff);
+	printf("Sending range read response message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
+
+	free_range_read_response_message(m);
+
+	return ret;
+}
+
+db_row_t* handle_read_query(read_query * q, db_schema_t ** schema, db_t * db, unsigned int * fastrandstate)
+{
+	int i=0;
+
+	*schema = get_schema(db, (WORD) q->cell_address->table_key);
+	int no_clustering_keys = q->cell_address->no_keys - (*schema)->no_primary_keys;
+
+	if(no_clustering_keys == 0)
+	{
+		return db_search((WORD *) q->cell_address->keys, (WORD) q->cell_address->table_key, db);
+	}
+	else
+	{
+		return db_search_clustering((WORD *) q->cell_address->keys,
+									(WORD *) (q->cell_address->keys + (*schema)->no_primary_keys),
+									no_clustering_keys, (WORD) q->cell_address->table_key, db);
+	}
+}
+
+int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results, range_read_query * q,
+									db_schema_t * schema, void ** snd_buf, unsigned * snd_msg_len,
+									vector_clock * vc)
+{
+	int schema_keys = schema->no_primary_keys + schema->min_no_clustering_keys; // We only use this schema data for sanity checking of read back results
+//	int no_keys = schema_keys - q->start_cell_address->no_keys + 1;
+	range_read_response_message * m = NULL;
+
+	if(no_results == 0)
+	{
+		m = init_range_read_response_message(NULL, 0, q->txnid, q->nonce);
+	}
+	else
+	{
+		assert(start_row != NULL);
+
+		int max_range_depth = 0;
+		int no_cells = 0, i=0;
+		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
+		{
+			db_row_t* result = (db_row_t* ) crt_row->value;
+//			print_long_row(result);
+			int max_depth = 1;
+			no_cells += count_cells(result, &max_depth);
+			max_range_depth = (max_depth > max_range_depth)?max_depth:max_range_depth;
+		}
+
+		cell * cells = malloc(no_cells * sizeof(cell));
+
+		long * key_path = (long *) malloc(max_range_depth * sizeof(long));
+
+		i=0;
+		cell * last_cell_ptr = cells;
+		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
+		{
+			db_row_t* result = (db_row_t* ) crt_row->value;
+			last_cell_ptr = serialize_cells(result, last_cell_ptr, q->start_cell_address->table_key, key_path, 1, schema_keys); // no_keys
+		}
+
+		assert(last_cell_ptr - cells == no_cells);
+
+		m = init_range_read_response_message(cells, no_cells, q->txnid, q->nonce);
+	}
+
+#if (VERBOSE_RPC > 0)
+		char print_buff[4096];
+		to_string_range_read_response_message(m, (char *) print_buff);
+		printf("Sending range read response message: %s\n", print_buff);
+#endif
+
+		int ret = serialize_range_read_response_message(m, snd_buf, snd_msg_len, vc);
+
+		free_range_read_response_message(m);
+
+		return ret;
+}
+
+int handle_range_read_query(range_read_query * q,
+							snode_t** start_row, snode_t** end_row, db_schema_t ** schema,
+							db_t * db, unsigned int * fastrandstate)
+{
+	int i=0;
+
+	assert(q->start_cell_address->table_key == q->end_cell_address->table_key);
+	assert(q->start_cell_address->no_keys == q->end_cell_address->no_keys);
+
+	*schema = get_schema(db, (WORD) q->start_cell_address->table_key);
+
+	int no_clustering_keys = q->start_cell_address->no_keys - (*schema)->no_primary_keys;
+
+	if(no_clustering_keys == 0)
+	{
+		return db_range_search((WORD *) q->start_cell_address->keys, (WORD *) q->end_cell_address->keys, start_row, end_row, (WORD) q->start_cell_address->table_key, db);
+	}
+	else
+	{
+		return db_range_search_clustering((WORD *) q->start_cell_address->keys,
+										(WORD *) (q->start_cell_address->keys + (*schema)->no_primary_keys),
+										(WORD *) (q->end_cell_address->keys + (*schema)->no_primary_keys),
+										no_clustering_keys, start_row, end_row, (WORD) q->start_cell_address->table_key, db);
+	}
+}
+
+// Queue message handlers:
+
+int get_queue_ack_packet(int status, queue_query_message * q,
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	ack_message * ack = init_ack_message(q->cell_address, status, q->txnid, q->nonce);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Sending queue ack message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(ack);
+
+	return ret;
+}
+
+int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results,
+									long new_read_head, int status, db_schema_t * schema,
+									queue_query_message * q,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	queue_query_message * m = NULL;
+
+	if(no_results == 0)
+	{
+		m = init_read_queue_response(q->cell_address, NULL, 0, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+	}
+	else
+	{
+		assert(start_row != NULL);
+
+		cell * cells = malloc(no_results * sizeof(cell));
+
+		int i=0;
+		long prev_id = -1;
+		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
+		{
+			db_row_t* result = (db_row_t* ) crt_row->value;
+			long id = (long) result->key;
+			assert(i==0 || prev_id == (id - 1));
+			prev_id = id;
+			if(result->last_blob_size <= 0)
+				copy_cell(cells+i, q->cell_address->table_key,
+						(long *) &result->key, 1,
+						(long *) result->column_array, result->no_columns,
+						NULL, 0,
+						result->version);
+			else
+				copy_cell(cells+i, q->cell_address->table_key,
+						(long *) &result->key, 1,
+						(long *) result->column_array, result->no_columns - 1,
+						result->column_array[result->no_columns - 1], result->last_blob_size,
+						result->version);
+		}
+
+		m = init_read_queue_response(q->cell_address, cells, no_results, q->app_id, q->shard_id, q->consumer_id, new_read_head, (short) status, q->txnid, q->nonce);
+	}
+
+#if (VERBOSE_RPC > 0)
+		char print_buff[1024];
+		to_string_queue_message(m, (char *) print_buff);
+		printf("Sending read queue response message: %s\n", print_buff);
+#endif
+
+		int ret = serialize_queue_message(m, snd_buf, snd_msg_len, 0, vc);
+
+		free_queue_message(m);
+
+		return ret;
+}
+
+int handle_create_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	if(q->txnid == NULL) // Create queue out of txn
+		return create_queue((WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], NULL, 1, db, fastrandstate);
+	else // Create queue in txn
+		return create_queue_in_txn((WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
+}
+
+int handle_delete_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	if(q->txnid == NULL)
+		return delete_queue((WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], NULL, 1, db, fastrandstate);
+	else
+		return delete_queue_in_txn((WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
+}
+
+int handle_subscribe_queue(queue_query_message * q, int * clientfd, long * prev_read_head, long * prev_consume_head, db_t * db, unsigned int * fastrandstate)
+{
+	if(q->txnid != NULL) // Create queue out of txn
+	{
+		assert(0); // Subscriptions in txns are not supported yet
+		return 1;
+	}
+	else
+		return register_remote_subscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+										clientfd, prev_read_head, prev_consume_head, 1, db, fastrandstate);
+}
+
+int handle_unsubscribe_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	if(q->txnid != NULL) // Create queue out of txn
+	{
+		assert(0); // Unsubscriptions in txns are not supported yet
+		return 1;
+	}
+	else
+		return unsubscribe_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db);
+}
+
+int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->no_cells > 0 && q->cells != NULL);
+
+	int status = -1;
+
+	for(int i=0;i<q->no_cells;i++)
+	{
+		int total_cols = q->cells[i].no_keys + q->cells[i].no_columns;
+		int total_cols_plus_blob = total_cols + ((q->cells[i].last_blob_size > 0)?(1):(0));
+
+		long * column_values = (long *) malloc(total_cols_plus_blob * sizeof(long));
+
+		int j = 0;
+		for(;j<q->cells[i].no_keys;j++)
+			column_values[j] = q->cells[i].keys[j];
+		for(;j<total_cols;j++)
+			column_values[j] = q->cells[i].columns[j-q->cells[i].no_keys];
+
+		if(q->cells[i].last_blob_size > 0)
+		{
+			assert(total_cols_plus_blob == total_cols + 1);
+			column_values[total_cols] = (long) malloc(q->cells[i].last_blob_size);
+			memcpy((WORD) column_values[total_cols], q->cells[i].last_blob, q->cells[i].last_blob_size);
+		}
+
+		// Below will automatically trigger remote consumer notifications on the queue, either immediately or upon txn commit:
+		if(q->txnid == NULL) // Enqueue out of txn
+			status = enqueue((WORD *) column_values, total_cols_plus_blob, q->cells[i].last_blob_size, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], 1, db, fastrandstate);
+		else // Enqueue in txn
+			status = enqueue_in_txn((WORD *) column_values, total_cols_plus_blob, q->cells[i].last_blob_size, (WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
+
+		if(status != 0)
+			break;
+	}
+
+	return status;
+}
+
+int handle_read_queue(queue_query_message * q,
+						int * entries_read, long * new_read_head, vector_clock ** prh_version,
+						snode_t** start_row, snode_t** end_row, db_schema_t ** schema,
+						db_t * db, unsigned int * fastrandstate)
+{
+	*schema = get_schema(db, (WORD) q->cell_address->table_key);
+
+	if(q->txnid == NULL) // Read queue out of txn
+		return read_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+							(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->queue_index,
+							entries_read, new_read_head, prh_version,
+							start_row, end_row, 1, db);
+	else // Read queue in txn
+		return read_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+									(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+									(int) q->queue_index, entries_read, new_read_head,
+									start_row, end_row, q->txnid, db, fastrandstate);
+}
+
+int handle_consume_queue(queue_query_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	if(q->txnid == NULL) // Consume queue out of txn
+		return consume_queue((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+							(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+							q->queue_index, db);
+	else // Consume queue in txn
+		return consume_queue_in_txn((WORD) q->consumer_id, (WORD) q->shard_id, (WORD) q->app_id,
+									(WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0],
+									q->queue_index, q->txnid, db, fastrandstate);
+}
+
+// Txn messages handlers:
+
+int get_txn_ack_packet(int status, txn_message * q,
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	ack_message * ack = init_ack_message(NULL, status, q->txnid, q->nonce);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_ack_message(ack, (char *) print_buff);
+	printf("Sending txn ack message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_ack_message(ack, snd_buf, snd_msg_len, vc);
+
+	free_ack_message(ack);
+
+	return ret;
+}
+
+
+int handle_new_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	txn_state * ts = get_txn_state(q->txnid, db);
+
+	if(ts != NULL)
+		return -2; // txnid already exists on server
+
+	ts = init_txn_state();
+
+	memcpy(&ts->txnid, q->txnid, sizeof(uuid_t));
+
+	skiplist_insert(db->txn_state, (WORD) &(ts->txnid), (WORD) ts, fastrandstate);
+
+	return 0;
+}
+
+int handle_validate_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+	assert(q->version != NULL);
+
+	return validate_txn(q->txnid, q->version, db);
+}
+
+int handle_commit_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	txn_state * ts = get_txn_state(q->txnid, db);
+
+	// Make sure the txn has the right commit stamp (it c'd be that the current server missed the previous validation packet so the version was not set then):
+
+	set_version(ts, q->version);
+
+	if(ts == NULL)
+		return -2; // txnid doesn't exist on server
+
+	return persist_txn(ts, db, fastrandstate);
+}
+
+int handle_abort_txn(txn_message * q, db_t * db, unsigned int * fastrandstate)
+{
+	assert(q->txnid != NULL);
+
+	return abort_txn(q->txnid, db);
+}
+
+
+int handle_socket_nop(int * childfd, int * status)
+{
+	struct sockaddr_in address;
+	int addrlen;
+	getpeername(*childfd, (struct sockaddr*)&address,
+				(socklen_t*)&addrlen);
+	printf("Host disconnected, ip %s , port %d, status=%d, fd, NOP %d\n" ,
+      inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
+
+	*status = NODE_DEAD;
+
+	return 0;
+}
+
+int handle_socket_close(int * childfd, int * status)
+{
+	struct sockaddr_in address;
+	int addrlen;
+	getpeername(*childfd, (struct sockaddr*)&address,
+				(socklen_t*)&addrlen);
+	printf("Host disconnected, ip %s, port %d, old_status=%d, closing fd %d\n" ,
+      inet_ntoa(address.sin_addr) , ntohs(address.sin_port), *status, *childfd);
+
+	//Close the socket and mark as 0 for reuse:
+	close(*childfd);
+	*childfd = 0;
+
+	*status = NODE_DEAD;
+
+	return 0;
+}
+
+int add_remote_server_to_list(remote_server * rs, skiplist_t * peer_list, unsigned int * seedptr)
+{
+    if(skiplist_search(peer_list, &rs->serveraddr) != NULL)
+    {
+		fprintf(stderr, "ERROR: Server address %s:%d was already added to membership!\n", rs->hostname, rs->portno);
+		assert(0);
+		return -1;
+    }
+
+    int status = skiplist_insert(peer_list, &rs->serveraddr, rs, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding server address %s:%d to membership!\n", rs->hostname, rs->portno);
+		assert(0);
+		return -2;
+    }
+
+    return 0;
+}
+
+#define AGREED_PEERS 0
+#define LOCAL_PEERS 1
+#define CONNECTED_PEERS 2
+
+int add_remote_server_to_membership(remote_server * rs, membership * m, short list, unsigned int * seedptr)
+{
+	switch(list)
+	{
+		case AGREED_PEERS:
+			return add_remote_server_to_list(rs, m->agreed_peers, seedptr);
+		case LOCAL_PEERS:
+			return add_remote_server_to_list(rs, m->local_peers, seedptr);
+		case CONNECTED_PEERS:
+			return add_remote_server_to_list(rs, m->connected_peers, seedptr);
+	}
+
+    return -1;
+}
+
+int add_peer_to_membership(char *hostname, unsigned short portno, struct sockaddr_in serveraddr, int serverfd, int do_connect, membership * m, short list, remote_server ** rs, unsigned int * seedptr)
+{
+    *rs = get_remote_server(hostname, portno, serveraddr, serverfd, do_connect);
+
+    if(rs == NULL)
+    {
+		printf("ERROR: Failed joining server %s:%d (it looks down)!\n", hostname, portno);
+    		return 1;
+    }
+
+    int status = add_remote_server_to_membership(*rs, m, list, seedptr);
+
+    if(status != 0)
+    {
+    		assert(0);
+    		free_remote_server(*rs);
+    		*rs = NULL;
+    }
+
+    return status;
+}
+
+typedef struct client_descriptor
+{
+	struct sockaddr_in addr;
+	int sockfd;
+	char id[256];
+} client_descriptor;
+
+client_descriptor * get_client_descriptor(struct sockaddr_in addr, int sockfd, char *hostname, int portno)
+{
+	client_descriptor * cd = (client_descriptor *) malloc(sizeof(struct client_descriptor));
+	memcpy(&(cd->addr), &addr, sizeof(struct sockaddr_in));
+	cd->sockfd = sockfd;
+    snprintf((char *) &cd->id, 256, "%s:%d", hostname, portno);
+	return cd;
+}
+
+void free_client_descriptor(client_descriptor * cd)
+{
+	free(cd);
+}
+
+int add_client_to_membership(struct sockaddr_in addr, int sockfd, char *hostname, int portno, skiplist_t * clients, unsigned int * seedptr)
+{
+	client_descriptor * cd = get_client_descriptor(addr, sockfd, hostname, portno);
+
+    if(skiplist_search(clients, &(cd->addr)) != NULL)
+    {
+		fprintf(stderr, "ERROR: Client address %s:%d was already added to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -1;
+    }
+
+    int status = skiplist_insert(clients, &(cd->addr), cd, seedptr);
+
+    if(status != 0)
+    {
+		fprintf(stderr, "ERROR: Error adding client address %s:%d to membership!\n", hostname, portno);
+		free_client_descriptor(cd);
+		return -2;
+    }
+
+    return 0;
+}
+
+int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int my_id)
+{
+    void * tmp_out_buf = NULL, * q = NULL;
+    unsigned snd_msg_len;
+    short msg_type;
+	db_schema_t * schema;
+	long nonce = -1;
+
+	vector_clock * lc_read = NULL;
+    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1, &lc_read);
+
+    if(status != 0)
+    {
+//    		error("ERROR decoding client request");
+    		fprintf(stderr, "ERROR decoding client request");
+    		return -1;
+    }
+
+    if(lc_read != NULL)
+    {
+    		// If we were multi-threaded, we'd have to protect this snippet:
+
+    		update_vc(my_lc, lc_read);
+    		increment_vc(my_lc, my_id);
+
+    		free_vc(lc_read);
+    }
+
+    switch(msg_type)
+    {
+    		case RPC_TYPE_WRITE:
+    		{
+    			status = handle_write_query((write_query *) q, db, fastrandstate);
+    			if(status != 0)
+    			{
+    				printf("ERROR: handle_write_query returned %d!", status);
+    				assert(0);
+    			}
+    		    vector_clock * vc = (((write_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+    			status = get_ack_packet(status, (write_query *) q, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
+    			free_write_query((write_query *) q);
+    			break;
+    		}
+    		case RPC_TYPE_READ:
+    		{
+    			db_row_t* result = handle_read_query((read_query *) q, &schema, db, fastrandstate);
+    		    vector_clock * vc = (((read_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+    			status = get_read_response_packet(result, (read_query *) q, schema, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
+    			free_read_query((read_query *) q);
+    			break;
+    		}
+    		case RPC_TYPE_RANGE_READ:
+    		{
+    			snode_t * start_row = NULL, * end_row = NULL;
+    		    vector_clock * vc = (((range_read_query *) q)->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+    			int no_results = handle_range_read_query((range_read_query *) q, &start_row, &end_row, &schema, db, fastrandstate);
+    			status = get_range_read_response_packet(start_row, end_row, no_results, (range_read_query *) q, schema, &tmp_out_buf, &snd_msg_len, vc);
+    			if(vc != NULL)
+    				free_vc(vc);
+    			free_range_read_query((range_read_query *) q);
+    			break;
+    		}
+    		case RPC_TYPE_QUEUE:
+    		{
+    			queue_query_message * qm = (queue_query_message *) q;
+    		    vector_clock * vc = (qm->txnid != NULL)?(copy_vc(my_lc)):(NULL);
+
+    			switch(qm->msg_type)
+    			{
+    				case QUERY_TYPE_CREATE_QUEUE:
+    				{
+    					status = handle_create_queue(qm, db, fastrandstate);
+//    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+    					break;
+    				}
+    				case QUERY_TYPE_DELETE_QUEUE:
+    				{
+    					status = handle_delete_queue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+    					break;
+    				}
+    				case QUERY_TYPE_SUBSCRIBE_QUEUE:
+    				{
+    					long prev_read_head = -1, prev_consume_head = -1;
+    					status = handle_subscribe_queue(qm, &childfd, &prev_read_head, &prev_consume_head, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+    					break;
+    				}
+    				case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
+    				{
+    					status = handle_unsubscribe_queue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+    					break;
+    				}
+    				case QUERY_TYPE_ENQUEUE:
+    				{
+    					status = handle_enqueue(qm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    				case QUERY_TYPE_READ_QUEUE:
+    				{
+    					int entries_read = 0;
+    					long new_read_head = -1;
+    					vector_clock * prh_version = NULL;
+    					snode_t * start_row = NULL, * end_row = NULL;
+    					db_schema_t * schema = NULL;
+    					status = handle_read_queue(qm, &entries_read, &new_read_head, &prh_version,
+    													&start_row, &end_row, &schema, db, fastrandstate);
+    					assert(status == QUEUE_STATUS_READ_COMPLETE || status == QUEUE_STATUS_READ_INCOMPLETE);
+    					status = get_queue_read_response_packet(start_row, end_row, entries_read, new_read_head, status, schema, qm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    				case QUERY_TYPE_CONSUME_QUEUE:
+    				{
+    					status = handle_consume_queue(qm, db, fastrandstate);
+//    					assert(status == (int) qm->queue_index);
+    					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
+    					break;
+    				}
+    				default:
+    				{
+    					assert(0);
+    				}
+    			}
+
+    			if(vc != NULL)
+    				free_vc(vc);
+    			free_queue_message(qm);
+
+    			break;
+    		}
+    		case RPC_TYPE_TXN:
+    		{
+    			txn_message * tm = (txn_message *) q;
+    			assert(tm->txnid != NULL);
+    		    vector_clock * vc = copy_vc(my_lc);
+
+    			switch(tm->type)
+    			{
+    				case DB_TXN_BEGIN:
+    				{
+    					status = handle_new_txn(tm, db, fastrandstate);
+    					assert(status == 0 || status == -2);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    				case DB_TXN_VALIDATION:
+    				{
+    					status = handle_validate_txn(tm, db, fastrandstate);
+    					assert(status == VAL_STATUS_COMMIT || status == VAL_STATUS_ABORT);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    				case DB_TXN_COMMIT:
+    				{
+    					status = handle_commit_txn(tm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    				case DB_TXN_ABORT:
+    				{
+    					status = handle_abort_txn(tm, db, fastrandstate);
+    					assert(status == 0);
+    					status = get_txn_ack_packet(status, tm, &tmp_out_buf, &snd_msg_len, vc);
+
+    					break;
+    				}
+    			}
+
+    			if(vc != NULL)
+    				free_vc(vc);
+    			free_txn_message(tm);
+
+    			break;
+    		}
+    		case RPC_TYPE_ACK:
+    		{
+    			assert(0); // S'dn't happen currently
+    			break;
+    		}
+		default:
+		{
+			assert(0);
+		}
+    }
+
+    assert(status == 0);
+
+    int n = write(childfd, tmp_out_buf, snd_msg_len);
+    if (n < 0)
+      error("ERROR writing to socket");
+
+    free(tmp_out_buf);
+
+    return 0;
+}
+
+// Gossip message handling:
+
+int get_join_packet(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce,
+					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * jm = get_membership_join_msg(status, rack_id, dc_id, hostname, portno, nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(jm, (char *) print_buff);
+	printf("Sending Join message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(jm, snd_buf, snd_msg_len);
+
+	free_membership_agreement(jm);
+
+	return ret;
+}
+
+int get_agreement_propose_packet(int status, membership_state * membership, long nonce,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_propose_msg(status, membership, nonce, vc);
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Propose message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
+
+	free_membership_agreement(amr);
+
+	return ret;
+}
+
+int get_agreement_response_packet(int status, membership_state * membership, membership_agreement_msg * am,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_response_msg(status, membership, am->nonce, copy_vc(vc));
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Response message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
+
+	free_membership_agreement(amr);
+
+	return ret;
+}
+
+int get_agreement_notify_packet(int status, membership_state * membership, membership_agreement_msg * am,
+								membership_agreement_msg ** amr,	void ** snd_buf, unsigned * snd_msg_len,
+								vector_clock * vc, vector_clock * prev_vc)
+{
+	*amr = get_membership_notify_msg(status, membership, am->nonce, copy_vc(vc));
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(*amr, (char *) print_buff);
+	printf("Sending Membership Notify message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(*amr, snd_buf, snd_msg_len);
+
+	return ret;
+}
+
+int get_agreement_notify_ack_packet(int status, membership_agreement_msg * am,
+									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
+{
+	membership_agreement_msg * amr = get_membership_notify_ack_msg(status, am->nonce, copy_vc(vc));
+
+#if (VERBOSE_RPC > 0)
+	char print_buff[1024];
+	to_string_membership_agreement_msg(amr, (char *) print_buff);
+	printf("Sending Membership Notify ACK message: %s\n", print_buff);
+#endif
+
+	int ret = serialize_membership_agreement_msg(amr, snd_buf, snd_msg_len);
+
+	free_membership_agreement(amr);
+
+	return ret;
+}
+
+membership_state * get_membership_state_from_server_list(skiplist_t * servers, vector_clock * my_lc)
+{
+	if(servers->no_items == 0)
+		return NULL;
+
+	node_description * nds = (node_description *) malloc(servers->no_items * sizeof(node_description));
+
+	int i = 0;
+	for(snode_t * crt = HEAD(servers); crt!=NULL; crt = NEXT(crt), i++)
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		copy_node_description(nds+i, rs->status, get_node_id((struct sockaddr *) &(rs->serveraddr)), 0, 0, rs->hostname, rs->portno);
+	}
+
+	return init_membership_state(servers->no_items, nds, my_lc);
+}
+
+int no_live_nodes(skiplist_t * list)
+{
+	int no_nodes = 0;
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		if(rs->status == NODE_LIVE)
+			no_nodes++;
+	}
+
+	return no_nodes;
+}
+
+int no_live_or_unknown_nodes(skiplist_t * list)
+{
+	int no_nodes = 0;
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		if(rs->status == NODE_LIVE || rs->status == NODE_UNKNOWN)
+			no_nodes++;
+	}
+
+	return no_nodes;
+}
+
+int is_min_live_node(int id, skiplist_t * list)
+{
+	if(list->no_items == 0)
+		return -2; // empty list
+
+	int min_id = INT_MAX, id_in_list = 0;
+
+	for(snode_t * crt = HEAD(list); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+		if(node_id == id)
+			id_in_list = 1;
+
+		if(rs->status == NODE_LIVE || rs->status == NODE_UNKNOWN)
+		{
+			min_id = (node_id < min_id)?node_id:min_id;
+		}
+	}
+
+	if(!id_in_list)
+		return -1; // Node not in list
+
+	if(min_id == id)
+		return 1;
+
+	return 0;
+}
+
+int mark_live(membership * m, int sender_id)
+{
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+		if(node_id == sender_id)
+		{
+			rs->status = NODE_LIVE;
+
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+int mark_dead(membership * m, int sender_id)
+{
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+		int node_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+		if(node_id == sender_id)
+		{
+			rs->status = NODE_DEAD;
+
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+int send_join_message(int rack_id, int dc_id, char * hostname, unsigned short portno, vector_clock * my_vc, remote_server * dest_rs, unsigned int * fastrandstate)
+{
+    void * tmp_out_buf = NULL;
+    unsigned snd_msg_len;
+
+    if(dest_rs->status != NODE_LIVE || dest_rs->sockfd <= 0)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: Not sending JOIN request to %s, as its status is %d!\n", dest_rs->id, dest_rs->status);
+#endif
+
+    		return 1;
+    }
+
+	int status = get_join_packet(0, rack_id, dc_id, hostname, portno, _get_nonce(fastrandstate), &tmp_out_buf, &snd_msg_len, copy_vc(my_vc));
+
+	assert(status == 0);
+
+	int n = write(dest_rs->sockfd, tmp_out_buf, snd_msg_len);
+
+	if (n < 0)
+		error("ERROR writing to socket");
+
+	free(tmp_out_buf);
+
+	return 0;
+}
+
+
+int propose_local_membership(membership * m, vector_clock * my_vc, unsigned int * fastrandstate)
+{
+    void * tmp_out_buf = NULL;
+    unsigned snd_msg_len;
+
+    if(no_live_nodes(m->local_peers) <= 1)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: Skipping proposing new view, as no other nodes are live in local membership!\n");
+#endif
+		return -1;
+    }
+
+    if(is_min_live_node(m->my_id, m->local_peers) != 1)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: Skipping proposing new view, as I am not the min live node!\n");
+#endif
+		return -1;
+    }
+
+    if(m->outstanding_view_id != NULL)
+    {
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: Proposing new view, aborting already outstanding view proposal %s!\n",
+							to_string_vc(m->outstanding_view_id, msg_buf));
+#endif
+		skiplist_free(m->outstanding_proposal);
+		free_vc(m->outstanding_view_id);
+    }
+
+    m->outstanding_proposal = skiplist_clone(m->local_peers, fastrandstate);
+    m->outstanding_view_id = copy_vc(my_vc);
+    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
+    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
+    m->outstanding_proposal_acks = 0;
+	m->merged_responses = skiplist_clone(m->local_peers, fastrandstate); // init merged responses to "my response"
+
+	int status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+												m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
+
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+
+#if (VERBOSE_RPC > 0)
+		char msg_buf[1024];
+		fprintf(stderr, "SERVER: propose_local_membership: Evaluating node (%s, %d, %d, %d), my_id = %d..\n", rs->id, rs->status, rs->sockfd, get_node_id((struct sockaddr *) &(rs->serveraddr)), m->my_id);
+#endif
+
+		if(rs->status == NODE_LIVE && rs->sockfd > 0 && get_node_id((struct sockaddr *) &(rs->serveraddr)) != m->my_id) // skip myself, and nodes that are "down" in membership
+		{
+#if (VERBOSE_RPC > 0)
+			fprintf(stderr, "SERVER: Sending proposal!\n");
+#endif
+			int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
+
+			if (n < 0)
+			  error("ERROR writing to socket");
+
+			m->outstanding_proposal_acks++;
+		}
+	}
+
+	free(tmp_out_buf);
+
+	return 0;
+}
+
+int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skiplist_t * merged_list, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+	int memberships_differ = 0;
+	struct sockaddr_in dummy_serveraddr;
+
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(merged_list, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this node
+		{
+#if (VERBOSE_RPC > 0)
+			char msg_buf[1024];
+			printf("SERVER: merge_membership_agreement_msg_to_list: Learned about node %s from proposal, status=%d.\n", rs->id, rs->status);
+#endif
+
+			int status = connect_remote_server(rs);
+
+			if(status != 0)
+			{
+				rs->sockfd = 0;
+				rs->status = NODE_DEAD;
+				if(nd.status == NODE_LIVE)
+					memberships_differ = 1;
+			}
+
+			status = add_remote_server_to_list(rs, m->local_peers, fastrandstate);
+			status = add_remote_server_to_list(rs, merged_list, fastrandstate);
+
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from NODE_UNKNOWN to %d.\n", rs->id, nd.status);
+#endif
+
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			{
+				long local_counter = get_component_vc(my_lc, nd.node_id);
+				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+
+				if(proposed_counter > local_counter)
+				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
+					rs_local->status = nd.status;
+				}
+				else
+				{
+#if (VERBOSE_RPC > 0)
+					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+#endif
+
+					memberships_differ = 1;
+				}
+			}
+		}
+	}
+
+	return memberships_differ;
+}
+
+int handle_agreement_propose_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_lc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[1024];
+	printf("SERVER: Received new view proposal %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
+#endif
+
+	if(compare_vc(m->view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Rejecting proposed view %s because it is older than my installed view %s!\n",
+							to_string_vc(m->view_id, msg_buf), to_string_vc(ma->vc, msg_buf));
+#endif
+
+		*merged_membership = NULL;
+
+		return PROPOSAL_STATUS_REJECTED;
+	}
+
+	// Copy local view to merged list:
+	skiplist_t * merged_list = skiplist_clone(m->local_peers, fastrandstate);
+
+	// Merge it with proposed view:
+	int memberships_differ = merge_membership_agreement_msg_to_list(ma, merged_list, m, prev_lc, fastrandstate);
+
+	*merged_membership = get_membership_state_from_server_list(merged_list, my_lc);
+
+	return memberships_differ?PROPOSAL_STATUS_AMMENDED:PROPOSAL_STATUS_ACCEPTED;
+}
+
+int handle_agreement_response_message(membership_agreement_msg * ma, membership_state ** merged_membership, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[1024];
+	printf("SERVER: Received agreement response message %s, outstanding_proposal_acks=%d!\n", to_string_membership_agreement_msg(ma, msg_buf), m->outstanding_proposal_acks);
+#endif
+
+	*merged_membership = NULL;
+
+    if(m->outstanding_view_id == NULL)
+    {
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Received Agreement Response message, but no outstanding view proposal is active!\n");
+#endif
+		return -2;
+    }
+
+    if(m->outstanding_proposal_nonce != ma->nonce)
+    {
+#if (VERBOSE_RPC > 0)
+		fprintf(stderr, "SERVER: Received Agreement Response message, but nonce (%ld) does not match outstanding view proposal nonce (%ld)!\n",
+							ma->nonce, m->outstanding_proposal_nonce);
+#endif
+		return -1;
+    }
+
+	m->outstanding_proposal_acks--;
+
+    assert(m->outstanding_proposal_acks >=0);
+
+    if(ma->ack_status == PROPOSAL_STATUS_ACCEPTED) // view identical with proposed one
+    {
+    		if(m->outstanding_proposal_acks == 0)
+    		{
+        		if(m->proposal_status == PROPOSAL_STATUS_ACTIVE)
+        			m->proposal_status = PROPOSAL_STATUS_ACCEPTED; // my proposal was accepted
+
+    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+    			assert(*merged_membership != NULL);
+    		}
+    }
+    else if(ma->ack_status == PROPOSAL_STATUS_AMMENDED)
+    {
+    		int memberships_differ = merge_membership_agreement_msg_to_list(ma, m->merged_responses, m, prev_vc, fastrandstate);
+
+//    		assert(memberships_differ);
+
+    		if(m->proposal_status != PROPOSAL_STATUS_REJECTED)
+    			m->proposal_status = PROPOSAL_STATUS_AMMENDED; // my proposal was ammended
+
+    		if(m->proposal_status == PROPOSAL_STATUS_AMMENDED && m->outstanding_proposal_acks == 0)
+    		{
+    			*merged_membership = get_membership_state_from_server_list(m->merged_responses, my_lc);
+    			assert(*merged_membership != NULL);
+    		}
+    }
+    else
+    {
+    		assert(ma->ack_status == PROPOSAL_STATUS_REJECTED);
+
+    		m->proposal_status = PROPOSAL_STATUS_REJECTED; // my proposal was rejected
+    }
+
+    if((m->proposal_status == PROPOSAL_STATUS_AMMENDED || m->proposal_status == PROPOSAL_STATUS_ACCEPTED) && m->outstanding_proposal_acks == 0)
+		assert(*merged_membership != NULL);
+
+    return m->proposal_status;
+}
+
+int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_clock * my_lc, unsigned int * fastrandstate)
+{
+#if (VERBOSE_RPC > 0)
+	char msg_buf[1024];
+#endif
+
+	if(compare_vc(m->view_id, ma->vc) > 0)
+	{
+#if (VERBOSE_RPC > -1)
+		fprintf(stderr, "SERVER: Skipping installing notified view %s because it is older than my installed view %s!\n",
+							to_string_vc(ma->vc, msg_buf), to_string_vc(m->view_id, msg_buf));
+#endif
+
+		return 1;
+	}
+
+	// If servers are already connected in local membership, copy their entries from there into agreed membership. Otherwise create new connections for them:
+
+	skiplist_t * new_membership = create_skiplist(&sockaddr_cmp);
+
+	int local_view_disagrees = 0;
+	struct sockaddr_in dummy_serveraddr;
+
+	for(int i=0;i<ma->membership->no_nodes;i++)
+	{
+		node_description nd = ma->membership->membership[i];
+
+		remote_server * rs = get_remote_server(nd.hostname, nd.portno, dummy_serveraddr, -2, 0);
+		rs->status = nd.status;
+
+		snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
+
+		if(node == NULL) // I just learned about this node
+		{
+			int status = connect_remote_server(rs);
+
+			if(status != 0)
+			{
+				rs->sockfd = 0;
+				rs->status = NODE_DEAD;
+				local_view_disagrees = 1;
+			}
+
+			status = add_remote_server_to_list(rs, m->local_peers, fastrandstate);
+			assert(status == 0);
+
+			status = add_remote_server_to_list(rs, new_membership, fastrandstate);
+			assert(status == 0);
+		}
+		else
+		{
+			free_remote_server(rs);
+
+			remote_server * rs_local = (remote_server *) node->value;
+
+			if(rs_local->status == NODE_UNKNOWN)
+			{
+				rs_local->status = nd.status;
+			}
+			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
+			{
+				long local_counter = get_component_vc(my_lc, nd.node_id);
+				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+
+				if(proposed_counter > local_counter)
+				{
+					rs_local->status = nd.status;
+				}
+				else
+				{
+					local_view_disagrees = 1;
+				}
+			}
+
+			int status = add_remote_server_to_list(rs_local, new_membership, fastrandstate);
+			assert(status == 0);
+		}
+	}
+
+	if(m->agreed_peers != NULL)
+	{
+		skiplist_free(m->agreed_peers);
+//		skiplist_free_val(m->agreed_peers, &free_remote_server_ptr);
+	}
+
+	m->agreed_peers = new_membership;
+
+	update_or_replace_vc(&(m->view_id), ma->vc);
+
+#if (VERBOSE_RPC > -1)
+	printf("SERVER: Installed new agreed view %s, local_view_disagrees=%d\n",
+					to_string_membership_agreement_msg(ma, msg_buf),
+					local_view_disagrees);
+#endif
+
+	return local_view_disagrees;
+}
+
+int handle_agreement_notify_message(membership_agreement_msg * ma, membership * m, db_t * db, vector_clock * my_lc, vector_clock * prev_vc, unsigned int * fastrandstate)
+{
+	return install_agreed_view(ma, m, my_lc, fastrandstate);
+}
+
+int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membership * m, db_t * db, unsigned int * fastrandstate)
+{
+	return 0;
+}
+
+int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc)
+{
+	int status = deserialize_membership_agreement_msg(rcv_buf, rcv_msg_len, ma);
+
+	if(status == 0)
+	{
+		*nonce = (*ma)->nonce;
+		*vc = (*ma)->vc;
+
+#if (VERBOSE_RPC > 0)
+		char print_buff[4096];
+		to_string_membership_agreement_msg((*ma), (char *) print_buff);
+		printf("Received gossip message: %s\n", print_buff);
+#endif
+	}
+	else
+	{
+		*ma = NULL;
+		*vc = NULL;
+		*nonce = -1;
+	}
+
+	return status;
+}
+
+int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int old_id, int my_id, remote_server * rs)
+{
+    membership_agreement_msg * ma = NULL;
+	long nonce = -1;
+	vector_clock * lc_read = NULL;
+	int local_membership_changed = 0;
+
+	int status = parse_gossip_message(in_buf + sizeof(int), msg_len, &ma, &nonce, &lc_read);
+
+	if(status != 0)
+	{
+		fprintf(stderr, "ERROR decoding client request");
+    	    	return -1;
+	}
+
+	assert(ma->msg_type == MEMBERSHIP_AGREEMENT_JOIN);
+
+#if (VERBOSE_RPC > 0)
+	char msg_buf[1024];
+	printf("SERVER: Received new join message %s!\n", to_string_membership_agreement_msg(ma, msg_buf));
+#endif
+
+	// Update peer socket address to announced one:
+
+	assert(ma->membership->no_nodes == 1);
+
+	node_description nd = ma->membership->membership[0];
+	rs->status = NODE_LIVE;
+
+	status = update_listen_socket(rs, nd.hostname, nd.portno, 0);
+	assert(status == 0);
+
+	// Check if newly joined server already existed in local peers. If so, and if announced address differs, update it:
+
+	snode_t * node = skiplist_search(m->local_peers, &rs->serveraddr);
+
+	if(node != NULL)
+	{
+		remote_server * old_rs_local = (remote_server *) node->value;
+
+		if(strcmp((char *) &(rs->id), (char *) &(old_rs_local->id)) != 0)
+		{
+#if (VERBOSE_RPC > 0)
+			printf("SERVER: Removing old peer entry from local_peers: %s\n", old_rs_local->id);
+#endif
+			skiplist_delete(m->local_peers, &rs->serveraddr);
+
+			free_remote_server(old_rs_local);
+		}
+		else // I knew of this peer, and entry is the same. Nothing changes in local membership, except for possibly marking that node as live and updating socketfd, of node was previously dead:
+		{
+			int old_status = old_rs_local->status;
+			int new_joiner_id = get_node_id((struct sockaddr *) &(old_rs_local->serveraddr));
+
+			assert(my_id != new_joiner_id);
+
+			if(old_status == NODE_DEAD || my_id < new_joiner_id)
+			{
+				assert(old_rs_local->sockfd <= 0 || my_id < new_joiner_id);
+
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: Peer %s %s. Updating its sockfd from %d to %d, old_status=%d, and marking node live!\n",
+												old_rs_local->id, (old_status == NODE_DEAD)?"came back up":"sent join request",
+												old_rs_local->sockfd, rs->sockfd, old_rs_local->status);
+#endif
+
+				old_rs_local->status = NODE_LIVE;
+
+				old_rs_local->sockfd = rs->sockfd;
+			}
+			else
+			{
+				assert(old_rs_local->sockfd > 0);
+
+#if (VERBOSE_RPC > 0)
+				printf("SERVER: I am already connected to peer %s (status = %d), and my id > his id. NOT updating its sockfd from %d to %d, and closing new socket!\n",
+										old_rs_local->id, old_rs_local->status, old_rs_local->sockfd, rs->sockfd);
+#endif
+
+//				close(rs->sockfd);
+			}
+
+			return old_rs_local->status != old_status; // We s'd propose new membership if local membership changed
+		}
+	}
+
+	// Add newly joined peer to local_peers:
+
+	status = add_remote_server_to_membership(rs, m, LOCAL_PEERS, fastrandstate);
+
+	assert(status == 0);
+
+    if(ma != NULL)
+    		free_membership_agreement(ma);
+
+	return 1;
+}
+
+
+int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int sender_id)
+{
+    void * tmp_out_buf = NULL;
+    unsigned snd_msg_len;
+    membership_agreement_msg * ma = NULL;
+	long nonce = -1;
+	vector_clock * lc_read = NULL;
+	short output_packet = 1;
+	membership_state * merged_membership = NULL;
+
+	int status = parse_gossip_message(in_buf + sizeof(int), msg_len, &ma, &nonce, &lc_read);
+
+	if(status != 0)
+	{
+		fprintf(stderr, "ERROR decoding client request");
+    	    	return -1;
+	}
+
+	mark_live(m, sender_id);
+
+	vector_clock * prev_vc = copy_vc(my_lc);
+
+#ifdef UPDATE_LC_ON_GOSSIP
+	if(lc_read != NULL)
+	{
+		// If we were multi-threaded, we'd have to protect this snippet:
+
+#if (VERBOSE_RPC > 2)
+    	    	char msg_buf[1024];
+		printf("SERVER: Received message with LC %s.\n", to_string_vc(lc_read, msg_buf));
+		printf("SERVER: My LC before update is %s.\n", to_string_vc(my_lc, msg_buf));
+#endif
+
+    	    	update_vc(my_lc, lc_read);
+
+#if (VERBOSE_RPC > 2)
+		printf("SERVER: Updated local LC to %s.\n", to_string_vc(my_lc, msg_buf));
+#endif
+
+    	    	increment_vc(my_lc, m->my_id);
+	}
+#endif
+
+	switch(ma->msg_type)
+	{
+		case MEMBERSHIP_AGREEMENT_PROPOSE:
+		{
+			status = handle_agreement_propose_message(ma, &merged_membership, m, db, copy_vc(my_lc), prev_vc, fastrandstate);
+//			assert(status == 0);
+			status = get_agreement_response_packet(status, merged_membership, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_RESPONSE:
+		{
+			status = handle_agreement_response_message(ma, &merged_membership, m, db, copy_vc(my_lc), prev_vc, fastrandstate);
+
+			if(status < 0)
+			{
+				output_packet = 0;
+			}
+			else if(m->proposal_status == PROPOSAL_STATUS_REJECTED)
+			{
+				// NOP
+			}
+			else if(m->outstanding_proposal_acks == 0)
+			{
+				assert(merged_membership != NULL);
+
+				if(m->proposal_status == PROPOSAL_STATUS_ACCEPTED)
+				{
+					membership_agreement_msg * amr = NULL;
+
+					status = get_agreement_notify_packet(PROPOSAL_STATUS_ACCEPTED, merged_membership, ma, &amr, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc), prev_vc);
+
+					int local_view_disagrees = install_agreed_view(amr, m, copy_vc(my_lc), fastrandstate);
+
+					free_membership_agreement(amr);
+
+					//	if(local_view_disagrees)
+					//	{
+					//		propose_local_membership(m, copy_vc(my_lc), fastrandstate);
+					//		output_packet = 0;
+					//	}
+					//
+				}
+				else if(m->proposal_status == PROPOSAL_STATUS_AMMENDED) // re-propose merged membership from previous round
+				{
+				    m->outstanding_proposal = skiplist_clone(m->merged_responses, fastrandstate);
+				    m->outstanding_view_id = copy_vc(my_lc);
+				    m->outstanding_proposal_nonce = _get_nonce(fastrandstate);
+				    m->proposal_status = PROPOSAL_STATUS_ACTIVE;
+				    m->outstanding_proposal_acks = 0;
+
+					status = get_agreement_propose_packet(0, get_membership_state_from_server_list(m->outstanding_proposal, copy_vc(m->outstanding_view_id)),
+																m->outstanding_proposal_nonce, &tmp_out_buf, &snd_msg_len, copy_vc(m->outstanding_view_id));
+				}
+			}
+			else
+			{
+				output_packet = 0;
+			}
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_NOTIFY:
+		{
+			int local_view_disagrees = handle_agreement_notify_message(ma, m, db, copy_vc(my_lc), prev_vc, fastrandstate);
+
+//			if(local_view_disagrees)
+//				propose_local_membership(m, copy_vc(my_lc), fastrandstate);
+
+			status = get_agreement_notify_ack_packet(status, ma, &tmp_out_buf, &snd_msg_len, copy_vc(my_lc));
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_RETRY_LINK:
+		{
+			assert(0);
+			break;
+		}
+		case MEMBERSHIP_AGREEMENT_NOTIFY_ACK:
+		{
+			status = handle_agreement_notify_ack_message(ma, m, db, fastrandstate);
+//			assert(status == 0);
+			output_packet = 0;
+			break;
+		}
+	}
+
+//    assert(status == 0);
+
+    if(output_packet)
+    {
+    		if(ma->msg_type == MEMBERSHIP_AGREEMENT_RESPONSE) // multicast notifications
+    		{
+    			assert(merged_membership != NULL);
+
+			for(snode_t * crt = HEAD(m->merged_responses); crt!=NULL; crt = NEXT(crt))
+			{
+				remote_server * rs = (remote_server *) crt->value;
+
+				if(rs->status == NODE_LIVE && rs->sockfd > 0 && get_node_id((struct sockaddr *) &(rs->serveraddr)) != m->my_id) // skip myself, and nodes that are "down" in membership
+				{
+					int n = write(rs->sockfd, tmp_out_buf, snd_msg_len);
+
+					if (n < 0)
+						error("ERROR writing to socket");
+
+					m->outstanding_proposal_acks++;
+				}
+			}
+    		}
+    		else // unicast back response
+    		{
+			int n = write(childfd, tmp_out_buf, snd_msg_len);
+
+			if (n < 0)
+			  error("ERROR writing to socket");
+    		}
+
+		free(tmp_out_buf);
+    }
+
+//    if(merged_membership != NULL)
+//    		free_membership_state(merged_membership);
+
+    if(ma != NULL)
+    		free_membership_agreement(ma);
+
+	return 0;
+}
+
+typedef struct argp_arguments
+{
+  int verbosity;
+  int portno;
+  int gportno;
+  char ** seeds;
+  unsigned short * seed_ports;
+  int no_seeds;
+  char * local_iface;
+} argp_arguments;
+
+error_t parse_opt (int key, char *arg, struct argp_state *state)
+{
+	argp_arguments * arguments = (argp_arguments *) state->input;
+	char tmp_buff[10];
+
+	switch (key)
+	{
+	  case 'v':
+		  arguments->verbosity = 2;
+		  break;
+	  case 'q':
+		  arguments->verbosity = 0;
+		  break;
+	  case 'p':
+		  arguments->portno = atoi(arg);
+		  break;
+	  case 'm':
+		  arguments->gportno = atoi(arg);
+		  break;
+	  case 's':
+	  {
+		  assert(strnlen(arg, 256) > 1);
+		  arguments->no_seeds = 1;
+		  for(char * end_ptr = strchr(arg, ',');end_ptr != NULL;end_ptr = strchr(end_ptr + 1, ','), arguments->no_seeds++);
+		  arguments->seeds = (char **) malloc(arguments->no_seeds * sizeof(char *));
+		  arguments->seed_ports = (unsigned short *) malloc(arguments->no_seeds * sizeof(int));
+		  char * start_ptr = arg, * end_ptr = NULL;
+		  int stop = 0;
+		  for(int i = 0;!stop;i++)
+		  {
+			  end_ptr = strchr(start_ptr, ',');
+			  if(end_ptr == NULL)
+			  {
+				  stop = 1;
+			  }
+			  else
+			  {
+				  *end_ptr = '\0';
+			  }
+
+			  char * separator_ptr = strchr(start_ptr, ':');
+			  assert(separator_ptr != NULL);
+			  *separator_ptr = '\0';
+
+			  arguments->seeds[i] = strndup(start_ptr, separator_ptr - start_ptr);
+			  arguments->seed_ports[i] = (unsigned short) atoi(separator_ptr + 1);
+
+			  start_ptr = end_ptr + 1;
+		  }
+		  break;
+	  }
+	  case 'i':
+	  {
+		  assert(strnlen(arg, 256) > 1);
+		  arguments->local_iface = strndup(arg, 256);
+		  break;
+	  }
+	  case ARGP_KEY_ARG:
+  	  case ARGP_KEY_END:
+//		  argp_usage (state);
+		  break;
+  	  default:
+	  	return ARGP_ERR_UNKNOWN;
+	}
+
+	return 0;
+}
+
+int main(int argc, char **argv) {
+  int parentfd, gparentfd, childfd;
+  int portno, gportno;
+  int clientlen;
+  struct sockaddr_in serveraddr, gserveraddr, clientaddr;
+  struct hostent *hostp;
+  char *hostaddrp;
+  int optval; /* flag value for setsockopt */
+  int msg_len; /* message byte size */
+  fd_set readfds;
+  struct timeval timeout;
+  timeout.tv_sec = 3;
+  timeout.tv_usec = 0;
+  unsigned int seed;
+  int ret = 0;
+  char msg_buf[1024];
+  int verbosity = SERVER_VERBOSITY;
+
+  const char *argp_program_version = "ddb server 1.0";
+
+  static struct argp_option options[] =
+  {
+    {"verbose",  'v', 0,      0,  "Produce verbose output" },
+    {"quiet",    'q', 0,      0,  "Don't produce any output" },
+    {"port",   	 'p', "PORT", 0,  "Port for client data requests" },
+    {"mport",   	 'm', "MPORT", 0,  "Port for server gossip packets" },
+    {"seeds",   	 's', "SEEDS", 0,  "Seeds, comma-separated" },
+    {"iface",   	 'i', "IFACE", 0,  "Local interface to listen to" },
+    { 0 }
+  };
+
+  static struct argp argp = { options, parse_opt, NULL, "ddb - standalone server module" };
+
+  argp_arguments arguments;
+
+  /* Default values. */
+  arguments.verbosity = 1;
+  arguments.portno = DEFAULT_DATA_PORT;
+  arguments.gportno = DEFAULT_GOSSIP_PORT;
+  arguments.local_iface = "127.0.0.1";
+
+  argp_parse (&argp, argc, argv, 0, 0, &arguments);
+
+  printf("SERVER: Using args: portno=%d, gportno=%d, verbosity=%d, seeds:\n", arguments.portno, arguments.gportno, arguments.verbosity);
+  for(int i=0;i<arguments.no_seeds;i++)
+  {
+	  struct hostent * host = gethostbyname(arguments.seeds[i]);
+      if (host == NULL)
+      {
+          fprintf(stderr, "ERROR, no such host %s\n", arguments.seeds[i]);
+          return -1;
+      }
+
+      free(arguments.seeds[i]);
+      arguments.seeds[i] = strdup(host->h_name);
+
+	  printf("SERVER: %s:%d\n", arguments.seeds[i], arguments.seed_ports[i]);
+  }
+
+  skiplist_t * clients = create_skiplist(&sockaddr_cmp); // List of remote clients
+
+  portno = arguments.portno;
+  gportno = arguments.gportno;
+  verbosity = arguments.verbosity;
+
+  GET_RANDSEED(&seed, 0); // thread_id
+
+  // Get db pointer:
+  db_t * db = get_db();
+
+  // Create schema:
+  ret = create_state_schema(db, &seed);
+  printf("Test %s - %s\n", "create_state_schema", ret==0?"OK":"FAILED");
+
+  ret = create_queue_schema(db, &seed);
+  printf("Test %s - %s\n", "create_queue_schema", ret==0?"OK":"FAILED");
+
+  struct hostent * local_iface_hostent = gethostbyname(arguments.local_iface);
+
+  // Set up main data socket:
+
+  parentfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (parentfd < 0)
+    error("ERROR opening socket");
+
+  optval = 1;
+  setsockopt(parentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
+  bzero((char *) &serveraddr, sizeof(serveraddr));
+  serveraddr.sin_family = AF_INET;
+  serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  serveraddr.sin_port = htons((unsigned short) portno);
+
+  // Set up main gossip socket:
+
+  gparentfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (gparentfd < 0)
+    error("ERROR opening gossip socket");
+
+  setsockopt(gparentfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
+  bzero((char *) &gserveraddr, sizeof(serveraddr));
+  gserveraddr.sin_family = AF_INET;
+  bcopy(local_iface_hostent->h_addr_list[0], (char *)&(gserveraddr.sin_addr.s_addr), local_iface_hostent->h_length);
+//  gserveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+  gserveraddr.sin_port = htons((uint16_t) gportno);
+
+  int my_id = get_node_id((struct sockaddr *) &gserveraddr);
+  char * my_address = strdup(inet_ntoa(gserveraddr.sin_addr));
+  unsigned short my_port = (unsigned short) ntohs(gserveraddr.sin_port);
+
+  vector_clock * my_lc = init_local_vc_id(my_id);
+
+  membership * m = get_membership(my_id);
+
+  printf("SERVER: Started [%s:%d, %s:%d], my_lc = %s\n", inet_ntoa(serveraddr.sin_addr), ntohs(serveraddr.sin_port), my_address, my_port, to_string_vc(my_lc, msg_buf));
+
+  if (bind(parentfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
+    error("ERROR on binding client socket");
+
+  if (listen(parentfd, 100) < 0) /* allow 100 requests to queue up */
+    error("ERROR on listen client socket");
+
+  if (bind(gparentfd, (struct sockaddr *) &gserveraddr, sizeof(serveraddr)) < 0)
+    error("ERROR on binding gossip socket");
+
+  if (listen(gparentfd, 100) < 0) /* allow 100 requests to queue up */
+    error("ERROR on listen gossip socket");
+
+  // Add myself to local membership:
+
+  remote_server * rsp = NULL;
+  ret = add_peer_to_membership(my_address, my_port, gserveraddr, -1, 0, m, LOCAL_PEERS, &rsp, &seed);
+
+  // Now add seed servers:
+
+  struct sockaddr_in dummy_serveraddr;
+
+  for(int i=0;i<arguments.no_seeds;i++)
+  {
+	  int cmp_res = strncmp(arguments.seeds[i], my_address, 256);
+
+	  // Skip connecting to myself:
+	  if(cmp_res == 0 && arguments.seed_ports[i] == my_port)
+	  {
+		  printf("SERVER: Skipping connecting to seed %s:%d (myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
+		  continue;
+	  }
+
+#if (DO_HIERARCHICAL_CONNECT > 0)
+	  // Also skip connecting to seed nodes with IP:port bigger (lexicographycally) than myself (they will connect to me as they come up):
+	  if(cmp_res > 0 || ((cmp_res == 0) && (arguments.seed_ports[i] > my_port)) )
+	  {
+		  printf("SERVER: Skipping connecting to seed %s:%d (> myself)\n", arguments.seeds[i], arguments.seed_ports[i]);
+	  }
+	  else
+	  {
+#endif
+	  	  printf("SERVER: Connecting to %s:%d..\n", arguments.seeds[i], arguments.seed_ports[i]);
+		  ret = add_peer_to_membership(arguments.seeds[i], arguments.seed_ports[i], dummy_serveraddr, -2, 1, m, LOCAL_PEERS, &rsp, &seed);
+		  if(ret == 0 && rsp->status == NODE_LIVE)
+		  {
+			  ret = send_join_message(0, 0, my_address, my_port, my_lc, rsp, &seed);
+		  }
+#if (DO_HIERARCHICAL_CONNECT > 0)
+	  }
+#endif
+  }
+
+  ret = propose_local_membership(m, copy_vc(my_lc), &seed);
+
+  clientlen = sizeof(clientaddr);
+
+  while(1)
+  {
+		FD_ZERO(&readfds);
+
+		// Add parent sockets to read set:
+
+		FD_SET(parentfd, &readfds);
+		FD_SET(gparentfd, &readfds);
+		int max_fd = (parentfd>gparentfd)?(parentfd):(gparentfd);
+
+		// Add active clients to read set:
+
+		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+		{
+			client_descriptor * rs = (client_descriptor *) crt->value;
+			if(rs->sockfd > 0)
+			{
+//				printf("SERVER: Listening to client socket %s..\n", rs->id);
+				FD_SET(rs->sockfd, &readfds);
+				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("SERVER: Not listening to disconnected client socket %s..\n", rs->id);
+			}
+		}
+
+		// Add active peers to read set:
+
+		for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+			if(rs->sockfd > 0)
+			{
+				if(verbosity > 3)
+				{
+					ret = fcntl(rs->sockfd, F_GETFL);
+					printf("active peer %s, sockfd=%d, status=%d, flags=%d\n", rs->id, rs->sockfd, rs->status, ret);
+				}
+
+//				printf("SERVER: Listening to peer socket %s..\n", rs->id);
+				FD_SET(rs->sockfd, &readfds);
+				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("SERVER: Not listening to disconnected peer socket %s..\n", rs->id);
+			}
+		}
+
+		// Add active pre-joined peers to read set:
+
+		for(snode_t * crt = HEAD(m->connected_peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+			if(rs->sockfd > 0 && rs->status == NODE_PREJOINED)
+			{
+				if(verbosity > 3)
+				{
+					ret = fcntl(rs->sockfd, F_GETFL);
+					printf("pre-joined peer %s, sockfd=%d, status=%d, flags=%d\n", rs->id, rs->sockfd, rs->status, ret);
+				}
+
+//				printf("SERVER: Listening to peer socket %s..\n", rs->id);
+				FD_SET(rs->sockfd, &readfds);
+				max_fd = (rs->sockfd > max_fd)? rs->sockfd : max_fd;
+			}
+			else
+			{
+//				printf("SERVER: Not listening to disconnected peer socket %s..\n", rs->id);
+			}
+		}
+
+		int status = select(max_fd + 1, &readfds, NULL, NULL, NULL); // &timeout
+
+		if ((status < 0) && (errno != EINTR) && (errno != EBADF))
+		{
+			printf("select error %d/%d!\n", status, errno);
+
+			assert(0);
+		}
+
+		if(verbosity > 3)
+			printf("select returned %d/%d!\n", status, errno);
+
+		// Check if there's a new connection attempt from a client:
+
+		if(FD_ISSET(parentfd, &readfds))
+		{
+			  childfd = accept(parentfd, (struct sockaddr *) &clientaddr, &clientlen);
+			  if (childfd < 0)
+			    error("ERROR on accept");
+
+			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
+						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+			  if (hostp == NULL)
+			    error("ERROR on gethostbyaddr");
+			  hostaddrp = strdup(inet_ntoa(clientaddr.sin_addr));
+			  if (hostaddrp == NULL)
+			    error("ERROR on inet_ntoa\n");
+
+			  if(verbosity > 0)
+				  printf("SERVER: accepted connection from client: %s (%s:%d)\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port));
+
+			  ret = add_client_to_membership(clientaddr, childfd, hostaddrp, ntohs(clientaddr.sin_port), clients, &seed); // hostp->h_name
+
+//			  assert(ret == 0);
+		}
+
+		// Check if there's a new connection attempt from a peer server:
+
+		if(FD_ISSET(gparentfd, &readfds))
+		{
+			  childfd = accept(gparentfd, (struct sockaddr *) &clientaddr, &clientlen);
+			  if (childfd < 0)
+			    error("ERROR on accept");
+
+			  hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr,
+						  sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+			  if (hostp == NULL)
+			    error("ERROR on gethostbyaddr");
+			  hostaddrp = strdup(inet_ntoa(clientaddr.sin_addr));
+			  if (hostaddrp == NULL)
+			    error("ERROR on inet_ntoa\n");
+
+			  if(verbosity > 0)
+				  printf("SERVER: accepted connection from peer: %s (%s:%d), sockfd=%d\n", hostp->h_name, hostaddrp, ntohs(clientaddr.sin_port), childfd);
+
+			  ret = add_peer_to_membership(hostaddrp, ntohs(clientaddr.sin_port), clientaddr, childfd, 0, m, CONNECTED_PEERS, &rsp, &seed); // hostp->h_name
+			  rsp->status = NODE_PREJOINED;
+
+//			  assert(ret == 0);
+
+			  continue;
+		}
+
+		// Check if there are messages from existing clients:
+
+		for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+		{
+			client_descriptor * rs = (client_descriptor *) crt->value;
+			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			// Received a msg from this client:
+			{
+				if(read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &ret, &handle_socket_close))
+					continue;
+
+			    if(handle_client_message(rs->sockfd, msg_len, db, &seed, my_lc, my_id))
+			    		continue;
+			}
+		}
+
+		// Check if there are messages from peer servers:
+
+		for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+
+			if(rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			// Received a msg from this server:
+			{
+				if(verbosity > 3)
+					printf("active peer %s, sockfd=%d, status=%d is ready for reading\n", rs->id, rs->sockfd, rs->status);
+
+				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_close);
+
+				if(rs->status == NODE_DEAD || rs->sockfd <= 0) // If peer closed socket, propose it removed from agreed membership
+				{
+					propose_local_membership(m, copy_vc(my_lc), &seed);
+					continue;
+				}
+
+				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+				if(handle_server_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id))
+			    		continue;
+			}
+		}
+
+		// Check if there are messages from pre-joined peer servers:
+
+		for(snode_t * crt = HEAD(m->connected_peers); crt!=NULL; crt = NEXT(crt))
+		{
+			remote_server * rs = (remote_server *) crt->value;
+
+			if(rs->status == NODE_PREJOINED && rs->sockfd > 0 && FD_ISSET(rs->sockfd , &readfds))
+			// Received a msg from this server:
+			{
+				if(verbosity > 3)
+					printf("pre-joined peer %s, sockfd=%d, status=%d is ready for reading\n", rs->id, rs->sockfd, rs->status);
+
+				ret = read_full_packet(&(rs->sockfd), (char *) in_buf, SERVER_BUFSIZE, &msg_len, &(rs->status), &handle_socket_nop);
+
+				// TO DO: If peer closed socket before it sent join packet (rs->status == NODE_DEAD || rs->sockfd <= 0), also remove it from connected list to save some space
+
+				if(ret)
+					continue;
+
+				int sender_id = get_node_id((struct sockaddr *) &(rs->serveraddr));
+				if((ret=handle_join_message(rs->sockfd, msg_len, m, db, &seed, my_lc, sender_id, my_id, rs)) < 0)
+			    		continue;
+
+				if(ret > 0) // local membership changed
+				{
+					if(verbosity > 0)
+						printf("Membership changed after %s/%d/%d joined, proposing new membership\n", rs->id, rs->sockfd, rs->status);
+
+					propose_local_membership(m, copy_vc(my_lc), &seed);
+				}
+				else
+				{
+					if(verbosity > 0)
+						printf("Membership did not change after %s/%d/%d joined, NOT proposing new membership\n", rs->id, rs->sockfd, rs->status);
+				}
+			}
+		}
+  }
+
+  // Close sockets to clients and peers:
+
+	for(snode_t * crt = HEAD(clients); crt!=NULL; crt = NEXT(crt))
+	{
+		client_descriptor * rs = (client_descriptor *) crt->value;
+		if(rs->sockfd > 0)
+		{
+			close(rs->sockfd);
+		}
+	}
+
+	for(snode_t * crt = HEAD(m->local_peers); crt!=NULL; crt = NEXT(crt))
+	{
+		remote_server * rs = (remote_server *) crt->value;
+		if(rs->sockfd > 0)
+		{
+			close(rs->sockfd);
+		}
+	}
+}
+
+
+

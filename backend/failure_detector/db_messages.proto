@@ -1,0 +1,250 @@
+
+syntax = "proto2";
+
+// Membership protocol:
+
+message NodeStateMessage {
+	required int32 status=1;	// 0 - dead, 1 - ready, 2 - alive but not ready
+	required int32 node_id=2;
+	required bytes hostname=3;
+	required int32 port=4;
+	required int32 rack_id=5;
+	required int32 dc_id=6;
+}
+
+message VectorClockMessage {
+ 	repeated int32 ids=1; 
+ 	repeated int64 counters=2; 
+}
+
+message GossipMessage {
+	required NodeStateMessage node_state=1;
+ 	required VectorClockMessage vc=2;
+}
+
+message MembershipViewMessage {
+ 	repeated NodeStateMessage membership=1; 
+ 	required VectorClockMessage view_id=2;
+}
+
+message MembershipAgreementMessage {
+	required int32 msg_type=1;		// 0 - PROPOSE, 1 - RESPONSE, 2 - NOTIFY, 3 - RETRY_LINK, 4 - NOTIFY_ACK
+	required int32 ack_status=2;		// 0 - ACK, 1 - NACK, 2 - UNINIT
+ 	optional MembershipViewMessage view=3; 
+ 	required int64 nonce=4;
+ 	required VectorClockMessage vc=5;
+}
+
+// DB cells and Queue entries:
+
+message CellAddressMessage {
+	required int64 table_key=1;
+	repeated int64 keys=2;
+}
+
+message CellMessage {
+	required int64 table_key=1;
+	repeated int64 keys=2;
+	repeated int64 columns=3;
+}
+
+message VersionedCellMessage {
+	required int64 table_key=1;
+	repeated int64 keys=2;
+	repeated int64 columns=3;
+	required bytes blob=4;
+	
+	optional VectorClockMessage version=5;
+//	optional int64 version_no=6;
+}
+
+// DB queries:
+
+message ServerMessage {
+	required int32 mtype=1; // {RPC_TYPE_WRITE, RPC_TYPE_READ, RPC_TYPE_RANGE_READ, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+	
+	optional WriteQueryMessage wm=2;
+	optional ReadQueryMessage rm=3;
+	optional RangeReadQueryMessage rrm=4;
+	optional QueueQueryMessage qm=5;
+	optional TxnMessage tm=6;
+	
+	optional VectorClockMessage vc=7;
+}
+
+message ClientMessage {
+	required int32 mtype=1; // {RPC_TYPE_ACK, RPC_TYPE_WRITE, RPC_TYPE_RANGE_READ_RESPONSE, RPC_TYPE_QUEUE, RPC_TYPE_TXN}
+	
+	optional AckMessage am=2;
+	optional WriteQueryMessage wm=3;
+	optional RangeReadResponseMessage rrrm=4;
+	optional QueueQueryMessage qm=5;
+	optional TxnMessage tm=6;
+
+	optional VectorClockMessage vc=7;
+}
+
+message WriteQueryMessage {
+	optional VersionedCellMessage cell=1; // CellMessage
+	required bytes txnid=2;
+	required int64 nonce=3;
+	
+	required int32 msg_type=4; // {RPC_TYPE_WRITE, RPC_TYPE_DELETE}
+	
+	required int32 mtype=5;
+}
+
+message ReadQueryMessage {
+	required CellAddressMessage cell_address=1;
+	required bytes txnid=2;
+	required int64 nonce=3;
+	
+	required int32 mtype=4;
+}
+
+message AckMessage {
+	optional CellAddressMessage cell_address=1;
+	required int32 status=2; // 0 - ACK, 1 - NACK
+	required bytes txnid=3;
+	required int64 nonce=4;
+	
+	required int32 mtype=5;
+}
+
+message RangeReadQueryMessage {
+	required CellAddressMessage start_cell_address=1;
+	required CellAddressMessage end_cell_address=2;
+	required bytes txnid=3;
+	required int64 nonce=4;
+	
+	required int32 mtype=5;
+}
+
+message RangeReadResponseMessage {
+	repeated VersionedCellMessage cells=1;
+	required bytes txnid=2;
+	required int64 nonce=3;
+	
+	required int32 mtype=4;
+}
+
+
+// Txn messages:
+
+message TxnMessage {
+	required int32 type=1; // BEGIN=0, VALIDATION=1, COMMIT=2, ABORT=3
+	repeated VersionedCellMessage own_read_set=2;
+	repeated VersionedCellMessage own_write_set=3;
+	repeated VersionedCellMessage complete_read_set=4;
+	repeated VersionedCellMessage complete_write_set=5;
+	required bytes txnid=6;
+	required int64 nonce=7;
+	
+	optional VectorClockMessage version=8;
+	
+	required int32 mtype=9;
+}
+
+// Queue messages:
+
+message QueueQueryMessage {
+	required CellAddressMessage queue_address=1;
+	
+	required int32 msg_type=2; // QUERY_TYPE_{CREATE_QUEUE, DELETE_QUEUE, SUBSCRIBE_QUEUE, UNSUBSCRIBE_QUEUE, ENQUEUE, READ_QUEUE, CONSUME_QUEUE, READ_QUEUE_RESPONSE, NOTIFICATION}
+
+	required int32 app_id=3;
+	required int32 shard_id=4;
+	required int32 consumer_id=5;
+
+	required int32 queue_index=6;
+
+	required int32 status=7;
+	
+	repeated VersionedCellMessage cells=8;
+
+	required bytes txnid=9;
+	required int64 nonce=10;
+	
+	required int32 mtype=11;
+}
+
+
+// Below message types are obsolete:
+
+message ConsumerID {
+	required int32 app_id=1;
+	required int32 shard_id=2;
+	required int32 consumer_id=3;
+}
+
+message CreateQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required bytes txnid=2;
+	required int64 nonce=3;
+}
+
+message DeleteQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required bytes txnid=2;
+	required int64 nonce=3;
+}
+
+message SubscribeQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required bytes txnid=3;
+	required int64 nonce=4;
+}
+
+message UnsubscribeQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required bytes txnid=3;
+	required int64 nonce=4;
+}
+
+message EnqueueMessage {
+	repeated VersionedCellMessage cells=1; // CellMessage
+	required bytes txnid=2;
+	required int64 nonce=3;
+}
+
+message EnqueueResponseMessage {
+	required CellAddressMessage queue_address=1;
+	required int64 last_item_id=2;	
+	required bytes txnid=3;
+	required int64 nonce=4;
+}
+
+message ReadQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required int64 max_items=3;
+	required bytes txnid=4;
+	required int64 nonce=5;
+}
+
+message ReadQueueResponseMessage {
+	repeated VersionedCellMessage queue_entries=1;
+	required ConsumerID consumer_id=2;
+	required bytes txnid=3;
+	required int64 nonce=4;
+}
+
+message ConsumeQueueMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required int64 new_consume_head=3;
+	required bytes txnid=4;
+	required int64 nonce=5;
+}
+
+message ConsumeQueueResponseMessage {
+	required CellAddressMessage queue_address=1;
+	required ConsumerID consumer_id=2;
+	required int32 status=3; // 0 - ACK, 1 - NACK
+	required int64 new_consume_head=4;
+	required bytes txnid=5;
+	required int64 nonce=6;
+}
+

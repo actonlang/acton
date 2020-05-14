@@ -60,7 +60,7 @@ int populate_db(db_t * db, unsigned int * fastrandstate) {
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				if(db_insert(column_values, no_cols, (WORD) 0, db, fastrandstate) != 0)
+				if(db_insert(column_values, no_cols, no_clustering_keys, 0, (WORD) 0, db, fastrandstate) != 0)
 					return -1;
 			}
 		}
@@ -90,7 +90,7 @@ int test_search_column(db_t * db) {
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 1;
 
-				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], (int*) column_idxs, no_cols, (WORD) 0, db);
+				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], 2, (int*) column_idxs, no_cols, (WORD) 0, db);
 
 				for(int i=0;i<no_cols;i++)
 				{
@@ -219,10 +219,10 @@ int test_update(db_t * db)
 				column_values[2] = (WORD) iid;
 				column_values[3] = (WORD) iid + 2;
 
-				if(db_update(column_idxs, no_cols, column_values, (WORD) 0, db) != 0)
+				if(db_update(column_values, no_cols, 2, 0, column_idxs, (WORD) 0, db) != 0)
 					return -2;
 
-				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], (int*) column_idxs, no_cols, (WORD) 0, db);
+				WORD* col_values = db_search_columns(&column_values[0], &column_values[1], 2, (int*) column_idxs, no_cols, (WORD) 0, db);
 
 				for(int i=0;i<no_cols;i++)
 				{
@@ -243,11 +243,11 @@ int test_update(db_t * db)
 
 // Delete by (PK):
 
-int test_delete_pk(db_t * db)
+int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 {
 	for(long aid=0;aid<no_actors;aid++)
 	{
-		if(db_delete_row((WORD *) &aid, (WORD) 0, db) != 0)
+		if(db_delete_row((WORD *) &aid, (WORD) 0, db, fastrandstate) != 0)
 		{
 			printf("Delete failed for pk %ld!\n", aid);
 			return -1;
@@ -350,7 +350,17 @@ int test_range_search_pk_ck1(db_t * db)
 	long end_key = no_collections - 1;
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_clustering((WORD*) &pk,(WORD*) &start_key, (WORD*) &end_key, 1, &start_row, &end_row, (WORD) 0, db) == no_collections);
+	int no_entries = db_range_search_clustering((WORD*) &pk,(WORD*) &start_key, (WORD*) &end_key, 1, &start_row, &end_row, (WORD) 0, db);
+
+	if(no_entries != no_collections)
+	{
+		printf("ERROR: db_range_search_clustering(%ld, %ld-%ld) returned %d entries!\n", pk, start_key, end_key, no_entries);
+		print_long_db(db);
+		assert(0);
+		return 1;
+	}
+
+	return 0;
 }
 
 // Range search by (PK, CK1, CK2):
@@ -370,7 +380,17 @@ int test_range_search_pk_ck1_ck2(db_t * db)
 
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_clustering((WORD*) &pk,(WORD*) start_keys, (WORD*) end_keys, 2, &start_row, &end_row, (WORD) 0, db) == no_collections);
+	int no_entries = db_range_search_clustering((WORD*) &pk,(WORD*) start_keys, (WORD*) end_keys, 2, &start_row, &end_row, (WORD) 0, db);
+
+	if(no_entries != no_items)
+	{
+		printf("ERROR: db_range_search_clustering(%ld, %ld, %ld-%ld) returned %d entries!\n", pk, start_keys[0], end_keys[0], end_keys[1], no_entries);
+		print_long_db(db);
+		assert(0);
+		return 1;
+	}
+
+	return 0;
 }
 
 // Range search by secondary index:
@@ -383,7 +403,7 @@ int test_range_search_index(db_t * db)
 	long end_key = no_items;
 	snode_t* start_row = NULL, * end_row = NULL;
 
-	return (db_range_search_index(0, (WORD) start_key, (WORD) end_key, &start_row, &end_row, (WORD) 0, db) == no_items);
+	return (db_range_search_index(0, (WORD) start_key, (WORD) end_key, &start_row, &end_row, (WORD) 0, db) == (no_items - 1));
 }
 
 
@@ -454,7 +474,7 @@ int main(int argc, char **argv) {
 
 	// Delete by (PK):
 
-	ret = test_delete_pk(db);
+	ret = test_delete_pk(db, &seed);
 	printf("Test %s - %s\n", "test_delete_pk", ret==0?"OK":"FAILED");
 
 	ret = populate_db(db, &seed);
