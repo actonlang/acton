@@ -198,7 +198,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[1] = (WORD) COLLECTION_ID_0;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
-		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
+		char * str_value = ((int) node->value <= 9)?(digits[(int) node->value]):"NaN";
 
 		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
@@ -212,7 +212,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 		column_values[1] = (WORD) COLLECTION_ID_1;
 		column_values[2] = node->key;
 		column_values[3] = node->value;
-		char * str_value = ((int) node->value < 9)?(digits[(int) node->value]):"NaN";
+		char * str_value = ((int) node->value <= 9)?(digits[(int) node->value]):"NaN";
 
 		ret = remote_insert_in_txn(column_values, 4, no_state_primary_keys, 2,
 									(WORD) str_value, strnlen((const char *) str_value, 10) + 1,
@@ -230,7 +230,7 @@ int checkpoint_local_state(actor_args * ca, uuid_t * txnid, unsigned int * fastr
 								NULL, 0,
 								ca->state_table_key, txnid, ca->db);
 
-	char * str_value = ((int) ca->total_rcv < 9)?(digits[(int) ca->total_rcv]):"NaN";
+	char * str_value = ((int) ca->total_rcv <= 9)?(digits[(int) ca->total_rcv]):"NaN";
 
 	column_values[1] = (WORD) COLLECTION_ID_3;
 
@@ -261,7 +261,7 @@ int send_seed_msgs(actor_args * ca, int * msgs_sent, unsigned int * fastrandstat
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) i;
-		char * str_value = (i < 9)?(digits[i]):"NaN";
+		char * str_value = (i <= 9)?(digits[i]):"NaN";
 
 		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, NULL, ca->db);
 
@@ -300,7 +300,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 	{
 		column_values[0] = ca->consumer_id;
 		column_values[1] = (WORD) outgoing_counters[i];
-		char * str_value = (outgoing_counters[i] < 9)?(digits[outgoing_counters[i]]):"NaN";
+		char * str_value = (outgoing_counters[i] <= 9)?(digits[outgoing_counters[i]]):"NaN";
 
 		ret = remote_enqueue_in_txn(column_values, no_queue_cols, (WORD) str_value, strnlen((const char *) str_value, 10) + 1, ca->queue_table_key, (WORD) dest_id, txnid, ca->db);
 
