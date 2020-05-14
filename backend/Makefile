@@ -29,7 +29,7 @@ subdirs: $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@
 
-all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests txn_unit_tests remote_txn_unit_tests client server
+all: failure_detector skiplist_test libdb libcomm db_unit_tests queue_unit_tests txn_actor_ring_tests_local txn_actor_ring_tests_remote client server
 
 db.o:
 	cc db.c -c -I src $(LFLAGS) $(CFLAGS)
@@ -81,12 +81,12 @@ queue_unit_tests: queue_unit_tests.c libdb
 		$(LIBS) \
 		-o queue_unit_tests
 
-txn_unit_tests: txn_unit_tests.c libdb
-	cc txn_unit_tests.c \
+txn_actor_ring_tests_local: txn_actor_ring_tests_local.c libdb
+	cc txn_actor_ring_tests_local.c \
 		$(CFLAGS) -I ../src -L $(LIBDIR) \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
-		-o txn_unit_tests
+		-o txn_actor_ring_tests_local
 		
 skiplist_test: skiplist_test.c skiplist.c
 	cc skiplist_test.c skiplist.c \
@@ -106,14 +106,14 @@ server: server.c libdb failure_detector
 	 -L $(LIBDIR) -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o server
 
-remote_txn_unit_tests: remote_txn_unit_tests.c libdb libdbclient failure_detector
-	cc remote_txn_unit_tests.c \
+txn_actor_ring_tests_remote: txn_actor_ring_tests_remote.c libdb libdbclient failure_detector
+	cc txn_actor_ring_tests_remote.c \
 	 $(CFLAGS) \
 	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
-	 -o remote_txn_unit_tests
+	 -o txn_actor_ring_tests_remote
 
 $(LIBDIR):
 	mkdir -p $(LIBDIR)
 
 clean:
-	rm -rf *.o failure_detector/*.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_unit_tests remote_txn_unit_tests server client failure_detector/db_messages_test
+	rm -rf *.o failure_detector/*.o $(LIBDIR) skiplist_test db_unit_tests queue_unit_tests txn_actor_ring_tests_local txn_actor_ring_tests_remote server client failure_detector/db_messages_test
