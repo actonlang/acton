@@ -1,16 +1,19 @@
-#include "../../rts/rts.h"
 #include "Pingpong.h"
 
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
     $this->self = self;
     $this->count = count;
 }
-void lambda$1$__serialize__(lambda$1 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
-    // TBD
+void lambda$1$__serialize__(lambda$1 $this, $Serial$state state) {
+    $step_serialize($this->self,state);
+    $step_serialize($this->count,state);
 }
-lambda$1 lambda$1$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
-    // TBD
-    return NULL;
+
+lambda$1 lambda$1$__deserialize__($Serial$state state) {
+    lambda$1 res = $DNEW(lambda$1,state);
+    res->self = (Pingpong)$step_deserialize(state);
+    res->count = ($int)$step_deserialize(state);
+    return res;
 }
 $R lambda$1$enter(lambda$1 $this, $Cont then) {
     Pingpong self = $this->self;
@@ -21,12 +24,13 @@ $R lambda$1$enter(lambda$1 $this, $Cont then) {
 void lambda$2$__init__(lambda$2 $this, Pingpong self) {
     $this->self = self;
 }
-void lambda$2$__serialize__(lambda$2 self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
-    // TBD
+void lambda$2$__serialize__(lambda$2 $this, $Serial$state state) {
+    $step_serialize($this->self,state);
 }
-lambda$2 lambda$2$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
-    // TBD
-    return NULL;
+lambda$2 lambda$2$__deserialize__($Serial$state state) {
+    lambda$2 res = $DNEW(lambda$2,state);
+    res->self = (Pingpong)$step_deserialize(state);
+    return res;
 }
 $R lambda$2$enter(lambda$2 $this, $Cont then) {
     Pingpong self = $this->self;
@@ -45,12 +49,15 @@ $R Pingpong$ping(Pingpong self, $Cont then) {
     $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count));
     return $R_CONT(then, $None);
 }
-void Pingpong$__serialize__(Pingpong self, $Mapping$dict wit, $WORD* prefix, int prefix_size, $dict done, struct $ROWLISTHEADER accum) {
-    // TBD
+void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
+    $step_serialize(self->i,state);
+    $step_serialize(self->count,state);
 }
-Pingpong Pingpong$__deserialize__($Mapping$dict with, $ROW *row, $dict done) {
-    // TBD
-    return NULL;
+Pingpong Pingpong$__deserialize__($Serial$state state) {
+    Pingpong res = $DNEW(Pingpong,state);
+    res->i = ($int)$step_deserialize(state);
+    res->count = ($int)$step_deserialize(state);
+    return res;
 }
 $R Pingpong$pong(Pingpong self, $int q, $Cont then) {
     printf("%ld     %ld Pong\n", self->i->val, q->val);
@@ -85,5 +92,8 @@ struct Pingpong$class Pingpong$methods = {
 };
 
 $R $ROOT($Env env, $Cont then) {
+    $register(($Serializable$methods)&lambda$1$methods);
+    $register(($Serializable$methods)&lambda$2$methods);
+    $register(($Serializable$methods)&Pingpong$methods);
     return $NEWCC(Pingpong, then, to$int(env));
 }

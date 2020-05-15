@@ -20,6 +20,16 @@ Pingpong: Pingpong.c Pingpong.h
 		Pingpong.c \
 		-o Pingpong
 
+Pingpong2: ../../rts/rts.c Pingpong.c Pingpong.h
+	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-lutf8proc \
+		-D EXPERIMENT=1 \
+		-pthread \
+		../../rts/rts.c \
+		../builtin.o \
+		Pingpong.c \
+		-o Pingpong2
+
 clean:
 	rm -f *.o
 	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test iterator_test range_test Pingpong
