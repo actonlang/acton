@@ -94,6 +94,7 @@ $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
 
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
+    UNASSIGNED,
     NULL,
     lambda$1$__init__,
     lambda$1$__serialize__,
@@ -102,6 +103,7 @@ struct lambda$1$class lambda$1$methods = {
 };
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
+    UNASSIGNED,
     NULL,
     lambda$2$__init__,
     lambda$2$__serialize__,
@@ -110,6 +112,7 @@ struct lambda$2$class lambda$2$methods = {
 };
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",
+    UNASSIGNED,
     NULL,
     Pingpong$__init__,
     Pingpong$__serialize__,
@@ -119,9 +122,9 @@ struct Pingpong$class Pingpong$methods = {
 };
 
 $R $ROOT($Env env, $Cont then) {
-    $register(($Serializable$methods)&lambda$1$methods);
-    $register(($Serializable$methods)&lambda$2$methods);
-    $register(($Serializable$methods)&Pingpong$methods);
+    $register(&lambda$1$methods);
+    $register(&lambda$2$methods);
+    $register(&Pingpong$methods);
     return $NEWCC(Pingpong, then, to$int(env));
 }
 

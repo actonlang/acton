@@ -12,6 +12,7 @@ typedef struct Pingpong *Pingpong;
 
 struct lambda$1$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$1, Pingpong, $int, $int);
     void (*__serialize__)(lambda$1, $Serial$state);
@@ -30,6 +31,7 @@ struct lambda$1 {
 
 struct lambda$2$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$2, Pingpong, $int);
     void (*__serialize__)(lambda$2, $Serial$state);
@@ -47,6 +49,7 @@ struct lambda$2 {
 
 struct Pingpong$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Pingpong, $int, $Cont);
     void (*__serialize__)(Pingpong, $Serial$state);

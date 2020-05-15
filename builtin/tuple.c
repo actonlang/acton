@@ -7,6 +7,7 @@ $tuple $tuple_deserialize($Serial$state state) {
 
 struct $tuple$class $tuple$methods = {
     "tuple",
+    UNASSIGNED,
     $tuple_serialize,
     $tuple_deserialize
 };

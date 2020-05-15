@@ -35,7 +35,7 @@ typedef struct $ROW *$ROW;
 struct $ROW {
   int class_id;
   int blob_size;
-  long row_no;
+  //  long row_no;
   $ROW next;
   $WORD blob[];
 };
@@ -65,6 +65,7 @@ typedef struct $Serializable  *$Serializable;
 
 struct $Serializable$methods {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Serializable,...);
   void (*__serialize__)($Serializable, $Serial$state);
@@ -110,6 +111,7 @@ typedef struct $Hashable$WORD *$Hashable$WORD;
 
 struct $Hashable$WORD$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class *superclass;
     void (*__init__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);

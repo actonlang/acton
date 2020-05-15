@@ -5,81 +5,58 @@
  * We need to sort out how initialization is to be done.
  */
 
-int nextid = 100;
+int PREASSIGNED = 40;
 
-$dict methods;  //key is classid; value is method table
-$dict classids; //key is method table; value is classid
+$list $methods;  //key is classid; values are method tables
 
-/*
- * Probably better to let methods be a list, since it is indexed by non-negative ints.
- * Would require nextid to be initialized to 16 (first unused classid after builtin 
- * and rts classes).
- */
 
-void $register_force(int classid, $Serializable$methods meths) {
-  $int classid1 =to$int(classid);
-  $dict_setitem(methods,($Hashable)$Hashable$int$witness,classid1,meths);
-  $dict_setitem(classids,($Hashable)$Hashable$WORD$witness,meths,classid1);
+void $register_force(int classid, $WORD meths) {
+  // we require that $methods is big enough to index it at classid. See register_builtin below.
+  $list_setitem($methods,classid,meths);
+  (($Serializable$methods)meths)->$class_id = classid;
 }
     
-void $register($Serializable$methods meths) {
-  $register_force(nextid++,meths);
+void $register($WORD meths) {
+    $list_append($methods,meths);
+    (($Serializable$methods)meths)->$class_id = $methods->length-1;
 }
 
-int $get_classid($Serializable$methods meths) {
-  $int classid = $dict_get(classids,($Hashable)$Hashable$WORD$witness,meths,NULL);
-  if (classid)
-    return (int)from$int(classid);
-  else {
-    fprintf(stderr,"Internal error in get_classid: classid not found\n");
-    exit(-1);
-  }
-}
-
-$Serializable$methods $get_methods(int classid)  {
-  $Serializable$methods meths = $dict_get(methods,($Hashable)$Hashable$int$witness,to$int((long)classid),NULL);
-  if (meths)
-    return meths; 
-  else { 
-    fprintf(stderr,"Internal error in get_methods: method table not found for classid %d\n",classid); 
-    exit(-1); 
-  } 
-}
 
 /*
  * We do not register rts classid's here, since we do be able to serialize without including all of rts.o with its  
  * special main and handling of $ROOT. Doing so would complicate testing of builtin types significantly.
  */
 void $register_builtin() {
-  methods  = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  classids = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
-  $register_force(NULL_ID,($Serializable$methods)&$Null$methods);
-  $register_force(INT_ID,($Serializable$methods)&$int$methods);
-  $register_force(FLOAT_ID,($Serializable$methods)&$float$methods);
-  //  $register_force(COMPLEX_ID,($Serializable$methods)&$complex$methods);
-  $register_force(BOOL_ID,($Serializable$methods)&$bool$methods);
-  $register_force(STR_ID,($Serializable$methods)&$str$methods);
-  $register_force(LIST_ID,($Serializable$methods)&$list$methods);
-  $register_force(DICT_ID,($Serializable$methods)&$dict$methods);
-  $register_force(SET_ID,($Serializable$methods)&$set$methods);
-  $register_force(RANGE_ID,($Serializable$methods)&$range$methods);
-  $register_force(STRITERATOR_ID,($Serializable$methods)&$Iterator$str$methods);
-  $register_force(LISTITERATOR_ID,($Serializable$methods)&$Iterator$list$methods);
-  $register_force(DICTITERATOR_ID,($Serializable$methods)&$Iterator$dict$methods);
-  $register_force(VALUESITERATOR_ID,($Serializable$methods)&$Iterator$dict$values$methods);
-  $register_force(ITEMSITERATOR_ID,($Serializable$methods)&$Iterator$dict$items$methods);
-  $register_force(SETITERATOR_ID,($Serializable$methods)&$Iterator$set$methods);
-  $register_force(BASEEXCEPTION_ID,($Serializable$methods)&$BaseException$methods);
-  $register_force(SYSTEMEXIT_ID,($Serializable$methods)&$SystemExit$methods);
-  $register_force(KEYBOARDINTERRUPT_ID,($Serializable$methods)&$KeyboardInterrupt$methods);
-  $register_force(EXCEPTION_ID,($Serializable$methods)&$Exception$methods);
-  $register_force(ASSERTIONERROR_ID,($Serializable$methods)&$AssertionError$methods);
-  $register_force(LOOKUPERROR_ID,($Serializable$methods)&$LookupError$methods);
-  $register_force(INDEXERROR_ID,($Serializable$methods)&$IndexError$methods);
-  $register_force(KEYERROR_ID,($Serializable$methods)&$KeyError$methods);
-  $register_force(MEMORYERROR_ID,($Serializable$methods)&$MemoryError$methods);
-  $register_force(OSERROR_ID,($Serializable$methods)&$OSError$methods);
-  $register_force(RUNTIMEERROR_ID,($Serializable$methods)&$RuntimeError$methods);
-  $register_force(NOTIMPLEMENTEDERROR_ID,($Serializable$methods)&$NotImplementedError$methods);
-  $register_force(VALUEERROR_ID,($Serializable$methods)&$ValueError$methods);
+  $methods = $list_new(2*PREASSIGNED); //preallocate space for PREASSIGNED user classes before doubling needed
+  memset($methods->data,0,PREASSIGNED*sizeof($WORD)); // initiate PREASSIGNED first slots to NULL;
+  $methods->length = PREASSIGNED;
+  $register_force(NULL_ID,&$Null$methods);
+  $register_force(INT_ID,&$int$methods);
+  $register_force(FLOAT_ID,&$float$methods);
+  //  $register_force(COMPLEX_ID,&$complex$methods);
+  $register_force(BOOL_ID,&$bool$methods);
+  $register_force(STR_ID,&$str$methods);
+  $register_force(LIST_ID,&$list$methods);
+  $register_force(DICT_ID,&$dict$methods);
+  $register_force(SET_ID,&$set$methods);
+  $register_force(RANGE_ID,&$range$methods);
+  $register_force(STRITERATOR_ID,&$Iterator$str$methods);
+  $register_force(LISTITERATOR_ID,&$Iterator$list$methods);
+  $register_force(DICTITERATOR_ID,&$Iterator$dict$methods);
+  $register_force(VALUESITERATOR_ID,&$Iterator$dict$values$methods);
+  $register_force(ITEMSITERATOR_ID,&$Iterator$dict$items$methods);
+  $register_force(SETITERATOR_ID,&$Iterator$set$methods);
+  $register_force(BASEEXCEPTION_ID,&$BaseException$methods);
+  $register_force(SYSTEMEXIT_ID,&$SystemExit$methods);
+  $register_force(KEYBOARDINTERRUPT_ID,&$KeyboardInterrupt$methods);
+  $register_force(EXCEPTION_ID,&$Exception$methods);
+  $register_force(ASSERTIONERROR_ID,&$AssertionError$methods);
+  $register_force(LOOKUPERROR_ID,&$LookupError$methods);
+  $register_force(INDEXERROR_ID,&$IndexError$methods);
+  $register_force(KEYERROR_ID,&$KeyError$methods);
+  $register_force(MEMORYERROR_ID,&$MemoryError$methods);
+  $register_force(OSERROR_ID,&$OSError$methods);
+  $register_force(RUNTIMEERROR_ID,&$RuntimeError$methods);
+  $register_force(NOTIMPLEMENTEDERROR_ID,&$NotImplementedError$methods);
+  $register_force(VALUEERROR_ID,&$ValueError$methods);
 }

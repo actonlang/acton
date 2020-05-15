@@ -1,5 +1,7 @@
 struct $bool$class {
   char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
   void (*__init__)($bool, long);
   void (*__serialize__)($bool, $Serial$state);
   $bool (*__deserialize__)($Serial$state);

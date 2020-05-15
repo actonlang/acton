@@ -227,6 +227,7 @@ $R $RetNew$enter($RetNew $this, $WORD _ignore) {
 
 struct $Msg$class $Msg$methods = {
     MSG_HEADER,
+    UNASSIGNED,
     NULL,
     $Msg$__init__,
     $Msg$__serialize__,
@@ -235,6 +236,7 @@ struct $Msg$class $Msg$methods = {
 
 struct $Actor$class $Actor$methods = {
     ACTOR_HEADER,
+    UNASSIGNED,
     NULL,
     $Actor$__init__,
     $Actor$__serialize__,
@@ -243,6 +245,7 @@ struct $Actor$class $Actor$methods = {
 
 struct $Catcher$class $Catcher$methods = {
     CATCHER_HEADER,
+    UNASSIGNED,
     NULL,
     $Catcher$__init__,
     $Catcher$__serialize__,
@@ -251,6 +254,7 @@ struct $Catcher$class $Catcher$methods = {
 
 struct $Clos$class $Clos$methods = {
     CLOS_HEADER,
+    UNASSIGNED,
     NULL,
     $Clos$__init__,
     $Clos$__serialize__,
@@ -260,6 +264,7 @@ struct $Clos$class $Clos$methods = {
 
 struct $Cont$class $Cont$methods = {
     CONT_HEADER,
+    UNASSIGNED,
     NULL,
     $Cont$__init__,
     $Cont$__serialize__,
@@ -269,6 +274,7 @@ struct $Cont$class $Cont$methods = {
 
 struct $RetNew$class $RetNew$methods = {
     "$RetNew",
+    UNASSIGNED,
     NULL,
     $RetNew$__init__,
     $RetNew$__serialize__,
@@ -428,6 +434,7 @@ $Cont $Done__deserialize__($Serial$state state) {
 
 struct $Cont$class $Done$methods = {
     CONT_HEADER,
+    UNASSIGNED,
     NULL,
     $Cont$__init__,
     $Done__serialize__,
@@ -445,6 +452,7 @@ $R $NewRoot$enter ($Cont $this, $WORD val) {
 
 struct $Cont$class $NewRoot$methods = {
     CONT_HEADER,
+    UNASSIGNED,
     NULL,
     $Cont$__init__,
     NULL,
@@ -462,6 +470,7 @@ $R $WriteRoot$enter($Cont $this, $WORD val) {
 
 struct $Cont$class $WriteRoot$methods = {
     CONT_HEADER,
+    UNASSIGNED,
     NULL,
     $Cont$__init__,
     NULL,
@@ -648,13 +657,13 @@ void $deserialize_rts($ROW row) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $register_rts () {
-  $register_force(MSG_ID,($Serializable$methods)&$Msg$methods);
-  $register_force(ACTOR_ID,($Serializable$methods)&$Actor$methods);
-  $register_force(CATCHER_ID,($Serializable$methods)&$Catcher$methods);
-  $register_force(CLOS_ID,($Serializable$methods)&$Clos$methods);
-  $register_force(CONT_ID,($Serializable$methods)&$Cont$methods);
-  $register_force(DONE_ID,($Serializable$methods)&$Done$methods);
-  $register_force(RETNEW_ID,($Serializable$methods)&$RetNew$methods);
+  $register_force(MSG_ID,&$Msg$methods);
+  $register_force(ACTOR_ID,&$Actor$methods);
+  $register_force(CATCHER_ID,&$Catcher$methods);
+  $register_force(CLOS_ID,&$Clos$methods);
+  $register_force(CONT_ID,&$Cont$methods);
+  $register_force(DONE_ID,&$Done$methods);
+  $register_force(RETNEW_ID,&$RetNew$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////

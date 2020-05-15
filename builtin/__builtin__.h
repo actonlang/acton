@@ -472,6 +472,7 @@ struct $Eq {
 
 struct $Eq$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Eq);
     $bool (*__eq__)($Eq, $WORD, $WORD);
@@ -480,6 +481,7 @@ struct $Eq$class {
 
 struct $Eq$opaque {
     char *$GCINFO;
+    int $class_id;
     $Eq proto;
     $WORD impl;
 };
@@ -495,6 +497,7 @@ struct $Ord {
 
 struct $Ord$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord);
     $bool (*__eq__)($Ord, $WORD, $WORD);
@@ -507,6 +510,7 @@ struct $Ord$class {
 
 struct $Ord$opaque {
     char *$GCINFO;
+    int $class_id;
     $Ord proto;
     $WORD impl;
 };
@@ -522,6 +526,7 @@ struct $Logical {
 
 struct $Logical$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Logical);
     $WORD (*__and__)($Logical, $WORD, $WORD);
@@ -531,6 +536,7 @@ struct $Logical$class {
 
 struct $Logical$opaque {
     char *$GCINFO;
+    int $class_id;
     $Logical proto;
     $WORD impl;
 };
@@ -546,6 +552,7 @@ struct $Plus {
 
 struct $Plus$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus);
     $WORD (*__add__)($Plus, $WORD, $WORD);
@@ -553,6 +560,7 @@ struct $Plus$class {
 
 struct $Plus$opaque {
     char *$GCINFO;
+    int $class_id;
     $Plus proto;
     $WORD impl;
 };
@@ -568,6 +576,7 @@ struct $Minus {
 
 struct $Minus$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Minus);
     $WORD (*__sub__)($Minus, $WORD, $WORD);
@@ -575,6 +584,7 @@ struct $Minus$class {
 
 struct $Minus$opaque {
     char *$GCINFO;
+    int $class_id;
     $Minus proto;
     $WORD impl;
 };
@@ -590,6 +600,7 @@ struct $Hashable {
 
 struct $Hashable$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable);
     $bool (*__eq__)($Hashable, $WORD, $WORD);
@@ -599,6 +610,7 @@ struct $Hashable$class {
 
 struct $Hashable$opaque {
     char *$GCINFO;
+    int $class_id;
     $Hashable proto;
     $WORD impl;
 };
@@ -614,6 +626,7 @@ struct $Boolean {
 
 struct $Boolean$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Boolean);
     $bool (*__bool__)($Boolean, $WORD);
@@ -621,6 +634,7 @@ struct $Boolean$class {
 
 struct $Boolean$opaque {
     char *$GCINFO;
+    int $class_id;
     $Boolean proto;
     $WORD impl;
 };
@@ -637,6 +651,7 @@ struct $Indexed {
 
 struct $Indexed$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Indexed, $Eq);
     $WORD (*__getitem__)($Indexed, $WORD, $WORD);
@@ -646,6 +661,7 @@ struct $Indexed$class {
 
 struct $Indexed$opaque {
     char *$GCINFO;
+    int $class_id;
     $Indexed proto;
     $WORD impl;
 };
@@ -661,6 +677,7 @@ struct $Sliceable {
 
 struct $Sliceable$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sliceable);
     $WORD (*__getitem__)($Sliceable, $WORD, $int);
@@ -673,6 +690,7 @@ struct $Sliceable$class {
 
 struct $Sliceable$opaque {
     char *$GCINFO;
+    int $class_id;
     $Sliceable proto;
     $WORD impl;
 };
@@ -688,6 +706,7 @@ struct $Iterable {
 
 struct $Iterable$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable);
     $Iterator (*__iter__)($Iterable, $WORD);
@@ -695,6 +714,7 @@ struct $Iterable$class {
 
 struct $Iterable$opaque {
     char *$GCINFO;
+    int $class_id;
     $Iterable proto;
     $WORD impl;
 };
@@ -710,6 +730,7 @@ struct $Collection {
 
 struct $Collection$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
@@ -719,6 +740,7 @@ struct $Collection$class {
 
 struct $Collection$opaque {
     char *$GCINFO;
+    int $class_id;
     $Collection proto;
     $WORD impl;
 };
@@ -735,6 +757,7 @@ struct $Container {
 
 struct $Container$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container, $Eq);
     $Iterator (*__iter__)($Container, $WORD);
@@ -746,6 +769,7 @@ struct $Container$class {
 
 struct $Container$opaque {
     char *$GCINFO;
+    int $class_id;
     $Container proto;
     $WORD impl;
 };
@@ -763,6 +787,7 @@ struct $Sequence {
 
 struct $Sequence$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sequence);
     $WORD (*__getitem__)($Sequence, $WORD, $int);
@@ -779,6 +804,7 @@ struct $Sequence$class {
 
 struct $Sequence$opaque {
     char *$GCINFO;
+    int $class_id;
     $Sequence proto;
     $WORD impl;
 };
@@ -796,6 +822,7 @@ struct $Mapping {
 
 struct $Mapping$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Mapping, $Eq);
     $Iterator (*__iter__)($Mapping, $WORD);
@@ -814,6 +841,7 @@ struct $Mapping$class {
 
 struct $Mapping$opaque {
     char *$GCINFO;
+    int $class_id;
     $Mapping proto;
     $WORD impl;
 };
@@ -833,6 +861,7 @@ struct $Set {
 
 struct $Set$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Set, $Eq);
     $Iterator (*__iter__)($Set, $WORD);
@@ -848,6 +877,7 @@ struct $Set$class {
 
 struct $Set$opaque {
     char *$GCINFO;
+    int $class_id;
     $Set proto;
     $WORD impl;
 };
@@ -865,6 +895,7 @@ struct $Complex {
 
 struct $Complex$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Complex);
     $bool (*__eq__)($Complex, $WORD, $WORD);
@@ -884,6 +915,7 @@ struct $Complex$class {
 
 struct $Complex$opaque {
     char *$GCINFO;
+    int $class_id;
     $Complex proto;
     $WORD impl;
 };
@@ -900,6 +932,7 @@ struct $Real {
 
 struct $Real$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Real);
     $bool (*__eq__)($Real, $WORD, $WORD);
@@ -917,6 +950,7 @@ struct $Real$class {
 
 struct $Real$opaque {
     char *$GCINFO;
+    int $class_id;
     $Real proto;
     $WORD impl;
 };
@@ -932,6 +966,7 @@ struct $Rational {
 
 struct $Rational$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Rational);
     $bool (*__eq__)($Rational, $WORD, $WORD);
@@ -951,6 +986,7 @@ struct $Rational$class {
 
 struct $Rational$opaque {
     char *$GCINFO;
+    int $class_id;
     $Rational proto;
     $WORD impl;
 };
@@ -967,6 +1003,7 @@ struct $Integral {
 
 struct $Integral$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Integral);
     $bool (*__eq__)($Integral, $WORD, $WORD);
@@ -994,6 +1031,7 @@ struct $Integral$class {
 
 struct $Integral$opaque {
     char *$GCINFO;
+    int $class_id;
     $Integral proto;
     $WORD impl;
 };
@@ -1009,6 +1047,7 @@ struct $Boolean$int {
 
 struct $Boolean$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Boolean$int);
     $bool (*__bool__)($Boolean$int, $int);
@@ -1025,6 +1064,7 @@ struct $Boolean$list {
 
 struct $Boolean$list$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Boolean$list);
     $bool (*__bool__)($Boolean$list, $list);
@@ -1043,6 +1083,7 @@ struct $Sequence$list {
 
 struct $Sequence$list$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sequence$list);
     $WORD (*__getitem__)($Sequence$list, $list, $int);
@@ -1078,6 +1119,7 @@ struct $Collection$list {
 
 struct $Collection$list$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Collection$list, $Sequence$list);
     $Iterator (*__iter__)($Collection$list, $list);
@@ -1099,6 +1141,7 @@ struct $Plus$list {
 
 struct $Plus$list$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus$list, $Sequence$list);
     $list (*__add__)($Plus$list, $list, $list);
@@ -1116,6 +1159,7 @@ struct $Container$list {
 
 struct $Container$list$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container$list, $Eq);
     $Iterator (*__iter__)($Container$list, $list);
@@ -1142,6 +1186,7 @@ struct $Mapping$dict {
 
 struct $Mapping$dict$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Mapping$dict, $Hashable);
     $Iterator (*__iter__)($Mapping$dict, $dict);
@@ -1182,6 +1227,7 @@ struct $Indexed$dict {
 
 struct $Indexed$dict$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Indexed$dict, $Mapping$dict, $Eq);
     $WORD (*__getitem__)($Indexed$dict, $dict, $WORD);
@@ -1206,6 +1252,7 @@ struct $Set$set {
 
 struct $Set$set$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Set$set, $Hashable);
     $Iterator (*__iter__)($Set$set, $set);
@@ -1239,6 +1286,7 @@ struct $Ord$set {
 
 struct $Ord$set$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$set, $Set$set);
     $bool (*__eq__)($Ord$set, $set, $set);
@@ -1266,6 +1314,7 @@ struct $Logical$set {
 
 struct $Logical$set$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Logical$set, $Set$set);
     $set (*__and__)($Logical$set, $set, $set);
@@ -1287,6 +1336,7 @@ struct $Minus$set {
 
 struct $Minus$set$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Minus$set, $Set$set);
     $set (*__sub__)($Minus$set, $set, $set);
@@ -1303,6 +1353,7 @@ struct $Iterable$Iterator {
 
 struct $Iterable$Iterator$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable$Iterator);
     $Iterator (*__iter__)($Iterable$Iterator, $Iterator);
@@ -1319,6 +1370,7 @@ struct $Ord$str {
 
 struct $Ord$str$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$str);
     $bool (*__eq__)($Ord$str, $str, $str);
@@ -1346,6 +1398,7 @@ struct $Container$str {
 
 struct $Container$str$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container$str, $Eq);
     $Iterator (*__iter__)($Container$str, $str);
@@ -1370,6 +1423,7 @@ struct $Sliceable$str {
 
 struct $Sliceable$str$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sliceable$str);
     $str (*__getitem__)($Sliceable$str, $str, $int);
@@ -1396,6 +1450,7 @@ struct $Plus$str {
 
 struct $Plus$str$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus$str);
     $str (*__add__)($Plus$str, $str, $str);
@@ -1412,6 +1467,7 @@ struct $Hashable$str {
 
 struct $Hashable$str$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$str);
     $bool (*__eq__)($Hashable$str, $str, $str);
@@ -1434,6 +1490,7 @@ struct $Integral$int {
 
 struct $Integral$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Integral$int);
     $bool (*__eq__)($Integral$int, $int, $int);
@@ -1491,6 +1548,7 @@ struct $Logical$int {
 
 struct $Logical$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Logical$int, $Integral$int);
     $int (*__and__)($Logical$int, $int, $int);
@@ -1514,6 +1572,7 @@ struct $Complex$int {
 
 struct $Complex$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Complex$int, $Integral$int);
     $bool (*__eq__)($Complex$int, $int, $int);
@@ -1555,6 +1614,7 @@ struct $Plus$int {
 
 struct $Plus$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus$int, $Complex$int);
     $int (*__add__)($Plus$int, $int, $int);
@@ -1572,6 +1632,7 @@ struct $Minus$int {
 
 struct $Minus$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Minus$int, $Complex$int);
     $int (*__sub__)($Minus$int, $int, $int);
@@ -1588,6 +1649,7 @@ struct $Hashable$int {
 
 struct $Hashable$int$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$int);
     $bool (*__eq__)($Hashable$int, $int, $int);
@@ -1609,6 +1671,7 @@ struct $Real$float {
 
 struct $Real$float$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Real$float);
     $bool (*__eq__)($Real$float, $float, $float);
@@ -1648,6 +1711,7 @@ struct $Complex$float {
 
 struct $Complex$float$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Complex$float, $Real$float);
     $bool (*__eq__)($Complex$float, $float, $float);
@@ -1689,6 +1753,7 @@ struct $Plus$float {
 
 struct $Plus$float$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus$float, $Complex$float);
     $float (*__add__)($Plus$float, $float, $float);
@@ -1706,6 +1771,7 @@ struct $Minus$float {
 
 struct $Minus$float$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Minus$float, $Complex$float);
     $float (*__sub__)($Minus$float, $float, $float);
@@ -1722,6 +1788,7 @@ struct $Hashable$float {
 
 struct $Hashable$float$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$float);
     $bool (*__eq__)($Hashable$float, $float, $float);
@@ -1742,6 +1809,7 @@ struct $Iterable$range {
 
 struct $Iterable$range$class {
     char *$GCINFO;
+    int $class_id;
     $Super $superclass;
     void (*__init__)($Iterable$range);
     $Iterator (*__iter__)($Iterable$range, $range);

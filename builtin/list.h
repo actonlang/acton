@@ -1,5 +1,6 @@
 struct $list$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($list, $Iterable$opaque);
   void (*__serialize__)($list,$Serial$state);
@@ -32,6 +33,7 @@ typedef struct $Iterator$list *$Iterator$list; ;
 
 struct $Iterator$list$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$list, $list);
   void (*__serialize__)($Iterator$list,$Serial$state);

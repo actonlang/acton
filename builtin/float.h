@@ -1,5 +1,6 @@
 struct $float$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($float, double);
   void (*__serialize__)($float,$Serial$state);

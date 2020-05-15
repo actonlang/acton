@@ -4,7 +4,7 @@ void $float_init($float self, double val);
 void $float_serialize($float self, $Serial$state state);
 $float $float_deserialize($Serial$state state);
 
-struct $float$class $float$methods = {"",NULL,$float_init, $float_serialize, $float_deserialize};
+struct $float$class $float$methods = {"",UNASSIGNED,NULL,$float_init, $float_serialize, $float_deserialize};
 
 
 // Serialization ///////////////////////////////////////////////////////////////////////
@@ -189,28 +189,28 @@ void $Minus$float_init($Minus$float wit, $Complex$float w$Complex$float) {
  struct $Minus$float $Minus$float_instance;
  struct $Hashable$float $Hashable$float_instance;
 
-struct $Real$float$class $Real$float$methods = {"", NULL, $Real$float_init,$Real$float$__eq__ , $Real$float$__ne__ , $Real$float$__lt__ , $Real$float$__le__ ,
+struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float_init,$Real$float$__eq__ , $Real$float$__ne__ , $Real$float$__lt__ , $Real$float$__le__ ,
                                                      $Real$float$__gt__ , $Real$float$__ge__ , $Real$float$__float__ , $Real$float$__trunc__ , $Real$float$__floor__ ,
                                                      $Real$float$__ceil__ , $Real$float$__round__};
  struct $Real$float $Real$float_instance = {&$Real$float$methods};
  $Real$float $Real$float$witness = &$Real$float_instance;
 
 
-struct $Complex$float$class $Complex$float$methods = {"", NULL, $Complex$float_init,$Complex$float$__eq__,$Complex$float$__ne__,$Complex$float$__complx__,
+struct $Complex$float$class $Complex$float$methods = {"", UNASSIGNED,NULL, $Complex$float_init,$Complex$float$__eq__,$Complex$float$__ne__,$Complex$float$__complx__,
                                                $Complex$float$__bool__,$Complex$float$__mul__,$Complex$float$__truediv__,$Complex$float$__pow__,$Complex$float$__neg__,
                                                $Complex$float$__pos__,$Complex$float$real,$Complex$float$imag,$Complex$float$__abs__,$Complex$float$__conjugate__};
  struct $Complex$float $Complex$float_instance = {&$Complex$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
  $Complex$float $Complex$float$witness = &$Complex$float_instance;
 
-struct $Plus$float$class $Plus$float$methods = {"", NULL, $Plus$float_init,$Plus$float$__add__};
+struct $Plus$float$class $Plus$float$methods = {"", UNASSIGNED,NULL, $Plus$float_init,$Plus$float$__add__};
  struct $Plus$float $Plus$float_instance = {&$Plus$float$methods, &$Complex$float_instance};
  $Plus$float $Plus$float$witness = &$Plus$float_instance;
 
-struct $Minus$float$class $Minus$float$methods = {"", NULL, $Minus$float_init,$Minus$float$__sub__};
+struct $Minus$float$class $Minus$float$methods = {"", UNASSIGNED,NULL, $Minus$float_init,$Minus$float$__sub__};
  struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Complex$float_instance};
  $Minus$float $Minus$float$witness = &$Minus$float_instance;
 
-struct $Hashable$float$class $Hashable$float$methods = {"", NULL, (void (*)($Hashable$float))$default__init__,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
+struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$float))$default__init__,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
  struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
  $Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
  

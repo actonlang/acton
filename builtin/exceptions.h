@@ -1,5 +1,6 @@
 struct $BaseException$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($BaseException,$str);
   void (*__serialize__)($BaseException, $Serial$state);
@@ -15,6 +16,7 @@ extern struct $BaseException$class $BaseException$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $SystemExit$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($SystemExit,$str);
   void (*__serialize__)($SystemExit,$Serial$state);
@@ -30,6 +32,7 @@ extern struct $SystemExit$class $SystemExit$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyboardInterrupt$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($KeyboardInterrupt,$str);
   void (*__serialize__)($KeyboardInterrupt,$Serial$state);
@@ -45,6 +48,7 @@ extern struct $KeyboardInterrupt$class $KeyboardInterrupt$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $Exception$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Exception,$str);
   void (*__serialize__)($Exception,$Serial$state);
@@ -60,6 +64,7 @@ extern struct $Exception$class $Exception$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $AssertionError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($AssertionError,$str);
   void (*__serialize__)($AssertionError,$Serial$state);
@@ -75,6 +80,7 @@ extern struct $AssertionError$class $AssertionError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $LookupError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($LookupError,$str);
   void (*__serialize__)($LookupError,$Serial$state);
@@ -90,6 +96,7 @@ extern struct $LookupError$class $LookupError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $IndexError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($IndexError,$str);
   void (*__serialize__)($IndexError, $Serial$state);
@@ -105,6 +112,7 @@ extern struct $IndexError$class $IndexError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($KeyError,$str);
   void (*__serialize__)($KeyError,$Serial$state);
@@ -120,6 +128,7 @@ extern struct $KeyError$class $KeyError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $MemoryError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($MemoryError,$str);
   void (*__serialize__)($MemoryError, $Serial$state);
@@ -135,6 +144,7 @@ extern struct $MemoryError$class $MemoryError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $OSError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($OSError,$str);
   void (*__serialize__)($OSError, $Serial$state);
@@ -150,6 +160,7 @@ extern struct $OSError$class $OSError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $RuntimeError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($RuntimeError,$str);
   void (*__serialize__)($RuntimeError, $Serial$state);
@@ -165,6 +176,7 @@ extern struct $RuntimeError$class $RuntimeError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $NotImplementedError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($NotImplementedError,$str);
   void (*__serialize__)($NotImplementedError,$Serial$state);
@@ -180,6 +192,7 @@ extern struct $NotImplementedError$class $NotImplementedError$methods;
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $ValueError$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($ValueError,$str);
   void (*__serialize__)($ValueError, $Serial$state);

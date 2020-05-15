@@ -57,26 +57,39 @@
  * This call does *not* register the rts class id's MSG_ID  -- ITEM_ID, which must be registered by 
  * a call to register_rts in rts.h. 
  */
+
 void $register_builtin();
 
 /* 
  * Register a user defined class by supplying the address to its method table. A fresh class id is generated and 
  * the internal mapping extended. Each class whose objects may be serialized must be registered.
  */
-void $register($Serializable$methods meths);
+void $register($WORD meths);
 
 /*
  * Registering a class with predetermined class id. To be used for builtin and rts classes only..
  * 
  */
-void $register_force(int classid, $Serializable$methods meths);
+void $register_force(int classid, $WORD meths);
+
+
+
+
+#define $GET_CLASSID(meths)  (meths)->$class_id
+
+#define $GET_METHODS(classid)  (($Serializable$methods)$list_getitem($methods,classid))
+
+$list $methods;
 
 /*
+
+*
  * During serialization, get_classid is called to get the integer to be stored in the serialized file.
- */
+ *
 int $get_classid($Serializable$methods meths);
 
-/*
+ *
  * During deserialization, the method table is retrieved by calling get_methods.
- */
+ *
 $Serializable$methods $get_methods(int classid);
+*/

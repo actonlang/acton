@@ -1,6 +1,7 @@
 struct $tuple$class {
     char *$GCINFO;
-    void (*__serialize__)($tuple,$Serial$state);
+    int $class_id;
+  void (*__serialize__)($tuple,$Serial$state);   //superclass and init missing
     $tuple (*__deserialize__)($Serial$state);
 };
 

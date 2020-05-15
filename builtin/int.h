@@ -1,5 +1,6 @@
 struct $int$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($int, long);
   void (*__serialize__)($int,$Serial$state);

@@ -22,6 +22,7 @@ $R lambda$1$enter(lambda$1 $this, $Msg _ignore) {
 
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
+    UNASSIGNED,
     NULL,
     lambda$1$__init__,
     lambda$1$__serialize__,
@@ -58,6 +59,7 @@ $R lambda$2$enter(lambda$2 $this, $Cont c$1) {
 
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
+    UNASSIGNED,
     NULL,
     lambda$2$__init__,
     lambda$2$__serialize__,
@@ -111,6 +113,7 @@ $R Act$act(Act self, $int from, $list table, $Cont cont$0) {
 
 struct Act$class Act$methods = {
     "Act",
+    UNASSIGNED,
     NULL,
     Act$__init__,
     Act$__serialize__,
@@ -147,6 +150,7 @@ $R lambda$3$enter(lambda$3 $this, Act $res) {
 
 struct lambda$3$class lambda$3$methods = {
     "lambda$3",
+    UNASSIGNED,
     NULL,
     lambda$3$__init__,
     lambda$3$__serialize__,
@@ -176,6 +180,7 @@ $R lambda$4$enter(lambda$4 $this, $WORD _ignore) {
 
 struct lambda$4$class lambda$4$methods = {
     "lambda$4",
+    UNASSIGNED,
     NULL,
     lambda$4$__init__,
     lambda$4$__serialize__,
@@ -223,6 +228,7 @@ Root Root$__deserialize__($Serial$state state) {
 
 struct Root$class Root$methods = {
     "Root",
+    UNASSIGNED,
     NULL,
     Root$__init__,
     Root$__serialize__,
@@ -244,12 +250,12 @@ void $init_module() {
     no_actors = to$int(5);
     total_msgs = to$int(20);
     $register_builtin();
-    $register(($Serializable$methods)&lambda$1$methods);
-    $register(($Serializable$methods)&lambda$2$methods);
-    $register(($Serializable$methods)&lambda$3$methods);
-    $register(($Serializable$methods)&lambda$4$methods);
-    $register(($Serializable$methods)&Root$methods);
-    $register(($Serializable$methods)&Act$methods);
+    $register(&lambda$1$methods);
+    $register(&lambda$2$methods);
+    $register(&lambda$3$methods);
+    $register(&lambda$4$methods);
+    $register(&Root$methods);
+    $register(&Act$methods);
 }
 
 $R $ROOT($Env env, $Cont cont$0) {

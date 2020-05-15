@@ -17,7 +17,7 @@ ActorRing: ActorRing.c ActorRing.h
 
 clean:
 	rm -f *.o
-	rm -f list_serialize_test dict_serialize_test str_serialize_test set_serialize_test multi_serialization_test graph_serialize_test
+	rm -f list_serialize_test dict_serialize_test str_serialize_test set_serialize_test multi_serialization_test 
 	rm -f ActorRing
 
 runtests:

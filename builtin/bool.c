@@ -2,7 +2,7 @@ void $bool_init($bool self, long val);
 void $bool_serialize($bool self, $Serial$state);
 $bool $bool_deserialize($Serial$state);
 
-struct $bool$class $bool$methods = {"", $bool_init, $bool_serialize, $bool_deserialize};
+struct $bool$class $bool$methods = {"",UNASSIGNED,NULL,$bool_init, $bool_serialize, $bool_deserialize};
 
 
 // Serialization ///////////////////////////////////////////////////////////////////////

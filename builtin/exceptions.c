@@ -14,7 +14,7 @@ $BaseException $BaseException$__deserialize__($Serial$state state) {
   return $NEW($BaseException,($str)$step_deserialize(state));
 };
 
-struct $BaseException$class $BaseException$methods = {"",NULL,$BaseException$__init__,$BaseException$__serialize__,$BaseException$__deserialize__};
+struct $BaseException$class $BaseException$methods = {"",UNASSIGNED,NULL,$BaseException$__init__,$BaseException$__serialize__,$BaseException$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $SystemExit$__init__($SystemExit self, $str error_message) {
   self->error_message = error_message;
@@ -32,7 +32,7 @@ $SystemExit $SystemExit$__deserialize__($Serial$state state) {
   return $NEW($SystemExit,($str)$step_deserialize(state));
 };
 
-struct $SystemExit$class $SystemExit$methods = {"",($Super$class)&$BaseException$methods,$SystemExit$__init__,$SystemExit$__serialize__,$SystemExit$__deserialize__};
+struct $SystemExit$class $SystemExit$methods = {"",UNASSIGNED,($Super$class)&$BaseException$methods,$SystemExit$__init__,$SystemExit$__serialize__,$SystemExit$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $KeyboardInterrupt$__init__($KeyboardInterrupt self, $str error_message) {
   self->error_message = error_message;
@@ -50,7 +50,7 @@ $KeyboardInterrupt $KeyboardInterrupt$__deserialize__($Serial$state state) {
   return $NEW($KeyboardInterrupt,($str)$step_deserialize(state));
 };
 
-struct $KeyboardInterrupt$class $KeyboardInterrupt$methods = {"",($Super$class)&$BaseException$methods,$KeyboardInterrupt$__init__,$KeyboardInterrupt$__serialize__,$KeyboardInterrupt$__deserialize__};
+struct $KeyboardInterrupt$class $KeyboardInterrupt$methods = {"",UNASSIGNED,($Super$class)&$BaseException$methods,$KeyboardInterrupt$__init__,$KeyboardInterrupt$__serialize__,$KeyboardInterrupt$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $Exception$__init__($Exception self, $str error_message) {
   self->error_message = error_message;
@@ -68,7 +68,7 @@ $Exception $Exception$__deserialize__($Serial$state state) {
   return $NEW($Exception,($str)$step_deserialize(state));
 };
 
-struct $Exception$class $Exception$methods = {"",($Super$class)&$BaseException$methods,$Exception$__init__,$Exception$__serialize__,$Exception$__deserialize__};
+struct $Exception$class $Exception$methods = {"",UNASSIGNED,($Super$class)&$BaseException$methods,$Exception$__init__,$Exception$__serialize__,$Exception$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $AssertionError$__init__($AssertionError self, $str error_message) {
   self->error_message = error_message;
@@ -86,7 +86,7 @@ $AssertionError $AssertionError$__deserialize__($Serial$state state) {
   state->row++;
 };
 
-struct $AssertionError$class $AssertionError$methods = {"",($Super$class)&$Exception$methods,$AssertionError$__init__,$AssertionError$__serialize__,$AssertionError$__deserialize__};
+struct $AssertionError$class $AssertionError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$AssertionError$__init__,$AssertionError$__serialize__,$AssertionError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $LookupError$__init__($LookupError self, $str error_message) {
   self->error_message = error_message;
@@ -104,7 +104,7 @@ $LookupError $LookupError$__deserialize__($Serial$state state) {
   return $NEW($LookupError,($str)$step_deserialize(state));
 };
 
-struct $LookupError$class $LookupError$methods = {"",($Super$class)&$Exception$methods,$LookupError$__init__,$LookupError$__serialize__,$LookupError$__deserialize__};
+struct $LookupError$class $LookupError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$LookupError$__init__,$LookupError$__serialize__,$LookupError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $IndexError$__init__($IndexError self, $str error_message) {
   self->error_message = error_message;
@@ -122,7 +122,7 @@ $IndexError $IndexError$__deserialize__($Serial$state state) {
   return $NEW($IndexError,($str)$step_deserialize(state));
 };
 
-struct $IndexError$class $IndexError$methods = {"",($Super$class)&$LookupError$methods,$IndexError$__init__,$IndexError$__serialize__,$IndexError$__deserialize__};
+struct $IndexError$class $IndexError$methods = {"",UNASSIGNED,($Super$class)&$LookupError$methods,$IndexError$__init__,$IndexError$__serialize__,$IndexError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $KeyError$__init__($KeyError self, $str error_message) {
   self->error_message = error_message;
@@ -140,7 +140,7 @@ $KeyError $KeyError$__deserialize__($Serial$state state) {
   return $NEW($KeyError,($str)$step_deserialize(state));
 };
 
-struct $KeyError$class $KeyError$methods = {"",($Super$class)&$LookupError$methods,$KeyError$__init__,$KeyError$__serialize__,$KeyError$__deserialize__};
+struct $KeyError$class $KeyError$methods = {"",UNASSIGNED,($Super$class)&$LookupError$methods,$KeyError$__init__,$KeyError$__serialize__,$KeyError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $MemoryError$__init__($MemoryError self, $str error_message) {
   self->error_message = error_message;
@@ -158,7 +158,7 @@ $MemoryError $MemoryError$__deserialize__($Serial$state state) {
   return $NEW($MemoryError,($str)$step_deserialize(state));
 };
 
-struct $MemoryError$class $MemoryError$methods = {"",($Super$class)&$Exception$methods,$MemoryError$__init__,$MemoryError$__serialize__,$MemoryError$__deserialize__};
+struct $MemoryError$class $MemoryError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$MemoryError$__init__,$MemoryError$__serialize__,$MemoryError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $OSError$__init__($OSError self, $str error_message) {
   self->error_message = error_message;
@@ -176,7 +176,7 @@ $OSError $OSError$__deserialize__($Serial$state state) {
   return $NEW($OSError,($str)$step_deserialize(state));
 };
 
-struct $OSError$class $OSError$methods = {"",($Super$class)&$Exception$methods,$OSError$__init__,$OSError$__serialize__,$OSError$__deserialize__};
+struct $OSError$class $OSError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$OSError$__init__,$OSError$__serialize__,$OSError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $RuntimeError$__init__($RuntimeError self, $str error_message) {
   self->error_message = error_message;
@@ -194,7 +194,7 @@ $RuntimeError $RuntimeError$__deserialize__($Serial$state state) {
   return $NEW($RuntimeError,($str)$step_deserialize(state));
 };
 
-struct $RuntimeError$class $RuntimeError$methods = {"",($Super$class)&$Exception$methods,$RuntimeError$__init__,$RuntimeError$__serialize__,$RuntimeError$__deserialize__};
+struct $RuntimeError$class $RuntimeError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$RuntimeError$__init__,$RuntimeError$__serialize__,$RuntimeError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $NotImplementedError$__init__($NotImplementedError self, $str error_message) {
   self->error_message = error_message;
@@ -212,7 +212,7 @@ $NotImplementedError $NotImplementedError$__deserialize__($Serial$state state) {
   return $NEW($NotImplementedError,($str)$step_deserialize(state));
 };
 
-struct $NotImplementedError$class $NotImplementedError$methods = {"",($Super$class)&$RuntimeError$methods,$NotImplementedError$__init__,$NotImplementedError$__serialize__,$NotImplementedError$__deserialize__};
+struct $NotImplementedError$class $NotImplementedError$methods = {"",UNASSIGNED,($Super$class)&$RuntimeError$methods,$NotImplementedError$__init__,$NotImplementedError$__serialize__,$NotImplementedError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
 void $ValueError$__init__($ValueError self, $str error_message) {
   self->error_message = error_message;
@@ -230,5 +230,5 @@ $ValueError $ValueError$__deserialize__($Serial$state state) {
   return $NEW($ValueError,($str)$step_deserialize(state));
 };
 
-struct $ValueError$class $ValueError$methods = {"",($Super$class)&$Exception$methods,$ValueError$__init__,$ValueError$__serialize__,$ValueError$__deserialize__};
+struct $ValueError$class $ValueError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$ValueError$__init__,$ValueError$__serialize__,$ValueError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////

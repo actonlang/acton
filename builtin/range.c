@@ -64,10 +64,10 @@ $Iterator$range $Iterator$range$_deserialize($Serial$state state) {
 }
 
 
-struct $range$class $range$methods = {"",NULL,$range$__init__,$range$__serialize__,$range$__deserialize__};
+struct $range$class $range$methods = {"",UNASSIGNED,NULL,$range$__init__,$range$__serialize__,$range$__deserialize__};
 
 
-struct $Iterator$range$class $Iterator$range$methods = {"",($Super$class)&$Iterator$methods, $Iterator$range_init,
+struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$range_init,
                                                       $Iterator$range_serialize, $Iterator$range$_deserialize, $Iterator$range_next};
 
 //$Iterator $range_iter($range rng) {
@@ -82,7 +82,7 @@ $Iterator $Iterable$range$__iter__ ($Iterable$range wit, $range rng) {
   return ($Iterator)$NEW($Iterator$range,rng);
 }
 
-struct $Iterable$range$class $Iterable$range$methods = {"",NULL,$Iterable$range$__init__,$Iterable$range$__iter__};
+struct $Iterable$range$class $Iterable$range$methods = {"",UNASSIGNED,NULL,$Iterable$range$__init__,$Iterable$range$__iter__};
 
 struct $Iterable$range $Iterable$range_instance = {&$Iterable$range$methods};
 $Iterable$range $Iterable$range$witness = &$Iterable$range_instance;

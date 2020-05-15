@@ -58,6 +58,7 @@ typedef struct $R $R;
 
 struct $Msg$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
     void (*__serialize__)($Msg, $Serial$state);
@@ -76,6 +77,7 @@ struct $Msg {
 
 struct $Actor$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
@@ -91,6 +93,7 @@ struct $Actor {
 
 struct $Catcher$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Catcher, $Cont);
     void (*__serialize__)($Catcher, $Serial$state);
@@ -104,6 +107,7 @@ struct $Catcher {
 
 struct $Clos$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Clos);
     void (*__serialize__)($Clos, $Serial$state);
@@ -116,6 +120,7 @@ struct $Clos {
 
 struct $Cont$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Cont);
     void (*__serialize__)($Cont, $Serial$state);
@@ -131,6 +136,7 @@ struct $Cont {
 
 struct $RetNew$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($RetNew, $Cont, $Actor);
     void (*__serialize__)($RetNew, $Serial$state);

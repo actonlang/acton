@@ -9,6 +9,7 @@ struct $str {
 
 struct $str$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($str, char*);
   void (*__serialize__)($str,$Serial$state);
@@ -83,6 +84,7 @@ typedef struct $Iterator$str *$Iterator$str; ;
 
 struct $Iterator$str$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$str, $str);
   void (*__serialize__)($Iterator$str,$Serial$state);

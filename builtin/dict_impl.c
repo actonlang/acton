@@ -23,7 +23,7 @@ struct $table_struct {
                        // after this follows tb_entries array;
 };
 
-struct $dict$class $dict$methods = {"", NULL, $dict_init, $dict_serialize,$dict_deserialize}; 
+struct $dict$class $dict$methods = {"", UNASSIGNED,NULL, $dict_init, $dict_serialize,$dict_deserialize}; 
 
 
 #define DKIX_EMPTY (-1)
@@ -297,7 +297,7 @@ $Iterator$dict $Iterator$dict$_deserialize($Serial$state state) {
 }
 
 
-struct $Iterator$dict$class $Iterator$dict$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict_init,
+struct $Iterator$dict$class $Iterator$dict$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
                                                       $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_next};
 
 $Iterator $dict_iter($dict dict) {
@@ -409,7 +409,7 @@ $Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
 
 
 
-struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
+struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
                                                       $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_next};
 
 // items iterator
@@ -452,7 +452,7 @@ $Iterator$dict$items $Iterator$dict$items_deserialize($Serial$state state) {
 
 
 
-struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
+struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
                                                       $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize, $Iterator$dict$items_next};
 
 

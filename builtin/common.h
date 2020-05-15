@@ -63,6 +63,7 @@ typedef struct $Super *$Super;
 
 struct $Super$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
 };
 

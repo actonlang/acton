@@ -2,6 +2,7 @@
 
 struct $Iterator$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator);
   void (*__serialize__)($Iterator,$Serial$state);

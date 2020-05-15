@@ -1,5 +1,6 @@
 struct $range$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($range, $int, $int, $int);
   void (*__serialize__)($range,$Serial$state);
@@ -31,6 +32,7 @@ typedef struct $Iterator$range *$Iterator$range;
 
 struct $Iterator$range$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$range, $range);
   void (*__serialize__)($Iterator$range,$Serial$state);

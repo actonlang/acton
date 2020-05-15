@@ -6,7 +6,7 @@ $list $list_deserialize( $Serial$state state);
 // List methods ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct $list$class $list$methods = {"",NULL, $list_init, $list_serialize,$list_deserialize,$list_copy};
+struct $list$class $list$methods = {"",UNASSIGNED,NULL, $list_init, $list_serialize,$list_deserialize,$list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +58,7 @@ static void expand($list lst,int n) {
    lst->capacity = newcapacity;
 }  
 
-$list list_new(int capacity) {
+$list $list_new(int capacity) {
   if (capacity < 0) {
     exception e;
     MKEXCEPTION(e,VALUEERROR);
@@ -92,7 +92,7 @@ $list $list_add($list lst, $list other) {
   int lstlen = lst->length;
   int otherlen = other->length;
   int reslen = lstlen + otherlen;
-  $list res = list_new(reslen);
+  $list res = $list_new(reslen);
   memcpy(res->data,lst->data,lstlen*sizeof($WORD));
   memcpy(res->data+lstlen,other->data,otherlen*sizeof($WORD));
   res->length = reslen;
@@ -103,7 +103,7 @@ $list $list_add($list lst, $list other) {
 
 
 $list $list_fromiter($Iterator iter) {
-  $list res = list_new(0);
+  $list res = $list_new(0);
   if (iter==NULL) {
     return res;
   }
@@ -157,7 +157,7 @@ $Iterator$list $Iterator$list$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$list$class $Iterator$list$methods = {"",($Super$class)&$Iterator$methods, $Iterator$list_init,
+struct $Iterator$list$class $Iterator$list$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
                                                       $Iterator$list_serialize, $Iterator$list$_deserialize, $Iterator$list_next};
 
 $Iterator $list_iter($list lst) {
@@ -211,7 +211,7 @@ $list $list_getslice($list lst, $Slice slc) {
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   //slice notation have been eliminated and default values applied.
   // slen now is the length of the slice
-  $list rlst = list_new(slen);
+  $list rlst = $list_new(slen);
   int t = start;
   for (int i=0; i<slen; i++) {
     $WORD w;
@@ -224,7 +224,7 @@ $list $list_getslice($list lst, $Slice slc) {
 
 void $list_setslice($list lst, $Slice slc, $Iterator it) {
   int len = lst->length;
-  $list other = list_new(0);
+  $list other = $list_new(0);
   $WORD w;
   while((w=it->$class->__next__(it)))
     $list_append(other,w);
@@ -312,7 +312,7 @@ void $list_reverse($list lst) {
 
 $list $list_copy($list lst) {
   int len = lst->length;
-  $list res = list_new(len);
+  $list res = $list_new(len);
   res->length = len;
   memcpy(res->data,lst->data,len*sizeof($WORD));
   return res;
@@ -365,11 +365,11 @@ $list $list_deserialize($Serial$state state) {
   if (this->class_id < 0) {
     return ($list)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    $list res = list_new((int)(long)this->blob[0]);
+    $list res = $list_new((int)(long)this->blob[0]);
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
-      res->data[i] = $get_methods(abs((state->row)->class_id))->__deserialize__(state);
+      res->data[i] = $step_deserialize(state);
     return res;
   }
 }

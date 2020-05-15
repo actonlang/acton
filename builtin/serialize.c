@@ -17,43 +17,6 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
   header->last = elem;
 }
 
-/*
-// Internal auxiliary types /////////////////////////////////////////////////////////////////////////////
-
-typedef struct $PREFIX  *$PREFIX;
-
-struct $PREFIX {
-  int prefix_size;
-  $WORD prefix[];
-};
-
-
-// $Hashable$PREFIX 
-
-$bool $Hashable$PREFIX_eq($Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
-  if (a->prefix_size != b->prefix_size)
-    return $false;
-  for (int i=0; i< a->prefix_size; i++)
-    if (a->prefix[i] != b->prefix[i])
-      return $false;
-  return $true;
-}
-
-$bool $Hashable$PREFIX_ne($Hashable$PREFIX wit, $PREFIX a, $PREFIX b) {
-  return to$bool( !from$bool($Hashable$PREFIX_eq(wit,a,b)));
-}
-
-$int $Hashable$PREFIX_hash($Hashable$PREFIX wit, $PREFIX a) {
-  return to$int($PREFIX_hash(a));
-}
-
-
-struct $Hashable$PREFIX$class $Hashable$PREFIX$methods = {"", (void (*)($Hashable$PREFIX))$default__init__, $Hashable$PREFIX_eq,$Hashable$PREFIX_ne,$Hashable$PREFIX_hash};
-struct $Hashable$PREFIX $Hashable$PREFIX_instance = {&$Hashable$PREFIX$methods};
-struct $Hashable$PREFIX *$Hashable$PREFIX$witness = &$Hashable$PREFIX_instance;
-*/
-
-
 
 $bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
@@ -67,7 +30,7 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int(pointer_hash(a));
 }
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {"",NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD$class $Hashable$WORD$methods = {"",UNASSIGNED,NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
@@ -83,13 +46,13 @@ $Serializable $Null__deserialize__( $Serial$state state) {
   return NULL;
 }
 
-struct $Serializable$methods $Null$methods = {"",NULL,(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
+struct $Serializable$methods $Null$methods = {"",UNASSIGNED,NULL,(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
 void $step_serialize($WORD self, $Serial$state state) {
   if (self) {
-    int class_id = $get_classid((($Serializable)self)->$class);
+    int class_id = $GET_CLASSID((($Serializable)self)->$class);
     if (class_id > 10) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
       $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
       if (prevkey) {
@@ -113,9 +76,9 @@ $Serializable $step_deserialize($Serial$state state) {
     if (this->class_id < 0) 
       return ($Serializable)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
     else 
-      return $get_methods(this->class_id)->__deserialize__(state);
+      return $GET_METHODS(this->class_id)->__deserialize__(state);
   } else
-    return $get_methods(abs(state->row->class_id))->__deserialize__(state);
+    return $GET_METHODS(abs(state->row->class_id))->__deserialize__(state);
 }
 
 
@@ -145,7 +108,7 @@ void $write_serialized($ROW row, char *file) {
   int chunk_size;
   char *start;
   while(row) {
-    chunk_size = 2*sizeof(int) + sizeof($WORD);
+    chunk_size = 2*sizeof(int);// + sizeof($WORD);
     start = (char*)row;
     if (p+chunk_size > bufend) {
       int fits = bufend - p;
@@ -213,8 +176,8 @@ $ROW $read_serialized(char *file) {
   header.last = NULL;
   bufend = buf + fread(buf,1,sizeof(buf),fileptr);
   while(p < bufend || !feof(fileptr)) {
-    int init[4];
-    chunk_size = 4*sizeof(int); //really two int's and a $WORD!!
+    int init[2];//4
+    chunk_size = 2*sizeof(int); //4 //really two int's and a $WORD!!
     start = (char*)init;
     if (p + chunk_size > bufend) {
       int fits = bufend - p;
@@ -226,8 +189,8 @@ $ROW $read_serialized(char *file) {
     }
     memcpy(start,p,chunk_size);
     p+=chunk_size;
-    $ROW row = malloc(2*sizeof(int) + (init[1]+2) * sizeof($WORD));
-    memcpy(row,init,4*sizeof(int));
+    $ROW row = malloc(2*sizeof(int) + (init[1]+1) * sizeof($WORD));//+2
+    memcpy(row,init,2*sizeof(int));//4
     row->next = NULL;
     chunk_size =  (init[1]) * sizeof($WORD);
     start = (char*)row->blob;
@@ -254,7 +217,7 @@ $Serializable $deserialize_file(char *file) {
 $ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob) {
   $ROW res = malloc(2 * sizeof(int) + (2+blob_size)*sizeof($WORD));
   res->class_id = class_id;
-  res->row_no = (*start_no)++;
+  (*start_no)++;
   res->blob_size = blob_size;
   res->next = NULL;
   if (blob)

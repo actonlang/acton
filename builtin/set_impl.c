@@ -15,7 +15,7 @@ void $set_init($set set, $Hashable hashwit, $Iterable$opaque it);
 
 
 // Maybe we should  offer union, intersection and symmetric difference under those names.
-struct $set$class $set$methods = {"",NULL,$set_init,$set_serialize,$set_deserialize,$set_copy}; 
+struct $set$class $set$methods = {"",UNASSIGNED,NULL,$set_init,$set_serialize,$set_deserialize,$set_copy}; 
 
 
 #define PERTURB_SHIFT 5
@@ -442,7 +442,7 @@ $Iterator$set $Iterator$set$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$set$class $Iterator$set$methods = {"",($Super$class)&$Iterator$methods, $Iterator$set_init,
+struct $Iterator$set$class $Iterator$set$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,
                                                       $Iterator$set_serialize, $Iterator$set$_deserialize, $Iterator$set_next};
 
 

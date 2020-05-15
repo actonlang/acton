@@ -1,5 +1,5 @@
 
-$list list_init($list lst, $Iterable$opaque it);
+void $list_init($list lst, $Iterable$opaque it);
 
 $list $list_copy($list lst);
 
@@ -26,3 +26,4 @@ $Iterator $list_reversed($list lst);
 void $list_insert($list lst, int ix, $WORD val);
 void $list_reverse($list lst);
 
+$list $list_new(int capacity);

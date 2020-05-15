@@ -1,5 +1,6 @@
 struct $dict$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void(*__init__)($dict, $Hashable, $Iterable$opaque);
   void (*__serialize__)($dict,$Serial$state);
@@ -27,6 +28,7 @@ typedef struct $Iterator$dict *$Iterator$dict;
 
 struct $Iterator$dict$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict, $dict);
   void (*__serialize__)($Iterator$dict,$Serial$state);
@@ -48,6 +50,7 @@ typedef struct $Iterator$dict$values *$Iterator$dict$values;
 
 struct $Iterator$dict$values$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$values, $dict);
   void (*__serialize__)($Iterator$dict$values,$Serial$state);
@@ -69,6 +72,7 @@ typedef struct $Iterator$dict$items *$Iterator$dict$items;
 
 struct $Iterator$dict$items$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$items, $dict);
   void (*__serialize__)($Iterator$dict$items,$Serial$state);

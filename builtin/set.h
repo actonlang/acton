@@ -1,5 +1,6 @@
 struct $set$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($set, $Hashable, $Iterable$opaque);
   void (*__serialize__)($set, $Serial$state);
@@ -37,6 +38,7 @@ typedef struct $Iterator$set *$Iterator$set; ;
 
 struct $Iterator$set$class {
   char *$GCINFO;
+  int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$set, $set);
   void (*__serialize__)($Iterator$set, $Serial$state);

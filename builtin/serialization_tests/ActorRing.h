@@ -18,6 +18,7 @@ typedef struct Root *Root;
 
 struct lambda$1$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$1, $Cont);
     void (*__serialize__)(lambda$1, $Serial$state);
@@ -31,6 +32,7 @@ struct lambda$1 {
 
 struct lambda$2$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$2, Act, $int, $list);
     void (*__serialize__)(lambda$2, $Serial$state);
@@ -46,6 +48,7 @@ struct lambda$2 {
 
 struct Act$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Act, $int, $Cont);
     void (*__serialize__)(Act, $Serial$state);
@@ -66,6 +69,7 @@ struct Act {
 
 struct lambda$3$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$3, Root, $Iterator, $Cont);
     void (*__serialize__)(lambda$3, $Serial$state);
@@ -81,6 +85,7 @@ struct lambda$3 {
 
 struct lambda$4$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$4, $Cont);
     void (*__serialize__)(lambda$4, $Serial$state);
@@ -94,6 +99,7 @@ struct lambda$4 {
 
 struct Root$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Root, $int, $Cont);
     void (*__serialize__)(Root, $Serial$state);
