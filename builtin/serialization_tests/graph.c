@@ -18,7 +18,7 @@ $Node $Node__deserialize__($Serial$state state) {
   return res;                                        
 }
 
-struct $Node$class $Node$methods = {"",NULL,$Node__init__,$Node__serialize__,$Node__deserialize__};
+struct $Node$class $Node$methods = {"",UNASSIGNED,NULL,$Node__init__,$Node__serialize__,$Node__deserialize__};
 
 // IntNodes (graph vertices) ////////////////////////////////////////////////////////////////////////////
  
@@ -39,7 +39,7 @@ $IntNode $IntNode__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $IntNode$class $IntNode$methods = {"",NULL,$IntNode__init__,$IntNode__serialize__,$IntNode__deserialize__};
+struct $IntNode$class $IntNode$methods = {"",UNASSIGNED,NULL,$IntNode__init__,$IntNode__serialize__,$IntNode__deserialize__};
 
 
 // FloatNodes (graph vertices) ////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ $FloatNode $FloatNode__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $FloatNode$class $FloatNode$methods = {"",NULL,$FloatNode__init__,$FloatNode__serialize__,$FloatNode__deserialize__};
+struct $FloatNode$class $FloatNode$methods = {"",UNASSIGNED,NULL,$FloatNode__init__,$FloatNode__serialize__,$FloatNode__deserialize__};
 
 
 // Graphs ////////////////////////////////////////////////////////////////////////////
@@ -82,11 +82,11 @@ $Graph $Graph__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $Graph$class $Graph$methods = {"",NULL,$Graph__init__,$Graph__serialize__,$Graph__deserialize__};
+struct $Graph$class $Graph$methods = {"",UNASSIGNED,NULL,$Graph__init__,$Graph__serialize__,$Graph__deserialize__};
 
 void $register_graph(){
-  $register(($Serializable$methods)&$Node$methods);
-  $register(($Serializable$methods)&$IntNode$methods);
-  $register(($Serializable$methods)&$FloatNode$methods);
-  $register(($Serializable$methods)&$Graph$methods);
+  $register(&$Node$methods);
+  $register(&$IntNode$methods);
+  $register(&$FloatNode$methods);
+  $register(&$Graph$methods);
 }

@@ -4,8 +4,8 @@ all:
 	gcc ../builtin.o str_serialize_test.c -o str_serialize_test -lutf8proc
 	gcc ../builtin.o set_serialize_test.c -o set_serialize_test -lutf8proc
 	gcc ../builtin.o multi_serialization_test.c -o multi_serialization_test -lutf8proc
-#	gcc -c graph.c
-#	gcc ../builtin.o graph.o graph_serialize_test.c -o graph_serialize_test -lutf8proc
+	gcc -c graph.c
+	gcc ../builtin.o graph.o graph_serialize_test.c -o graph_serialize_test -lutf8proc
 
 ActorRing: ActorRing.c ActorRing.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
@@ -26,4 +26,4 @@ runtests:
 	./str_serialize_test
 	./set_serialize_test
 	./multi_serialization_test
-#	./graph_serialize_test
+	./graph_serialize_test

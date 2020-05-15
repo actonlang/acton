@@ -8,6 +8,7 @@ typedef struct $Node *$Node;
 
 struct $Node$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Node, $list);
     void (*__serialize__)($Node, $Serial$state);
@@ -29,6 +30,7 @@ typedef struct $IntNode *$IntNode;
 
 struct $IntNode$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($IntNode, $list, $int);
     void (*__serialize__)($IntNode, $Serial$state);
@@ -51,6 +53,7 @@ typedef struct $FloatNode *$FloatNode;
 
 struct $FloatNode$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($FloatNode, $list, $float);
     void (*__serialize__)($FloatNode,$Serial$state);
@@ -71,6 +74,7 @@ typedef struct $Graph *$Graph;
 
 struct $Graph$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void (*__init__)($Graph, $list);
     void (*__serialize__)($Graph, $Serial$state);
