@@ -43,13 +43,12 @@ void $dict_serialize($dict self,$Serial$state state) {
   }
   $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
   int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
-  $ROW row = $new_row(DICT_ID,&state->row_no,blobsize,NULL);
+  $ROW row = $add_header(DICT_ID,blobsize,state);
   row->blob[0] = ($WORD)self->numelements;
   row->blob[1] = ($WORD)self->table->tb_size;
   row->blob[2] = ($WORD)self->table->tb_usable;
   row->blob[3] = ($WORD)self->table->tb_nentries;
   memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
-  $enqueue(state,row);
   for (int i=0; i<self->table->tb_nentries; i++) {
     $entry_t entry = &TB_ENTRIES(self->table)[i];
     $step_serialize(to$int(entry->hash),state);

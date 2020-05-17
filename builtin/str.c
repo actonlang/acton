@@ -651,13 +651,12 @@ void $str_init($str self, char *str) {
 
 void $str_serialize($str str,$Serial$state state) {
   int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
-  $ROW row = $new_row(STR_ID,&state->row_no,2+nWords,NULL);
+  $ROW row = $add_header(STR_ID,2+nWords,state);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
   memcpy(row->blob,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
   long nchars = (long)str->nchars;
   memcpy(row->blob+1,&nchars,sizeof($WORD));
   memcpy(row->blob+2,str->str,nbytes+1);
-  $enqueue(state,row);
 }
 
 $str $str_deserialize($Serial$state state) {
