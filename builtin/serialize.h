@@ -80,16 +80,12 @@ struct $Serializable {
 // small-step helpers for defining serializations //////////////////////////////////////////////////
 
 void $step_serialize($WORD self, $Serial$state state);
-$Serializable $step_deserialize($Serial$state state);
+$WORD $step_deserialize($Serial$state state);
 
 void $val_serialize(int class_id, $WORD val, $Serial$state state);
 $WORD $val_deserialize($Serial$state state);
 
-// the next two functions are mainly used in serialization of builtin types
-
-void $enqueue($Serial$state state, $ROW elem);
-$ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob);
-
+$ROW $add_header(int class_id, int blob_size, $Serial$state state);
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 

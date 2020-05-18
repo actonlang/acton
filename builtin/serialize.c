@@ -16,7 +16,8 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
     header->fst = elem;
   header->last = elem;
 }
-
+ 
+// Hashable$WORD methods //////////////////////////////////////////////////
 
 $bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
@@ -37,7 +38,7 @@ struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 // Null methods for serialization of NULL ///////////////////////////////////////
 
 void $Null__serialize__($Serializable self, $Serial$state state) {
-  $enqueue(state,$new_row(NULL_ID,&state->row_no,0,NULL));
+  $add_header(NULL_ID,0,state);
 }
 
 $Serializable $Null__deserialize__( $Serial$state state) {
@@ -50,6 +51,16 @@ struct $Serializable$methods $Null$methods = {"",UNASSIGNED,NULL,(void (*)($Seri
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
+$ROW $add_header(int class_id, int blob_size, $Serial$state state) {
+  $ROW res = malloc(2 * sizeof(int) + (2+blob_size)*sizeof($WORD));
+  res->class_id = class_id;
+  state->row_no++;
+  res->blob_size = blob_size;
+  res->next = NULL;
+  $enqueue(state,res);
+  return res;
+}
+
 void $step_serialize($WORD self, $Serial$state state) {
   if (self) {
     int class_id = $GET_CLASSID((($Serializable)self)->$class);
@@ -59,22 +70,22 @@ void $step_serialize($WORD self, $Serial$state state) {
         $val_serialize(-class_id,&prevkey->val,state);
       } else {
         $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
-        $enqueue(state,$new_row(class_id,&state->row_no,0,NULL));
+        $add_header(class_id,0,state);
         (($Serializable)self)->$class->__serialize__(self,state);
       }
     } else 
        (($Serializable)self)->$class->__serialize__(self,state);
   } else
-      $enqueue(state,$new_row(NULL_ID,&state->row_no,0,NULL));
+    $add_header(NULL_ID,0,state);
 }
 
-$Serializable $step_deserialize($Serial$state state) {
+$WORD $step_deserialize($Serial$state state) {
   if (abs(state->row->class_id) > 10) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) 
-      return ($Serializable)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
+      return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
     else 
       return $GET_METHODS(this->class_id)->__deserialize__(state);
   } else
@@ -83,10 +94,9 @@ $Serializable $step_deserialize($Serial$state state) {
 
 
 
-void $val_serialize(int class_id, $WORD val,$Serial$state state) { 
-  $ROW row = $new_row(class_id,&state->row_no,1,NULL);
+void $val_serialize(int class_id, $WORD val,$Serial$state state) {
+  $ROW row = $add_header(class_id,1,state);
   memcpy(row->blob,val,sizeof($WORD));
-  $enqueue(state,row);
 }
 
 $WORD $val_deserialize($Serial$state state) {
@@ -108,7 +118,7 @@ void $write_serialized($ROW row, char *file) {
   int chunk_size;
   char *start;
   while(row) {
-    chunk_size = 2*sizeof(int);// + sizeof($WORD);
+    chunk_size = 2*sizeof(int);
     start = (char*)row;
     if (p+chunk_size > bufend) {
       int fits = bufend - p;
@@ -177,7 +187,7 @@ $ROW $read_serialized(char *file) {
   bufend = buf + fread(buf,1,sizeof(buf),fileptr);
   while(p < bufend || !feof(fileptr)) {
     int init[2];//4
-    chunk_size = 2*sizeof(int); //4 //really two int's and a $WORD!!
+    chunk_size = 2*sizeof(int); 
     start = (char*)init;
     if (p + chunk_size > bufend) {
       int fits = bufend - p;
@@ -189,7 +199,7 @@ $ROW $read_serialized(char *file) {
     }
     memcpy(start,p,chunk_size);
     p+=chunk_size;
-    $ROW row = malloc(2*sizeof(int) + (init[1]+1) * sizeof($WORD));//+2
+    $ROW row = malloc(2*sizeof(int) + (init[1]+1) * sizeof($WORD));
     memcpy(row,init,2*sizeof(int));//4
     row->next = NULL;
     chunk_size =  (init[1]) * sizeof($WORD);
@@ -213,17 +223,6 @@ $Serializable $deserialize_file(char *file) {
   return $deserialize($read_serialized(file));
 }
 
-
-$ROW $new_row(int class_id, long *start_no, int blob_size, $WORD *blob) {
-  $ROW res = malloc(2 * sizeof(int) + (2+blob_size)*sizeof($WORD));
-  res->class_id = class_id;
-  (*start_no)++;
-  res->blob_size = blob_size;
-  res->next = NULL;
-  if (blob)
-    memcpy(res->blob,blob,blob_size*sizeof($WORD));
-  return res;
-}
 
 void $default__init__($Initializable s) {
   return;
