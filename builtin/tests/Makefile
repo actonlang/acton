@@ -32,7 +32,7 @@ Pingpong2: ../../rts/rts.c Pingpong.c Pingpong.h
 
 clean:
 	rm -f *.o
-	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test iterator_test range_test Pingpong
+	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test iterator_test range_test Pingpong Pingpong2
 
 runtests:
 	./slice_test

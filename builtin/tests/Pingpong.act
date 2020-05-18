@@ -13,7 +13,7 @@ actor Pingpong(i):
 
 ######################################  Type inference:
 
-actor Pingpong(i : int) -> None:
+actor Pingpong(i : int):
     var count : int = 0
     def ping() -> None:
         count = count + 1
@@ -28,7 +28,7 @@ actor Pingpong(i : int) -> None:
 
 ######################################  Witness translation:
 
-actor Pingpong(i : int) -> None:
+actor Pingpong(i : int):
     var count : int = to$int(0)
     def ping() -> None:
         count = Plus$int$witness.__add__(count, to$int(1))
