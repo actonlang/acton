@@ -62,27 +62,44 @@ class Msg[A] ():
 ## General protocols ###############################################################################
 
 class Eq[S] ():
+  def __init__($wself):
+      pass
   __eq__       : (S,S) -> bool
   __ne__       : (S,S) -> bool            # has default defn
 
 class Ord[S] (Eq[S]):
+  def __init__($wself):
+      Eq.__init__($wself)
+
   __lt__       : (S,S) -> bool
   __le__       : (S,S) -> bool
   __gt__       : (S,S) -> bool            # has default defn
   __ge__       : (S,S) -> bool            # has default defn
       
 class Logical[S] ():
+  def __init__($wself):
+      pass
+
   __and__     : (S,S) -> S
   __or__      : (S,S) -> S
   __xor__     : (S,S) -> S
 
 class Plus[S] ():
+  def __init__($wself):
+      pass
+
   __add__      : (S,S) -> S
 
 class Minus[S] ():
+  def __init__($wself):
+      pass
+
   __sub__      : (S,S) -> S
 
 class Hashable[S] (Eq[S]):
+  def __init__($wself):
+      pass
+
   __hash__     : (S) -> int
 
 class dict[A,B] ():                     # Note: A(Hashable) removed here
@@ -92,17 +109,22 @@ class set[A] ():                        # Note: A(Hashable) removed here
   pass
 
 class Boolean[S] ():
+  def __init__($wself):
+      pass
+
   __bool__   : (S) -> bool
 
 class Boolean$int (Boolean[int]):
   def __init__($wself):
-      pass
+      Boolean.__init__($wself)
+
   def __bool__($wself, self):
     return Eq$int$witness.__ne__(self,0)
 
 class Boolean$list[A] (Boolean[list[A]]):
   def __init__($wself):
-      pass
+      Boolean.__init__($wself)
+
   def __bool__($wself, self):
     return Ord$int$witness.__gt__(Collection$list$witness.__len__(self,0))
 
@@ -110,19 +132,26 @@ class Boolean$list[A] (Boolean[list[A]]):
 ## Collection protocols ############################################################################
 
 class Indexed[S,A,B] ():
-  @property
-  w$Eq_A       : Eq[A]
+  w$Eq$A       : Eq[A]
+  def __init__($wself, w$Eq$A : Eq[A]):
+      $wself.w$Eq$A = w$Eq$A
   
   __getitem__  : (S,A) -> B
   __setitem__  : (S,A,B) -> None 
   __delitem__  : (S,A) -> None
   
 class Sliceable[S,A] (Indexed[S,int,A]):
+  def __init__($wself):
+      Indexed.__init__($wself, Eq$int())
+
   __getslice__ : (S,Slice) -> S
   __setslice__ : (S,Slice,Iterable$opaque[A]) -> None
   __delslice__ : (S,Slice) -> None
   
 class Iterable[S,A] ():
+  def __init__($wself):
+      pass
+
   __iter__     : (S) -> Iterator[A]
 
 class Iterable$opaque[A] ():            # Exists S:
@@ -130,11 +159,17 @@ class Iterable$opaque[A] ():            # Exists S:
     impl       : S
 
 class Collection[S,A] (Iterable[S,A]):
+  def __init__($wself):
+      Iterable.__init__($wself)
+
   __fromiter__ : (Iterable$opaque[A]) -> S
   __len__      : (S) -> int
   
 class Container[S,A]] (Collection[S,A]):
-  w$Eq_A          : Eq[A]
+  w$Eq$A          : Eq[A]
+  def __init__($wself, w$Eq$A : Eq[A]):
+      Colleaction.__init__($wself)
+      $wself.w$Eq$A = w$Eq$A
   
   __contains__    : (S,A) -> bool  
   __containsnot__ : (S,A) -> bool
@@ -149,23 +184,17 @@ class Container[S,A]] (Collection[S,A]):
 #   Sequence <-------- <--------------
 
 class Sequence[S,A] (Sliceable[S,A]):
-  @property
-  w$Collection_Sequence : Collection[S,A]
-  @property
-  w$Plus_Sequence       : Plus[S]:
+  w$Collection$Sequence : Collection[S,A]
+  w$Plus$Sequence       : Plus[S]:
+  def __init__($wself, w$Collection$Sequence : Collection[S,A], w$Plus$Sequence : Plus[S]):
+      Sliceable.__init__($wself)
+      $wself.w$Collection$Sequence = w$Collection$Sequence
+      $wself.w$Plus$Sequence = w$Plus$Sequence
   
   __reversed__ : (S) -> Iterator[A] 
   insert      : (S,int,A) -> None
   append      : (S,A) -> None   
   reverse     : (S,) -> None       
-
-  # Mirroring Collection:
-  __fromiter__ : (Iterable$opaque[A]) -> S
-  __len__      : (S) -> int
-  __iter__     : (S) -> Iterator[A]
-
-  # Mirroring Plus:
-  __add__      : (S,S) -> S
 
 
 #   Iterable
@@ -180,23 +209,18 @@ class Sequence[S,A] (Sliceable[S,A]):
 #   Mapping <---------
 
 class Mapping[S,A,B] (Container[S,A]):
-  @property
-  w$Indexed_Mapping   : Indexed[S,A,B])
-  @property
-  w$Eq_A              : Eq[A]
+  w$Indexed$Mapping   : Indexed[S,A,B])
+  def __init($wself, w$Eq$A : Eq[A], w$Indexed$Mapping : Indexed[S]):
+      Container.__init__($wself, w$Eq$A)
+      $wself.w$Indexed$Mapping = w$Indexed$Mapping
   
   get         : (S,A,B) -> B
   keys        : (S) -> Iterator[A]
-  values      : (S) -> Iterator[B]
+  values      : (S) -> Iterator[Bw$Eq$A]:
   items       : (S) -> Iterator[(A,B)]
   update      : (S,Iterable$opaque[(A,B)]) -> None  
   popitem     : (S) -> (A,B)
   setdefault  : (S,A,B) -> None
-
-  # Mirroring Indexed:
-  __getitem__  : (S,A) -> B
-  __setitem__  : (S,A,B) -> None 
-  __delitem__  : (S,A) -> None
 
 
 #   Iterable
@@ -211,36 +235,20 @@ class Mapping[S,A,B] (Container[S,A]):
 #   Set <------------- <-------------- <--------------
 
 class Set[S,A] (Container[S,A]):
-  @property
-  w$Ord_Set       : Ord[S]
-  @property
-  w$Logical_Set   : Logical[S]
-  @property
-  w$Minus_Set     : Minus[S]
-  @property
-  w$Eq_A          : Eq[A]
+  w$Ord$Set       : Ord[S]
+  w$Logical$Set   : Logical[S]
+  w$Minus$Set     : Minus[S]
+  def __init__($wself, w$Eq$A : Eq[A], w$Ord$Set : Ord[S], w$Logical$Set : Logical[S], w$Minus$Set : Minus[S]):
+      Container.__init__($wself, w$Eq$A)
+      $wself.w$Ord$Set = w$Ord$Set
+      $wself.w$Logical$Set = w$Logical$Set
+      $wself.w$Minus$Set = w$Minus$Set
   
   isdisjoint  : (S,S) -> bool
   add         : (S,A) -> None  
   discard     : (S,A) -> None  
   pop         : (S) -> A 
 
-  # Mirroring Ord:
-  __eq__       : (S,S) -> bool
-  __ne__       : (S,S) -> bool            # has default defn
-  __lt__       : (S,S) -> bool
-  __le__       : (S,S) -> bool
-  __gt__       : (S,S) -> bool            # has default defn
-  __ge__       : (S,S) -> bool            # has default defn
-
-  # Mirroring Logical:
-  __and__     : (S,S) -> S
-  __or__      : (S,S) -> S
-  __xor__     : (S,S) -> S
-
-  # Mirroring Sub:
-  __sub__      : (S,S) -> S
-  
 
 ## Number protocols ################################################################################
 
@@ -259,10 +267,12 @@ class Set[S,A] (Container[S,A]):
 #   Integral <--------
 
 class Complex[S] (Eq[S]):
-  @property
-  w$Plus_Complex   : Plus[S]
-  @property
-  w$Minus_Complex  : Minus[S]
+  w$Plus$Complex   : Plus[S]
+  w$Minus$Complex  : Minus[S]
+  def __init__($wself, w$Plus$Complex : Plus[S], w$Minus$Complex : Minus[S]):
+      Eq.__init__($wself)
+      $wself.w$Plus$Complex = w$Plus$Complex
+      $wself.w$Minus$Complex = w$Minus$Complex
   
   __complex__  : (S) -> complex
   __bool__     : (S) -> bool
@@ -280,19 +290,16 @@ class Complex[S] (Eq[S]):
 
   conjugate    : (S) -> S
 
-  # Mirroring Plus:
-  __add__      : (S,S) -> S
-  
-  # Mirroring Minus:
-  __sub__      : (S,S) -> S
 
 class Complex$opaque ():            # Exists S:
   proto        : Complex[S]
   impl         : S
 
 class Real[S] (Ord[S]):
-  @property
-  w$Complex_Real : Complex[S]  # Eq implemented in both parents!
+  w$Complex$Real : Complex[S]       # Eq implemented in both parents!
+  def __init__($wself, w$Complex$Real : Complex[S]):
+      Ord.__init__($wself)
+      $wself.w$Complex$Real = w$Complex$Real
   
   __float__    : (S) -> float
 
@@ -301,34 +308,23 @@ class Real[S] (Ord[S]):
   __ceil__     : (S) -> Integral$opaque
   __round__    : (S) -> Integral$opaque
 
-  # Mirroring Complex:
-  __complex__  : (S) -> complex
-  __bool__     : (S) -> bool
-  __mul__      : (S,S) -> S
-  __truediv__  : (S,S) -> S
-  __pow__      : (S,S) -> S
-  __neg__      : (S) -> S
-  __pos__      : (S) -> S
-  real         : (S) -> Real$opaque
-  imag         : (S) -> Real$opaque
-  __abs__      : (S) -> Real$opaque
-  conjugate    : (S) -> S
-  __add__      : (S,S) -> S
-  __sub__      : (S,S) -> S
 
 class Real$opaque ():           # Exists S:
-  @property
   proto        : Real[S]
-  @property
   impl         : S
 
 class Rational[S] (Real[S]):
+  def __init__($wself, w$Complex$Real : Complex[S]):
+      Real.__init__($wself, w$Complex$Real)
+
   numerator    : (S) -> Integral$opaque
   denominator  : (S) -> Integral$opaque
 
 class Integral[S] (Rational[S]):
-  @property
-  w$Logical_Integral : Logical[S]
+  w$Logical$Integral : Logical[S]
+  def __init__($wself, w$Complex$Real : Complex[S], w$Logical$Integral : Logical[S]):
+      Rational.__init__($wself, w$Complex$Real)
+      $wself.w$Logical$Integral = w$Logical$Integral
   
   __int__      : (S) -> int
   __index__    : (S) -> int
@@ -342,146 +338,135 @@ class Integral[S] (Rational[S]):
 
   __invert__   : (S) -> S
 
-  # Mirroring Logical:
-  __and__     : (S,S) -> S
-  __or__      : (S,S) -> S
-  __xor__     : (S,S) -> S
 
 class Integral$opaque ():       # Exists S:
-  @property
   proto       : Integral[S]
-  @property
   impl        : S
 
 
 ## Extensions ######################################################################################
 
+class Collection$list (Collection[list[A],A]):
+    w$Sequence$list : Sequence$list[A]
+    def __init__($wself, w$Sequence$list):
+        Collection.__init__($wself)
+        $wself.w$Sequence$list = w$Sequence$list
+class Plus$list (Plus[list[A],A]):
+    w$Sequence$list : Sequence$list[A]
+    def __init__($wself, w$Sequence$list):
+        Plus.__init__($wself)
+        $wself.w$Sequence$list = w$Sequence$list
 class Sequence$list[A] (Sequence[list[A],A]):
-    class Collection$list (Collection[list[A],A]):
-        @property
-        w$Sequence_list : Sequence$list[A]
-        def __init__($wself, w1):
-            $wself.w$Sequence_list = w1
-    class Plus$list (Plus[list[A],A]):
-        @property
-        w$Sequence_list : Sequence$list[A]
-        def __init__($wself, w1):
-            $wself.w$Sequence_list = w1
     def __init__($wself):
-        $wself.w$Eq_A = w$Eq$int
-        $wself.w$Collection_Sequence = Collection$list($wself)
-        $wself.w$Plus_Sequence = Plus$list($wself)
-
-Sequence$list$witness = Sequence$list()
-Collection$list$witness = Sequence$list$witness.w$Collection_Sequence
-Plus$list$witness = Sequence$list$witness.w$Plus_Sequence
+        Sequence.__init__(Collection$list($wself), Plus$list($wself))
 
 class Container$list[A(Eq)] (Container[A]):
-    def __init__($wself, w1 : Eq[A]):
-        $wself.w$Eq_A = w1
+    w$Sequence$list : Sequence[list[A],A]
+    def __init__($wself, w$Eq$A : Eq[A]):
+        Container.__init__($wself, w$Eq$A)
+        $wself.w$Sequence$list = Sequence$list()
 
+class Indexed$dict (Indexed[dict[A,B],A,B]):
+    w$Mapping$dict : Mapping$dict[A,B]
+    def __init__($wself, w$Eq$A : Eq[A], w$Mapping$dict : Mapping$dict[A,B]):
+        Indexed.__init__($wself, w$Eq$A)
+        $wself.w$Mapping_dict = w$Mapping$dict
 class Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):
-    class Indexed$dict (Indexed[dict[A,B],A,B]):
-        @property
-        w$Mapping_dict : Mapping$dict[A,B]
-        def __init__($wself, w1 : Mapping$dict[A,B], w2 : Eq[A]):
-            $wself.w$Mapping_dict = w1
-            $wself.w$Eq_A = w2
-    @property
-    w$Hashable_A : Hashable[A]
-    def __init__($wself, w1 : Hashable[A]):
-        $wself.w$Indexed_Mapping = Indexed$dict($wself, w1)
-        $wself.w$Hashable_A = w1
+    w$Hashable$A : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A]):
+        Mapping.__init__($wself, Indexed$dict($wself,w$Hashable$A))
+        $wself.w$Hashable$A = w$Hashable$A
 
+class Ord$set (Ord[set[A]]):
+    w$Set$set : Set$set[A]
+    def __init__($wself, w$Set$set):
+        Ord.__init__($wself)
+        $wself.w$Set$set = w$Set$set
+class Locical$set (Logical[set[A]]):
+    w$Set$set : Set$set[A]
+    def __init__($wself, w$Set$set):
+        Logical.__init__($wself)
+        $wself.w$Set$set = w$Set$set
+class Minus$set (Minus[set[A]]):
+    w$Set$set : Set$set[A]
+    def __init__($wself, w$Set$set):
+        Minus.__init__($wself)
+        $wself.w$Set$set = w$Set$set
 class Set$set[A] (Set[set[A],A]):
-    class Ord$set (Ord[set[A]]):
-        @property
-        w$Set_set : Set$set[A]
-        def __init__($wself, w1):
-            $wself.w$Set_set = w1
-    class Locical$set (Logical[set[A]]):
-        @property
-        w$Set_set : Set$set[A]
-        def __init__($wself, w1):
-            $wself.w$Set_set = w1
-    class Minus$set (Minus[set[A]]):
-        @property
-        w$Set_set : Set$set[A]
-        def __init__($wself, w1):
-            $wself.w$Set_set = w1
-    @property
-    w$Hashable_A : Hashable[A]
-    def __init__($wself, w1 : Hashable[A]):
-        $wself.w$Ord_Set = Ord$set($wself)
-        $wself.w$Logical_set = Logical$set($wself)
-        $wself.w$Minus_set = Minus$set($wself)
-        $wself.w$Hashable_A = w1
+    w$Hashable$A : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A]):
+        Set.__init__($wself, w$Hashable$A, Ord$set($wself), Logical$set($wself), Minus$set($wself))
+        $wself.w$Hashable$A = w$Hashable$A
 
 class Iterable$Iterator[A] (Iterable[Iterator[A],A]):
     def __init__($wself):
-        pass
+        Iterable.__init__($wself)
 
 class Ord$str (Ord[str]):
     def __init__($wself):
-        pass
+        Ord.__init__($wself)
 
 class Container$str (Container[str,str]):
     def __init__($wself):
-        pass
+        Container.__init__($wself, Eq$str())
 
 class Sliceable$str (Sliceable[str,str]):
     def __init__($wself):
-        $wself.w$Eq_A = w$Eq$int
+        Sliceable.__init__($wself)
 
 class Plus$str (Plus[str]):
     def __init__($wself):
-        pass
+        Plus.__init__($wself)
 
 class Hashable$str (Hashable[str]):
     def __init__($wself):
-        pass
+        Hashable.__init__($wself)
 
+class Logical$int (Logical[int]):
+    w$Integral$int : Integral$int
+    def __init__($wself, w$Integral$int):
+        $wself.w$Integral$int = w$Integral$int
+class Plus$int (Plus[int]):
+    w$Integral$int : Integral$int
+    def __init__($wself, w$Integral$int):
+        $wself.w$Integral$int = w$Integral$int
+class Minus$int (Minus[int]):
+    w$Integral$int : Integral$int
+    def __init__($wself, w$Integral$int):
+        $wself.w$Integral$int = w$Integral$int
+class Complex$int (Complex[int]):
+    w$Integral$int : Integral$int
+    def __init__($wself, w$Integral$int):
+        Complex.__init__($wself, Plus$int($wself), Minus$int($wself))
+        $wself.w$Integral$int = w$Integral$int
 class Integral$int (Integral[int]):
-    class Logical$int (Logical[int]):
-        @property
-        w$Integral_int : Integral$int
-        def __init__($wself, w1):
-            $wself.w$Integral_int = w1
-    class Complex$int (Complex[int]):
-        @property
-        w$Integral_int : Integral$int
-        def __init__($wself, w1):
-            $wself.w$Integral_int = w1
     def __init__($wself):
-        $wself.w$Logical_Integral = Logical$int($wself)
-        $wself.w$Complex_Integral = Complex$int($wself)
-
-##########
-Integral$int$witness = Integral$int()
-Rational$int$witness = Integral$int$witness
-Logical$int$witness = Integral$int$witness.w$Logical_Integral
-Real$int$witness = Rational$int$witness
-Ord$int$witness = Real$int$witness
-Complex$int$witness = Real$int$witness.w$Complex_Real
-Eq$int$witness = Ord$int$witness
-##########
+        Integral.__init__($wself, Complex$int($wself), Logical$int($wself))
 
 class Hashable$int (Hashable[int]):
     def __init__($wself):
-        pass
+        Hashable.__init__($wself)
 
+class Plus$float (Plus[float]):
+    w$Real$float : Real$float
+    def __init__($wself, w$Real$float):
+        $wself.w$Real$float = w$Real$float
+class Minus$float (Minus[float]):
+    w$Real$float : Real$float
+    def __init__($wself, w$Real$float):
+        $wself.w$Real$float = w$Real$float
+class Complex$float (Complex[float]):
+    w$Real$float : Real$float
+    def __init__($wself, w$Real$float):
+        Complex.__init__($wself, Plus$float($wself), Minus$float($wself))
+        $wself.w$Real$float = w$Real$float
 class Real$float (Real[float]):
-    class Complex$float (Complex[float]):
-        @property
-        w$Real_float : Real$float
-        def __init__($wself, w1):
-            $wself.w$Real_float = w1
     def __init__($wself):
-        $wself.w$Complex_Integral = Complex$float($wself)
+        Real.__init__($wself, Complex$float($wself))
 
 class Hashable$float (Hashable[float]):
     def __init__($wself):
-        pass
+        Hashable.__init__($wself)
 
 ## Builtin functions #####################################################
 
