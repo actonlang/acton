@@ -113,10 +113,6 @@ extension list[A] (Boolean):
   def __bool__(self):
     return self.__len__() > 0
 
-#extension Self (Boolean) if Self(Collection):
-#  def __bool__(self):
-#    return self.__len__() > 0
-
 
 ## Collection protocols ############################################################################
 
@@ -142,6 +138,8 @@ protocol Container[A(Eq)] (Collection[A]):
   __contains__    : (A) -> bool  
   __containsnot__ : (A) -> bool
 
+
+
 #   Indexed         Iterable
 #    |               |
 #    |               |
@@ -155,6 +153,8 @@ protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
   insert      : (int,A) -> None
   append      : (A) -> None   
   reverse     : () -> None       
+
+
 
 #   Iterable
 #    |
@@ -176,6 +176,8 @@ protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
   popitem     : () -> (A,B)
   setdefault  : (A,B) -> None
 
+
+
 #   Iterable
 #    |
 #    |
@@ -193,6 +195,7 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
   add         : (A) -> None  
   discard     : (A) -> None  
   pop         : () -> A 
+
 
 ## Number protocols ################################################################################
 
@@ -212,7 +215,6 @@ protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
 
 protocol Complex (Eq,Plus,Minus):
   __complex__  : () -> complex
-  __bool__     : () -> bool
 
   @staticmethod
   __mul__      : (Self,Self) -> Self

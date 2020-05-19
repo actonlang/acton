@@ -342,3 +342,86 @@ ex21d = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]
 ex21e = [("Eq",[]), ("Ord",["Eq"]), ("Container",[]), ("Set",["Container","Ord"]),
          ("Ord$set",["Ord"]),
          ("Ord$set$2",["Ord$set","Ord"])]                                               -- Succeeds... Acceptable? Or detect by a separate check?
+
+ex22  = [("Eq",[]), ("Ord",["Eq"]), ("Plus",[]), ("Minus",[]), ("Logical",[]),
+         ("Complex",["Ord","Plus","Minus"]),
+         ("Real",["Complex"]), ("Rational",["Real"]),
+         ("Integral",["Rational","Logical"])]                                           -- Rational,Real,Complex,Ord,Eq,Plus,Minus,Logical
+
+
+--   Indexed         Iterable
+--    |               |
+--    |               |
+--   Sliceable       Collection      Plus
+--    |               |               |
+--    |               |               |
+--   Sequence <-------- <--------------
+--    |
+--    |
+--   Sequence$list
+
+ex23  = [("Plus",[]), ("Indexed",[]), ("Iterable",[]),
+         ("Sliceable",["Indexed"]), ("Collection",["Iterable"]),
+         ("Sequence",["Sliceable","Collection","Plus"]),
+         ("Sequence$list",["Sequence"])]                        -- Sequence,Sliceable,Indexed,Collection,Iterable,Plus
+
+
+
+--   (Indexed)       Iterable                        Indexed
+--    |               |                               |
+--    |               |                               |
+--   (Sliceable)     Collection      Plus            Sliceable
+--    |               |               |               |
+--    |               |               |               |
+--   Sequence <-------- <--------------              Sliceable$list
+--    |                                               |
+--    |                                               |
+--   Sequence$list <-----------------------------------
+
+ex24  = [("Plus",[]), ("Indexed",[]), ("Iterable",[]),
+         ("Sliceable",["Indexed"]), ("Collection",["Iterable"]),
+         ("Sequence",["Sliceable","Collection","Plus"]),
+         ("Sliceable$list",["Sliceable"]),
+         ("Sequence$list",["Sliceable$list","Sequence"])]       -- Sliceable$list,Sequence,Sliceable,Indexed,Collection,Iterable,Plus
+
+
+
+--   (Indexed)       Iterable
+--    |               |
+--    |               |
+--   Sliceable       Collection      Plus            Indexed
+--    |               |               |               |
+--    |               |               |               |
+--   Sequence <-------- <--------------              Indexed$list
+--    |                                               |
+--    |                                               |
+--   Sequence$list <-----------------------------------
+
+ex25  = [("Plus",[]), ("Indexed",[]), ("Iterable",[]),
+         ("Sliceable",["Indexed"]), ("Collection",["Iterable"]),
+         ("Sequence",["Sliceable","Collection","Plus"]),
+         ("Indexed$list",["Indexed"]),
+         ("Sequence$list",["Indexed$list","Sequence"])]         -- Indexed$list,Sequence,Sliceable,Indexed,Collection,Iterable,Plus
+
+
+
+--                   Indexed         Iterable
+--                    |               |
+--                    |               |
+--   (Iterable)      Sliceable       Collection      Plus        
+--    |               |               |               |
+--    |               |               |               |
+--   (Collection)    Sequence <-------- <--------------          
+--    |               |
+--    |               |
+--   Container       Sequence$list                               
+--    |               |
+--    |               |
+--   Container$list <--
+
+ex26  = [("Plus",[]), ("Indexed",[]), ("Iterable",[]),
+         ("Sliceable",["Indexed"]), ("Collection",["Iterable"]),
+         ("Sequence",["Sliceable","Collection","Plus"]),
+         ("Container",["Collection"]),
+         ("Sequence$list",["Sequence"]),
+         ("Container$list",["Sequence$list","Container"])]      -- Sequence$list,Sequence,Sliceable,Indexed,Container,Collection,Iterable,Plus
