@@ -11,7 +11,7 @@ $dict $dict_fromiter($Hashable hashwit, $Iterable$opaque it);
 int $dict_contains($dict dict, $Hashable hashwit, $WORD key);
 
 $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt);
-$WORD $dict_popitem($dict dict, $Hashable hashwit);
+$tuple $dict_popitem($dict dict, $Hashable hashwit);
 void $dict_update($dict dict, $Hashable hashwit, $Iterable$opaque it);
 $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt);
 $Iterator $dict_keys($dict dict);

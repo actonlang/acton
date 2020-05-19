@@ -6,8 +6,7 @@
 #include <string.h>
 
 typedef void *$WORD;
-//typedef void $None;
-
+/*
 struct exception;
 typedef struct exception *exception;
 
@@ -28,7 +27,7 @@ struct $tuple;
 typedef struct $tuple *$tuple;
 
 struct $tuple {
-    struct $tuple$class *$class;
+   struct $tuple$class *$class;
 };
 
 struct $tup1_t {
@@ -54,7 +53,7 @@ enum  exc {INDEXERROR, VALUEERROR, KEYERROR, STOPITERATION, TYPEERROR, MEMORYERR
 typedef enum exc exc;
 
 #define MKEXCEPTION(e,sube) e=0;
-
+*/
 struct $Super$class;
 typedef struct $Super$class *$Super$class;
 

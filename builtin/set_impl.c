@@ -332,9 +332,7 @@ void $set_remove($set set, $Hashable hashwit, $WORD elem) {
   if($set_discard_entry(set,hashwit,elem,hash))
     return;
   else {
-      exception e;
-      MKEXCEPTION(e,KEYERROR);
-      RAISE(e);
+    RAISE(($BaseException)$NEW($KeyError,from$UTF8("remove: element not set member")));
   }
 }
 

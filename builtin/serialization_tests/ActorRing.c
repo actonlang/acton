@@ -12,7 +12,7 @@ void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
 
 lambda$1 lambda$1$__deserialize__($Serial$state state) {
   lambda$1 res = $DNEW(lambda$1,state);
-  res->cont$0 = ($Cont)$step_deserialize(state);  
+  res->cont$0 = $step_deserialize(state);  
   return res;
 }
 
@@ -47,9 +47,9 @@ void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
 
 lambda$2 lambda$2$__deserialize__($Serial$state state) {
   lambda$2 res = $DNEW(lambda$2,state);
-  res->self = (Act)$step_deserialize(state);      
-  res->from = ($int)$step_deserialize(state);     
-  res->table = ($list)$step_deserialize(state);   
+  res->self = $step_deserialize(state);      
+  res->from = $step_deserialize(state);     
+  res->table = $step_deserialize(state);   
   return res;
 }
 
@@ -87,10 +87,10 @@ void Act$__serialize__(Act self, $Serial$state state) {
 
 Act Act$__deserialize__($Serial$state state) {
   Act res = $DNEW(Act,state);
-  res->i = ($int)$step_deserialize(state);         
-  res->count = ($int)$step_deserialize(state);     
-  res->rcv_dict = ($dict)$step_deserialize(state); 
-  res->snd_dict = ($dict)$step_deserialize(state); 
+  res->i = $step_deserialize(state);         
+  res->count = $step_deserialize(state);     
+  res->rcv_dict = $step_deserialize(state); 
+  res->snd_dict = $step_deserialize(state); 
   return res;
 }
 
@@ -138,9 +138,9 @@ void lambda$3$__serialize__(lambda$3 self, $Serial$state state) {
 
 lambda$3 lambda$3$__deserialize__($Serial$state state) {
   lambda$3 res = $DNEW(lambda$3,state);
-  res->self = (Root)$step_deserialize(state);        
-  res->iter$1 = ($Iterator)$step_deserialize(state); 
-  res->cont$0 = ($Cont)$step_deserialize(state);     
+  res->self = $step_deserialize(state);        
+  res->iter$1 = $step_deserialize(state); 
+  res->cont$0 = $step_deserialize(state);     
   return res;
 }
 
@@ -222,7 +222,7 @@ void Root$__serialize__(Root self, $Serial$state state) {
 
 Root Root$__deserialize__($Serial$state state) {
   Root res = $DNEW(Root,state);
-  res->table = ($list)$step_deserialize(state);   
+  res->table = $step_deserialize(state);   
   return res;
 }
 

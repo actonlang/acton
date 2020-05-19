@@ -15,9 +15,9 @@ void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
 
 lambda$1 lambda$1$__deserialize__($Serial$state state) {
     lambda$1 res = $DNEW(lambda$1,state);
-    res->self = (Pingpong)$step_deserialize(state);
-    res->count = ($int)$step_deserialize(state);
-    res->q = ($int)$step_deserialize(state);
+    res->self = $step_deserialize(state);
+    res->count = $step_deserialize(state);
+    res->q = $step_deserialize(state);
     return res;
 }
 
@@ -43,8 +43,8 @@ void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
 
 lambda$2 lambda$2$__deserialize__($Serial$state state) {
     lambda$2 res = $DNEW(lambda$2,state);
-    res->self = (Pingpong)$step_deserialize(state);
-    res->q = ($int)$step_deserialize(state);
+    res->self = $step_deserialize(state);
+    res->q = $step_deserialize(state);
     return res;
 }
 
@@ -71,8 +71,8 @@ void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
 
 Pingpong Pingpong$__deserialize__($Serial$state state) {
   Pingpong res = $DNEW(Pingpong,state);
-    res->i = ($int)$step_deserialize(state);
-    res->count = ($int)$step_deserialize(state);
+    res->i = $step_deserialize(state);
+    res->count = $step_deserialize(state);
     return res;
 }
 

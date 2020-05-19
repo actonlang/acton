@@ -29,6 +29,9 @@ typedef struct $bool *$bool;
 struct $range;
 typedef struct $range *$range;
 
+struct $tuple;
+typedef struct $tuple *$tuple;
+
 struct $Iterator;
 typedef struct $Iterator *$Iterator;
 
@@ -464,6 +467,24 @@ typedef struct $Iterable$range *$Iterable$range;
 struct $Iterable$range$class;
 typedef struct $Iterable$range$class *$Iterable$range$class;
 
+struct $Iterable$tuple;
+typedef struct $Iterable$tuple *$Iterable$tuple;
+
+struct $Iterable$tuple$class;
+typedef struct $Iterable$tuple$class *$Iterable$tuple$class;
+
+struct $Sliceable$tuple;
+typedef struct $Sliceable$tuple *$Sliceable$tuple;
+
+struct $Sliceable$tuple$class;
+typedef struct $Sliceable$tuple$class *$Sliceable$tuple$class;
+
+struct $Hashable$tuple;
+typedef struct $Hashable$tuple *$Hashable$tuple;
+
+struct $Hashable$tuple$class;
+typedef struct $Hashable$tuple$class *$Hashable$tuple$class;
+
 // $Eq ////////////////////////////////////////////////////////////
 
 struct $Eq {
@@ -835,7 +856,7 @@ struct $Mapping$class {
     $Iterator (*values)($Mapping, $WORD);
     $Iterator (*items)($Mapping, $WORD);
     void (*update)($Mapping, $WORD, $Iterable$opaque);
-    $tup2_t (*popitem)($Mapping, $WORD);
+    $tuple (*popitem)($Mapping, $WORD);
     void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
 
@@ -1021,7 +1042,7 @@ struct $Integral$class {
     $Integral$opaque (*denominator)($Integral, $WORD);
     $int (*__int__)($Integral, $WORD);
     $int (*__index__)($Integral, $WORD);
-    $tup2_t (*__divmod__)($Integral, $WORD, $WORD);
+    $tuple (*__divmod__)($Integral, $WORD, $WORD);
     $WORD (*__floordiv__)($Integral, $WORD, $WORD);
     $WORD (*__mod__)($Integral, $WORD, $WORD);
     $WORD (*__lshift__)($Integral, $WORD, $WORD);
@@ -1199,7 +1220,7 @@ struct $Mapping$dict$class {
     $Iterator (*values)($Mapping$dict, $dict);
     $Iterator (*items)($Mapping$dict, $dict);
     void (*update)($Mapping$dict, $dict, $Iterable$opaque);
-    $tup2_t (*popitem)($Mapping$dict, $dict);
+    $tuple (*popitem)($Mapping$dict, $dict);
     void (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
 };
 
@@ -1214,7 +1235,7 @@ $Iterator $Mapping$dict$keys ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$values ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$items ($Mapping$dict, $dict);
 void $Mapping$dict$update ($Mapping$dict, $dict, $Iterable$opaque);
-$tup2_t $Mapping$dict$popitem ($Mapping$dict, $dict);
+$tuple $Mapping$dict$popitem ($Mapping$dict, $dict);
 void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 
 // $Indexed$dict ////////////////////////////////////////////////////////////
@@ -1508,7 +1529,7 @@ struct $Integral$int$class {
     $Integral$opaque (*denominator)($Integral$int, $int);
     $int (*__int__)($Integral$int, $int);
     $int (*__index__)($Integral$int, $int);
-    $tup2_t (*__divmod__)($Integral$int, $int, $int);
+    $tuple (*__divmod__)($Integral$int, $int, $int);
     $int (*__floordiv__)($Integral$int, $int, $int);
     $int (*__mod__)($Integral$int, $int, $int);
     $int (*__lshift__)($Integral$int, $int, $int);
@@ -1532,7 +1553,7 @@ $Integral$opaque $Integral$int$numerator ($Integral$int, $int);
 $Integral$opaque $Integral$int$denominator ($Integral$int, $int);
 $int $Integral$int$__int__ ($Integral$int, $int);
 $int $Integral$int$__index__ ($Integral$int, $int);
-$tup2_t $Integral$int$__divmod__ ($Integral$int, $int, $int);
+$tuple $Integral$int$__divmod__ ($Integral$int, $int, $int);
 $int $Integral$int$__floordiv__ ($Integral$int, $int, $int);
 $int $Integral$int$__mod__ ($Integral$int, $int, $int);
 $int $Integral$int$__lshift__ ($Integral$int, $int, $int);
@@ -1817,3 +1838,73 @@ struct $Iterable$range$class {
 
 void $Iterable$range$__init__ ($Iterable$range);
 $Iterator $Iterable$range$__iter__ ($Iterable$range, $range);
+
+// $Iterable$tuple ////////////////////////////////////////////////////////////
+
+struct $Iterable$tuple {
+    $Iterable$tuple$class $class;
+};
+
+struct $Iterable$tuple$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super $superclass;
+    void (*__init__)($Iterable$tuple);
+    $Iterator (*__iter__)($Iterable$tuple, $tuple);
+};
+
+void $Iterable$tuple$__init__ ($Iterable$tuple);
+$Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple);
+
+
+// $Sliceable$tuple ////////////////////////////////////////////////////////////
+
+// all methods except getitem and getslice will raise NotImplementedError
+
+struct $Sliceable$tuple {
+    $Sliceable$tuple$class $class;
+};
+
+struct $Sliceable$tuple$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Sliceable$tuple);
+    $WORD (*__getitem__)($Sliceable$tuple , $tuple, $int);
+    void (*__setitem__)($Sliceable$tuple, $tuple, $int, $WORD);
+    void (*__delitem__)($Sliceable$tuple, $tuple, $int);
+    $tuple (*__getslice__)($Sliceable$tuple, $tuple, $Slice);
+    void (*__setslice__)($Sliceable$tuple, $tuple, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sliceable$tuple, $tuple, $Slice);
+};
+
+void $Sliceable$tuple$__init__ ($Sliceable$tuple);
+$WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple, $tuple, $int);
+void $Sliceable$tuple$__setitem__ ($Sliceable$tuple, $tuple, $int, $WORD);
+void $Sliceable$tuple$__delitem__ ($Sliceable$tuple, $tuple, $int);
+$tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple, $tuple, $Slice);
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $tuple, $Slice, $Iterable$opaque);
+void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $Slice);
+
+// $Hashable$tuple ////////////////////////////////////////////////////////////
+
+struct $Hashable$tuple {
+  $Hashable$tuple$class $class;
+  int w$Hashable$tuple$size;
+  $Hashable *w$Hashable$tuple;
+};
+
+struct $Hashable$tuple$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Hashable$tuple,int,$Hashable*);
+    $bool (*__eq__)($Hashable$tuple, $tuple, $tuple);
+    $bool (*__ne__)($Hashable$tuple, $tuple, $tuple);
+    $int (*__hash__)($Hashable$tuple, $tuple);
+};
+  
+void $Hashable$tuple$__init__ ($Hashable$tuple,int,$Hashable*);
+$bool $Hashable$tuple$__eq__ ($Hashable$tuple, $tuple, $tuple);
+$bool $Hashable$tuple$__ne__ ($Hashable$tuple, $tuple, $tuple);
+$int $Hashable$tuple$__hash__ ($Hashable$tuple, $tuple);

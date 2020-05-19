@@ -132,16 +132,13 @@ $str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
 
+// this should be an internal error instead; calls are prevented by typechecking.
 void $Sliceable$str$__setitem__ ($Sliceable$str wit, $str str, $int i, $str val) {
-    exception e;
-    MKEXCEPTION(e,NOTIMPLEMENTED);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("setitem: str is immutable")));
 }
 
 void $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
-    exception e;
-    MKEXCEPTION(e,NOTIMPLEMENTED);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("delitem: str is immutable")));
 }
 
 $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
@@ -149,15 +146,11 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
 }
 
 void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
-    exception e;
-    MKEXCEPTION(e,NOTIMPLEMENTED);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("setslice: str is immutable")));
 }
 
 void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
-    exception e;
-    MKEXCEPTION(e,NOTIMPLEMENTED);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("delslice: str is immutable")));
 }
 
 $str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
@@ -371,9 +364,7 @@ static int get_index(int i, int nchars) {
     if (i >= -nchars)
       return nchars+i;
   }
-  exception e;
-  MKEXCEPTION(e,INDEXERROR);
-  RAISE(e);
+  RAISE(($BaseException)$NEW($IndexError,from$UTF8("indexing outside str")));
   return 0;
 }
 
@@ -525,10 +516,8 @@ $str $str_add($str s, $str t) {
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
+// this should be eliminated
 $str $str_fromiter($Iterator it) {
-  exception e;
-  MKEXCEPTION(e,NOTIMPLEMENTED);
-  RAISE(e);
   return NULL;
 }
          
@@ -697,9 +686,7 @@ $str $str_capitalize($str s) {
 
 $str $str_center($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    exception e;
-    MKEXCEPTION(e,TYPEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("center: fill string not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -806,9 +793,7 @@ $int $str_find($str s, $str sub, $int start, $int end) {
 $int $str_index($str s, $str sub, $int start, $int end) {
   $int n = $str_find(s,sub,start,end);
   if (from$int(n)<0) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("index: substring not found")));
   }
   return n;
 }
@@ -970,24 +955,20 @@ $bool $str_isupper($str s) {
 //creates many intermediate strings...
 $str $str_join($str s, $Iterator iter) {
   $str res;
-  $str nxt  = ($str)iter->$class->__next__(iter);
-  //  if(!iterator_next(iter)             //BEWARE: must catch STOPITERATION!!!!
-  //   res = (str_t)nxt;
-  // else
-  //  return null_str;
-
-  while(1) {
-    nxt =  ($str)iter->$class->__next__(iter);
-    res = ($str)$str_add($str_add(res,s),nxt);
-  }
-  return res;
+  $str nxt = ($str)iter->$class->__next__(iter);
+  if (nxt) {
+    res = nxt;
+    while((nxt = ($str)iter->$class->__next__(iter))) {
+      res = ($str)$str_add($str_add(res,s),nxt);
+    }
+    return res;
+  } else
+    return NULL;
 }
 
 $str $str_ljust($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    exception e;
-    MKEXCEPTION(e,TYPEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ljust: fill str not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -1096,18 +1077,14 @@ $int $str_rfind($str s, $str sub, $int start, $int end) {
 $int $str_rindex($str s, $str sub, $int start, $int end) {
   $int n = $str_rfind(s,sub,start,end);
   if (from$int(n)<0) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("rindex: substring not found")));
   };
   return n;
 }
 
 $str $str_rjust($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    exception e;
-    MKEXCEPTION(e,TYPEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("rjust: fill string not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -1199,9 +1176,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     return res;
   } else { // separator given
     if (sep->nchars==0) {
-      exception e;
-      MKEXCEPTION(e,VALUEERROR);
-      RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("split: separator is empty string")));
     }
     if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
       $list_append(res,null_str);

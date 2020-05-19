@@ -209,3 +209,8 @@ $ValueError $ValueError$__deserialize__($Serial$state state) {
 
 struct $ValueError$class $ValueError$methods = {"",UNASSIGNED,($Super$class)&$Exception$methods,$ValueError$__init__,$ValueError$__serialize__,$ValueError$__deserialize__};
 //////////////////////////////////////////////////////////////////////////////////////////////
+
+void RAISE($BaseException e) {
+  fprintf(stderr,"%s\n",(char*)to$UTF8(e->error_message));
+  exit(1);
+}

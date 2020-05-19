@@ -48,7 +48,7 @@ void $Mapping$dict$update ($Mapping$dict wit, $dict dict, $Iterable$opaque other
   $dict_update(dict,wit->w$Hashable$Mapping,other);
 }
 
-$tup2_t $Mapping$dict$popitem ($Mapping$dict wit, $dict dict) {
+$tuple $Mapping$dict$popitem ($Mapping$dict wit, $dict dict) {
   return $dict_popitem(dict, wit->w$Hashable$Mapping);
 }
 

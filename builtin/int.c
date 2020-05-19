@@ -92,14 +92,13 @@ $int $Integral$int$__index__($Integral$int wit, $int n) {
   return n;
 }
 
-$tup2_t $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
+$tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
   int n = from$int(a);
   int d = from$int(b);
-  $tup2_t res = malloc(sizeof(struct $tup2_t));
-  res->$class = &$tup2_t$methods;
-  res->a = to$int(n/d);
-  res->b = to$int(n%d);
-  return res;
+  $WORD *comps = malloc(2*sizeof($WORD));
+  comps[0] = to$int(n/d);
+  comps[1] = to$int(n%d);
+  return $NEW($tuple,2,comps);
 }
 
 $int $Integral$int$__floordiv__($Integral$int wit, $int a, $int b) {
