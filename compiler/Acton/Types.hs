@@ -421,27 +421,6 @@ matchingDec n sc dec dec'
   | otherwise                           = decorationMismatch n sc dec
 
 
-checkAttributes te' te
-  | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
-  | not $ null props                    = err2 props "Property attribute cannot have a class-level definition"
-  | otherwise                           = do nsigs <- mapM newSig nterms; 
-                                             return (nsigs, abssigs, dom sigs)
-  where (sigs,terms)                    = sigTerms te
-        (sigs',terms')                  = sigTerms te'
-        (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
-        nterms                          = prune (dom allsigs) terms
-        abssigs                         = dom allsigs \\ dom allterms
-        osigs                           = dom sigs `intersect` dom sigs'
-        props                           = dom terms `intersect` dom (propSigs allsigs)
-
-        newSig (n, NDef sc dec)         = do t <- newTVar; return (n, NSig (monotype t) dec)
-        newSig (n, NVar t)              = do t <- newTVar; return (n, NSig (monotype t) Static)
-        newSig (n, i)                   = return (n,i)
-
-        -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
-        -- TODO: check that __init__ is never defined by a protocol
-
-
 instance InfEnv Decl where
     infEnv env d@(Actor _ n _ p k _ _)
       | nodup (p,k)                     = case findName n env of
@@ -468,8 +447,8 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (nsigs,_,_) <- checkAttributes te' te
-                                                 return (cs, [(n, NClass q as (te++te'++nsigs))], Class l n q us b')
+                                                 (nsigs,_,_) <- checkAttributes [] te' te
+                                                 return (cs, [(n, NClass q as (nsigs++te))], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQ n) q $ defineTVars q $ block (stateScope env) env
             (as,ps)                     = mro2 env1 us
@@ -480,9 +459,9 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (nsigs,_,_) <- checkAttributes te' te
+                                                 (nsigs,_,_) <- checkAttributes [] te' te
                                                  when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute lacks signature"
-                                                 return (cs, [(n, NProto q ps (te++te'))], Protocol l n q us b')
+                                                 return (cs, [(n, NProto q ps te)], Protocol l n q us b')
                                              _ -> illegalRedef n
       where env1                        = reserve (bound b) $ defineSelf (NoQ n) q $ defineTVars q $ block (stateScope env) env
             ps                          = mro1 env1 us
@@ -493,25 +472,48 @@ instance InfEnv Decl where
       | otherwise                       = do pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
-                                             (nsigs,asigs,sigs) <- checkAttributes te' te
+                                             (nsigs,asigs,sigs) <- checkAttributes ns te' te
                                              when (not $ null nsigs) $ err2 (dom nsigs) "Method/attribute not in listed protocols"
                                              when (not (null asigs || inBuiltin env)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             return (cs, [(extensionName n us, NExt n q ps (te++te'))], Extension l n q us b)
+                                             return (cs, [(extensionName n us, NExt n q ps te)], Extension l n q us b)
       where env1                        = reserve (bound b) $ defineSelf n q $ defineTVars q $ block (stateScope env) env
             ps                          = mro1 env1 us
-            us'                         = [ TC w ts | w <- findPrevExts n (map (tcname . snd) ps) env ]
-            ps'                         = mro1 env1 (us'++us)
-            te'                         = parentTEnv env ps'
+            ns                          = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
+            te'                         = parentTEnv env ps
             ts                          = map tVar (tybound q)
+
+checkAttributes ns te' te
+  | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
+  | not $ null props                    = err2 props "Property attribute cannot have a class-level definition"
+  | not $ null final                    = err2 final "Methods finalized in a previous extension cannot be overridden"
+  | otherwise                           = do nsigs <- mapM newSig nterms; 
+                                             return (nsigs, abssigs, dom sigs)
+  where (sigs,terms)                    = sigTerms te
+        (sigs',terms')                  = sigTerms te'
+        (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
+        nterms                          = prune (dom allsigs) terms
+        abssigs                         = dom allsigs \\ dom allterms
+        osigs                           = dom sigs `intersect` dom sigs'
+        props                           = dom terms `intersect` dom (propSigs allsigs)
+        final                           = dom terms `intersect` ns
+
+        newSig (n, NDef sc dec)         = do t <- newTVar; return (n, NSig (monotype t) dec)
+        newSig (n, NVar t)              = do t <- newTVar; return (n, NSig (monotype t) Static)
+        newSig (n, i)                   = return (n,i)
+
+        -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
+        -- TODO: check that __init__ is never defined by a protocol
+
 
 extensionName                           :: QName -> [TCon] -> Name
 extensionName c ps                      = Derived (deriveQ $ tcname $ head ps) (nstr $ deriveQ c)
 
-deriveQ (NoQ n)                 = n
-deriveQ (QName (ModName m) n)   = deriveMod n m
-deriveMod n0 []                 = n0
-deriveMod n0 (n:m)              = deriveMod (Derived n0 (nstr n)) m
+deriveQ (NoQ n)                         = n
+deriveQ (QName (ModName m) n)           = deriveMod n m
+
+deriveMod n0 []                         = n0
+deriveMod n0 (n:m)                      = deriveMod (Derived n0 (nstr n)) m
 
 
 class Check a where
@@ -650,7 +652,7 @@ instance Infer Expr where
     infer env (Var l n)                 = case findQName n env of
                                             NVar t -> return ([], t, Var l n)
                                             NSVar t -> return ([], t, Var l n)              -- TODO: Cast currFX (fxAct st)
-                                            NDef sc d -> do (cs,t) <- instantiate env sc
+                                            NDef sc d -> do (cs,t) <- instantiate env sc    -- TODO: apply wits of cs
                                                             return (cs, t, Var l n)
                                             NClass q _ te -> undefined                      -- TODO: define!
                                             NSig _ _ -> nameReserved n
@@ -682,7 +684,8 @@ instance Infer Expr where
                                              return (Cast (fxAct st) fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ixs)           = do (cs1,t,e') <- infer env e
-                                             (cs2,ti,ix') <- infer env ix
+                                             ti <- newTVar
+                                             (cs2,ix') <- inferSub env ti ix
                                              t0 <- newTVar
                                              w <- newWitness
                                              return (Impl w t (pIndexed ti t0) :
@@ -691,8 +694,9 @@ instance Infer Expr where
                | otherwise              = Tuple NoLoc (foldr PosArg PosNil ixs) KwdNil
     infer env (Slice l e slz)           = do (cs1,t,e') <- infer env e
                                              (cs2,sl') <- inferSlice env sl
+                                             t0 <- newTVar
                                              w <- newWitness
-                                             return (Impl w t pSliceable :
+                                             return (Impl w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) (e' : toArgs sl'))
       where sl | length slz == 1        = head slz
                | otherwise              = notYet l "Multidimensional slicing"
@@ -752,12 +756,12 @@ instance Infer Expr where
             method UMinus               = negKW
             method BNot                 = invertKW
     infer env (CompOp l e1 [OpArg (Op _ op) e2])
-      | op `elem` [In,NotIn]            = do (cs1,t1,e1') <- infer env e1
+      | op `elem` [In,NotIn]            = do t1 <- newTVar
+                                             (cs1,e1') <- inferSub env t1 e1
                                              (cs2,t2,e2') <- infer env e2
                                              w1 <- newWitness
                                              w2 <- newWitness
                                              return (Impl w1 t2 (pContainer t1) :
-                                                     Impl w2 t1 pEq :
                                                      cs1++cs2, tBool, eCall (eDot (eVar w1) (method op)) [eVar w2, e1', e2'])
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
@@ -791,33 +795,35 @@ instance Infer Expr where
       | Just m <- isModule env e        = infer env (Var l (QName m n))
 
     infer env (Dot l (Var l' c) n)
-      | NClass q us te <- cinfo         = case lookup n $ nSigs te of
-                                              Just (NSig sc dec)
-                                                | isProp dec sc -> err l "Property attribute not selectable"
-                                                | otherwise -> do
-                                                  (cs1,tvs) <- instQual env q
-                                                  let t0 = tCon (TC c tvs)
-                                                  (cs2,t) <- instantiate env sc
-                                                  let t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                  return (cs1++cs2, t', Dot l (Var l' c) n)
-                                              Nothing -> case findExtAttr c n env of
-                                                  Just (w,sc,dec) -> do
-                                                     (cs1,tvs) <- instQual env q
-                                                     let t0 = tCon (TC c tvs)
-                                                     (cs2,t) <- instantiate env sc
-                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                     return (cs1++cs2, t', eDot w n)
-                                                  Nothing -> err1 l "Attribute not found"
-      | NProto q us te <- cinfo         = case lookup n $ nSigs te of
-                                              Nothing -> err1 l "Attribute not found"
-                                              Just (NSig sc dec) -> do
-                                                    (cs1,tvs) <- instQual env q
-                                                    w <- newWitness
+      | NClass q us te <- cinfo         = do (_,ts) <- instQual env q
+                                             case findAttr env (TC c ts) n of
+                                                Just (_wf,sc,dec)
+                                                  | isProp dec sc -> err l "Property attribute not selectable by class"
+                                                  | otherwise -> do
+                                                      (cs1,t) <- instantiate env sc              -- TODO: apply wits of cs1
+                                                      let t0 = tCon $ TC c ts
+                                                          t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                      return (cs1, t', Dot l (Var l' c) n)
+                                                Nothing ->
+                                                    case findWitness env c (hasAttr env n) of
+                                                        Just wit -> do
+                                                            (cs1,p,e) <- instWitness env ts wit
+                                                            let Just (wf,sc,dec) = findAttr env p n
+                                                            (cs2,t) <- instantiate env sc                -- TODO: apply wits of cs1
+                                                            let t0 = tCon $ TC c ts
+                                                                t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                            return (cs1++cs2, t', Dot l (wf e) n)
+                                                        Nothing -> err1 l "Attribute not found"
+      | NProto q us te <- cinfo         = do (_,ts) <- instQual env q
+                                             case findAttr env (TC c ts) n of
+                                                Just (wf,sc,dec) -> do
+                                                    (cs1,t) <- instantiate env sc                -- TODO: apply wits of cs1
                                                     t0 <- newTVar
-                                                    (cs2,t) <- instantiate env sc
                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                    return (Impl w t0 (TC c tvs) : 
-                                                            cs1++cs2, t', eDot (eVar w) n)
+                                                    w <- newWitness
+                                                    return (Impl w t0 (TC c ts) :
+                                                            cs1, t', Dot l (wf $ eVar w) n)
+                                                Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
 
     infer env (Dot l e n)               = do (cs,t,e') <- infer env e
@@ -1110,7 +1116,8 @@ instance Infer Target where
                                              _ -> err1 n "Variable not mutable:"
 
     infer env (TaIndex l e [i])         = do (cs1,t,e') <- infer env e
-                                             (cs2,ti,i') <- infer env i
+                                             ti <- newTVar
+                                             (cs2,i') <- inferSub env ti i
                                              t0 <- newTVar
                                              w <- newWitness
                                              fx <- currFX
@@ -1121,10 +1128,11 @@ instance Infer Target where
                                                      cs1++cs2, t0, TaIndex l e' [i'])             -- TODO: translate using w...
     infer env (TaSlice l e [s])         = do (cs1,t,e') <- infer env e
                                              (cs2,s') <- inferSlice env s
+                                             t0 <- newTVar
                                              w <- newWitness
                                              fx <- currFX
                                              st <- newTVar
-                                             return (Impl w t pSliceable :
+                                             return (Impl w t (pSliceable t0) :
                                                      Cast t tObject : 
                                                      Cast (fxMut st) fx :
                                                      cs1++cs2, t, TaSlice l e' [s'])              -- TODO: translate using w
