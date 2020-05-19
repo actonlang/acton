@@ -88,17 +88,6 @@ genEnv env cs te ds                     = do cs1 <- simplify env cs
                                              return (cs2, te2, ds)                       -- TODO: adjust ds
 
 
-inferGen                                :: Env -> Expr -> TypeM (Constraints, TSchema, Expr)
-inferGen env e                          = do (cs,t,e) <- infer env e
-                                             cs <- simplify env cs
-                                             t <- msubst t
-                                             tvs <- msubstTV (tyfree env)
-                                             let (cs1,cs2) = partition (canWait tvs) cs
-                                                 q = mkBinds cs2
-                                             return (cs1, tSchema q t, Lambda NoLoc PosNIL KwdNIL e)
-  where canWait tvs c                   = all (`elem` tvs) (tyfree c)
-
-
 {- Mark's THIH:                                            
 
 myExpl :: Env -> (Name,TSchema,[Alt]) -> TypeM [Constraint]
@@ -555,7 +544,7 @@ instance Check Decl where
                                              --solve env1 cs1'
                                              t1 <- msubst (tFun (fxAct st) prow krow t)
                                              cs2 <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
-                                             -- TODO: checkEnv that st doesn't escape
+                                             -- TODO: check that st doesn't escape
                                              return (cs2, Actor l n q1 p' k' a b')
       where q1                          = autoQuant env q p k a
             cswf                        = wellformed env (q,a)
