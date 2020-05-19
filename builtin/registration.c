@@ -40,6 +40,7 @@ void $register_builtin() {
   $register_force(DICT_ID,&$dict$methods);
   $register_force(SET_ID,&$set$methods);
   $register_force(RANGE_ID,&$range$methods);
+  $register_force(TUPLE_ID,&$tuple$methods);
   $register_force(STRITERATOR_ID,&$Iterator$str$methods);
   $register_force(LISTITERATOR_ID,&$Iterator$list$methods);
   $register_force(DICTITERATOR_ID,&$Iterator$dict$methods);

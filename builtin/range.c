@@ -8,9 +8,7 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
-     exception e;
-     MKEXCEPTION(e,INDEXERROR);
-     RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("step size zero in range")));
     }
     else
       self->step = stp;

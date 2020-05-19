@@ -50,9 +50,7 @@ static void expand($list lst,int n) {
      ? malloc(newcapacity*sizeof($WORD))
      : realloc(lst->data,newcapacity*sizeof($WORD));
    if (newptr == NULL) {
-     exception e;
-     MKEXCEPTION(e,MEMORYERROR);
-     RAISE(e);
+    RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
    }
    lst->data = newptr;
    lst->capacity = newcapacity;
@@ -60,22 +58,17 @@ static void expand($list lst,int n) {
 
 $list $list_new(int capacity) {
   if (capacity < 0) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
+    fprintf(stderr,"Internal error list_new: negative capacity");
+    exit(-1);
   } 
   $list lst = malloc(sizeof(struct $list));
   if (lst == NULL) {
-     exception e;
-     MKEXCEPTION(e,MEMORYERROR);
-     RAISE(e);
+     RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
   }
   if (capacity>0) {
     lst->data = malloc(capacity*sizeof($WORD));
     if (lst->data == NULL) {
-      exception e;
-      MKEXCEPTION(e,MEMORYERROR);
-      RAISE(e);
+       RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
     }
   } else {
     lst->data = NULL;
@@ -170,9 +163,7 @@ $WORD $list_getitem($list lst, int ix) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
-     exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($IndexError,from$UTF8("getitem: indexing outside list")));
   }
   return lst->data[ix0];
 }
@@ -181,9 +172,7 @@ void $list_setitem($list lst, int ix, $WORD val) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
-    exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: indexing outside list")));
   }
   lst->data[ix0] = val;
 }
@@ -192,9 +181,7 @@ void $list_delitem($list lst,int ix) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if(ix0 < 0 || ix0 >= len) {
-    exception e;
-    MKEXCEPTION(e,INDEXERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($IndexError,from$UTF8("delitem: indexing outside list")));
   }
   memmove(lst->data + ix0,
           lst->data + (ix0 + 1),
@@ -232,9 +219,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (step != 1 && olen != slen) {
-    exception e;
-    MKEXCEPTION(e,VALUEERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("setslice: illegal slice")));
   }
   int copy = olen <= slen ? olen : slen;
   int t = start;
@@ -329,9 +314,7 @@ void $list_init($list lst, $Iterable$opaque it) {
   int capacity = 4;
   lst->data = malloc(capacity*sizeof($WORD));
   if (lst->data == NULL) {
-      exception e;
-      MKEXCEPTION(e,MEMORYERROR);
-      RAISE(e);
+    RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
   }
   lst->length = 0;
   lst->capacity = capacity;

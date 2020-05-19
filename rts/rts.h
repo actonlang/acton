@@ -9,7 +9,7 @@
 
 #include "../builtin/builtin.h"
 
-typedef void *$WORD;
+// typedef void *$WORD; defined in builtin
 
 struct $Msg;
 struct $Actor;

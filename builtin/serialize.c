@@ -28,7 +28,7 @@ $bool $Hashable$WORD_ne($Hashable$WORD wit, $WORD a, $WORD b) {
 }
 
 $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
-  return to$int(pointer_hash(a));
+  return to$int($pointer_hash(a));
 }
 
 struct $Hashable$WORD$class $Hashable$WORD$methods = {"",UNASSIGNED,NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
@@ -64,7 +64,7 @@ $ROW $add_header(int class_id, int blob_size, $Serial$state state) {
 void $step_serialize($WORD self, $Serial$state state) {
   if (self) {
     int class_id = $GET_CLASSID((($Serializable)self)->$class);
-    if (class_id > 10) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
+    if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
       $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
       if (prevkey) {
         $val_serialize(-class_id,&prevkey->val,state);
@@ -80,7 +80,7 @@ void $step_serialize($WORD self, $Serial$state state) {
 }
 
 $WORD $step_deserialize($Serial$state state) {
-  if (abs(state->row->class_id) > 10) {
+  if (abs(state->row->class_id) > ITEM_ID) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;

@@ -1,6 +1,6 @@
 #include "builtin.h"
 
-#include "common.c"
+//#include "common.c"
 #include "__builtin__.c"
 #include "int.c"
 #include "float.c"

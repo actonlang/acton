@@ -122,12 +122,12 @@ void $Msg$__serialize__($Msg self, $Serial$state state) {
 
 $Msg $Msg$__deserialize__($Serial$state state) {
   $Msg res = $DNEW($Msg,state);
-    res->next = ($Msg)$step_deserialize(state);
-    res->to = ($Actor)$step_deserialize(state);
-    res->cont = ($Cont)$step_deserialize(state);
-    res->waiting = ($Actor)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->to = $step_deserialize(state);
+    res->cont = $step_deserialize(state);
+    res->waiting = $step_deserialize(state);
     res->baseline = (time_t)$val_deserialize(state);
-    res->value = ($WORD)$step_deserialize(state);
+    res->value = $step_deserialize(state);
     atomic_flag_clear(&res->wait_lock);
     return res;
 }
@@ -149,9 +149,9 @@ void $Actor$__serialize__($Actor self, $Serial$state state) {
 
 $Actor $Actor$__deserialize__($Serial$state state) {
   $Actor res = $DNEW($Actor,state);
-    res->next = ($Actor)$step_deserialize(state);
-    res->msg = ($Msg)$step_deserialize(state);
-    res->catcher = ($Catcher)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->msg = $step_deserialize(state);
+    res->catcher = $step_deserialize(state);
     atomic_flag_clear(&res->msg_lock);
     return res;
 }
@@ -170,8 +170,8 @@ void $Catcher$__serialize__($Catcher self, $Serial$state state) {
 
 $Catcher $Catcher$__deserialize__($Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->next = ($Catcher)$step_deserialize(state);
-    res->cont = ($Cont)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->cont = $step_deserialize(state);
     return res;
 }
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -213,8 +213,8 @@ void $RetNew$__serialize__($RetNew self, $Serial$state state) {
 
 $RetNew $RetNew$__deserialize__($Serial$state state) {
     $RetNew res = $DNEW($RetNew,state);
-    res->cont = ($Cont)$step_deserialize(state);
-    res->act = ($Actor)$step_deserialize(state);
+    res->cont = $step_deserialize(state);
+    res->act = $step_deserialize(state);
     return res;
 }
 
