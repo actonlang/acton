@@ -43,7 +43,7 @@ solve env cs                                = solve' env [] cs
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-type Equations                              = [(Name, Expr)]
+type Equations                              = [(Name, Type, Expr)]
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq

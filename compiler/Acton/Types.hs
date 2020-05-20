@@ -37,13 +37,16 @@ infTop env ss                           = do pushFX fxPure tNone
                                              popFX
                                              eq <- solve env cs
                                              te1 <- msubst te
-                                             return (te1, ss1)
+                                             return (te1, bindWits eq ++ ss1)
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
 
 class InfEnv a where
     infEnv                              :: Env -> a -> TypeM (Constraints,TEnv,a)
+    infEnvX                             :: Env -> a -> TypeM (Constraints,TEnv,[a])
+    infEnvX env x                       = do (cs,te,x') <- infEnv env x
+                                             return (cs, te, [x'])
 
 class InfEnvT a where
     infEnvT                             :: Env -> a -> TypeM (Constraints,TEnv,Type,a)
@@ -70,6 +73,7 @@ splitGen env tvs te cs
 
 mkBinds cs                              = collect [] $ catMaybes $ map bound cs
   where
+    bound (Cast (TVar _ v) (TCon _ u))  = Just $ TBind v [u]
     bound (Sub w (TVar _ v) (TCon _ u)) = Just $ TBind v [u]                            -- TODO: preserve w!!!!!!!!!
     bound (Impl w (TVar _ v) u)         = Just $ TBind v [u]                            -- TODO: preserve w!!!!!!!!!
     bound c                             = trace ("### Unreduced constraint: " ++ prstr c) $ Nothing
@@ -274,9 +278,9 @@ liveCombine (Just te) (Just te')        = Just $ te++te'
 
 instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
-    infEnv env (s : ss)                 = do (cs1,te1,s') <- infEnv env s
-                                             (cs2,te2,ss') <- infEnv (define te1 env) ss
-                                             return (cs1++cs2, te1++te2, s':ss')
+    infEnv env (s : ss)                 = do (cs1,te1,ss1) <- infEnvX env s
+                                             (cs2,te2,ss2) <- infEnv (define te1 env) ss
+                                             return (cs1++cs2, te1++te2, ss1++ss2)
 
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
@@ -379,14 +383,6 @@ instance InfEnv Stmt where
                                              (cs2,t,e2') <- infer env e2
                                              return (cs1++cs2, [], After l e1' e2')
     
-    infEnv env (Decl l ds)
-      | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
-                                             return (cs1, te1, Decl l ds1)
-      | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
-                                             (cs2,ds2) <- checkEnv (define te1 env) False ds1
-                                             (cs3,te2,eq,ds3) <- genEnv env (cs1++cs2) te1 ds2
-                                             return (cs3, te2, Decl l ds3)
-
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
       | otherwise                       = return ([], [(n, NSig (autoQuantize env sc) dec) | n <- ns], d)
@@ -395,6 +391,17 @@ instance InfEnv Stmt where
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
+    infEnv env (Decl l ds)              = internal l "infEnv on single Decl"
+
+    infEnvX env (Decl l ds)
+      | inDecl env && nodup ds          = do (cs1,te1,ds1) <- infEnv env ds
+                                             return (cs1, te1, [Decl l ds1])
+      | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
+                                             (cs2,ds2) <- checkEnv (define te1 env) False ds1
+                                             (cs3,te2,eq,ds3) <- genEnv env (cs1++cs2) te1 ds2
+                                             return (cs3, te2, bindWits eq ++ [Decl l ds3])
+
+bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
 
 autoQuantize env (TSchema l [] t)       = TSchema NoLoc q t
   where q                               = [ TBind v [] | v <- nub (tyfree t \\ (tvSelf : tvarScope env)), skolem v ]
@@ -547,7 +554,7 @@ instance Check Decl where
                                              t1 <- msubst (tFun (fxAct st) prow krow t)
                                              (cs2,eq2) <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
                                              -- TODO: check that st doesn't escape
-                                             return (cs2, Actor l n q1 p' k' a b')
+                                             return (cs2, Actor l n q1 p' k' a (bindWits (eq2++eq1++eq0) ++ b'))
       where q1                          = autoQuant env q p k a
             cswf                        = wellformed env (q,a)
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 $
@@ -567,7 +574,7 @@ instance Check Decl where
                                              eq1 <- solve env1 cs1'
                                              t1 <- msubst (tFun fx prow krow t)
                                              (cs2,eq2) <- checkAssump env cl n cs1 (TSchema NoLoc q1 t1)
-                                             return (cs2, Def l n q1 p' k' a b' d)
+                                             return (cs2, Def l n q1 p' k' a (bindWits (eq2++eq1++eq0) ++ b') d)
       where q1                          = autoQuant env q p k a
             cswf                        = wellformed env (q,a)
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q1 env
