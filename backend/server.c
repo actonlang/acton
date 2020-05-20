@@ -2141,7 +2141,7 @@ error_t parse_opt (int key, char *arg, struct argp_state *state)
 int main(int argc, char **argv) {
   int parentfd, gparentfd, childfd;
   int portno, gportno;
-  int clientlen;
+  unsigned int clientlen;
   struct sockaddr_in serveraddr, gserveraddr, clientaddr;
   struct hostent *hostp;
   char *hostaddrp;

@@ -153,7 +153,7 @@ int deserialize_gs(void * buf, unsigned msg_len, gossip_state ** gs)
 
 	  vector_clock * vc = init_vc_from_msg(msg->vc);
 
-	  *gs = init_gossip_state(msg->node_state->status, msg->node_state->node_id, msg->node_state->rack_id, msg->node_state->dc_id, msg->node_state->hostname.data, msg->node_state->port, vc);
+	  *gs = init_gossip_state(msg->node_state->status, msg->node_state->node_id, msg->node_state->rack_id, msg->node_state->dc_id, (char *) msg->node_state->hostname.data, msg->node_state->port, vc);
 
 	  return 0;
 }
@@ -259,7 +259,7 @@ membership_state * init_membership_from_msg(MembershipViewMessage * msg)
 	node_description * membership = (node_description *) malloc(msg->n_membership * sizeof(node_description));
 	for(int i=0;i<msg->n_membership;i++)
 		copy_node_description(membership+i, msg->membership[i]->status, msg->membership[i]->node_id, msg->membership[i]->rack_id, msg->membership[i]->dc_id,
-								msg->membership[i]->hostname.data, (unsigned short) msg->membership[i]->port);
+								(char *) msg->membership[i]->hostname.data, (unsigned short) msg->membership[i]->port);
 	return init_membership_state(msg->n_membership, membership, view_id);
 }
 
