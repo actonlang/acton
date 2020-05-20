@@ -14,87 +14,93 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: Env -> Constraints -> TypeM Constraints
-simplify env cs                             = do --traceM ("### simplify: " ++ prstrs cs)
-                                                 reduce env cs
+simplify                                    :: Env -> Constraints -> TypeM (Constraints,Equations)
+simplify env cs                             = simplify' env [] cs
+  where simplify' env eq cs                 = do --traceM ("### simplify: " ++ prstrs cs)
+                                                 eq1 <- reduce env eq cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if simple cs1
-                                                     then return [] -- cs1
-                                                     else simplify env cs1
-  where simple cs                           = True                              -- TODO: add proper test
+                                                     -- then return (cs1,eq1)
+                                                     then return ([],eq1)
+                                                     else simplify' env eq1 cs1
+        simple cs                           = True                              -- TODO: add proper test
 
 -- Reduce aggressively or fail
-solve                                       :: Env -> Constraints -> TypeM ()
-solve env cs                                = do --traceM ("### solve: " ++ prstrs cs)
-                                                 reduce env cs
+solve                                       :: Env -> Constraints -> TypeM Equations
+solve env cs                                = solve' env [] cs
+  where solve' env eq cs                    = do --traceM ("### solve: " ++ prstrs cs)
+                                                 eq1 <- reduce env eq cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if done cs1
-                                                     then return ()
-                                                     else solve env cs1
-  where done cs                             = True                              -- TODO: ensure proper termination...!
+                                                     then return eq1
+                                                     else solve' env eq1 cs1
+        done cs                             = True                              -- TODO: ensure proper termination...!
 
 
 ----------------------------------------------------------------------------------------------------------------------
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-reduce                                      :: Env -> Constraints -> TypeM ()
-reduce env []                               = return ()
-reduce env (c:cs)                           = do c' <- msubst c
-                                                 reduce' env c'
+type Equations                              = [(Name, Expr)]
+
+reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
+reduce env eq []                            = return eq
+reduce env eq (c:cs)                        = do c' <- msubst c
+                                                 eq1 <- reduce' env eq c'
                                                  cs' <- msubst cs
-                                                 reduce env cs'
+                                                 reduce env eq1 cs'
 
-reduce'                                     :: Env -> Constraint -> TypeM ()
-reduce' env (Cast t1 t2)                    = cast' env t1 t2
-reduce' env (Sub w t1 t2)                   = sub' env w t1 t2
+reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
+reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
+                                                 return eq
+reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
-reduce' env c@(Impl w (TVar _ tv) u)
-  | not $ skolem tv                         = defer [c]
-  | u `elem` ps                             = return ()
+reduce' env eq c@(Impl w (TVar _ tv) u)
+  | not $ skolem tv                         = do defer [c]; return eq
+  | u `elem` ps                             = return eq
   where ps                                  = findProtoBound tv env
-reduce' env c@(Impl w (TCon _ tc) p)        = case findWitness env (tcname tc) (tcname p ==) of
+reduce' env eq c@(Impl w (TCon _ tc) p)     = case findWitness env (tcname tc) (tcname p ==) of
                                                  Just wit -> do
                                                      (cs,p',e) <- instWitness env (tcargs tc) wit
-                                                     reduce env (cs ++ zipWith Cast (tcargs p) (tcargs p'))       -- TODO: unify instead of cast!
+                                                     reduce env eq (cs ++ zipWith Cast (tcargs p) (tcargs p'))       -- TODO: unify instead of cast!
                                                  Nothing -> noRed c
-reduce' env c@(Sel w (TVar _ tv) n t2)
-  | not $ skolem tv                         = defer [c]
-  | u:_ <- findClassBound tv env            = reduce' env (Sel w (tCon u) n t2)
-reduce' env (Sel w t1@(TCon _ tc) n t2)     = case findAttr env tc n of
+reduce' env eq c@(Sel w (TVar _ tv) n t2)
+  | not $ skolem tv                         = do defer [c]; return eq
+  | u:_ <- findClassBound tv env            = reduce' env eq (Sel w (tCon u) n t2)
+reduce' env eq (Sel w t1@(TCon _ tc) n t2)  = case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
                                                   (cs,t) <- instantiate env sc
                                                   -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
                                                   let t' = subst [(tvSelf,t1)] t
-                                                  reduce env (Cast t' t2 : cs)
+                                                  reduce env eq (Cast t' t2 : cs)
                                                 Nothing -> err1 n "Attribute not found:"
-reduce' env (Sel w (TExist _ p) n t2)       = case findAttr env p n of
+reduce' env eq (Sel w (TExist _ p) n t2)    = case findAttr env p n of
                                                 Just (wf,sc,dec) -> do
                                                   (cs,t) <- instantiate env sc
                                                   when (tvSelf `elem` tyfree t) (err1 n "Self attribute not selectable from abstract type")
-                                                  reduce env (Cast t t2 : cs)
+                                                  reduce env eq (Cast t t2 : cs)
                                                 Nothing -> err1 n "Attribute not found:"
-reduce' env (Sel w (TTuple _ p r) n t2)     = reduce' env (Cast r (kwdRow n t2 tWild))
+reduce' env eq (Sel w (TTuple _ p r) n t2)  = reduce' env eq (Cast r (kwdRow n t2 tWild))
 
 
-reduce' env (Sel w (TUnion _ us) n t2)      = do t <- newTVar
-                                                 reduce env (Sel w t n t2 : [ Cast (mkTCon u) t | u <- us ])
+reduce' env eq (Sel w (TUnion _ us) n t2)   = do t <- newTVar
+                                                 reduce env eq (Sel w t n t2 : [ Cast (mkTCon u) t | u <- us ])
   where mkTCon (ULit _)                     = tStr
         mkTCon (UCon c)                     = tCon (TC c [])
 
-reduce' env c@(Mut (TVar _ tv) n t2)
-  | not $ skolem tv                         = defer [c]
-  | u:_ <- findClassBound tv env            = reduce' env (Mut (tCon u) n t2)
-reduce' env (Mut t1@(TCon _ tc) n t2)       = case findAttr env tc n of
+reduce' env eq c@(Mut (TVar _ tv) n t2)
+  | not $ skolem tv                         = do defer [c]; return eq
+  | u:_ <- findClassBound tv env            = reduce' env eq (Mut (tCon u) n t2)
+reduce' env eq (Mut t1@(TCon _ tc) n t2)    = case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
                                                   when (dec/=Property) (noMut n)
                                                   (cs,t) <- instantiate env sc
                                                   let t' = subst [(tvSelf,t1)] t
-                                                  reduce env (Cast t1 tObject : Cast t' t2 : cs)
+                                                  reduce env eq (Cast t1 tObject : Cast t' t2 : cs)
                                                 Nothing -> err1 n "Attribute not found:"
-reduce' env c                               = noRed c
+reduce' env eq c                            = noRed c
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -194,45 +200,48 @@ cast' env t1 t2                             = noRed (Cast t1 t2)
 -- sub
 ----------------------------------------------------------------------------------------------------------------------
 
-sub                                         :: Env -> Name -> Type -> Type ->TypeM ()
-sub env w t1 t2                             = do t1' <- msubst t1
+sub                                         :: Env -> Equations -> Name -> Type -> Type ->TypeM Equations
+sub env eq w t1 t2                          = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 sub' env w t1' t2'
+                                                 sub' env eq w t1' t2'
 
-sub'                                        :: Env -> Name -> Type -> Type ->TypeM ()
-sub' env w (TVar _ tv1) (TVar _ tv2)
-  | tv1 == tv2                              = return ()
+sub'                                        :: Env -> Equations -> Name -> Type -> Type ->TypeM Equations
+sub' env eq w (TVar _ tv1) (TVar _ tv2)
+  | tv1 == tv2                              = return eq
 
-sub' env w t1@(TVar _ tv) t2
-  | not $ skolem tv                         = defer [Sub w t1 t2]
+sub' env eq w t1@(TVar _ tv) t2
+  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
 -- if skolem...
 
-sub' env w t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = defer [Sub w t1 t2]
+sub' env eq w t1 t2@(TVar _ tv)
+  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
 -- if skolem...
 
-sub' env w (TExist _ p1) (TExist l p2)
-  | not $ null sup                          = mapM_ (uncurry $ cast env) ((head sup `zip` tcargs p2) ++ (tcargs p2 `zip` head sup))     -- TODO: use polarities
+sub' env eq w (TExist _ p1) (TExist l p2)
+  | not $ null sup                          = do mapM_ (uncurry $ cast env) (head sup `zip` tcargs p2); return eq     -- TODO: use polarities
   where NProto q as te                      = findQName (tcname p1) env
         s                                   = tybound q `zip` tcargs p1
         sup                                 = [ subst s (tcargs c) | (w',c) <- as, tcname c == tcname p2 ]
 
 --           as declared           as called
-sub' env w (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do sub env w fx1 fx2
-                                                 sub env w p2 p1            -- TODO: implement pos/kwd argument shifting
-                                                 sub env w k2 k1
-                                                 sub env w t1 t2
+sub' env eq w (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do w1 <- newWitness
+                                                 w2 <- newWitness
+                                                 w3 <- newWitness
+                                                 eq1 <- sub env eq  w1 fx1 fx2
+                                                 eq2 <- sub env eq1 w2 p2 p1            -- TODO: implement pos/kwd argument shifting
+                                                 eq3 <- sub env eq2 w3 k2 k1
+                                                 sub env eq3 w t1 t2
 
-sub' env w (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do sub env w p1 p2
-                                                 sub env w k1 k2
+sub' env eq w (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do eq1 <- sub env eq w p1 p2
+                                                 sub env eq1 w k1 k2
 
-sub' env w (TNil _ k1) (TNil _ k2)
-  | k1 == k2                                = return ()
-sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n r2 (rowTail r1)
-                                                 sub env w t1 t2
-                                                 sub env w r1 r2'
+sub' env eq w (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = return eq
+sub' env eq w (TRow _ k n t1 r1) r2         = do (t2,r2') <- findElem (tNil k) n r2 (rowTail r1)
+                                                 eq1 <- sub env eq w t1 t2
+                                                 sub env eq1 w r1 r2'
   where findElem r0 n r tl                  = do r0' <- msubst r0
                                                  r' <- msubst r
                                                  tl' <- msubst tl
@@ -249,8 +258,8 @@ sub' env w (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem (tNil k) n
                                                  return (t, revApp r0 r)
         revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
         revApp (TNil _ _) r2                = r2
-sub' env w t1 t2                            = do cast env t1 t2
-                                                 return ()              -- lambda x:x
+sub' env eq w t1 t2                         = do cast env t1 t2
+                                                 return eq              -- lambda x:x
 
 
 
