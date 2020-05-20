@@ -38,7 +38,7 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env {
                                 names      :: TEnv,
-                                wits       :: [(QName,[Wit])],
+                                wits       :: [(QName,Witness)],
                                 modules    :: [(ModName,TEnv)],
                                 defaultmod :: ModName,
                                 indecl     :: Bool }
@@ -59,13 +59,16 @@ data NameInfo               = NVar      Type
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
-data Wit                    = WClass    { generated_name :: QName, extension_qual :: Qual, base_protos :: [WTCon], extension_tenv :: TEnv }
---                            | WInst     Expr TCon TCon
+data Witness                = WClass    { binds::Qual, proto::TCon, wname::QName, wsteps::[Maybe QName] }
+--                            | WInst   { args::[Type], proto::TCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
 type WTCon                  = ([Maybe QName],TCon)
 
 instance Data.Binary.Binary NameInfo
+
+instance Eq Witness where
+    a@WClass{} == b@WClass{}    = tcname (proto a) == tcname (proto b)
 
 instance Pretty TEnv where
     pretty tenv                 = vcat (map pretty tenv)
@@ -283,10 +286,10 @@ setDefaultMod m env         = env{ defaultmod = m }
 setInDecl                   :: Env -> Env
 setInDecl env               = env{ indecl = True }
 
-addWit                      :: QName -> Wit -> Env -> Env
-addWit c w env              = case lookup c (wits env) of
-                                Just ws -> env{ wits = (c,w:ws) : wits env }
-                                Nothing -> env{ wits = (c,[w]) : wits env }
+addWit                      :: Env -> (QName,Witness) -> Env
+addWit env cwit
+  | cwit `elem` wits env    = env
+  | otherwise               = env{ wits = cwit : wits env }
 
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
@@ -298,7 +301,9 @@ block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = env{ names = reverse te ++ prune (dom te) (names env) }
+define te env               = foldl addWit env ws
+  where env1                = env{ names = reverse te ++ prune (dom te) (names env) }
+        ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
@@ -376,40 +381,25 @@ isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findWits                    :: QName -> Env -> [Wit]
-findWits n env              = case lookup (unalias env n) $ wits env of
-                                Just ws -> ws
-                                Nothing -> []
+findWitness                 :: Env -> QName -> (QName->Bool) -> Maybe Witness
+findWitness env cn f        = listToMaybe [ w | (c,w) <- wits env, c == cn, f $ tcname $ proto w ]
 
-findWit                     :: TCon -> TCon -> Env -> Maybe (Expr,Qual)
-findWit c p env             = listToMaybe [ (foldl f (eQVar w) ws, q) | WClass w q ps _ <- findWits (tcname c) env,
-                                                                        let s = tybound q `zip` tcargs c,
-                                                                        (ws,p') <- ps, p == subst s p' ]
-  where f e Nothing         = e
-        f e (Just w)        = eDot e (noq w)
-
-findPrevExts                :: QName -> [QName] -> Env -> [QName]
-findPrevExts n ns env       = [ w | WClass w q ps _ <- findWits n env, any connected ps ]
-  where connected (w,p)     = tcname p `elem` ns
-
-
-findExtAttr                 :: QName -> Name -> Env -> Maybe (Expr,TSchema,Decoration)
-findExtAttr c_n a_n env     = listToMaybe [ (eQVar w,sc,dec) | WClass w _ _ te <- findWits c_n env,
-                                                               Just (NSig sc dec) <- [lookup a_n te] ]
-
+hasWitness                  :: Env -> QName -> QName -> Bool
+hasWitness env cn pn        =  not $ null $ findWitness env cn (pn==)
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: Env -> TCon -> Name -> (TSchema,Decoration)          -- Solver.reduce...
-findAttr env tc n           = findIn (te ++ concat tes)
+findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Decoration)                              -- Solver.reduce Sel
+findAttr env tc n           = findIn (([Nothing],te) : [ (w,te') | (w,u) <- wus, let (_,te') = findCon env u ])
   where (wus,te)            = findCon env tc
-        tes                 = [ te' | (w,u) <- wus, let (_,te') = findCon env u ]
-        findIn te1          = case lookup n te1 of
-                                Just (NSig sc d)      -> (sc,NoDec)
-                                Nothing               -> err1 n "Attribute not found:"
+        findIn ((w,te):tes) = case lookup n te of
+                                Just (NSig sc d) -> Just (wexpr w, sc, d)
+                                Nothing          -> findIn tes
+        findIn []           = Nothing
 
-findCon                     :: Env -> TCon -> ([WTCon],TEnv)                        --
+    
+findCon                     :: Env -> TCon -> ([WTCon],TEnv)                                            -- findAttr, mro
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
@@ -420,6 +410,15 @@ findCon env (TC n ts)
                                 i -> err1 n ("findCon: Class or protocol name expected, got " ++ show i ++ " --- ")
         tvs                 = tybound q
         s                   = tvs `zip` ts
+
+conAttrs                    :: Env -> QName -> [Name]
+conAttrs env qn             = case findQName qn env of
+                                NClass q us te -> dom te
+                                NProto q us te -> dom te
+                                NExt n q us te -> dom te
+
+hasAttr                     :: Env -> Name -> QName -> Bool
+hasAttr env n qn            = n `elem` conAttrs env qn
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
@@ -523,12 +522,26 @@ instQual env q              = do ts <- newTVars [ tvkind v | TBind v _ <- q ]
                                  cs <- qualConstraints env q ts
                                  return (cs, ts)
 
+instWitness                 :: Env -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)
+instWitness env ts wit      = case wit of
+                                 WClass q p w ws -> do
+                                    cs <- qualConstraints env q ts
+                                    return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (eQVar w) $ wvars cs))
+
 qualConstraints             :: Env -> Qual -> [Type] -> TypeM Constraints
 qualConstraints env q ts    = do let s = tybound q `zip` ts
                                  sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
+
+wexpr                       :: [Maybe QName] -> Expr -> Expr
+wexpr []                    = id
+wexpr (Nothing : w)         = wexpr w
+wexpr (Just n : w)          = wexpr w . (\e -> eDot e (noq n))
+
+wvars                       :: Constraints -> [Expr]
+wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
 
 -- Import handling (local definitions only) ----------------------------------------------
@@ -545,7 +558,7 @@ impModule ps env (Import _ ms)  = imp env ms
         imp env (ModuleItem m as : is)
                                 = do (env1,te) <- doImp ps env m
                                      let env2 = maybe (defineMod m te env1) (\n->define [(n, NMAlias m)] env1) as
-                                     imp env2 is
+                                     imp (importWits m te env2) is
 impModule ps env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,te) <- doImp ps env m
                                      return $ importSome items m te $ importWits m te $ env1
@@ -594,9 +607,8 @@ impNames m te               = mapMaybe imp te
     imp _                   = Nothing                               -- cannot happen
 
 importWits                  :: ModName -> TEnv -> Env -> Env
-importWits m te env         = foldl addW env ws
-  where ws                  = [ (c, WClass (QName m n) q ps te') | (n, NExt c q ps te') <- te ]
-        addW env (c,w)      = addWit c w env
+importWits m te env         = foldl addWit env ws
+  where ws                  = [ (c, WClass q p (QName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 
 -- Type inference monad ------------------------------------------------------------------

@@ -85,21 +85,21 @@ int main() {
      wit->w$Indexed$Mapping->$class->__setitem__( wit->w$Indexed$Mapping,other,toWord(j),toWord(2*j));
 
   $Iterator items = wit->$class->items(wit,dict);
-  $WORD item;
+  $tuple item;
   for (int k=0; k<10; k++) {
-    if ((item = items->$class->__next__(items))) {
-      $str key = (($tup2_t)item)->a;
-      $str val = (($tup2_t)item)->b;
+    if ((item = ($tuple)items->$class->__next__(items))) {
+      $str key = item->components[0];
+      $str val = item->components[1];
       printf("item #%d is: key=%ld, value=%ld\n",k,fromWord(key),fromWord(val));
     }
   }
 
   wit->$class->update(wit,dict,dict_iterable(wit,other));
   if((item = wit->$class->popitem(wit,dict))) {
-    printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
+    printf("popitem gives: key=%ld, value=%ld\n",fromWord(item->components[0]),fromWord(item->components[1]));
   }
   if((item = wit->$class->popitem(wit,dict))) {
-     printf("popitem gives: key=%ld, value=%ld\n",fromWord((($tup2_t)item)->a),fromWord((($tup2_t)item)->b));
+     printf("popitem gives: key=%ld, value=%ld\n",fromWord(item->components[0]),fromWord(item->components[1]));
   }
   printf("size of dictionary should be 10007; is %ld\n",from$int(wit->$class->__len__(wit,dict)));
 }

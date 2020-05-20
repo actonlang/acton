@@ -332,9 +332,7 @@ void $set_remove($set set, $Hashable hashwit, $WORD elem) {
   if($set_discard_entry(set,hashwit,elem,hash))
     return;
   else {
-      exception e;
-      MKEXCEPTION(e,KEYERROR);
-      RAISE(e);
+    RAISE(($BaseException)$NEW($KeyError,from$UTF8("remove: element not set member")));
   }
 }
 
@@ -473,12 +471,11 @@ void $set_serialize($set self, $Serial$state state) {
     return;
   }
   $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
-  $ROW row = $new_row(SET_ID,&state->row_no,4,NULL);
+  $ROW row = $add_header(SET_ID,4,state);
   row->blob[0] = ($WORD)self->numelements;
   row->blob[1] = ($WORD)self->fill;
   row->blob[2] = ($WORD)self->mask;
   row->blob[3] = ($WORD)self->finger;
-  $enqueue(state,row);
   for (long i=0; i<=self->mask; i++) {
     $setentry *entry = &self->table[i];
     $step_serialize(to$int(entry->hash),state);

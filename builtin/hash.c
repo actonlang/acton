@@ -106,7 +106,7 @@ long $float_hash($float v) {
   return double_hash(from$float(v));
 }
 
-long pointer_hash($WORD p) {
+long $pointer_hash($WORD p) {
     long x;
     long y = (long)p;
     // bottom 3 or 4 bits are likely to be 0; rotate y by 4 to avoid
@@ -170,112 +170,24 @@ long $string_hash(void *src, int len) {
     return x;
 }
 
-/* Hash for tuples. This is a slightly simplified version of the xxHash
-   non-cryptographic hash:
-   - we do not use any parallellism, there is only 1 accumulator.
-   - we drop the final mixing since this is just a permutation of the
-     output space: it does not help against collisions.
-   - at the end, we mangle the length with a single constant.
-   For the xxHash specification, see
-   https://github.com/Cyan4973/xxHash/blob/master/doc/xxhash_spec.md
-
-   Below are the official constants from the xxHash specification. Optimizing
-   compilers should emit a single "rotate" instruction for the
-   _PyHASH_XXROTATE() expansion. If that doesn't happen for some important
-   platform, the macro could be changed to expand to a platform-specific rotate
-   spelling instead.
-*/
-#define _PyHASH_XXPRIME_1 ((long)11400714785074694791ULL)
-#define _PyHASH_XXPRIME_2 ((long)14029467366897019727ULL)
-#define _PyHASH_XXPRIME_5 ((long)2870177450012600261ULL)
-#define _PyHASH_XXROTATE(x) ((x << 31) | (x >> 33))  // Rotate left 31 bits 
-
-/*
- Tests have shown that it's not worth to cache the hash value, see
-   https://bugs.python.org/issue9685 
-*/
-
-/*
-
-long $PREFIX_hash($PREFIX v) {
-    int i, len = v->prefix_size;
-
-    long acc = _PyHASH_XXPRIME_5;
-    for (i = 0; i < len; i++) {
-      long lane = long_hash((long)v->prefix[i]);
-      // printf("tuple element hash is %ld\n",lane);
-      //      if (lane == (size_t)-1) {
-      //  return -1;
-      //}
-      acc += lane * _PyHASH_XXPRIME_2;
-      acc = _PyHASH_XXROTATE(acc);
-      acc *= _PyHASH_XXPRIME_1;
-    }
-
-    //Add input length, mangled to keep the historical value of hash(()). 
-    acc += len ^ (_PyHASH_XXPRIME_5 ^ 3527539UL);
-
-    if (acc == (long)-1) {
-        return 1546275796;
-    }
-    return acc;
-}
-*/
+   
 /*
  "Old" hash algorithm for tuples; used in Python versions <= 3.7. 
     From 3.8 the xxHash-based algorithm above is used.
-
-size_t tuple_hash($WORD ht,$WORD v) {
-  
-  tuple_t hashes = (tuple_t)ht;
-  tuple_t tup = (tuple_t)v;
-  size_t x = 0x345678UL;  // Unsigned for defined overflow behavior. 
-  size_t y;
-  size_t len = tup->length;
-  size_t mult = _PyHASH_MULTIPLIER;
-  $WORD *p = tup->item;
-  $WORD *h = hashes->item;
-  
-  for (int i = 0; i<len; i++) {
-    size_t(*hfn)($WORD) = (size_t(*)($WORD))(h[i]);
-    y = hfn(p[i]);
-    //    printf("hash of component is %ld\n",y);
+*/
+long $tuple_hash($Hashable$tuple wit,$tuple tup) {
+  int size = tup->size;
+  long x = 0x345678UL;
+  long y;
+  long mult = _PyHASH_MULTIPLIER;
+  for (int i=0; i < size; i++) {
+    $Hashable h = wit->w$Hashable$tuple[i];
+    y = from$int(h->$class->__hash__(h,tup->components[i]));
     x = (x ^ y) * mult;
-    // the cast might truncate len; that doesn't change hash stability 
-    mult += (size_t)(82520UL + 2*(len-i-1));
+    mult += (long)(82520UL + 2*(size-i-1));
   }
   x += 97531UL;
-  if (x == (size_t)-1) 
+  if (x == (long)-1) 
     x = -2;
   return x;
 }
-
-
-static struct Hashable_struct long_h = {long_eq, long_hash};
-
-Hashable long_Hashable = &long_h;
-
-static struct Hashable_struct double_h = {double_eq, double_hash};
-
-Hashable double_Hashable =  &double_h;
-
-int unboxed_eq($WORD a, $WORD b) {
-  return a == b;
-}
-
-size_t unboxed_hash($WORD v) {
-  long u = (long)v, sign=1;
-  if (u<0)  {
-    sign=-1;
-    u = -u;
-  }
-  size_t h = u % _PyHASH_MODULUS * sign;
-  if (h == (size_t)-1)
-    h = (size_t)-2;
-  return h;
-}
-
-static struct Hashable_struct unboxed_h = {unboxed_eq, unboxed_hash};
-
-Hashable unboxed_Hashable = &unboxed_h;
-*/

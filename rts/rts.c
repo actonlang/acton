@@ -122,12 +122,12 @@ void $Msg$__serialize__($Msg self, $Serial$state state) {
 
 $Msg $Msg$__deserialize__($Serial$state state) {
   $Msg res = $DNEW($Msg,state);
-    res->next = ($Msg)$step_deserialize(state);
-    res->to = ($Actor)$step_deserialize(state);
-    res->cont = ($Cont)$step_deserialize(state);
-    res->waiting = ($Actor)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->to = $step_deserialize(state);
+    res->cont = $step_deserialize(state);
+    res->waiting = $step_deserialize(state);
     res->baseline = (time_t)$val_deserialize(state);
-    res->value = ($WORD)$step_deserialize(state);
+    res->value = $step_deserialize(state);
     atomic_flag_clear(&res->wait_lock);
     return res;
 }
@@ -137,6 +137,7 @@ $Msg $Msg$__deserialize__($Serial$state state) {
 void $Actor$__init__($Actor a) {
     a->next = NULL;
     a->msg = NULL;
+    a->outgoing = NULL;
     a->catcher = NULL;
     atomic_flag_clear(&a->msg_lock);
 }
@@ -149,9 +150,9 @@ void $Actor$__serialize__($Actor self, $Serial$state state) {
 
 $Actor $Actor$__deserialize__($Serial$state state) {
   $Actor res = $DNEW($Actor,state);
-    res->next = ($Actor)$step_deserialize(state);
-    res->msg = ($Msg)$step_deserialize(state);
-    res->catcher = ($Catcher)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->msg = $step_deserialize(state);
+    res->catcher = $step_deserialize(state);
     atomic_flag_clear(&res->msg_lock);
     return res;
 }
@@ -170,8 +171,8 @@ void $Catcher$__serialize__($Catcher self, $Serial$state state) {
 
 $Catcher $Catcher$__deserialize__($Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->next = ($Catcher)$step_deserialize(state);
-    res->cont = ($Cont)$step_deserialize(state);
+    res->next = $step_deserialize(state);
+    res->cont = $step_deserialize(state);
     return res;
 }
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -213,8 +214,8 @@ void $RetNew$__serialize__($RetNew self, $Serial$state state) {
 
 $RetNew $RetNew$__deserialize__($Serial$state state) {
     $RetNew res = $DNEW($RetNew,state);
-    res->cont = ($Cont)$step_deserialize(state);
-    res->act = ($Actor)$step_deserialize(state);
+    res->cont = $step_deserialize(state);
+    res->act = $step_deserialize(state);
     return res;
 }
 
@@ -408,6 +409,38 @@ $Msg DEQ_timed(time_t now) {
     return res;
 }
 
+// Place a message in the outgoing buffer of the sender. Not protected (never
+// exposed to data races).
+void PUSH_outgoing($Actor self, $Msg m) {
+    m->next = self->outgoing;
+    self->outgoing = m;
+}
+
+// Actually send all buffered messages of the sender. Not protected (never
+// exposed to data races).
+void FLUSH_outgoing($Actor self) {
+    $Msg prev = NULL;
+    $Msg m = self->outgoing;
+    while (m) {
+        $Msg next = m->next;
+        m->next = prev;
+        prev = m;
+        m = next;
+    }
+    m = prev;
+    while (m) {
+        if (m->baseline == self->msg->baseline) {
+            $Actor to = m->to;
+            if (ENQ_msg(m, to)) {
+                ENQ_ready(to);
+            }
+        } else {
+            ENQ_timed(m);
+        }
+        m = m->next;
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 char *RTAG_name($RTAG tag) {
     switch (tag) {
@@ -509,9 +542,10 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    if (ENQ_msg(m, to)) {
-        ENQ_ready(to);
-    }
+    PUSH_outgoing(self, m);
+//    if (ENQ_msg(m, to)) {
+//        ENQ_ready(to);
+//    }
     return m;
 }
 
@@ -519,7 +553,8 @@ $Msg $AFTER(time_t sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
     $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
-    ENQ_timed(m);
+    PUSH_outgoing(self, m);
+//    ENQ_timed(m);
     return m;
 }
 
@@ -555,6 +590,7 @@ void *main_loop(void *arg) {
             $R r = cont->$class->enter(cont, val);
             switch (r.tag) {
                 case $RDONE: {
+                    FLUSH_outgoing(current);
                     m->value = r.value;
                     $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL
                     while (b) {
@@ -581,6 +617,7 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case $RWAIT: {
+                    FLUSH_outgoing(current);
                     m->cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (!ADD_waiting(current, x)) {

@@ -43,13 +43,12 @@ void $dict_serialize($dict self,$Serial$state state) {
   }
   $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
   int blobsize = 4 + (self->table->tb_size + 1) * sizeof(int)/sizeof($WORD);
-  $ROW row = $new_row(DICT_ID,&state->row_no,blobsize,NULL);
+  $ROW row = $add_header(DICT_ID,blobsize,state);
   row->blob[0] = ($WORD)self->numelements;
   row->blob[1] = ($WORD)self->table->tb_size;
   row->blob[2] = ($WORD)self->table->tb_usable;
   row->blob[3] = ($WORD)self->table->tb_nentries;
   memcpy(&row->blob[4],self->table->tb_indices,self->table->tb_size*sizeof(int));
-  $enqueue(state,row);
   for (int i=0; i<self->table->tb_nentries; i++) {
     $entry_t entry = &TB_ENTRIES(self->table)[i];
     $step_serialize(to$int(entry->hash),state);
@@ -159,9 +158,9 @@ void $dict_init($dict dict, $Hashable hashwit, $Iterable$opaque it) {
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
   if (it) {
     $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-    $tup2_t nxt;
-    while((nxt = ($tup2_t)iter->$class->__next__(iter))) {
-      $dict_setitem(dict,hashwit,nxt->a,nxt->b);
+    $tuple nxt;
+    while((nxt = ($tuple)iter->$class->__next__(iter))) {
+      $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
     }
     
     //try iterate and insert into dict, catching StopIteration
@@ -309,9 +308,7 @@ $Iterator $dict_iter($dict dict) {
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   if (insertdict(dict, hashwit, hash, key, value)<0) {
-    exception e;
-    MKEXCEPTION(e,MEMORYERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($IndexError,from$UTF8("getitem: key not in dictionary")));
   }      
 }
 
@@ -320,9 +317,7 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
-    exception e;
-    MKEXCEPTION(e,KEYERROR);
-    RAISE(e);
+    RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: key not in dictionary")));
   }      
   return res;
 }
@@ -339,9 +334,7 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == NULL) {
-      exception e;
-      MKEXCEPTION(e,KEYERROR);
-      RAISE(e);
+      RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: key not in dictionary")));
     }
     entry->value = NULL;
     dict->numelements--;
@@ -422,11 +415,10 @@ static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
       self->nxt = i+1;
-      $tup2_t res = malloc(sizeof(struct $tup2_t));
-      res->$class = &$tup2_t$methods;
-      res->a = entry->key;
-      res->b = entry->value;
-      return res;
+      $WORD *comps = malloc(2*sizeof($WORD));
+      comps[0] = entry->key;
+      comps[1] = entry->value;
+      return $NEW($tuple,2,comps);
     }
     i++;
   }
@@ -478,23 +470,21 @@ $WORD $dict_get($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {
     return res;
 }
 
-$WORD $dict_popitem($dict dict, $Hashable hashwit) {
+$tuple $dict_popitem($dict dict, $Hashable hashwit) {
   $table table = dict->table;
   int ix = table->tb_nentries-1;
   while (ix >= 0) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
     if (entry->value != NULL) {
-      $tup2_t res = malloc(sizeof(struct $tup2_t));
-      res->$class = &$tup2_t$methods;
-      res->a = entry->key;
-      res->b = entry->value;
-      entry->value = NULL;
+      $WORD *comps = malloc(2*sizeof($WORD));
+      comps[0] = entry->key;
+      comps[1] = entry->value;
       long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
       int i = lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
       table->tb_nentries = ix;
-      return res;
+      return $NEW($tuple,2,comps);
     }
     ix--;
   }
@@ -503,9 +493,9 @@ $WORD $dict_popitem($dict dict, $Hashable hashwit) {
 
 void $dict_update($dict dict,  $Hashable hashwit, $Iterable$opaque it) {
   $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-  $WORD item;
-  while((item = iter->$class->__next__(iter)))
-    $dict_setitem(dict,hashwit,(($tup2_t)item)->a,(($tup2_t)item)->b);
+  $tuple item;
+  while((item = ($tuple)iter->$class->__next__(iter)))
+    $dict_setitem(dict,hashwit,item->components[0],item->components[1]);
 }
 
 $WORD $dict_setdefault($dict dict, $Hashable hashwit, $WORD key, $WORD deflt) {

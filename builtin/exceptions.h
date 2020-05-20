@@ -7,6 +7,8 @@ struct $BaseException$class {
   $BaseException (*__deserialize__)($Serial$state);
 };
 
+typedef struct $BaseException *$BaseException;
+
 struct $BaseException {
   struct $BaseException$class *$class;
   $str error_message;
@@ -22,6 +24,8 @@ struct $SystemExit$class {
   void (*__serialize__)($SystemExit,$Serial$state);
   $SystemExit (*__deserialize__)($Serial$state);
 };
+
+typedef struct $SystemExit *$SystemExit;
 
 struct $SystemExit {
   struct $SystemExit$class *$class;
@@ -39,6 +43,8 @@ struct $KeyboardInterrupt$class {
   $KeyboardInterrupt (*__deserialize__)($Serial$state);
 };
 
+typedef struct $KeyboardInterrupt *$KeyboardInterrupt;
+
 struct $KeyboardInterrupt {
   struct $KeyboardInterrupt$class *$class;
   $str error_message;
@@ -54,6 +60,8 @@ struct $Exception$class {
   void (*__serialize__)($Exception,$Serial$state);
   $Exception (*__deserialize__)($Serial$state);
 };
+
+typedef struct $Exception *$Exception;
 
 struct $Exception {
   struct $Exception$class *$class;
@@ -71,6 +79,8 @@ struct $AssertionError$class {
   $AssertionError (*__deserialize__)($Serial$state);
 };
 
+typedef struct $AssertionError *$AssertionError;
+
 struct $AssertionError {
   struct $AssertionError$class *$class;
   $str error_message;
@@ -86,6 +96,8 @@ struct $LookupError$class {
   void (*__serialize__)($LookupError,$Serial$state);
   $LookupError (*__deserialize__)($Serial$state);
 };
+
+typedef struct $LookupError *$LookupError;
 
 struct $LookupError {
   struct $LookupError$class *$class;
@@ -103,6 +115,8 @@ struct $IndexError$class {
   $IndexError (*__deserialize__)($Serial$state);
 };
 
+typedef struct $IndexError *$IndexError;
+
 struct $IndexError {
   struct $IndexError$class *$class;
   $str error_message;
@@ -118,6 +132,8 @@ struct $KeyError$class {
   void (*__serialize__)($KeyError,$Serial$state);
   $KeyError (*__deserialize__)($Serial$state);
 };
+
+typedef struct $KeyError *$KeyError;
 
 struct $KeyError {
   struct $KeyError$class *$class;
@@ -135,6 +151,8 @@ struct $MemoryError$class {
   $MemoryError (*__deserialize__)($Serial$state);
 };
 
+typedef struct $$MemoryError *$$MemoryError;
+
 struct $MemoryError {
   struct $MemoryError$class *$class;
   $str error_message;
@@ -150,6 +168,8 @@ struct $OSError$class {
   void (*__serialize__)($OSError, $Serial$state);
   $OSError (*__deserialize__)($Serial$state);
 };
+
+typedef struct $OSError *$OSError;
 
 struct $OSError {
   struct $OSError$class *$class;
@@ -167,6 +187,8 @@ struct $RuntimeError$class {
   $RuntimeError (*__deserialize__)($Serial$state);
 };
 
+typedef struct $RuntimeError *$RuntimeError;
+
 struct $RuntimeError {
   struct $RuntimeError$class *$class;
   $str error_message;
@@ -182,6 +204,8 @@ struct $NotImplementedError$class {
   void (*__serialize__)($NotImplementedError,$Serial$state);
   $NotImplementedError (*__deserialize__)($Serial$state);
 };
+
+typedef struct $NotImplementedError *$NotImplementedError;
 
 struct $NotImplementedError {
   struct $NotImplementedError$class *$class;
@@ -199,15 +223,16 @@ struct $ValueError$class {
   $ValueError (*__deserialize__)($Serial$state);
 };
 
+typedef struct $ValueError *$ValueError;
+
 struct $ValueError {
   struct $ValueError$class *$class;
   $str error_message;
 };
 
 extern struct $ValueError$class $ValueError$methods;
- 
 
-
+void RAISE($BaseException e);
 
  
 /*

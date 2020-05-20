@@ -9,7 +9,7 @@
 
 #include "../builtin/builtin.h"
 
-typedef void *$WORD;
+// typedef void *$WORD; defined in builtin
 
 struct $Msg;
 struct $Actor;
@@ -87,6 +87,7 @@ struct $Actor {
     struct $Actor$class *$class;
     $Actor next;
     $Msg msg;
+    $Msg outgoing;
     $Catcher catcher;
     volatile atomic_flag msg_lock;
 };

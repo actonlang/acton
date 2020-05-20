@@ -8,9 +8,7 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
-     exception e;
-     MKEXCEPTION(e,INDEXERROR);
-     RAISE(e);
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("step size zero in range")));
     }
     else
       self->step = stp;
@@ -19,11 +17,10 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
 }
 
 void $range$__serialize__($range self, $Serial$state state) {
-  $ROW row = $new_row(RANGE_ID,&state->row_no,3,NULL);
+  $ROW row = $add_header(RANGE_ID,3,state);
   row->blob[0] = ($WORD)(long)self->start;
   row->blob[1] = ($WORD)(long)self->stop;
   row->blob[2] = ($WORD)(long)self->step;
-  $enqueue(state,row);
 }
 
 $range $range$__deserialize__($Serial$state state) {
