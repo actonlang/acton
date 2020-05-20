@@ -55,13 +55,13 @@ int db_update_in_txn(int * col_idxs, int no_cols, size_t blob_size, WORD * colum
 
 int enqueue_in_txn(WORD * column_values, int no_cols, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
+		int max_entries, int * entries_read, int64_t * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		db_t * db, unsigned int * fastrandstate);
 int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
+					int64_t new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						uuid_t * txnid, db_t * db, unsigned int * fastrandstate);
 int unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 								uuid_t * txnid, db_t * db, unsigned int * fastrandstate);

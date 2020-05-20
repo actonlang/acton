@@ -15,7 +15,7 @@ int txn_write_cmp(WORD e1, WORD e2)
 	txn_write * tr2 = (txn_write *) e2;
 
 	if(tr1->table_key != tr2->table_key)
-		return (int) ((long) tr1->table_key - (long) tr2->table_key);
+		return (int) ((int64_t) tr1->table_key - (int64_t) tr2->table_key);
 
 	if(tr1->query_type < QUERY_TYPE_ENQUEUE) // Regular ops ordering:
 	{
@@ -29,7 +29,7 @@ int txn_write_cmp(WORD e1, WORD e2)
 		for(int i=0;i<no_key_cols1;i++)
 		{
 			if(tr1->column_values[i] != tr2->column_values[i])
-				return (int) (long) tr1->column_values[i] - (long) tr2->column_values[i];
+				return (int) (int64_t) tr1->column_values[i] - (int64_t) tr2->column_values[i];
 		}
 	}
 	else // Queue ops ordering:
@@ -41,13 +41,13 @@ int txn_write_cmp(WORD e1, WORD e2)
 		if(tr1->query_type == QUERY_TYPE_READ_QUEUE || tr1->query_type == QUERY_TYPE_CONSUME_QUEUE)
 		{
 			if(tr1->queue_id != tr2->queue_id)
-				return (int) ((long) tr1->queue_id - (long) tr2->queue_id);
+				return (int) ((int64_t) tr1->queue_id - (int64_t) tr2->queue_id);
 			if(tr1->app_id != tr2->app_id)
-				return (int) ((long) tr1->app_id - (long) tr2->app_id);
+				return (int) ((int64_t) tr1->app_id - (int64_t) tr2->app_id);
 			if(tr1->shard_id != tr2->shard_id)
-				return (int) ((long) tr1->shard_id - (long) tr2->shard_id);
+				return (int) ((int64_t) tr1->shard_id - (int64_t) tr2->shard_id);
 			if(tr1->consumer_id != tr2->consumer_id)
-				return (int) ((long) tr1->consumer_id - (long) tr2->consumer_id);
+				return (int) ((int64_t) tr1->consumer_id - (int64_t) tr2->consumer_id);
 		}
 		// All enqueues, queue creates, deletes, subscribes and unsubscribes are accumulated in the write set, in the local order they were issued in the txn:
 		else if(tr1->query_type == QUERY_TYPE_ENQUEUE ||
@@ -56,7 +56,7 @@ int txn_write_cmp(WORD e1, WORD e2)
 				tr1->query_type == QUERY_TYPE_UNSUBSCRIBE_QUEUE)
 		{
 			if(tr1->local_order != tr2->local_order)
-				return (int) ((long) tr1->local_order - (long) tr2->local_order);
+				return (int) ((int64_t) tr1->local_order - (int64_t) tr2->local_order);
 		}
 	}
 
@@ -74,7 +74,7 @@ int txn_read_cmp(WORD e1, WORD e2)
 		return tr1->query_type - tr2->query_type;
 
 	if(tr1->table_key != tr2->table_key)
-		return (int) ((long) tr1->table_key - (long) tr2->table_key);
+		return (int) ((int64_t) tr1->table_key - (int64_t) tr2->table_key);
 
 	if(tr1->query_type == QUERY_TYPE_READ_INDEX || tr1->query_type == QUERY_TYPE_READ_INDEX_RANGE)
 	{
@@ -160,7 +160,7 @@ void free_txn_state(txn_state * ts)
 	free(ts);
 }
 
-txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, long local_order)
+txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, int64_t local_order)
 {
 	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
 	memset(tw, 0, sizeof(txn_write) + no_cols*sizeof(WORD));
@@ -180,7 +180,7 @@ txn_write * get_txn_write(short query_type, WORD * column_values, int no_cols, i
 	return tw;
 }
 
-txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_primary_keys, WORD * clustering_keys, int no_clustering_keys, WORD table_key, long local_order)
+txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_primary_keys, WORD * clustering_keys, int no_clustering_keys, WORD table_key, int64_t local_order)
 {
 	int no_cols = no_primary_keys + no_clustering_keys;
 	txn_write * tw = (txn_write *) malloc(sizeof(txn_write) + no_cols*sizeof(WORD));
@@ -206,7 +206,7 @@ txn_write * get_dummy_txn_write(short query_type, WORD * primary_keys, int no_pr
 
 txn_write * get_txn_queue_op(short query_type, WORD * column_values, int no_cols, size_t blob_size, WORD table_key,
 					WORD queue_id, WORD consumer_id, WORD shard_id, WORD app_id,
-					long new_read_head, vector_clock * prh_version, long new_consume_head, long local_order)
+					int64_t new_read_head, vector_clock * prh_version, int64_t new_consume_head, int64_t local_order)
 {
 	assert(query_type >= QUERY_TYPE_ENQUEUE && query_type <= QUERY_TYPE_UNSUBSCRIBE_QUEUE);
 
@@ -259,8 +259,8 @@ txn_read * get_txn_read(short query_type,
 						WORD* col_keys, int no_col_keys,
 						int idx_idx,
 						vector_clock * result_version,
-						long * range_result_keys, vector_clock ** range_result_versions, int no_range_results,
-						WORD table_key, long local_order)
+						int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results,
+						WORD table_key, int64_t local_order)
 {
 	int total_col_count = no_primary_keys + no_clustering_keys;
 	if(query_type == QUERY_TYPE_READ_ROW_RANGE)
@@ -348,7 +348,7 @@ void free_txn_read(txn_read * tr)
 int add_write_to_txn(short query_type, WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, size_t blob_size, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
 	assert((query_type == QUERY_TYPE_UPDATE) || (query_type == QUERY_TYPE_DELETE));
-	txn_write * tw = get_txn_write(query_type, column_values, no_cols, no_primary_keys, no_clustering_keys, blob_size, table_key, (long) ts->write_set->no_items);
+	txn_write * tw = get_txn_write(query_type, column_values, no_cols, no_primary_keys, no_clustering_keys, blob_size, table_key, (int64_t) ts->write_set->no_items);
 
 	// Note that this will overwrite previous values written for the variable in the same txn (last write wins):
 
@@ -367,7 +367,7 @@ int add_row_read_to_txn(WORD* primary_keys, int no_primary_keys,
 						WORD table_key, db_row_t* result,
 						txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW, primary_keys, NULL, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (int64_t) ts->read_set->no_items);
 
 	// Note that this will overwrite previous values read for the variable in the same txn (last read wins):
 
@@ -386,18 +386,18 @@ int add_row_range_read_to_txn(WORD* start_primary_keys, WORD* end_primary_keys, 
 								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	int64_t * range_result_keys = (int64_t *) malloc(no_results * sizeof(int64_t));
 	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
 	int i=0;
 
 	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
 	{
 		db_row_t * row = (db_row_t *) crt_row->value;
-		range_result_keys[i] = (long) row->key;
+		range_result_keys[i] = (int64_t) row->key;
 		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
 	}
 
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, range_result_keys, range_result_versions, no_results, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_ROW_RANGE, start_primary_keys, end_primary_keys, no_primary_keys, NULL, NULL, 0, NULL, 0, -1, NULL, range_result_keys, range_result_versions, no_results, table_key, (int64_t) ts->read_set->no_items);
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
 
@@ -412,7 +412,7 @@ int add_cell_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusteri
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_CELL, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, NULL, 0, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (int64_t) ts->read_set->no_items);
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
 
@@ -429,14 +429,14 @@ int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* st
 								snode_t* start_row, snode_t* end_row, int no_results,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	int64_t * range_result_keys = (int64_t *) malloc(no_results * sizeof(int64_t));
 	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
 	int i=0;
 
 	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
 	{
 		db_row_t * row = (db_row_t *) crt_row->value;
-		range_result_keys[i] = (long) row->key;
+		range_result_keys[i] = (int64_t) row->key;
 		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
 	}
 
@@ -444,7 +444,7 @@ int add_cell_range_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* st
 								start_clustering_keys, end_clustering_keys, no_clustering_keys,
 								NULL, 0, -1, NULL,
 								range_result_keys, range_result_versions, no_results,
-								table_key, (long) ts->read_set->no_items);
+								table_key, (int64_t) ts->read_set->no_items);
 
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
@@ -461,7 +461,7 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 								WORD table_key, db_row_t* result,
 								txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_COLS, primary_keys, NULL, no_primary_keys, clustering_keys, NULL, no_clustering_keys, col_keys, no_columns, -1, copy_vc(result->version), NULL, NULL, 0, table_key, (int64_t) ts->read_set->no_items);
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
 
@@ -474,7 +474,7 @@ int add_col_read_to_txn(WORD* primary_keys, int no_primary_keys, WORD* clusterin
 
 int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t* result, txn_state * ts, unsigned int * fastrandstate)
 {
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, copy_vc(result->version), NULL, NULL, 0, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX, index_key, NULL, 1, NULL, NULL, 0, NULL, 0, idx_idx, copy_vc(result->version), NULL, NULL, 0, table_key, (int64_t) ts->read_set->no_items);
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
 
@@ -487,18 +487,18 @@ int add_index_read_to_txn(WORD* index_key, int idx_idx, WORD table_key, db_row_t
 
 int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_key, snode_t* start_row, snode_t* end_row, int no_results, WORD table_key, txn_state * ts, unsigned int * fastrandstate)
 {
-	long * range_result_keys = (long *) malloc(no_results * sizeof(long));
+	int64_t * range_result_keys = (int64_t *) malloc(no_results * sizeof(int64_t));
 	vector_clock ** range_result_versions = (vector_clock **) malloc(no_results * sizeof(vector_clock *));;
 	int i=0;
 
 	for(snode_t* crt_row = start_row;crt_row != end_row;crt_row=NEXT(crt_row), i++)
 	{
 		db_row_t * row = (db_row_t *) crt_row->value;
-		range_result_keys[i] = (long) row->key;
+		range_result_keys[i] = (int64_t) row->key;
 		range_result_versions[i] = (row->version != NULL)? copy_vc(row->version) : NULL;
 	}
 
-	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, range_result_keys, range_result_versions, no_results, table_key, (long) ts->read_set->no_items);
+	txn_read * tr = get_txn_read(QUERY_TYPE_READ_INDEX_RANGE, start_idx_key, end_idx_key, 1, NULL, NULL, 0, NULL, 0, idx_idx, NULL, range_result_keys, range_result_versions, no_results, table_key, (int64_t) ts->read_set->no_items);
 	snode_t * prev_tr_node = skiplist_search(ts->read_set, (WORD) tr);
 	txn_read * prev_tr = (prev_tr_node != NULL)?prev_tr_node->value : NULL;
 
@@ -514,18 +514,18 @@ int add_index_range_read_to_txn(int idx_idx, WORD* start_idx_key, WORD* end_idx_
 int add_enqueue_to_txn(WORD * column_values, int no_cols, size_t blob_size, WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_ENQUEUE, column_values, no_cols, blob_size, table_key, queue_id,
-						NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
+						NULL, NULL, NULL, -1, NULL, -1, (int64_t) ts->write_set->no_items);
 
 	 // Multiple enqueues in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate);
 }
 
 int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						long new_read_head, vector_clock * prh_version, txn_state * ts, unsigned int * fastrandstate)
+						int64_t new_read_head, vector_clock * prh_version, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_READ_QUEUE, NULL, 0, 0, table_key, queue_id,
 								consumer_id, shard_id, app_id, new_read_head, prh_version, -1,
-								(long) ts->write_set->no_items);
+								(int64_t) ts->write_set->no_items);
 
 	// Keep only latest private_read_head when doing multiple queue reads in the same txn:
 	snode_t * prev_tw_node = skiplist_search(ts->write_set, (WORD) tw);
@@ -540,11 +540,11 @@ int add_read_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 }
 
 int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, txn_state * ts, unsigned int * fastrandstate)
+					int64_t new_consume_head, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CONSUME_QUEUE, NULL, 0, 0, table_key, queue_id,
 								consumer_id, shard_id, app_id, -1, NULL, new_consume_head,
-								(long) ts->write_set->no_items);
+								(int64_t) ts->write_set->no_items);
 	// Keep only latest private_consume_head when doing multiple queue consumes in the same txn:
 	snode_t * prev_tw_node = skiplist_search(ts->write_set, (WORD) tw);
 	txn_write * prev_tw = (prev_tw_node != NULL)?prev_tw_node->value : NULL;
@@ -559,7 +559,7 @@ int add_consume_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_CREATE_QUEUE, NULL, 0, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, NULL, -1, (int64_t) ts->write_set->no_items);
 
 	 // Multiple "create queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
@@ -568,14 +568,14 @@ int add_create_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsig
 int add_delete_queue_to_txn(WORD table_key, WORD queue_id, txn_state * ts, unsigned int * fastrandstate)
 {
 	txn_write * tw = get_txn_queue_op(QUERY_TYPE_DELETE_QUEUE, NULL, 0, 0, table_key, queue_id,
-											NULL, NULL, NULL, -1, NULL, -1, (long) ts->write_set->no_items);
+											NULL, NULL, NULL, -1, NULL, -1, (int64_t) ts->write_set->no_items);
 
 	 // Multiple "delete queue"-s in the same txn accumulate in write set (indexed by local_order = ts->write_set->no_items):
 	return skiplist_insert(ts->write_set, (WORD) tw, (WORD) tw, fastrandstate); // TO DO: Handle multiple enqueues in the same txn
 }
 
 int add_subscribe_queue_to_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						txn_state * ts, unsigned int * fastrandstate)
 {
 	assert (0); // Not implemented

@@ -14,7 +14,7 @@
 #else
 #define GET_RANDSEED(seedptr, rand)							                        							\
 {                                                                                     						\
-  long now = time(NULL);                                                                 						\
+  int64_t now = time(NULL);                                                                 						\
   *(seedptr) = (unsigned int) ((now & 0xFFFFFFFF00000000) + (now & 0x00000000FFFFFFFF) + rand) ; \
 }
 #endif

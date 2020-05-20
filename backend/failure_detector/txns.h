@@ -8,7 +8,7 @@
 
 typedef struct txn_message
 {
-	long txnid;
+	int64_t txnid;
 
 } txn_message;
 

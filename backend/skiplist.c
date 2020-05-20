@@ -13,7 +13,7 @@
 #include "fastrand.h"
 
 int long_cmp(WORD e1, WORD e2) {
-	return (int) ((long) e1 - (long) e2);
+	return (int) ((int64_t) e1 - (int64_t) e2);
 }
 
 int uuid_cmp(WORD e1, WORD e2)
@@ -120,7 +120,7 @@ snode_t *skiplist_search(skiplist_t *list, WORD key) {
             x = x->forward[i];
     }
 
-    if (x != NULL && ((long) x->key) != LONG_MAX && list->cmp(key, x->key) == 0) {
+    if (x != NULL && ((int64_t) x->key) != LONG_MAX && list->cmp(key, x->key) == 0) {
         return x;
     } else {
         return NULL;
@@ -263,7 +263,7 @@ void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD))
 void skiplist_dump(skiplist_t *list) {
     snode_t *x = list->header;
     while (x && x->forward[0] != NULL) {
-        printf("%ld[%ld]->", (long) x->forward[0]->key, (long) x->forward[0]->value);
+        printf("%ld[%ld]->", (int64_t) x->forward[0]->key, (int64_t) x->forward[0]->value);
         x = x->forward[0];
     }
     printf("NIL\n");

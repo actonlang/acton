@@ -18,7 +18,7 @@ void free_client_msg(ClientMessage * m);
 
 // Write Query:
 
-write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long nonce)
+write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, int64_t nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
 	ca->cell = cell;
@@ -28,7 +28,7 @@ write_query * init_write_query(cell * cell, int msg_type, uuid_t * txnid, long n
 	return ca;
 }
 
-write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, long nonce)
+write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, int64_t nonce)
 {
 	write_query * ca = (write_query *) malloc(sizeof(write_query));
 	ca->cell = (cell != NULL)?(init_cell_copy(cell->table_key, cell->keys, cell->no_keys, cell->columns, cell->no_columns, cell->last_blob, cell->last_blob_size, cell->version)):(NULL);
@@ -46,33 +46,33 @@ write_query * init_write_query_copy(cell * cell, int msg_type, uuid_t * txnid, l
 	return ca;
 }
 
-write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_insert_in_txn(WORD * column_values, int no_cols, int no_primary_keys, int no_clustering_keys, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	int no_keys = no_primary_keys + no_clustering_keys;
 	assert(no_cols > no_keys || (blob != NULL && blob_size > 0));
-	cell * c = init_cell((long) table_key, (long *) column_values, no_keys, ((long *) column_values + no_keys), no_cols - no_keys, blob, blob_size, NULL);
+	cell * c = init_cell((int64_t) table_key, (int64_t *) column_values, no_keys, ((int64_t *) column_values + no_keys), no_cols - no_keys, blob, blob_size, NULL);
 	return init_write_query_copy(c, RPC_TYPE_WRITE, txnid, nonce);
 }
 
-write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_delete_row_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell * c = init_cell((long) table_key, (long *) primary_keys, no_primary_keys, NULL, 0, NULL, 0, NULL);
+	cell * c = init_cell((int64_t) table_key, (int64_t *) primary_keys, no_primary_keys, NULL, 0, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
-write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_delete_cell_in_txn(WORD* keys, int no_primary_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell * c = init_cell((long) table_key, (long *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL, 0, NULL);
+	cell * c = init_cell((int64_t) table_key, (int64_t *) keys, no_primary_keys + no_clustering_keys, NULL, 0, NULL, 0, NULL);
 	return init_write_query_copy(c, RPC_TYPE_DELETE, txnid, nonce);
 }
 
-write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_delete_by_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	assert (0); // Not supported
 	return 0;
 }
 
-write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, long nonce)
+write_query * build_update_in_txn(int * col_idxs, int no_cols, WORD * column_values, WORD blob, size_t blob_size, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	assert (0); // Not supported
 	return 0;
@@ -246,7 +246,7 @@ int equals_write_query(write_query * ca1, write_query * ca2)
 
 // Read Query:
 
-read_query * init_read_query(cell_address * cell_address, uuid_t * txnid, long nonce)
+read_query * init_read_query(cell_address * cell_address, uuid_t * txnid, int64_t nonce)
 {
 	read_query * ca = (read_query *) malloc(sizeof(read_query));
 	ca->cell_address = cell_address;
@@ -255,7 +255,7 @@ read_query * init_read_query(cell_address * cell_address, uuid_t * txnid, long n
 	return ca;
 }
 
-read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, long nonce)
+read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, int64_t nonce)
 {
 	read_query * ca = (read_query *) malloc(sizeof(read_query));
 	ca->cell_address = init_cell_address_copy(cell_address->table_key, cell_address->keys, cell_address->no_keys);
@@ -272,27 +272,27 @@ read_query * init_read_query_copy(cell_address * cell_address, uuid_t * txnid, l
 	return ca;
 }
 
-read_query * build_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+read_query * build_search_in_txn(WORD* primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_copy((long) table_key, (long *) primary_keys, no_primary_keys);
+	cell_address * c = init_cell_address_copy((int64_t) table_key, (int64_t *) primary_keys, no_primary_keys);
 
 	return init_read_query_copy(c, txnid, nonce);
 }
 
-read_query * build_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+read_query * build_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) clustering_keys, no_clustering_keys);
+	cell_address * c = init_cell_address_copy2((int64_t) table_key, (int64_t *) primary_keys, no_primary_keys, (int64_t *) clustering_keys, no_clustering_keys);
 
 	return init_read_query_copy(c, txnid, nonce);
 }
 
-read_query * build_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD* col_keys, int no_columns, WORD table_key, uuid_t * txnid, long nonce)
+read_query * build_search_columns_in_txn(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD* col_keys, int no_columns, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	assert(0); // Not supported
 	return NULL;
 }
 
-read_query * build_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, long nonce)
+read_query * build_search_index_in_txn(WORD index_key, int idx_idx, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	assert(0); // Not supported
 	return NULL;
@@ -426,40 +426,40 @@ int equals_read_query(read_query * ca1, read_query * ca2)
 
 // Range read query:
 
-range_read_query * build_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, long nonce)
+range_read_query * build_range_search_in_txn(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * start_c = init_cell_address_copy((long) table_key, (long *) start_primary_keys, no_primary_keys);
-	cell_address * end_c = init_cell_address_copy((long) table_key, (long *) end_primary_keys, no_primary_keys);
+	cell_address * start_c = init_cell_address_copy((int64_t) table_key, (int64_t *) start_primary_keys, no_primary_keys);
+	cell_address * end_c = init_cell_address_copy((int64_t) table_key, (int64_t *) end_primary_keys, no_primary_keys);
 
 	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
 }
 
-range_read_query * build_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, long nonce)
+range_read_query * build_range_search_clustering_in_txn(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * start_c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) start_clustering_keys, no_clustering_keys);
-	cell_address * end_c = init_cell_address_copy2((long) table_key, (long *) primary_keys, no_primary_keys, (long *) end_clustering_keys, no_clustering_keys);
+	cell_address * start_c = init_cell_address_copy2((int64_t) table_key, (int64_t *) primary_keys, no_primary_keys, (int64_t *) start_clustering_keys, no_clustering_keys);
+	cell_address * end_c = init_cell_address_copy2((int64_t) table_key, (int64_t *) primary_keys, no_primary_keys, (int64_t *) end_clustering_keys, no_clustering_keys);
 
 	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
 }
 
-range_read_query * build_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, WORD table_key, uuid_t * txnid, long nonce)
+range_read_query * build_range_search_index_in_txn(int idx_idx, WORD start_idx_key, WORD end_idx_key, WORD table_key, uuid_t * txnid, int64_t nonce)
 {
 	assert(0); // Not supported
 	return NULL;
 }
 
-range_read_query * build_wildcard_range_search_in_txn(WORD table_key, uuid_t * txnid, long nonce)
+range_read_query * build_wildcard_range_search_in_txn(WORD table_key, uuid_t * txnid, int64_t nonce)
 {
-	long min_key = LONG_MIN;
-	long max_key = LONG_MAX - 1;
+	int64_t min_key = LONG_MIN;
+	int64_t max_key = LONG_MAX - 1;
 
-	cell_address * start_c = init_cell_address_copy((long) table_key, &min_key, 1);
-	cell_address * end_c = init_cell_address_copy((long) table_key, &max_key, 1);
+	cell_address * start_c = init_cell_address_copy((int64_t) table_key, &min_key, 1);
+	cell_address * end_c = init_cell_address_copy((int64_t) table_key, &max_key, 1);
 
 	return init_range_read_query_copy(start_c, end_c, txnid, nonce);
 }
 
-range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce)
+range_read_query * init_range_read_query(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, int64_t nonce)
 {
 	range_read_query * ca = (range_read_query *) malloc(sizeof(range_read_query));
 	ca->start_cell_address = start_cell_address;
@@ -476,7 +476,7 @@ void free_range_read_query(range_read_query * ca)
 	free(ca);
 }
 
-range_read_query * init_range_read_query_copy(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, long nonce)
+range_read_query * init_range_read_query_copy(cell_address * start_cell_address, cell_address * end_cell_address, uuid_t * txnid, int64_t nonce)
 {
 	range_read_query * ca = (range_read_query *) malloc(sizeof(range_read_query));
 	ca->start_cell_address = init_cell_address_copy(start_cell_address->table_key, start_cell_address->keys, start_cell_address->no_keys);
@@ -629,7 +629,7 @@ int equals_range_read_query(range_read_query * ca1, range_read_query * ca2)
 
 // Ack Message:
 
-ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t * txnid, long nonce)
+ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t * txnid, int64_t nonce)
 {
 	ack_message * ca = (ack_message *) malloc(sizeof(ack_message));
 	ca->cell_address = cell_address;
@@ -639,7 +639,7 @@ ack_message * init_ack_message(cell_address * cell_address, int status, uuid_t *
 	return ca;
 }
 
-ack_message * init_ack_message_copy(cell_address * cell_address, int status, uuid_t * txnid, long nonce)
+ack_message * init_ack_message_copy(cell_address * cell_address, int status, uuid_t * txnid, int64_t nonce)
 {
 	ack_message * ca = (ack_message *) malloc(sizeof(ack_message));
 	ca->cell_address = (cell_address != NULL)?(init_cell_address_copy(cell_address->table_key, cell_address->keys, cell_address->no_keys)):(NULL);
@@ -796,7 +796,7 @@ int equals_ack_message(ack_message * ca1, ack_message * ca2)
 
 // Range read response:
 
-range_read_response_message * init_range_read_response_message(cell * cells, int no_cells, uuid_t * txnid, long nonce)
+range_read_response_message * init_range_read_response_message(cell * cells, int no_cells, uuid_t * txnid, int64_t nonce)
 {
 	range_read_response_message * ca = (range_read_response_message *) malloc(sizeof(range_read_response_message));
 	ca->cells = cells;
@@ -806,7 +806,7 @@ range_read_response_message * init_range_read_response_message(cell * cells, int
 	return ca;
 }
 
-range_read_response_message * init_range_read_response_message_copy(cell * cells, int no_cells, uuid_t * txnid, long nonce)
+range_read_response_message * init_range_read_response_message_copy(cell * cells, int no_cells, uuid_t * txnid, int64_t nonce)
 {
 	range_read_response_message * ca = (range_read_response_message *) malloc(sizeof(range_read_response_message));
 	ca->no_cells = no_cells;
@@ -1000,7 +1000,7 @@ int equals_range_read_response_message(range_read_response_message * ca1, range_
 
 // Queue query (and response) messages:
 
-queue_query_message * init_query_message_basic(cell_address * cell_address, uuid_t * txnid, long nonce)
+queue_query_message * init_query_message_basic(cell_address * cell_address, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = (queue_query_message *) malloc(sizeof(queue_query_message));
 	ca->cells = NULL;
@@ -1024,69 +1024,69 @@ queue_query_message * init_query_message_basic(cell_address * cell_address, uuid
 	return ca;
 }
 
-queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	cell * entry = init_cell_copy((long) table_key, (long *) column_values, 0, (long *) column_values, no_cols, blob, blob_size, NULL);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+	cell * entry = init_cell_copy((int64_t) table_key, (int64_t *) column_values, 0, (int64_t *) column_values, no_cols, blob, blob_size, NULL);
 
 	return init_enqueue_message(c, entry, 1, txnid, nonce);
 }
 
 queue_query_message * build_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-												int max_entries, uuid_t * txnid, long nonce)
+												int max_entries, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_read_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, (long) max_entries, txnid, nonce);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+	return init_read_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, (int64_t) max_entries, txnid, nonce);
 
 }
 
 queue_query_message * build_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-													long new_consume_head, uuid_t * txnid, long nonce)
+													int64_t new_consume_head, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_consume_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, new_consume_head, txnid, nonce);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+	return init_consume_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, new_consume_head, txnid, nonce);
 }
 
-queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
 	return init_create_queue_message(c, txnid, nonce);
 }
 
-queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
 	return init_delete_queue_message(c, txnid, nonce);
 }
 
-queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_subscribe_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, txnid, nonce);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+	return init_subscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, txnid, nonce);
 }
 
-queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, long nonce)
+queue_query_message * build_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id, uuid_t * txnid, int64_t nonce)
 {
-	cell_address * c = init_cell_address_single_key_copy((long) table_key, (long) queue_id);
-	return init_unsubscribe_queue_message(c, (long) app_id, (long) shard_id, (long) consumer_id, txnid, nonce);
+	cell_address * c = init_cell_address_single_key_copy((int64_t) table_key, (int64_t) queue_id);
+	return init_unsubscribe_queue_message(c, (int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id, txnid, nonce);
 }
 
 
-queue_query_message * init_create_queue_message(cell_address * cell_address, uuid_t * txnid, long nonce)
+queue_query_message * init_create_queue_message(cell_address * cell_address, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_CREATE_QUEUE;
 	return ca;
 }
 
-queue_query_message * init_delete_queue_message(cell_address * cell_address, uuid_t * txnid, long nonce)
+queue_query_message * init_delete_queue_message(cell_address * cell_address, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_DELETE_QUEUE;
 	return ca;
 }
 
-queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, long nonce)
+queue_query_message * init_subscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_SUBSCRIBE_QUEUE;
@@ -1096,7 +1096,7 @@ queue_query_message * init_subscribe_queue_message(cell_address * cell_address, 
 	return ca;
 }
 
-queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, long nonce)
+queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_UNSUBSCRIBE_QUEUE;
@@ -1106,7 +1106,7 @@ queue_query_message * init_unsubscribe_queue_message(cell_address * cell_address
 	return ca;
 }
 
-queue_query_message * init_enqueue_message(cell_address * cell_address, cell * cells, int no_cells, uuid_t * txnid, long nonce)
+queue_query_message * init_enqueue_message(cell_address * cell_address, cell * cells, int no_cells, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_ENQUEUE;
@@ -1115,7 +1115,7 @@ queue_query_message * init_enqueue_message(cell_address * cell_address, cell * c
 	return ca;
 }
 
-queue_query_message * init_read_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long max_entries, uuid_t * txnid, long nonce)
+queue_query_message * init_read_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int64_t max_entries, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_READ_QUEUE;
@@ -1126,7 +1126,7 @@ queue_query_message * init_read_queue_message(cell_address * cell_address, int a
 	return ca;
 }
 
-queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, long new_consume_head, uuid_t * txnid, long nonce)
+queue_query_message * init_consume_queue_message(cell_address * cell_address, int app_id, int shard_id, int consumer_id, int64_t new_consume_head, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_CONSUME_QUEUE;
@@ -1137,7 +1137,7 @@ queue_query_message * init_consume_queue_message(cell_address * cell_address, in
 	return ca;
 }
 
-queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_read_head, short status, uuid_t * txnid, long nonce)
+queue_query_message * init_read_queue_response(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_read_head, short status, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_READ_QUEUE_RESPONSE;
@@ -1152,7 +1152,7 @@ queue_query_message * init_read_queue_response(cell_address * cell_address, cell
 
 }
 
-queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, long new_no_entries, short status, uuid_t * txnid, long nonce)
+queue_query_message * init_queue_notification(cell_address * cell_address, cell * cells, int no_cells, int app_id, int shard_id, int consumer_id, int64_t new_no_entries, short status, uuid_t * txnid, int64_t nonce)
 {
 	queue_query_message * ca = init_query_message_basic(cell_address, txnid, nonce);
 	ca->msg_type = QUERY_TYPE_QUEUE_NOTIFICATION;
@@ -1493,7 +1493,7 @@ int equals_queue_message(queue_query_message * ca1, queue_query_message * ca2)
 
 // Txn Message:
 
-txn_message * build_new_txn(uuid_t * txnid, long nonce)
+txn_message * build_new_txn(uuid_t * txnid, int64_t nonce)
 {
 	return init_txn_message_copy(DB_TXN_BEGIN,
 			NULL, 0, // own_read_set, no_own_read_set,
@@ -1503,7 +1503,7 @@ txn_message * build_new_txn(uuid_t * txnid, long nonce)
 			txnid, NULL, nonce);
 }
 
-txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long nonce)
+txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, int64_t nonce)
 {
 	// In the current implementation, the server mirrors the txn's complete read and write sets, so there is no reason to re-send them from client:
 
@@ -1515,7 +1515,7 @@ txn_message * build_validate_txn(uuid_t * txnid, vector_clock * version, long no
 			txnid, version, nonce);
 }
 
-txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, long nonce)
+txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, int64_t nonce)
 {
 	// In the current implementation, the server mirrors the txn's complete read and write sets, so there is no reason to re-send them from client:
 
@@ -1527,7 +1527,7 @@ txn_message * build_commit_txn(uuid_t * txnid, vector_clock * version, long nonc
 			txnid, version, nonce);
 }
 
-txn_message * build_abort_txn(uuid_t * txnid, long nonce)
+txn_message * build_abort_txn(uuid_t * txnid, int64_t nonce)
 {
 	return init_txn_message_copy(DB_TXN_ABORT,
 			NULL, 0, // own_read_set, no_own_read_set,
@@ -1542,7 +1542,7 @@ txn_message * init_txn_message(int type,
 		cell * own_write_set, int no_own_write_set,
 		cell * complete_read_set, int no_complete_read_set,
 		cell * complete_write_set, int no_complete_write_set,
-		uuid_t * txnid, vector_clock * version, long nonce)
+		uuid_t * txnid, vector_clock * version, int64_t nonce)
 {
 	txn_message * ca = (txn_message *) malloc(sizeof(txn_message));
 	ca->type = type;
@@ -1565,7 +1565,7 @@ txn_message * init_txn_message_copy(int type,
 		cell * own_write_set, int no_own_write_set,
 		cell * complete_read_set, int no_complete_read_set,
 		cell * complete_write_set, int no_complete_write_set,
-		uuid_t * txnid, vector_clock * version, long nonce)
+		uuid_t * txnid, vector_clock * version, int64_t nonce)
 {
 	txn_message * ca = (txn_message *) malloc(sizeof(txn_message));
 

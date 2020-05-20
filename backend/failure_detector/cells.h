@@ -14,16 +14,16 @@ typedef void * WORD;
 
 typedef struct cell_address
 {
-	long table_key;
-	long * keys;
+	int64_t table_key;
+	int64_t * keys;
 	int no_keys;
 } cell_address;
 
-cell_address * init_cell_address(long table_key, long * keys, int no_keys);
-cell_address * init_cell_address_copy(long table_key, long * keys, int no_keys);
-cell_address * init_cell_address_copy2(long table_key, long * primary_keys, int no_primary_keys, long * clustering_keys, int no_clustering_keys);
-cell_address * init_cell_address_single_key_copy(long table_key, long key);
-int copy_cell_address(cell_address * ca, long table_key, long * keys, int no_keys);
+cell_address * init_cell_address(int64_t table_key, int64_t * keys, int no_keys);
+cell_address * init_cell_address_copy(int64_t table_key, int64_t * keys, int no_keys);
+cell_address * init_cell_address_copy2(int64_t table_key, int64_t * primary_keys, int no_primary_keys, int64_t * clustering_keys, int no_clustering_keys);
+cell_address * init_cell_address_single_key_copy(int64_t table_key, int64_t key);
+int copy_cell_address(cell_address * ca, int64_t table_key, int64_t * keys, int no_keys);
 void free_cell_address(cell_address * ca);
 void init_cell_address_msg(CellAddressMessage * msg, cell_address * ca);
 cell_address * init_cell_address_from_msg(CellAddressMessage * msg);
@@ -35,19 +35,19 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff);
 
 typedef struct cell
 {
-	long table_key;
-	long * keys;
+	int64_t table_key;
+	int64_t * keys;
 	int no_keys;
-	long * columns;
+	int64_t * columns;
 	int no_columns;
 	WORD last_blob;
 	size_t last_blob_size;
 	vector_clock * version;
 } cell;
 
-cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
-void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
+cell * init_cell(int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
+cell * init_cell_copy(int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
+void copy_cell(cell * ca, int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version);
 cell_address * get_cell_address(cell * c);
 cell * init_cell_from_msg(VersionedCellMessage * msg);
 cell * copy_cell_from_msg(cell * c, VersionedCellMessage * msg);

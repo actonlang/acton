@@ -31,7 +31,7 @@
 
 // Comm loop fctns:
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server, vector_clock ** vc);
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, int64_t * nonce, short is_server, vector_clock ** vc);
 int read_full_packet(int * sockfd, char * inbuf, size_t inbuf_size, int * msg_len, int * statusp, int (*handle_socket_close)(int * sockfd, int * status));
 int sockaddr_cmp(WORD a1, WORD a2);
 

@@ -47,11 +47,11 @@ int create_schema(db_t * db, unsigned int * fastrandstate) {
 // Populate DB (also db_insert test):
 
 int populate_db(db_t * db, unsigned int * fastrandstate) {
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
@@ -77,11 +77,11 @@ int test_search_column(db_t * db) {
 	for(int i=0;i<no_cols;i++)
 		column_idxs[i]=i;
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
@@ -97,8 +97,8 @@ int test_search_column(db_t * db) {
 					if(col_values[i] != column_values[i])
 					{
 						printf("Read back mismatched column %d on row (%ld, %ld, %ld, %ld). Read back: (%ld, %ld, %ld, %ld)!\n",
-								i, (long) column_values[0], (long) column_values[1], (long) column_values[2], (long) column_values[3],
-								(long) col_values[0], (long) col_values[1], (long) col_values[2], (long) col_values[3]);
+								i, (int64_t) column_values[0], (int64_t) column_values[1], (int64_t) column_values[2], (int64_t) column_values[3],
+								(int64_t) col_values[0], (int64_t) col_values[1], (int64_t) col_values[2], (int64_t) col_values[3]);
 						ret = -1;
 					}
 				}
@@ -114,13 +114,13 @@ int test_search_column(db_t * db) {
 
 int test_search_pk(db_t * db)
 {
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
 		db_row_t* row = db_search((WORD *) &aid, (WORD) 0, db);
 
-		if((long) row->key != aid)
+		if((int64_t) row->key != aid)
 		{
-			printf("Read back mismatched pk %ld ( != %ld)!\n", (long) row->key, aid);
+			printf("Read back mismatched pk %ld ( != %ld)!\n", (int64_t) row->key, aid);
 			return -1;
 		}
 	}
@@ -132,15 +132,15 @@ int test_search_pk(db_t * db)
 
 int test_search_pk_ck1(db_t * db)
 {
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
 			db_row_t* row = db_search_clustering((WORD *) &aid, (WORD *) &cid, 1, (WORD) 0, db);
 
-			if((long) row->key != cid)
+			if((int64_t) row->key != cid)
 			{
-				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (int64_t) row->key, cid, aid, cid);
 				return -1;
 			}
 		}
@@ -153,11 +153,11 @@ int test_search_pk_ck1(db_t * db)
 
 int test_search_pk_ck1_ck2(db_t * db)
 {
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				WORD * cks = (WORD *) malloc(2 * sizeof(WORD));
 				cks[0] = (WORD) cid;
@@ -165,9 +165,9 @@ int test_search_pk_ck1_ck2(db_t * db)
 
 				db_row_t* row = db_search_clustering((WORD *) &aid, cks, 2, (WORD) 0, db);
 
-				if((long) row->key != iid)
+				if((int64_t) row->key != iid)
 				{
-					printf("Read back mismatched ck2 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (long) row->key, iid, aid, cid, iid);
+					printf("Read back mismatched ck2 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (int64_t) row->key, iid, aid, cid, iid);
 					return -1;
 				}
 			}
@@ -183,7 +183,7 @@ int test_search_index(db_t * db)
 {
 	// TO DO: fix
 
-	for(long iid=0;iid<no_items;iid++)
+	for(int64_t iid=0;iid<no_items;iid++)
 	{
 		db_row_t* row = db_search_index((WORD) (iid + 1), 0, (WORD) 0, db);
 
@@ -206,11 +206,11 @@ int test_update(db_t * db)
 	for(int i=0;i<no_cols;i++)
 		column_idxs[i]=i;
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
@@ -229,8 +229,8 @@ int test_update(db_t * db)
 					if(col_values[i] != column_values[i])
 					{
 						printf("Read back mismatched column %d on row (%ld, %ld, %ld, %ld). Read back: (%ld, %ld, %ld, %ld)!\n",
-								i, (long) column_values[0], (long) column_values[1], (long) column_values[2], (long) column_values[3],
-								(long) col_values[0], (long) col_values[1], (long) col_values[2], (long) col_values[3]);
+								i, (int64_t) column_values[0], (int64_t) column_values[1], (int64_t) column_values[2], (int64_t) column_values[3],
+								(int64_t) col_values[0], (int64_t) col_values[1], (int64_t) col_values[2], (int64_t) col_values[3]);
 						ret = -1;
 					}
 				}
@@ -245,7 +245,7 @@ int test_update(db_t * db)
 
 int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 {
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
 		if(db_delete_row((WORD *) &aid, (WORD) 0, db, fastrandstate) != 0)
 		{
@@ -257,7 +257,7 @@ int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 
 		if(row != NULL)
 		{
-			printf("Delete failed for pk %ld - did not delete row (return row key %ld)!\n", aid, (long) row->key);
+			printf("Delete failed for pk %ld - did not delete row (return row key %ld)!\n", aid, (int64_t) row->key);
 			return -1;
 		}
 	}
@@ -295,7 +295,7 @@ int test_delete_col(db_t * db)
 // Delete by secondary index:
 int test_delete_index(db_t * db)
 {
-	for(long iid=0;iid<no_items;iid++)
+	for(int64_t iid=0;iid<no_items;iid++)
 	{
 		if(db_delete_by_index((WORD) (iid + 1), 0, (WORD) 0, db) != 0)
 		{
@@ -307,7 +307,7 @@ int test_delete_index(db_t * db)
 
 		if(row != NULL)
 		{
-			printf("Delete failed for secondary key value %ld - did not delete row (return row key %ld)!\n", iid + 1, (long) row->key);
+			printf("Delete failed for secondary key value %ld - did not delete row (return row key %ld)!\n", iid + 1, (int64_t) row->key);
 			return -1;
 		}
 	}
@@ -321,8 +321,8 @@ int test_range_search_pk(db_t * db)
 {
 	// TO DO: Improve (check returned keys):
 
-	long start_key = 0;
-	long end_key = no_actors - 1;
+	int64_t start_key = 0;
+	int64_t end_key = no_actors - 1;
 	snode_t* start_row = NULL, * end_row = NULL;
 
 	return (db_range_search((WORD*) &start_key, (WORD*) &end_key, &start_row, &end_row, (WORD) 0, db) == no_actors);
@@ -332,8 +332,8 @@ int test_range_search_pk_copy(db_t * db)
 {
 	// TO DO: Improve (check returned keys):
 
-	long start_key = 0;
-	long end_key = no_actors - 1;
+	int64_t start_key = 0;
+	int64_t end_key = no_actors - 1;
 	db_row_t* rows = NULL;
 
 	return (db_range_search_copy((WORD*) &start_key, (WORD*) &end_key, &rows, (WORD) 0, db) == no_actors);
@@ -345,9 +345,9 @@ int test_range_search_pk_ck1(db_t * db)
 {
 	// TO DO: Improve (check returned keys):
 
-	long pk = 0;
-	long start_key = 0;
-	long end_key = no_collections - 1;
+	int64_t pk = 0;
+	int64_t start_key = 0;
+	int64_t end_key = no_collections - 1;
 	snode_t* start_row = NULL, * end_row = NULL;
 
 	int no_entries = db_range_search_clustering((WORD*) &pk,(WORD*) &start_key, (WORD*) &end_key, 1, &start_row, &end_row, (WORD) 0, db);
@@ -369,12 +369,12 @@ int test_range_search_pk_ck1_ck2(db_t * db)
 {
 	// TO DO: Improve (check returned keys):
 
-	long pk = 0;
-	long start_keys[2];
+	int64_t pk = 0;
+	int64_t start_keys[2];
 	start_keys[0] = 0;
 	start_keys[1] = 0;
 
-	long end_keys[2];
+	int64_t end_keys[2];
 	end_keys[0] = 0;
 	end_keys[1] = no_items - 1;
 
@@ -399,8 +399,8 @@ int test_range_search_index(db_t * db)
 {
 	// TO DO: Improve (check returned keys):
 
-	long start_key = 1;
-	long end_key = no_items;
+	int64_t start_key = 1;
+	int64_t end_key = no_items;
 	snode_t* start_row = NULL, * end_row = NULL;
 
 	return (db_range_search_index(0, (WORD) start_key, (WORD) end_key, &start_row, &end_row, (WORD) 0, db) == (no_items - 1));

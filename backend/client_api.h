@@ -34,7 +34,7 @@ typedef struct msg_callback
 {
 	void (*callback)(void *);
 	WORD client_id;
-	long nonce;
+	int64_t nonce;
 	pthread_mutex_t * lock;
 	pthread_cond_t * signal;
 
@@ -44,7 +44,7 @@ typedef struct msg_callback
 	short no_replies;
 } msg_callback;
 
-msg_callback * get_msg_callback(long nonce, WORD client_id, void (*callback)(void *), int replication_factor);
+msg_callback * get_msg_callback(int64_t nonce, WORD client_id, void (*callback)(void *), int replication_factor);
 int add_reply_to_msg_callback(void * reply, short reply_type, msg_callback * mc);
 void free_msg_callback(msg_callback * mc);
 
@@ -65,7 +65,7 @@ typedef struct remote_db {
 	short stop_comm;
 	fd_set readfds;
 
-	long requests;
+	int64_t requests;
 	unsigned int fastrandstate;
 
     pthread_mutex_t* lc_lock;
@@ -74,11 +74,11 @@ typedef struct remote_db {
 
 remote_db_t * get_remote_db(int replication_factor);
 int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsigned int * seedptr);
-msg_callback * add_msg_callback(long nonce, void (*callback)(void *), remote_db_t * db);
-int delete_msg_callback(long nonce, remote_db_t * db);
+msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db);
+int delete_msg_callback(int64_t nonce, remote_db_t * db);
 int wait_on_msg_callback(msg_callback * mc, remote_db_t * db);
-int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t * db);
-long get_nonce(remote_db_t * db);
+int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_t * db);
+int64_t get_nonce(remote_db_t * db);
 vector_clock * get_lc(remote_db_t * db);
 vector_clock * get_and_increment_lc(remote_db_t * db, int node_id);
 int update_lc_protected(remote_db_t * db, vector_clock * vc_in);
@@ -125,18 +125,18 @@ int remote_create_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, re
 int remote_delete_queue_in_txn(WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
 int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t blob_size, WORD table_key, WORD queue_id, uuid_t * txnid, remote_db_t * db);
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
+		int max_entries, int * entries_read, int64_t * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		remote_db_t * db);
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, uuid_t * txnid, remote_db_t * db);
+					int64_t new_consume_head, uuid_t * txnid, remote_db_t * db);
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						remote_db_t * db);
 int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 						remote_db_t * db);
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						uuid_t * txnid, remote_db_t * db);
 int remote_unsubscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
 								uuid_t * txnid, remote_db_t * db);

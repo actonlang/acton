@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server)
+int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, int64_t * nonce, short is_server)
 {
 	write_query * wq;
 	read_query * rq;
@@ -172,7 +172,7 @@ int parse_message_v1(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short 
 	return 1;
 }
 
-int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, long * nonce, short is_server, vector_clock ** vc)
+int parse_message(void * rcv_buf, size_t rcv_msg_len, void ** out_msg, short * out_msg_type, int64_t * nonce, short is_server, vector_clock ** vc)
 {
 	read_query * rq;
 	range_read_query * rrq;

@@ -80,16 +80,16 @@ typedef struct membership_agreement_msg
 	int msg_type;
 	int ack_status;
 	membership_state * membership;
-	long nonce;
+	int64_t nonce;
 	vector_clock * vc;
 } membership_agreement_msg;
 
-membership_agreement_msg * get_membership_propose_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc);
-membership_agreement_msg * get_membership_response_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc);
-membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc);
-membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, long nonce, vector_clock * vc);
-membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce, vector_clock * vc);
-membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, long nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_propose_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_response_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, int64_t nonce, vector_clock * vc);
+membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, int64_t nonce, vector_clock * vc);
+membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc);
 void free_membership_agreement(membership_agreement_msg * ma);
 void free_membership_agreement_msg(MembershipAgreementMessage * msg);
 int serialize_membership_agreement_msg(membership_agreement_msg * gs, void ** buf, unsigned * len);

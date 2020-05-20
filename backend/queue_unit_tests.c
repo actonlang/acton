@@ -45,8 +45,8 @@ typedef struct consumer_args
 	int successful_consumes;
 	int successful_replays;
 
-	long read_head;
-	long read_head_after_replay;
+	int64_t read_head;
+	int64_t read_head_after_replay;
 
 	int status;
 } consumer_args;
@@ -57,7 +57,7 @@ typedef struct consumer_args
 int do_enqueues(db_t * db, WORD table_id, WORD queue_id, int no_enqueues, int rand_sleep, int * successful_enqueues, unsigned int * fastrandstate) {
 	unsigned int randno;
 
-	for(long iid=0;iid<no_enqueues;iid++)
+	for(int64_t iid=0;iid<no_enqueues;iid++)
 	{
 		WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
@@ -99,8 +99,8 @@ void * producer(void * pargs)
 void consumer_callback(queue_callback_args * qca)
 {
 	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
-			(long) qca->app_id, (long) qca->shard_id, (long) qca->consumer_id,
-			(long) qca->table_key, (long) qca->queue_id,
+			(int64_t) qca->app_id, (int64_t) qca->shard_id, (int64_t) qca->consumer_id,
+			(int64_t) qca->table_key, (int64_t) qca->queue_id,
 			qca->status);
 }
 
@@ -131,10 +131,10 @@ int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
 			if((*entries_read) > 0)
 			{
 				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
-						(long) ca->consumer_id, ca->successful_dequeues, (long) end_row->key);
+						(int64_t) ca->consumer_id, ca->successful_dequeues, (int64_t) end_row->key);
 
-				if(((long) end_row->key) != ca->successful_dequeues - 1)
-					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (long) end_row->key, ca->successful_dequeues - 1);
+				if(((int64_t) end_row->key) != ca->successful_dequeues - 1)
+					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (int64_t) end_row->key, ca->successful_dequeues - 1);
 			}
 		}
 	}
@@ -160,7 +160,7 @@ void * consumer(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	long prev_read_head = -1, prev_consume_head = -1;
+	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc,
 							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
 	printf("Test %s - %s (%d)\n", "subscribe_queue", ret==0?"OK":"FAILED", ret);
@@ -179,7 +179,7 @@ void * consumer(void * cargs)
 
 	ret = consume_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 						ca->table_key, ca->queue_id,
-						(long) ca->read_head, ca->db);
+						(int64_t) ca->read_head, ca->db);
 
 	if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 		printf("ERROR: consume_queue returned %d\n", ret);
@@ -187,7 +187,7 @@ void * consumer(void * cargs)
 		ca->successful_consumes = ca->successful_dequeues;
 
 	printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
-			(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
+			(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
 
 	while(ca->successful_consumes < ca->no_enqueues)
 	{
@@ -208,7 +208,7 @@ void * consumer(void * cargs)
 
 		ret = consume_queue(ca->consumer_id, ca->shard_id, ca->app_id,
 							ca->table_key, ca->queue_id,
-							(long) ca->read_head, ca->db);
+							(int64_t) ca->read_head, ca->db);
 
 		if(ret < 0 && ret != DB_ERR_QUEUE_COMPLETE)
 			printf("ERROR: consume_queue returned %d\n", ret);
@@ -216,7 +216,7 @@ void * consumer(void * cargs)
 			ca->successful_consumes = ca->successful_dequeues;
 
 		printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
-				(long) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
+				(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
 
 		pthread_mutex_unlock(&lock);
 	}
@@ -245,7 +245,7 @@ void * consumer_replay(void * cargs)
 	qc.signal = &signal;
 	qc.callback = consumer_callback;
 
-	long prev_read_head = -1, prev_consume_head = -1;
+	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->table_key, ca->queue_id, &qc,
 							&prev_read_head, &prev_consume_head, 1, ca->db, &seed);
 

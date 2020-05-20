@@ -510,13 +510,13 @@ int table_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t
 		return 0;
 	}
 
-	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; NEXT(*end_row) != NULL && (int64_t) (*end_row)->key < (int64_t) end_primary_keys[0]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }
 
 int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
 {
 	int i = 0;
 
@@ -524,7 +524,7 @@ int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_k
 
 	snode_t * start_row = skiplist_search_higher(table->rows, start_primary_keys[0]);
 
-	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_primary_keys[0]; cell_row_node=NEXT(cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (int64_t) cell_row_node->key < (int64_t) end_primary_keys[0]; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -532,7 +532,7 @@ int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_k
 		if(i>(no_range_results - 1))
 			return 1;
 
-		if((long) cell_row->key != range_result_keys[i])
+		if((int64_t) cell_row->key != range_result_keys[i])
 			return 1;
 
 		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
@@ -569,7 +569,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 
 	if(row == NULL)
 		return NULL;
-//		printf("Row not found by primary key %ld!\n", (long) primary_keys[0]);
+//		printf("Row not found by primary key %ld!\n", (int64_t) primary_keys[0]);
 
 	for(int i=0;i<no_clustering_keys;i++)
 	{
@@ -581,7 +581,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 		}
 		else
 		{
-//			printf("Row not found by clustering key %d / %ld!\n", i, (long) clustering_keys[i]);
+//			printf("Row not found by clustering key %d / %ld!\n", i, (int64_t) clustering_keys[i]);
 
 			return NULL;
 		}
@@ -652,7 +652,7 @@ int table_range_search_clustering(WORD* primary_keys, WORD* start_clustering_key
 	}
 
 	int no_results = 0;
-	for(*end_row = *start_row; NEXT(*end_row) != NULL && (long) (*end_row)->key < (long) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; NEXT(*end_row) != NULL && (int64_t) (*end_row)->key < (int64_t) end_clustering_keys[no_clustering_keys-1]; *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }
@@ -667,7 +667,7 @@ void print_long_db(db_t * db)
 
 void print_long_table(db_table_t * table)
 {
-	printf("DB_TABLE: %ld [%d rows]\n", (long) table->table_key, table->rows->no_items);
+	printf("DB_TABLE: %ld [%d rows]\n", (int64_t) table->table_key, table->rows->no_items);
 
 	for(snode_t * node = HEAD(table->rows);node!=NULL;node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -687,7 +687,7 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 {
 	#define PRINT_BLOBS 1
 
-	sprintf(to_string, "{ %ld, ", (long) row->key);
+	sprintf(to_string, "{ %ld, ", (int64_t) row->key);
 
 	if(row->cells != NULL)
 	{
@@ -719,12 +719,12 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 
 #if (PRINT_BLOBS > 0)
 			if(i<(row->no_columns - 1) || row->last_blob_size <= 0)
-				sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+				sprintf(to_string + strlen(to_string), "%ld, ", (int64_t) row->column_array[i]);
 			else
 				sprintf(to_string + strlen(to_string), "%s, ", (char *) row->column_array[i]);
 
 #else
-			sprintf(to_string + strlen(to_string), "%ld, ", (long) row->column_array[i]);
+			sprintf(to_string + strlen(to_string), "%ld, ", (int64_t) row->column_array[i]);
 #endif
 		}
 		sprintf(to_string + strlen(to_string), " ]");
@@ -736,7 +736,7 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 }
 
 int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
 {
 	assert(no_primary_keys == 1);
 
@@ -762,7 +762,7 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 	snode_t * start_row = skiplist_search_higher(row->cells, start_clustering_keys[no_clustering_keys-1]);
 	int i = 0;
 
-	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_clustering_keys[no_clustering_keys-1]; cell_row_node=NEXT(cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (int64_t) cell_row_node->key < (int64_t) end_clustering_keys[no_clustering_keys-1]; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -770,7 +770,7 @@ int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WOR
 		if(i>(no_range_results - 1))
 			return 1;
 
-		if((long) cell_row->key != range_result_keys[i])
+		if((int64_t) cell_row->key != range_result_keys[i])
 			return 1;
 
 		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
@@ -858,13 +858,13 @@ int table_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, 
 
 	*start_row = skiplist_search_higher(table->indexes[idx_idx], start_idx_key);
 
-	for(*end_row = *start_row; (*end_row != NULL) && ((long) (*end_row)->key < (long) end_idx_key); *end_row=NEXT(*end_row), no_results++);
+	for(*end_row = *start_row; (*end_row != NULL) && ((int64_t) (*end_row)->key < (int64_t) end_idx_key); *end_row=NEXT(*end_row), no_results++);
 
 	return no_results+1;
 }
 
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table)
 {
 	db_schema_t * schema = table->schema;
 	int i = 0;
@@ -873,7 +873,7 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 
 	snode_t * start_row = skiplist_search_higher(table->indexes[idx_idx], start_idx_key);
 
-	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (long) cell_row_node->key < (long) end_idx_key; cell_row_node=NEXT(cell_row_node), i++)
+	for(snode_t * cell_row_node = start_row; cell_row_node != NULL && (int64_t) cell_row_node->key < (int64_t) end_idx_key; cell_row_node=NEXT(cell_row_node), i++)
 	{
 		db_row_t* cell_row = (db_row_t *) cell_row_node->value;
 
@@ -881,7 +881,7 @@ int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_i
 		if(i>(no_range_results - 1))
 			return 1;
 
-		if((long) cell_row->key != range_result_keys[i])
+		if((int64_t) cell_row->key != range_result_keys[i])
 			return 1;
 
 		int cmp = compare_vc(cell_row->version, range_result_versions[i]);
@@ -911,7 +911,7 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 	}
 	else
 	{
-		printf("table_delete_row(): Row with pk %ld doesn't exist!\n", (long) primary_keys[0]);
+		printf("table_delete_row(): Row with pk %ld doesn't exist!\n", (int64_t) primary_keys[0]);
 	}
 
 	return row == NULL;
@@ -941,7 +941,7 @@ int db_insert_transactional(WORD * column_values, int no_cols, int no_clustering
 #if (VERBOSE_BACKEND > 0)
 	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", min_no_cols);
 	for(int i=0;i<min_no_cols;i++)
-		printf("column_values[%d] = %ld\n", i, (long) column_values[i]);
+		printf("column_values[%d] = %ld\n", i, (int64_t) column_values[i]);
 #endif
 
 	snode_t * node = skiplist_search(db->tables, table_key);
@@ -1001,7 +1001,7 @@ int db_range_search(WORD* start_primary_keys, WORD* end_primary_keys, snode_t** 
 }
 
 int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -1063,7 +1063,7 @@ int db_range_search_clustering(WORD* primary_keys, WORD* start_clustering_keys, 
 }
 
 int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -1125,7 +1125,7 @@ int db_range_search_index(int idx_idx, WORD start_idx_key, WORD end_idx_key, sno
 }
 
 int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db)
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db)
 {
 	snode_t * node = skiplist_search(db->tables, table_key);
 
@@ -1143,7 +1143,7 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 
 	if(node == NULL)
 	{
-		printf("db_delete_row(): Table with pk %ld doesn't exist!\n", (long) table_key);
+		printf("db_delete_row(): Table with pk %ld doesn't exist!\n", (int64_t) table_key);
 		return -1;
 	}
 

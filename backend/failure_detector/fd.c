@@ -310,7 +310,7 @@ char * to_string_membership_state(membership_state * gs, char * msg_buff)
 
 /* Membership agreement messages: */
 
-membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, long nonce, vector_clock * vc)
+membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc)
 {
 	membership_agreement_msg * ma = (membership_agreement_msg *) malloc(sizeof(membership_agreement_msg));
 	ma->msg_type = msg_type;
@@ -321,27 +321,27 @@ membership_agreement_msg * init_membership_agreement_msg(int msg_type, int ack_s
 	return ma;
 }
 
-membership_agreement_msg * get_membership_propose_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc)
+membership_agreement_msg * get_membership_propose_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc)
 {
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_PROPOSE, ack_status, membership, nonce, vc);
 }
 
-membership_agreement_msg * get_membership_response_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc)
+membership_agreement_msg * get_membership_response_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc)
 {
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_RESPONSE, ack_status, membership, nonce, vc);
 }
 
-membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_state * membership, long nonce, vector_clock * vc)
+membership_agreement_msg * get_membership_notify_msg(int ack_status, membership_state * membership, int64_t nonce, vector_clock * vc)
 {
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_NOTIFY, ack_status, membership, nonce, vc);
 }
 
-membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, long nonce, vector_clock * vc)
+membership_agreement_msg * get_membership_notify_ack_msg(int ack_status, int64_t nonce, vector_clock * vc)
 {
 	return init_membership_agreement_msg(MEMBERSHIP_AGREEMENT_NOTIFY_ACK, ack_status, NULL, nonce, vc);
 }
 
-membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce, vector_clock * vc)
+membership_agreement_msg * get_membership_join_msg(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, int64_t nonce, vector_clock * vc)
 {
 	node_description * nd = init_node_description(status, -1, rack_id, dc_id, hostname, portno);
 

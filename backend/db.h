@@ -102,8 +102,8 @@ typedef struct consumer_state {
 	WORD shard_id;
 	WORD app_id;
 
-	long private_read_head;
-	long private_consume_head;
+	int64_t private_read_head;
+	int64_t private_consume_head;
 
 	vector_clock * prh_version;
 	vector_clock * pch_version;
@@ -125,7 +125,7 @@ typedef struct db_cell {
 
 	// Queue metadata:
 	skiplist_t * consumer_state; // TO DO: Change to hash table, add indexing by shard_id and app_id
-	long no_entries;
+	int64_t no_entries;
 	pthread_mutex_t* enqueue_lock;
 	pthread_mutex_t* read_lock;
 	pthread_mutex_t* subscribe_lock;
@@ -176,12 +176,12 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 int db_delete_by_index(WORD index_key, int idx_idx, WORD table_key, db_t * db);
 int db_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, WORD table_key, vector_clock * version, db_t * db);
 int db_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys, WORD table_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys, WORD table_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_t * db);
 int db_verify_index_version(WORD index_key, int idx_idx, WORD table_key, vector_clock * version, db_t * db);
 int db_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-									long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db);
+									int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, WORD table_key, db_t * db);
 
 // Lower level API:
 
@@ -211,12 +211,12 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 int table_delete_by_index(WORD index_key, int idx_idx, db_table_t * table);
 int table_verify_cell_version(WORD* primary_keys, int no_primary_keys, WORD* clustering_keys, int no_clustering_keys, vector_clock * version, db_table_t * table);
 int table_verify_row_range_version(WORD* start_primary_keys, WORD* end_primary_keys, int no_primary_keys,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_cell_range_version(WORD* primary_keys, int no_primary_keys, WORD* start_clustering_keys, WORD* end_clustering_keys, int no_clustering_keys,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 int table_verify_index_version(WORD index_key, int idx_idx, vector_clock * version, db_table_t * table);
 int table_verify_index_range_version(int idx_idx, WORD start_idx_key, WORD end_idx_key,
-										long * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
+										int64_t * range_result_keys, vector_clock ** range_result_versions, int no_range_results, db_table_t * table);
 
 queue_callback_args * get_queue_callback_args(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id, int status);
 void free_queue_callback_args(queue_callback_args * qca);

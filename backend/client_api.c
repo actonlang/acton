@@ -6,7 +6,7 @@
 
 #include "client_api.h"
 
-long requests=0;
+int64_t requests=0;
 // char out_buf[BUFSIZE];
 // char in_buf[BUFSIZE];
 
@@ -16,19 +16,19 @@ int queue_callback_cmp(WORD e1, WORD e2)
 	queue_callback_args * a2 = (queue_callback_args *) e2;
 
 	if(a1->consumer_id != a2->consumer_id)
-		return (long) a1->consumer_id - (long) a2->consumer_id;
+		return (int64_t) a1->consumer_id - (int64_t) a2->consumer_id;
 
 	if(a1->queue_id != a2->queue_id)
-		return (long) a1->queue_id - (long) a2->queue_id;
+		return (int64_t) a1->queue_id - (int64_t) a2->queue_id;
 
 	if(a1->table_key != a2->table_key)
-		return (long) a1->table_key - (long) a2->table_key;
+		return (int64_t) a1->table_key - (int64_t) a2->table_key;
 
 	if(a1->shard_id != a2->shard_id)
-		return (long) a1->shard_id - (long) a2->shard_id;
+		return (int64_t) a1->shard_id - (int64_t) a2->shard_id;
 
 	if(a1->app_id != a2->app_id)
-		return (long) a1->app_id - (long) a2->app_id;
+		return (int64_t) a1->app_id - (int64_t) a2->app_id;
 
 	return 0;
 }
@@ -207,7 +207,7 @@ void * comm_thread_loop(void * args)
 			    void * tmp_out_buf = NULL, * q = NULL;
 			    short msg_type;
 				db_schema_t * schema;
-				long nonce = -1;
+				int64_t nonce = -1;
 
 				vector_clock * lc_read = NULL;
 			    int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 0, &lc_read);
@@ -249,21 +249,21 @@ void * comm_thread_loop(void * args)
 			    		if(qc == NULL)
 			    		{
 						fprintf(stderr, "CLIENT: No local subscriber subscriber %ld/%ld/%ld exists for queue %ld/%ld!\n",
-																		(long) qqm->consumer_id, (long) qqm->shard_id, (long) qqm->app_id,
-																		(long) notif_table_key, (long) notif_queue_id);
+																		(int64_t) qqm->consumer_id, (int64_t) qqm->shard_id, (int64_t) qqm->app_id,
+																		(int64_t) notif_table_key, (int64_t) notif_queue_id);
 						continue;
 			    		}
 
 					queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (long) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					printf("CLIENT: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 
 					status = pthread_mutex_lock(qc->lock);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qqm->consumer_id, qc, qc->lock, status);
+					printf("CLIENT: Locked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 					pthread_cond_signal(qc->signal);
@@ -272,11 +272,11 @@ void * comm_thread_loop(void * args)
 					assert(status == 0);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qqm->consumer_id, qc, qc->lock, status);
+					printf("CLIENT: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Notified local subscriber %ld (%p/%p/%p/%p)\n", (long) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					printf("CLIENT: Notified local subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 			    }
 
@@ -325,7 +325,7 @@ int add_server_to_membership(char *hostname, int portno, remote_db_t * db, unsig
     return 0;
 }
 
-msg_callback * add_msg_callback(long nonce, void (*callback)(void *), remote_db_t * db)
+msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_db_t * db)
 {
 	pthread_mutex_lock(db->msg_callbacks_lock);
 
@@ -354,7 +354,7 @@ msg_callback * add_msg_callback(long nonce, void (*callback)(void *), remote_db_
     return mc;
 }
 
-int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t * db)
+int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_t * db)
 {
 	int ret = 0;
 
@@ -393,7 +393,7 @@ int add_reply_to_nonce(void * reply, short reply_type, long nonce, remote_db_t *
 	return no_replies;
 }
 
-int delete_msg_callback(long nonce, remote_db_t * db)
+int delete_msg_callback(int64_t nonce, remote_db_t * db)
 {
 	pthread_mutex_lock(db->msg_callbacks_lock);
 
@@ -417,22 +417,22 @@ int delete_msg_callback(long nonce, remote_db_t * db)
     return 0;
 }
 
-long _get_nonce(remote_db_t * db)
+int64_t _get_nonce(remote_db_t * db)
 {
 #ifdef RANDOM_NONCES
 	unsigned int randno1, randno2;
-	long randlong;
+	int64_t randlong;
 	FASTRAND(&(db->fastrandstate), randno1);
 	FASTRAND(&(db->fastrandstate), randno2);
-	return ((long) randno1 << 32) | ((long) randno2 & 0xFFFFFFFFL);
+	return ((int64_t) randno1 << 32) | ((int64_t) randno2 & 0xFFFFFFFFL);
 #else
 	return ++requests;
 #endif
 }
 
-long get_nonce(remote_db_t * db)
+int64_t get_nonce(remote_db_t * db)
 {
-	long nonce = -1;
+	int64_t nonce = -1;
 	snode_t * node = (snode_t *) 1;
 
 	while(node != NULL)
@@ -580,7 +580,7 @@ int wait_on_msg_callback(msg_callback * mc, remote_db_t * db)
 	return 0;
 }
 
-int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce, msg_callback ** mc, remote_db_t * db)
+int send_packet_wait_replies_async(void * out_buf, unsigned out_len, int64_t nonce, msg_callback ** mc, remote_db_t * db)
 {
 	int ret = 0;
 	*mc = add_msg_callback(nonce, NULL, db);
@@ -614,7 +614,7 @@ int send_packet_wait_replies_async(void * out_buf, unsigned out_len, long nonce,
 	return 0;
 }
 
-int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, long nonce, msg_callback ** mc, remote_db_t * db)
+int send_packet_wait_replies_sync(void * out_buf, unsigned out_len, int64_t nonce, msg_callback ** mc, remote_db_t * db)
 {
 	int ret = send_packet_wait_replies_async(out_buf, out_len, nonce, mc, db);
 
@@ -895,7 +895,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 	{
 		db_row_t * cell = result, * new_cell = NULL;
 
-		assert(response->cells[i].keys[0] == (long) result->key);
+		assert(response->cells[i].keys[0] == (int64_t) result->key);
 
 		for(int j=1;j<response->cells[i].no_keys;j++, cell = new_cell)
 		{
@@ -1252,7 +1252,7 @@ void remote_print_long_table(WORD table_key, remote_db_t * db)
 	snode_t* start_row = NULL, * end_row = NULL;
 	int no_items = remote_read_full_table_in_txn(&start_row, &end_row, table_key, NULL, db);
 
-	printf("DB_TABLE: %ld [%d rows]\n", (long) table_key, no_items);
+	printf("DB_TABLE: %ld [%d rows]\n", (int64_t) table_key, no_items);
 
 	for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -1427,7 +1427,7 @@ int remote_enqueue_in_txn(WORD * column_values, int no_cols, WORD blob, size_t b
 }
 
 int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
+		int max_entries, int * entries_read, int64_t * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		remote_db_t * db)
 {
@@ -1507,7 +1507,7 @@ int remote_read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 }
 
 int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, uuid_t * txnid, remote_db_t * db)
+					int64_t new_consume_head, uuid_t * txnid, remote_db_t * db)
 {
 	unsigned len = 0;
 	void * tmp_out_buf = NULL;
@@ -1563,7 +1563,7 @@ int remote_consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WO
 }
 
 int remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						remote_db_t * db)
 {
 	unsigned len = 0;
@@ -1686,7 +1686,7 @@ int remote_unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 }
 
 int remote_subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						uuid_t * txnid, remote_db_t * db)
 {
 	assert (0); // Not supported
@@ -1729,8 +1729,8 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 
 #if (VERBOSITY > 0)
 	printf("CLIENT: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
-					(long) app_id, (long) shard_id, (long) consumer_id,
-					(long) table_key, (long) queue_id, cs->callback);
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
 	return status;
@@ -1770,8 +1770,8 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 #if (VERBOSITY > 0)
 	printf("CLIENT: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld with callback %p\n",
-					(long) app_id, (long) shard_id, (long) consumer_id,
-					(long) table_key, (long) queue_id, cs->callback);
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
 	return (callback != NULL)?0:CLIENT_ERR_NO_SUBSCRIPTION_EXISTS;
@@ -2137,7 +2137,7 @@ int close_client_txn(uuid_t * txnid, remote_db_t * db)
 
 // Msg callback handling:
 
-msg_callback * get_msg_callback(long nonce, WORD client_id, void (*callback)(void *), int replication_factor)
+msg_callback * get_msg_callback(int64_t nonce, WORD client_id, void (*callback)(void *), int replication_factor)
 {
 	msg_callback * mc = (msg_callback *) malloc(sizeof(msg_callback) +
 							2 * sizeof(pthread_mutex_t) + sizeof(pthread_cond_t) +

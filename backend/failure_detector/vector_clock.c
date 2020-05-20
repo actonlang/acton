@@ -149,7 +149,7 @@ int add_component_vc(vector_clock * vc, int node_id, int initial_counter)
 	return 0;
 }
 
-long get_component_vc(vector_clock * vc, int node_id)
+int64_t get_component_vc(vector_clock * vc, int node_id)
 {
 	// Binary search node_id:
 	int found_idx = 0, exact_match = 0;
@@ -186,7 +186,7 @@ int cmpfunc (const void * a, const void * b) {
    return (((struct versioned_id *)a)->node_id - ((struct versioned_id *)b)->node_id);
 }
 
-vector_clock * init_vc(int init_no_nodes, int * node_ids, long * counters, int sort_node_ids)
+vector_clock * init_vc(int init_no_nodes, int * node_ids, int64_t * counters, int sort_node_ids)
 {
 	vector_clock * vc = (vector_clock *) malloc(sizeof(struct vector_clock));
 	memset(vc, 0, sizeof(struct vector_clock));
@@ -245,7 +245,7 @@ vector_clock * init_empty_vc()
 
 vector_clock * init_local_vc_id(int local_id)
 {
-	long counter = 0;
+	int64_t counter = 0;
 
 	return init_vc(1, &local_id, &counter, 0);
 }

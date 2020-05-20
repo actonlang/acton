@@ -50,7 +50,7 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 	int ret = db_create_table(table_id, db_schema, db, fastrandstate);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Queue table %ld created\n", (long) table_id);
+	printf("BACKEND: Queue table %ld created\n", (int64_t) table_id);
 #endif
 
 	return ret;
@@ -59,12 +59,12 @@ int create_queue_table(WORD table_id, int no_cols, int * col_types, db_t * db, u
 // Functions for handling remote notifications:
 
 int get_queue_notification_packet(WORD table_key, WORD queue_id, WORD app_id, WORD shard_id, WORD consumer_id,
-									long new_no_entries, int status,
+									int64_t new_no_entries, int status,
 									void ** snd_buf, unsigned * snd_msg_len)
 {
 	cell_address ca;
 
-	copy_cell_address(&ca, (long) table_key, (long *) &queue_id, 1);
+	copy_cell_address(&ca, (int64_t) table_key, (int64_t *) &queue_id, 1);
 
 	queue_query_message * m = init_queue_notification(&ca, NULL, 0, (int) app_id, (int) shard_id, (int) consumer_id, new_no_entries, status, NULL, -1);
 
@@ -113,7 +113,7 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
 			if(*(cs->sockfd) == 0)
 			{
 #if (VERBOSITY > 0)
-				printf("SERVER: Skipping notifying disconnected subscriber %ld\n", (long) cs->consumer_id);
+				printf("SERVER: Skipping notifying disconnected subscriber %ld\n", (int64_t) cs->consumer_id);
 				continue;
 #endif
 			}
@@ -137,7 +137,7 @@ int notify_remote_queue_subscribers(WORD table_key, WORD queue_id, db_t * db)
 			cs->notified=1;
 
 #if (VERBOSITY > 0)
-			printf("SERVER: Notified remote subscriber %ld\n", (long) cs->consumer_id);
+			printf("SERVER: Notified remote subscriber %ld\n", (int64_t) cs->consumer_id);
 #endif
 		}
 	}
@@ -165,7 +165,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 		pthread_mutex_lock(db_row->enqueue_lock);
 	}
 
-	long entry_id = db_row->no_entries;
+	int64_t entry_id = db_row->no_entries;
 	db_row->no_entries++;
 
 	if(use_lock)
@@ -178,13 +178,13 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 	WORD * queue_column_values = (WORD *) malloc((no_cols + 2) * sizeof(WORD));
 	queue_column_values[0]=queue_id;
 	queue_column_values[1]=(WORD) entry_id;
-	for(long i=2;i<no_cols + 2;i++)
+	for(int64_t i=2;i<no_cols + 2;i++)
 		queue_column_values[i]=column_values[i-2];
 
 	int status = table_insert(queue_column_values, no_cols+2, 1, last_blob_size, NULL, table, fastrandstate);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Inserted queue entry %ld in queue %ld/%ld, status=%d\n", entry_id, (long) table_key, (long) queue_id, status);
+	printf("BACKEND: Inserted queue entry %ld in queue %ld/%ld, status=%d\n", entry_id, (int64_t) table_key, (int64_t) queue_id, status);
 #endif
 
 	// Notify subscribers if they haven't been notified:
@@ -205,13 +205,13 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 				queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (VERBOSITY > 0)
-				printf("BACKEND: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+				printf("BACKEND: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
 
 				ret = pthread_mutex_lock(cs->callback->lock);
 
 #if (LOCK_VERBOSITY > 0)
-				printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+				printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
 				pthread_cond_signal(cs->callback->signal);
@@ -219,7 +219,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 				ret = pthread_mutex_unlock(cs->callback->lock);
 
 #if (LOCK_VERBOSITY > 0)
-				printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+				printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 			}
 			else // remote subscriber
@@ -229,7 +229,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 				if(*(cs->sockfd) == 0)
 				{
 #if (VERBOSITY > 0)
-					printf("SERVER: Skipping notifying disconnected remote subscriber %ld\n", (long) cs->consumer_id);
+					printf("SERVER: Skipping notifying disconnected remote subscriber %ld\n", (int64_t) cs->consumer_id);
 #endif
 					continue;
 				}
@@ -254,7 +254,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 			cs->notified=1;
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Notified %s subscriber %ld\n", (cs->callback != NULL)?"local":"remote", (long) cs->consumer_id);
+			printf("BACKEND: Notified %s subscriber %ld\n", (cs->callback != NULL)?"local":"remote", (int64_t) cs->consumer_id);
 #endif
 		}
 	}
@@ -263,7 +263,7 @@ int enqueue(WORD * column_values, int no_cols, size_t last_blob_size, WORD table
 }
 
 int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							long new_read_head, vector_clock * version, short use_lock, db_t * db)
+							int64_t new_read_head, vector_clock * version, short use_lock, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 	if(table == NULL)
@@ -274,7 +274,7 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	long no_entries = db_row->no_entries;
+	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
@@ -308,7 +308,7 @@ int set_private_read_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD tab
 }
 
 int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-							long new_consume_head, vector_clock * version, db_t * db)
+							int64_t new_consume_head, vector_clock * version, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 	if(table == NULL)
@@ -319,7 +319,7 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	long no_entries = db_row->no_entries;
+	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
@@ -343,7 +343,7 @@ int set_private_consume_head(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 }
 
 int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head, vector_clock ** prh_version,
+		int max_entries, int * entries_read, int64_t * new_read_head, vector_clock ** prh_version,
 		snode_t** start_row, snode_t** end_row, short use_lock,
 		db_t * db)
 {
@@ -359,7 +359,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	long no_entries = db_row->no_entries;
+	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
@@ -388,7 +388,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	}
 
 	*new_read_head = MIN(cs->private_read_head + max_entries, no_entries - 1);
-	long start_index = cs->private_read_head + 1;
+	int64_t start_index = cs->private_read_head + 1;
 
 	cs->private_read_head = *new_read_head;
 
@@ -397,7 +397,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 		pthread_mutex_unlock(db_row->read_lock);
 	}
 
-	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
+	int64_t no_results = (int64_t) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_read_head, 1,
 										start_row, end_row, table);
 
@@ -405,7 +405,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld read %ld queue entries, new_read_head=%ld\n",
-					(long) cs->consumer_id, no_results, cs->private_read_head);
+					(int64_t) cs->consumer_id, no_results, cs->private_read_head);
 #endif
 
 	*entries_read = (int) no_results;
@@ -418,7 +418,7 @@ int read_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 }
 
 int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, long offset, int * entries_read, long * new_read_head, vector_clock ** prh_version,
+		int max_entries, int64_t offset, int * entries_read, int64_t * new_read_head, vector_clock ** prh_version,
 		snode_t** start_row, snode_t** end_row, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -433,7 +433,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	long no_entries = db_row->no_entries;
+	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
@@ -441,7 +441,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 	consumer_state * cs = (consumer_state *) (consumer_node->value);
 
-	long start_offset = (offset >= 0)?offset:cs->private_read_head;
+	int64_t start_offset = (offset >= 0)?offset:cs->private_read_head;
 	assert(start_offset <= no_entries - 1);
 
 	*prh_version = (cs->prh_version != NULL)? copy_vc(cs->prh_version) : NULL;
@@ -453,9 +453,9 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 	}
 
 	*new_read_head = MIN(start_offset + max_entries, no_entries - 1);
-	long start_index = start_offset + 1;
+	int64_t start_index = start_offset + 1;
 
-	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
+	int64_t no_results = (int64_t) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_read_head, 1,
 										start_row, end_row, table);
 
@@ -463,7 +463,7 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld peeked %ld / %ld queue entries, new_read_head=%ld, private_read_head=%ld\n",
-					(long) cs->consumer_id, no_results, no_entries, *new_read_head, cs->private_read_head);
+					(int64_t) cs->consumer_id, no_results, no_entries, *new_read_head, cs->private_read_head);
 #endif
 
 	*entries_read = (int) no_results;
@@ -474,8 +474,8 @@ int peek_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WOR
 }
 
 int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		long replay_offset, int max_entries,
-		int * entries_read, long * new_replay_offset,
+		int64_t replay_offset, int max_entries,
+		int * entries_read, int64_t * new_replay_offset,
 		snode_t** start_row, snode_t** end_row,
 		db_t * db)
 {
@@ -490,7 +490,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 	db_row_t * db_row = (db_row_t *) (node->value);
 
-	long no_entries = db_row->no_entries;
+	int64_t no_entries = db_row->no_entries;
 
 	snode_t * consumer_node = skiplist_search(db_row->consumer_state, consumer_id);
 	if(node == NULL)
@@ -509,9 +509,9 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 	}
 
 	*new_replay_offset = MIN(cs->private_consume_head + replay_offset + max_entries, cs->private_read_head);
-	long start_index = cs->private_consume_head + replay_offset;
+	int64_t start_index = cs->private_consume_head + replay_offset;
 
-	long no_results = (long) table_range_search_clustering((WORD *) &queue_id,
+	int64_t no_results = (int64_t) table_range_search_clustering((WORD *) &queue_id,
 										(WORD*) &start_index, (WORD*) new_replay_offset, 1,
 										start_row, end_row, table);
 
@@ -524,7 +524,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld replayed %ld queue entries, new_replay_offset=%ld\n",
-					(long) cs->consumer_id, no_results, *new_replay_offset);
+					(int64_t) cs->consumer_id, no_results, *new_replay_offset);
 #endif
 
 	int ret = ((*new_replay_offset) == cs->private_read_head)? QUEUE_STATUS_READ_COMPLETE : QUEUE_STATUS_READ_INCOMPLETE;
@@ -533,7 +533,7 @@ int replay_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, W
 }
 
 int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		long new_consume_head, db_t * db)
+		int64_t new_consume_head, db_t * db)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
 
@@ -570,14 +570,14 @@ int consume_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, 
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld consumed entries, new_consume_head=%ld, read_head=%ld\n",
-					(long) cs->consumer_id, cs->private_consume_head, cs->private_read_head);
+					(int64_t) cs->consumer_id, cs->private_consume_head, cs->private_read_head);
 #endif
 
 	return (int) new_consume_head;
 }
 
 int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					queue_callback * callback, int * sockfd, long * prev_read_head, long * prev_consume_head,
+					queue_callback * callback, int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	db_table_t * table = get_table_by_key(table_key, db);
@@ -602,7 +602,7 @@ int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_ke
 	{
 		consumer_state * found_cs = (consumer_state *) (consumer_node->value);
 
-		printf("BACKEND: ERR: Found consumer state %ld when searching for consumer_id %ld!\n", (long) found_cs->consumer_id, (long) consumer_id);
+		printf("BACKEND: ERR: Found consumer state %ld when searching for consumer_id %ld!\n", (int64_t) found_cs->consumer_id, (int64_t) consumer_id);
 
 		*prev_read_head = found_cs->private_read_head;
 		*prev_consume_head = found_cs->private_consume_head;
@@ -632,15 +632,15 @@ int _subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_ke
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
-					(long) cs->app_id, (long) cs->shard_id, (long) cs->consumer_id,
-					(long) table_key, (long) queue_id, cs->callback);
+					(int64_t) cs->app_id, (int64_t) cs->shard_id, (int64_t) cs->consumer_id,
+					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
 
 	return ret;
 }
 
 int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+					queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	assert(callback != NULL);
@@ -651,7 +651,7 @@ int subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key
 }
 
 int register_remote_subscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					int * sockfd, long * prev_read_head, long * prev_consume_head,
+					int * sockfd, int64_t * prev_read_head, int64_t * prev_consume_head,
 					short use_lock, db_t * db, unsigned int * fastrandstate)
 {
 	assert(sockfd != NULL);
@@ -689,8 +689,8 @@ int unsubscribe_queue(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 
 #if (VERBOSITY > 0)
 	printf("BACKEND: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld\n",
-					(long) app_id, (long) shard_id, (long) consumer_id,
-					(long) table_key, (long) queue_id);
+					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
+					(int64_t) table_key, (int64_t) queue_id);
 #endif
 
 	return 0;
@@ -725,7 +725,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 	queue_column_values[2]=0;
 
 /*
-	for(long i=2;i<schema->no_cols;i++)
+	for(int64_t i=2;i<schema->no_cols;i++)
 		queue_column_values[i]=0;
 */
 
@@ -776,7 +776,7 @@ int create_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 		pthread_mutex_unlock(table->lock);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Queue %ld/%ld created\n", (long) table_key, (long) queue_id);
+	printf("BACKEND: Queue %ld/%ld created\n", (int64_t) table_key, (int64_t) queue_id);
 #endif
 
 	return 0;
@@ -813,13 +813,13 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 			queue_callback_args * qca = get_queue_callback_args(table_key, queue_id, cs->app_id, cs->shard_id, cs->consumer_id, QUEUE_NOTIF_DELETED);
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+			printf("BACKEND: Attempting to notify subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
 
 			ret = pthread_mutex_lock(cs->callback->lock);
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+			printf("BACKEND: Locked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
 			pthread_cond_signal(cs->callback->signal);
@@ -827,13 +827,13 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 			ret = pthread_mutex_unlock(cs->callback->lock);
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, ret);
+			printf("BACKEND: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, ret);
 #endif
 
 //			cs->notified=1;
 
 #if (VERBOSITY > 0)
-			printf("BACKEND: Notified subscriber %ld (%p/%p/%p/%p)\n", (long) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
+			printf("BACKEND: Notified subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qca->consumer_id, cs->callback, cs->callback->lock, cs->callback->signal, cs->callback->callback);
 #endif
 
 		}
@@ -847,7 +847,7 @@ int delete_queue(WORD table_key, WORD queue_id, vector_clock * version, short us
 		pthread_mutex_unlock(table->lock);
 
 #if (VERBOSITY > 0)
-	printf("BACKEND: Queue %ld/%ld deleted\n", (long) table_key, (long) queue_id);
+	printf("BACKEND: Queue %ld/%ld deleted\n", (int64_t) table_key, (int64_t) queue_id);
 #endif
 
 	return ret;

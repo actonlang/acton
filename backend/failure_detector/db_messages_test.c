@@ -80,7 +80,7 @@ int main (int argc, const char * argv[])
 	// Generate a dummy VC message:
 
 	int node_ids[] = {0,1};
-	long counters[] = {0,0};
+	int64_t counters[] = {0,0};
 
 	vector_clock * vc = init_vc(2, node_ids, counters, 1), * vc_r = NULL;
 	add_component_vc(vc, 2, 0);
@@ -148,8 +148,8 @@ int main (int argc, const char * argv[])
 
 	// Generate a dummy Cell and CellAddress:
 
-	long key = 1, end_key = 3;
-	long column = 1, end_column = 5;
+	int64_t key = 1, end_key = 3;
+	int64_t column = 1, end_column = 5;
 	uuid_t txnid;
 	uuid_generate(txnid);
 

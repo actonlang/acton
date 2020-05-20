@@ -66,14 +66,14 @@ int key_path_overlaps(txn_read * tr, txn_write * tw)
 
 	if(tr->query_type == QUERY_TYPE_READ_INDEX)
 	{
-		if((long) tw->column_values[tr->idx_idx] == (long) tr->start_primary_keys[0])
+		if((int64_t) tw->column_values[tr->idx_idx] == (int64_t) tr->start_primary_keys[0])
 			return 1;
 		return 0;
 	}
 
 	if(tr->query_type == QUERY_TYPE_READ_INDEX_RANGE)
 	{
-		if((long) tw->column_values[tr->idx_idx] <= (long) tr->start_primary_keys[0] && (long) tw->column_values[tr->idx_idx] >= (long) tr->end_primary_keys[0])
+		if((int64_t) tw->column_values[tr->idx_idx] <= (int64_t) tr->start_primary_keys[0] && (int64_t) tw->column_values[tr->idx_idx] >= (int64_t) tr->end_primary_keys[0])
 			return 1;
 		return 0;
 	}
@@ -83,8 +83,8 @@ int key_path_overlaps(txn_read * tr, txn_write * tw)
 		if(is_exact_read_query && tr->start_primary_keys[i] != tw->column_values[i])
 			return 0;
 		if(!is_exact_read_query &&
-			((long) tr->start_primary_keys[i] > (long) tw->column_values[i] ||
-			(long) tr->end_primary_keys[i] < (long) tw->column_values[i]))
+			((int64_t) tr->start_primary_keys[i] > (int64_t) tw->column_values[i] ||
+			(int64_t) tr->end_primary_keys[i] < (int64_t) tw->column_values[i]))
 				return 0;
 	}
 	for(int i=0;i<tr->no_clustering_keys;i++)
@@ -92,8 +92,8 @@ int key_path_overlaps(txn_read * tr, txn_write * tw)
 		if(is_exact_read_query && tr->start_clustering_keys[i] != tw->column_values[tw->no_primary_keys + i])
 			return 0;
 		if(!is_exact_read_query &&
-			((long) tr->start_clustering_keys[i] > (long) tw->column_values[tw->no_primary_keys + i] ||
-			(long) tr->end_clustering_keys[i] < (long) tw->column_values[tw->no_primary_keys + i]))
+			((int64_t) tr->start_clustering_keys[i] > (int64_t) tw->column_values[tw->no_primary_keys + i] ||
+			(int64_t) tr->end_clustering_keys[i] < (int64_t) tw->column_values[tw->no_primary_keys + i]))
 				return 0;
 	}
 
@@ -324,9 +324,9 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 					uuid_unparse_lower(ts->txnid, uuid_str2);
 
 					printf("Invalidating txn due to ww conflict on table=%ld/%ld, write_type=%d/%d, key=%ld/%ld, txn=%s/%s\n",
-								(long) tw->table_key, (long) tw2->table_key,
+								(int64_t) tw->table_key, (int64_t) tw2->table_key,
 								tw->query_type, tw2->query_type,
-								((long *) tw->column_values)[0], ((long *) tw2->column_values)[0],
+								((int64_t *) tw->column_values)[0], ((int64_t *) tw2->column_values)[0],
 								uuid_str2, uuid_str1);
 //					assert(0);
 #endif
@@ -706,7 +706,7 @@ int enqueue_in_txn(WORD * column_values, int no_cols, size_t blob_size, WORD tab
 }
 
 int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-		int max_entries, int * entries_read, long * new_read_head,
+		int max_entries, int * entries_read, int64_t * new_read_head,
 		snode_t** start_row, snode_t** end_row, uuid_t * txnid,
 		db_t * db, unsigned int * fastrandstate)
 {
@@ -714,7 +714,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 	if(ts == NULL)
 		return -2; // No such txn
 
-	long prev_read_head = -1;
+	int64_t prev_read_head = -1;
 
 	// Lookup previously existing read head in this txn's read set:
 
@@ -747,7 +747,7 @@ int read_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_k
 }
 
 int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-					long new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
+					int64_t new_consume_head, uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
 	txn_state * ts = get_txn_state(txnid, db);
 	if(ts == NULL)
@@ -758,7 +758,7 @@ int consume_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD tabl
 }
 
 int subscribe_queue_in_txn(WORD consumer_id, WORD shard_id, WORD app_id, WORD table_key, WORD queue_id,
-						queue_callback * callback, long * prev_read_head, long * prev_consume_head,
+						queue_callback * callback, int64_t * prev_read_head, int64_t * prev_consume_head,
 						uuid_t * txnid, db_t * db, unsigned int * fastrandstate)
 {
 	assert (0); // Not implemented

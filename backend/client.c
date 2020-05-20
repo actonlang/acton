@@ -66,11 +66,11 @@ int populate_db(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned
 
 	WORD * column_values = (WORD *) malloc(no_cols * sizeof(WORD));
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				column_values[0] = (WORD) aid;
 				column_values[1] = (WORD) cid;
@@ -101,7 +101,7 @@ int delete_all(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsigned 
 	printf("TEST: delete_test\n");
 
 	int ret = 0;
-	for(long aid = 0; aid<no_actors; aid++)
+	for(int64_t aid = 0; aid<no_actors; aid++)
 		ret |= remote_delete_row_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
 
 	return ret;
@@ -113,7 +113,7 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 
 	char print_buff[1024];
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
 		db_row_t * row = remote_search_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD) 0, txnid, db);
 
@@ -128,9 +128,9 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 			return -1;
 		}
 
-		if((long) row->key != aid)
+		if((int64_t) row->key != aid)
 		{
-			printf("Read back mismatched pk %ld ( != %ld) in cell!\n", (long) row->key, aid);
+			printf("Read back mismatched pk %ld ( != %ld) in cell!\n", (int64_t) row->key, aid);
 			return -1;
 		}
 	}
@@ -144,9 +144,9 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 
 	char print_buff[1024];
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
 			db_row_t * row = remote_search_clustering_in_txn((WORD *) &aid, schema->no_primary_keys, (WORD *) &cid, 1, (WORD) 0, txnid, db);
 
@@ -161,9 +161,9 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 				return -1;
 			}
 
-			if((long) row->key != cid)
+			if((int64_t) row->key != cid)
 			{
-				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (long) row->key, cid, aid, cid);
+				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (int64_t) row->key, cid, aid, cid);
 				return -1;
 			}
 		}
@@ -179,11 +179,11 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 	char print_buff[1024];
 	WORD * cks = (WORD *) malloc(2 * sizeof(WORD));
 
-	for(long aid=0;aid<no_actors;aid++)
+	for(int64_t aid=0;aid<no_actors;aid++)
 	{
-		for(long cid=0;cid<no_collections;cid++)
+		for(int64_t cid=0;cid<no_collections;cid++)
 		{
-			for(long iid=0;iid<no_items;iid++)
+			for(int64_t iid=0;iid<no_items;iid++)
 			{
 				cks[0] = (WORD) cid;
 				cks[1] = (WORD) iid;
@@ -195,9 +195,9 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 
 				print_long_row(row);
 
-				if((long) row->key != iid)
+				if((int64_t) row->key != iid)
 				{
-					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (long) row->key, iid, aid, cid, iid);
+					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (int64_t) row->key, iid, aid, cid, iid);
 					return -1;
 				}
 			}
@@ -212,8 +212,8 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 void consumer_callback(queue_callback_args * qca)
 {
 	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
-			(long) qca->app_id, (long) qca->shard_id, (long) qca->consumer_id,
-			(long) qca->table_key, (long) qca->queue_id,
+			(int64_t) qca->app_id, (int64_t) qca->shard_id, (int64_t) qca->consumer_id,
+			(int64_t) qca->table_key, (int64_t) qca->queue_id,
 			qca->status);
 }
 
@@ -242,7 +242,7 @@ int test_delete_queue(remote_db_t * db, uuid_t * txnid)
 int test_subscribe_queue(remote_db_t * db, WORD consumer_id, WORD queue_id)
 {
 	printf("TEST: subscribe_queue\n");
-	long prev_read_head = -1, prev_consume_head = -1;
+	int64_t prev_read_head = -1, prev_consume_head = -1;
 	queue_callback * qc = get_queue_callback(consumer_callback);
 
 	return remote_subscribe_queue(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id, qc, &prev_read_head, &prev_consume_head, db); // &txnid
@@ -260,7 +260,7 @@ int test_enqueue(remote_db_t * db, WORD queue_id, uuid_t * txnid)
 
 	WORD * column_values = (WORD *) malloc(no_queue_cols * sizeof(WORD));
 
-	for(long i=0;i<no_enqueues;i++)
+	for(int64_t i=0;i<no_enqueues;i++)
 	{
 		column_values[0] = (WORD) i;
 		column_values[1] = (WORD) i + 1;
@@ -277,7 +277,7 @@ int test_read_queue(remote_db_t * db, WORD consumer_id, WORD queue_id, uuid_t * 
 	printf("TEST: read_queue\n");
 	int max_entries = no_enqueues;
 	int entries_read;
-	long new_read_head;
+	int64_t new_read_head;
 	snode_t* start_row, * end_row;
 	int ret = remote_read_queue_in_txn(consumer_id, (WORD) 1, (WORD) 2, (WORD) 1, queue_id,
 									max_entries, &entries_read, &new_read_head,
@@ -302,7 +302,7 @@ int test_txn(remote_db_t * db, db_schema_t * schema, unsigned * fastrandstate)
 	printf("TEST: txn\n");
 
 	int node_ids[] = {0,1};
-	long counters[] = {0,0};
+	int64_t counters[] = {0,0};
 
 	vector_clock * vc = init_vc(2, node_ids, counters, 0), * vc_r = NULL;
 	add_component_vc(vc, 2, 0);

@@ -60,16 +60,16 @@ void error(char *msg) {
 #define DEFAULT_GOSSIP_PORT 34000
 
 #define RANDOM_NONCES
-long requests = 0;
+int64_t requests = 0;
 
-long _get_nonce(unsigned int * fastrandstate)
+int64_t _get_nonce(unsigned int * fastrandstate)
 {
 #ifdef RANDOM_NONCES
 	unsigned int randno1, randno2;
-	long randlong;
+	int64_t randlong;
 	FASTRAND(fastrandstate, randno1);
 	FASTRAND(fastrandstate, randno2);
-	return ((long) randno1 << 32) | ((long) randno2 & 0xFFFFFFFFL);
+	return ((int64_t) randno1 << 32) | ((int64_t) randno2 & 0xFFFFFFFFL);
 #else
 	return ++requests;
 #endif
@@ -93,7 +93,7 @@ typedef struct membership
 	int my_id;
 
 	skiplist_t * outstanding_proposal;
-	long outstanding_proposal_nonce;
+	int64_t outstanding_proposal_nonce;
 	vector_clock * outstanding_view_id;
 	int outstanding_proposal_acks;
 	short proposal_status;
@@ -331,7 +331,7 @@ vector_clock * get_empty_vc()
 vector_clock * get_local_vc(int my_id)
 {
 	int node_ids[] = {my_id};
-	long counters[] = {0};
+	int64_t counters[] = {0};
 	return init_vc(1, node_ids, counters, 0);
 }
 
@@ -357,12 +357,12 @@ int count_cells(db_row_t* result, int * max_depth)
 	return no_cells;
 }
 
-cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * key_path, int depth, int no_schema_keys)
+cell * serialize_cells(db_row_t* result, cell * cells, int64_t table_key, int64_t * key_path, int depth, int no_schema_keys)
 {
 	if(result == NULL)
 		return cells;
 
-	key_path[depth-1] = (long) result->key;
+	key_path[depth-1] = (int64_t) result->key;
 
 	if(result->cells == NULL || result->cells->no_items == 0)
 	{
@@ -372,13 +372,13 @@ cell * serialize_cells(db_row_t* result, cell * cells, long table_key, long * ke
 		if(result->last_blob_size <= 0)
 			copy_cell(cells, table_key,
 					key_path, depth,
-					(long *) result->column_array, result->no_columns,
+					(int64_t *) result->column_array, result->no_columns,
 					NULL, 0,
 					result->version);
 		else
 			copy_cell(cells, table_key,
 					key_path, depth,
-					(long *) result->column_array, result->no_columns - 1,
+					(int64_t *) result->column_array, result->no_columns - 1,
 					result->column_array[result->no_columns - 1], result->last_blob_size,
 					result->version);
 
@@ -411,22 +411,22 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 	{
 		assert(result->no_columns > 0);
 		assert(result->no_columns >= schema->min_no_cols);
-		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (long) result->key);
+		assert(q->cell_address->keys[q->cell_address->no_keys - 1] == (int64_t) result->key);
 
 		cell * c = NULL;
 		if(result->last_blob_size <= 0)
 		{
 			c = init_cell(q->cell_address->table_key,
-							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-							(long *) result->column_array, result->no_columns,
+							(int64_t *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
+							(int64_t *) result->column_array, result->no_columns,
 							NULL, 0,
 							result->version);
 		}
 		else
 		{
 			c = init_cell(q->cell_address->table_key,
-							(long *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
-							(long *) result->column_array, result->no_columns - 1,
+							(int64_t *) &result->key, 1, // Result cell always points to last (inner-most) key of the query
+							(int64_t *) result->column_array, result->no_columns - 1,
 							result->column_array[result->no_columns - 1], result->last_blob_size,
 							result->version);
 		}
@@ -445,7 +445,7 @@ int get_read_response_packet(db_row_t* result, read_query * q, db_schema_t * sch
 
 		cell * cells = malloc(no_results * sizeof(cell));
 
-		long * key_path = (long *) malloc(max_depth * sizeof(long));
+		int64_t * key_path = (int64_t *) malloc(max_depth * sizeof(int64_t));
 
 		cell * last_cell_ptr = serialize_cells(result, cells, q->cell_address->table_key, key_path, 1, schema_keys); // no_keys
 
@@ -515,7 +515,7 @@ int get_range_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 
 		cell * cells = malloc(no_cells * sizeof(cell));
 
-		long * key_path = (long *) malloc(max_range_depth * sizeof(long));
+		int64_t * key_path = (int64_t *) malloc(max_range_depth * sizeof(int64_t));
 
 		i=0;
 		cell * last_cell_ptr = cells;
@@ -590,7 +590,7 @@ int get_queue_ack_packet(int status, queue_query_message * q,
 }
 
 int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_results,
-									long new_read_head, int status, db_schema_t * schema,
+									int64_t new_read_head, int status, db_schema_t * schema,
 									queue_query_message * q,
 									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
@@ -607,23 +607,23 @@ int get_queue_read_response_packet(snode_t* start_row, snode_t* end_row, int no_
 		cell * cells = malloc(no_results * sizeof(cell));
 
 		int i=0;
-		long prev_id = -1;
+		int64_t prev_id = -1;
 		for(snode_t * crt_row = start_row; i<no_results; crt_row = NEXT(crt_row), i++)
 		{
 			db_row_t* result = (db_row_t* ) crt_row->value;
-			long id = (long) result->key;
+			int64_t id = (int64_t) result->key;
 			assert(i==0 || prev_id == (id - 1));
 			prev_id = id;
 			if(result->last_blob_size <= 0)
 				copy_cell(cells+i, q->cell_address->table_key,
-						(long *) &result->key, 1,
-						(long *) result->column_array, result->no_columns,
+						(int64_t *) &result->key, 1,
+						(int64_t *) result->column_array, result->no_columns,
 						NULL, 0,
 						result->version);
 			else
 				copy_cell(cells+i, q->cell_address->table_key,
-						(long *) &result->key, 1,
-						(long *) result->column_array, result->no_columns - 1,
+						(int64_t *) &result->key, 1,
+						(int64_t *) result->column_array, result->no_columns - 1,
 						result->column_array[result->no_columns - 1], result->last_blob_size,
 						result->version);
 		}
@@ -660,7 +660,7 @@ int handle_delete_queue(queue_query_message * q, db_t * db, unsigned int * fastr
 		return delete_queue_in_txn((WORD) q->cell_address->table_key, (WORD) q->cell_address->keys[0], q->txnid, db, fastrandstate);
 }
 
-int handle_subscribe_queue(queue_query_message * q, int * clientfd, long * prev_read_head, long * prev_consume_head, db_t * db, unsigned int * fastrandstate)
+int handle_subscribe_queue(queue_query_message * q, int * clientfd, int64_t * prev_read_head, int64_t * prev_consume_head, db_t * db, unsigned int * fastrandstate)
 {
 	if(q->txnid != NULL) // Create queue out of txn
 	{
@@ -694,7 +694,7 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 		int total_cols = q->cells[i].no_keys + q->cells[i].no_columns;
 		int total_cols_plus_blob = total_cols + ((q->cells[i].last_blob_size > 0)?(1):(0));
 
-		long * column_values = (long *) malloc(total_cols_plus_blob * sizeof(long));
+		int64_t * column_values = (int64_t *) malloc(total_cols_plus_blob * sizeof(int64_t));
 
 		int j = 0;
 		for(;j<q->cells[i].no_keys;j++)
@@ -705,7 +705,7 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 		if(q->cells[i].last_blob_size > 0)
 		{
 			assert(total_cols_plus_blob == total_cols + 1);
-			column_values[total_cols] = (long) malloc(q->cells[i].last_blob_size);
+			column_values[total_cols] = (int64_t) malloc(q->cells[i].last_blob_size);
 			memcpy((WORD) column_values[total_cols], q->cells[i].last_blob, q->cells[i].last_blob_size);
 		}
 
@@ -723,7 +723,7 @@ int handle_enqueue(queue_query_message * q, db_t * db, unsigned int * fastrandst
 }
 
 int handle_read_queue(queue_query_message * q,
-						int * entries_read, long * new_read_head, vector_clock ** prh_version,
+						int * entries_read, int64_t * new_read_head, vector_clock ** prh_version,
 						snode_t** start_row, snode_t** end_row, db_schema_t ** schema,
 						db_t * db, unsigned int * fastrandstate)
 {
@@ -968,7 +968,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     unsigned snd_msg_len;
     short msg_type;
 	db_schema_t * schema;
-	long nonce = -1;
+	int64_t nonce = -1;
 
 	vector_clock * lc_read = NULL;
     int status = parse_message(in_buf + sizeof(int), msg_len, &q, &msg_type, &nonce, 1, &lc_read);
@@ -1051,7 +1051,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				}
     				case QUERY_TYPE_SUBSCRIBE_QUEUE:
     				{
-    					long prev_read_head = -1, prev_consume_head = -1;
+    					int64_t prev_read_head = -1, prev_consume_head = -1;
     					status = handle_subscribe_queue(qm, &childfd, &prev_read_head, &prev_consume_head, db, fastrandstate);
     					assert(status == 0);
     					status = get_queue_ack_packet(status, qm, &tmp_out_buf, &snd_msg_len, vc);
@@ -1075,7 +1075,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
     				case QUERY_TYPE_READ_QUEUE:
     				{
     					int entries_read = 0;
-    					long new_read_head = -1;
+    					int64_t new_read_head = -1;
     					vector_clock * prh_version = NULL;
     					snode_t * start_row = NULL, * end_row = NULL;
     					db_schema_t * schema = NULL;
@@ -1177,7 +1177,7 @@ int handle_client_message(int childfd, int msg_len, db_t * db, unsigned int * fa
 
 // Gossip message handling:
 
-int get_join_packet(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, long nonce,
+int get_join_packet(int status, int rack_id, int dc_id, char * hostname, unsigned short portno, int64_t nonce,
 					void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	membership_agreement_msg * jm = get_membership_join_msg(status, rack_id, dc_id, hostname, portno, nonce, vc);
@@ -1195,7 +1195,7 @@ int get_join_packet(int status, int rack_id, int dc_id, char * hostname, unsigne
 	return ret;
 }
 
-int get_agreement_propose_packet(int status, membership_state * membership, long nonce,
+int get_agreement_propose_packet(int status, membership_state * membership, int64_t nonce,
 									void ** snd_buf, unsigned * snd_msg_len, vector_clock * vc)
 {
 	membership_agreement_msg * amr = get_membership_propose_msg(status, membership, nonce, vc);
@@ -1532,8 +1532,8 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 			}
 			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
-				long local_counter = get_component_vc(my_lc, nd.node_id);
-				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
+				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
 
 				if(proposed_counter > local_counter)
 				{
@@ -1718,8 +1718,8 @@ int install_agreed_view(membership_agreement_msg * ma, membership * m, vector_cl
 			}
 			else if(rs_local->status != nd.status) // if proposed server status is different than local one, and proposed clock is newer, use proposed status
 			{
-				long local_counter = get_component_vc(my_lc, nd.node_id);
-				long proposed_counter = get_component_vc(ma->vc, nd.node_id);
+				int64_t local_counter = get_component_vc(my_lc, nd.node_id);
+				int64_t proposed_counter = get_component_vc(ma->vc, nd.node_id);
 
 				if(proposed_counter > local_counter)
 				{
@@ -1765,7 +1765,7 @@ int handle_agreement_notify_ack_message(membership_agreement_msg * ma, membershi
 	return 0;
 }
 
-int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, long * nonce, vector_clock ** vc)
+int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreement_msg ** ma, int64_t * nonce, vector_clock ** vc)
 {
 	int status = deserialize_membership_agreement_msg(rcv_buf, rcv_msg_len, ma);
 
@@ -1793,7 +1793,7 @@ int parse_gossip_message(void * rcv_buf, size_t rcv_msg_len, membership_agreemen
 int handle_join_message(int childfd, int msg_len, membership * m, db_t * db, unsigned int * fastrandstate, vector_clock * my_lc, int old_id, int my_id, remote_server * rs)
 {
     membership_agreement_msg * ma = NULL;
-	long nonce = -1;
+	int64_t nonce = -1;
 	vector_clock * lc_read = NULL;
 	int local_membership_changed = 0;
 
@@ -1894,7 +1894,7 @@ int handle_server_message(int childfd, int msg_len, membership * m, db_t * db, u
     void * tmp_out_buf = NULL;
     unsigned snd_msg_len;
     membership_agreement_msg * ma = NULL;
-	long nonce = -1;
+	int64_t nonce = -1;
 	vector_clock * lc_read = NULL;
 	short output_packet = 1;
 	membership_state * merged_membership = NULL;

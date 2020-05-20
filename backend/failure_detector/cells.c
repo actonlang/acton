@@ -50,7 +50,7 @@ int deserialize_vc(void * buf, unsigned msg_len, vector_clock ** vc)
 
 // Cell Address:
 
-cell_address * init_cell_address(long table_key, long * keys, int no_keys)
+cell_address * init_cell_address(int64_t table_key, int64_t * keys, int no_keys)
 {
 	cell_address * ca = (cell_address *) malloc(sizeof(cell_address));
 	ca->table_key = table_key;
@@ -60,49 +60,49 @@ cell_address * init_cell_address(long table_key, long * keys, int no_keys)
 	return ca;
 }
 
-cell_address * init_cell_address_copy(long table_key, long * keys, int no_keys)
+cell_address * init_cell_address_copy(int64_t table_key, int64_t * keys, int no_keys)
 {
 	cell_address * ca = (cell_address *) malloc(sizeof(cell_address));
 	ca->table_key = table_key;
 	ca->no_keys = no_keys;
-	ca->keys = (long *) malloc(no_keys * sizeof(long));
+	ca->keys = (int64_t *) malloc(no_keys * sizeof(int64_t));
 	for(int i=0;i<no_keys;i++)
 		ca->keys[i] = keys[i];
 
 	return ca;
 }
 
-cell_address * init_cell_address_copy2(long table_key, long * primary_keys, int no_primary_keys, long * clustering_keys, int no_clustering_keys)
+cell_address * init_cell_address_copy2(int64_t table_key, int64_t * primary_keys, int no_primary_keys, int64_t * clustering_keys, int no_clustering_keys)
 {
 	int i = 0;
 	cell_address * c = (cell_address *) malloc(sizeof(cell_address));
-	c->table_key = (long) table_key;
+	c->table_key = (int64_t) table_key;
 	c->no_keys = no_primary_keys + no_clustering_keys;
 
 	assert(c->no_keys > 0);
 
-	c->keys = (long *) malloc(c->no_keys * sizeof(long));
+	c->keys = (int64_t *) malloc(c->no_keys * sizeof(int64_t));
 	for(;i<no_primary_keys;i++)
-		c->keys[i] = (long) primary_keys[i];
+		c->keys[i] = (int64_t) primary_keys[i];
 
 	for(;i<c->no_keys;i++)
-		c->keys[i] = (long) clustering_keys[i-no_primary_keys];
+		c->keys[i] = (int64_t) clustering_keys[i-no_primary_keys];
 
 	return c;
 }
 
-cell_address * init_cell_address_single_key_copy(long table_key, long key)
+cell_address * init_cell_address_single_key_copy(int64_t table_key, int64_t key)
 {
 	cell_address * ca = (cell_address *) malloc(sizeof(cell_address));
 	ca->table_key = table_key;
 	ca->no_keys = 1;
-	ca->keys = (long *) malloc(sizeof(long));
+	ca->keys = (int64_t *) malloc(sizeof(int64_t));
 	ca->keys[0] = key;
 
 	return ca;
 }
 
-int copy_cell_address(cell_address * ca, long table_key, long * keys, int no_keys)
+int copy_cell_address(cell_address * ca, int64_t table_key, int64_t * keys, int no_keys)
 {
 	ca->table_key = table_key;
 	ca->keys = keys;
@@ -122,7 +122,7 @@ void init_cell_address_msg(CellAddressMessage * msg, cell_address * ca)
 {
 	msg->table_key = ca->table_key;
 	msg->n_keys = ca->no_keys;
-	msg->keys = (long *) malloc(ca->no_keys * sizeof(long));
+	msg->keys = (int64_t *) malloc(ca->no_keys * sizeof(int64_t));
 	for(int i=0;i<ca->no_keys;i++)
 		msg->keys[i] = ca->keys[i];
 }
@@ -203,7 +203,7 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff)
 
 // Cell:
 
-cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
+cell * init_cell(int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
 	ca->table_key = table_key;
@@ -218,19 +218,19 @@ cell * init_cell(long table_key, long * keys, int no_keys, long * columns, int n
 	return ca;
 }
 
-void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
+void copy_cell(cell * ca, int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	ca->table_key = table_key;
 
 	ca->no_keys = no_keys;
-	ca->keys = (long *) malloc(no_keys * sizeof(long));
+	ca->keys = (int64_t *) malloc(no_keys * sizeof(int64_t));
 	for(int i=0;i<no_keys;i++)
 		ca->keys[i] = keys[i];
 
 	assert(last_blob == NULL || last_blob_size > 0);
 
 	ca->no_columns = no_columns;
-	ca->columns = (long *) malloc(no_columns * sizeof(long));
+	ca->columns = (int64_t *) malloc(no_columns * sizeof(int64_t));
 	for(int i=0;i<no_columns;i++)
 		ca->columns[i] = columns[i];
 
@@ -251,7 +251,7 @@ void copy_cell(cell * ca, long table_key, long * keys, int no_keys, long * colum
 		ca->version = NULL;
 }
 
-cell * init_cell_copy(long table_key, long * keys, int no_keys, long * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
+cell * init_cell_copy(int64_t table_key, int64_t * keys, int no_keys, int64_t * columns, int no_columns, WORD last_blob, size_t last_blob_size, vector_clock * version)
 {
 	cell * ca = (cell *) malloc(sizeof(cell));
 	copy_cell(ca, table_key, keys, no_keys, columns, no_columns, last_blob, last_blob_size, version);
@@ -292,13 +292,13 @@ void init_cell_msg(VersionedCellMessage * msg, cell * ca, VectorClockMessage * v
 {
 	msg->table_key = ca->table_key;
 	msg->n_keys = ca->no_keys;
-	msg->keys = (long *) malloc(ca->no_keys * sizeof(long));
+	msg->keys = (int64_t *) malloc(ca->no_keys * sizeof(int64_t));
 	for(int i=0;i<ca->no_keys;i++)
 		msg->keys[i] = ca->keys[i];
 
 	msg->n_columns = ca->no_columns;
 	if(ca->no_columns > 0)
-		msg->columns = (long *) malloc(ca->no_columns * sizeof(long));
+		msg->columns = (int64_t *) malloc(ca->no_columns * sizeof(int64_t));
 	for(int i=0;i<ca->no_columns;i++)
 		msg->columns[i] = ca->columns[i];
 
