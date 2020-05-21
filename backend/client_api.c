@@ -7,8 +7,6 @@
 #include "client_api.h"
 
 int64_t requests=0;
-// char out_buf[BUFSIZE];
-// char in_buf[BUFSIZE];
 
 int queue_callback_cmp(WORD e1, WORD e2)
 {
@@ -248,7 +246,7 @@ void * comm_thread_loop(void * args)
 
 			    		if(qc == NULL)
 			    		{
-						fprintf(stderr, "CLIENT: No local subscriber subscriber %ld/%ld/%ld exists for queue %ld/%ld!\n",
+						fprintf(stderr, "CLIENT: No local subscriber subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " exists for queue %" PRId64 "/%" PRId64 "!\n",
 																		(int64_t) qqm->consumer_id, (int64_t) qqm->shard_id, (int64_t) qqm->app_id,
 																		(int64_t) notif_table_key, (int64_t) notif_queue_id);
 						continue;
@@ -257,13 +255,13 @@ void * comm_thread_loop(void * args)
 					queue_callback_args * qca = get_queue_callback_args(notif_table_key, notif_queue_id, (WORD) qqm->app_id, (WORD) qqm->shard_id, (WORD) qqm->consumer_id, QUEUE_NOTIF_ENQUEUED);
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Attempting to notify local subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					printf("CLIENT: Attempting to notify local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 
 					status = pthread_mutex_lock(qc->lock);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Locked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
+					printf("CLIENT: Locked consumer lock of %" PRId64 " (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 					pthread_cond_signal(qc->signal);
@@ -272,11 +270,11 @@ void * comm_thread_loop(void * args)
 					assert(status == 0);
 
 #if (CLIENT_LOCK_VERBOSITY > 0)
-					printf("CLIENT: Unlocked consumer lock of %ld (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
+					printf("CLIENT: Unlocked consumer lock of %" PRId64 " (%p/%p), status=%d\n", (int64_t) qqm->consumer_id, qc, qc->lock, status);
 #endif
 
 #if (CLIENT_VERBOSITY > 0)
-					printf("CLIENT: Notified local subscriber %ld (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
+					printf("CLIENT: Notified local subscriber %" PRId64 " (%p/%p/%p/%p)\n", (int64_t) qqm->consumer_id, qc, qc->lock, qc->signal, qc->callback);
 #endif
 			    }
 
@@ -345,7 +343,7 @@ msg_callback * add_msg_callback(int64_t nonce, void (*callback)(void *), remote_
 
     if(status != 0)
     {
-		fprintf(stderr, "ERROR: Found duplicate nonce %ld when trying to add msg callback!\n", nonce);
+		fprintf(stderr, "ERROR: Found duplicate nonce %" PRId64 " when trying to add msg callback!\n", nonce);
 		assert(0);
 		delete_msg_callback(mc->nonce, db);
 		return NULL;
@@ -366,7 +364,7 @@ int add_reply_to_nonce(void * reply, short reply_type, int64_t nonce, remote_db_
 	{
 		pthread_mutex_unlock(db->msg_callbacks_lock);
 
-//		printf("Nonce %ld not found!\n", nonce);
+//		printf("Nonce %" PRId64 " not found!\n", nonce);
 
 		return -1;
 	}
@@ -831,7 +829,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 
 		if(root_cell_node == NULL)
 		{
-//			printf("Creating new root cell for cell %d (%ld)\n", i, response->cells[i].keys[0]);
+//			printf("Creating new root cell for cell %d (%" PRId64 ")\n", i, response->cells[i].keys[0]);
 
 			root_cell = create_db_row_schemaless2((WORD *) response->cells[i].keys, response->cells[i].no_keys,
 					(WORD *) response->cells[i].columns, response->cells[i].no_columns,
@@ -855,7 +853,7 @@ int get_db_rows_forest_from_read_response(range_read_response_message * response
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
 						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
-//				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				printf("Inserting cell %d (%" PRId64 ") into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -907,7 +905,7 @@ db_row_t* get_db_rows_tree_from_read_response(range_read_response_message * resp
 						(WORD *) response->cells[i].columns, response->cells[i].no_columns,
 						response->cells[i].last_blob, response->cells[i].last_blob_size, &(db->fastrandstate));
 
-//				printf("Inserting cell %d (%ld) into tree at level %d\n", i, response->cells[i].keys[j], j);
+//				printf("Inserting cell %d (%" PRId64 ") into tree at level %d\n", i, response->cells[i].keys[j], j);
 
 				skiplist_insert(cell->cells, (WORD) response->cells[i].keys[j], (WORD) new_cell, &(db->fastrandstate));
 
@@ -1252,7 +1250,7 @@ void remote_print_long_table(WORD table_key, remote_db_t * db)
 	snode_t* start_row = NULL, * end_row = NULL;
 	int no_items = remote_read_full_table_in_txn(&start_row, &end_row, table_key, NULL, db);
 
-	printf("DB_TABLE: %ld [%d rows]\n", (int64_t) table_key, no_items);
+	printf("DB_TABLE: %" PRId64 " [%d rows]\n", (int64_t) table_key, no_items);
 
 	for(snode_t * node = start_row; node!=NULL; node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -1728,7 +1726,7 @@ int subscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD ta
 	assert(status == 0);
 
 #if (VERBOSITY > 0)
-	printf("CLIENT: Subscriber %ld/%ld/%ld subscribed queue %ld/%ld with callback %p\n",
+	printf("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " subscribed queue %" PRId64 "/%" PRId64 " with callback %p\n",
 					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif
@@ -1769,7 +1767,7 @@ int unsubscribe_queue_client(WORD consumer_id, WORD shard_id, WORD app_id, WORD 
 	free_queue_callback(callback);
 
 #if (VERBOSITY > 0)
-	printf("CLIENT: Subscriber %ld/%ld/%ld unsubscribed queue %ld/%ld with callback %p\n",
+	printf("CLIENT: Subscriber %" PRId64 "/%" PRId64 "/%" PRId64 " unsubscribed queue %" PRId64 "/%" PRId64 " with callback %p\n",
 					(int64_t) app_id, (int64_t) shard_id, (int64_t) consumer_id,
 					(int64_t) table_key, (int64_t) queue_id, cs->callback);
 #endif

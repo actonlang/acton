@@ -98,7 +98,7 @@ void * producer(void * pargs)
 
 void consumer_callback(queue_callback_args * qca)
 {
-	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
+	printf("Consumer %" PRId64 "/%" PRId64 "/%" PRId64 " received notification for queue %" PRId64 "/%" PRId64 ", status %d\n",
 			(int64_t) qca->app_id, (int64_t) qca->shard_id, (int64_t) qca->consumer_id,
 			(int64_t) qca->table_key, (int64_t) qca->queue_id,
 			qca->status);
@@ -130,11 +130,11 @@ int read_queue_while_not_empty(consumer_args * ca, int * entries_read)
 
 			if((*entries_read) > 0)
 			{
-				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
+				printf("CONSUMER %" PRId64 ": successful_dequeues=%d, last_entry_id=%" PRId64 "\n",
 						(int64_t) ca->consumer_id, ca->successful_dequeues, (int64_t) end_row->key);
 
 				if(((int64_t) end_row->key) != ca->successful_dequeues - 1)
-					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (int64_t) end_row->key, ca->successful_dequeues - 1);
+					printf("Test %s - FAILED (%" PRId64 " != %d)\n", "last_entry_id", (int64_t) end_row->key, ca->successful_dequeues - 1);
 			}
 		}
 	}
@@ -186,7 +186,7 @@ void * consumer(void * cargs)
 	else
 		ca->successful_consumes = ca->successful_dequeues;
 
-	printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
+	printf("CONSUMER %" PRId64 ": successful_dequeues=%d, successful_consumes=%d\n",
 			(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
 
 	while(ca->successful_consumes < ca->no_enqueues)
@@ -215,7 +215,7 @@ void * consumer(void * cargs)
 		else
 			ca->successful_consumes = ca->successful_dequeues;
 
-		printf("CONSUMER %ld: successful_dequeues=%d, successful_consumes=%d\n",
+		printf("CONSUMER %" PRId64 ": successful_dequeues=%d, successful_consumes=%d\n",
 				(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes);
 
 		pthread_mutex_unlock(&lock);

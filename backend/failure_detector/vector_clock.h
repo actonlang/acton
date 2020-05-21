@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
+#include <inttypes.h>
 
 // Sets in found_idx index of node_id (if found), or first smallest index (if not found):
 #define BINARY_SEARCH_NODEID(vc, node_id, found_idx, exact_match)						\

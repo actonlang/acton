@@ -1538,7 +1538,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 				if(proposed_counter > local_counter)
 				{
 #if (VERBOSE_RPC > 0)
-					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					printf("SERVER: merge_membership_agreement_msg_to_list: Updating status of node %s from %d to %d, because local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					rs_local->status = nd.status;
@@ -1546,7 +1546,7 @@ int merge_membership_agreement_msg_to_list(membership_agreement_msg * ma, skipli
 				else
 				{
 #if (VERBOSE_RPC > 0)
-					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%ld, proposed_counter=%ld.\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
+					printf("SERVER: merge_membership_agreement_msg_to_list: Requesting membership ammend, because for node %s, local_status=%d, proposed_status=%d, local_counter=%" PRId64 ", proposed_counter=%" PRId64 ".\n", rs->id, rs_local->status, nd.status, local_counter, proposed_counter);
 #endif
 
 					memberships_differ = 1;
@@ -1608,7 +1608,7 @@ int handle_agreement_response_message(membership_agreement_msg * ma, membership_
     if(m->outstanding_proposal_nonce != ma->nonce)
     {
 #if (VERBOSE_RPC > 0)
-		fprintf(stderr, "SERVER: Received Agreement Response message, but nonce (%ld) does not match outstanding view proposal nonce (%ld)!\n",
+		fprintf(stderr, "SERVER: Received Agreement Response message, but nonce (%" PRId64 ") does not match outstanding view proposal nonce (%" PRId64 ")!\n",
 							ma->nonce, m->outstanding_proposal_nonce);
 #endif
 		return -1;

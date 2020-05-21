@@ -69,21 +69,21 @@ libdbclient: client_api.o failure_detector $(LIBDIR)
 
 db_unit_tests: db_unit_tests.c libdb
 	cc -std=c11 db_unit_tests.c \
-		$(CFLAGS) -I ../src -L $(LIBDIR) \
+		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o db_unit_tests
 
 queue_unit_tests: queue_unit_tests.c libdb
 	cc queue_unit_tests.c \
-		$(CFLAGS) -I ../src -L $(LIBDIR) \
+		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o queue_unit_tests
 
 actor_ring_tests_local: actor_ring_tests_local.c libdb
 	cc actor_ring_tests_local.c \
-		$(CFLAGS) -I ../src -L $(LIBDIR) \
+		$(CFLAGS) -I ../src -L $(LIBDIR) -L/usr/local/opt/util-linux/lib \
 		-ldb -lvc -lremote -lprotobuf-c $(LFLAGS) -pthread \
 		$(LIBS) \
 		-o actor_ring_tests_local
@@ -91,25 +91,25 @@ actor_ring_tests_local: actor_ring_tests_local.c libdb
 skiplist_test: skiplist_test.c skiplist.c
 	cc skiplist_test.c skiplist.c \
 		$(CFLAGS) -I ../src \
-		$(LFLAGS) \
+		$(LFLAGS) -L/usr/local/opt/util-linux/lib \
 		-o skiplist_test
 		
 client: client.c libdb libdbclient
 	cc client.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o client
 
 server: server.c libdb failure_detector
 	cc server.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -lremote -lcomm -ldb -lvc -lprotobuf-c -largp -pthread -luuid \
 	 -o server
 
 actor_ring_tests_remote: actor_ring_tests_remote.c libdb libdbclient failure_detector
 	cc actor_ring_tests_remote.c \
 	 $(CFLAGS) \
-	 -L $(LIBDIR) -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
+	 -L $(LIBDIR) -L/usr/local/opt/util-linux/lib -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -pthread -luuid \
 	 -o actor_ring_tests_remote
 
 $(LIBDIR):

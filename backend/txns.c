@@ -323,7 +323,7 @@ int is_write_invalidated(txn_write * tw, txn_state * rts, db_t * db)
 					uuid_unparse_lower(rts->txnid, uuid_str1);
 					uuid_unparse_lower(ts->txnid, uuid_str2);
 
-					printf("Invalidating txn due to ww conflict on table=%ld/%ld, write_type=%d/%d, key=%ld/%ld, txn=%s/%s\n",
+					printf("Invalidating txn due to ww conflict on table=%" PRId64 "/%" PRId64 ", write_type=%d/%d, key=%" PRId64 "/%" PRId64 ", txn=%s/%s\n",
 								(int64_t) tw->table_key, (int64_t) tw2->table_key,
 								tw->query_type, tw2->query_type,
 								((int64_t *) tw->column_values)[0], ((int64_t *) tw2->column_values)[0],
