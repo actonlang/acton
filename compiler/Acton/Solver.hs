@@ -55,51 +55,79 @@ reduce env eq (c:cs)                        = do c' <- msubst c
 reduce'                                     :: Env -> Equations -> Constraint -> TypeM Equations
 reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
                                                  return eq
+
 reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
-reduce' env eq c@(Impl w (TVar _ tv) u)
+reduce' env eq c@(Impl w (TVar _ tv) p)
   | not $ skolem tv                         = do defer [c]; return eq
-  | u `elem` ps                             = return eq
-  where ps                                  = findProtoBound tv env
-reduce' env eq c@(Impl w (TCon _ tc) p)     = case findWitness env (tcname tc) (tcname p ==) of
-                                                 Just wit -> do
-                                                     (cs,p',e) <- instWitness env (tcargs tc) wit
-                                                     reduce env eq (cs ++ zipWith Cast (tcargs p) (tcargs p'))       -- TODO: unify instead of cast!
-                                                 Nothing -> noRed c
-reduce' env eq c@(Sel w (TVar _ tv) n t2)
-  | not $ skolem tv                         = do defer [c]; return eq
-  | u:_ <- findClassBound tv env            = reduce' env eq (Sel w (tCon u) n t2)
-reduce' env eq (Sel w t1@(TCon _ tc) n t2)  = case findAttr env tc n of
-                                                Just (wf,sc,dec) -> do
-                                                  (cs,t) <- instantiate env sc
-                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                  let t' = subst [(tvSelf,t1)] t
-                                                  reduce env eq (Cast t' t2 : cs)
-                                                Nothing -> err1 n "Attribute not found:"
-reduce' env eq (Sel w (TExist _ p) n t2)    = case findAttr env p n of
-                                                Just (wf,sc,dec) -> do
-                                                  (cs,t) <- instantiate env sc
-                                                  when (tvSelf `elem` tyfree t) (err1 n "Self attribute not selectable from abstract type")
-                                                  reduce env eq (Cast t t2 : cs)
-                                                Nothing -> err1 n "Attribute not found:"
-reduce' env eq (Sel w (TTuple _ p r) n t2)  = reduce' env eq (Cast r (kwdRow n t2 tWild))
+  | Just wit <- search                      = do (cs,p',e) <- instWitness env [] wit
+                                                 reduce env eq (zipWith Cast (tcargs p) (tcargs p') ++ cs)       -- TODO: unify instead of cast!
+  where search                              = findWitness env (NoQ $ tvname tv) (tcname p ==)
+  
+reduce' env eq c@(Impl w (TCon _ tc) p)
+  | Just wit <- search                      = do (cs,p',e) <- instWitness env (tcargs tc) wit
+                                                 reduce env eq (zipWith Cast (tcargs p) (tcargs p') ++ cs)       -- TODO: unify instead of cast!
+  where search                              = findWitness env (tcname tc) (tcname p ==)
 
+reduce' env eq (Impl w (TExist _ u) p)
+  | Just (wf,p') <- search                  = reduce env eq (zipWith Cast (tcargs p) (tcargs p'))                -- TODO: unify instead of cast!
+  where search                              = findProto env u (tcname p)
+
+reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
+  | not $ skolem tv                         = do defer [c]; return eq
+  | Just (wf,sc,dec) <- findVAttr env tv n  = do (cs,t) <- instantiate env sc
+                                                 -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t' t2 : cs)
+  | Just wit <- search                      = do (cs1,p,e) <- instWitness env [] wit
+                                                 let Just (wf,sc,dec) = findAttr env p n
+                                                 (cs2,t) <- instantiate env sc                -- TODO: apply wits of cs2, make "self" extra arg
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t' t2 : cs1++cs2)
+  | otherwise                               = err1 n "Attribute not found"
+  where search                              = findWitness env (NoQ $ tvname tv) (hasAttr env n)
+
+reduce' env eq (Sel w t1@(TCon _ tc) n t2)
+  | Just (wf,sc,dec) <- findAttr env tc n   = do (cs,t) <- instantiate env sc
+                                                 -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t' t2 : cs)
+  | Just wit <- search                      = do (cs1,p,e) <- instWitness env (tcargs tc) wit
+                                                 let Just (wf,sc,dec) = findAttr env p n
+                                                 (cs2,t) <- instantiate env sc                -- TODO: apply wits of cs2, make "self" extra arg
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t' t2 : cs1++cs2)
+  | otherwise                               = err1 n "Attribute not found"
+  where search                              = findWitness env (tcname tc) (hasAttr env n)
+
+reduce' env eq (Sel w (TExist _ p) n t2)
+  | Just (wf,sc,dec) <- findAttr env p n    = do (cs,t) <- instantiate env sc
+                                                 when (tvSelf `elem` tyfree t) (err1 n "Self attribute not selectable from abstract type")
+                                                 reduce env eq (Cast t t2 : cs)
+  | otherwise                               = err1 n "Attribute not found:"
+
+reduce' env eq (Sel w (TTuple _ p r) n t2)  = reduce' env eq (Cast r (kwdRow n t2 tWild))
 
 reduce' env eq (Sel w (TUnion _ us) n t2)   = do t <- newTVar
                                                  reduce env eq (Sel w t n t2 : [ Cast (mkTCon u) t | u <- us ])
   where mkTCon (ULit _)                     = tStr
         mkTCon (UCon c)                     = tCon (TC c [])
 
-reduce' env eq c@(Mut (TVar _ tv) n t2)
+reduce' env eq c@(Mut t1@(TVar _ tv) n t2)
   | not $ skolem tv                         = do defer [c]; return eq
-  | u:_ <- findClassBound tv env            = reduce' env eq (Mut (tCon u) n t2)
-reduce' env eq (Mut t1@(TCon _ tc) n t2)    = case findAttr env tc n of
-                                                Just (wf,sc,dec) -> do
-                                                  when (dec/=Property) (noMut n)
-                                                  (cs,t) <- instantiate env sc
-                                                  let t' = subst [(tvSelf,t1)] t
-                                                  reduce env eq (Cast t1 tObject : Cast t' t2 : cs)
-                                                Nothing -> err1 n "Attribute not found:"
+  | Just (wf,sc,dec) <- findVAttr env tv n  = do when (dec/=Property) (noMut n)
+                                                 (cs,t) <- instantiate env sc
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t1 tObject : Cast t2 t' : cs)
+  | otherwise                               = err1 n "Attribute not found:"
+
+reduce' env eq (Mut t1@(TCon _ tc) n t2)
+  | Just (wf,sc,dec) <- findAttr env tc n   = do when (dec/=Property) (noMut n)
+                                                 (cs,t) <- instantiate env sc
+                                                 let t' = subst [(tvSelf,t1)] t
+                                                 reduce env eq (Cast t1 tObject : Cast t2 t' : cs)
+  | otherwise                               = err1 n "Attribute not found:"
+
 reduce' env eq c                            = noRed c
 
 
@@ -128,11 +156,10 @@ cast' env (TVar _ tv1) (TVar _ tv2)
 
 cast' env t1@(TVar _ tv) t2
   | not $ skolem tv                         = defer [Cast t1 t2]
--- if skolem...
+  | Just tc <- findVBound env tv            = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)
   | not $ skolem tv                         = defer [Cast t1 t2]
--- if skolem...
 
 cast' env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2                  = mapM_ (uncurry $ cast env) ((tcargs c1 `zip` tcargs c2) ++ (tcargs c2 `zip` tcargs c1))   -- TODO: use polarities
@@ -211,11 +238,10 @@ sub' env eq w (TVar _ tv1) (TVar _ tv2)
 
 sub' env eq w t1@(TVar _ tv) t2
   | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
--- if skolem...
+  | Just tc <- findVBound env tv            = sub' env eq w (tCon tc) t2
 
 sub' env eq w t1 t2@(TVar _ tv)
   | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
--- if skolem...
 
 sub' env eq w (TExist _ p1) (TExist l p2)
   | not $ null sup                          = do mapM_ (uncurry $ cast env) (head sup `zip` tcargs p2); return eq     -- TODO: use polarities

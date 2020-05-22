@@ -51,7 +51,7 @@ data NameInfo               = NVar      Type
                             | NClass    Qual [WTCon] TEnv
                             | NProto    Qual [WTCon] TEnv
                             | NExt      QName Qual [WTCon] TEnv
-                            | NTVar     Kind [TCon] [TCon]
+                            | NTVar     Kind (Maybe TCon)
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -60,7 +60,7 @@ data NameInfo               = NVar      Type
                             deriving (Eq,Show,Read,Generic)
 
 data Witness                = WClass    { binds::Qual, proto::TCon, wname::QName, wsteps::[Maybe QName] }
---                            | WInst   { args::[Type], proto::TCon, wname::QName, wsteps::[Maybe QName] }
+                            | WInst     { proto::TCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
 type WTCon                  = ([Maybe QName],TCon)
@@ -69,6 +69,8 @@ instance Data.Binary.Binary NameInfo
 
 instance Eq Witness where
     a@WClass{} == b@WClass{}    = tcname (proto a) == tcname (proto b)
+    a@WInst{} == b@WInst{}      = tcname (proto a) == tcname (proto b)
+    _ == _                      = False
 
 instance Pretty TEnv where
     pretty tenv                 = vcat (map pretty tenv)
@@ -94,7 +96,7 @@ instance Pretty (Name,NameInfo) where
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> pretty n <> 
                                   brackets (commaList $ tybound q) <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ pretty te)
-    pretty (n, NTVar k as ps)   = pretty n <> parens (commaList (as++ps))
+    pretty (n, NTVar k mba)     = pretty n <> maybe empty (parens . pretty) mba
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -118,7 +120,7 @@ instance Subst NameInfo where
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q ps te)     = NExt n <$> msubst q <*> msubst ps <*> msubst te
-    msubst (NTVar k as ps)      = NTVar k <$> msubst as <*> msubst ps
+    msubst (NTVar k mba)        = NTVar k <$> msubst mba
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -132,7 +134,7 @@ instance Subst NameInfo where
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ (tvSelf : tybound q)
-    tyfree (NTVar k as ps)      = tyfree as ++ tyfree ps
+    tyfree (NTVar k mba)        = tyfree mba
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -213,7 +215,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
-    unalias env (NTVar k as ps)     = NTVar k (unalias env as) (unalias env ps)
+    unalias env (NTVar k mba)       = NTVar k (unalias env mba)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -301,15 +303,17 @@ block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = foldl addWit env ws
+define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ prune (dom te) (names env) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
-defineTVars (TBind (TV k n) us : q) env
-                            = defineTVars q env{ names = (n, NTVar k (map snd as) (map snd ps)) : names env }
-  where (as,ps)             = mro2 env us
+defineTVars (TBind tv@(TV k n) us : q) env
+                            = foldl addWit env1 ws
+  where env1                = defineTVars q env{ names = (n, NTVar k mba) : names env }
+        (mba,us')           = case mro2 env us of ([],_) -> (Nothing,us); _ -> (Just (head us), tail us)
+        ws                  = [ (NoQ n, WInst p (NoQ (tvarWit tv p)) ws) | u <- us', let (wus,_) = findCon env u, (ws,p) <- wus ]
 
 defineSelf                  :: QName -> Qual -> Env -> Env
 defineSelf qn q env         = defineTVars [TBind tvSelf [tc]] env
@@ -337,7 +341,7 @@ stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 tvarScope                   :: Env -> [TVar]
-tvarScope env               = [ TV k n | (n, NTVar k _ _) <- names env ]
+tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
@@ -390,16 +394,19 @@ hasWitness env cn pn        =  not $ null $ findWitness env cn (pn==)
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Decoration)                              -- Solver.reduce Sel
-findAttr env tc n           = findIn (([Nothing],te) : [ (w,te') | (w,u) <- wus, let (_,te') = findCon env u ])
-  where (wus,te)            = findCon env tc
+findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Decoration)
+findAttr env tc n           = findIn [ (w,te') | (w,u) <- wus, let (_,te') = findCon env u ]
+  where wus                 = ([Nothing],tc) : fst (findCon env tc)
         findIn ((w,te):tes) = case lookup n te of
                                 Just (NSig sc d) -> Just (wexpr w, sc, d)
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
-    
-findCon                     :: Env -> TCon -> ([WTCon],TEnv)                                            -- findAttr, mro
+findProto                   :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
+findProto env p qn          = listToMaybe [ (wexpr ws, p') | (ws,p') <- wus, tcname p == qn ]
+  where wus                 = ([Nothing],p) : fst (findCon env p)
+
+findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
@@ -419,6 +426,22 @@ conAttrs env qn             = case findQName qn env of
 
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
+
+
+-- TVar queries ------------------------------------------------------------------------------------------------------------------
+
+findVBound                  :: Env -> TVar -> Maybe TCon
+findVBound env tv           = case findName (tvname tv) env of
+                                NTVar _ mba -> mba
+                                _ -> err1 tv "Unknown type variable"
+
+findVAttr                   :: Env -> TVar -> Name -> Maybe (Expr->Expr,TSchema,Decoration)
+findVAttr env tv n          = case findVBound env tv of
+                                Just a -> findAttr env a n
+                                Nothing -> Nothing
+
+tvarWit                     :: TVar -> TCon -> Name
+tvarWit tv p                = Derived (tvname tv) (nstr $ deriveQ $ tcname p)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
@@ -497,18 +520,6 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
 
 
--- TVar queries ------------------------------------------------------------------------------------------------------------------
-
-findClassBound              :: TVar -> Env -> [TCon]
-findClassBound tv env       = case findName (tvname tv) env of
-                                NTVar _ as us -> as
-                                _ -> []
-
-findProtoBound              :: TVar -> Env -> [TCon]
-findProtoBound tv env       = case findName (tvname tv) env of
-                                NTVar _ as ps -> ps
-                                _ -> []
-
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
 instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
@@ -527,6 +538,8 @@ instWitness env ts wit      = case wit of
                                  WClass q p w ws -> do
                                     cs <- qualConstraints env q ts
                                     return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (eQVar w) $ wvars cs))
+                                 WInst p w ws ->
+                                    return ([], p, wexpr ws (eQVar w))
 
 qualConstraints             :: Env -> Qual -> [Type] -> TypeM Constraints
 qualConstraints env q ts    = do let s = tybound q `zip` ts
