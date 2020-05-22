@@ -402,8 +402,8 @@ findAttr env tc n           = findIn [ (w,te') | (w,u) <- wus, let (_,te') = fin
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
-findProto                   :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
-findProto env p qn          = listToMaybe [ (wexpr ws, p') | (ws,p') <- wus, tcname p == qn ]
+findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
+findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- wus, tcname p == qn ]
   where wus                 = ([Nothing],p) : fst (findCon env p)
 
 findCon                     :: Env -> TCon -> ([WTCon],TEnv)
@@ -940,6 +940,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
+                                    | NoUnify Type Type
                                     deriving (Show)
 
 instance Control.Exception.Exception TypeError
@@ -959,6 +960,7 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
+    loc (NoUnify t1 t2)             = loc t1
 
 typeError err                       = (loc err,render (expl err))
   where
@@ -975,6 +977,7 @@ typeError err                       = (loc err,render (expl err))
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
 
 checkerError (FileNotFound n)       = (loc n, "Type interface file not found for " ++ prstr n)
@@ -1026,4 +1029,5 @@ noMut n                             = Control.Exception.throw $ NoMut n
 lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
 lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c
+noUnify t1 t2                       = Control.Exception.throw $ NoUnify t1 t2
 
