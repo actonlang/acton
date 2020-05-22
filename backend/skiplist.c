@@ -8,6 +8,7 @@
 #include <limits.h>
 #include <assert.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
 
 #include "skiplist.h"
 #include "fastrand.h"
@@ -68,7 +69,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
     for (; i >= 0; i--) {
         while (x->forward[i] != NULL && (list->cmp(x->forward[i]->key, key) < 0))
             x = x->forward[i];
-//		printf("Item %ld will update node %ld at level %d\n", key, x->key, i);
+//		printf("Item %" PRId64 " will update node %" PRId64 " at level %d\n", key, x->key, i);
         	update[i] = x;
     }
 //    x = x->forward[0];
@@ -78,7 +79,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         return 0;
     } else {
         level = rand_level(seedptr);
-//		printf("Item %ld, picking level %d\n", key, level);
+//		printf("Item %" PRId64 ", picking level %d\n", key, level);
         if (level > list->level) {
             for (i = list->level + 1; i <= level; i++) {
                 update[i] = list->header;
@@ -91,7 +92,7 @@ int skiplist_insert(skiplist_t *list, WORD key, WORD value, unsigned int * seedp
         x->value = value;
         x->forward = (snode_t **) malloc(sizeof(snode_t*) * (level+1));
         for (i = 0; i <= level; i++) {
-//        		printf("Item %ld chaining myself after node %ld at level %d\n", key, update[i]->key, i);
+//        		printf("Item %" PRId64 " chaining myself after node %" PRId64 " at level %d\n", key, update[i]->key, i);
             x->forward[i] = update[i]->forward[i];
             update[i]->forward[i] = x;
         }
@@ -263,7 +264,7 @@ void skiplist_free_val(skiplist_t *list, void (*free_val)(WORD))
 void skiplist_dump(skiplist_t *list) {
     snode_t *x = list->header;
     while (x && x->forward[0] != NULL) {
-        printf("%ld[%ld]->", (int64_t) x->forward[0]->key, (int64_t) x->forward[0]->value);
+        printf("%" PRId64 "[%" PRId64 "]->", (int64_t) x->forward[0]->key, (int64_t) x->forward[0]->value);
         x = x->forward[0];
     }
     printf("NIL\n");

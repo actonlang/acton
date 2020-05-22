@@ -124,13 +124,13 @@ int test_search_pk(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, unsig
 
 		if(row == NULL)
 		{
-			printf("Read back wrong NULL row for cell (%ld)!\n", aid);
+			printf("Read back wrong NULL row for cell (%" PRId64 ")!\n", aid);
 			return -1;
 		}
 
 		if((int64_t) row->key != aid)
 		{
-			printf("Read back mismatched pk %ld ( != %ld) in cell!\n", (int64_t) row->key, aid);
+			printf("Read back mismatched pk %" PRId64 " ( != %" PRId64 ") in cell!\n", (int64_t) row->key, aid);
 			return -1;
 		}
 	}
@@ -157,13 +157,13 @@ int test_search_pk_ck1(db_schema_t * schema, remote_db_t * db, uuid_t * txnid, u
 
 			if(row == NULL)
 			{
-				printf("Read back wrong NULL row for cell (%ld, %ld)!\n", aid, cid);
+				printf("Read back wrong NULL row for cell (%" PRId64 ", %" PRId64 ")!\n", aid, cid);
 				return -1;
 			}
 
 			if((int64_t) row->key != cid)
 			{
-				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (int64_t) row->key, cid, aid, cid);
+				printf("Read back mismatched ck1 %" PRId64 " ( != %" PRId64 ") in cell (%" PRId64 ", %" PRId64 ")!\n", (int64_t) row->key, cid, aid, cid);
 				return -1;
 			}
 		}
@@ -197,7 +197,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 
 				if((int64_t) row->key != iid)
 				{
-					printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (int64_t) row->key, iid, aid, cid, iid);
+					printf("Read back mismatched ck1 %" PRId64 " ( != %" PRId64 ") in cell (%" PRId64 ", %" PRId64 ", %" PRId64 ")!\n", (int64_t) row->key, iid, aid, cid, iid);
 					return -1;
 				}
 			}
@@ -211,7 +211,7 @@ int test_search_pk_ck1_ck2(db_schema_t * schema, remote_db_t * db, uuid_t * txni
 
 void consumer_callback(queue_callback_args * qca)
 {
-	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
+	printf("Consumer %" PRId64 "/%" PRId64 "/%" PRId64 " received notification for queue %" PRId64 "/%" PRId64 ", status %d\n",
 			(int64_t) qca->app_id, (int64_t) qca->shard_id, (int64_t) qca->consumer_id,
 			(int64_t) qca->table_key, (int64_t) qca->queue_id,
 			qca->status);

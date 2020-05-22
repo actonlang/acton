@@ -12,6 +12,7 @@
 
 #include <pthread.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 typedef void *WORD;
 

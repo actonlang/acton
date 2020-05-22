@@ -218,7 +218,7 @@ char * to_string_write_query(write_query * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "%s(txnid=%s, nonce=%ld, cell=", (ca->msg_type == RPC_TYPE_WRITE)?("WriteQuery"):("DeleteQuery"), uuid_str, ca->nonce);
+	sprintf(crt_ptr, "%s(txnid=%s, nonce=%" PRId64 ", cell=", (ca->msg_type == RPC_TYPE_WRITE)?("WriteQuery"):("DeleteQuery"), uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	if(ca->cell != NULL)
@@ -402,7 +402,7 @@ char * to_string_read_query(read_query * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "ReadQuery(txnid=%s, nonce=%ld, ", uuid_str, ca->nonce);
+	sprintf(crt_ptr, "ReadQuery(txnid=%s, nonce=%" PRId64 ", ", uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	to_string_cell_address(ca->cell_address, crt_ptr);
@@ -596,7 +596,7 @@ char * to_string_range_read_query(range_read_query * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "RangeReadQuery(txnid=%s, nonce=%ld, start_key=", uuid_str, ca->nonce);
+	sprintf(crt_ptr, "RangeReadQuery(txnid=%s, nonce=%" PRId64 ", start_key=", uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	to_string_cell_address(ca->start_cell_address, crt_ptr);
@@ -768,7 +768,7 @@ char * to_string_ack_message(ack_message * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "AckMessage(status=%d, txnid=%s, nonce=%ld, ", ca->status, uuid_str, ca->nonce);
+	sprintf(crt_ptr, "AckMessage(status=%d, txnid=%s, nonce=%" PRId64 ", ", ca->status, uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	if(ca->cell_address != NULL)
@@ -957,7 +957,7 @@ char * to_string_range_read_response_message(range_read_response_message * ca, c
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "RangeReadResponseMessage(txnid=%s, nonce=%ld", uuid_str, ca->nonce);
+	sprintf(crt_ptr, "RangeReadResponseMessage(txnid=%s, nonce=%" PRId64 "", uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	sprintf(crt_ptr, ", cells={");
@@ -1406,42 +1406,42 @@ char * to_string_queue_message(queue_query_message * ca, char * msg_buff)
 	{
 		case QUERY_TYPE_CREATE_QUEUE:
 		{
-			sprintf(crt_ptr, "CreateQueue(txnid=%s, nonce=%ld, ", uuid_str, ca->nonce);
+			sprintf(crt_ptr, "CreateQueue(txnid=%s, nonce=%" PRId64 ", ", uuid_str, ca->nonce);
 			break;
 		}
 		case QUERY_TYPE_DELETE_QUEUE:
 		{
-			sprintf(crt_ptr, "DeleteQueue(txnid=%s, nonce=%ld, ", uuid_str, ca->nonce);
+			sprintf(crt_ptr, "DeleteQueue(txnid=%s, nonce=%" PRId64 ", ", uuid_str, ca->nonce);
 			break;
 		}
 		case QUERY_TYPE_SUBSCRIBE_QUEUE:
 		{
-			sprintf(crt_ptr, "SubscribeQueue(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
+			sprintf(crt_ptr, "SubscribeQueue(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
 			break;
 		}
 		case QUERY_TYPE_UNSUBSCRIBE_QUEUE:
 		{
-			sprintf(crt_ptr, "UnsubscribeQueue(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
+			sprintf(crt_ptr, "UnsubscribeQueue(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id);
 			break;
 		}
 		case QUERY_TYPE_ENQUEUE:
 		{
-			sprintf(crt_ptr, "Enqueue(txnid=%s, nonce=%ld, no_entries=%d, ", uuid_str, ca->nonce, ca->no_cells);
+			sprintf(crt_ptr, "Enqueue(txnid=%s, nonce=%" PRId64 ", no_entries=%d, ", uuid_str, ca->nonce, ca->no_cells);
 			break;
 		}
 		case QUERY_TYPE_READ_QUEUE:
 		{
-			sprintf(crt_ptr, "ReadQueue(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, max_items=%ld, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
+			sprintf(crt_ptr, "ReadQueue(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, max_items=%" PRId64 ", ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
 			break;
 		}
 		case QUERY_TYPE_CONSUME_QUEUE:
 		{
-			sprintf(crt_ptr, "ConsumeQueue(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, new_consume_head=%ld, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
+			sprintf(crt_ptr, "ConsumeQueue(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, new_consume_head=%" PRId64 ", ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->queue_index);
 			break;
 		}
 		case QUERY_TYPE_READ_QUEUE_RESPONSE:
 		{
-			sprintf(crt_ptr, "ReadQueueResponse(txnid=%s, nonce=%ld, app_id=%d, shard_id=%d, consumer_id=%d, no_entries=%d, new_read_head=%ld, status=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index, ca->status);
+			sprintf(crt_ptr, "ReadQueueResponse(txnid=%s, nonce=%" PRId64 ", app_id=%d, shard_id=%d, consumer_id=%d, no_entries=%d, new_read_head=%" PRId64 ", status=%d, ", uuid_str, ca->nonce, ca->app_id, ca->shard_id, ca->consumer_id, ca->no_cells, ca->queue_index, ca->status);
 			break;
 		}
 	}
@@ -1866,7 +1866,7 @@ char * to_string_txn_message(txn_message * ca, char * msg_buff)
 	else
 		uuid_str[0]='\0';
 
-	sprintf(crt_ptr, "TxnMessage(type=%d, txnid=%s, nonce=%ld", ca->type, uuid_str, ca->nonce);
+	sprintf(crt_ptr, "TxnMessage(type=%d, txnid=%s, nonce=%" PRId64 "", ca->type, uuid_str, ca->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	sprintf(crt_ptr, ", own_read_set={");

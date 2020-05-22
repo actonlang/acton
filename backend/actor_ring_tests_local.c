@@ -139,7 +139,7 @@ int create_queue_schema(db_t * db, unsigned int * fastrandstate)
 
 void consumer_callback(queue_callback_args * qca)
 {
-	printf("Consumer %ld/%ld/%ld received notification for queue %ld/%ld, status %d\n",
+	printf("Consumer %" PRId64 "/%" PRId64 "/%" PRId64 " received notification for queue %" PRId64 "/%" PRId64 ", status %d\n",
 			(int64_t) qca->app_id, (int64_t) qca->shard_id, (int64_t) qca->consumer_id,
 			(int64_t) qca->table_key, (int64_t) qca->queue_id,
 			qca->status);
@@ -172,11 +172,11 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 
 			if((*entries_read) > 0)
 			{
-				printf("CONSUMER %ld: successful_dequeues=%d, last_entry_id=%ld\n",
+				printf("CONSUMER %" PRId64 ": successful_dequeues=%d, last_entry_id=%" PRId64 "\n",
 						(int64_t) ca->consumer_id, ca->successful_dequeues, (int64_t) (*end_row)->key);
 
 				if(((int64_t) (*end_row)->key) != ca->successful_dequeues - 1)
-					printf("Test %s - FAILED (%ld != %d)\n", "last_entry_id", (int64_t) (*end_row)->key, ca->successful_dequeues - 1);
+					printf("Test %s - FAILED (%" PRId64 " != %d)\n", "last_entry_id", (int64_t) (*end_row)->key, ca->successful_dequeues - 1);
 			}
 		}
 	}
@@ -292,7 +292,7 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 
 /*
 	if(debug)
-		printf("ACTOR %ld: Sending %d msgs to ACTOR %ld.\n", (int64_t) ca->consumer_id, no_outgoing_counters, dest_id);
+		printf("ACTOR %" PRId64 ": Sending %d msgs to ACTOR %" PRId64 ".\n", (int64_t) ca->consumer_id, no_outgoing_counters, dest_id);
 */
 
 	assert(no_queue_cols == 3);
@@ -330,12 +330,12 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 	if(entries_read == 0 || start_row == NULL)
 	{
-		printf("ACTOR %ld: No msgs to process!\n", (int64_t) ca->consumer_id);
+		printf("ACTOR %" PRId64 ": No msgs to process!\n", (int64_t) ca->consumer_id);
 		return 0;
 	}
 
 	if(debug)
-		printf("ACTOR %ld: %d msgs to process.\n", (int64_t) ca->consumer_id, entries_read);
+		printf("ACTOR %" PRId64 ": %d msgs to process.\n", (int64_t) ca->consumer_id, entries_read);
 
 	for(crt_row = start_row; processed<entries_read; crt_row = NEXT(crt_row), processed++)
 	{
@@ -348,7 +348,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		int counter_val = (int) db_row->column_array[1];
 		char * str_value = (char *) db_row->column_array[2];
 
-		printf("ACTOR %ld: Read queue entry: (id=%ld, snd=%ld, val=%d, str=%s)\n", (int64_t) ca->consumer_id, queue_entry_id, sender_id, counter_val, str_value);
+		printf("ACTOR %" PRId64 ": Read queue entry: (id=%" PRId64 ", snd=%" PRId64 ", val=%d, str=%s)\n", (int64_t) ca->consumer_id, queue_entry_id, sender_id, counter_val, str_value);
 
 //					skiplist_search(ca->rcv_counters, COLLECTION_ID_0, (WORD) entries_read);
 
@@ -377,7 +377,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		assert(ret == 0);
 
 		if(debug)
-			printf("ACTOR %ld: Chekpointed local state in txn.\n", (int64_t) ca->consumer_id);
+			printf("ACTOR %" PRId64 ": Chekpointed local state in txn.\n", (int64_t) ca->consumer_id);
 
 		// Send outgoing msgs in txn:
 		ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
@@ -385,7 +385,7 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		assert(ret == 0);
 
 		if(debug)
-			printf("ACTOR %ld: Sent %d outgoing msgs in txn.\n", (int64_t) ca->consumer_id, *msgs_sent);
+			printf("ACTOR %" PRId64 ": Sent %d outgoing msgs in txn.\n", (int64_t) ca->consumer_id, *msgs_sent);
 	}
 
 	return ret;
@@ -414,7 +414,7 @@ void * actor(void * cargs)
 		return NULL;
 
 	if(debug)
-		printf("ACTOR %ld: Subscribed to queue %ld/%ld with callback (%p/%p/%p/%p)\n", (int64_t) ca->consumer_id, (int64_t) ca->queue_table_key, (int64_t) ca->queue_id, qc, qc->lock, qc->signal, qc->callback);
+		printf("ACTOR %" PRId64 ": Subscribed to queue %" PRId64 "/%" PRId64 " with callback (%p/%p/%p/%p)\n", (int64_t) ca->consumer_id, (int64_t) ca->queue_table_key, (int64_t) ca->queue_id, qc, qc->lock, qc->signal, qc->callback);
 
 	increment_vc(ca->vc, (int) ca->consumer_id);
 
@@ -428,7 +428,7 @@ void * actor(void * cargs)
 		send_seed_msgs(ca, &msgs_sent, &seed);
 		ca->successful_enqueues += msgs_sent;
 		if(debug)
-			printf("ACTOR %ld: sent %d seed outgoing msgs.\n", (int64_t) ca->consumer_id, msgs_sent);
+			printf("ACTOR %" PRId64 ": sent %d seed outgoing msgs.\n", (int64_t) ca->consumer_id, msgs_sent);
 	}
 
 	int read_status = read_queue_while_not_empty(ca, &entries_read, &start_row, &end_row);
@@ -459,12 +459,12 @@ void * actor(void * cargs)
 				printf("ERROR: consume_queue returned %d\n", ret);
 
 			if(debug)
-				printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (int64_t) ca->consumer_id, (int64_t) ca->read_head);
+				printf("ACTOR %" PRId64 ": consumed input queue up to %" PRId64 " in txn.\n", (int64_t) ca->consumer_id, (int64_t) ca->read_head);
 
 			ret = commit_txn(txnid, ca->vc, ca->db, &seed);
 
 			if(debug)
-				printf("ACTOR %ld: Commit returned %d.\n", (int64_t) ca->consumer_id, ret);
+				printf("ACTOR %" PRId64 ": Commit returned %d.\n", (int64_t) ca->consumer_id, ret);
 
 			checkpoint_success = (ret == VAL_STATUS_COMMIT);
 		}
@@ -474,19 +474,19 @@ void * actor(void * cargs)
 		ca->successful_consumes = ca->successful_dequeues;
 		ca->successful_enqueues += msgs_sent;
 
-		printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, no_enqueues=%d\n",
+		printf("ACTOR %" PRId64 ": successful_dequeues=%d, successful_consumes=%d, no_enqueues=%d\n",
 				(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->no_enqueues);
 	}
 
 	while(ca->successful_consumes < ca->no_enqueues)
 	{
 		if(debug)
-			printf("ACTOR %ld: Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (int64_t) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
+			printf("ACTOR %" PRId64 ": Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (int64_t) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
 
 		ret = pthread_mutex_lock(qc->lock);
 
 		if(debug_lock)
-			printf("ACTOR %ld: Locked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
+			printf("ACTOR %" PRId64 ": Locked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
 
 		struct timespec ts;
 		clock_gettime(CLOCK_REALTIME, &ts);
@@ -496,17 +496,17 @@ void * actor(void * cargs)
 		pthread_mutex_unlock(qc->lock);
 
 		if(debug_lock)
-			printf("ACTOR %ld: Unlocked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
+			printf("ACTOR %" PRId64 ": Unlocked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
 
 		if(ret == 0)
 		{
 			if(debug)
-				printf("ACTOR %ld: Was signaled, status=%d, reading queue..\n", (int64_t) ca->consumer_id, ret);
+				printf("ACTOR %" PRId64 ": Was signaled, status=%d, reading queue..\n", (int64_t) ca->consumer_id, ret);
 		}
 		else
 		{
 			if(debug)
-				printf("ACTOR %ld: Wait timed out, status=%d, reading queue..\n", (int64_t) ca->consumer_id, ret);
+				printf("ACTOR %" PRId64 ": Wait timed out, status=%d, reading queue..\n", (int64_t) ca->consumer_id, ret);
 
 //			continue;
 		}
@@ -539,12 +539,12 @@ void * actor(void * cargs)
 					printf("ERROR: consume_queue returned %d\n", ret);
 
 				if(debug)
-					printf("ACTOR %ld: consumed input queue up to %ld in txn.\n", (int64_t) ca->consumer_id, (int64_t) ca->read_head);
+					printf("ACTOR %" PRId64 ": consumed input queue up to %" PRId64 " in txn.\n", (int64_t) ca->consumer_id, (int64_t) ca->read_head);
 
 				ret = commit_txn(txnid, ca->vc, ca->db, &seed);
 
 				if(debug)
-					printf("ACTOR %ld: Commit returned %d.\n", (int64_t) ca->consumer_id, ret);
+					printf("ACTOR %" PRId64 ": Commit returned %d.\n", (int64_t) ca->consumer_id, ret);
 
 				checkpoint_success = (ret == VAL_STATUS_COMMIT);
 			}
@@ -554,7 +554,7 @@ void * actor(void * cargs)
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
 
-			printf("ACTOR %ld: successful_dequeues=%d, successful_consumes=%d, successful_enqueues=%d, private_read_head=%ld, no_enqueues=%d\n",
+			printf("ACTOR %" PRId64 ": successful_dequeues=%d, successful_consumes=%d, successful_enqueues=%d, private_read_head=%" PRId64 ", no_enqueues=%d\n",
 					(int64_t) ca->consumer_id, ca->successful_dequeues, ca->successful_consumes, ca->successful_enqueues, ca->read_head, ca->no_enqueues);
 
 //			print_long_db(ca->db);

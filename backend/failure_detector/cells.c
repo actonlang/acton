@@ -187,12 +187,12 @@ char * to_string_cell_address(cell_address * ca, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 
-	sprintf(crt_ptr, "CellAddress(table_key=%ld, keys={", ca->table_key);
+	sprintf(crt_ptr, "CellAddress(table_key=%" PRId64 ", keys={", ca->table_key);
 	crt_ptr += strlen(crt_ptr);
 
 	for(int i=0;i<ca->no_keys;i++)
 	{
-		sprintf(crt_ptr, "%ld, ", ca->keys[i]);
+		sprintf(crt_ptr, "%" PRId64 ", ",  ca->keys[i]);
 		crt_ptr += strlen(crt_ptr);
 	}
 
@@ -432,12 +432,12 @@ char * to_string_cell(cell * ca, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
 
-	sprintf(crt_ptr, "Cell(table_key=%ld, keys={", ca->table_key);
+	sprintf(crt_ptr, "Cell(table_key=%" PRId64 ", keys={", ca->table_key);
 	crt_ptr += strlen(crt_ptr);
 
 	for(int i=0;i<ca->no_keys;i++)
 	{
-		sprintf(crt_ptr, "%ld, ", ca->keys[i]);
+		sprintf(crt_ptr, "%" PRId64 ", ", ca->keys[i]);
 		crt_ptr += strlen(crt_ptr);
 	}
 
@@ -446,7 +446,7 @@ char * to_string_cell(cell * ca, char * msg_buff)
 
 	for(int i=0;i<ca->no_columns;i++)
 	{
-		sprintf(crt_ptr, "%ld, ", ca->columns[i]);
+		sprintf(crt_ptr, "%" PRId64 ", ", ca->columns[i]);
 		crt_ptr += strlen(crt_ptr);
 	}
 
