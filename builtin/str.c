@@ -34,7 +34,7 @@ $bool $str_isprintable($str s);
 $bool $str_isspace($str s);
 $bool $str_istitle($str s);
 $bool $str_isupper($str s);
-$str $str_join($str sep, $Iterator iter);
+$str $str_join($str sep, $Iterable$opaque it);
 $str $str_ljust($str s, int width, $str fill); 
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
@@ -952,18 +952,37 @@ $bool $str_isupper($str s) {
   return to$bool(hascased);
 }
 
-//creates many intermediate strings...
-$str $str_join($str s, $Iterator iter) {
+$str $str_join($str s, $Iterable$opaque it) {
+  $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+  int len = 0;
+  int totchars = 0;
+  int totbytes = 0;
+  $str nxt;
+  while ((nxt = ($str)iter->$class->__next__(iter))) {
+    len ++;
+    totchars += nxt->nchars;
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totchars += (len-1) * s->nchars;
+    totbytes += (len-1) * s->nbytes;
+  }
   $str res;
-  $str nxt = ($str)iter->$class->__next__(iter);
-  if (nxt) {
-    res = nxt;
-    while((nxt = ($str)iter->$class->__next__(iter))) {
-      res = ($str)$str_add($str_add(res,s),nxt);
+  NEW_UNFILLED(res,totchars,totbytes);
+  if (len > 0) {
+    unsigned char *p = res->str;
+    iter = it->proto->$class->__iter__(it->proto,it->impl);
+    nxt = ($str)iter->$class->__next__(iter);
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    while ((nxt = ($str)iter->$class->__next__(iter))) {
+      memcpy(p,s->str,s->nbytes);
+      p += s->nbytes;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
     }
-    return res;
-  } else
-    return NULL;
+  }
+  return res;
 }
 
 $str $str_ljust($str s, int width, $str fill) {

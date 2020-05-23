@@ -12,6 +12,48 @@ class complex:
 class bool:
   pass
 
+class range:
+  pass
+
+class BaseException:
+  pass
+
+class SystemExit (BaseException):
+  pass
+
+class KeyboardInterrupt (BaseException):
+  pass 
+
+class Exception (BaseException):
+  pass
+
+class AssertionError (Exception):
+  pass
+
+class LookupError (Exception):
+  pass
+
+class IndexError (LookupError):
+  pass
+
+class KeyError (LookupError):
+  pass
+
+class MemoryError (Exception):
+  pass
+
+class OSError (Exception):
+  pass
+
+class RuntimeError (Exception):
+  pass
+
+class NotImplementedError (RuntimeError):
+  pass
+
+class ValueError (Exception):
+  pass
+
 class str:
   capitalize   : () -> str
   center       : (int,str) -> str
@@ -29,7 +71,7 @@ class str:
   isspace      : () -> bool
   istitle      : () -> bool
   isupper      : () -> bool
-  join         : (Iterator[str]) -> str
+  join         : (Iterable[str]) -> str
   ljust        : (int,str) -> str
   lower        : () -> str
   lstrip       : (str) -> str
@@ -102,16 +144,16 @@ class dict[A(Hashable),B] ():
 class set[A(Hashable)] ():
   pass
 
-protocol Boolean:
-  __bool__   : () -> bool
+# protocol Boolean:
+#  __bool__   : () -> bool
 
-extension int (Boolean):
-  def __bool__(self):
-    return self != 0
+# extension int (Boolean):
+#  def __bool__(self):
+#    return self != 0
 
-extension list[A] (Boolean):
-  def __bool__(self):
-    return self.__len__() > 0
+# extension list[A] (Boolean):
+#   def __bool__(self):
+#    return self.__len__() > 0
 
 
 ## Collection protocols ############################################################################
@@ -296,4 +338,66 @@ extension float (Hashable):pass
 
 def abs(x : Complex) -> Real:
     return x.__abs__()
-    
+
+def all(it : Iterable[A]) -> bool:
+    for x in it:
+        if not x:
+            return False
+    return True
+
+def any(it : Iterable[A]) -> bool:
+    for x in it:
+        if x:
+            return True
+    return False
+
+ascii : (*A) -> str
+
+bin : (Integral) -> str
+
+chr : (Integral) -> str
+
+def divmod(a : Integral, b : Integral) -> (Integral, Integral): 
+  return Integral.__divmod__(a,b)
+
+enumerate : (Iterable[A],?int) -> Iterable[(A,int)]
+
+filter : (?((A) -> B), Iterable[A]) -> Iterator[B]
+
+def float(x : Real) -> float:
+   return x.__float__()
+
+hex : (Integral) -> str
+
+def iter(x : Iterable[A]) -> Iterator[A]:
+  return x.__iter__()
+
+def len(x : Collection[A]) -> int:
+  return x.__len__()
+
+map : ((A) -> B,Iterable[A]) -> Iterator[B]
+
+max : [A(Ord)] => (Iterable[A],?A) -> A 
+
+min : [A(Ord)] => (Iterable[A],?A) -> A 
+
+def next(x : Iterator[A]) -> A:
+  return x.__next__()
+
+ord : (str) -> int
+
+def pow(a : Complex, b : Complex) -> Complex:
+  return Complex.__pow__(a,b)
+
+print :  (*A) -> None
+
+def reversed(seq : Sequence[A]) -> Iterator[A]:
+  return seq.__reversed__()
+
+round : (x : Real,n : ?int) -> Real
+
+sorted : [A(Ord)] => (Iterable[A]) -> list[A]
+
+sum : [A(Add)] => (Iterable[A],?A) -> A
+
+zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]

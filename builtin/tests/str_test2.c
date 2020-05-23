@@ -34,9 +34,12 @@ int main() {
     $Sequence$list wit4 = $Sequence$list$witness;
     $int len = wit4->w$Collection$Sequence->$class->__len__(wit4->w$Collection$Sequence,lst);
     for (long i=0; i < from$int(len); i++) {
-      $Sequence$list wit5 = $Sequence$list$witness;
-      printf("  '%s'\n",to$UTF8(wit5->$class->__getitem__(wit5,lst,to$int(i))));
+      printf("  '%s'\n",to$UTF8(wit4->$class->__getitem__(wit4,lst,to$int(i))));
     }
+    $Collection$opaque coll = $Collection$pack(($Collection)wit4->w$Collection$Sequence,lst);
+    $str space = from$UTF8(" ");
+    $str joined = space->$class->join(space,($Iterable$opaque) coll);
+    printf("joined string is '%s'\n",to$UTF8(joined));
   }
   $str chinese = from$UTF8("但他呼吁进行全面调查");
   printf("chinese nbytes = %d, nchars = %d\n",chinese->nbytes,chinese->nchars);

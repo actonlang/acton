@@ -34,7 +34,7 @@ struct $str$class {
   $bool (*isspace)($str s);
   $bool (*istitle)($str s);
   $bool (*isupper)($str s);
-  $str (*join)($str sep, $Iterator iter);
+  $str (*join)($str sep, $Iterable$opaque it);
   $str (*ljust)($str s, int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $str (*lower)($str s);
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
