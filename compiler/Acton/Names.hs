@@ -8,6 +8,15 @@ import Debug.Trace
 
 self                                = Name NoLoc "self"
 
+deriveQ (NoQ n)                     = n
+deriveQ (QName (ModName m) n)       = deriveMod n m
+
+deriveMod n0 []                     = n0
+deriveMod n0 (n:m)                  = deriveMod (Derived n0 (nstr n)) m
+
+
+-- Mutually recursive groups -------
+
 declnames (Extension{} : ds)        = declnames ds
 declnames (d : ds)                  = dname d : declnames ds
 declnames []                        = []

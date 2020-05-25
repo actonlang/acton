@@ -96,7 +96,7 @@ int test_search_column(db_t * db) {
 				{
 					if(col_values[i] != column_values[i])
 					{
-						printf("Read back mismatched column %d on row (%ld, %ld, %ld, %ld). Read back: (%ld, %ld, %ld, %ld)!\n",
+						printf("Read back mismatched column %d on row (%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "). Read back: (%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 ")!\n",
 								i, (int64_t) column_values[0], (int64_t) column_values[1], (int64_t) column_values[2], (int64_t) column_values[3],
 								(int64_t) col_values[0], (int64_t) col_values[1], (int64_t) col_values[2], (int64_t) col_values[3]);
 						ret = -1;
@@ -120,7 +120,7 @@ int test_search_pk(db_t * db)
 
 		if((int64_t) row->key != aid)
 		{
-			printf("Read back mismatched pk %ld ( != %ld)!\n", (int64_t) row->key, aid);
+			printf("Read back mismatched pk %" PRId64 " ( != %" PRId64 ")!\n", (int64_t) row->key, aid);
 			return -1;
 		}
 	}
@@ -140,7 +140,7 @@ int test_search_pk_ck1(db_t * db)
 
 			if((int64_t) row->key != cid)
 			{
-				printf("Read back mismatched ck1 %ld ( != %ld) in cell (%ld, %ld)!\n", (int64_t) row->key, cid, aid, cid);
+				printf("Read back mismatched ck1 %" PRId64 " ( != %" PRId64 ") in cell (%" PRId64 ", %" PRId64 ")!\n", (int64_t) row->key, cid, aid, cid);
 				return -1;
 			}
 		}
@@ -167,7 +167,7 @@ int test_search_pk_ck1_ck2(db_t * db)
 
 				if((int64_t) row->key != iid)
 				{
-					printf("Read back mismatched ck2 %ld ( != %ld) in cell (%ld, %ld, %ld)!\n", (int64_t) row->key, iid, aid, cid, iid);
+					printf("Read back mismatched ck2 %" PRId64 " ( != %" PRId64 ") in cell (%" PRId64 ", %" PRId64 ", %" PRId64 ")!\n", (int64_t) row->key, iid, aid, cid, iid);
 					return -1;
 				}
 			}
@@ -189,7 +189,7 @@ int test_search_index(db_t * db)
 
 		if(row == NULL)
 		{
-			printf("Read back mismatched row for secondary key %ld!\n", iid + 1);
+			printf("Read back mismatched row for secondary key %" PRId64 "!\n", iid + 1);
 			return -1;
 		}
 	}
@@ -228,7 +228,7 @@ int test_update(db_t * db)
 				{
 					if(col_values[i] != column_values[i])
 					{
-						printf("Read back mismatched column %d on row (%ld, %ld, %ld, %ld). Read back: (%ld, %ld, %ld, %ld)!\n",
+						printf("Read back mismatched column %d on row (%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "). Read back: (%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 ")!\n",
 								i, (int64_t) column_values[0], (int64_t) column_values[1], (int64_t) column_values[2], (int64_t) column_values[3],
 								(int64_t) col_values[0], (int64_t) col_values[1], (int64_t) col_values[2], (int64_t) col_values[3]);
 						ret = -1;
@@ -249,7 +249,7 @@ int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 	{
 		if(db_delete_row((WORD *) &aid, (WORD) 0, db, fastrandstate) != 0)
 		{
-			printf("Delete failed for pk %ld!\n", aid);
+			printf("Delete failed for pk %" PRId64 "!\n", aid);
 			return -1;
 		}
 
@@ -257,7 +257,7 @@ int test_delete_pk(db_t * db, unsigned int * fastrandstate)
 
 		if(row != NULL)
 		{
-			printf("Delete failed for pk %ld - did not delete row (return row key %ld)!\n", aid, (int64_t) row->key);
+			printf("Delete failed for pk %" PRId64 " - did not delete row (return row key %" PRId64 ")!\n", aid, (int64_t) row->key);
 			return -1;
 		}
 	}
@@ -299,7 +299,7 @@ int test_delete_index(db_t * db)
 	{
 		if(db_delete_by_index((WORD) (iid + 1), 0, (WORD) 0, db) != 0)
 		{
-			printf("Delete failed for secondary key value %ld!\n", iid + 1);
+			printf("Delete failed for secondary key value %" PRId64 "!\n", iid + 1);
 			return -1;
 		}
 
@@ -307,7 +307,7 @@ int test_delete_index(db_t * db)
 
 		if(row != NULL)
 		{
-			printf("Delete failed for secondary key value %ld - did not delete row (return row key %ld)!\n", iid + 1, (int64_t) row->key);
+			printf("Delete failed for secondary key value %" PRId64 " - did not delete row (return row key %" PRId64 ")!\n", iid + 1, (int64_t) row->key);
 			return -1;
 		}
 	}
@@ -354,7 +354,7 @@ int test_range_search_pk_ck1(db_t * db)
 
 	if(no_entries != no_collections)
 	{
-		printf("ERROR: db_range_search_clustering(%ld, %ld-%ld) returned %d entries!\n", pk, start_key, end_key, no_entries);
+		printf("ERROR: db_range_search_clustering(%" PRId64 ", %" PRId64 "-%" PRId64 ") returned %d entries!\n", pk, start_key, end_key, no_entries);
 		print_long_db(db);
 		assert(0);
 		return 1;
@@ -384,7 +384,7 @@ int test_range_search_pk_ck1_ck2(db_t * db)
 
 	if(no_entries != no_items)
 	{
-		printf("ERROR: db_range_search_clustering(%ld, %ld, %ld-%ld) returned %d entries!\n", pk, start_keys[0], end_keys[0], end_keys[1], no_entries);
+		printf("ERROR: db_range_search_clustering(%" PRId64 ", %" PRId64 ", %" PRId64 "-%" PRId64 ") returned %d entries!\n", pk, start_keys[0], end_keys[0], end_keys[1], no_entries);
 		print_long_db(db);
 		assert(0);
 		return 1;

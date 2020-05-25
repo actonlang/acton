@@ -449,7 +449,7 @@ int table_update(WORD * column_values, int no_cols, int no_clustering_keys, size
 	int i=schema->no_primary_keys + no_clustering_keys;
 	for(;i<no_cols - 1;i++)
 	{
-//		printf("Updating col %d / %d to value %ld\n", col_idxs[i], i, column_values[i]);
+//		printf("Updating col %d / %d to value %" PRId64 "\n", col_idxs[i], i, column_values[i]);
 		row->column_array[col_idxs[i] - schema->no_primary_keys - no_clustering_keys] = column_values[i];
 	}
 
@@ -569,7 +569,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 
 	if(row == NULL)
 		return NULL;
-//		printf("Row not found by primary key %ld!\n", (int64_t) primary_keys[0]);
+//		printf("Row not found by primary key %" PRId64 "!\n", (int64_t) primary_keys[0]);
 
 	for(int i=0;i<no_clustering_keys;i++)
 	{
@@ -581,7 +581,7 @@ db_row_t* table_search_clustering(WORD* primary_keys, WORD* clustering_keys, int
 		}
 		else
 		{
-//			printf("Row not found by clustering key %d / %ld!\n", i, (int64_t) clustering_keys[i]);
+//			printf("Row not found by clustering key %d / %" PRId64 "!\n", i, (int64_t) clustering_keys[i]);
 
 			return NULL;
 		}
@@ -667,7 +667,7 @@ void print_long_db(db_t * db)
 
 void print_long_table(db_table_t * table)
 {
-	printf("DB_TABLE: %ld [%d rows]\n", (int64_t) table->table_key, table->rows->no_items);
+	printf("DB_TABLE: %" PRId64 " [%d rows]\n", (int64_t) table->table_key, table->rows->no_items);
 
 	for(snode_t * node = HEAD(table->rows);node!=NULL;node=NEXT(node))
 		print_long_row((db_row_t*) node->value);
@@ -687,7 +687,7 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 {
 	#define PRINT_BLOBS 1
 
-	sprintf(to_string, "{ %ld, ", (int64_t) row->key);
+	sprintf(to_string, "{ %" PRId64 ", ", (int64_t) row->key);
 
 	if(row->cells != NULL)
 	{
@@ -719,12 +719,12 @@ void long_row_to_string(db_row_t* row, char * to_string, int * len, char * orig_
 
 #if (PRINT_BLOBS > 0)
 			if(i<(row->no_columns - 1) || row->last_blob_size <= 0)
-				sprintf(to_string + strlen(to_string), "%ld, ", (int64_t) row->column_array[i]);
+				sprintf(to_string + strlen(to_string), "%" PRId64 ", ", (int64_t) row->column_array[i]);
 			else
 				sprintf(to_string + strlen(to_string), "%s, ", (char *) row->column_array[i]);
 
 #else
-			sprintf(to_string + strlen(to_string), "%ld, ", (int64_t) row->column_array[i]);
+			sprintf(to_string + strlen(to_string), "%" PRId64 ", ", (int64_t) row->column_array[i]);
 #endif
 		}
 		sprintf(to_string + strlen(to_string), " ]");
@@ -911,7 +911,7 @@ int table_delete_row(WORD* primary_keys, vector_clock * version, db_table_t * ta
 	}
 	else
 	{
-		printf("table_delete_row(): Row with pk %ld doesn't exist!\n", (int64_t) primary_keys[0]);
+		printf("table_delete_row(): Row with pk %" PRId64 " doesn't exist!\n", (int64_t) primary_keys[0]);
 	}
 
 	return row == NULL;
@@ -941,7 +941,7 @@ int db_insert_transactional(WORD * column_values, int no_cols, int no_clustering
 #if (VERBOSE_BACKEND > 0)
 	printf("BACKEND: db_insert_transactional: Attempting to insert %d total columns into backend:\n", min_no_cols);
 	for(int i=0;i<min_no_cols;i++)
-		printf("column_values[%d] = %ld\n", i, (int64_t) column_values[i]);
+		printf("column_values[%d] = %" PRId64 "\n", i, (int64_t) column_values[i]);
 #endif
 
 	snode_t * node = skiplist_search(db->tables, table_key);
@@ -1143,7 +1143,7 @@ int db_delete_row_transactional(WORD* primary_keys, vector_clock * version, WORD
 
 	if(node == NULL)
 	{
-		printf("db_delete_row(): Table with pk %ld doesn't exist!\n", (int64_t) table_key);
+		printf("db_delete_row(): Table with pk %" PRId64 " doesn't exist!\n", (int64_t) table_key);
 		return -1;
 	}
 

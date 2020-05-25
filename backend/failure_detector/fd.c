@@ -443,7 +443,7 @@ int equals_membership_agreement_msg(membership_agreement_msg * ma1, membership_a
 char * to_string_membership_agreement_msg(membership_agreement_msg * ma, char * msg_buff)
 {
 	char * crt_ptr = msg_buff;
-	sprintf(crt_ptr, "Membership_agreement_msg(type=%d, ack_status=%d, nonce=%ld, ", ma->msg_type, ma->ack_status, ma->nonce);
+	sprintf(crt_ptr, "Membership_agreement_msg(type=%d, ack_status=%d, nonce=%" PRId64 ", ", ma->msg_type, ma->ack_status, ma->nonce);
 	crt_ptr += strlen(crt_ptr);
 
 	if(ma->membership != NULL)
