@@ -59,7 +59,7 @@ instance Relabel Stmt where
 
 instance Relabel Decl where
     relabel (Def _ n q ps ks ann ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel ss <*> return md
-    relabel (Actor _ n q ps ks ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel b
+    relabel (Actor _ n q ps ks b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
@@ -76,6 +76,7 @@ instance Relabel Expr where
     relabel (Strings _ ss) = Strings <$> newLoc <*> return ss
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
     relabel (Call _ e ps ks) = Call <$> newLoc <*> relabel e <*> relabel ps <*> relabel ks
+    relabel (Await _ e) = Await <$> newLoc <*> relabel e
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3

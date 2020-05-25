@@ -96,6 +96,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- mapM instd ds
         instb (TBind v us)          = TBind <$> instv v <*> return us
         instv (TV KWild n)          = TV <$> newKVar <*> return n
         instv v                     = return v
+        kinds (Actor _ n q _ _ _)   = [(n,kind KType q)]
         kinds (Class _ n q _ _)     = [(n,kind KType q)]
         kinds (Protocol _ n q _ _)  = [(n,kind KProto q)]
         kinds _                     = []
@@ -131,10 +132,8 @@ instance KCheck Decl where
                                       kchkSuite env1 b <*> return m
       where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
-    kchk env (Actor l n q p k t b)  = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
-                                      kchkSuite env1 b
-      where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
-                 | otherwise        = extvars (tybound q) env
+    kchk env (Actor l n q p k b)    = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
+      where env1                    = extvars (tybound q) env
     kchk env (Class l n q us b)     = Class l n <$> kchkQual env q <*> kchkBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
@@ -452,11 +451,11 @@ instance KSubst Stmt where
     ksubst g (Signature l ns t d)   = Signature l ns <$> ksubst g t <*> return d
 
 instance KSubst Decl where
-    ksubst g (Def l n q p k ann b m)    = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g ann <*> ksubst g b <*> return m
-    ksubst g (Actor l n q p k ann b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g ann <*> ksubst g b
-    ksubst g (Class l n q as b)         = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Protocol l n q as b)      = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
-    ksubst g (Extension l n q as b)     = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Def l n q p k a b m)  = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return m
+    ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
+    ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
+    ksubst g (Extension l n q as b) = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
 
 instance KSubst Expr where
     ksubst g (Var l n)              = return $ Var l n
