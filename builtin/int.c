@@ -1,10 +1,4 @@
-void $int_init($int, long);
-void $int_serialize($int,$Serial$state);
-$int $int_deserialize($Serial$state);
-
-struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_serialize, $int_deserialize};
-
-// Initialization and Serialization ///////////////////////////////////////////////////////////////////////
+// General methods ///////////////////////////////////////////////////////////////////////
 
 void $int_init($int self, long val){
   self->val = val;
@@ -17,6 +11,18 @@ void $int_serialize($int n,$Serial$state state) {
 $int $int_deserialize($Serial$state state) {
   return to$int((long)$val_deserialize(state));
 }
+
+$bool $int_bool($int n) {
+  return to$bool(n->val != 0);
+}
+
+$str $int_str($int n) {
+  char *s;
+  asprintf(&s,"%ld",n->val);
+  return from$UTF8(s);
+}
+  
+struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_bool,$int_str,$int_serialize,$int_deserialize};
 
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));

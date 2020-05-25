@@ -9,8 +9,10 @@ typedef struct $Initializable  *$Initializable;
 struct $Initializable$methods {
   char *$GCINFO;
   int $class_id;
-  struct $Super$class $superclass;
+  $Super$class $superclass;
   void (*__init__)($Initializable,...);
+  $bool (*__bool__)($Initializable);
+  $str (*__str__)($Initializable);
 };
 
 struct $Initializable {
@@ -68,6 +70,8 @@ struct $Serializable$methods {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Serializable,...);
+  $bool (*__bool__)($Serializable);
+  $str (*__str__)($Serializable);
   void (*__serialize__)($Serializable, $Serial$state);
   $Serializable (*__deserialize__)($Serial$state);
 };

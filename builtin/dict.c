@@ -1,6 +1,3 @@
-void $dict_serialize($dict,$Serial$state);
-$dict $dict_deserialize($Serial$state);
-
 
 struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__, $Mapping$dict$__fromiter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
                                                               $Mapping$dict$__containsnot__, $Mapping$dict$get, $Mapping$dict$keys, $Mapping$dict$values,

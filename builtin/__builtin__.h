@@ -467,11 +467,11 @@ typedef struct $Iterable$range *$Iterable$range;
 struct $Iterable$range$class;
 typedef struct $Iterable$range$class *$Iterable$range$class;
 
-struct $Iterable$tuple;
-typedef struct $Iterable$tuple *$Iterable$tuple;
+/* struct $Iterable$tuple; */
+/* typedef struct $Iterable$tuple *$Iterable$tuple; */
 
-struct $Iterable$tuple$class;
-typedef struct $Iterable$tuple$class *$Iterable$tuple$class;
+/* struct $Iterable$tuple$class; */
+/* typedef struct $Iterable$tuple$class *$Iterable$tuple$class; */
 
 struct $Sliceable$tuple;
 typedef struct $Sliceable$tuple *$Sliceable$tuple;
@@ -1839,23 +1839,22 @@ struct $Iterable$range$class {
 void $Iterable$range$__init__ ($Iterable$range);
 $Iterator $Iterable$range$__iter__ ($Iterable$range, $range);
 
-// $Iterable$tuple ////////////////////////////////////////////////////////////
+/* // $Iterable$tuple //////////////////////////////////////////////////////////// */
 
-struct $Iterable$tuple {
-    $Iterable$tuple$class $class;
-};
+/* struct $Iterable$tuple { */
+/*     $Iterable$tuple$class $class; */
+/* }; */
 
-struct $Iterable$tuple$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super $superclass;
-    void (*__init__)($Iterable$tuple);
-    $Iterator (*__iter__)($Iterable$tuple, $tuple);
-};
+/* struct $Iterable$tuple$class { */
+/*     char *$GCINFO; */
+/*     int $class_id; */
+/*     $Super $superclass; */
+/*     void (*__init__)($Iterable$tuple); */
+/*     $Iterator (*__iter__)($Iterable$tuple, $tuple); */
+/* }; */
 
-void $Iterable$tuple$__init__ ($Iterable$tuple);
-$Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple);
-
+/* void $Iterable$tuple$__init__ ($Iterable$tuple); */
+/* $Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple); */
 
 // $Sliceable$tuple ////////////////////////////////////////////////////////////
 

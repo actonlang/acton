@@ -3,6 +3,8 @@ struct $float$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($float, double);
+  $bool (*__bool__)($float);
+  $str (*__str__)($float);
   void (*__serialize__)($float,$Serial$state);
   $float (*__deserialize__)($Serial$state);
 };

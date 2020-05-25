@@ -3,6 +3,8 @@ struct $bool$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($bool, long);
+  $bool (*__bool__)($bool);
+  $str (*__str__)($bool);
   void (*__serialize__)($bool, $Serial$state);
   $bool (*__deserialize__)($Serial$state);
 };

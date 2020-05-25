@@ -1,13 +1,8 @@
 #include <math.h>
 
-void $float_init($float self, double val);
-void $float_serialize($float self, $Serial$state state);
-$float $float_deserialize($Serial$state state);
-
-struct $float$class $float$methods = {"",UNASSIGNED,NULL,$float_init, $float_serialize, $float_deserialize};
 
 
-// Serialization ///////////////////////////////////////////////////////////////////////
+// General methods ///////////////////////////////////////////////////////////////////////
 
 void $float_init($float self, double val){
   self->val = val;
@@ -24,6 +19,18 @@ $float $float_deserialize($Serial$state state) {
  return to$float(x);
 }
 
+  
+$bool $float_bool($float x) {
+  return to$bool(x->val != 0.0);
+}
+
+$str $float_str($float x) {
+  char *s;
+  asprintf(&s,"%g10",x->val);
+  return from$UTF8(s);
+}
+
+struct $float$class $float$methods = {"",UNASSIGNED,NULL,$float_init,$float_bool,$float_str,$float_serialize, $float_deserialize};
   
 $float to$float(double x) {
   $float res = malloc(sizeof(struct $float));
