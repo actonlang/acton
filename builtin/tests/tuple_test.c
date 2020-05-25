@@ -5,8 +5,7 @@ int main() {
   $WORD comps1[] = {to$int(7),from$UTF8("A string"),to$float(3.14)};
   $tuple tup1 = $NEW($tuple,3,comps1);
   $Sliceable$tuple wit = $Sliceable$tuple$witness;
-  printf("tup1=(%ld,%s,%f)\n",from$int(wit->$class->__getitem__(wit,tup1,to$int(0))),
-         to$UTF8(wit->$class->__getitem__(wit,tup1,to$int(1))),from$float(wit->$class->__getitem__(wit,tup1,to$int(2))));
+  printf("tup1=%s\n",to$UTF8(tup1->$class->__str__(tup1)));
   int start = 0;
   int stop = 3;
   int step = 2;

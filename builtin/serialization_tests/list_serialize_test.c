@@ -17,12 +17,12 @@ int main() {
   $list lst2 = ($list)$deserialize_file("test.bin");
   $printlist(lst2);
   */
-  $list lst2 = $list_fromiter(NULL);
+  $list lst2 = $NEW($list,NULL);
   for (long i = 0L; i < TESTSIZE; i++) {
     if (i%2L != 0L) {
       $list_append(lst2,$list_getitem(lst2,i/2L));
     } else {
-      $list sublst = $list_fromiter(NULL);
+      $list sublst = $NEW($list,NULL);
       for (long j=0L; j < i; j++)
         $list_append(sublst,to$int(j));
       $list_append(lst2,sublst);
@@ -33,21 +33,23 @@ int main() {
   $list lst3 = ($list)$deserialize(row);
   $ROW row2 = $read_serialized("test2.bin");
   $write_serialized(row2,"test3.bin");
+  $list lst0 = $list_getitem(lst3,4);
+  printf("%s\n",to$UTF8(lst3->$class->__str__(lst3)));
   
-  for (int i=0; i<$list_len(lst3); i++) {
-    printf("sublist %d is ",i);
-    $printlist($list_getitem(lst3,i));
-  }
-  $list_setitem($list_getitem(lst3,2),1,to$int(7));
-  for (int i=0; i<$list_len(lst3); i++) {
-    printf("sublist %d is ",i);
-    $printlist($list_getitem(lst3,i));
-  }
-  $list lst4 = ($list)$deserialize(row2);
-    for (int i=0; i<$list_len(lst4); i++) {
-    printf("sublist %d is ",i);
-    $printlist($list_getitem(lst4,i));
-  }
+   /* for (int i=0; i<$list_len(lst3); i++) {  */
+   /*   printf("sublist %d is ",i);  */
+   /*   $printlist($list_getitem(lst3,i));  */
+   /* }  */
+  /* $list_setitem($list_getitem(lst3,2),1,to$int(7)); */
+  /* for (int i=0; i<$list_len(lst3); i++) { */
+  /*   printf("sublist %d is ",i); */
+  /*   $printlist($list_getitem(lst3,i)); */
+  /* } */
+  /* $list lst4 = ($list)$deserialize(row2); */
+  /*   for (int i=0; i<$list_len(lst4); i++) { */
+  /*   printf("sublist %d is ",i); */
+  /*   $printlist($list_getitem(lst4,i)); */
+  /* } */
 }
 
 /*

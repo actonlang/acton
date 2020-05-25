@@ -16,6 +16,18 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
     self->step = 1;
 }
 
+
+$bool $range$__bool__($range self) {
+  return to$bool ((self->step > 0 && self->stop > self->start) ||
+                  (self->start > self->stop));
+}
+
+$str $range$__str__($range self) {
+  char *s;
+  asprintf(&s,"range(%d,%d,%d)",self->start,self->stop,self->step);
+  return from$UTF8(s);
+}
+
 void $range$__serialize__($range self, $Serial$state state) {
   $ROW row = $add_header(RANGE_ID,3,state);
   row->blob[0] = ($WORD)(long)self->start;
@@ -48,6 +60,16 @@ void $Iterator$range_init($Iterator$range self, $range rng) {
   self->nxt = 0;
 }                                    
 
+$bool $Iterator$range_bool($Iterator$range self) {
+  return $true;
+}
+
+$str $Iterator$range_str($Iterator$range self) {
+  char *s;
+  asprintf(&s,"<range iterator object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Iterator$range_serialize($Iterator$range self, $Serial$state state) {
   $step_serialize(self->src,state);
   $step_serialize(to$int(self->nxt),state);
@@ -61,11 +83,11 @@ $Iterator$range $Iterator$range$_deserialize($Serial$state state) {
 }
 
 
-struct $range$class $range$methods = {"",UNASSIGNED,NULL,$range$__init__,$range$__serialize__,$range$__deserialize__};
+struct $range$class $range$methods = {"",UNASSIGNED,NULL,$range$__init__,$range$__bool__,$range$__str__,$range$__serialize__,$range$__deserialize__};
 
 
-struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$range_init,
-                                                      $Iterator$range_serialize, $Iterator$range$_deserialize, $Iterator$range_next};
+struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$range_init,$Iterator$range_bool,
+                                                        $Iterator$range_str,$Iterator$range_serialize, $Iterator$range$_deserialize, $Iterator$range_next};
 
 //$Iterator $range_iter($range rng) {
 //  return ($Iterator)$NEW($Iterator$range,rng);
@@ -74,6 +96,7 @@ struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$cl
 void $Iterable$range$__init__ ($Iterable$range wit){
   return;
 }
+
 
 $Iterator $Iterable$range$__iter__ ($Iterable$range wit, $range rng) {
   return ($Iterator)$NEW($Iterator$range,rng);

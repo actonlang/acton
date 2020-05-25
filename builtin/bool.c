@@ -1,8 +1,3 @@
-void $bool_init($bool self, long val);
-void $bool_serialize($bool self, $Serial$state);
-$bool $bool_deserialize($Serial$state);
-
-struct $bool$class $bool$methods = {"",UNASSIGNED,NULL,$bool_init, $bool_serialize, $bool_deserialize};
 
 
 // Serialization ///////////////////////////////////////////////////////////////////////
@@ -11,14 +6,26 @@ void $bool_init($bool self, long val){
   self->val = val;
 }
 
-void $bool_serialize($bool n, $Serial$state state) {
-  $val_serialize(BOOL_ID,&n->val,state);
+$bool $bool_bool($bool self) {
+  return self;
+}
+
+$str $bool_str($bool self) {
+  if (self->val)
+    return from$UTF8("True");
+  else
+    return from$UTF8("False");
+}
+
+void $bool_serialize($bool self, $Serial$state state) {
+  $val_serialize(BOOL_ID,&self->val,state);
 }
 
 $bool $bool_deserialize($Serial$state state) {
   return to$bool((long)$val_deserialize(state));
 }
 
+struct $bool$class $bool$methods = {"",UNASSIGNED,NULL,$bool_init, $bool_bool, $bool_str, $bool_serialize, $bool_deserialize};
 
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));

@@ -8,11 +8,15 @@
 
 //  Method tables ///////////////////////////////////////////////////////////////
 
-// String-specific methods
+// General methods
 
 void $str_init($str, char*);
+$bool $str_bool($str);
+$str $str_str($str);
 void $str_serialize($str,$Serial$state);
 $str $str_deserialize($Serial$state);
+
+// String-specific methods
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
@@ -53,10 +57,10 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",UNASSIGNED,NULL,$str_init, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
-   $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
-   $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
-   $str_upper, $str_zfill};
+  {"",UNASSIGNED,NULL, $str_init, $str_bool, $str_str, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith,
+   $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
+   $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
+   $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
 
 //static $str$methods $str_methods = &$str_table;
 
@@ -612,7 +616,9 @@ $str $str_getslice($str s, $Slice slc) {
  return res;
 }
 
-// Serialization ////////////////////////////////////////////////////////////// 
+
+
+// General methods ////////////////////////////////////////////////////////////// 
 
 void $str_init($str self, char *str) {
   int nbytes = 0;
@@ -638,11 +644,22 @@ void $str_init($str self, char *str) {
   }
 }
 
+$bool $str_bool($str s) {
+  return to$bool(s->nchars > 0);
+};
+
+$str $str_str($str s) {
+  $list s2 = $list_new(1);
+  $list_append(s2,s);
+  return $str_join_par('\'',s2,'\'');
+}
+
+
 void $str_serialize($str str,$Serial$state state) {
-  int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
+  int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
   $ROW row = $add_header(STR_ID,2+nWords,state);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
-  memcpy(row->blob,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
+  memcpy(row->blob,&nbytes,sizeof($WORD));            // but we should think of a better, general approach.
   long nchars = (long)str->nchars;
   memcpy(row->blob+1,&nchars,sizeof($WORD));
   memcpy(row->blob+2,str->str,nbytes+1);
@@ -1316,3 +1333,37 @@ $str $str_zfill($str s, int width) {
   return res;
 }
  
+$str $str_join_par(char lpar, $list elems, char rpar) {
+  char *s = ", ";
+  int len = elems->length;
+  int totchars = 2;  //parens
+  int totbytes = 2;
+  $str nxt;
+  for (int i=0; i<len; i++) {
+    nxt = ($str)elems->data[i];
+    totchars += nxt->nchars;
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totchars += (len-1) * 2; // 2 is length of ", "
+    totbytes += (len-1) * 2; 
+  }
+  $str res;
+  NEW_UNFILLED(res,totchars,totbytes);
+  res->str[0] = lpar;
+  res->str[totbytes-1] = rpar;
+  if (len > 0) {
+    unsigned char *p = res->str+1;
+    nxt = elems->data[0];
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    for (int i=1; i<len; i++) {
+      nxt = ($str)elems->data[i];
+      memcpy(p,s,2);
+      p += 2;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
+    }
+  }
+  return res;
+}
