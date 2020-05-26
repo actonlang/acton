@@ -421,6 +421,7 @@ void PUSH_outgoing($Actor self, $Msg m) {
 void FLUSH_outgoing($Actor self) {
     $Msg prev = NULL;
     $Msg m = self->outgoing;
+    self->outgoing = NULL;
     while (m) {
         $Msg next = m->next;
         m->next = prev;
@@ -429,6 +430,8 @@ void FLUSH_outgoing($Actor self) {
     }
     m = prev;
     while (m) {
+        $Msg next = m->next;
+        m->next = NULL;
         if (m->baseline == self->msg->baseline) {
             $Actor to = m->to;
             if (ENQ_msg(m, to)) {
@@ -437,7 +440,7 @@ void FLUSH_outgoing($Actor self) {
         } else {
             ENQ_timed(m);
         }
-        m = m->next;
+        m = next;
     }
 }
 
