@@ -256,9 +256,10 @@ static void $set_add_entry($set set, $Hashable hashwit, $WORD key, long hash) {
 
 
 $set $set_copy($set set, $Hashable hashwit) {
-  $set res = $NEW($set,hashwit,NULL);
-  memcpy(res,set,sizeof(*set));
-  memcpy(res->table,set->table,sizeof(*set->table));
+  $set res = malloc(sizeof(struct $set));
+  memcpy(res,set,sizeof(struct $set));
+  res->table = malloc((set->mask+1)*sizeof($setentry));
+  memcpy(res->table,set->table,(set->mask+1)*sizeof($setentry));
   return res;
 }
 
@@ -495,6 +496,7 @@ $str $Iterator$set_str($Iterator$set self) {
   asprintf(&s,"<set keys iterator object at %p>",self);
   return from$UTF8(s);
 }
+
 void $Iterator$set_serialize($Iterator$set self, $Serial$state state) {
   $step_serialize(self->src,state);
   $step_serialize(to$int(self->nxt),state);

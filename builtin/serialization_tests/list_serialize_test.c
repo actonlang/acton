@@ -8,7 +8,7 @@ int main() {
   $register_builtin();
   /*
   long prefix[] = {9L,7L,3L};
-  $list lst = $list_fromiter(NULL);
+  $list lst = $NEW($list,NULL);
   for (long i = 3L; i < 300L; i += 10L)
     $list_append(lst,to$int(i));
   long start_no = 0;

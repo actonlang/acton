@@ -15,6 +15,8 @@ struct lambda$1$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$1, Pingpong, $int, $int);
+    $bool (*__bool__)(lambda$1);
+    $str (*__str__)(lambda$1);
     void (*__serialize__)(lambda$1, $Serial$state);
     lambda$1 (*__deserialize__)($Serial$state);
     $R (*enter)(lambda$1, $Cont);
@@ -34,6 +36,8 @@ struct lambda$2$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$2, Pingpong, $int);
+    $bool (*__bool__)(lambda$2);
+    $str (*__str__)(lambda$2);
     void (*__serialize__)(lambda$2, $Serial$state);
     lambda$2 (*__deserialize__)($Serial$state);
     $R (*enter)(lambda$2, $Cont);
@@ -52,6 +56,8 @@ struct Pingpong$class {
     int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Pingpong, $int, $Cont);
+    $bool (*__bool__)(Pingpong);
+    $str (*__str__)(Pingpong);
     void (*__serialize__)(Pingpong, $Serial$state);
     Pingpong (*__deserialize__)($Serial$state);
     $R (*ping)(Pingpong, $int, $Cont);

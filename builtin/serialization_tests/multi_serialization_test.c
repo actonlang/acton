@@ -4,7 +4,7 @@ int main() {
   $register_builtin();
   $int a = to$int(17);
   $int b = to$int(36);
-  $list lst = $list_fromiter(NULL);
+  $list lst = $NEW($list,NULL);
   $list_append(lst,a);
   $list_append(lst,b);
   $Serial$state state = malloc(sizeof(struct $Serial$state));

@@ -110,6 +110,16 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
     atomic_flag_clear(&m->wait_lock);
 }
 
+$bool $Msg$__bool__($Msg self) {
+  return $true;
+}
+
+$str $Msg$__str__($Msg self) {
+  char *s;
+  asprintf(&s,"<$Msg object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Msg$__serialize__($Msg self, $Serial$state state) {
     $step_serialize(self->next,state);
     $step_serialize(self->to,state);
@@ -142,6 +152,16 @@ void $Actor$__init__($Actor a) {
     atomic_flag_clear(&a->msg_lock);
 }
 
+$bool $Actor$__bool__($Actor self) {
+  return $true;
+}
+
+$str $Actor$__str__($Actor self) {
+  char *s;
+  asprintf(&s,"<$Actor object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Actor$__serialize__($Actor self, $Serial$state state) {
     $step_serialize(self->next,state);
     $step_serialize(self->msg,state);
@@ -164,6 +184,16 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
     c->cont = cont;
 }
 
+$bool $Catcher$__bool__($Catcher self) {
+  return $true;
+}
+
+$str $Catcher$__str__($Catcher self) {
+  char *s;
+  asprintf(&s,"<$Catcher object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Catcher$__serialize__($Catcher self, $Serial$state state) {
     $step_serialize(self->next,state);
     $step_serialize(self->cont,state);
@@ -179,6 +209,16 @@ $Catcher $Catcher$__deserialize__($Serial$state state) {
 
 void $Clos$__init__($Clos $this) { }
 
+$bool $Clos$__bool__($Clos self) {
+  return $true;
+}
+
+$str $Clos$__str__($Clos self) {
+  char *s;
+  asprintf(&s,"<$Clos object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Clos$__serialize__($Clos self, $Serial$state state) {
     // TBD
 }
@@ -190,6 +230,16 @@ $Clos $Clos$__deserialize__($Serial$state state) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Cont$__init__($Cont $this) { }
+
+$bool $Cont$__bool__($Cont self) {
+  return $true;
+}
+
+$str $Cont$__str__($Cont self) {
+  char *s;
+  asprintf(&s,"<$Cont object at %p>",self);
+  return from$UTF8(s);
+}
 
 void $Cont$__serialize__($Cont self, $Serial$state state) {
     // TBD
@@ -205,6 +255,16 @@ $Cont $Cont$__deserialize__($Serial$state state) {
 void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
     $this->cont = cont;
     $this->act = act;
+}
+
+$bool $RetNew$__bool__($RetNew self) {
+  return $true;
+}
+
+$str $RetNew$__str__($RetNew self) {
+  char *s;
+  asprintf(&s,"<$RetNew object at %p>",self);
+  return from$UTF8(s);
 }
 
 void $RetNew$__serialize__($RetNew self, $Serial$state state) {
@@ -231,6 +291,8 @@ struct $Msg$class $Msg$methods = {
     UNASSIGNED,
     NULL,
     $Msg$__init__,
+    $Msg$__bool__,
+    $Msg$__str__,
     $Msg$__serialize__,
     $Msg$__deserialize__
 };
@@ -240,6 +302,8 @@ struct $Actor$class $Actor$methods = {
     UNASSIGNED,
     NULL,
     $Actor$__init__,
+    $Actor$__bool__,
+    $Actor$__str__,
     $Actor$__serialize__,
     $Actor$__deserialize__
 };
@@ -249,6 +313,8 @@ struct $Catcher$class $Catcher$methods = {
     UNASSIGNED,
     NULL,
     $Catcher$__init__,
+    $Catcher$__bool__,
+    $Catcher$__str__,
     $Catcher$__serialize__,
     $Catcher$__deserialize__
 };
@@ -258,6 +324,8 @@ struct $Clos$class $Clos$methods = {
     UNASSIGNED,
     NULL,
     $Clos$__init__,
+    $Clos$__bool__,
+    $Clos$__str__,
     $Clos$__serialize__,
     $Clos$__deserialize__,
     NULL
@@ -268,6 +336,8 @@ struct $Cont$class $Cont$methods = {
     UNASSIGNED,
     NULL,
     $Cont$__init__,
+    $Cont$__bool__,
+    $Cont$__str__,
     $Cont$__serialize__,
     $Cont$__deserialize__,
     NULL
@@ -278,6 +348,8 @@ struct $RetNew$class $RetNew$methods = {
     UNASSIGNED,
     NULL,
     $RetNew$__init__,
+    $RetNew$__bool__,
+    $RetNew$__str__,
     $RetNew$__serialize__,
     $RetNew$__deserialize__,
     $RetNew$enter
@@ -458,6 +530,16 @@ $R $DONE$enter($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
+$bool $Done$__bool__($Cont self) {
+  return $true;
+}
+
+$str $Done$__str__($Cont self) {
+  char *s;
+  asprintf(&s,"<$Done object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Done__serialize__($Cont self, $Serial$state state) {
   return;
 }
@@ -473,6 +555,8 @@ struct $Cont$class $Done$methods = {
     UNASSIGNED,
     NULL,
     $Cont$__init__,
+    $Done$__bool__,
+    $Done$__str__,
     $Done__serialize__,
     $Done__deserialize__,
     $DONE$enter
@@ -493,6 +577,8 @@ struct $Cont$class $NewRoot$methods = {
     $Cont$__init__,
     NULL,
     NULL,
+    NULL,
+    NULL,
     $NewRoot$enter
 };
 struct $Cont $NewRoot$instance = {
@@ -509,6 +595,8 @@ struct $Cont$class $WriteRoot$methods = {
     UNASSIGNED,
     NULL,
     $Cont$__init__,
+    NULL,
+    NULL,
     NULL,
     NULL,
     $WriteRoot$enter

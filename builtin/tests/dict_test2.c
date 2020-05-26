@@ -28,9 +28,10 @@ $Iterable$opaque dict_iterable($Mapping$dict wit, $dict dict) {
     
 int main() {
   //$register_builtin();
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$str$witness);
-  $dict dict = wit->$class->__fromiter__(wit,NULL); 
-  $dict other = wit->$class->__fromiter__(wit,NULL);
+  $Hashable hashwit = ($Hashable)$Hashable$str$witness;
+  $Mapping$dict wit = $NEW($Mapping$dict,hashwit);
+  $dict dict = $NEW($dict,hashwit,NULL); 
+  $dict other = $NEW($dict,hashwit,NULL);
   int j;
 
   for (long i=1; i < 1000000; i++) {

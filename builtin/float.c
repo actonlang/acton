@@ -26,7 +26,7 @@ $bool $float_bool($float x) {
 
 $str $float_str($float x) {
   char *s;
-  asprintf(&s,"%g10",x->val);
+  asprintf(&s,"%g",x->val);
   return from$UTF8(s);
 }
 
