@@ -82,13 +82,13 @@ deactD env []                       = return []
 deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds
 deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 
-deactA env (Actor l n q p k t b)    = do (bint,sext) <- withStore (deact env1 b)
+deactA env (Actor l n q p k b)      = do (bint,sext) <- withStore (deact env1 b)
                                          let (ssigs,sext') = partition isSig sext
-                                             _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
+                                             _init_ = Def l0 initKW [] (addSelf p) k Nothing (create:copies) NoDec
                                              create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQ n')) (parToArg p) KwdNil)
                                              copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQ selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
-                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoDec
+                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k Nothing ss NoDec
                                              (ds,ss) = partition isDecl bint
                                              extern = Class l n q [] (reverse sext' ++ [Decl l0 [_init_]])
                                              intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)

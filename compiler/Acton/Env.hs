@@ -48,6 +48,7 @@ data NameInfo               = NVar      Type
                             | NSVar     Type
                             | NDef      TSchema Decoration
                             | NSig      TSchema Decoration
+                            | NAct      Qual PosRow KwdRow TEnv
                             | NClass    Qual [WTCon] TEnv
                             | NProto    Qual [WTCon] TEnv
                             | NExt      QName Qual [WTCon] TEnv
@@ -83,6 +84,8 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text "::" <+> pretty t
+    pretty (n, NAct q p k te)   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  parens (prettyFunRow p k) <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -117,6 +120,7 @@ instance Subst NameInfo where
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NDef t d)           = NDef <$> msubst t <*> return d
     msubst (NSig t d)           = NSig <$> msubst t <*> return d
+    msubst (NAct q p k te)      = NAct <$> msubst q <*> msubst p <*> msubst k <*> msubst te
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q ps te)     = NExt n <$> msubst q <*> msubst ps <*> msubst te
@@ -131,6 +135,7 @@ instance Subst NameInfo where
     tyfree (NSVar t)            = tyfree t
     tyfree (NDef t d)           = tyfree t
     tyfree (NSig t d)           = tyfree t
+    tyfree (NAct q p k te)      = (tyfree q ++ tyfree p ++ tyfree k ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ (tvSelf : tybound q)
@@ -212,6 +217,7 @@ instance Unalias NameInfo where
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NDef t d)          = NDef (unalias env t) d
     unalias env (NSig t d)          = NSig (unalias env t) d
+    unalias env (NAct q p k te)     = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te)
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
@@ -374,12 +380,23 @@ isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns
 
 tconKind                    :: QName -> Env -> Kind
 tconKind n env              = case findQName n env of
+                                NAct q _ _ _ -> kind KType q
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
+isActor                     :: QName -> Env -> Bool
+isActor n env               = case findQName n env of
+                                NAct q p k te -> True
+                                _ -> False
+
+isClass                     :: QName -> Env -> Bool
+isClass n env               = case findQName n env of
+                                NClass q us te -> True
+                                _ -> False
+
 isProto                     :: QName -> Env -> Bool
 isProto n env               = case findQName n env of
                                 NProto q us te -> True
@@ -411,6 +428,7 @@ findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
   where (q,us,te)           = case findQName n env of
+                                NAct q p k te  -> (q,[],te)
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
@@ -420,6 +438,7 @@ findCon env (TC n ts)
 
 conAttrs                    :: Env -> QName -> [Name]
 conAttrs env qn             = case findQName qn env of
+                                NAct q p k te  -> dom te
                                 NClass q us te -> dom te
                                 NProto q us te -> dom te
                                 NExt n q us te -> dom te
@@ -463,6 +482,7 @@ instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | TBind v us <- q, u <- us ]
       where q               = case findQName n env of
+                                NAct q p k te  -> q
                                 NClass q us te -> q
                                 NProto q us te -> q
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
@@ -487,6 +507,7 @@ instance WellFormed TBind where
 
 mro2 env []                             = ([], [])
 mro2 env (u:us)
+  | isActor (tcname u) env              = err1 u "Actor subclassing not allowed"
   | isProto (tcname u) env              = ([], mro env (u:us))
   | otherwise                           = (mro env [u], mro env us)
 
@@ -611,8 +632,9 @@ importAll m te env          = define (impNames m te) env
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
   where 
-    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NAct _ _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _ _)   = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
@@ -881,21 +903,21 @@ instance Subst Decl where
     msubst d@(Def l n q p k a ss dec)   = do (s,ren) <- msubstRenaming d
                                              return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                               (subst s (subst ren a)) (subst s (subst ren ss)) dec
-    msubst d@(Actor l n q p k a ss)     = do (s,ren) <- msubstRenaming d
+    msubst d@(Actor l n q p k ss)       = do (s,ren) <- msubstRenaming d
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                                (subst s (subst ren a)) (subst s (subst ren ss))
+                                                                (subst s (subst ren ss))
 
     tybound (Protocol l n q bs ss)  = tvSelf : tybound q
     tybound (Class l n q bs ss)     = tvSelf : tybound q
     tybound (Extension l n q bs ss) = tvSelf : tybound q
     tybound (Def l n q p k a ss d)  = tybound q
-    tybound (Actor l n q p k a ss)  = tybound q
+    tybound (Actor l n q p k ss)    = tybound q
     
     tyfree (Protocol l n q bs ss)   = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
     tyfree (Class l n q bs ss)      = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
     tyfree (Extension l n q bs ss)  = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
     tyfree (Def l n q p k a ss d)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
-    tyfree (Actor l n q p k a ss)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
+    tyfree (Actor l n q p k ss)     = nub (tyfree q ++ tyfree p ++ tyfree k) \\ tybound q
     
 instance Subst Stmt where
     msubst (Decl l ds)              = Decl l <$> msubst ds

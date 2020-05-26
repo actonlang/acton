@@ -645,9 +645,8 @@ actordef = addLoc $ do
                 nm <- name <?> "actor name"
                 q <- optbinds
                 (ppar,kpar) <- parens (funpars True)
-                mba <- optional (arrow *> ttype)
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar mba ss
+                return $ S.Actor NoLoc nm q ppar kpar ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite

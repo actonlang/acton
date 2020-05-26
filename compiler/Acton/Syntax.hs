@@ -44,7 +44,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 deriving (Show)
 
 data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite }
+                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual, bounds::[TCon], dbody::Suite }
@@ -267,6 +267,8 @@ tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
 
+tCon0 n q       = tCon $ TC n [ tVar tv | TBind tv _ <- q ]
+
 tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
@@ -423,7 +425,7 @@ instance Eq Stmt where
 
 instance Eq Decl where
     Def _ n1 q1 p1 k1 a1 b1 m1  ==  Def _ n2 q2 p2 k2 a2 b2 m2  = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2 && m1 == m2
-    Actor _ n1 q1 p1 k1 a1 b1   ==  Actor _ n2 q2 p2 k2 a2 b2   = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2
+    Actor _ n1 q1 p1 k1 b1      ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
     Class _ n1 q1 a1 b1         ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1      ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1     ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
