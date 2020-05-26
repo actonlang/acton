@@ -12,7 +12,7 @@ ActorRing: ActorRing.c ActorRing.h
 		-lutf8proc \
 		../../rts/rts.o \
 		../builtin.o \
-		-g ActorRing.c \
+		ActorRing.c \
 		-o ActorRing
 
 clean:
