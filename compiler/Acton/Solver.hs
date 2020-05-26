@@ -61,25 +61,26 @@ reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
 reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
 reduce' env eq c@(Impl w (TVar _ tv) p)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | not $ scoped tv env                     = do defer [c]; return eq
   | Just wit <- search                      = do (cs,p',e) <- instWitness env [] wit
-                                                 unifyM (tcargs p) (tcargs p')
+                                                 unifyM env (tcargs p) (tcargs p')
                                                  reduce env eq cs
   where search                              = findWitness env (NoQ $ tvname tv) (tcname p ==)
   
 reduce' env eq c@(Impl w (TCon _ tc) p)
   | Just wit <- search                      = do (cs,p',e) <- instWitness env (tcargs tc) wit
-                                                 unifyM (tcargs p) (tcargs p')
+                                                 unifyM env (tcargs p) (tcargs p')
                                                  reduce env eq cs
   where search                              = findWitness env (tcname tc) (tcname p ==)
 
-reduce' env eq (Impl w (TExist _ u) p)
-  | Just (wf,p') <- search                  = do unifyM (tcargs p) (tcargs p')
+reduce' env eq c@(Impl w (TExist _ u) p)
+  | Just (wf,p') <- search                  = do unifyM env (tcargs p) (tcargs p')
                                                  return eq
-  where search                              = findAncestor env u (tcname p)
+  | otherwise                               = trace ("## No success") $ noRed c
+  where search                              = trace ("## reducing " ++ prstr c ++ "\n   ancestry: " ++ prstrs (findAncestry env u)) $ findAncestor env u (tcname p)
 
 reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | not $ scoped tv env                     = do defer [c]; return eq
   | Just (wf,sc,dec) <- findVAttr env tv n  = do (cs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
                                                  let t' = subst [(tvSelf,t1)] t
@@ -126,7 +127,7 @@ reduce' env eq (Sel w (TUnion _ us) n t2)   = do t <- newTVar
         mkTCon (UCon c)                     = tCon (TC c [])
 
 reduce' env eq c@(Mut t1@(TVar _ tv) n t2)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | not $ scoped tv env                     = do defer [c]; return eq
   | Just (wf,sc,dec) <- findVAttr env tv n  = do when (dec/=Property) (noMut n)
                                                  (cs,t) <- instantiate env sc
                                                  let t' = subst [(tvSelf,t1)] t
@@ -161,11 +162,11 @@ castM env ts1 ts2                           = mapM_ (uncurry $ cast env) (ts1 `z
 {-  
 -- part of computing GLBs
 cast' env (TVar _ tv) t2
-  | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
+  | not $ scoped tv env                     = do when (tv `elem` tyfree t2) (infiniteType tv)
                                                  substitute tv t2
 -- part of computing LUBs
 cast' env t1 (TVar _ tv)
-  | not $ skolem tv                         = do when (tv `elem` tyfree t1) (infiniteType tv)
+  | not $ scoped tv env                     = do when (tv `elem` tyfree t1) (infiniteType tv)
                                                  substitute tv t1
 -}
                                              
@@ -173,20 +174,22 @@ cast' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 cast' env t1@(TVar _ tv) t2
-  | not $ skolem tv                         = defer [Cast t1 t2]
+  | not $ scoped tv env                     = defer [Cast t1 t2]
+  | t2 == tBoolean                          = return ()
   | Just tc <- findVBound env tv            = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = defer [Cast t1 t2]
+  | not $ scoped tv env                           = defer [Cast t1 t2]
 
 cast' env (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = unifyM (tcargs c1) (tcargs c')        -- TODO: cast/unify based on polarities
+  | c2 == cBoolean                          = return ()
+  | Just (wf,c') <- search                  = unifyM env (tcargs c1) (tcargs c')        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env (TExist _ p1) (TExist l p2)
-  | tcname p1 == tcname p2                  = unifyM (tcargs p1) (tcargs p2)
+  | tcname p1 == tcname p2                  = unifyM env (tcargs p1) (tcargs p2)
 
---           as declared           as called
+--         as declared           as called
 cast' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do cast env fx1 fx2
                                                  cast env p2 p1
@@ -218,66 +221,86 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem k (tNil k)
                                                  cast env t1 t2
                                                  cast env r1 r2'
 
+cast' env (TFX _ fx1) (TFX _ fx2)
+  | Just unifs <- castFX env fx1 fx2        = unifs
+
 cast' env t1 t2                             = noRed (Cast t1 t2)
 
+
+castFX env FXPure FXPure                    = Just $ return ()
+castFX env FXPure (FXMut _)                 = Just $ return ()
+castFX env FXPure (FXAct _)                 = Just $ return ()
+castFX env (FXMut t1) (FXMut t2)            = Just $ unify env t1 t2
+castFX env (FXMut t1) (FXAct t2)            = Just $ unify env t1 t2
+castFX env (FXAct t1) (FXAct t2)            = Just $ unify env t1 t2
+castFX env FXAsync FXAsync                  = Just $ return ()
+castFX env fx1 fx2                          = Nothing
 
 
 ----------------------------------------------------------------------------------------------------------------------
 -- unify
 ----------------------------------------------------------------------------------------------------------------------
 
-unify                                       :: Type -> Type -> TypeM ()
-unify t1 t2                                 = do t1' <- msubst t1
+unify                                       :: Env -> Type -> Type -> TypeM ()
+unify env t1 t2                             = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 unify' t1' t2'
+                                                 unify' env t1' t2'
 
-unifyM ts1 ts2                              = mapM_ (uncurry $ unify) (ts1 `zip` ts2)
+unifyM env ts1 ts2                          = mapM_ (uncurry $ unify env) (ts1 `zip` ts2)
 
 
-unify' (TVar _ tv1) (TVar _ tv2)
+unify' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
-unify' (TVar _ tv) t2
-  | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
+unify' env (TVar _ tv) t2
+  | not $ scoped tv env                     = do when (tv `elem` tyfree t2) (infiniteType tv)
                                                  substitute tv t2
-unify' t1 (TVar _ tv)
-  | not $ skolem tv                         = do when (tv `elem` tyfree t1) (infiniteType tv)
+unify' env t1 (TVar _ tv)
+  | not $ scoped tv env                     = do when (tv `elem` tyfree t1) (infiniteType tv)
                                                  substitute tv t1
 
-unify' (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2                  = unifyM (tcargs c1) (tcargs c2)
+unify' env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2                  = unifyM env (tcargs c1) (tcargs c2)
 
-unify' (TExist _ p1) (TExist l p2)
-  | tcname p1 == tcname p2                  = unifyM (tcargs p1) (tcargs p2)
+unify' env (TExist _ p1) (TExist l p2)
+  | tcname p1 == tcname p2                  = unifyM env (tcargs p1) (tcargs p2)
 
---           as declared           as called
-unify' (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do unify fx1 fx2
-                                                 unify p2 p1
-                                                 unify k2 k1
-                                                 unify t1 t2
+unify' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do unify env fx1 fx2
+                                                 unify env p2 p1
+                                                 unify env k2 k1
+                                                 unify env t1 t2
 
-unify' (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do unify p1 p2
-                                                 unify k1 k2
+unify' env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do unify env p1 p2
+                                                 unify env k1 k2
 
-unify' (TUnion _ u1) (TUnion _ u2)
+unify' env (TUnion _ u1) (TUnion _ u2)
   | all (uniElem u2) u1,
     all (uniElem u1) u2                     = return ()
 
-unify' (TOpt _ t1) (TOpt _ t2)              = unify t1 t2
-unify' (TNone _) (TNone _)                  = return ()
+unify' env (TOpt _ t1) (TOpt _ t2)          = unify env t1 t2
+unify' env (TNone _) (TNone _)              = return ()
 
-unify' (TWild _) t2                         = return ()
-unify' t1 (TWild _)                         = return ()
+unify' env (TWild _) t2                     = return ()
+unify' env t1 (TWild _)                     = return ()
 
-unify' (TNil _ k1) (TNil _ k2)
+unify' env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-unify' (TRow _ k n t1 r1) r2                = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
-                                                 unify t1 t2
-                                                 unify r1 r2'
+unify' env (TRow _ k n t1 r1) r2            = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
+                                                 unify env t1 t2
+                                                 unify env r1 r2'
 
-unify' t1 t2                                = noUnify t1 t2
+unify' env (TFX _ fx1) (TFX _ fx2)
+  | Just unifs <- unifyFX env fx1 fx2       = unifs
 
+unify' env t1 t2                            = noUnify t1 t2
+
+
+unifyFX env FXPure FXPure                   = Just $ return ()
+unifyFX env (FXMut t1) (FXMut t2)           = Just $ unify env t1 t2
+unifyFX env (FXAct t1) (FXAct t2)           = Just $ unify env t1 t2
+unifyFX env FXAsync FXAsync                 = Just $ return ()
+unifyFX env fx1 fx2                         = Nothing
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -294,14 +317,14 @@ sub' env eq w (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return eq
 
 sub' env eq w t1@(TVar _ tv) t2
-  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
+  | not $ scoped tv env                     = do defer [Sub w t1 t2]; return eq
   | Just tc <- findVBound env tv            = sub' env eq w (tCon tc) t2
 
 sub' env eq w t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
+  | not $ scoped tv env                     = do defer [Sub w t1 t2]; return eq
 
 sub' env eq w (TExist _ p1) (TExist l p2)
-  | Just (wf,p') <- search                  = do unifyM (tcargs p1) (tcargs p'); return eq
+  | Just (wf,p') <- search                  = do unifyM env (tcargs p1) (tcargs p'); return eq
   where search                              = findAncestor env p1 (tcname p2)
 
 --           as declared           as called

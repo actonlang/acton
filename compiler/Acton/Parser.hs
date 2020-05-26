@@ -612,7 +612,7 @@ decl_group = do p <- L.indentLevel
 decl :: Parser S.Decl
 decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
-decorator :: Bool -> Parser S.Decoration
+decorator :: Bool -> Parser S.Deco
 decorator sig = do
        p <- L.indentLevel
        d <- decoration
@@ -627,11 +627,11 @@ decorator sig = do
 funcdef :: Parser S.Decl
 funcdef =  addLoc $ do
               assertNotData
-              (p,md) <- withPos (decorator False <* rword "def")
+              (p,(deco,fx)) <- withPos (((,) <$> decorator False <*> optional effect) <* rword "def")
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure md
+              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure deco <*> pure (maybe S.tWild id fx)
 
 
 optbinds :: Parser [S.TBind]
@@ -777,13 +777,14 @@ exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (\p -> S.Tup
 expr_nocond = or_expr <|> lambdef_nocond
 
 lambdefGen t = addLoc $ do
+            fx <- optional effect
             rword "lambda"
             (ppar,kpar) <- funpars False
             colon
-            S.Lambda NoLoc ppar kpar <$> t
+            S.Lambda NoLoc ppar kpar <$> t <*> return (maybe S.tWild id fx)
 
-lambdef = lambdefGen expr
-lambdef_nocond = lambdefGen expr_nocond
+lambdef = try $ lambdefGen expr
+lambdef_nocond = try $ lambdefGen expr_nocond
 
 -- Logical expressions ------------------------------------------------------------------
 
@@ -1042,12 +1043,12 @@ effect  :: Parser S.Type
 effect  = addLoc $  
             S.TVar NoLoc <$> tvar
         <|> rword "_" *> return (S.TWild NoLoc)
-        <|> rword "actor" *> return S.fxActor
         <|> rword "async" *> return S.fxAsync
-        <|> rword "act" *> brackets (S.fxAct <$> varonly)
-        <|> rword "mut" *> brackets (S.fxMut <$> varonly)
+        <|> rword "act" *> optvar S.fxAct
+        <|> rword "mut" *> optvar S.fxMut
+        <|> rword "pure" *> return S.fxPure
         <|> return S.fxPure
-  where varonly = addLoc $ S.TVar NoLoc <$> tvar
+  where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
 
 posrow :: Parser S.PosRow 
 posrow = posItems S.posRow S.posVar S.posNil ttype (optional tvar)
@@ -1105,11 +1106,11 @@ ttype    =  addLoc (
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))
-        <|> try (do fx <- effect
+        <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows
                     arrow
                     t <- ttype
-                    return (S.TFun NoLoc fx p k t))
+                    return (S.TFun NoLoc (maybe S.fxPure id mbfx) p k t))
         <|> try (do (p,k) <- parens funrows
                     return (S.TTuple NoLoc p k))
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))

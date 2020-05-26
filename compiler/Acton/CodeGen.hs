@@ -93,7 +93,8 @@ genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ genSuite env b $+$ char '}'
 
 instance Gen Decl where
-    gen env (Def _ n q ps ks a b m) = (gen env a <+> genQName env n <+> parens (gen env ps) <+> char '{')
+    gen env (Def _ n q ps ks a b d m)
+                                    = (gen env a <+> genQName env n <+> parens (gen env ps) <+> char '{')
                                       $+$ genSuite env b $+$ char '}'
     gen env (Class _ n q a b)       = text "class" <+> genQName env n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ genSuite env b

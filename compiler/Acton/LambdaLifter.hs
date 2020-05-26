@@ -231,17 +231,17 @@ instance Lift Stmt where
       | otherwise                       = Decl l <$> ll env ds >>= liftToNext
 
 instance Lift Decl where
-    ll env (Def l n q ps _ks ann b m)
+    ll env (Def l n q ps _ks ann b d fx)
       | inClass env                     = do --traceM ("## ll Def (method) " ++ prstr n)
-                                             Def l n q ps2 _ks ann <$> defBody env1 b <*> pure m
+                                             Def l n q ps2 _ks ann <$> defBody env1 b <*> pure d <*> pure fx
       where env1                        = setSelf p1 $ extLocals (bound ps1) $ extPrefix InDef n env
             (p1,t1,ps1)                 = case ps of PosPar n t _ ps1 -> (Just n, t, ps1); _ -> (Nothing, Nothing, ps)
             ps2                         = PosPar selfKW t1 Nothing ps1
-    ll env (Def l n q ps _ks ann b m)
+    ll env (Def l n q ps _ks ann b d fx)
       | onTop env                       = do --traceM ("## ll Def (on top) " ++ prstr n)
-                                             Def l n q ps _ks ann <$> defBody env1 b <*> pure m
+                                             Def l n q ps _ks ann <$> defBody env1 b <*> pure d <*> pure fx
       | otherwise                       = do --traceM ("## ll Def (nested) " ++ prstr n)
-                                             Def l (liftedname env n) q ps' _ks ann <$> defBody env1 b <*> pure m
+                                             Def l (liftedname env n) q ps' _ks ann <$> defBody env1 b <*> pure d <*> pure fx
       where env1                        = extLocals (bound ps) $ extPrefix InDef n env
             ps'                         = addParams vs ps
             vs                          = extraArgs env n
@@ -284,11 +284,11 @@ instance Lift Expr where
     ll env (CompOp l e ops)             = CompOp l <$> ll env e <*> ll env ops
     ll env (UnOp l o e)                 = UnOp l o <$> ll env e
     ll env (Dot l e n)                  = Dot l <$> ll env e <*> pure n
-    ll env (Lambda l ps _k e)           = do nn <- newName "lambda"
+    ll env (Lambda l ps _k e fx)        = do nn <- newName "lambda"
                                              let env1 = extLocals (bound ps) $ extPrefix InDef nn env
                                              --traceM ("## ll Lambda (nested)")
                                              b <- defBody env1 [Return l0 (Just e)]
-                                             liftToTop $ Decl l0 $ [Def l nn [] ps' _k Nothing b NoDec]
+                                             liftToTop $ Decl l0 $ [Def l nn [] ps' _k Nothing b NoDec fx]
                                              return (closure nn vs)
       where ps'                         = addParams vs ps
             vs                          = intersect (free e) (locals env) \\ bound ps

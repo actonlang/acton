@@ -39,11 +39,11 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | After         { sloc::SrcLoc, expr::Expr, expr2::Expr }
-                | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema, dec::Decoration }
+                | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema, dec::Deco }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Decoration }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Deco, dfx::TFX }
                 | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
@@ -70,7 +70,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | UnOp          { eloc::SrcLoc, uop::Op Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer, tl :: Bool }
-                | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr }
+                | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
                 | Yield         { eloc::SrcLoc, yexp1::Maybe Expr }
                 | YieldFrom     { eloc::SrcLoc, yfrom::Expr }
                 | Tuple         { eloc::SrcLoc, pargs::PosArg, kargs::KwdArg }
@@ -164,8 +164,8 @@ data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq)
 
-data Decoration = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
-    
+data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
+
 data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
 data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual, sctype::Type } deriving (Show,Read,Generic)
@@ -178,7 +178,7 @@ data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
 data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut Type | FXAct Type | FXAsync | FXActor deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut Type | FXAct Type | FXAsync deriving (Eq,Show,Read,Generic)
 
 type Qual       = [TBind]
 
@@ -210,11 +210,11 @@ data Constraint = Cast  Type Type
 
 type Constraints = [Constraint]
 
-skolem (TV k n) = case n of
-                    Name{} -> True
-                    _      -> False
+generated (TV k n)  = case n of
+                        Name{} -> False
+                        _      -> True
 
-dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec
+dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec fxWild
 
 sDef n p b      = sDecl [dDef n p b]
 sReturn e       = Return NoLoc (Just e)
@@ -240,7 +240,7 @@ eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
 eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e (Op NoLoc o) e'
-eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e
+eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e fxWild
 
 pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
 
@@ -275,11 +275,11 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxActor         = TFX NoLoc FXActor
 fxAsync         = TFX NoLoc FXAsync
 fxAct t         = TFX NoLoc (FXAct t)
 fxMut t         = TFX NoLoc (FXMut t)
 fxPure          = TFX NoLoc FXPure
+fxWild          = tWild
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
@@ -294,13 +294,12 @@ rowTail (TRow _ _ _ _ r)
 rowTail r       = r
 
 
-tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOTUVW" ]
+tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
 
-fxSupply        = [ TV KFX $ name (c:tl) | tl <- "" : map show [1..], c <- "XY" ]
 
-prowSupply      = [ TV PRow $ name (c:tl) | tl <- "" : map show [1..], c <- "PQ" ]
-krowSupply      = [ TV KRow $ name (c:tl) | tl <- "" : map show [1..], c <- "RS" ]
-
+tvarSubst vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
+  where
+    setk (v,v') = (v, tVar $ v'{ tvkind = tvkind v })
 
 type Substitution = [(TVar,Type)]
 
@@ -309,7 +308,7 @@ instance Data.Binary.Binary Pass
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
 instance Data.Binary.Binary QName
-instance Data.Binary.Binary Decoration
+instance Data.Binary.Binary Deco
 instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
@@ -424,12 +423,13 @@ instance Eq Stmt where
     _                   ==  _                   = False
 
 instance Eq Decl where
-    Def _ n1 q1 p1 k1 a1 b1 m1  ==  Def _ n2 q2 p2 k2 a2 b2 m2  = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2 && m1 == m2
-    Actor _ n1 q1 p1 k1 b1      ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
-    Class _ n1 q1 a1 b1         ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Protocol _ n1 q1 a1 b1      ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    Extension _ n1 q1 a1 b1     ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
-    _                           == _                            = False
+    Def _ n1 q1 p1 k1 a1 b1 m1 d1   ==  Def _ n2 q2 p2 k2 a2 b2 m2 d2 
+                                                                    = n1==n2 && q1==q2 && p1==p2 && k1==k2 && a1==a2 && b1==b2 && d1==d2 && m1==m2
+    Actor _ n1 q1 p1 k1 b1          ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
+    Class _ n1 q1 a1 b1             ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Protocol _ n1 q1 a1 b1          ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    Extension _ n1 q1 a1 b1         ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
+    _                               == _                            = False
 
 instance Eq Expr where
     x@Var{}             ==  y@Var{}             = var x == var y
@@ -452,7 +452,7 @@ instance Eq Expr where
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
     x@Dot{}             ==  y@Dot{}             = exp1 x == exp1 y && attr x == attr y
     x@DotI{}            ==  y@DotI{}            = exp1 x == exp1 y && ival x == ival y
-    x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y
+    x@Lambda{}          ==  y@Lambda{}          = ppar x == ppar y && kpar x == kpar y && exp1 x == exp1 y && efx x == efx y
     x@Yield{}           ==  y@Yield{}           = yexp1 x == yexp1 y
     x@YieldFrom{}       ==  y@YieldFrom{}       = yfrom x == yfrom y
     x@Tuple{}           ==  y@Tuple{}           = pargs x == pargs y && kargs x == kargs y

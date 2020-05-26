@@ -58,7 +58,8 @@ instance Relabel Stmt where
     relabel (Signature _ ns t d) = Signature <$> newLoc <*> relabel ns <*> relabel t <*> return d
 
 instance Relabel Decl where
-    relabel (Def _ n q ps ks ann ss md) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel ann <*> relabel ss <*> return md
+    relabel (Def _ n q ps ks ann ss dec fx) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> 
+                                            relabel ann <*> relabel ss <*> return dec <*> return fx
     relabel (Actor _ n q ps ks b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
@@ -85,7 +86,7 @@ instance Relabel Expr where
     relabel (UnOp _ op e) = UnOp <$> newLoc <*> relabel op <*> relabel e 
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
     relabel (DotI _ e i t) = DotI <$> newLoc <*> relabel e <*> return i <*> return t
-    relabel (Lambda _ ps ks e) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e
+    relabel (Lambda _ ps ks e fx) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e <*> relabel fx
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e
     relabel (Tuple _ ps ks) = Tuple <$> newLoc <*> relabel ps <*> relabel ks
@@ -227,7 +228,6 @@ instance Relabel Type where
     relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
 
 instance Relabel FX where
-    relabel (FXActor) = return FXActor
     relabel (FXAsync) = return FXAsync
     relabel (FXAct t) = FXAct <$> relabel t
     relabel (FXMut t) = FXMut <$> relabel t

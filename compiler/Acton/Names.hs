@@ -144,13 +144,13 @@ instance Vars Stmt where
     bound _                         = []
 
 instance Vars Decl where
-    free (Def _ n q ps ks ann b md) = (free ps ++ free ks ++ free b) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
+    free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
     free (Actor _ n q ps ks b)      = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ bound b)
     free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ bound b)
     free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound q ++ bound b)
     free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ (bound q ++ bound b)
 
-    bound (Def _ n _ _ _ _ _ _)     = [n]
+    bound (Def _ n _ _ _ _ _ _ _)   = [n]
     bound (Actor _ n _ _ _ _)       = [n]
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
@@ -187,7 +187,7 @@ instance Vars Expr where
     free (UnOp _ o e)               = free e
     free (Dot _ e n)                = free e
     free (DotI _ e i t)             = free e
-    free (Lambda _ ps ks e)         = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
+    free (Lambda _ ps ks e fx)      = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
     free (Tuple _ ps ks)            = free ps ++ free ks

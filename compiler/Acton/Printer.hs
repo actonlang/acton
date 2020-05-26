@@ -50,9 +50,9 @@ instance Pretty Stmt where
     pretty (Signature _ vs sc d)    = prettyDec d $ commaList vs <+> colon <+> pretty sc
 
 instance Pretty Decl where
-    pretty (Def _ n q ps ks a b d)  = (prettyDec d $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
-                                      nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
-    pretty (Actor _ n q ps ks b)    = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (ps,ks)) <>
+    pretty (Def _ n q p k a b d x)  = (prettyDecFX d x $ text "def" <+> pretty n <+> nonEmpty brackets commaList q <+> 
+                                      parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
+    pretty (Actor _ n q p k b)      = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty (p,k)) <>
                                       colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
@@ -60,6 +60,11 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
+
+prettyDecFX d fx                    = prettyDec d . (prettyFX fx <+>)
+
+prettyFX (TWild _)                  = empty
+prettyFX fx                         = pretty fx
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
@@ -126,7 +131,7 @@ instance Pretty Expr where
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i False)       = pretty e <> dot <> pretty i
     pretty (DotI _ e i True)        = pretty e <> dot <> pretty i <> text "*"
-    pretty (Lambda _ ps ks e)       = text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
+    pretty (Lambda _ ps ks e fx)    = prettyFX fx <+> text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
@@ -250,7 +255,7 @@ prettyPats ps (Just p)              = commaSep pretty ps <> comma <+> text "*" <
 
 prettyDec d                         = (pretty d $+$)
 
-instance Pretty Decoration where
+instance Pretty Deco where
     pretty NoDec                    = empty
     pretty Static                   = text "@static"
     pretty Property                 = text "@property"
@@ -377,7 +382,6 @@ instance Pretty Type where
     pretty (TFX _ fx)               = pretty fx
 
 instance Pretty FX where
-    pretty (FXActor)                = text "actor"
     pretty (FXAsync)                = text "async"
     pretty (FXAct t)                = text "act" <> brackets (pretty t)
     pretty (FXMut t)                = text "mut" <> brackets (pretty t)
@@ -394,8 +398,8 @@ instance Pretty Kind where
     pretty KWild                    = text "_"
 
 instance Pretty Constraint where
-    pretty (Cast t1 t2)             = pretty t1 <+> parens (pretty t2)
-    pretty (Sub w t1 t2)            = pretty w <+> colon <+> pretty t1 <+> parens (pretty t2)
+    pretty (Cast t1 t2)             = pretty t1 <+> text "<" <+> pretty t2
+    pretty (Sub w t1 t2)            = pretty w <+> colon <+> pretty t1 <+> text "<" <+> pretty t2
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <+> text "." <> pretty n <+> text "~" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ":=" <+> pretty t2

@@ -128,8 +128,8 @@ instance KCheck Stmt where
     kchk env (Signature l ns t d)   = Signature l ns <$> kchk env t <*> return d
 
 instance KCheck Decl where
-    kchk env (Def l n q p k t b m)  = Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*> 
-                                      kchkSuite env1 b <*> return m
+    kchk env (Def l n q p k t b d x)= Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*> 
+                                      kchkSuite env1 b <*> return d <*> kexpWild KFX env1 x
       where env1 | null q           = extvars ((tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)) env
                  | otherwise        = extvars (tybound q) env
     kchk env (Actor l n q p k b)    = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
@@ -138,8 +138,9 @@ instance KCheck Decl where
       where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Extension l n q us b) = do kexpNoWild KType env (TC n (map tVar $ tybound q))
-                                         Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Extension l n q us b) = do ext <- Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+                                         kexpNoWild KType env1 (TC n (map tVar $ tybound q))
+                                         return ext
       where env1                    = extvars (tvSelf : tybound q) env
 
 instance KCheck Expr where
@@ -162,7 +163,7 @@ instance KCheck Expr where
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 
     kchk env (Dot l e n)            = Dot l <$> kchk env e <*> return n
     kchk env (DotI l e i tl)        = DotI l <$> kchk env e <*> return i <*> return tl
-    kchk env (Lambda l ps ks e)     = Lambda l <$> kchk env ps <*> kchk env ks <*> kchk env e
+    kchk env (Lambda l ps ks e fx)  = Lambda l <$> kchk env ps <*> kchk env ks <*> kchk env e <*> kexpWild KFX env fx
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
     kchk env (Tuple l es ks)        = Tuple l <$> kchk env es <*> kchk env ks
@@ -309,7 +310,7 @@ instance KInfer Type where
                                          return (k, TVar l (TV k n))
     kinfer env False (TWild l)      = Acton.Env.err1 l "Illegal wildcard type"
     kinfer env w (TVar l v)
-      | not (skolem v) || v `elem` tvars env
+      | generated v || v `elem` tvars env
                                     = do (k,v) <- kinfer env w v
                                          return (k, TVar l v)
       | otherwise                   = Acton.Env.err1 v "Unbound type variable:"
@@ -339,7 +340,6 @@ instance KInfer Type where
                                          return (KFX, TFX l fx)
 
 instance KCheck FX where
-    kchk env (FXActor)              = return FXActor
     kchk env (FXAsync)              = return FXAsync
     kchk env (FXAct t)              = FXAct <$> kexpWild KType env t
     kchk env (FXMut t)              = FXMut <$> kexpWild KType env t
@@ -425,7 +425,6 @@ instance KSubst FX where
     ksubst g (FXMut t)              = FXMut <$> ksubst g t
     ksubst g (FXAct t)              = FXAct <$> ksubst g t
     ksubst g FXAsync                = return FXAsync
-    ksubst g FXActor                = return FXActor
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
@@ -451,7 +450,7 @@ instance KSubst Stmt where
     ksubst g (Signature l ns t d)   = Signature l ns <$> ksubst g t <*> return d
 
 instance KSubst Decl where
-    ksubst g (Def l n q p k a b m)  = Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return m
+    ksubst g (Def l n q p k a b d x)= Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x
     ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
     ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
@@ -477,7 +476,7 @@ instance KSubst Expr where
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
     ksubst g (DotI l e i t)         = DotI l <$> ksubst g e <*> return i <*> return t
-    ksubst g (Lambda l ps ks e)     = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e
+    ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e
     ksubst g (Tuple l es ks)        = Tuple l <$> ksubst g es <*> ksubst g ks

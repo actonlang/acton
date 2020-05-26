@@ -21,7 +21,7 @@ transform m@(Module nm is stmts)        = Module nm is (map (Decl NoLoc . (:[]))
 -----------------------------------------------------------------------------------------------------
  
 data TransEnv                           = TransEnv {protocols :: [(Name,Decl)],
-                                                    decor :: Decoration,
+                                                    decor :: Deco,
                                                     fstpar :: Maybe Type,
                                                     master :: Maybe TCon
                                                    }
