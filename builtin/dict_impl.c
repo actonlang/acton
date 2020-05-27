@@ -386,12 +386,6 @@ long $dict_len($dict dict) {
   return dict->numelements;
 }
 
-
-$dict $dict_fromiter($Hashable hashwit, $Iterable$opaque it) {
-  return $NEW($dict,hashwit,it);
-}
-
-
 // Container_Eq /////////////////////////////////////////////////////////////////////////////
 
 int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {

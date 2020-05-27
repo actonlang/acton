@@ -156,10 +156,6 @@ $complex $Complex$int$__complx__($Complex$int wit, $int a) {
   return to$complex(to$float((double)from$int(a)),to$float(0.0));
 }
 
-$bool $Complex$int$__bool__($Complex$int wit, $int a) {
-  return from$int(a)==0L ? $true : $false;
-}
-
 $int $Complex$int$__mul__($Complex$int wit,  $int a, $int b) {
   return to$int(from$int(a) * from$int(b));
 }  
@@ -281,7 +277,7 @@ $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
 
 struct $Complex$int$class $Complex$int$methods = {"", UNASSIGNED,NULL,$Complex$int_init, $Complex$int$__eq__,$Complex$int$__ne__,$Complex$int$__complx__,
-                                               $Complex$int$__bool__,$Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
+                                               $Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
                                                $Complex$int$__pos__,$Complex$int$real,$Complex$int$imag,$Complex$int$__abs__,$Complex$int$__conjugate__};
 struct $Complex$int $Complex$int_instance = {&$Complex$int$methods, &$Integral$int_instance, &$Plus$int_instance, &$Minus$int_instance};
 $Complex$int $Complex$int$witness = &$Complex$int_instance;

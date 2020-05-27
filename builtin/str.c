@@ -75,7 +75,6 @@ int $str_ge($str,$str);
 
 $Iterator $str_iter($str);
 
-$str $str_fromiter($Iterator);
 $int $str_len($str str);
 
 int $str_contains ($str, $str);
@@ -114,10 +113,6 @@ $bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
 
 $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
-}
-
-$str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque it) {
-  return $str_fromiter(it->proto->$class->__iter__(it->proto,it->impl));
 }
 
 $int $Container$str$__len__ ($Container$str wit, $str str) {
@@ -181,7 +176,7 @@ struct $Ord$str$class  $Ord$str$methods = {"", UNASSIGNED, NULL,(void (*)($Ord$s
 struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
 $Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-struct $Container$str$class  $Container$str$methods = {"",UNASSIGNED, NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str$class  $Container$str$methods = {"",UNASSIGNED, NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__len__, $Container$str$__containsnot__};
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
@@ -519,12 +514,6 @@ $str $str_add($str s, $str t) {
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
-
-// this should be eliminated
-$str $str_fromiter($Iterator it) {
-  return NULL;
-}
-         
          
 $int $str_len($str s) {
   $int res = to$int(s->nchars);
@@ -1159,7 +1148,7 @@ void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
 
 
 $list $str_split($str s, $str sep, $int maxsplit) {
-  $list res = $list_fromiter(NULL);
+  $list res = $NEW($list,NULL);
   if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
   int remaining = s->nchars;
   if (sep == NULL) {
@@ -1232,7 +1221,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
 }
 
 $list $str_splitlines($str s) {
-  $list res = $list_fromiter(NULL);
+  $list res = $NEW($list,NULL);
   int remaining = s->nchars;
   unsigned char *p = s->str;
   int nbytes, codepoint, wordlength;

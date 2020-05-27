@@ -433,10 +433,6 @@ int $set_isdisjoint($Hashable hashwit, $set set, $set other) {
 
 // Collection /////////////////////////////////////////////////////////////////////////////////////////////
 
-$set $set_fromiter($Hashable wit, $Iterable$opaque it) {
-  return $NEW($set,wit,it);
-}
-
 long $set_len($set set) {
   return set->numelements;
 }

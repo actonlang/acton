@@ -147,18 +147,6 @@ class dict[A(Hashable),B] ():
 class set[A(Hashable)] ():
   pass
 
-# protocol Boolean:
-#  __bool__   : () -> bool
-
-# extension int (Boolean):
-#  def __bool__(self):
-#    return self != 0
-
-# extension list[A] (Boolean):
-#   def __bool__(self):
-#    return self.__len__() > 0
-
-
 ## Number protocols ################################################################################
 
 #   Eq ______________               Plus            Minus
@@ -249,7 +237,7 @@ protocol Sliceable[A] (Indexed[int,A]):
   
 protocol Collection[A] (Iterable[A]):
   @staticmethod
-  __fromiter__ : (Iterable[A]) -> Self 
+#  __fromiter__ : (Iterable[A]) -> Self 
   __len__      : () -> int
   
 protocol Container[A(Eq)] (Collection[A]):

@@ -150,19 +150,6 @@ $list $list_add($list lst, $list other) {
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
 
-$list $list_fromiter($Iterator iter) {
-  $list res = $list_new(0);
-  if (iter==NULL) {
-    return res;
-  }
-  while (1) {
-    $WORD nxt = iter->$class->__next__(iter);
-    $list_append(res,nxt);
-  }                                         // try/except to stop loop when next raises STOPITERATION.
-  return res;
-}
-
-
 long $list_len($list lst) {
   return (long)lst->length;
 }

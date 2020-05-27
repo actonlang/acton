@@ -70,7 +70,7 @@ $bool $Real$float$__ge__ ($Real$float wit, $float a, $float b) {
 }
 
 $float $Real$float$__float__ ($Real$float wit, $float x) {
-  return to$float((double)x->val);
+  return x;
 }
 
 $Integral$opaque $Real$float$__trunc__ ($Real$float wit, $float x) {
@@ -102,10 +102,6 @@ $bool $Complex$float$__ne__ ($Complex$float wit, $float a, $float b) {
 
 $complex $Complex$float$__complx__($Complex$float wit, $float a) {
   return to$complex(to$float(from$float(a)),to$float(0.0));
-}
-
-$bool $Complex$float$__bool__($Complex$float wit, $float a) {
-  return from$float(a)==0.0 ? $true : $false;
 }
 
 $float $Complex$float$__mul__($Complex$float wit,  $float a, $float b) {
@@ -204,7 +200,7 @@ struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float
 
 
 struct $Complex$float$class $Complex$float$methods = {"", UNASSIGNED,NULL, $Complex$float_init,$Complex$float$__eq__,$Complex$float$__ne__,$Complex$float$__complx__,
-                                               $Complex$float$__bool__,$Complex$float$__mul__,$Complex$float$__truediv__,$Complex$float$__pow__,$Complex$float$__neg__,
+                                               $Complex$float$__mul__,$Complex$float$__truediv__,$Complex$float$__pow__,$Complex$float$__neg__,
                                                $Complex$float$__pos__,$Complex$float$real,$Complex$float$imag,$Complex$float$__abs__,$Complex$float$__conjugate__};
  struct $Complex$float $Complex$float_instance = {&$Complex$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
  $Complex$float $Complex$float$witness = &$Complex$float_instance;

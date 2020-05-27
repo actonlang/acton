@@ -7,7 +7,6 @@ $list $list_add($list lst, $list other);
 
 $Iterator $list_iter($list lst);
 
-$list $list_fromiter($Iterator it);
 long $list_len($list lst);
 
 int $list_contains($Eq w,$list lst, $WORD elem);
