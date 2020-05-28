@@ -81,8 +81,6 @@ typedef struct actor_args
 
 	queue_callback * qc;
 
-	vector_clock * vc;
-
 	db_schema_t * schema;
 
 	int status;
@@ -153,8 +151,6 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 						ca->queue_table_key, ca->queue_id,
 						2, entries_read, &ca->read_head,
 						start_row, end_row, NULL, ca->db);
-
-		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		if(read_status < 0)
 		{
@@ -398,8 +394,6 @@ void * actor(void * cargs)
 
 	GET_RANDSEED(&seed, 0); // thread_id
 
-	increment_vc(ca->vc, (int) ca->consumer_id);
-
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = remote_subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, qc,
 							&prev_read_head, &prev_consume_head, ca->db);
@@ -409,8 +403,6 @@ void * actor(void * cargs)
 
 	if(debug)
 		printf("ACTOR %" PRId64 ": Subscribed to queue %" PRId64 "/%" PRId64 " with callback (%p/%p/%p/%p)\n", (int64_t) ca->consumer_id, (int64_t) ca->queue_table_key, (int64_t) ca->queue_id, qc, qc->lock, qc->signal, qc->callback);
-
-	increment_vc(ca->vc, (int) ca->consumer_id);
 
 	ca->rcv_counters = create_skiplist_long();
 	ca->snd_counters = create_skiplist_long();
@@ -467,8 +459,6 @@ void * actor(void * cargs)
 
 //		remote_print_long_table(state_table_key, ca->db);
 //		remote_print_long_table(queue_table_key, ca->db);
-
-		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		ca->successful_consumes = ca->successful_dequeues;
 		ca->successful_enqueues += msgs_sent;
@@ -535,8 +525,6 @@ void * actor(void * cargs)
 
 //			remote_print_long_table(state_table_key, ca->db);
 //			remote_print_long_table(queue_table_key, ca->db);
-
-			increment_vc(ca->vc, (int) ca->consumer_id);
 
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
@@ -621,7 +609,6 @@ int main(int argc, char **argv) {
 		cargs[i].queue_table_key = queue_table_key;
 		cargs[i].queue_id = cargs[i].consumer_id;
 		cargs[i].no_enqueues = no_items;
-		cargs[i].vc = init_vc(no_actors, (int *) node_ids, (int64_t *) counters, 0);
 		cargs[i].qc = get_queue_callback(consumer_callback);
 		cargs[i].schema = schema;
 
