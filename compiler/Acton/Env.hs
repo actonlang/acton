@@ -167,13 +167,6 @@ instance Subst WTCon where
 
 msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
-instance Subst SrcInfoTag where
-    msubst (GEN l t)                = GEN l <$> msubst t
-    msubst (INS l t)                = INS l <$> msubst t
-
-    tyfree (GEN _ t)                = tyfree t
-    tyfree (INS _ t)                = tyfree t
-
 
 -------------------------------------------------------------------------------------------------------------------
 
@@ -675,11 +668,10 @@ data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                currsubst       :: TVarMap,
-                                                dumped          :: SrcInfo
+                                                currsubst       :: TVarMap
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s, dumped = [] }
+initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s }
 
 type TypeM a                            = State TypeState a
 
@@ -719,12 +711,6 @@ substitute tv t                         = state $ \st -> ((), st{ currsubst = Ma
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
-
-dump                                    :: SrcInfo -> TypeM ()
-dump inf                                = state $ \st -> ((), st{ dumped = inf ++ dumped st })
-
-getDump                                 :: TypeM SrcInfo
-getDump                                 = state $ \st -> (dumped st, st)
 
 
 newName s                               = Internal s <$> newUnique <*> return TypesPass

@@ -320,19 +320,6 @@ instance Data.Binary.Binary FX
 instance Data.Binary.Binary Constraint
 
 
--- SrcInfo ------------------
-
-type SrcInfo            = [SrcInfoTag]
-
-data SrcInfoTag         = GEN   SrcLoc TSchema
-                        | INS   SrcLoc Type
-                        deriving (Eq,Show)
-
-lookupGEN l info        = listToMaybe [ t | GEN l' t <- info, l' == l ]
-
-lookupINS l info        = listToMaybe [ t | INS l' t <- info, l' == l ]
-
-
 -- Locations ----------------
 
 instance HasLoc Import where

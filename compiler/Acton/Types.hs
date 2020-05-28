@@ -12,13 +12,13 @@ import Acton.Solver
 import Acton.Transform
 import qualified InterfaceFiles
 
-reconstruct                             :: String -> Env -> Module -> IO (TEnv, Module, SrcInfo)
+reconstruct                             :: String -> Env -> Module -> IO (TEnv, Module)
 reconstruct outname env modul           = do InterfaceFiles.writeFile (outname ++ ".ty") (unalias env2 te)
-                                             return (te, modul', info)
+                                             return (te, modul')
   where Module m imp suite              = modul
         env1                            = reserve (bound suite) env
         env2                            = define te env1
-        ((te,suite'),info)              = runTypeM $ (,) <$> infTop env1 suite <*> getDump
+        (te,suite')                     = runTypeM $ infTop env1 suite
         modul'                          = Module m imp suite'
 
 solverError                             = typeError
@@ -380,8 +380,7 @@ stripQual q                             = [ TBind v [] | TBind v us <- q ]
 
 --------------------------------------------------------------------------------------------------------------------------
 
-splitAndSolve env vs cs                 = do 
-                                             (cs0,eq0) <- simplify env cs
+splitAndSolve env vs cs                 = do (cs0,eq0) <- simplify env cs
                                              let (cs1',cs1) = partition (any (`elem` vs) . tyfree) cs0
                                              eq1 <- solve env cs1'
                                              return (cs1, eq1++eq0)
@@ -418,55 +417,6 @@ checkActorAssumption env n0 p k te      = do (css,eqs) <- unzip <$> mapM check1 
           | otherwise                   = internal (loc n) "checkActAssump"
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
 
---------------------------------------------------------------------------------------------------------------------------
-
-splitGen                                :: Env -> [TVar] -> TEnv -> Constraints -> TypeM (Constraints,TEnv,[(Name,TCon)],Equations)
-splitGen env fvs te cs
-  | null ambig_cs                       = return (fixed_cs, map generalize te, ws, [])
-  | otherwise                           = do eq0 <- solve env ambig_cs
-                                             (cs1,eq1) <- simplify env (fixed_cs++gen_cs)
-                                             te1 <- msubst te
-                                             fvs1 <- msubstTV fvs
-                                             (cs2,te2,ws2,eq2) <- splitGen env fvs1 te1 cs1
-                                             return (cs2, te2, ws2, eq2++eq1++eq0)
-  where
-    def_vss                             = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te ]
-    gen_vs                              = nub $ foldr union [] def_vss
-    safe_vs | null def_vss              = []
-            | otherwise                 = nub $ foldr1 intersect def_vss
-    (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
-    (ambig_cs, gen_cs)                  = partition ambig cs'                                               -- TODO: replace ambig check with "must solve"
-    ambig c                             = any (`notElem` safe_vs) (tyfree c)
-    (ws,q_new)                          = mkQual gen_vs gen_cs
-    s                                   = tvarSubst gen_vs fvs
-
-    generalize (n, NDef sc dec)         = (n, NDef (gen sc) dec)
-      where gen (TSchema l [] t)        = TSchema l (subst s q_new) (subst s t)
-            gen sc                      = sc
-    generalize (n, i)                   = (n, i)
-
-
-mkQual vs cs                            = (concat wss, q)
-  where
-    (wss,q)                             = unzip $ map cbind vs
-    cbind v
-      | length casts > 1                = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
-                                          (impls, TBind v (map snd impls))
-      | otherwise                       = (impls, TBind v (casts ++ map snd impls))
-      where casts                       = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
-            impls                       = [ (w,u) | Impl w (TVar _ v') u <- cs, v == v' ]
-
-
-genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
-genEnv env cs te ds                     = do (cs1,eq1) <- simplify env cs
-                                             te1 <- msubst te
-                                             tvs <- msubstTV (tyfree env)
-                                             (cs2, te2, ws, eq2) <- splitGen env tvs te1 cs1
-                                             dump [ INS (loc v) t | (v, TSchema _ [] t) <- nSchemas te1 ]
-                                             dump [ GEN (loc v) t | (v, t) <- nSchemas te2 ]
-                                             return (cs2, te2, eq2++eq1, map (absW ws) ds)
-  where -- absW ws (Def l n q p k t b d x) = undefined
-        absW ws d                       = d
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -478,7 +428,6 @@ instance (Check a) => Check [a] where
     checkEnv env cl (d:ds)              = do (cs1,d') <- checkEnv env cl d
                                              (cs2,ds') <- checkEnv env cl ds
                                              return (cs1++cs2, d':ds')
-
 
 instance Check Decl where
     checkEnv env cl (Def l n q p k a b d fx)
@@ -572,6 +521,54 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
+splitGen                                :: Env -> [TVar] -> TEnv -> Constraints -> TypeM (Constraints,TEnv,[(Name,TCon)],Equations)
+splitGen env fvs te cs
+  | null ambig_cs                       = return (fixed_cs, map generalize te, ws, [])
+  | otherwise                           = do eq0 <- solve env ambig_cs
+                                             (cs1,eq1) <- simplify env (fixed_cs++gen_cs)
+                                             te1 <- msubst te
+                                             fvs1 <- msubstTV fvs
+                                             (cs2,te2,ws2,eq2) <- splitGen env fvs1 te1 cs1
+                                             return (cs2, te2, ws2, eq2++eq1++eq0)
+  where
+    def_vss                             = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te ]
+    gen_vs                              = nub $ foldr union [] def_vss
+    safe_vs | null def_vss              = []
+            | otherwise                 = nub $ foldr1 intersect def_vss
+    (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
+    (ambig_cs, gen_cs)                  = partition ambig cs'                                               -- TODO: replace ambig check with "must solve"
+    ambig c                             = any (`notElem` safe_vs) (tyfree c)
+    (ws,q_new)                          = mkQual gen_vs gen_cs
+    s                                   = tvarSubst gen_vs fvs
+
+    generalize (n, NDef sc dec)         = (n, NDef (gen sc) dec)
+      where gen (TSchema l [] t)        = TSchema l (subst s q_new) (subst s t)
+            gen sc                      = sc
+    generalize (n, i)                   = (n, i)
+
+
+mkQual vs cs                            = (concat wss, q)
+  where
+    (wss,q)                             = unzip $ map cbind vs
+    cbind v
+      | length casts > 1                = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
+                                          (impls, TBind v (map snd impls))
+      | otherwise                       = (impls, TBind v (casts ++ map snd impls))
+      where casts                       = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
+            impls                       = [ (w,u) | Impl w (TVar _ v') u <- cs, v == v' ]
+
+
+genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,Equations,[Decl])
+genEnv env cs te ds                     = do (cs1,eq1) <- simplify env cs
+                                             te1 <- msubst te
+                                             tvs <- msubstTV (tyfree env)
+                                             (cs2, te2, ws, eq2) <- splitGen env tvs te1 cs1
+                                             return (cs2, te2, eq2++eq1, map (absW ws) ds)
+  where -- absW ws (Def l n q p k t b d x) = undefined
+        absW ws d                       = d
+
+--------------------------------------------------------------------------------------------------------------------------
+
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do (cs1,e') <- inferBool env e
                                              (cs2,te,b') <- infEnv env b
@@ -625,7 +622,6 @@ instance Infer Expr where
     infer env e@(Strings _ ss)          = return ([], tUnion [ULit $ concat ss], e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e
-                                             dump [INS (loc e) t]
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newTVar
@@ -800,7 +796,6 @@ instance Infer Expr where
                                              (cs1,te1,krow,k') <- infEnvT (define te0 env1) k
                                              (cs2,t,e') <- infer (define te1 (define te0 env1)) e
                                              popFX
-                                             dump [INS l $ tFun fx prow krow t]
                                              return (cs0++cs1++cs2, tFun fx prow krow t, Lambda l p' k' e' fx)
       where env1                        = reserve (bound (p,k)) env
     infer env e@Yield{}                 = notYetExpr e
