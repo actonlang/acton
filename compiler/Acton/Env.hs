@@ -46,12 +46,13 @@ data Env                    = Env {
 
 data NameInfo               = NVar      Type
                             | NSVar     Type
-                            | NDef      TSchema Decoration
-                            | NSig      TSchema Decoration
+                            | NDef      TSchema Deco
+                            | NSig      TSchema Deco
+                            | NAct      Qual PosRow KwdRow TEnv
                             | NClass    Qual [WTCon] TEnv
                             | NProto    Qual [WTCon] TEnv
                             | NExt      QName Qual [WTCon] TEnv
-                            | NTVar     Kind [TCon] [TCon]
+                            | NTVar     Kind (Maybe TCon)
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -60,27 +61,47 @@ data NameInfo               = NVar      Type
                             deriving (Eq,Show,Read,Generic)
 
 data Witness                = WClass    { binds::Qual, proto::TCon, wname::QName, wsteps::[Maybe QName] }
---                            | WInst   { args::[Type], proto::TCon, wname::QName, wsteps::[Maybe QName] }
+                            | WInst     { proto::TCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
 type WTCon                  = ([Maybe QName],TCon)
 
 instance Data.Binary.Binary NameInfo
 
-instance Eq Witness where
-    a@WClass{} == b@WClass{}    = tcname (proto a) == tcname (proto b)
 
+wmatch env (x,a)      (y,b)         = qmatch env x y && match a b
+  where match a@WClass{} b@WClass{} = qmatch env (tcname (proto a)) (tcname (proto b))
+        match a@WInst{}  b@WInst{}  = qmatch env (tcname (proto a)) (tcname (proto b))
+        match a          b          = False
+
+qmatch env a@QName{}  b@QName{}     = mname a == mname b && noq a == noq b
+qmatch env a@NoQ{}    b@NoQ{}       = noq a == noq b
+qmatch env a@NoQ{}    b@QName{}     = defaultmod env == mname b && noq a == noq b
+qmatch env a@QName{}  b@NoQ{}       = mname a == defaultmod env && noq a == noq b
+
+
+instance Pretty (QName,Witness) where
+    pretty (n, WClass q p w ws) = text "WClass" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty p) <+>
+                                  equals <+> pretty (wexpr ws (eCall (eQVar w) []))
+    pretty (n, WInst p w ws)    = text "WInst" <+> pretty n <+> parens (pretty p) <+>
+                                  equals <+> pretty (wexpr ws (eQVar w))
+        
 instance Pretty TEnv where
     pretty tenv                 = vcat (map pretty tenv)
 
 instance Pretty Env where
-    pretty env                  = vcat (map pretty (names env))
+    pretty env                  = vcat (map pretty (names env)) $+$
+                                  text "---"  $+$
+                                  vcat (map pretty (wits env)) $+$
+                                  text "."
 
 instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text "::" <+> pretty t
+    pretty (n, NAct q p k te)   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  parens (prettyFunRow p k) <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -89,12 +110,12 @@ instance Pretty (Name,NameInfo) where
                                   nonEmpty parens commaList us
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
-    pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> pretty n <+> parens (commaList ps) <>
+    pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ pretty te)
-    pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> pretty n <> 
+    pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
                                   brackets (commaList $ tybound q) <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ pretty te)
-    pretty (n, NTVar k as ps)   = pretty n <> parens (commaList (as++ps))
+    pretty (n, NTVar k mba)     = pretty n <> maybe empty (parens . pretty) mba
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -115,10 +136,11 @@ instance Subst NameInfo where
     msubst (NSVar t)            = NSVar <$> msubst t
     msubst (NDef t d)           = NDef <$> msubst t <*> return d
     msubst (NSig t d)           = NSig <$> msubst t <*> return d
+    msubst (NAct q p k te)      = NAct <$> msubst q <*> msubst p <*> msubst k <*> msubst te
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q ps te)     = NExt n <$> msubst q <*> msubst ps <*> msubst te
-    msubst (NTVar k as ps)      = NTVar k <$> msubst as <*> msubst ps
+    msubst (NTVar k mba)        = NTVar k <$> msubst mba
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -129,10 +151,11 @@ instance Subst NameInfo where
     tyfree (NSVar t)            = tyfree t
     tyfree (NDef t d)           = tyfree t
     tyfree (NSig t d)           = tyfree t
+    tyfree (NAct q p k te)      = (tyfree q ++ tyfree p ++ tyfree k ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ (tvSelf : tybound q)
-    tyfree (NTVar k as ps)      = tyfree as ++ tyfree ps
+    tyfree (NTVar k mba)        = tyfree mba
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -210,10 +233,11 @@ instance Unalias NameInfo where
     unalias env (NSVar t)           = NSVar (unalias env t)
     unalias env (NDef t d)          = NDef (unalias env t) d
     unalias env (NSig t d)          = NSig (unalias env t) d
+    unalias env (NAct q p k te)     = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te)
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
-    unalias env (NTVar k as ps)     = NTVar k (unalias env as) (unalias env ps)
+    unalias env (NTVar k mba)       = NTVar k (unalias env mba)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
@@ -242,7 +266,7 @@ sigTerms te                 = (nSigs te, nTerms te)
 propSigs                    :: TEnv -> TEnv
 propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
 
-isProp                      :: Decoration -> TSchema -> Bool
+isProp                      :: Deco -> TSchema -> Bool
 isProp Property _           = True
 isProp NoDec sc             = case sctype sc of TFun{} -> False; _ -> True
 isProp _ _                  = False
@@ -288,8 +312,9 @@ setInDecl env               = env{ indecl = True }
 
 addWit                      :: Env -> (QName,Witness) -> Env
 addWit env cwit
-  | cwit `elem` wits env    = env
+  | exists                  = env
   | otherwise               = env{ wits = cwit : wits env }
+  where exists              = any (wmatch env cwit) (wits env)
 
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
@@ -301,19 +326,24 @@ block                       :: [Name] -> Env -> Env
 block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ names env }
 
 define                      :: TEnv -> Env -> Env
-define te env               = foldl addWit env ws
+define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ prune (dom te) (names env) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
-defineTVars (TBind (TV k n) us : q) env
-                            = defineTVars q env{ names = (n, NTVar k (map snd as) (map snd ps)) : names env }
-  where (as,ps)             = mro2 env us
+defineTVars (TBind tv@(TV k n) us : q) env
+                            = foldl addWit env1 ws
+  where env1                = defineTVars q env{ names = (n, NTVar k mba) : names env }
+        (mba,us')           = case mro2 env us of ([],_) -> (Nothing,us); _ -> (Just (head us), tail us)
+        ws                  = [ (NoQ n, WInst p (NoQ (tvarWit tv p)) ws) | u <- us', (ws,p) <- findAncestry env u ]
 
 defineSelf                  :: QName -> Qual -> Env -> Env
 defineSelf qn q env         = defineTVars [TBind tvSelf [tc]] env
   where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
+
+defineSelfOpaque            :: Env -> Env
+defineSelfOpaque env        = defineTVars [TBind tvSelf []] env
 
 
 defineMod                   :: ModName -> TEnv -> Env -> Env
@@ -337,8 +367,10 @@ stateScope                  :: Env -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 tvarScope                   :: Env -> [TVar]
-tvarScope env               = [ TV k n | (n, NTVar k _ _) <- names env ]
+tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
+scoped                      :: TVar -> Env -> Bool
+scoped tv env               = tv `elem` tvarScope env
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
@@ -370,40 +402,56 @@ isMod env ns                = maybe False (const True) (maybeFindMod (ModName ns
 
 tconKind                    :: QName -> Env -> Kind
 tconKind n env              = case findQName n env of
+                                NAct q _ _ _ -> kind KType q
                                 NClass q _ _ -> kind KType q
                                 NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
   where kind k []           = k
         kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
                                 
+isActor                     :: QName -> Env -> Bool
+isActor n env               = case findQName n env of
+                                NAct q p k te -> True
+                                _ -> False
+
+isClass                     :: QName -> Env -> Bool
+isClass n env               = case findQName n env of
+                                NClass q us te -> True
+                                _ -> False
+
 isProto                     :: QName -> Env -> Bool
 isProto n env               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
 findWitness                 :: Env -> QName -> (QName->Bool) -> Maybe Witness
-findWitness env cn f        = listToMaybe [ w | (c,w) <- wits env, c == cn, f $ tcname $ proto w ]
+findWitness env cn f        = listToMaybe [ w | (c,w) <- wits env, qmatch env c cn, f $ tcname $ proto w ]
 
 hasWitness                  :: Env -> QName -> QName -> Bool
-hasWitness env cn pn        =  not $ null $ findWitness env cn (pn==)
+hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn)
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Decoration)                              -- Solver.reduce Sel
-findAttr env tc n           = findIn (([Nothing],te) : [ (w,te') | (w,u) <- wus, let (_,te') = findCon env u ])
-  where (wus,te)            = findCon env tc
-        findIn ((w,te):tes) = case lookup n te of
+findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Deco)
+findAttr env tc n           = findIn [ (w,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
+  where findIn ((w,te):tes) = case lookup n te of
                                 Just (NSig sc d) -> Just (wexpr w, sc, d)
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
-    
-findCon                     :: Env -> TCon -> ([WTCon],TEnv)                                            -- findAttr, mro
+findAncestry                :: Env -> TCon -> [WTCon]
+findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
+
+findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
+findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
+
+findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
   where (q,us,te)           = case findQName n env of
+                                NAct q p k te  -> (q,[],te)
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
@@ -413,12 +461,29 @@ findCon env (TC n ts)
 
 conAttrs                    :: Env -> QName -> [Name]
 conAttrs env qn             = case findQName qn env of
+                                NAct q p k te  -> dom te
                                 NClass q us te -> dom te
                                 NProto q us te -> dom te
                                 NExt n q us te -> dom te
 
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
+
+
+-- TVar queries ------------------------------------------------------------------------------------------------------------------
+
+findVBound                  :: Env -> TVar -> Maybe TCon
+findVBound env tv           = case findName (tvname tv) env of
+                                NTVar _ mba -> mba
+                                _ -> err1 tv "Unknown type variable"
+
+findVAttr                   :: Env -> TVar -> Name -> Maybe (Expr->Expr,TSchema,Deco)
+findVAttr env tv n          = case findVBound env tv of
+                                Just a -> findAttr env a n
+                                Nothing -> Nothing
+
+tvarWit                     :: TVar -> TCon -> Name
+tvarWit tv p                = Derived (tvname tv) (nstr $ deriveQ $ tcname p)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------
@@ -440,6 +505,7 @@ instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | TBind v us <- q, u <- us ]
       where q               = case findQName n env of
+                                NAct q p k te  -> q
                                 NClass q us te -> q
                                 NProto q us te -> q
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
@@ -464,6 +530,7 @@ instance WellFormed TBind where
 
 mro2 env []                             = ([], [])
 mro2 env (u:us)
+  | isActor (tcname u) env              = err1 u "Actor subclassing not allowed"
   | isProto (tcname u) env              = ([], mro env (u:us))
   | otherwise                           = (mro env [u], mro env us)
 
@@ -488,26 +555,14 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
     equal                               :: WTCon -> WTCon -> Bool
     equal (w1,u1) (w2,u2)
-      | u1 == u2                        = True
-      | tcname u1 == tcname u2          = err2 [u1,u2] "Inconsistent protocol instantiations"
+      | headmatch                       = tcargs u1 == tcargs u2 || err2 [u1,u2] "Inconsistent protocol instantiations"
       | otherwise                       = False
+      where headmatch                   = qmatch env (tcname u1) (tcname u2)
 
     absent                              :: WTCon -> [WTCon] -> Bool
     absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
 
 
-
--- TVar queries ------------------------------------------------------------------------------------------------------------------
-
-findClassBound              :: TVar -> Env -> [TCon]
-findClassBound tv env       = case findName (tvname tv) env of
-                                NTVar _ as us -> as
-                                _ -> []
-
-findProtoBound              :: TVar -> Env -> [TCon]
-findProtoBound tv env       = case findName (tvname tv) env of
-                                NTVar _ as ps -> ps
-                                _ -> []
 
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
@@ -527,6 +582,8 @@ instWitness env ts wit      = case wit of
                                  WClass q p w ws -> do
                                     cs <- qualConstraints env q ts
                                     return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (eQVar w) $ wvars cs))
+                                 WInst p w ws ->
+                                    return ([], p, wexpr ws (eQVar w))
 
 qualConstraints             :: Env -> Qual -> [Type] -> TypeM Constraints
 qualConstraints env q ts    = do let s = tybound q `zip` ts
@@ -598,8 +655,9 @@ importAll m te env          = define (impNames m te) env
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
   where 
-    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NAct _ _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
     imp (n, NExt _ _ _ _)   = Nothing
     imp (n, NAlias _)       = Just (n, NAlias (QName m n))
     imp (n, NVar t)         = Just (n, NAlias (QName m n))
@@ -747,24 +805,22 @@ instance Subst TSchema where
                     newvars         = tyfree (rng s)
                     clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
-                    freshvars       = tvarSupply \\ avoidvars
-                    renaming_s      = clashvars `zip` map (TVar NoLoc) freshvars
-                    q'              = [ TBind (subst renaming_s v) (subst renaming_s cs) | TBind v cs <- q ]
-                    t'              = subst renaming_s t
+                    renaming        = tvarSubst clashvars avoidvars
+                    q'              = [ TBind (subst renaming v) (subst renaming cs) | TBind v cs <- q ]
+                    t'              = subst renaming t
 
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t)         = tybound q
 
 msubstRenaming                      :: Subst a => a -> TypeM (Substitution,Substitution)
 msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey relevant <$> getSubstitution
-                                         return $ (dom s `zip` subst (renaming_s  (tyfree (rng s))) (rng s),renaming_s (tyfree (rng s)))
+                                         return $ (dom s `zip` subst (renaming (tyfree (rng s))) (rng s),renaming (tyfree (rng s)))
       where relevant k _            = k `elem` vs0
             vs0                     = tyfree c
             vs                      = tybound c
-            renaming_s newvars      = clashvars `zip` map tVar freshvars
+            renaming newvars        = tvarSubst clashvars avoidvars
               where clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
-                    freshvars       = tvarSupply \\ avoidvars
 
 testSchemaSubst = do
     putStrLn ("t:  " ++ render (pretty t))
@@ -865,24 +921,24 @@ instance Subst Decl where
                                              return $ Class l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
     msubst d@(Extension l n q bs ss)    = do (s,ren) <- msubstRenaming d
                                              return $ Extension l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
-    msubst d@(Def l n q p k a ss dec)   = do (s,ren) <- msubstRenaming d
+    msubst d@(Def l n q p k a ss de fx) = do (s,ren) <- msubstRenaming d
                                              return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                              (subst s (subst ren a)) (subst s (subst ren ss)) dec
-    msubst d@(Actor l n q p k a ss)     = do (s,ren) <- msubstRenaming d
+                                                              (subst s (subst ren a)) (subst s (subst ren ss)) de (subst s fx)
+    msubst d@(Actor l n q p k ss)       = do (s,ren) <- msubstRenaming d
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                                (subst s (subst ren a)) (subst s (subst ren ss))
+                                                                (subst s (subst ren ss))
 
-    tybound (Protocol l n q bs ss)  = tvSelf : tybound q
-    tybound (Class l n q bs ss)     = tvSelf : tybound q
-    tybound (Extension l n q bs ss) = tvSelf : tybound q
-    tybound (Def l n q p k a ss d)  = tybound q
-    tybound (Actor l n q p k a ss)  = tybound q
+    tybound (Protocol l n q ps b)   = tvSelf : tybound q
+    tybound (Class l n q ps b)      = tvSelf : tybound q
+    tybound (Extension l n q ps b)  = tvSelf : tybound q
+    tybound (Def l n q p k t b d x) = tybound q
+    tybound (Actor l n q p k b)     = tybound q
     
-    tyfree (Protocol l n q bs ss)   = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
-    tyfree (Class l n q bs ss)      = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
-    tyfree (Extension l n q bs ss)  = nub (tyfree q ++ tyfree bs ++ tyfree ss) \\ (tvSelf : tybound q)
-    tyfree (Def l n q p k a ss d)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
-    tyfree (Actor l n q p k a ss)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree a) \\ tybound q
+    tyfree (Protocol l n q ps b)   = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Class l n q ps b)      = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Extension l n q ps b)  = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
+    tyfree (Def l n q p k t b d x) = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b ++ tyfree t ++ tyfree x) \\ tybound q
+    tyfree (Actor l n q p k b)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ tybound q
     
 instance Subst Stmt where
     msubst (Decl l ds)              = Decl l <$> msubst ds
@@ -919,7 +975,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
-                                    | DecorationMismatch Name TSchema Decoration
+                                    | DecorationMismatch Name TSchema Deco
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
                                     | NoSelInstByClass Name TCon
@@ -927,6 +983,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
+                                    | NoUnify Type Type
                                     deriving (Show)
 
 instance Control.Exception.Exception TypeError
@@ -946,6 +1003,7 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
+    loc (NoUnify t1 t2)             = loc t1
 
 typeError err                       = (loc err,render (expl err))
   where
@@ -962,6 +1020,7 @@ typeError err                       = (loc err,render (expl err))
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
 
 checkerError (FileNotFound n)       = (loc n, "Type interface file not found for " ++ prstr n)
@@ -1013,4 +1072,5 @@ noMut n                             = Control.Exception.throw $ NoMut n
 lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
 lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c
+noUnify t1 t2                       = Control.Exception.throw $ NoUnify t1 t2
 

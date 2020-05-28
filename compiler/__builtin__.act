@@ -12,6 +12,60 @@ class complex:
 class bool:
   pass
 
+class range:
+  pass
+
+class BaseException:
+  pass
+
+class SystemExit (BaseException):
+  pass
+
+class KeyboardInterrupt (BaseException):
+  pass 
+
+class Exception (BaseException):
+  pass
+
+class AssertionError (Exception):
+  pass
+
+class LookupError (Exception):
+  pass
+
+class IndexError (LookupError):
+  pass
+
+class KeyError (LookupError):
+  pass
+
+class MemoryError (Exception):
+  pass
+
+class OSError (Exception):
+  pass
+
+class RuntimeError (Exception):
+  pass
+
+class NotImplementedError (RuntimeError):
+  pass
+
+class ValueError (Exception):
+  pass
+
+class Slice:
+  pass
+  
+class list[A] ():
+  copy : () -> list[A]
+
+class Iterator[A] ():
+  __next__     : () -> A
+  
+protocol Iterable[A]:
+  __iter__     : () -> Iterator[A]
+  
 class str:
   capitalize   : () -> str
   center       : (int,str) -> str
@@ -29,7 +83,7 @@ class str:
   isspace      : () -> bool
   istitle      : () -> bool
   isupper      : () -> bool
-  join         : (Iterator[str]) -> str
+  join         : (Iterable[str]) -> str
   ljust        : (int,str) -> str
   lower        : () -> str
   lstrip       : (str) -> str
@@ -46,15 +100,6 @@ class str:
   strip        : (str) -> str
   upper        : () -> str
   str_zfill    : (str,int) -> str
-
-class Slice:
-  pass
-  
-class Iterator[A] ():
-  next : () -> A
-  
-class list[A] ():
-  copy : () -> list[A]
 
 class Msg[A] ():
   pass
@@ -101,101 +146,6 @@ class dict[A(Hashable),B] ():
 
 class set[A(Hashable)] ():
   pass
-
-protocol Boolean:
-  __bool__   : () -> bool
-
-extension int (Boolean):
-  def __bool__(self):
-    return self != 0
-
-extension list[A] (Boolean):
-  def __bool__(self):
-    return self.__len__() > 0
-
-
-## Collection protocols ############################################################################
-
-protocol Indexed[A (Eq),B]:
-  __getitem__  : (A) -> B
-  __setitem__  : (A,B) -> None 
-  __delitem__  : (A) -> None
-
-protocol Sliceable[A] (Indexed[int,A]):
-  __getslice__ : (Slice) -> Self
-  __setslice__ : (Slice,Iterable[A]) -> None
-  __delslice__ : (Slice) -> None
-  
-protocol Iterable[A]:
-  __iter__     : () -> Iterator[A]
-  
-protocol Collection[A] (Iterable[A]):
-  @staticmethod
-  __fromiter__ : (Iterable[A]) -> Self 
-  __len__      : () -> int
-  
-protocol Container[A(Eq)] (Collection[A]):
-  __contains__    : (A) -> bool  
-  __containsnot__ : (A) -> bool
-
-
-
-#   Indexed         Iterable
-#    |               |
-#    |               |
-#   Sliceable       Collection      Plus
-#    |               |               |
-#    |               |               |
-#   Sequence <-------- <--------------
-
-protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
-  __reversed__ : () -> Iterator[A] 
-  insert      : (int,A) -> None
-  append      : (A) -> None   
-  reverse     : () -> None       
-
-
-
-#   Iterable
-#    |
-#    |
-#   Collection
-#    |
-#    |
-#   Container       Indexed
-#    |               |
-#    |               |
-#   Mapping <---------
-
-protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
-  get         : (A,B) -> B
-  keys        : () -> Iterator[A]
-  values      : () -> Iterator[B]
-  items       : () -> Iterator[(A,B)]
-  update      : (Iterable[(A,B)]) -> None  
-  popitem     : () -> (A,B)
-  setdefault  : (A,B) -> None
-
-
-
-#   Iterable
-#    |
-#    |
-#   Collection      Eq
-#    |               |
-#    |               |
-#   Container       Ord             Logical         Minus
-#    |               |               |               |
-#    |               |               |               |
-#   Set <------------- <-------------- <--------------
-
-protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
-  @staticmethod
-  isdisjoint  : (Self,Self) -> bool
-  add         : (A) -> None  
-  discard     : (A) -> None  
-  pop         : () -> A 
-
 
 ## Number protocols ################################################################################
 
@@ -263,7 +213,97 @@ protocol Integral (Rational,Logical):
 
   __invert__   : () -> Self
 
-## Extensions ######################################################################################
+
+## Number protocol extensions ######################################################################
+
+extension int (Integral):pass
+extension int (Hashable):pass
+
+extension float (Real):pass
+extension float (Hashable):pass
+
+
+## Collection protocols ############################################################################
+
+protocol Indexed[A (Eq),B]:
+  __getitem__  : (A) -> B
+  __setitem__  : (A,B) -> None 
+  __delitem__  : (A) -> None
+
+protocol Sliceable[A] (Indexed[int,A]):
+  __getslice__ : (Slice) -> Self
+  __setslice__ : (Slice,Iterable[A]) -> None
+  __delslice__ : (Slice) -> None
+  
+protocol Collection[A] (Iterable[A]):
+  @staticmethod
+#  __fromiter__ : (Iterable[A]) -> Self 
+  __len__      : () -> int
+  
+protocol Container[A(Eq)] (Collection[A]):
+  __contains__    : (A) -> bool  
+  __containsnot__ : (A) -> bool
+
+
+
+#   Indexed         Iterable
+#    |               |
+#    |               |
+#   Sliceable       Collection      Plus
+#    |               |               |
+#    |               |               |
+#   Sequence <-------- <--------------
+
+protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
+  __reversed__ : () -> Iterator[A] 
+  insert      : (int,A) -> None
+  append      : (A) -> None   
+  reverse     : () -> None       
+
+
+
+#   Iterable
+#    |
+#    |
+#   Collection
+#    |
+#    |
+#   Container       Indexed
+#    |               |
+#    |               |
+#   Mapping <---------
+
+protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
+  get         : (A,B) -> B
+  keys        : () -> Iterator[A]
+  values      : () -> Iterator[B]
+  items       : () -> Iterator[(A,B)]
+  update      : (Iterable[(A,B)]) -> None  
+  popitem     : () -> (A,B)
+  setdefault  : (A,B) -> None
+
+
+
+#   Iterable
+#    |
+#    |
+#   Collection      Eq
+#    |               |
+#    |               |
+#   Container       Ord             Logical         Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Set <------------- <-------------- <--------------
+
+protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
+  @staticmethod
+  isdisjoint  : (Self,Self) -> bool
+  add         : (A) -> None  
+  discard     : (A) -> None  
+  pop         : () -> A 
+
+
+## Collection protocol extensions ########################################
 
 extension list[A] (Sequence[A]): pass
 
@@ -286,14 +326,70 @@ extension str (Plus): pass
 extension str(Hashable): pass
 
 
-extension int (Integral):pass
-extension int (Hashable):pass
-
-extension float (Real):pass
-extension float (Hashable):pass
-
 ## Builtin functions #####################################################
 
 def abs(x : Complex) -> Real:
     return x.__abs__()
-    
+
+def all(it : Iterable[A]) -> bool:
+    for x in it:
+        if not x:
+            return False
+    return True
+
+def any(it : Iterable[A]) -> bool:
+    for x in it:
+        if x:
+            return True
+    return False
+
+ascii : (*A) -> str
+
+bin : (Integral) -> str
+
+chr : (Integral) -> str
+
+def divmod(a : Integral, b : Integral) -> (Integral, Integral): 
+  return Integral.__divmod__(a,b)
+
+enumerate : (Iterable[A],?int) -> Iterable[(A,int)]
+
+filter : (?((A) -> B), Iterable[A]) -> Iterator[B]
+
+#def float(x : Real) -> float:
+#   return x.__float__()
+
+hex : (Integral) -> str
+
+def iter(x : Iterable[A]) -> Iterator[A]:
+  return x.__iter__()
+
+def len(x : Collection[A]) -> int:
+  return x.__len__()
+
+map : ((A) -> B,Iterable[A]) -> Iterator[B]
+
+max : [A(Ord)] => (Iterable[A],?A) -> A 
+
+min : [A(Ord)] => (Iterable[A],?A) -> A 
+
+def next(x : Iterator[A]) -> A:
+  return x.__next__()
+
+ord : (str) -> int
+
+def pow(a : Complex, b : Complex) -> Complex:
+  return Complex.__pow__(a,b)
+
+print :  (*A) -> None
+
+def reversed(seq : Sequence[A]) -> Iterator[A]:
+  return seq.__reversed__()
+
+round : (x : Real,n : ?int) -> Real
+
+sorted : [A(Ord)] => (Iterable[A]) -> list[A]
+
+sum : [A(Plus)] => (Iterable[A],?A) -> A
+
+zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]

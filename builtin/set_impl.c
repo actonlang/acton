@@ -9,15 +9,6 @@ This implementation of sets is an adaptation of CPython's set implementation.
 
 */
 
-// Types ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void $set_init($set set, $Hashable hashwit, $Iterable$opaque it);
-
-
-// Maybe we should  offer union, intersection and symmetric difference under those names.
-struct $set$class $set$methods = {"",UNASSIGNED,NULL,$set_init,$set_serialize,$set_deserialize,$set_copy}; 
-
-
 #define PERTURB_SHIFT 5
 #define MIN_SIZE 8
 
@@ -25,6 +16,90 @@ static $WORD _dummy;
 #define dummy (&_dummy)
 
 static $Iterator $set_iter_entry($set set);
+
+// General methods ///////////////////////////////////////////////////////////////////////////////////
+
+void $set_init($set set, $Hashable hashwit, $Iterable$opaque it) {
+  set->numelements = 0;
+  set->fill = 0;
+  set->mask = MIN_SIZE-1;
+  set->finger = 0;
+  set->table = malloc(MIN_SIZE*sizeof($setentry));
+  memset(set->table,0,MIN_SIZE*sizeof($setentry));
+  if (it) {
+    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+    $WORD nxt;
+    while((nxt = iter->$class->__next__(iter))) {
+      $set_add(set,hashwit,nxt);
+    }
+  }
+}
+
+$bool $set_bool($set self) {
+  return to$bool(self->numelements>0);
+}
+
+$str $set_str($set self) {
+  $list s2 = $list_new(self->numelements);
+  $Iterator$set iter = $NEW($Iterator$set,self);
+  $Initializable elem;
+  for (int i=0; i<self->numelements; i++) {
+    elem = ($Initializable)iter->$class->__next__(iter);
+    $list_append(s2,elem->$class->__str__(elem));
+  }
+  return $str_join_par('{',s2,'}');
+}
+
+void $set_serialize($set self, $Serial$state state) {
+  $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+  if (prevkey) {
+      $val_serialize(-SET_ID,&prevkey->val,state);
+    return;
+  }
+  $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+  $ROW row = $add_header(SET_ID,4,state);
+  row->blob[0] = ($WORD)self->numelements;
+  row->blob[1] = ($WORD)self->fill;
+  row->blob[2] = ($WORD)self->mask;
+  row->blob[3] = ($WORD)self->finger;
+  for (long i=0; i<=self->mask; i++) {
+    $setentry *entry = &self->table[i];
+    $step_serialize(to$int(entry->hash),state);
+    $step_serialize(entry->key,state);
+  }
+}
+ 
+$set $set_deserialize ($Serial$state state) {
+  $ROW this = state->row;
+  state->row = this->next;
+  state->row_no++;
+  if (this->class_id < 0) {
+    return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
+  } else {
+    $set res = malloc(sizeof(struct $set));
+    $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
+    res->$class = &$set$methods;
+    res->numelements = (long)this->blob[0];
+    res->fill = (long)this->blob[1];
+    res->mask = (long)this->blob[2];
+    res->finger = (long)this->blob[3];
+    res->table = malloc((res->mask+1)*sizeof($setentry));
+    memset(res->table,0,(res->mask+1)*sizeof($setentry));
+    for (int i=0; i<=res->mask;i++) {
+      $setentry *entry = &res->table[i];
+      entry->hash = from$int(($int)$step_deserialize(state));
+      entry->key = $step_deserialize(state);
+        if (entry->hash==-1)
+          entry->key = dummy;
+    }
+    return res;
+  }
+}
+
+
+
+// Maybe we should  offer union, intersection and symmetric difference under those names.
+struct $set$class $set$methods = {"",UNASSIGNED,NULL,$set_init,$set_bool,$set_str,$set_serialize,$set_deserialize,$set_copy}; 
 
 
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
@@ -124,23 +199,6 @@ static int $set_contains_entry($set set,  $Hashable hashwit, $WORD elem, long ha
   return $set_lookkey(set, hashwit, elem, hash)->key != NULL;
 }
 
-void $set_init($set set, $Hashable hashwit, $Iterable$opaque it) {
-  set->numelements = 0;
-  set->fill = 0;
-  set->mask = MIN_SIZE-1;
-  set->finger = 0;
-  set->table = malloc(MIN_SIZE*sizeof($setentry));
-  memset(set->table,0,MIN_SIZE*sizeof($setentry));
-  if (it) {
-    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-    $WORD nxt;
-    while((nxt = iter->$class->__next__(iter))) {
-      $set_add(set,hashwit,nxt);
-    }
-  }
-}
-
-
 static void $set_add_entry($set set, $Hashable hashwit, $WORD key, long hash) {
   $setentry *freeslot;
   $setentry *entry;
@@ -198,9 +256,10 @@ static void $set_add_entry($set set, $Hashable hashwit, $WORD key, long hash) {
 
 
 $set $set_copy($set set, $Hashable hashwit) {
-  $set res = $NEW($set,hashwit,NULL);
-  memcpy(res,set,sizeof(*set));
-  memcpy(res->table,set->table,sizeof(*set->table));
+  $set res = malloc(sizeof(struct $set));
+  memcpy(res,set,sizeof(struct $set));
+  res->table = malloc((set->mask+1)*sizeof($setentry));
+  memcpy(res->table,set->table,(set->mask+1)*sizeof($setentry));
   return res;
 }
 
@@ -374,10 +433,6 @@ int $set_isdisjoint($Hashable hashwit, $set set, $set other) {
 
 // Collection /////////////////////////////////////////////////////////////////////////////////////////////
 
-$set $set_fromiter($Hashable wit, $Iterable$opaque it) {
-  return $NEW($set,wit,it);
-}
-
 long $set_len($set set) {
   return set->numelements;
 }
@@ -428,6 +483,16 @@ void $Iterator$set_init($Iterator$set self, $set set) {
   self->nxt = 0;
 }
 
+$bool $Iterator$set_bool($Iterator$set self) {
+  return $true;
+}
+
+$str $Iterator$set_str($Iterator$set self) {
+  char *s;
+  asprintf(&s,"<set keys iterator object at %p>",self);
+  return from$UTF8(s);
+}
+
 void $Iterator$set_serialize($Iterator$set self, $Serial$state state) {
   $step_serialize(self->src,state);
   $step_serialize(to$int(self->nxt),state);
@@ -440,7 +505,7 @@ $Iterator$set $Iterator$set$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$set$class $Iterator$set$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,
+struct $Iterator$set$class $Iterator$set$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,$Iterator$set_bool,$Iterator$set_str,
                                                       $Iterator$set_serialize, $Iterator$set$_deserialize, $Iterator$set_next};
 
 
@@ -462,50 +527,3 @@ $set $set_difference($Hashable hashwit, $set set, $set other) {
   return res;
 }
  
-// Serialization ///////////////////////////////////////////////////////////////////////////////////
-
-void $set_serialize($set self, $Serial$state state) {
-  $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
-  if (prevkey) {
-      $val_serialize(-SET_ID,&prevkey->val,state);
-    return;
-  }
-  $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
-  $ROW row = $add_header(SET_ID,4,state);
-  row->blob[0] = ($WORD)self->numelements;
-  row->blob[1] = ($WORD)self->fill;
-  row->blob[2] = ($WORD)self->mask;
-  row->blob[3] = ($WORD)self->finger;
-  for (long i=0; i<=self->mask; i++) {
-    $setentry *entry = &self->table[i];
-    $step_serialize(to$int(entry->hash),state);
-    $step_serialize(entry->key,state);
-  }
-}
- 
-$set $set_deserialize ($Serial$state state) {
-  $ROW this = state->row;
-  state->row = this->next;
-  state->row_no++;
-  if (this->class_id < 0) {
-    return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
-  } else {
-    $set res = malloc(sizeof(struct $set));
-    $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
-    res->$class = &$set$methods;
-    res->numelements = (long)this->blob[0];
-    res->fill = (long)this->blob[1];
-    res->mask = (long)this->blob[2];
-    res->finger = (long)this->blob[3];
-    res->table = malloc((res->mask+1)*sizeof($setentry));
-    memset(res->table,0,(res->mask+1)*sizeof($setentry));
-    for (int i=0; i<=res->mask;i++) {
-      $setentry *entry = &res->table[i];
-      entry->hash = from$int(($int)$step_deserialize(state));
-      entry->key = $step_deserialize(state);
-        if (entry->hash==-1)
-          entry->key = dummy;
-    }
-    return res;
-  }
-}

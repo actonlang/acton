@@ -73,7 +73,7 @@ instance Deact Stmt where
                                          Assign l <$> deact env ps <*> deact env e
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
-                                         let lambda = Lambda l0 PosNIL KwdNIL e2'
+                                         let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct tWild)
                                          return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e1' $ PosArg lambda PosNil) KwdNil
     deact env (Decl l ds)           = Decl l <$> deactD env ds
     deact env (Signature l ns t d)  = return $ Signature l ns t d
@@ -82,13 +82,16 @@ deactD env []                       = return []
 deactD env (d@Actor{} : ds)         = (++) <$> deactA env d <*> deactD env ds
 deactD env (d : ds)                 = (:) <$> deact env d <*> deactD env ds
 
-deactA env (Actor l n q p k t b)    = do (bint,sext) <- withStore (deact env1 b)
+deactA env (Actor l n q p k b)      = do (bint,sext) <- withStore (deact env1 b)
                                          let (ssigs,sext') = partition isSig sext
-                                             _init_ = Def l0 initKW [] (addSelf p) k t (create:copies) NoDec
+                                             st     = head (tvarSupply \\ tybound q)
+                                             q'     = TBind st [] : q
+                                             fx     = fxAct $ tVar st
+                                             _init_ = Def l0 initKW [] (addSelf p) k Nothing (create:copies) NoDec fx
                                              create = Update l0 [selfPat selfKW] (Call l0 (Var l0 (NoQ n')) (parToArg p) KwdNil)
                                              copies = [ Update l0 [selfPat n] (Dot l0 (Dot l0 (Var l0 (NoQ selfKW)) selfKW) n) | n <- consts ]
                                              consts = bound b \\ statedefs b \\ bound ds
-                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k t ss NoDec
+                                             _init' = Def l0 initKW [] (PosPar selfKW Nothing Nothing p) k Nothing ss NoDec fx
                                              (ds,ss) = partition isDecl bint
                                              extern = Class l n q [] (reverse sext' ++ [Decl l0 [_init_]])
                                              intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)
@@ -109,12 +112,14 @@ parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQ n)) (parToArg p)
 asyncCall env n p                   = Call l0 (Var l0 primASYNC) (PosArg selfSelf (PosArg clos PosNil)) KwdNil
   where selfSelf                    = Dot l0 (Var l0 (NoQ selfKW)) selfKW
         meth                        = Dot l0 selfSelf n
-        clos                        = Lambda l0 PosNIL KwdNIL $ Call l0 meth (parToArg p) KwdNil
+        clos                        = Lambda l0 PosNIL KwdNIL (Call l0 meth (parToArg p) KwdNil) (fxAct tWild)
 
 awaitCall env n p                   = Call l0 (Var l0 primAWAIT) (PosArg (asyncCall env n p) PosNil) KwdNil
 
 instance Deact Decl where
-    deact env (Def l n q p k t b m) = Def l n q p k t <$> deact env1 b <*> return m
+    deact env (Def l n q p k t b d x)
+                                    = do b' <- deact env1 b
+                                         return $ Def l n q p k t b' d x
       where env1                    = hideLocals (bound (p,k) ++ bound b) env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
     deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
@@ -144,7 +149,7 @@ instance Deact Expr where
     deact env (UnOp l op e)         = UnOp l op <$> deact env e 
     deact env (Dot l e nm)          = Dot l <$> deact env e <*> return nm
     deact env (DotI l e i t)        = DotI l <$> deact env e <*> return i <*> return t
-    deact env (Lambda l ps ks e)    = Lambda l ps ks <$> deact env e
+    deact env (Lambda l ps ks e fx) = Lambda l ps ks <$> deact env e <*> return fx
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es ks)       = Tuple l <$> deact env es <*> deact env ks

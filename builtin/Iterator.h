@@ -5,6 +5,8 @@ struct $Iterator$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator);
+  $bool (*__bool__)($Iterator);
+  $str (*__str__)($Iterator);
   void (*__serialize__)($Iterator,$Serial$state);
   $Iterator (*__deserialize__)($Serial$state);
   $WORD (*__next__)($Iterator);

@@ -3,6 +3,8 @@ struct $BaseException$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($BaseException,$str);
+  $bool (*__bool__)($BaseException);
+  $str (*__str__)($BaseException);
   void (*__serialize__)($BaseException, $Serial$state);
   $BaseException (*__deserialize__)($Serial$state);
 };
@@ -21,6 +23,8 @@ struct $SystemExit$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($SystemExit,$str);
+  $bool (*__bool__)($SystemExit);
+  $str (*__str__)($SystemExit);
   void (*__serialize__)($SystemExit,$Serial$state);
   $SystemExit (*__deserialize__)($Serial$state);
 };
@@ -39,6 +43,8 @@ struct $KeyboardInterrupt$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($KeyboardInterrupt,$str);
+  $bool (*__bool__)($KeyboardInterrupt);
+  $str (*__str__)($KeyboardInterrupt);
   void (*__serialize__)($KeyboardInterrupt,$Serial$state);
   $KeyboardInterrupt (*__deserialize__)($Serial$state);
 };
@@ -57,6 +63,8 @@ struct $Exception$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Exception,$str);
+  $bool (*__bool__)($Exception);
+  $str (*__str__)($Exception);
   void (*__serialize__)($Exception,$Serial$state);
   $Exception (*__deserialize__)($Serial$state);
 };
@@ -75,6 +83,8 @@ struct $AssertionError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($AssertionError,$str);
+  $bool (*__bool__)($AssertionError);
+  $str (*__str__)($AssertionError);
   void (*__serialize__)($AssertionError,$Serial$state);
   $AssertionError (*__deserialize__)($Serial$state);
 };
@@ -93,6 +103,8 @@ struct $LookupError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($LookupError,$str);
+  $bool (*__bool__)($LookupError);
+  $str (*__str__)($LookupError);
   void (*__serialize__)($LookupError,$Serial$state);
   $LookupError (*__deserialize__)($Serial$state);
 };
@@ -111,6 +123,8 @@ struct $IndexError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($IndexError,$str);
+  $bool (*__bool__)($IndexError);
+  $str (*__str__)($IndexError);
   void (*__serialize__)($IndexError, $Serial$state);
   $IndexError (*__deserialize__)($Serial$state);
 };
@@ -129,6 +143,8 @@ struct $KeyError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($KeyError,$str);
+  $bool (*__bool__)($KeyError);
+  $str (*__str__)($KeyError);
   void (*__serialize__)($KeyError,$Serial$state);
   $KeyError (*__deserialize__)($Serial$state);
 };
@@ -147,6 +163,8 @@ struct $MemoryError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($MemoryError,$str);
+  $bool (*__bool__)($MemoryError);
+  $str (*__str__)($MemoryError);
   void (*__serialize__)($MemoryError, $Serial$state);
   $MemoryError (*__deserialize__)($Serial$state);
 };
@@ -165,6 +183,8 @@ struct $OSError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($OSError,$str);
+  $bool (*__bool__)($OSError);
+  $str (*__str__)($OSError);
   void (*__serialize__)($OSError, $Serial$state);
   $OSError (*__deserialize__)($Serial$state);
 };
@@ -183,6 +203,8 @@ struct $RuntimeError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($RuntimeError,$str);
+  $bool (*__bool__)($RuntimeError);
+  $str (*__str__)($RuntimeError);
   void (*__serialize__)($RuntimeError, $Serial$state);
   $RuntimeError (*__deserialize__)($Serial$state);
 };
@@ -201,6 +223,8 @@ struct $NotImplementedError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($NotImplementedError,$str);
+  $bool (*__bool__)($NotImplementedError);
+  $str (*__str__)($NotImplementedError);
   void (*__serialize__)($NotImplementedError,$Serial$state);
   $NotImplementedError (*__deserialize__)($Serial$state);
 };
@@ -219,6 +243,8 @@ struct $ValueError$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($ValueError,$str);
+  $bool (*__bool__)($ValueError);
+  $str (*__str__)($ValueError);
   void (*__serialize__)($ValueError, $Serial$state);
   $ValueError (*__deserialize__)($Serial$state);
 };

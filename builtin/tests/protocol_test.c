@@ -16,20 +16,13 @@ void printSequence($Sequence wit, $WORD seq) {
 }
 
 $list range($Sequence wit, long a, long b) {
-  $list res = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
+  $list res = $NEW($list,NULL);
   for (long i=a; i<b; i++)
     wit->$class->append(wit,res,to$int(i));
   return res;
 }
 
-/*
-$list fromto(long a, long b) {
-  $list res = $list_fromiter(NULL);
-  for (long i = a; i<b; i++)
-    $list_append(res,to$int(i));
-  return res;
-}
-*/
+
 $WORD concat($Collection wit1, $Indexed wit2, $Plus wit3, $WORD s, $WORD zero) {
   $WORD res = zero;
   $int len = wit1->$class->__len__(wit1,s);
@@ -50,8 +43,8 @@ Plus$class Plus$int_instance = &Plus$int_struct;
 int main() {
   $Sequence wit = ($Sequence)$Sequence$list$witness;
   // first we use concat for list concatenation
-  $WORD lst = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
-  $WORD emptylist = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
+  $WORD lst = $NEW($list,NULL);
+  $WORD emptylist = $NEW($list,NULL);
   for (long i = 1; i< 10; i++) {
     wit->$class->append(wit,lst,range(wit,i,2*i));
   }

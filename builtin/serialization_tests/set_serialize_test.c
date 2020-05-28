@@ -5,7 +5,7 @@
 int main() {
   $register_builtin();
   $Hashable wit = ($Hashable)$Hashable$int$witness;
-  $set s = $set_fromiter(wit,NULL);
+  $set s = $NEW($set,wit,NULL);
   for (long j = 0; j < 100; j++)
     $set_add(s,wit,to$int(j*j));
   $serialize_file(($Serializable)s,"test6.bin");

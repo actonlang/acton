@@ -8,11 +8,15 @@
 
 //  Method tables ///////////////////////////////////////////////////////////////
 
-// String-specific methods
+// General methods
 
 void $str_init($str, char*);
+$bool $str_bool($str);
+$str $str_str($str);
 void $str_serialize($str,$Serial$state);
 $str $str_deserialize($Serial$state);
+
+// String-specific methods
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
@@ -34,7 +38,7 @@ $bool $str_isprintable($str s);
 $bool $str_isspace($str s);
 $bool $str_istitle($str s);
 $bool $str_isupper($str s);
-$str $str_join($str sep, $Iterator iter);
+$str $str_join($str sep, $Iterable$opaque it);
 $str $str_ljust($str s, int width, $str fill); 
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
@@ -53,10 +57,10 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",UNASSIGNED,NULL,$str_init, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith, $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha,
-   $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace, $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip,
-   $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust, $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip,
-   $str_upper, $str_zfill};
+  {"",UNASSIGNED,NULL, $str_init, $str_bool, $str_str, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith,
+   $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
+   $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
+   $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
 
 //static $str$methods $str_methods = &$str_table;
 
@@ -71,7 +75,6 @@ int $str_ge($str,$str);
 
 $Iterator $str_iter($str);
 
-$str $str_fromiter($Iterator);
 $int $str_len($str str);
 
 int $str_contains ($str, $str);
@@ -110,10 +113,6 @@ $bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
 
 $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
-}
-
-$str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque it) {
-  return $str_fromiter(it->proto->$class->__iter__(it->proto,it->impl));
 }
 
 $int $Container$str$__len__ ($Container$str wit, $str str) {
@@ -177,7 +176,7 @@ struct $Ord$str$class  $Ord$str$methods = {"", UNASSIGNED, NULL,(void (*)($Ord$s
 struct $Ord$str $Ord$str_instance = {&$Ord$str$methods};
 $Ord$str $Ord$str$witness = &$Ord$str_instance;
 
-struct $Container$str$class  $Container$str$methods = {"",UNASSIGNED, NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__fromiter__, $Container$str$__len__, $Container$str$__containsnot__};
+struct $Container$str$class  $Container$str$methods = {"",UNASSIGNED, NULL,$Container$str$__init__,$Container$str$__iter__, $Container$str$__len__, $Container$str$__containsnot__};
 struct $Container$str $Container$str_instance = {&$Container$str$methods,($Eq)&$Ord$str_instance};
 $Container$str $Container$str$witness = &$Container$str_instance;
 
@@ -515,12 +514,6 @@ $str $str_add($str s, $str t) {
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
-
-// this should be eliminated
-$str $str_fromiter($Iterator it) {
-  return NULL;
-}
-         
          
 $int $str_len($str s) {
   $int res = to$int(s->nchars);
@@ -612,7 +605,9 @@ $str $str_getslice($str s, $Slice slc) {
  return res;
 }
 
-// Serialization ////////////////////////////////////////////////////////////// 
+
+
+// General methods ////////////////////////////////////////////////////////////// 
 
 void $str_init($str self, char *str) {
   int nbytes = 0;
@@ -638,11 +633,22 @@ void $str_init($str self, char *str) {
   }
 }
 
+$bool $str_bool($str s) {
+  return to$bool(s->nchars > 0);
+};
+
+$str $str_str($str s) {
+  $list s2 = $list_new(1);
+  $list_append(s2,s);
+  return $str_join_par('\'',s2,'\'');
+}
+
+
 void $str_serialize($str str,$Serial$state state) {
-  int nWords = str->nbytes/sizeof($WORD) + 1; // # $WORDS needed to store str->str, including terminating 0.
+  int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
   $ROW row = $add_header(STR_ID,2+nWords,state);
   long nbytes = (long)str->nbytes;                    // We could pack nbytes and nchars in one $WORD, 
-  memcpy(row->blob,&nbytes,sizeof($WORD));// but we should think of a better, general approach.
+  memcpy(row->blob,&nbytes,sizeof($WORD));            // but we should think of a better, general approach.
   long nchars = (long)str->nchars;
   memcpy(row->blob+1,&nchars,sizeof($WORD));
   memcpy(row->blob+2,str->str,nbytes+1);
@@ -952,18 +958,37 @@ $bool $str_isupper($str s) {
   return to$bool(hascased);
 }
 
-//creates many intermediate strings...
-$str $str_join($str s, $Iterator iter) {
+$str $str_join($str s, $Iterable$opaque it) {
+  $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+  int len = 0;
+  int totchars = 0;
+  int totbytes = 0;
+  $str nxt;
+  while ((nxt = ($str)iter->$class->__next__(iter))) {
+    len ++;
+    totchars += nxt->nchars;
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totchars += (len-1) * s->nchars;
+    totbytes += (len-1) * s->nbytes;
+  }
   $str res;
-  $str nxt = ($str)iter->$class->__next__(iter);
-  if (nxt) {
-    res = nxt;
-    while((nxt = ($str)iter->$class->__next__(iter))) {
-      res = ($str)$str_add($str_add(res,s),nxt);
+  NEW_UNFILLED(res,totchars,totbytes);
+  if (len > 0) {
+    unsigned char *p = res->str;
+    iter = it->proto->$class->__iter__(it->proto,it->impl);
+    nxt = ($str)iter->$class->__next__(iter);
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    while ((nxt = ($str)iter->$class->__next__(iter))) {
+      memcpy(p,s->str,s->nbytes);
+      p += s->nbytes;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
     }
-    return res;
-  } else
-    return NULL;
+  }
+  return res;
 }
 
 $str $str_ljust($str s, int width, $str fill) {
@@ -1123,7 +1148,7 @@ void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
 
 
 $list $str_split($str s, $str sep, $int maxsplit) {
-  $list res = $list_fromiter(NULL);
+  $list res = $NEW($list,NULL);
   if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
   int remaining = s->nchars;
   if (sep == NULL) {
@@ -1196,7 +1221,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
 }
 
 $list $str_splitlines($str s) {
-  $list res = $list_fromiter(NULL);
+  $list res = $NEW($list,NULL);
   int remaining = s->nchars;
   unsigned char *p = s->str;
   int nbytes, codepoint, wordlength;
@@ -1297,3 +1322,37 @@ $str $str_zfill($str s, int width) {
   return res;
 }
  
+$str $str_join_par(char lpar, $list elems, char rpar) {
+  char *s = ", ";
+  int len = elems->length;
+  int totchars = 2;  //parens
+  int totbytes = 2;
+  $str nxt;
+  for (int i=0; i<len; i++) {
+    nxt = ($str)elems->data[i];
+    totchars += nxt->nchars;
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totchars += (len-1) * 2; // 2 is length of ", "
+    totbytes += (len-1) * 2; 
+  }
+  $str res;
+  NEW_UNFILLED(res,totchars,totbytes);
+  res->str[0] = lpar;
+  res->str[totbytes-1] = rpar;
+  if (len > 0) {
+    unsigned char *p = res->str+1;
+    nxt = elems->data[0];
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    for (int i=1; i<len; i++) {
+      nxt = ($str)elems->data[i];
+      memcpy(p,s,2);
+      p += 2;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
+    }
+  }
+  return res;
+}

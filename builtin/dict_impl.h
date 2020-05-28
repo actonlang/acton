@@ -6,7 +6,6 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key);
 void $dict_delitem($dict dict, $Hashable hashwit, $WORD key);
 
 long $dict_len($dict dict);
-$dict $dict_fromiter($Hashable hashwit, $Iterable$opaque it);
 
 int $dict_contains($dict dict, $Hashable hashwit, $WORD key);
 

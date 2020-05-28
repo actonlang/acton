@@ -1,10 +1,4 @@
-void $int_init($int, long);
-void $int_serialize($int,$Serial$state);
-$int $int_deserialize($Serial$state);
-
-struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_serialize, $int_deserialize};
-
-// Initialization and Serialization ///////////////////////////////////////////////////////////////////////
+// General methods ///////////////////////////////////////////////////////////////////////
 
 void $int_init($int self, long val){
   self->val = val;
@@ -17,6 +11,18 @@ void $int_serialize($int n,$Serial$state state) {
 $int $int_deserialize($Serial$state state) {
   return to$int((long)$val_deserialize(state));
 }
+
+$bool $int_bool($int n) {
+  return to$bool(n->val != 0);
+}
+
+$str $int_str($int n) {
+  char *s;
+  asprintf(&s,"%ld",n->val);
+  return from$UTF8(s);
+}
+  
+struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_bool,$int_str,$int_serialize,$int_deserialize};
 
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
@@ -150,10 +156,6 @@ $complex $Complex$int$__complx__($Complex$int wit, $int a) {
   return to$complex(to$float((double)from$int(a)),to$float(0.0));
 }
 
-$bool $Complex$int$__bool__($Complex$int wit, $int a) {
-  return from$int(a)==0L ? $true : $false;
-}
-
 $int $Complex$int$__mul__($Complex$int wit,  $int a, $int b) {
   return to$int(from$int(a) * from$int(b));
 }  
@@ -275,7 +277,7 @@ $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
 
 struct $Complex$int$class $Complex$int$methods = {"", UNASSIGNED,NULL,$Complex$int_init, $Complex$int$__eq__,$Complex$int$__ne__,$Complex$int$__complx__,
-                                               $Complex$int$__bool__,$Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
+                                               $Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
                                                $Complex$int$__pos__,$Complex$int$real,$Complex$int$imag,$Complex$int$__abs__,$Complex$int$__conjugate__};
 struct $Complex$int $Complex$int_instance = {&$Complex$int$methods, &$Integral$int_instance, &$Plus$int_instance, &$Minus$int_instance};
 $Complex$int $Complex$int$witness = &$Complex$int_instance;

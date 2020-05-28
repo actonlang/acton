@@ -5,9 +5,10 @@
 
 
 int main() {
-  $Set$set wit= $NEW($Set$set,($Hashable)$Hashable$int$witness);
-  $set s = wit->$class->__fromiter__(wit,NULL);
-  $set s2 = wit->$class->__fromiter__(wit,NULL);
+  $Hashable hashwit = ($Hashable)$Hashable$int$witness;
+  $Set$set wit= $NEW($Set$set,hashwit);
+  $set s = $NEW($set,hashwit,NULL);
+  $set s2 = $NEW($set,hashwit,NULL);
   printf("sets created\n");
   for (long i = 13; i < 1000; i++) {
     wit->$class->add(wit,s,to$int(i*i));
@@ -35,12 +36,12 @@ int main() {
   printf("Iterating over intersection:\n");
   while((w = iter->$class->__next__(iter))) 
     printf("%ld\n",from$int(w));
- 
+  printf("Printing intersection with __str__ : %s\n",(s3->$class->__str__(s3))->str); 
   $set s4 = wit->w$Logical$Set->$class->__or__(wit->w$Logical$Set,s,s2);
   printf("size of union is %ld (should be 1458)\n",from$int(wit->$class->__len__(wit,s4)));
   printf("checking if union is gt both operands; returns %ld and %ld\n",from$bool(wit->w$Ord$Set->$class->__gt__(wit->w$Ord$Set,s4,s)),from$bool(wit->w$Ord$Set->$class->__gt__(wit->w$Ord$Set,s4,s2)));
   $set s5 = wit->w$Logical$Set->$class->__xor__(wit->w$Logical$Set,s,s2);
-  printf("size of symmetric difference is %ld\n",from$int(wit->$class->__len__(wit,s5)));
+  printf("size of symmetric difference is %ld (should be 1431)\n",from$int(wit->$class->__len__(wit,s5)));
   printf("popping and printing again elements in intersection\n");
   while((w = wit->$class->pop(wit,s3)))
     printf("popped %ld\n",from$int(w));

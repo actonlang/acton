@@ -294,11 +294,11 @@ instance CPS Decl where
     cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env1 b
       where env1                        = emptyCtxt env
 
-    cps env (Actor l n q p k a b)       = Actor l n q (addContParam p) k a <$> cpsSuite env1 b
+    cps env (Actor l n q p k b)         = Actor l n q (addContParam p) k <$> cpsSuite env1 b
       where env1                        = Meth contKW +: env { ctxt = [Act] }
 
-    cps env (Def l n q p k a b m)
-      | contDef (tinfo env) l n m       = Def l n q (addContParam p) k a <$> cpsSuite env1 b <*> return m
+    cps env (Def l n q p k a b d m)
+      | contDef (tinfo env) l n m       = Def l n q (addContParam p) k a <$> cpsSuite env1 b <*> return d <*> return m
       where env1                        = Meth contKW +: env { defd = bound p }
 
     cps env d                           = return d
@@ -420,8 +420,8 @@ instance PreCPS Stmt where
     pre env s                           = return s
 
 instance PreCPS Decl where
-    pre env (Actor l n q ps ks ann b)   = Actor l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b
-    pre env (Def l n q ps ks ann b m)   = Def l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b <*> return m
+    pre env (Actor l n q ps ks b)       = Actor l n q <$> pre env ps <*> pre env ks <*> return b
+    pre env (Def l n q ps ks ann b d m) = Def l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b <*> return d <*> return m
     pre env d                           = return d
     
 instance PreCPS Branch where
@@ -459,21 +459,21 @@ instance PreCPS Expr where
     pre env (UnOp l o e)                = UnOp l o <$> pre env e
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
     pre env (DotI l e i t)              = DotI l <$> pre env e <*> return i <*> return t
-    pre env (Lambda l ps ks e)          = do (e1,stmts) <- withPrefixes $ pre env e
+    pre env (Lambda l ps ks e fx)       = do (e1,stmts) <- withPrefixes $ pre env e
                                              case stmts of                                              -- TODO: utilize type of e (+below)
                                                  [] ->
-                                                    liftM3 (Lambda l) (pre env ps) (pre env ks)(return e1)
+                                                    Lambda l <$> pre env ps <*> pre env ks <*> return e1 <*> return fx
                                                  _  -> do 
                                                     ps1 <- pre env ps
                                                     ks1 <- pre env ks
                                                     f <- newName "lambda"
-                                                    prefix [sDecl [Def l f [] ps1 ks1 Nothing (stmts ++ [sReturn e1]) NoDec]]
+                                                    prefix [sDecl [Def l f [] ps1 ks1 Nothing (stmts ++ [sReturn e1]) NoDec fx]]
                                                     return (Var l0 (NoQ f))
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es ks)             = Tuple l <$> pre env es <*> pre env ks
     pre env (List l es)                 = List l <$> pre env es
-    pre env (ListComp l (Elem e) c)     = do (e1,stmts) <- withPrefixes $ liftM2 (ListComp l) (fmap Elem $ pre env e) (pre env c)
+    pre env (ListComp l (Elem e) c)     = do (e1,stmts) <- withPrefixes $ ListComp l <$> (Elem <$> pre env e) <*> pre env c
                                              case stmts of
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
@@ -481,7 +481,7 @@ instance PreCPS Expr where
       where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnList [])
             s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "append")) [e])
     pre env (Dict l es)                 = Dict l <$> pre env es
-    pre env (DictComp l (Assoc k v) c)  = do (e1,stmts) <- withPrefixes $ liftM2 (DictComp l) (liftM2 Assoc (pre env k) (pre env v)) (pre env c)
+    pre env (DictComp l (Assoc k v) c)  = do (e1,stmts) <- withPrefixes $ DictComp l <$> (Assoc <$> pre env k <*> pre env v) <*> pre env c
                                              case stmts of
                                                  [] -> return e1
                                                  _  -> do acc <- newName "acc"
@@ -489,7 +489,7 @@ instance PreCPS Expr where
       where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnDict [])
             s1 acc                      = undefined -- sAssign [tIndex (eVar acc) k] v
     pre env (Set l es)                  = Set l <$> pre env es
-    pre env (SetComp l (Elem e) c)      = do (e1,stmts) <- withPrefixes $ liftM2 (SetComp l) (fmap Elem $ pre env e) (pre env c)
+    pre env (SetComp l (Elem e) c)      = do (e1,stmts) <- withPrefixes $ SetComp l <$> (Elem <$> pre env e) <*> pre env c
                                              case stmts of
                                                 [] -> return e1
                                                 _  -> do acc <- newName "acc"

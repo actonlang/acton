@@ -37,6 +37,14 @@ struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
 // Null methods for serialization of NULL ///////////////////////////////////////
 
+$bool $Null__bool__($Serializable self) {
+  return $false;
+}
+
+$str $Null__str__($Serializable self) {
+  return from$UTF8("NULL");
+}
+
 void $Null__serialize__($Serializable self, $Serial$state state) {
   $add_header(NULL_ID,0,state);
 }
@@ -47,7 +55,7 @@ $Serializable $Null__deserialize__( $Serial$state state) {
   return NULL;
 }
 
-struct $Serializable$methods $Null$methods = {"",UNASSIGNED,NULL,(void (*)($Serializable,...))$default__init__, $Null__serialize__,  $Null__deserialize__};
+struct $Serializable$methods $Null$methods = {"",UNASSIGNED,NULL,(void (*)($Serializable,...))$default__init__, $Null__bool__, $Null__str__, $Null__serialize__,  $Null__deserialize__};
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 

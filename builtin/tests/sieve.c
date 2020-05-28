@@ -57,7 +57,7 @@ $list sieve(int n) {
   $WORD false = toWord(0);
   $WORD true = toWord(1);
   $WORD w;
-  $list isPrime = $list_fromiter(NULL); 
+  $list isPrime = $NEW($list,NULL); 
   $list_append(isPrime,false); 
   $list_append(isPrime,false);
   for (int i=2; i < n; i++) 
@@ -69,7 +69,7 @@ $list sieve(int n) {
         $list_setitem(isPrime,k,false);
     }
   }
-  $list primes = $list_fromiter(NULL);
+  $list primes = $NEW($list,NULL);
   for (int i=0; i<n; i++) {
     w = $list_getitem(isPrime,i);
     if (fromWord(w)) {
@@ -95,7 +95,7 @@ void printSequence($Sequence$list wit, $WORD seq) {
 
 $list sieveS($Sequence$list wit, int n) {
   $WORD w;
-  $list isPrime = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
+  $list isPrime = $NEW($list,NULL);
   wit->$class->append(wit,isPrime,$false); 
   wit->$class->append(wit,isPrime,$false);
   for (int i=2; i < n; i++) 
@@ -107,7 +107,7 @@ $list sieveS($Sequence$list wit, int n) {
         wit->$class->__setitem__(wit,isPrime,to$int(k),$false);
     }
   }
-  $list primes = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
+  $list primes = $NEW($list,NULL);
   for (int i=0; i<n; i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$bool(w)) {

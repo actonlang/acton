@@ -13,7 +13,6 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.CodeGen
-import qualified Acton.Builtin
 {-
 import qualified Yang.Syntax as Y
 import qualified Yang.Parser

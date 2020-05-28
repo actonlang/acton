@@ -1,8 +1,5 @@
-void $dict_serialize($dict,$Serial$state);
-$dict $dict_deserialize($Serial$state);
 
-
-struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__, $Mapping$dict$__fromiter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
+struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
                                                               $Mapping$dict$__containsnot__, $Mapping$dict$get, $Mapping$dict$keys, $Mapping$dict$values,
                                                               $Mapping$dict$items, $Mapping$dict$update, $Mapping$dict$popitem, $Mapping$dict$setdefault};
 
@@ -10,10 +7,6 @@ struct $Indexed$dict$class   $Indexed$dict$methods = {"", UNASSIGNED,NULL,$Index
 
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict wit, $dict dict) {
   return $dict_iter(dict);
-}
-
-$dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable$opaque it) {
-  return $dict_fromiter(wit->w$Hashable$Mapping,it);
 }
 
 $int $Mapping$dict$__len__ ($Mapping$dict wit, $dict dict) {

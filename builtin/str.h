@@ -12,6 +12,8 @@ struct $str$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($str, char*);
+  $bool (*__bool__)($str);
+  $str (*__str__)($str);
   void (*__serialize__)($str,$Serial$state);
   $str (*__deserialize__)($Serial$state);
   $str (*capitalize)($str s);
@@ -34,7 +36,7 @@ struct $str$class {
   $bool (*isspace)($str s);
   $bool (*istitle)($str s);
   $bool (*isupper)($str s);
-  $str (*join)($str sep, $Iterator iter);
+  $str (*join)($str sep, $Iterable$opaque it);
   $str (*ljust)($str s, int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $str (*lower)($str s);
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
@@ -56,7 +58,7 @@ struct $str$class {
   $str (*$str_zfill)($str s, int width);
 };
 
-extern struct $int$class $int$methods;
+extern struct $str$class $str$methods;
 
 extern struct $Ord$str$class $Ord$strmethods;
 extern struct $Hashable$str$class $Hashable$strmethods;
@@ -99,3 +101,10 @@ struct $Iterator$str {
 };
 
 extern struct  $Iterator$str$class  $Iterator$str$methods;
+
+
+// Internal auxiliary function /////////////////////////////////////////////
+
+// used in defining __str__ method for collection types (list, dict, set)
+
+$str $str_join_par(char lpar,$list elems, char rpar);

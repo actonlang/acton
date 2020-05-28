@@ -1,9 +1,9 @@
 /* 
- * During initialization of an Acton program we need to establish a one-to-one mapping between method tables and integers. 
+ * During initialization of an Acton program we need to establish a one-to-one mapping between method tables and non-negative integers. 
  * The latter are called class id's and for each object being serialized, its class id is stored together with serialization of its
  * local state. During deserialization, the class id is used to find the object's method table and hence its __deserialize__ method.
  * Builtin classes and classes in the runtime system have predefined class id's, mainly to ease debugging (e.g. to make reading
- * hexdumps of serialized files slighly less painful).
+ * hexdumps of serialized files slightly less painful).
  * 
  * This mechanism requires that the mapping between method tables and integers is the same in the serializing and the 
  * deserializing system. This will be the case if they do registration for the same classes in the same order, typically 
@@ -68,7 +68,7 @@ void $register_builtin();
 void $register($WORD meths);
 
 /*
- * Registering a class with predetermined class id. To be used for builtin and rts classes only..
+ * Registering a class with predetermined class id. To be used for builtin and rts classes only.
  * 
  */
 void $register_force(int classid, $WORD meths);

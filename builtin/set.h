@@ -3,6 +3,8 @@ struct $set$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($set, $Hashable, $Iterable$opaque);
+  $bool (*__bool__)($set);
+  $str (*__str__)($set);
   void (*__serialize__)($set, $Serial$state);
   $set (*__deserialize__)($Serial$state);
   $set(*copy)($set, $Hashable);
@@ -41,6 +43,8 @@ struct $Iterator$set$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$set, $set);
+  $bool (*__bool__)($Iterator$set);
+  $str (*__str__)($Iterator$set);
   void (*__serialize__)($Iterator$set, $Serial$state);
   $Iterator$set (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$set);

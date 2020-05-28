@@ -1,21 +1,13 @@
-#include <stddef.h>
 #include <stdio.h>
 #include "../builtin.h"
-
- 
-$list range($Sequence$list wit, long a, long b) {
-  $list res = wit->w$Collection$Sequence->$class->__fromiter__(wit->w$Collection$Sequence,NULL);
-  for (long i=a; i<b; i++)
-    wit->$class->append(wit,res,to$int(i));
-  return res;
-}
  
 int main() {
-  $list lst = range($Sequence$list$witness,1,100);
+ $Iterable$opaque it = $Iterable$pack(($Iterable)$Iterable$range$witness,$NEW($range,to$int(1),to$int(100),to$int(1)));
+ $list lst = $NEW($list,it);
   $Container$list wit2 = $NEW($Container$list,($Eq)$Hashable$int$witness);
   $bool b = wit2->$class->__contains__(wit2,lst,to$int(17));
   $bool c = wit2->$class->__contains__(wit2,lst,to$int(171));
   $bool d = wit2->$class->__contains__(wit2,lst,to$int(100));
-  printf("results are %ld, %ld, %ld\n",from$bool(b),from$bool(c),from$bool(d));
+  printf("results are %s, %s, %s\n",(b->$class->__str__(b))->str,(c->$class->__str__(c))->str,(d->$class->__str__(d))->str);
 }
   

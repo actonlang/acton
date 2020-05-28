@@ -170,15 +170,6 @@ typedef struct $Hashable$class *$Hashable$class;
 struct $Hashable$opaque;
 typedef struct $Hashable$opaque *$Hashable$opaque;
 
-struct $Boolean;
-typedef struct $Boolean *$Boolean;
-
-struct $Boolean$class;
-typedef struct $Boolean$class *$Boolean$class;
-
-struct $Boolean$opaque;
-typedef struct $Boolean$opaque *$Boolean$opaque;
-
 struct $Indexed;
 typedef struct $Indexed *$Indexed;
 
@@ -286,18 +277,6 @@ typedef struct $Integral$class *$Integral$class;
 
 struct $Integral$opaque;
 typedef struct $Integral$opaque *$Integral$opaque;
-
-struct $Boolean$int;
-typedef struct $Boolean$int *$Boolean$int;
-
-struct $Boolean$int$class;
-typedef struct $Boolean$int$class *$Boolean$int$class;
-
-struct $Boolean$list;
-typedef struct $Boolean$list *$Boolean$list;
-
-struct $Boolean$list$class;
-typedef struct $Boolean$list$class *$Boolean$list$class;
 
 struct $Sequence$list;
 typedef struct $Sequence$list *$Sequence$list;
@@ -467,11 +446,11 @@ typedef struct $Iterable$range *$Iterable$range;
 struct $Iterable$range$class;
 typedef struct $Iterable$range$class *$Iterable$range$class;
 
-struct $Iterable$tuple;
-typedef struct $Iterable$tuple *$Iterable$tuple;
+/* struct $Iterable$tuple; */
+/* typedef struct $Iterable$tuple *$Iterable$tuple; */
 
-struct $Iterable$tuple$class;
-typedef struct $Iterable$tuple$class *$Iterable$tuple$class;
+/* struct $Iterable$tuple$class; */
+/* typedef struct $Iterable$tuple$class *$Iterable$tuple$class; */
 
 struct $Sliceable$tuple;
 typedef struct $Sliceable$tuple *$Sliceable$tuple;
@@ -638,31 +617,6 @@ struct $Hashable$opaque {
 
 $Hashable$opaque $Hashable$pack($Hashable proto, $WORD impl);
 
-
-// $Boolean ////////////////////////////////////////////////////////////
-
-struct $Boolean {
-    $Boolean$class $class;
-};
-
-struct $Boolean$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Boolean);
-    $bool (*__bool__)($Boolean, $WORD);
-};
-
-struct $Boolean$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Boolean proto;
-    $WORD impl;
-};
-
-$Boolean$opaque $Boolean$pack($Boolean proto, $WORD impl);
-
-
 // $Indexed ////////////////////////////////////////////////////////////
 
 struct $Indexed {
@@ -755,7 +709,6 @@ struct $Collection$class {
     $Super$class $superclass;
     void (*__init__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
-    $WORD (*__fromiter__)($Collection, $Iterable$opaque);
     $int (*__len__)($Collection, $WORD);
 };
 
@@ -782,7 +735,6 @@ struct $Container$class {
     $Super$class $superclass;
     void (*__init__)($Container, $Eq);
     $Iterator (*__iter__)($Container, $WORD);
-    $WORD (*__fromiter__)($Container, $Iterable$opaque);
     $int (*__len__)($Container, $WORD);
     $bool (*__contains__)($Container, $WORD, $WORD);
     $bool (*__containsnot__)($Container, $WORD, $WORD);
@@ -847,7 +799,6 @@ struct $Mapping$class {
     $Super$class $superclass;
     void (*__init__)($Mapping, $Eq);
     $Iterator (*__iter__)($Mapping, $WORD);
-    $WORD (*__fromiter__)($Mapping, $Iterable$opaque);
     $int (*__len__)($Mapping, $WORD);
     $bool (*__contains__)($Mapping, $WORD, $WORD);
     $bool (*__containsnot__)($Mapping, $WORD, $WORD);
@@ -886,7 +837,6 @@ struct $Set$class {
     $Super$class $superclass;
     void (*__init__)($Set, $Eq);
     $Iterator (*__iter__)($Set, $WORD);
-    $WORD (*__fromiter__)($Set, $Iterable$opaque);
     $int (*__len__)($Set, $WORD);
     $bool (*__contains__)($Set, $WORD, $WORD);
     $bool (*__containsnot__)($Set, $WORD, $WORD);
@@ -922,7 +872,6 @@ struct $Complex$class {
     $bool (*__eq__)($Complex, $WORD, $WORD);
     $bool (*__ne__)($Complex, $WORD, $WORD);
     $complex (*__complx__)($Complex, $WORD);
-    $bool (*__bool__)($Complex, $WORD);
     $WORD (*__mul__)($Complex, $WORD, $WORD);
     $WORD (*__truediv__)($Complex, $WORD, $WORD);
     $WORD (*__pow__)($Complex, $WORD, $WORD);
@@ -1059,41 +1008,6 @@ struct $Integral$opaque {
 
 $Integral$opaque $Integral$pack($Integral proto, $WORD impl);
 
-
-// $Boolean$int ////////////////////////////////////////////////////////////
-
-struct $Boolean$int {
-    $Boolean$int$class $class;
-};
-
-struct $Boolean$int$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Boolean$int);
-    $bool (*__bool__)($Boolean$int, $int);
-};
-
-void $Boolean$int$__init__ ($Boolean$int);
-$bool $Boolean$int$__bool__ ($Boolean$int, $int);
-
-// $Boolean$list ////////////////////////////////////////////////////////////
-
-struct $Boolean$list {
-    $Boolean$list$class $class;
-};
-
-struct $Boolean$list$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Boolean$list);
-    $bool (*__bool__)($Boolean$list, $list);
-};
-
-void $Boolean$list$__init__ ($Boolean$list);
-$bool $Boolean$list$__bool__ ($Boolean$list, $list);
-
 // $Sequence$list ////////////////////////////////////////////////////////////
 
 struct $Sequence$list {
@@ -1144,13 +1058,11 @@ struct $Collection$list$class {
     $Super$class $superclass;
     void (*__init__)($Collection$list, $Sequence$list);
     $Iterator (*__iter__)($Collection$list, $list);
-    $list (*__fromiter__)($Collection$list, $Iterable$opaque);
     $int (*__len__)($Collection$list, $list);
 };
 
 void $Collection$list$__init__ ($Collection$list, $Sequence$list);
 $Iterator $Collection$list$__iter__ ($Collection$list, $list);
-$list $Collection$list$__fromiter__ ($Collection$list, $Iterable$opaque);
 $int $Collection$list$__len__ ($Collection$list, $list);
 
 // $Plus$list ////////////////////////////////////////////////////////////
@@ -1184,7 +1096,6 @@ struct $Container$list$class {
     $Super$class $superclass;
     void (*__init__)($Container$list, $Eq);
     $Iterator (*__iter__)($Container$list, $list);
-    $list (*__fromiter__)($Container$list, $Iterable$opaque);
     $int (*__len__)($Container$list, $list);
     $bool (*__contains__)($Container$list, $list, $WORD);
     $bool (*__containsnot__)($Container$list, $list, $WORD);
@@ -1192,7 +1103,6 @@ struct $Container$list$class {
 
 void $Container$list$__init__ ($Container$list, $Eq);
 $Iterator $Container$list$__iter__ ($Container$list, $list);
-$list $Container$list$__fromiter__ ($Container$list, $Iterable$opaque);
 $int $Container$list$__len__ ($Container$list, $list);
 $bool $Container$list$__contains__ ($Container$list, $list, $WORD);
 $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
@@ -1211,7 +1121,6 @@ struct $Mapping$dict$class {
     $Super$class $superclass;
     void (*__init__)($Mapping$dict, $Hashable);
     $Iterator (*__iter__)($Mapping$dict, $dict);
-    $dict (*__fromiter__)($Mapping$dict, $Iterable$opaque);
     $int (*__len__)($Mapping$dict, $dict);
     $bool (*__contains__)($Mapping$dict, $dict, $WORD);
     $bool (*__containsnot__)($Mapping$dict, $dict, $WORD);
@@ -1226,7 +1135,6 @@ struct $Mapping$dict$class {
 
 void $Mapping$dict$__init__ ($Mapping$dict, $Hashable);
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
-$dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable$opaque);
 $int $Mapping$dict$__len__ ($Mapping$dict, $dict);
 $bool $Mapping$dict$__contains__ ($Mapping$dict, $dict, $WORD);
 $bool $Mapping$dict$__containsnot__ ($Mapping$dict, $dict, $WORD);
@@ -1277,7 +1185,6 @@ struct $Set$set$class {
     $Super$class $superclass;
     void (*__init__)($Set$set, $Hashable);
     $Iterator (*__iter__)($Set$set, $set);
-    $set (*__fromiter__)($Set$set, $Iterable$opaque);
     $int (*__len__)($Set$set, $set);
     $bool (*__contains__)($Set$set, $set, $WORD);
     $bool (*__containsnot__)($Set$set, $set, $WORD);
@@ -1289,7 +1196,6 @@ struct $Set$set$class {
 
 void $Set$set$__init__ ($Set$set, $Hashable);
 $Iterator $Set$set$__iter__ ($Set$set, $set);
-$set $Set$set$__fromiter__ ($Set$set, $Iterable$opaque);
 $int $Set$set$__len__ ($Set$set, $set);
 $bool $Set$set$__contains__ ($Set$set, $set, $WORD);
 $bool $Set$set$__containsnot__ ($Set$set, $set, $WORD);
@@ -1423,7 +1329,6 @@ struct $Container$str$class {
     $Super$class $superclass;
     void (*__init__)($Container$str, $Eq);
     $Iterator (*__iter__)($Container$str, $str);
-    $str (*__fromiter__)($Container$str, $Iterable$opaque);
     $int (*__len__)($Container$str, $str);
     $bool (*__contains__)($Container$str, $str, $str);
     $bool (*__containsnot__)($Container$str, $str, $str);
@@ -1431,7 +1336,6 @@ struct $Container$str$class {
 
 void $Container$str$__init__ ($Container$str, $Eq);
 $Iterator $Container$str$__iter__ ($Container$str, $str);
-$str $Container$str$__fromiter__ ($Container$str, $Iterable$opaque);
 $int $Container$str$__len__ ($Container$str, $str);
 $bool $Container$str$__contains__ ($Container$str, $str, $str);
 $bool $Container$str$__containsnot__ ($Container$str, $str, $str);
@@ -1599,7 +1503,6 @@ struct $Complex$int$class {
     $bool (*__eq__)($Complex$int, $int, $int);
     $bool (*__ne__)($Complex$int, $int, $int);
     $complex (*__complx__)($Complex$int, $int);
-    $bool (*__bool__)($Complex$int, $int);
     $int (*__mul__)($Complex$int, $int, $int);
     $int (*__truediv__)($Complex$int, $int, $int);
     $int (*__pow__)($Complex$int, $int, $int);
@@ -1615,7 +1518,6 @@ void $Complex$int$__init__ ($Complex$int, $Integral$int);
 $bool $Complex$int$__eq__ ($Complex$int, $int, $int);
 $bool $Complex$int$__ne__ ($Complex$int, $int, $int);
 $complex $Complex$int__complx__ ($Complex$int, $int);
-$bool $Complex$int$__bool__ ($Complex$int, $int);
 $int $Complex$int$__mul__ ($Complex$int, $int, $int);
 $int $Complex$int$__truediv__ ($Complex$int, $int, $int);
 $int $Complex$int$__pow__ ($Complex$int, $int, $int);
@@ -1738,7 +1640,6 @@ struct $Complex$float$class {
     $bool (*__eq__)($Complex$float, $float, $float);
     $bool (*__ne__)($Complex$float, $float, $float);
     $complex (*__complx__)($Complex$float, $float);
-    $bool (*__bool__)($Complex$float, $float);
     $float (*__mul__)($Complex$float, $float, $float);
     $float (*__truediv__)($Complex$float, $float, $float);
     $float (*__pow__)($Complex$float, $float, $float);
@@ -1754,7 +1655,6 @@ void $Complex$float$__init__ ($Complex$float, $Real$float);
 $bool $Complex$float$__eq__ ($Complex$float, $float, $float);
 $bool $Complex$float$__ne__ ($Complex$float, $float, $float);
 $complex $Complex$float__complx__ ($Complex$float, $float);
-$bool $Complex$float$__bool__ ($Complex$float, $float);
 $float $Complex$float$__mul__ ($Complex$float, $float, $float);
 $float $Complex$float$__truediv__ ($Complex$float, $float, $float);
 $float $Complex$float$__pow__ ($Complex$float, $float, $float);
@@ -1839,23 +1739,22 @@ struct $Iterable$range$class {
 void $Iterable$range$__init__ ($Iterable$range);
 $Iterator $Iterable$range$__iter__ ($Iterable$range, $range);
 
-// $Iterable$tuple ////////////////////////////////////////////////////////////
+/* // $Iterable$tuple //////////////////////////////////////////////////////////// */
 
-struct $Iterable$tuple {
-    $Iterable$tuple$class $class;
-};
+/* struct $Iterable$tuple { */
+/*     $Iterable$tuple$class $class; */
+/* }; */
 
-struct $Iterable$tuple$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super $superclass;
-    void (*__init__)($Iterable$tuple);
-    $Iterator (*__iter__)($Iterable$tuple, $tuple);
-};
+/* struct $Iterable$tuple$class { */
+/*     char *$GCINFO; */
+/*     int $class_id; */
+/*     $Super $superclass; */
+/*     void (*__init__)($Iterable$tuple); */
+/*     $Iterator (*__iter__)($Iterable$tuple, $tuple); */
+/* }; */
 
-void $Iterable$tuple$__init__ ($Iterable$tuple);
-$Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple);
-
+/* void $Iterable$tuple$__init__ ($Iterable$tuple); */
+/* $Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple); */
 
 // $Sliceable$tuple ////////////////////////////////////////////////////////////
 

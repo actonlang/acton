@@ -3,6 +3,8 @@ struct $list$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($list, $Iterable$opaque);
+  $bool (*__bool__)($list);
+  $str (*__str__)($list);
   void (*__serialize__)($list,$Serial$state);
   $list (*__deserialize__)($Serial$state);
   $list(*copy)($list);
@@ -15,7 +17,6 @@ struct $list {
   int length;
   int capacity;
 };
-
 
 extern struct $list$class $list$methods;
 
@@ -36,6 +37,8 @@ struct $Iterator$list$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$list, $list);
+  $bool (*__bool__)($Iterator$list);
+  $str (*__str__)($Iterator$list);
   void (*__serialize__)($Iterator$list,$Serial$state);
   $Iterator$list (*__deserialize__)($Serial$state);
   $WORD(*__next__)($Iterator$list);
@@ -48,3 +51,4 @@ struct $Iterator$list {
 };
 
 extern struct  $Iterator$list$class  $Iterator$list$methods;
+

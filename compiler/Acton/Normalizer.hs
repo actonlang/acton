@@ -148,13 +148,13 @@ instance Norm Stmt where
                                          
                                        
 instance Norm Decl where
-    norm env (Def l n q p k t b m)  = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+    norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
                                          b' <- norm env1 b
-                                         return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') m
+                                         return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') d x
       where env1                    = extLocal (bound b ++ bound p ++ bound k) env
-    norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+    norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
                                          b' <- norm env1 b
-                                         return $ Actor l n q (noDefaults p') KwdNIL t (defaults p' ++ b')
+                                         return $ Actor l n q (noDefaults p') KwdNIL (defaults p' ++ b')
       where env1                    = extLocal (bound b ++ bound p ++ bound k) env
     norm env (Class l n q as b)     = Class l n q as <$> norm env b
     norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
@@ -186,7 +186,7 @@ instance Norm Expr where
     norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e                     -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
     norm env (DotI l e i t)         = DotI l <$> norm env e <*> return i <*> return t
-    norm env (Lambda l ps ks e)     = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e
+    norm env (Lambda l ps ks e fx)  = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e <*> return fx
       where env1                    = extLocal (bound ps ++ bound ks) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
