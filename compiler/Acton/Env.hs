@@ -2,14 +2,12 @@
 module Acton.Env where
 
 import qualified Control.Exception
-import Debug.Trace
 import qualified Data.Binary
 import GHC.Generics (Generic)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Control.Monad.State.Strict
 import Data.Typeable
-import Data.Traversable
 import System.FilePath.Posix (joinPath,takeDirectory)
 import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
@@ -278,12 +276,7 @@ nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
 parentTEnv                  :: Env -> [WTCon] -> TEnv
-parentTEnv env us           = concatMap tEnv us
-  where tEnv (w,u)          = case findQName (tcname u) env of
-                                NClass q _ te -> subst (tybound q `zip` tcargs u) te
-                                NProto q _ te -> subst (tybound q `zip` tcargs u) te
-                                NExt n q _ te -> subst (tybound q `zip` tcargs u) te
-                                _             -> []
+parentTEnv env us           = concatMap (snd . findCon env . snd) us
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
@@ -450,21 +443,20 @@ findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
-  where (q,us,te)           = case findQName n env of
+  where (q,us,te)           = findConName n env
+        tvs                 = tybound q
+        s                   = tvs `zip` ts
+      
+findConName n env           = case findQName n env of
                                 NAct q p k te  -> (q,[],te)
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
-                                i -> err1 n ("findCon: Class or protocol name expected, got " ++ show i ++ " --- ")
-        tvs                 = tybound q
-        s                   = tvs `zip` ts
+                                i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
 conAttrs                    :: Env -> QName -> [Name]
-conAttrs env qn             = case findQName qn env of
-                                NAct q p k te  -> dom te
-                                NClass q us te -> dom te
-                                NProto q us te -> dom te
-                                NExt n q us te -> dom te
+conAttrs env qn             = dom te
+  where (_,_,te)            = findConName qn env
 
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
@@ -893,7 +885,7 @@ instance Subst FX where
     tyfree _                        = []  
     
 instance Subst PosPar where
-    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> return e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
     msubst PosNIL                   = return PosNIL
     
@@ -902,7 +894,7 @@ instance Subst PosPar where
     tyfree PosNIL                   = []
 
 instance Subst KwdPar where
-    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> return e <*> msubst p
     msubst (KwdSTAR n t)            = KwdSTAR n <$> msubst t
     msubst KwdNIL                   = return KwdNIL
     

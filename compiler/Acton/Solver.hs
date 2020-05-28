@@ -77,7 +77,7 @@ reduce' env eq c@(Impl w (TExist _ u) p)
   | Just (wf,p') <- search                  = do unifyM env (tcargs p) (tcargs p')
                                                  return eq
   | otherwise                               = trace ("## No success") $ noRed c
-  where search                              = trace ("## reducing " ++ prstr c ++ "\n   ancestry: " ++ prstrs (findAncestry env u)) $ findAncestor env u (tcname p)
+  where search                              = findAncestor env u (tcname p)
 
 reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
   | not $ scoped tv env                     = do defer [c]; return eq
