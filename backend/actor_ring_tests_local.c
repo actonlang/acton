@@ -493,20 +493,7 @@ void * actor(void * cargs)
 		if(debug)
 			printf("ACTOR %" PRId64 ": Blocking for input (successful_consumes=%d, no_enqueues=%d)\n", (int64_t) ca->consumer_id, ca->successful_consumes, ca->no_enqueues);
 
-		ret = pthread_mutex_lock(qc->lock);
-
-		if(debug_lock)
-			printf("ACTOR %" PRId64 ": Locked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
-
-		struct timespec ts;
-		clock_gettime(CLOCK_REALTIME, &ts);
-		ts.tv_sec += 3;
-		ret = pthread_cond_timedwait(qc->signal, qc->lock, &ts);
-
-		pthread_mutex_unlock(qc->lock);
-
-		if(debug_lock)
-			printf("ACTOR %" PRId64 ": Unlocked consumer lock %p/%p, status=%d\n", (int64_t) ca->consumer_id, qc, qc->lock, ret);
+		ret = wait_on_queue_callback(qc);
 
 		if(ret == 0)
 		{
@@ -517,8 +504,6 @@ void * actor(void * cargs)
 		{
 			if(debug)
 				printf("ACTOR %" PRId64 ": Wait timed out, status=%d, reading queue..\n", (int64_t) ca->consumer_id, ret);
-
-//			continue;
 		}
 
 		// Received queue notification, reading:
