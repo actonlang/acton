@@ -258,6 +258,12 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
+noTerms                     :: TEnv -> TEnv
+noTerms te                  = [ (n,i) | (n,i) <- te, notTerm i ]
+  where notTerm NDef{}      = False
+        notTerm NVar{}      = False
+        notTerm _           = True
+
 sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
 

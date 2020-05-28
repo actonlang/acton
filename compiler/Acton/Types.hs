@@ -101,7 +101,8 @@ liveCombine (Just te) (Just te')        = Just $ te++te'
 instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,ss1) <- infEnvX env s
-                                             (cs2,te2,ss2) <- infEnv (define te1 env) ss
+                                             let te1' = if inDecl env then noTerms te1 else te1
+                                             (cs2,te2,ss2) <- infEnv (define te1' env) ss
                                              return (cs1++cs2, te1++te2, ss1++ss2)
 
 instance InfEnv Stmt where
