@@ -294,12 +294,20 @@ rowTail (TRow _ _ _ _ r)
 rowTail r       = r
 
 
-tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
+prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
+prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild
+prowOf PosNIL           = posNil
+
+krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
+krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild
+krowOf KwdNIL           = kwdNil
 
 
-tvarSubst vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
-  where
-    setk (v,v') = (v, tVar $ v'{ tvkind = tvkind v })
+tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
+
+tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
+  where setk (v,v')     = (v, tVar $ v'{ tvkind = tvkind v })
+
 
 type Substitution = [(TVar,Type)]
 

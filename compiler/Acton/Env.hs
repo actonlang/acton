@@ -251,11 +251,10 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
-noTerms                     :: TEnv -> TEnv
-noTerms te                  = [ (n,i) | (n,i) <- te, notTerm i ]
-  where notTerm NDef{}      = False
-        notTerm NVar{}      = False
-        notTerm _           = True
+noDefs                      :: TEnv -> TEnv
+noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
+  where isDef NDef{}        = True
+        isDef _             = False
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
@@ -712,6 +711,9 @@ substitute tv t                         = state $ \st -> ((), st{ currsubst = Ma
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
 
+setSubstitution                         :: Map TVar Type -> TypeM ()
+setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
+
 
 newName s                               = Internal s <$> newUnique <*> return TypesPass
 
@@ -789,7 +791,7 @@ instance Subst TSchema where
                     newvars         = tyfree (rng s)
                     clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
-                    renaming        = tvarSubst clashvars avoidvars
+                    renaming        = tvarSupplyMap clashvars avoidvars
                     q'              = [ TBind (subst renaming v) (subst renaming cs) | TBind v cs <- q ]
                     t'              = subst renaming t
 
@@ -802,9 +804,16 @@ msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey rel
       where relevant k _            = k `elem` vs0
             vs0                     = tyfree c
             vs                      = tybound c
-            renaming newvars        = tvarSubst clashvars avoidvars
+            renaming newvars        = tvarSupplyMap clashvars avoidvars
               where clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
+
+msubstWith                          :: (Subst a) => Substitution -> a -> TypeM a
+msubstWith s x                      = do s0 <- getSubstitution
+                                         sequence [ substitute tv t | (tv,t) <- s ]
+                                         x' <- msubst x
+                                         setSubstitution s0
+                                         return x'
 
 testSchemaSubst = do
     putStrLn ("t:  " ++ render (pretty t))

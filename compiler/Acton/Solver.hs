@@ -43,7 +43,16 @@ solve env cs                                = solve' env [] cs
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-type Equations                              = [(Name, Type, Expr)]
+type Equation                               = (Name, Type, Expr)
+type Equations                              = [Equation]
+
+instance Subst Equation where
+    msubst (w, t, e)                        = do t <- msubst t
+                                                 e <- msubst e
+                                                 return (w, t, e)
+    
+    tyfree (w, t, e)                        = tyfree t ++ tyfree e
+
 
 data Polarity                               = Neg | Inv | Pos deriving (Show)
 
