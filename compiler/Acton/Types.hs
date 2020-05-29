@@ -99,7 +99,7 @@ liveCombine (Just te) (Just te')        = Just $ te++te'
 instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,ss1) <- infEnvX env s
-                                             let te1' = if inDecl env then noDefs te1 else te1
+                                             let te1' = if inDecl env then noDecls te1 else te1
                                              (cs2,te2,ss2) <- infEnv (define te1' env) ss
                                              return (cs1++cs2, te1++te2, ss1++ss2)
 
@@ -442,7 +442,7 @@ instance Check Decl where
                                              (cs1,eq1) <- splitAndSolve env1 (tybound q1) (cswf++csp++csk++csb++cst)
                                              checkNoEscape env (tybound q1)
                                              -- At this point, n has the type given by its def annotations.
-                                             -- Now check that this type is no less general than the recursion assumption on n in env.
+                                             -- Now check that this type is no less general than its recursion assumption in env.
                                              matchAssumption env cl cs1 (Def l n q1 p' k' (Just t) (bindWits eq1 ++ b') d fx)
       where q1                          = autoQuant env q p k a
             cswf                        = wellformed env (q,a)

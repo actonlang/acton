@@ -251,9 +251,13 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
-noDefs                      :: TEnv -> TEnv
-noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
-  where isDef NDef{}        = True
+noDecls                     :: TEnv -> TEnv
+noDecls te                  = [ (n,i) | (n,i) <- te, not $ isDecl i ]
+  where isDecl NDef{}       = True
+        isDecl NAct{}       = True
+        isDecl NClass{}     = True
+        isDecl NProto{}     = True
+        isDecl NExt{}       = True
         isDef _             = False
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)
@@ -809,6 +813,7 @@ msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey rel
                     avoidvars       = vs0 ++ vs ++ newvars
 
 msubstWith                          :: (Subst a) => Substitution -> a -> TypeM a
+msubstWith [] x                     = return x
 msubstWith s x                      = do s0 <- getSubstitution
                                          sequence [ substitute tv t | (tv,t) <- s ]
                                          x' <- msubst x
