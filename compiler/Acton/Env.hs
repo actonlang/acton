@@ -302,8 +302,8 @@ initEnv nobuiltin           = if nobuiltin
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
 
-setInDecl                   :: Env -> Env
-setInDecl env               = env{ indecl = True }
+setInDecl                   :: Bool -> Env -> Env
+setInDecl f env             = env{ indecl = f }
 
 addWit                      :: Env -> (QName,Witness) -> Env
 addWit env cwit
@@ -322,7 +322,7 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 
 define                      :: TEnv -> Env -> Env
 define te env               = foldl addWit env1 ws
-  where env1                = env{ names = reverse te ++ prune (dom te) (names env) }
+  where env1                = env{ names = reverse te ++ exclude (dom te) (names env) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: Qual -> Env -> Env
@@ -346,7 +346,7 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
   where ModName (n:ns)      = m
         te1                 = case lookup n (names env) of Just (NModule te1) -> te1; _ -> []
         defmod [] te1       = NModule $ te
-        defmod (n:ns) te1   = NModule $ (n, defmod ns te2) : prune [n] te1
+        defmod (n:ns) te1   = NModule $ (n, defmod ns te2) : exclude [n] te1
           where te2         = case lookup n te1 of Just (NModule te2) -> te2; _ -> []
 
 

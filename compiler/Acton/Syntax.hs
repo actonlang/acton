@@ -302,6 +302,14 @@ krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k
 krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild
 krowOf KwdNIL           = kwdNil
 
+pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
+pArg (PosSTAR n a)      = PosStar (eVar n)
+pArg PosNIL             = PosNil
+
+kArg (KwdPar n a _ p)   = KwdArg n (eVar n) (kArg p)
+kArg (KwdSTAR n a)      = KwdStar (eVar n)
+kArg KwdNIL             = KwdNil
+
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
 
