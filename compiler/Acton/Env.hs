@@ -786,6 +786,18 @@ instance Subst Constraint where
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
+
+split_safe vs cs
+  | null dep_vs                     = (safe_cs, amb_cs)
+  | otherwise                       = split_safe (dep_vs ++ vs) cs
+  where (safe_cs,amb_cs)            = partition safe cs
+        dep_vs                      = tyfree safe_cs \\ vs
+        safe (Impl w t p)           = all (`elem` vs) (tyfree t)
+        safe (Cast t t')            = all (`elem` vs) (tyfree t)
+        safe (Sub w t t')           = all (`elem` vs) (tyfree t)
+        safe c                      = all (`elem` vs) (tyfree c)
+
+
 instance Subst TSchema where
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0

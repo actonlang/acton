@@ -532,12 +532,11 @@ splitGen env fvs cs te eqs
                                              splitGen env fvs cs te (eq1++eq0++eqs)
   where
     def_vss                             = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te, null $ scbind sc ]
-    gvs                                 = nub $ foldr union [] def_vss
+    gvs                                 = nub (foldr union [] def_vss ++ tyfree gen_cs)
     safe_vs | null def_vss              = []
             | otherwise                 = nub $ foldr1 intersect def_vss
     (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
-    (ambig_cs, gen_cs)                  = partition ambig cs'                                               -- TODO: replace ambig check with "must solve"
-    ambig c                             = any (`notElem` safe_vs) (tyfree c)
+    (gen_cs, ambig_cs)                  = split_safe safe_vs cs'              -- TODO: also include "must solve" constraints
 
 mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in (q, concat wss)
   where cbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
