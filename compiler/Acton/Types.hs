@@ -549,11 +549,11 @@ mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in 
 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
-genEnv env cs te ds                     = do (cs0,eq0) <- simplify env cs
+genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
                                              te <- msubst te
                                              fvs <- msubstTV (tyfree env ++ tyfixed te)
                                              (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
-                                             ds <- msubst ds
+                                             ds <- msubst ds0
                                              let (q,ws) = mkQual gvs gen_cs
                                                  s = tvarSupplyMap (tybound q) (tvarScope env)
                                                  te1 = map (generalize s q) te
@@ -570,9 +570,14 @@ genEnv env cs te ds                     = do (cs0,eq0) <- simplify env cs
     generalize s q (n, i)               = (n, i)
 
     abstract q ds ws eq d@Def{}
-      | null $ qual d                   = d{ qual = q, pos = w2par ws (pos d), dbody = wsubst ds ws (bindWits eq ++ dbody d) }
-    abstract q ds ws eq d               = d{ dbody = wsubst ds ws (dbody d) }
-
+      | null $ qual d                   = d{ qual = q, pos = w2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+    abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+    abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds ws (dbody d)) }
+      where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
+            bindInDef stmt              = stmt
+            bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
+            bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
+            
     wsubst ds []                        = id
     wsubst ds ws                        = transform trans
       where
