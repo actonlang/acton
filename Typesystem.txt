@@ -72,7 +72,7 @@ Type schemas:       T       ::=     [q]=>t  |  t
 Qua(l|nt)ifiers:    q       ::=     X(c,pi),q  |  .                                                     associative
 Goals:              g       ::=     t(c,pi),g  |  .                                                     associative
 
-Environments:       N       ::=     C:[q]=>(c;r)  |  P:[q]=>(pi;r)  |  w:[q]=>C(p)  |  w:q  |
+Environments:       N       ::=     C:[q]=>(c;n)  |  P:[q]=>(pi;n)  |  w:[q]=>C(p)  |  w:q  |
                                     x:T  |  z:t  |  x:#  |  z:#  |  N,N  |  .                           associative, commutative\duplicates
 
 Attribute envs:     n       ::=     x:T  |  n,n  |  .                                                   associative, commutative\duplicates
@@ -166,9 +166,9 @@ N,C:[q]=>(c;n) |- w : [o/q]q                            N,v:[q]=>C(p) |- w : [o/
 -------------------------------------- (WitC)           ------------------------------------- (WitP)
 N,C:[q]=>(c;n) |- \x:x : C[o] ([o/q]c)                  N,v:[q]=>C(p) |- v(w) : C[o] ([o/q]p)
 
-N,P:[q]=>(pi;n) |- w : t(P[o])                          N,P:[q]=>(pi;n) |- w : [o/q]q
-------------------------------------------- (WitSub)    -------------------------------------------------- (WitEX)
-N,P:[q]=>(pi;n) |- w.i : t([o/q]pi) / all i             N,P:[q]=>(pi;n) |- \x,y:x.0(y.1) : EX(P[o]) (P[o])
+N,P:[q]=>(pi;n) |- w : t(P[o])
+------------------------------------------- (WitSub)
+N,P:[q]=>(pi;n) |- w.i : t([o/q]pi) / all i
 
 N |- w' : t < c    N |- w : t(pi),g                     N |- wi : t(pi) / all i     N |- w : g                     
 ----------------------------------- (ConsC)             -------------------------------------- (ConsP)              ----------- (Cons0)
@@ -253,9 +253,9 @@ N |- E : t | e ~> E'    N |- w : t (p)    N |- w : p ~ (x:T,n)                  
 -------------------------------------------------------------- (SelP)               --------------------------------------------- (CSelP)
 N |- E.x : [t/Self]T | e  ~>  app(w.x, E')                                          N |- C.x : [C[o]/Self]addself(T) | e  ~>  w.x
 
-N |- E : EX(p) | e ~> E'    N |- _ : p ~ (x:T,n)    Self not in T                   N |- w : t (P[o])     N |- w : P[o] ~ (x:T,n)
------------------------------------------------------------------ (SelP')           ------------------------------------------ (CSelP')
-N |- E.x : T | e  ~>  app(E'.0.x, E'.1)                                             N |- P.x : [t/Self]addself(T) | e  ~>  w.x
+N |- E : EX(p) | e ~> E'    N |- _ : p ~ (x:T,n)    Self not in T-                  N |- w : t (P[o])     N |- w : P[o] ~ (x:T,n)
+------------------------------------------------------------------ (SelP')          ------------------------------------------ (CSelP')
+N |- E.x : [EX(p)/Self]T | e  ~>  app(E'.0.x, E'.1) ...                             N |- P.x : [t/Self]addself(T) | e  ~>  w.x
 
 
 
