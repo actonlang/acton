@@ -260,11 +260,6 @@ instance Pretty Deco where
     pretty Static                   = text "@static"
     pretty Property                 = text "@property"
 
-instance Pretty SrcInfoTag where
-    pretty (GEN l t)                = text "GEN" <+> parens (pretty l) <> colon <+> pretty t
-    pretty (INS l t)                = text "INS" <+> parens (pretty l) <> colon <+> pretty t
-
-
 instance Pretty Unary where
     pretty Not                      = text "not "
     pretty BNot                     = text "~"

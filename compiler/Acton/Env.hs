@@ -2,14 +2,12 @@
 module Acton.Env where
 
 import qualified Control.Exception
-import Debug.Trace
 import qualified Data.Binary
 import GHC.Generics (Generic)
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import Control.Monad.State.Strict
 import Data.Typeable
-import Data.Traversable
 import System.FilePath.Posix (joinPath,takeDirectory)
 import System.Directory (doesFileExist)
 import System.Environment (getExecutablePath)
@@ -169,13 +167,6 @@ instance Subst WTCon where
 
 msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
 
-instance Subst SrcInfoTag where
-    msubst (GEN l t)                = GEN l <$> msubst t
-    msubst (INS l t)                = INS l <$> msubst t
-
-    tyfree (GEN _ t)                = tyfree t
-    tyfree (INS _ t)                = tyfree t
-
 
 -------------------------------------------------------------------------------------------------------------------
 
@@ -260,6 +251,15 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
+noDecls                     :: TEnv -> TEnv
+noDecls te                  = [ (n,i) | (n,i) <- te, not $ isDecl i ]
+  where isDecl NDef{}       = True
+        isDecl NAct{}       = True
+        isDecl NClass{}     = True
+        isDecl NProto{}     = True
+        isDecl NExt{}       = True
+        isDef _             = False
+
 sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
 
@@ -278,12 +278,7 @@ nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
 parentTEnv                  :: Env -> [WTCon] -> TEnv
-parentTEnv env us           = concatMap tEnv us
-  where tEnv (w,u)          = case findQName (tcname u) env of
-                                NClass q _ te -> subst (tybound q `zip` tcargs u) te
-                                NProto q _ te -> subst (tybound q `zip` tcargs u) te
-                                NExt n q _ te -> subst (tybound q `zip` tcargs u) te
-                                _             -> []
+parentTEnv env us           = concatMap (snd . findCon env . snd) us
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
@@ -307,8 +302,8 @@ initEnv nobuiltin           = if nobuiltin
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
 
-setInDecl                   :: Env -> Env
-setInDecl env               = env{ indecl = True }
+setInDecl                   :: Bool -> Env -> Env
+setInDecl f env             = env{ indecl = f }
 
 addWit                      :: Env -> (QName,Witness) -> Env
 addWit env cwit
@@ -327,7 +322,7 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 
 define                      :: TEnv -> Env -> Env
 define te env               = foldl addWit env1 ws
-  where env1                = env{ names = reverse te ++ prune (dom te) (names env) }
+  where env1                = env{ names = reverse te ++ exclude (dom te) (names env) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: Qual -> Env -> Env
@@ -351,7 +346,7 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
   where ModName (n:ns)      = m
         te1                 = case lookup n (names env) of Just (NModule te1) -> te1; _ -> []
         defmod [] te1       = NModule $ te
-        defmod (n:ns) te1   = NModule $ (n, defmod ns te2) : prune [n] te1
+        defmod (n:ns) te1   = NModule $ (n, defmod ns te2) : exclude [n] te1
           where te2         = case lookup n te1 of Just (NModule te2) -> te2; _ -> []
 
 
@@ -450,21 +445,20 @@ findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
   | otherwise               = (subst s us, subst s te)
-  where (q,us,te)           = case findQName n env of
+  where (q,us,te)           = findConName n env
+        tvs                 = tybound q
+        s                   = tvs `zip` ts
+      
+findConName n env           = case findQName n env of
                                 NAct q p k te  -> (q,[],te)
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
-                                i -> err1 n ("findCon: Class or protocol name expected, got " ++ show i ++ " --- ")
-        tvs                 = tybound q
-        s                   = tvs `zip` ts
+                                i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
 conAttrs                    :: Env -> QName -> [Name]
-conAttrs env qn             = case findQName qn env of
-                                NAct q p k te  -> dom te
-                                NClass q us te -> dom te
-                                NProto q us te -> dom te
-                                NExt n q us te -> dom te
+conAttrs env qn             = dom te
+  where (_,_,te)            = findConName qn env
 
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
@@ -677,11 +671,10 @@ data TypeState                          = TypeState {
                                                 nextint         :: Int,
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
-                                                currsubst       :: TVarMap,
-                                                dumped          :: SrcInfo
+                                                currsubst       :: TVarMap
                                           }
 
-initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s, dumped = [] }
+initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s }
 
 type TypeM a                            = State TypeState a
 
@@ -722,11 +715,8 @@ substitute tv t                         = state $ \st -> ((), st{ currsubst = Ma
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
 
-dump                                    :: SrcInfo -> TypeM ()
-dump inf                                = state $ \st -> ((), st{ dumped = inf ++ dumped st })
-
-getDump                                 :: TypeM SrcInfo
-getDump                                 = state $ \st -> (dumped st, st)
+setSubstitution                         :: Map TVar Type -> TypeM ()
+setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
 
 
 newName s                               = Internal s <$> newUnique <*> return TypesPass
@@ -796,6 +786,18 @@ instance Subst Constraint where
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
+
+split_safe vs cs
+  | null dep_vs                     = (safe_cs, amb_cs)
+  | otherwise                       = split_safe (dep_vs ++ vs) cs
+  where (safe_cs,amb_cs)            = partition safe cs
+        dep_vs                      = tyfree safe_cs \\ vs
+        safe (Impl w t p)           = all (`elem` vs) (tyfree t)
+        safe (Cast t t')            = all (`elem` vs) (tyfree t)
+        safe (Sub w t t')           = all (`elem` vs) (tyfree t)
+        safe c                      = all (`elem` vs) (tyfree c)
+
+
 instance Subst TSchema where
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
@@ -805,7 +807,7 @@ instance Subst TSchema where
                     newvars         = tyfree (rng s)
                     clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
-                    renaming        = tvarSubst clashvars avoidvars
+                    renaming        = tvarSupplyMap clashvars avoidvars
                     q'              = [ TBind (subst renaming v) (subst renaming cs) | TBind v cs <- q ]
                     t'              = subst renaming t
 
@@ -818,9 +820,17 @@ msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey rel
       where relevant k _            = k `elem` vs0
             vs0                     = tyfree c
             vs                      = tybound c
-            renaming newvars        = tvarSubst clashvars avoidvars
+            renaming newvars        = tvarSupplyMap clashvars avoidvars
               where clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
+
+msubstWith                          :: (Subst a) => Substitution -> a -> TypeM a
+msubstWith [] x                     = return x
+msubstWith s x                      = do s0 <- getSubstitution
+                                         sequence [ substitute tv t | (tv,t) <- s ]
+                                         x' <- msubst x
+                                         setSubstitution s0
+                                         return x'
 
 testSchemaSubst = do
     putStrLn ("t:  " ++ render (pretty t))
@@ -893,7 +903,7 @@ instance Subst FX where
     tyfree _                        = []  
     
 instance Subst PosPar where
-    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> return e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
     msubst PosNIL                   = return PosNIL
     
@@ -902,7 +912,7 @@ instance Subst PosPar where
     tyfree PosNIL                   = []
 
 instance Subst KwdPar where
-    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> msubst e <*> msubst p
+    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> return e <*> msubst p
     msubst (KwdSTAR n t)            = KwdSTAR n <$> msubst t
     msubst KwdNIL                   = return KwdNIL
     

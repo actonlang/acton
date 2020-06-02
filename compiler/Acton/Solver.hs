@@ -43,7 +43,16 @@ solve env cs                                = solve' env [] cs
 -- reduce
 ----------------------------------------------------------------------------------------------------------------------
 
-type Equations                              = [(Name, Type, Expr)]
+type Equation                               = (Name, Type, Expr)
+type Equations                              = [Equation]
+
+instance Subst Equation where
+    msubst (w, t, e)                        = do t <- msubst t
+                                                 e <- msubst e
+                                                 return (w, t, e)
+    
+    tyfree (w, t, e)                        = tyfree t ++ tyfree e
+
 
 data Polarity                               = Neg | Inv | Pos deriving (Show)
 
@@ -77,7 +86,7 @@ reduce' env eq c@(Impl w (TExist _ u) p)
   | Just (wf,p') <- search                  = do unifyM env (tcargs p) (tcargs p')
                                                  return eq
   | otherwise                               = trace ("## No success") $ noRed c
-  where search                              = trace ("## reducing " ++ prstr c ++ "\n   ancestry: " ++ prstrs (findAncestry env u)) $ findAncestor env u (tcname p)
+  where search                              = findAncestor env u (tcname p)
 
 reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
   | not $ scoped tv env                     = do defer [c]; return eq

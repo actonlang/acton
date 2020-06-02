@@ -294,12 +294,28 @@ rowTail (TRow _ _ _ _ r)
 rowTail r       = r
 
 
-tvarSupply      = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
+prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
+prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild
+prowOf PosNIL           = posNil
+
+krowOf (KwdPar n a _ k) = kwdRow n (case a of Just t -> t; _ -> tWild) (krowOf k)
+krowOf (KwdSTAR n a)    = case a of Just (TTuple _ _ r) -> r; _ -> tWild
+krowOf KwdNIL           = kwdNil
+
+pArg (PosPar n a _ p)   = PosArg (eVar n) (pArg p)
+pArg (PosSTAR n a)      = PosStar (eVar n)
+pArg PosNIL             = PosNil
+
+kArg (KwdPar n a _ p)   = KwdArg n (eVar n) (kArg p)
+kArg (KwdSTAR n a)      = KwdStar (eVar n)
+kArg KwdNIL             = KwdNil
 
 
-tvarSubst vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
-  where
-    setk (v,v') = (v, tVar $ v'{ tvkind = tvkind v })
+tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
+
+tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
+  where setk (v,v')     = (v, tVar $ v'{ tvkind = tvkind v })
+
 
 type Substitution = [(TVar,Type)]
 
@@ -318,19 +334,6 @@ instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX
 instance Data.Binary.Binary Constraint
-
-
--- SrcInfo ------------------
-
-type SrcInfo            = [SrcInfoTag]
-
-data SrcInfoTag         = GEN   SrcLoc TSchema
-                        | INS   SrcLoc Type
-                        deriving (Eq,Show)
-
-lookupGEN l info        = listToMaybe [ t | GEN l' t <- info, l' == l ]
-
-lookupINS l info        = listToMaybe [ t | INS l' t <- info, l' == l ]
 
 
 -- Locations ----------------

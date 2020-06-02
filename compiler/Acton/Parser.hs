@@ -77,7 +77,6 @@ assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success 
 assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class or protocol")
 assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
-assertDefAct        = ifCtx [DEF,ACTOR]             [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function or an actor")
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
 
@@ -551,7 +550,7 @@ break_stmt =  S.Break <$> (assertLoop *> rwordLoc "break")
 continue_stmt =  S.Continue <$> (assertLoop *> rwordLoc "continue")
 
 return_stmt = addLoc $ do    -- the notFollowedBy colon here is to avoid confusion with data_stmt return case
-                assertDefAct
+                assertDef
                 rword "return" <* notFollowedBy colon
                 S.Return NoLoc <$> optional exprlist
  
@@ -734,7 +733,7 @@ data_stmt = addLoc $
            do (s,pat) <- withPos gen_pattern
               S.Data NoLoc (Just pat) <$> suite DATA s
         <|>
-           do (s,_) <- withPos (assertDefAct *> rword "return")
+           do (s,_) <- withPos (assertDef *> rword "return")
               S.Data NoLoc Nothing <$> suite DATA s
 
 suite :: CTX -> Pos -> Parser S.Suite

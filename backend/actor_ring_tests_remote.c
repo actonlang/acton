@@ -81,8 +81,6 @@ typedef struct actor_args
 
 	queue_callback * qc;
 
-	vector_clock * vc;
-
 	db_schema_t * schema;
 
 	int status;
@@ -153,8 +151,6 @@ int read_queue_while_not_empty(actor_args * ca, int * entries_read, snode_t ** s
 						ca->queue_table_key, ca->queue_id,
 						2, entries_read, &ca->read_head,
 						start_row, end_row, NULL, ca->db);
-
-		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		if(read_status < 0)
 		{
@@ -314,12 +310,12 @@ int send_outgoing_msgs(actor_args * ca, int outgoing_counters[], int no_outgoing
 	return 0;
 }
 
-int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, int * msgs_sent, uuid_t * txnid, actor_args * ca, unsigned int * fastrandstate)
+int process_messages(snode_t * start_row, snode_t * end_row, int entries_read,
+						int outgoing_counters[], int * no_outgoing_counters,
+						actor_args * ca, unsigned int * fastrandstate)
 {
 	int ret = 0;
 	int processed = 0;
-	int outgoing_counters[100];
-	int no_outgoing_counters = 0;
 	snode_t * crt_row = NULL;
 
 	if(entries_read == 0 || start_row == NULL)
@@ -350,7 +346,8 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 		ca->total_rcv++;
 
 		counter_val++;
-		outgoing_counters[no_outgoing_counters++] = counter_val;
+		outgoing_counters[*no_outgoing_counters] = counter_val;
+		*no_outgoing_counters = (*no_outgoing_counters) + 1;
 
 		int64_t dest_id = ((int64_t) ca->consumer_id < no_actors - 1)? ((int64_t) ca->consumer_id + 1) : 0;
 
@@ -362,27 +359,31 @@ int process_messages(snode_t * start_row, snode_t * end_row, int entries_read, i
 
 	assert(processed == entries_read);
 
-	if(processed > 0)
-	{
-		// Checkpoint local state in txn:
+	return processed;
+}
 
-		ret = checkpoint_local_state(ca, txnid, fastrandstate);
+int produce_effects(uuid_t * txnid, actor_args * ca,
+					int * msgs_sent, int outgoing_counters[], int no_outgoing_counters,
+					unsigned int * fastrandstate)
+{
+	// Checkpoint local state in txn:
 
-		assert(ret == 0);
+	int ret = checkpoint_local_state(ca, txnid, fastrandstate);
 
-		if(debug)
-			printf("ACTOR %" PRId64 ": Chekpointed local state in txn.\n", (int64_t) ca->consumer_id);
+	assert(ret == 0);
 
-		// Send outgoing msgs in txn:
-		ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
+	if(debug)
+		printf("ACTOR %" PRId64 ": Chekpointed local state in txn.\n", (int64_t) ca->consumer_id);
 
-		assert(ret == 0);
+	// Send outgoing msgs in txn:
+	ret = send_outgoing_msgs(ca, outgoing_counters, no_outgoing_counters, msgs_sent, txnid, fastrandstate);
 
-		if(debug)
-			printf("ACTOR %" PRId64 ": Sent %d outgoing msgs in txn.\n", (int64_t) ca->consumer_id, *msgs_sent);
-	}
+	assert(ret == 0);
 
-	return ret;
+	if(debug)
+		printf("ACTOR %" PRId64 ": Sent %d outgoing msgs in txn.\n", (int64_t) ca->consumer_id, *msgs_sent);
+
+	return 0;
 }
 
 void * actor(void * cargs)
@@ -391,14 +392,14 @@ void * actor(void * cargs)
 	int ret = 0;
 	snode_t * start_row, * end_row;
 	int msgs_sent = 0;
+	int outgoing_counters[100];
+	int no_outgoing_counters = 0;
 
 	actor_args * ca = (actor_args *) cargs;
 
 	queue_callback * qc = ca->qc;
 
 	GET_RANDSEED(&seed, 0); // thread_id
-
-	increment_vc(ca->vc, (int) ca->consumer_id);
 
 	int64_t prev_read_head = -1, prev_consume_head = -1;
 	ret = remote_subscribe_queue(ca->consumer_id, ca->shard_id, ca->app_id, ca->queue_table_key, ca->queue_id, qc,
@@ -409,8 +410,6 @@ void * actor(void * cargs)
 
 	if(debug)
 		printf("ACTOR %" PRId64 ": Subscribed to queue %" PRId64 "/%" PRId64 " with callback (%p/%p/%p/%p)\n", (int64_t) ca->consumer_id, (int64_t) ca->queue_table_key, (int64_t) ca->queue_id, qc, qc->lock, qc->signal, qc->callback);
-
-	increment_vc(ca->vc, (int) ca->consumer_id);
 
 	ca->rcv_counters = create_skiplist_long();
 	ca->snd_counters = create_skiplist_long();
@@ -433,6 +432,11 @@ void * actor(void * cargs)
 		return (void *) read_status;
 	}
 
+	// Add app-specific message processing work here:
+
+	no_outgoing_counters = 0;
+	ret = process_messages(start_row, end_row, entries_read, outgoing_counters, &no_outgoing_counters, ca, &seed);
+
 	if(entries_read > 0)
 	{
 		int checkpoint_success = 0;
@@ -440,9 +444,7 @@ void * actor(void * cargs)
 		{
 			uuid_t * txnid = remote_new_txn(ca->db);
 
-			// Add app-specific message processing work here:
-
-			ret = process_messages(start_row, end_row, entries_read, &msgs_sent, txnid, ca, &seed);
+			ret = produce_effects(txnid, ca, &msgs_sent, outgoing_counters, no_outgoing_counters, &seed);
 
 			assert(ret == 0);
 
@@ -467,8 +469,6 @@ void * actor(void * cargs)
 
 //		remote_print_long_table(state_table_key, ca->db);
 //		remote_print_long_table(queue_table_key, ca->db);
-
-		increment_vc(ca->vc, (int) ca->consumer_id);
 
 		ca->successful_consumes = ca->successful_dequeues;
 		ca->successful_enqueues += msgs_sent;
@@ -503,7 +503,8 @@ void * actor(void * cargs)
 			return (void *) read_status;
 		}
 
-		// Add app-specific message processing work here
+		no_outgoing_counters = 0;
+		ret = process_messages(start_row, end_row, entries_read, outgoing_counters, &no_outgoing_counters, ca, &seed);
 
 		if(entries_read > 0)
 		{
@@ -512,7 +513,7 @@ void * actor(void * cargs)
 			{
 				uuid_t * txnid = remote_new_txn(ca->db);
 
-				process_messages(start_row, end_row, entries_read, &msgs_sent, txnid, ca, &seed);
+				ret = produce_effects(txnid, ca, &msgs_sent, outgoing_counters, no_outgoing_counters, &seed);
 
 				// Consume input queue in same txn:
 
@@ -535,8 +536,6 @@ void * actor(void * cargs)
 
 //			remote_print_long_table(state_table_key, ca->db);
 //			remote_print_long_table(queue_table_key, ca->db);
-
-			increment_vc(ca->vc, (int) ca->consumer_id);
 
 			ca->successful_consumes = ca->successful_dequeues;
 			ca->successful_enqueues += msgs_sent;
@@ -621,7 +620,6 @@ int main(int argc, char **argv) {
 		cargs[i].queue_table_key = queue_table_key;
 		cargs[i].queue_id = cargs[i].consumer_id;
 		cargs[i].no_enqueues = no_items;
-		cargs[i].vc = init_vc(no_actors, (int *) node_ids, (int64_t *) counters, 0);
 		cargs[i].qc = get_queue_callback(consumer_callback);
 		cargs[i].schema = schema;
 

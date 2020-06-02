@@ -182,7 +182,7 @@ runRestPasses args paths src env original = (do
                           kchecked <- Acton.Kinds.check env' original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
                           
-                          (sigs,tchecked,tyinfo) <- Acton.Types.reconstruct outbase env' kchecked
+                          (sigs,tchecked) <- Acton.Types.reconstruct outbase env' kchecked
                           iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (iface args) $ dump "iface" (Pretty.vprint sigs)
 

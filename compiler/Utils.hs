@@ -46,7 +46,7 @@ dom                             = map fst
 
 rng                             = map snd
 
-prune xs                        = filter ((`notElem` xs) . fst)
+exclude xs                      = filter ((`notElem` xs) . fst)
 
 restrict xs                     = filter ((`elem` xs) . fst)
 
