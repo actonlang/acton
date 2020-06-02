@@ -251,13 +251,10 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
-noDecls                     :: TEnv -> TEnv
-noDecls te                  = [ (n,i) | (n,i) <- te, not $ isDecl i ]
-  where isDecl NDef{}       = True
-        isDecl NAct{}       = True
-        isDecl NClass{}     = True
-        isDecl NProto{}     = True
-        isDecl NExt{}       = True
+noDefs                      :: TEnv -> TEnv
+noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
+  where isDef NDef{}        = True
+        isDef NAct{}        = True
         isDef _             = False
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)

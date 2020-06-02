@@ -233,6 +233,7 @@ handler qn b    = Handler (Except NoLoc qn) b
 eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
+eTuple es       = Tuple NoLoc (foldr PosArg PosNil es) KwdNil
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
@@ -568,7 +569,6 @@ importsOf (Module _ imps _)         = impsOf imps
 unop op e                           = UnOp l0 (Op l0 op) e
 binop e1 op e2                      = BinOp l0 e1 (Op l0 op) e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
--- tuple es                            = Tuple l0 (map Elem es)
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 

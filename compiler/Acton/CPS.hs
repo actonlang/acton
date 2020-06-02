@@ -203,7 +203,7 @@ instance CPS [Stmt] where
                                              els' <- cpsSuite env els
                                              let advance = sAssign [p] (eCall (eDot (eVar ivar) nextKW) [])
                                                  body = sTry (advance : b') [handler qnStopIteration els'] [] [] : []
-                                             return $ sAssign [pVar ivar Nothing] (eCallVar iterKW [e]) :
+                                             return $ sAssign [pVar ivar Nothing] e :
                                                       sDef k (pospar [x]) body :
                                                       jump k
 

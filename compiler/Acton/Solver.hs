@@ -69,17 +69,17 @@ reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
 
 reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
-reduce' env eq c@(Impl w (TVar _ tv) p)
+reduce' env eq c@(Impl w t@(TVar _ tv) p)
   | not $ scoped tv env                     = do defer [c]; return eq
   | Just wit <- search                      = do (cs,p',e) <- instWitness env [] wit
                                                  unifyM env (tcargs p) (tcargs p')
-                                                 reduce env eq cs
+                                                 reduce env ((w,constraint2type t p,e):eq) cs
   where search                              = findWitness env (NoQ $ tvname tv) (tcname p ==)
   
-reduce' env eq c@(Impl w (TCon _ tc) p)
+reduce' env eq c@(Impl w t@(TCon _ tc) p)
   | Just wit <- search                      = do (cs,p',e) <- instWitness env (tcargs tc) wit
                                                  unifyM env (tcargs p) (tcargs p')
-                                                 reduce env eq cs
+                                                 reduce env ((w,constraint2type t p,e):eq) cs
   where search                              = findWitness env (tcname tc) (tcname p ==)
 
 reduce' env eq c@(Impl w (TExist _ u) p)
@@ -380,3 +380,10 @@ findElem k r0 n r tl                        = do r0' <- msubst r0
                                                  return (t, revApp r0 r)
         revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
         revApp (TNil _ _) r2                = r2
+
+
+----------------------------------------------------------------------------------------------------------------------
+-- Misc.
+----------------------------------------------------------------------------------------------------------------------
+
+constraint2type t (TC n ts)             = tCon $ TC n (t:ts)
