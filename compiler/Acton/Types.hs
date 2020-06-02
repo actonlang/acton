@@ -280,8 +280,6 @@ instance InfEnv Decl where
                                                  te <- infActorEnv env b
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
-                                                 -- st <- newTVar
-                                                 -- init_sc = monotype (tFun (fxAct st) prow krow tNone)
                                                  return ([], [(n, NAct q prow krow te)], d)
                                              _ ->
                                                  illegalRedef n
@@ -544,8 +542,9 @@ mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in 
                 | otherwise             = (TBind v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
                 impls                   = [ u | Impl w (TVar _ v') u <- cs, v == v' ]
-                wits                    = [ (w, constr2type t u) | Impl w t@(TVar _ v') u <- cs, v == v' ]
-        constr2type t (TC n ts)         = TC n (t:ts)
+                wits                    = [ (w, constraint2type t u) | Impl w t@(TVar _ v') u <- cs, v == v' ]
+
+constraint2type t (TC n ts)             = TC n (t:ts)
 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
@@ -570,10 +569,11 @@ genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
     generalize s q (n, i)               = (n, i)
 
     abstract q ds ws eq d@Def{}
-      | null $ qual d                   = d{ qual = q, pos = w2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+      | null $ qual d                   = d{ qual = q, pos = wit2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds ws (dbody d)) }
       where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
+            bindInDef (If l bs els)     = If l [ Branch l (map bindInDef ss) | Branch l ss <- bs ] (map bindInDef els)
             bindInDef stmt              = stmt
             bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
@@ -582,19 +582,19 @@ genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
     wsubst ds ws                        = transform trans
       where
         trans ns (Call l x@(Var _ (NoQ n)) p k)
-          | Just _ <- wfind n ns        = Just $ Call l x (w2arg ws p) k
+          | Just _ <- wfind n ns        = Just $ Call l x (wit2arg ws p) k
         trans ns x@(Var _ (NoQ n))
-          | Just (p,k,fx) <- wfind n ns = Just $ Lambda NoLoc (w2par ws p) k (Call NoLoc x (w2arg ws $ pArg p) (kArg k)) fx
+          | Just (p,k,fx) <- wfind n ns = Just $ Lambda NoLoc p k (Call NoLoc x (wit2arg ws (pArg p)) (kArg k)) fx
         trans ns _                      = Nothing
     
         wfind n ns | n `elem` ns        = Nothing
                    | otherwise          = lookup n [ (n,(p,k,fx)) | Def _ n [] p k _ _ _ fx <- ds ]
-    
-    w2arg ws                            = \p -> foldr f p ws
-      where f (w,tc)                    = PosArg (eVar w)
 
-    w2par ws                            = \p -> foldr f p ws
-      where f (w,tc)                    = PosPar w (Just $ tCon tc) Nothing
+wit2arg ws                              = \p -> foldr f p ws
+  where f (w,tc)                        = PosArg (eVar w)
+
+wit2par ws                              = \p -> foldr f p ws
+  where f (w,tc)                        = PosPar w (Just $ tCon tc) Nothing
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -628,16 +628,59 @@ instance InfEnv Except where
     infEnv env ex@(ExceptAs l x n)      = return ([Cast t tException], [(n, NVar t)], ex)
       where t                           = tCon (TC x [])
 
+pPar p                                  = f [ Internal "pos" i TypesPass | i <- [0..] ] p
+  where f ns (TRow _ PRow n t p)
+          | n == name "_"               = PosPar (head ns) (Just t) Nothing (f (tail ns) p)
+          | otherwise                   = PosPar n (Just t) Nothing (f ns p)
+        f ns (TNil _ PRow)              = PosNIL
+        f ns t                          = PosSTAR (head ns) (Just t)
+
+kPar k                                  = f [ Internal "kwd" i TypesPass | i <- [0..] ] k
+  where f ns (TRow _ KRow n t p)
+          | n == name "_"               = KwdPar (head ns) (Just t) Nothing (f (tail ns) p)
+          | otherwise                   = KwdPar n (Just t) Nothing (f ns p)
+        f ns (TNil _ KRow)              = KwdNIL
+        f ns t                          = KwdSTAR (head ns) (Just t)
+
+appWits cs tx e
+  | null ws                             = e
+  | otherwise                           = Lambda NoLoc p' k' (Call NoLoc e (wit2arg ws (pArg p')) (kArg k')) fx
+  where ws                              = [ (w, constraint2type t p) | Impl w t p <- cs ]
+        TFun _ fx p k _                 = tx
+        (p',k')                         = (pPar p, kPar k)
+
+appWits2nd Static cs tx e               = appWits cs tx e
+appWits2nd _ cs tx e
+  | null ws                             = e
+  | otherwise                           = Lambda NoLoc p' k' (Call NoLoc e (PosArg pSelf (wit2arg ws pArgs)) (kArg k')) fx
+  where ws                              = [ (w, constraint2type t p) | Impl w t p <- cs ]
+        TFun _ fx p k _                 = tx
+        (p',k')                         = (pPar p, kPar k)
+        PosArg pSelf pArgs              = pArg p'                    
+
+
 instance Infer Expr where
-    infer env (Var l n)                 = case findQName n env of
-                                            NVar t -> return ([], t, Var l n)
-                                            NSVar t -> return ([], t, Var l n)              -- TODO: Cast currFX (fxAct st)
-                                            NDef sc d -> do (cs,t) <- instantiate env sc    -- TODO: apply wits of cs
-                                                            return (cs, t, Var l n)
-                                            NClass q _ _ -> undefined                       -- TODO: define!
-                                            NAct q p k _ -> do st <- newTVar
-                                                               (cs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
-                                                               return (cs, t, Var l n)
+    infer env x@(Var _ n)               = case findQName n env of
+                                            NVar t -> return ([], t, x)
+                                            NSVar t -> do
+                                                fx <- currFX
+                                                st <- newTVar
+                                                return ([Cast (fxMut st) fx], t, x)
+                                            NDef sc d -> do 
+                                                (cs,t) <- instantiate env sc
+                                                return (cs, t, appWits cs t x)
+                                            NClass q _ _ -> do
+                                                (cs0,ts) <- instQual env q
+                                                case findAttr env (TC n ts) initKW of
+                                                    Just (_wf,sc,_dec) -> do
+                                                        (cs1,t) <- instantiate env sc
+                                                        let t0 = tCon $ TC n ts
+                                                            t' = subst [(tvSelf,t0)] t{ restype = tSelf }
+                                                        return (cs1, t', appWits (cs0++cs1) t' x)
+                                            NAct q p k _ -> do
+                                                st <- newTVar
+                                                (cs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
+                                                return (cs, t, appWits cs t x)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
                                             NBlocked -> nameBlocked n
@@ -776,35 +819,35 @@ instance Infer Expr where
     infer env (Dot l e n)
       | Just m <- isModule env e        = infer env (Var l (QName m n))
 
-    infer env (Dot l (Var l' c) n)
-      | NClass q us te <- cinfo         = do (_,ts) <- instQual env q
+    infer env (Dot l x@(Var _ c) n)
+      | NClass q us te <- cinfo         = do (cs0,ts) <- instQual env q
                                              case findAttr env (TC c ts) n of
                                                 Just (_wf,sc,dec)
                                                   | isProp dec sc -> err l "Property attribute not selectable by class"
                                                   | otherwise -> do
-                                                      (cs1,t) <- instantiate env sc              -- TODO: apply wits of cs1
+                                                      (cs1,t) <- instantiate env sc
                                                       let t0 = tCon $ TC c ts
                                                           t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                      return (cs1, t', Dot l (Var l' c) n)
+                                                      return (cs0++cs1, t', appWits2nd dec (cs0++cs1) t' (Dot l x n))
                                                 Nothing ->
                                                     case findWitness env c (hasAttr env n) of
                                                         Just wit -> do
                                                             (cs1,p,e) <- instWitness env ts wit
                                                             let Just (wf,sc,dec) = findAttr env p n
-                                                            (cs2,t) <- instantiate env sc                -- TODO: apply wits of cs2
+                                                            (cs2,t) <- instantiate env sc
                                                             let t0 = tCon $ TC c ts
                                                                 t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                            return (cs1++cs2, t', Dot l (wf e) n)
+                                                            return (cs1++cs2, t', appWits cs2 t' (Dot l (wf e) n))
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQual env q
                                              case findAttr env (TC c ts) n of
                                                 Just (wf,sc,dec) -> do
-                                                    (cs1,t) <- instantiate env sc                -- TODO: apply wits of cs1
+                                                    (cs1,t) <- instantiate env sc
                                                     t0 <- newTVar
                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Impl w t0 (TC c ts) :
-                                                            cs1, t', Dot l (wf $ eVar w) n)
+                                                            cs1, t', appWits cs1 t' (Dot l (wf $ eVar w) n))
                                                 Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
 
