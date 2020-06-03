@@ -14,7 +14,7 @@ $bool lambda$1$__bool__(lambda$1 self) {
 $str lambda$1$__str__(lambda$1 self) {
   char *s;
   asprintf(&s,"<lambda$1 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
@@ -52,7 +52,7 @@ $bool lambda$2$__bool__(lambda$2 self) {
 $str lambda$2$__str__(lambda$2 self) {
   char *s;
   asprintf(&s,"<lambda$2 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
@@ -91,7 +91,7 @@ $bool Pingpong$__bool__(Pingpong self) {
 $str Pingpong$__str__(Pingpong self) {
   char *s;
   asprintf(&s,"<Pingpong object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
     $step_serialize(self->i,state);

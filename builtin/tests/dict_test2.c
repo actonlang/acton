@@ -7,12 +7,12 @@
 $WORD toWord(long i) {
   char *s;
   int n = asprintf(&s,"%lu",i);
-  $str str = from$UTF8(s);
+  $str str = to$str(s);
   return ($WORD)str;
 }
 
 long fromWord($WORD w) {
-  unsigned char *str = to$UTF8(($str)w);
+  unsigned char *str = from$str(($str)w);
   long x;
   sscanf((char *)str,"%lu",&x);
   return x;

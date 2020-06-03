@@ -391,7 +391,7 @@ void $set_remove($set set, $Hashable hashwit, $WORD elem) {
   if($set_discard_entry(set,hashwit,elem,hash))
     return;
   else {
-    RAISE(($BaseException)$NEW($KeyError,from$UTF8("remove: element not set member")));
+    RAISE(($BaseException)$NEW($KeyError,to$str("remove: element not set member")));
   }
 }
 
@@ -432,6 +432,10 @@ int $set_isdisjoint($Hashable hashwit, $set set, $set other) {
 }
 
 // Collection /////////////////////////////////////////////////////////////////////////////////////////////
+
+$set $set_fromiter($Hashable hashwit,$Iterable$opaque iter) {
+  return $NEW($set, hashwit, iter);
+}
 
 long $set_len($set set) {
   return set->numelements;
@@ -490,7 +494,7 @@ $bool $Iterator$set_bool($Iterator$set self) {
 $str $Iterator$set_str($Iterator$set self) {
   char *s;
   asprintf(&s,"<set keys iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$set_serialize($Iterator$set self, $Serial$state state) {

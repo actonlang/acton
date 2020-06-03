@@ -53,7 +53,7 @@ int main() {
   $WORD lst2 = range(wit,1,100);
   printf("1+2+...+99 = %ld\n",from$int(concat(wit->w$Collection$Sequence,($Indexed)wit,($Plus)$Plus$int$witness,lst2,to$int(0))));
   // and finally as a very complicated identity function for strings
-  printf("result is '%s'\n",to$UTF8(concat(($Collection)$Container$str$witness,($Indexed)$Sliceable$str$witness,($Plus)$Plus$str$witness,from$UTF8("Complicated identity function"),from$UTF8(""))));
+  printf("result is '%s'\n",from$str(concat(($Collection)$Container$str$witness,($Indexed)$Sliceable$str$witness,($Plus)$Plus$str$witness,to$str("Complicated identity function"),to$str(""))));
 }
                  
   

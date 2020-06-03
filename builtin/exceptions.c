@@ -8,8 +8,8 @@ $bool $BaseException$__bool__($BaseException self) {
 
 $str $BaseException$__str__($BaseException self) {
   char *s;
-  asprintf(&s,"BaseException:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"BaseException:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $BaseException$__serialize__($BaseException self, $Serial$state state) {
@@ -35,8 +35,8 @@ $bool $SystemExit$__bool__($SystemExit self) {
 
 $str $SystemExit$__str__($SystemExit self) {
   char *s;
-  asprintf(&s,"SystemExit:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"SystemExit:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $SystemExit$__serialize__($SystemExit self, $Serial$state state) {
@@ -62,8 +62,8 @@ $bool $KeyboardInterrupt$__bool__($KeyboardInterrupt self) {
 
 $str $KeyboardInterrupt$__str__($KeyboardInterrupt self) {
   char *s;
-  asprintf(&s,"KeyboardInterrupt:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"KeyboardInterrupt:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $KeyboardInterrupt$__serialize__($KeyboardInterrupt self,$Serial$state state) {
@@ -89,8 +89,8 @@ $bool $Exception$__bool__($Exception self) {
 
 $str $Exception$__str__($Exception self) {
   char *s;
-  asprintf(&s,"Exception:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"Exception:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $Exception$__serialize__($Exception self,$Serial$state state) {
@@ -116,8 +116,8 @@ $bool $AssertionError$__bool__($AssertionError self) {
 
 $str $AssertionError$__str__($AssertionError self) {
   char *s;
-  asprintf(&s,"AssertionError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"AssertionError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $AssertionError$__serialize__($AssertionError self, $Serial$state state) {
@@ -143,8 +143,8 @@ $bool $LookupError$__bool__($LookupError self) {
 
 $str $LookupError$__str__($LookupError self) {
   char *s;
-  asprintf(&s,"LookupError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"LookupError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $LookupError$__serialize__($LookupError self,$Serial$state state) {
@@ -170,8 +170,8 @@ $bool $IndexError$__bool__($IndexError self) {
 
 $str $IndexError$__str__($IndexError self) {
   char *s;
-  asprintf(&s,"IndexError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"IndexError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $IndexError$__serialize__($IndexError self, $Serial$state state) {
@@ -196,8 +196,8 @@ $bool $KeyError$__bool__($KeyError self) {
 
 $str $KeyError$__str__($KeyError self) {
   char *s;
-  asprintf(&s,"KeyError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"KeyError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $KeyError$__serialize__($KeyError self, $Serial$state state) {
@@ -223,8 +223,8 @@ $bool $MemoryError$__bool__($MemoryError self) {
 
 $str $MemoryError$__str__($MemoryError self) {
   char *s;
-  asprintf(&s,"MemoryError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"MemoryError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $MemoryError$__serialize__($MemoryError self, $Serial$state state) {
@@ -250,8 +250,8 @@ $bool $OSError$__bool__($OSError self) {
 
 $str $OSError$__str__($OSError self) {
   char *s;
-  asprintf(&s,"OSError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"OSError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $OSError$__serialize__($OSError self, $Serial$state state) {
@@ -277,8 +277,8 @@ $bool $RuntimeError$__bool__($RuntimeError self) {
 
 $str $RuntimeError$__str__($RuntimeError self) {
   char *s;
-  asprintf(&s,"RuntimeError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"RuntimeError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $RuntimeError$__serialize__($RuntimeError self, $Serial$state state) {
@@ -303,8 +303,8 @@ $bool $NotImplementedError$__bool__($NotImplementedError self) {
 
 $str $NotImplementedError$__str__($NotImplementedError self) {
   char *s;
-  asprintf(&s,"NotImplementedError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"NotImplementedError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $NotImplementedError$__serialize__($NotImplementedError self, $Serial$state state) {
@@ -331,8 +331,8 @@ $bool $ValueError$__bool__($ValueError self) {
 
 $str $ValueError$__str__($ValueError self) {
   char *s;
-  asprintf(&s,"ValueError:  %s>",to$UTF8(self->error_message));
-  return from$UTF8(s);
+  asprintf(&s,"ValueError:  %s>",from$str(self->error_message));
+  return to$str(s);
 }
 
 void $ValueError$__serialize__($ValueError self,$Serial$state state) {
@@ -350,6 +350,6 @@ struct $ValueError$class $ValueError$methods = {"",UNASSIGNED,($Super$class)&$Ex
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 void RAISE($BaseException e) {
-  fprintf(stderr,"%s\n",(char*)to$UTF8(e->error_message));
+  fprintf(stderr,"%s\n",(char*)from$str(e->error_message));
   exit(1);
 }

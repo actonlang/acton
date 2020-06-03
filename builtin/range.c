@@ -8,7 +8,7 @@ void $range$__init__($range self, $int start, $int stop, $int step) {
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("step size zero in range")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("step size zero in range")));
     }
     else
       self->step = stp;
@@ -25,7 +25,7 @@ $bool $range$__bool__($range self) {
 $str $range$__str__($range self) {
   char *s;
   asprintf(&s,"range(%d,%d,%d)",self->start,self->stop,self->step);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $range$__serialize__($range self, $Serial$state state) {
@@ -67,7 +67,7 @@ $bool $Iterator$range_bool($Iterator$range self) {
 $str $Iterator$range_str($Iterator$range self) {
   char *s;
   asprintf(&s,"<range iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$range_serialize($Iterator$range self, $Serial$state state) {

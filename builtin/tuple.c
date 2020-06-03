@@ -43,7 +43,7 @@ $tuple $tuple_deserialize($Serial$state state) {
     int len = (int)(long)this->blob[0];
     $tuple res = malloc(sizeof(struct $tuple));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
-    $WORD *comps = malloc(len * sizeof($WORD));
+    res->components = malloc(len * sizeof($WORD));
     res->$class = &$tuple$methods;
     res->size = len;
     for (int i = 0; i < len; i++) 
@@ -81,7 +81,7 @@ $bool $Iterator$tuple_bool($Iterator$tuple self) {
 $str $Iterator$tuple_str($Iterator$tuple self) {
   char *s;
   asprintf(&s,"<tuple iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 void $Iterator$tuple_serialize($Iterator$tuple self,$Serial$state state) {
   $step_serialize(self->src,state);
@@ -125,7 +125,7 @@ $WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple wit, $tuple self, $int n) {
   int ix = (int)from$int(n);
   int ix0 = ix < 0 ? size + ix : ix;
   if (ix0 < 0 || ix0 >= size) {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("getitem: indexing outside tuple")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("getitem: indexing outside tuple")));
   }
   return self->components[ix0];
 }
@@ -202,3 +202,24 @@ $int $Hashable$tuple$__hash__ ($Hashable$tuple wit, $tuple tup) {
 
 struct $Hashable$tuple$class $Hashable$tuple$methods = {"",UNASSIGNED, NULL,$Hashable$tuple$__init__,
                                                           $Hashable$tuple$__eq__,$Hashable$tuple$__ne__,$Hashable$tuple$__hash__};
+
+
+$tuple tup1($WORD a) {
+  $WORD comps[] = {a};
+  return $NEW($tuple,1,comps);
+}
+
+$tuple tup2($WORD a, $WORD b) {
+  $WORD comps[] = {a,b};
+  return $NEW($tuple,2,comps);
+}
+
+$tuple tup3($WORD a, $WORD b, $WORD c) {
+  $WORD comps[] = {a,b,c};
+  return $NEW($tuple,3,comps);
+}
+
+$tuple tup4($WORD a, $WORD b, $WORD c, $WORD d) {
+  $WORD comps[] = {a,b,c,d};
+  return $NEW($tuple,4,comps);
+}

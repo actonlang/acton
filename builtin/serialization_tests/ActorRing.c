@@ -13,7 +13,7 @@ $bool lambda$1$__bool__(lambda$1 self) {
 $str lambda$1$__str__(lambda$1 self) {
   char *s;
   asprintf(&s,"<lambda$1 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
@@ -57,7 +57,7 @@ $bool lambda$2$__bool__(lambda$2 self) {
 $str lambda$2$__str__(lambda$2 self) {
   char *s;
   asprintf(&s,"<lambda$2 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
@@ -109,7 +109,7 @@ $bool Act$__bool__(Act self) {
 $str Act$__str__(Act self) {
   char *s;
   asprintf(&s,"<Act object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void Act$__serialize__(Act self, $Serial$state state) {
@@ -173,7 +173,7 @@ $bool lambda$3$__bool__(lambda$3 self) {
 $str lambda$3$__str__(lambda$3 self) {
   char *s;
   asprintf(&s,"<lambda$3 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$3$__serialize__(lambda$3 self, $Serial$state state) {
@@ -219,7 +219,7 @@ $bool lambda$4$__bool__(lambda$4 self) {
 $str lambda$4$__str__(lambda$4 self) {
   char *s;
   asprintf(&s,"<lambda$4 object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void lambda$4$__serialize__(lambda$4 self, $Serial$state state) {
@@ -283,7 +283,7 @@ $bool Root$__bool__(Root self) {
 $str Root$__str__(Root self) {
   char *s;
   asprintf(&s,"<Root object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void Root$__serialize__(Root self, $Serial$state state) {

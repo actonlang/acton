@@ -1,7 +1,7 @@
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $int_init($int self, long val){
-  self->val = val;
+void $int_init($int self, $Integral$opaque n){
+  self->val = n->proto->$class->__int__(n->proto,n->impl)->val;
 }
 
 void $int_serialize($int n,$Serial$state state) {
@@ -19,7 +19,7 @@ $bool $int_bool($int n) {
 $str $int_str($int n) {
   char *s;
   asprintf(&s,"%ld",n->val);
-  return from$UTF8(s);
+  return to$str(s);
 }
   
 struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_bool,$int_str,$int_serialize,$int_deserialize};

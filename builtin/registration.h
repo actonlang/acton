@@ -80,17 +80,6 @@ void $register_force(int classid, $WORD meths);
 
 #define $GET_METHODS(classid)  (($Serializable$methods)$list_getitem($methods,classid))
 
+// list of method tables indexed by class_id. Only accessed via GET_METHODS above-
+
 $list $methods;
-
-/*
-
-*
- * During serialization, get_classid is called to get the integer to be stored in the serialized file.
- *
-int $get_classid($Serializable$methods meths);
-
- *
- * During deserialization, the method table is retrieved by calling get_methods.
- *
-$Serializable$methods $get_methods(int classid);
-*/

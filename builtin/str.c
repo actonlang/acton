@@ -72,6 +72,7 @@ int $str_ge($str,$str);
 
 $Iterator $str_iter($str);
 
+$str $str_fromiter($Iterable$opaque);
 $int $str_len($str str);
 
 int $str_contains ($str, $str);
@@ -110,6 +111,10 @@ $bool $Ord$str$__ge__ ($Ord$str wit, $str a, $str b){
 
 $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
+}
+
+$str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque iter) {
+  return $str_join(to$str(""),iter);
 }
 
 $int $Container$str$__len__ ($Container$str wit, $str str) {
@@ -233,7 +238,7 @@ nm = malloc(sizeof(struct $str)); \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
 
-$str from$UTF8(char *str) {
+$str to$str(char *str) {
   int nbytes = 0;
   int nchars = 0;
 
@@ -259,7 +264,7 @@ $str from$UTF8(char *str) {
   }
 }
 
-unsigned char *to$UTF8($str str) {
+unsigned char *from$str($str str) {
   return str->str;
 }
 
@@ -363,7 +368,7 @@ static int get_index(int i, int nchars) {
     if (i >= -nchars)
       return nchars+i;
   }
-  RAISE(($BaseException)$NEW($IndexError,from$UTF8("indexing outside str")));
+  RAISE(($BaseException)$NEW($IndexError,to$str("indexing outside str")));
   return 0;
 }
 
@@ -690,7 +695,7 @@ $str $str_capitalize($str s) {
 
 $str $str_center($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("center: fill string not single char")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("center: fill string not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -797,7 +802,7 @@ $int $str_find($str s, $str sub, $int start, $int end) {
 $int $str_index($str s, $str sub, $int start, $int end) {
   $int n = $str_find(s,sub,start,end);
   if (from$int(n)<0) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("index: substring not found")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
   }
   return n;
 }
@@ -956,39 +961,6 @@ $bool $str_isupper($str s) {
   return to$bool(hascased);
 }
 
-/* $str $str_join($str s, $Iterable$opaque it) { */
-/*   $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl); */
-/*   int len = 0; */
-/*   int totchars = 0; */
-/*   int totbytes = 0; */
-/*   $str nxt; */
-/*   while ((nxt = ($str)iter->$class->__next__(iter))) { */
-/*     len++; */
-/*     totchars += nxt->nchars; */
-/*     totbytes += nxt->nbytes; */
-/*   } */
-/*   if (len > 1) { */
-/*     totchars += (len-1) * s->nchars; */
-/*     totbytes += (len-1) * s->nbytes; */
-/*   } */
-/*   $str res; */
-/*   NEW_UNFILLED(res,totchars,totbytes); */
-/*   if (len > 0) { */
-/*     unsigned char *p = res->str; */
-/*     iter = it->proto->$class->__iter__(it->proto,it->impl); */
-/*     nxt = ($str)iter->$class->__next__(iter); */
-/*     memcpy(p,nxt->str,nxt->nbytes); */
-/*     p += nxt->nbytes; */
-/*     while ((nxt = ($str)iter->$class->__next__(iter))) { */
-/*       memcpy(p,s->str,s->nbytes); */
-/*       p += s->nbytes; */
-/*       memcpy(p,nxt->str,nxt->nbytes); */
-/*       p += nxt->nbytes; */
-/*     } */
-/*   } */
-/*   return res; */
-/* } */
-
 $str $str_join($str s, $Iterable$opaque it) {
   int totchars = 0;
   int totbytes = 0;
@@ -1024,7 +996,7 @@ $str $str_join($str s, $Iterable$opaque it) {
 
 $str $str_ljust($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ljust: fill str not single char")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("ljust: fill str not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -1133,14 +1105,14 @@ $int $str_rfind($str s, $str sub, $int start, $int end) {
 $int $str_rindex($str s, $str sub, $int start, $int end) {
   $int n = $str_rfind(s,sub,start,end);
   if (from$int(n)<0) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("rindex: substring not found")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("rindex: substring not found")));
   };
   return n;
 }
 
 $str $str_rjust($str s, int width, $str fill) {
   if (fill->nchars != 1) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("rjust: fill string not single char")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
   }
   if (width <= s->nchars) {
     return s;
@@ -1232,7 +1204,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     return res;
   } else { // separator given
     if (sep->nchars==0) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("split: separator is empty string")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("split: separator is empty string")));
     }
     if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
       $list_append(res,null_str);
@@ -1466,11 +1438,11 @@ $str $bin($Integral$opaque n) {
 $str $chr($Integral$opaque n) {
   long v = n->proto->$class->__int__(n->proto,n->impl)->val;
   if (v >=  0x110000)
-     RAISE(($BaseException)$NEW($ValueError,from$UTF8("chr: argument is not a valid Unicode code point")));
+     RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   unsigned char code[4];
   int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
   if (nbytes==0)
-     RAISE(($BaseException)$NEW($ValueError,from$UTF8("chr: argument is not a valid Unicode code point")));
+     RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   $str res;
   NEW_UNFILLED(res,1,nbytes);
   for (int i=0; i<nbytes; i++)
@@ -1514,11 +1486,11 @@ $str $hex($Integral$opaque n) {
 
 $int $ord($str c) {
   if(c->nchars != 1)
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ord: argument is not a single Unicode char")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
   int cp;
   int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
   if (cpnbytes < 0)
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ord: argument is not a single Unicode char")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
   return to$int(cp);
 }
 

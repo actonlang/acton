@@ -16,7 +16,7 @@ $bool $Node__bool__($Node self) {
 }
 
 $str $Node__str__($Node self) {
-  return from$UTF8("$Node");
+  return to$str("$Node");
 }
 
 $Node $Node__deserialize__($Serial$state state) {                   
@@ -39,7 +39,7 @@ $bool $IntNode__bool__($IntNode self) {
 }
 
 $str $IntNode__str__($IntNode self) {
-  return from$UTF8("$IntNode");
+  return to$str("$IntNode");
 }
 
 void $IntNode__serialize__($IntNode self,$Serial$state state) {
@@ -69,7 +69,7 @@ $bool $FloatNode__bool__($FloatNode self) {
 }
 
 $str $FloatNode__str__($FloatNode self) {
-  return from$UTF8("$FloatNode");
+  return to$str("$FloatNode");
 }
 
 void $FloatNode__serialize__($FloatNode self,$Serial$state state) {
@@ -99,7 +99,7 @@ $bool $Graph__bool__($Graph self) {
 }
 
 $str $Graph__str__($Graph self) {
-  return from$UTF8("$Graph");
+  return to$str("$Graph");
 }
 
 void $Graph__serialize__($Graph self, $Serial$state state) {

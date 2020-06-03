@@ -1,12 +1,17 @@
 
-struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
-                                                              $Mapping$dict$__containsnot__, $Mapping$dict$get, $Mapping$dict$keys, $Mapping$dict$values,
-                                                              $Mapping$dict$items, $Mapping$dict$update, $Mapping$dict$popitem, $Mapping$dict$setdefault};
+struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__,
+                                                     $Mapping$dict$__fromiter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
+                                                     $Mapping$dict$__containsnot__, $Mapping$dict$get, $Mapping$dict$keys, $Mapping$dict$values,
+                                                     $Mapping$dict$items, $Mapping$dict$update, $Mapping$dict$popitem, $Mapping$dict$setdefault};
 
 struct $Indexed$dict$class   $Indexed$dict$methods = {"", UNASSIGNED,NULL,$Indexed$dict$__init__, $Indexed$dict$__getitem__, $Indexed$dict$__setitem__, $Indexed$dict$__delitem__};
 
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict wit, $dict dict) {
   return $dict_iter(dict);
+}
+
+$dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable$opaque iter) {
+  return $dict_fromiter(wit->w$Hashable$Mapping,iter);
 }
 
 $int $Mapping$dict$__len__ ($Mapping$dict wit, $dict dict) {

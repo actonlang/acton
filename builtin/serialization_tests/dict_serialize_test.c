@@ -3,8 +3,8 @@
 int main() {
   $register_builtin();
   $Hashable wit = ($Hashable)$Hashable$str$witness;
-  $str a = from$UTF8("a");
-  $str b = from$UTF8("b");
+  $str a = to$str("a");
+  $str b = to$str("b");
   $dict dict = $NEW($dict,wit,NULL);
   $Iterable$opaque it = $Iterable$pack(($Iterable)$Iterable$range$witness,$NEW($range,to$int(0),to$int(10),to$int(1)));
   $list lst = $NEW($list,it);

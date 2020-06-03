@@ -1,15 +1,13 @@
 #include <math.h>
 
-
-
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $float_init($float self, double val){
-  self->val = val;
+void $float_init($float self, $Real$opaque x){
+  self->val = x->proto->$class->__float__(x->proto,x->impl)->val;
 }
 
-void $float_serialize($float x, $Serial$state state) {
-  $val_serialize(FLOAT_ID,&x->val,state);
+void $float_serialize($float self, $Serial$state state) {
+  $val_serialize(FLOAT_ID,&self->val,state);
 }
 
 $float $float_deserialize($Serial$state state) {
@@ -19,7 +17,6 @@ $float $float_deserialize($Serial$state state) {
  return to$float(x);
 }
 
-  
 $bool $float_bool($float x) {
   return to$bool(x->val != 0.0);
 }
@@ -27,7 +24,7 @@ $bool $float_bool($float x) {
 $str $float_str($float x) {
   char *s;
   asprintf(&s,"%g",x->val);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 struct $float$class $float$methods = {"",UNASSIGNED,NULL,$float_init,$float_bool,$float_str,$float_serialize, $float_deserialize};

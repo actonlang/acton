@@ -42,7 +42,7 @@ $bool $Null__bool__($Serializable self) {
 }
 
 $str $Null__str__($Serializable self) {
-  return from$UTF8("NULL");
+  return to$str("NULL");
 }
 
 void $Null__serialize__($Serializable self, $Serial$state state) {

@@ -1,5 +1,6 @@
 ## Built-in types ##################################################################################
 
+
 class int:
   pass
 
@@ -103,7 +104,7 @@ class str:
 
 class Msg[A] ():
   pass
-
+    
 ## General protocols ###############################################################################
 
 protocol Eq:
@@ -237,7 +238,7 @@ protocol Sliceable[A] (Indexed[int,A]):
   
 protocol Collection[A] (Iterable[A]):
   @staticmethod
-#  __fromiter__ : (Iterable[A]) -> Self 
+  __fromiter__ : (Iterable[A]) -> Self 
   __len__      : () -> int
   
 protocol Container[A(Eq)] (Collection[A]):
@@ -355,9 +356,6 @@ def divmod(a : Integral, b : Integral) -> (Integral, Integral):
 enumerate : (Iterable[A],?int) -> Iterator[(A,int)]
 
 filter : (?((A) -> B), Iterable[A]) -> Iterator[B]
-
-#def float(x : Real) -> float:
-#   return x.__float__()
 
 def hash(x : Hashable) -> int:
   return x.__hash__()

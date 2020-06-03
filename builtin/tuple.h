@@ -48,3 +48,8 @@ struct $Iterator$tuple {
 };
 
 extern struct $Iterator$tuple$class $Iterator$tuple$methods;
+
+$tuple tup1($WORD a);
+$tuple tup2($WORD a, $WORD b);
+$tuple tup3($WORD a, $WORD b, $WORD c);
+$tuple tup4($WORD a, $WORD b, $WORD c, $WORD d);

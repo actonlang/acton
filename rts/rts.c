@@ -117,7 +117,7 @@ $bool $Msg$__bool__($Msg self) {
 $str $Msg$__str__($Msg self) {
   char *s;
   asprintf(&s,"<$Msg object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Msg$__serialize__($Msg self, $Serial$state state) {
@@ -159,7 +159,7 @@ $bool $Actor$__bool__($Actor self) {
 $str $Actor$__str__($Actor self) {
   char *s;
   asprintf(&s,"<$Actor object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Actor$__serialize__($Actor self, $Serial$state state) {
@@ -191,7 +191,7 @@ $bool $Catcher$__bool__($Catcher self) {
 $str $Catcher$__str__($Catcher self) {
   char *s;
   asprintf(&s,"<$Catcher object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Catcher$__serialize__($Catcher self, $Serial$state state) {
@@ -216,7 +216,7 @@ $bool $Clos$__bool__($Clos self) {
 $str $Clos$__str__($Clos self) {
   char *s;
   asprintf(&s,"<$Clos object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Clos$__serialize__($Clos self, $Serial$state state) {
@@ -238,7 +238,7 @@ $bool $Cont$__bool__($Cont self) {
 $str $Cont$__str__($Cont self) {
   char *s;
   asprintf(&s,"<$Cont object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Cont$__serialize__($Cont self, $Serial$state state) {
@@ -264,7 +264,7 @@ $bool $RetNew$__bool__($RetNew self) {
 $str $RetNew$__str__($RetNew self) {
   char *s;
   asprintf(&s,"<$RetNew object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $RetNew$__serialize__($RetNew self, $Serial$state state) {
@@ -537,7 +537,7 @@ $bool $Done$__bool__($Cont self) {
 $str $Done$__str__($Cont self) {
   char *s;
   asprintf(&s,"<$Done object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Done__serialize__($Cont self, $Serial$state state) {

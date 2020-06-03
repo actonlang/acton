@@ -12,9 +12,9 @@ $bool $bool_bool($bool self) {
 
 $str $bool_str($bool self) {
   if (self->val)
-    return from$UTF8("True");
+    return to$str("True");
   else
-    return from$UTF8("False");
+    return to$str("False");
 }
 
 void $bool_serialize($bool self, $Serial$state state) {

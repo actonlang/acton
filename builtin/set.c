@@ -9,7 +9,7 @@ struct $Ord$set $Ord$set_instance;
 struct $Minus$set $Minus$set_instance;
 struct $Logical$set $Logical$set_instance;
 
-struct $Set$set$class $Set$set$methods = {"", UNASSIGNED,NULL, $Set$set$__init__,$Set$set$__iter__, $Set$set$__len__, $Set$set$__contains__,
+struct $Set$set$class $Set$set$methods = {"", UNASSIGNED,NULL, $Set$set$__init__,$Set$set$__iter__, $Set$set$__fromiter__,$Set$set$__len__, $Set$set$__contains__,
                                                    $Set$set$__containsnot__, $Set$set$isdisjoint, $Set$set$add, $Set$set$discard, $Set$set$pop};   
 
 struct $Ord$set$class $Ord$set$methods = {"", UNASSIGNED,NULL, $Ord$set$__init__,$Ord$set$__eq__,$Ord$set$__ne__,$Ord$set$__lt__,$Ord$set$__le__,$Ord$set$__gt__,$Ord$set$__ge__};
@@ -21,7 +21,11 @@ struct $Logical$set$class $Logical$set$methods = {"", UNASSIGNED,NULL, $Logical$
 $Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
   return $set_iter(set);
 }
-   
+
+$set $Set$set$__fromiter__($Set$set wit, $Iterable$opaque iter) {
+  return $NEW($set,wit->w$Hashable$Set,iter);
+}
+
 $int $Set$set$__len__ ($Set$set wit, $set set) {
   return to$int($set_len(set));
 }
