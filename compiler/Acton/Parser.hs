@@ -443,13 +443,13 @@ apat = addLoc (
 -- Targets -------------------------------------------------------------------------------------
 
 target :: Parser S.Target
-target = try $ 
-         do tmp <- atom_expr
+target = try $ do 
+            tmp <- atom_expr
             case tmp of
-                S.Var _ (S.NoQ n) -> return $ S.TgVar n
-                S.Dot _ e n       -> return $ S.TgDot e n
-                S.Index _ e ix    -> return $ S.TgIndex e ix
-                S.Slice _ e sl    -> return $ S.TgSlice e sl
+                S.Var _ (S.NoQ n) -> return tmp
+                S.Dot _ e n       -> return tmp
+                S.Index _ e ix    -> return tmp
+                S.Slice _ e sl    -> return tmp
                 _                 -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
 
 ------------------------------------------------------------------------------------------------

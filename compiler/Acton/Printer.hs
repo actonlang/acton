@@ -240,12 +240,6 @@ instance Pretty Pattern where
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
 
-instance Pretty Target where
-    pretty (TgVar n)                = pretty n
-    pretty (TgIndex e ix)           = pretty e <> brackets (commaList ix)
-    pretty (TgSlice e sl)           = pretty e <> brackets (commaList sl)
-    pretty (TgDot e n)              = pretty e <> dot <> pretty n
-
 prettyPats [] Nothing               = empty
 prettyPats ps Nothing               = commaSep pretty ps
 prettyPats [] (Just p)              = text "*" <> pretty p

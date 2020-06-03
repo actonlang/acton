@@ -316,14 +316,6 @@ instance Vars Pattern where
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
     
-instance Vars Target where
-    free (TgVar n)                  = [n]
-    free (TgIndex e ix)             = free e ++ free ix
-    free (TgSlice e sl)             = free e ++ free sl
-    free (TgDot e n)                = free e
-
-    bound _                         = []
-
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn
     bound (ModuleItem qn (Just n))  = free n

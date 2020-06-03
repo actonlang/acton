@@ -88,12 +88,6 @@ trans' env (SetComp l e c)              = SetComp l (trans env1 e) (trans env1 c
 trans' env (Paren l e)                  = Paren l (trans env e)
 trans' env e                            = e
 
-instance Transform Target where
-    trans env (TgVar n)                 = TgVar n
-    trans env (TgIndex e ix)            = TgIndex (trans env e) (trans env ix)
-    trans env (TgSlice e sl)            = TgSlice (trans env e) (trans env sl)
-    trans env (TgDot e n)               = TgDot (trans env e) n
-
 instance Transform Exception where
     trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)
 

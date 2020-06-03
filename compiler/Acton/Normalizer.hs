@@ -209,12 +209,6 @@ instance Norm Pattern where
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
     norm env (PParen l p)           = PParen l <$> norm env p
 
-instance Norm Target where
-    norm env (TgVar n)              = return $ TgVar n
-    norm env (TgIndex e ix)         = TgIndex <$> norm env e <*> norm env ix
-    norm env (TgSlice e sl)         = TgSlice <$> norm env e <*> norm env sl
-    norm env (TgDot e n)            = TgDot <$> norm env e <*> norm env n
-
 instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 

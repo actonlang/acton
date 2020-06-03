@@ -204,12 +204,6 @@ instance Gen Pattern where
     gen env (PVar _ n (Just t))     = gen env t <+> gen env n
     gen env (PParen _ p)            = gen env p
 
-instance Gen Target where
-    gen env (TgVar n)               = gen env n
-    gen env (TgIndex e ix)          = gen env e <> brackets (commaList ix)
-    gen env (TgSlice e sl)          = gen env e <> brackets (commaList sl)
-    gen env (TgDot e n)             = gen env e <> text "->" <> gen env n
-
 instance Gen Unary where
     gen env Not                     = text "not "
     gen env BNot                    = text "~"

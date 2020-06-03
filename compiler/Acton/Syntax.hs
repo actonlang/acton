@@ -90,11 +90,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
 
-data Target     = TgVar         { tn::Name}
-                | TgIndex       { texp::Expr, tindex::[Expr] }
-                | TgSlice       { texp::Expr, tslice::[Sliz] }
-                | TgDot         { texp::Expr, tn::Name }
-                deriving (Show)
+type Target     = Expr
 
 data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | NoPass
                 deriving (Eq,Ord,Show,Read,Generic)
@@ -504,13 +500,6 @@ instance Eq Pattern where
     PParen _ p1         == p2                   = p1 == p2
     p1                  == PParen _ p2          = p1 == p2
     _                   == _                    = False
-instance Eq Target where
-    TgVar n1            == TgVar n2             = n1 == n2
-    TgIndex e1 ix1      == TgIndex e2 ix2       = e1 == e2 && ix1 == ix2
-    TgSlice e1 sl1      == TgSlice e2 sl2       = e1 == e2 && sl1 == sl2
-    TgDot e1 n1         == TgDot e2 n2          = e1 == e2 && n1 == n2
-    _                   == _                    = False
-
 
 instance Eq TSchema where
     TSchema _ q1 t1     == TSchema _ q2 t2      = q1 == q2 && t1 == t2

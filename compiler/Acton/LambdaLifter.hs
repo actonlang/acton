@@ -350,9 +350,3 @@ instance Lift Comp where
 instance Lift Pattern where
     ll env (PVar l n a)                 = return (PVar l n a)
     ll env (PParen l p)                 = PParen l <$> ll env p
-
-instance Lift Target where
-    ll env (TgVar n)                    = return (TgVar n)
-    ll env (TgIndex e ix)               = TgIndex <$> ll env e <*> ll env ix
-    ll env (TgSlice e sl)               = TgSlice <$> ll env e <*> ll env sl
-    ll env (TgDot e n)                  = TgDot <$> ll env e <*> return n

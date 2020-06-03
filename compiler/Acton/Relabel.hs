@@ -103,12 +103,6 @@ instance Relabel Pattern where
     relabel (PList _ ps p) = PList <$> newLoc <*> relabel ps <*> relabel p
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
 
-instance Relabel Target where
-    relabel (TgVar n) = TgVar <$> relabel n
-    relabel (TgIndex e ix) = TgIndex <$> relabel e <*> relabel ix
-    relabel (TgSlice e sl) = TgSlice <$> relabel e <*> relabel sl
-    relabel (TgDot e n) = TgDot <$> relabel e <*> relabel n
-
 instance Relabel Exception where
   relabel (Exception e mbe) = Exception <$> relabel e <*> relabel mbe
 

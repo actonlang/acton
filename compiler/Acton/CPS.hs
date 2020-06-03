@@ -560,9 +560,3 @@ instance PreCPS Pattern where
     pre env (PList l ps p)              = PList l <$> pre env ps <*> pre env p
     pre env (PParen l p)                = PParen l <$> pre env p
     pre env (PData l n ixs)             = PData l n <$> pre env ixs
-
-instance PreCPS Target where
-    pre env (TgVar n)                   = return (TgVar n)
-    pre env (TgIndex e ix)              = TgIndex <$> pre env e <*> pre env ix
-    pre env (TgSlice e sl)              = TgSlice <$> pre env e <*> pre env sl
-    pre env (TgDot e n)                 = TgDot <$> pre env e <*> return n

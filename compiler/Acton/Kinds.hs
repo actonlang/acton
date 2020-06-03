@@ -181,12 +181,6 @@ instance KCheck Pattern where
     kchk env (PList l ps p)         = PList l <$> kchk env ps <*> kchk env p
     kchk env (PParen l p)           = PParen l <$> kchk env p
 
-instance KCheck Target where
-    kchk env (TgVar n)              = return $ TgVar n
-    kchk env (TgIndex e ix)         = TgIndex <$> kchk env e <*> kchk env ix
-    kchk env (TgSlice e sl)         = TgSlice <$> kchk env e <*> kchk env sl
-    kchk env (TgDot e n)            = TgDot <$> kchk env e <*> return n
-
 instance KCheck Exception where
     kchk env (Exception e mbe)      = Exception <$> kchk env e <*> kchk env mbe
 
@@ -491,12 +485,6 @@ instance KSubst Pattern where
     ksubst g (PTuple l ps ks)       = PTuple l <$> ksubst g ps <*> ksubst g ks
     ksubst g (PList l ps p)         = PList l <$> ksubst g ps <*> ksubst g p
     ksubst g (PParen l p)           = PParen l <$> ksubst g p
-
-instance KSubst Target where
-    ksubst g (TgVar n)              = return $ TgVar n
-    ksubst g (TgIndex e ix)         = TgIndex <$> ksubst g e <*> ksubst g ix
-    ksubst g (TgSlice e sl)         = TgSlice <$> ksubst g e <*> ksubst g sl
-    ksubst g (TgDot e n)            = TgDot <$> ksubst g e <*> return n
 
 instance KSubst Exception where
     ksubst g (Exception e mbe)      = Exception <$> ksubst g e <*> ksubst g mbe
