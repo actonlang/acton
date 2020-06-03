@@ -122,7 +122,7 @@ instance Pretty Expr where
     pretty (BStrings _ ss)          = hcat (map pretty ss)
     pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
     pretty (Await _ e)              = text "await" <+> pretty e
-    pretty (Index _ e ix)           = pretty e <> brackets (commaList ix)
+    pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
     pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
     pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2

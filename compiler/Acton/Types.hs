@@ -107,15 +107,13 @@ instance InfEnv Stmt where
       | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, te, Assign l pats' e')
-    infEnv env (MutAssign l (Index _ e1 ixs) e2)
+    infEnv env (MutAssign l (Index _ e1 ix) e2)
                                         = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
                                              t0 <- newTVar
                                              (cs2,e1') <- inferSub env (tExist $ pIndexed ti t0) e1
                                              (cs3,e2') <- inferSub env t0 e2
                                              return (cs1++cs2++cs3, [], Expr l (eCall (eDot (eDot e1' protoKW) setitemKW) [eDot e1' implKW, ix', e2']))
-      where ix | length ixs == 1        = head ixs
-               | otherwise              = eTuple ixs
     infEnv env (MutAssign l (Slice _ e1 slz) e2)
                                         = do (cs1,t,e1') <- infer env e1
                                              (cs2,sl') <- inferSlice env sl
@@ -724,13 +722,11 @@ instance Infer Expr where
                                              fx <- currFX
                                              return (Cast (fxAct st) fx :
                                                      cs1, t0, Await l e')
-    infer env (Index l e ixs)           = do ti <- newTVar
+    infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
                                              t0 <- newTVar
                                              (cs2,e') <- inferSub env (tExist $ pIndexed ti t0) e
                                              return (cs1++cs2, t0, eCall (eDot (eDot e' protoKW) getitemKW) [eDot e' implKW, ix'])
-      where ix | length ixs == 1        = head ixs
-               | otherwise              = eTuple ixs
     infer env (Slice l e slz)           = do (cs1,t,e') <- infer env e
                                              (cs2,sl') <- inferSlice env sl
                                              t0 <- newTVar

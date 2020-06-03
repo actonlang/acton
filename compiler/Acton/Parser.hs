@@ -904,8 +904,10 @@ atom_expr = do
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
                       try (do
-                        is <- brackets indexlist
-                        return (\a -> S.Index NoLoc a is))
+                        ixs <- brackets indexlist
+                        let ix | length ixs > 1 = S.eTuple ixs
+                               | otherwise      = head ixs
+                        return (\a -> S.Index NoLoc a ix))
                         <|>
                       (do
                         ss <- brackets slicelist

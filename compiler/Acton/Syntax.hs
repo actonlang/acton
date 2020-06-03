@@ -62,7 +62,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
                 | Await         { eloc::SrcLoc, exp1::Expr }
-                | Index         { eloc::SrcLoc, exp1::Expr, index::[Expr] }
+                | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Op Binary, exp2::Expr }
