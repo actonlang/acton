@@ -25,24 +25,26 @@ extern struct $Iterable$tuple *$Iterable$tuple$witness;
 extern struct $Sliceable$tuple *$Sliceable$tuple$witness;
 extern struct $Hashable$tuple *$Hashable$tuple_new(int,$Hashable*);
 
-/* // Iterators over tuples /////////////////////////////////////////////////////// */
+// Iterators over tuples ///////////////////////////////////////////////////////
 
-/* typedef struct $Iterator$tuple *$Iterator$tuple; ; */
+typedef struct $Iterator$tuple *$Iterator$tuple;
 
-/* struct $Iterator$tuple$class { */
-/*   char *$GCINFO; */
-/*   int $class_id; */
-/*   $Super$class $superclass; */
-/*   void (*__init__)($Iterator$tuple, $tuple); */
-/*   void (*__serialize__)($Iterator$tuple,$Serial$state); */
-/*   $Iterator$tuple (*__deserialize__)($Serial$state); */
-/*   $WORD(*__next__)($Iterator$tuple); */
-/* }; */
+struct $Iterator$tuple$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$tuple, $tuple);
+  $bool (*__bool__)($Iterator$tuple);
+  $str (*__str__)($Iterator$tuple);
+  void (*__serialize__)($Iterator$tuple,$Serial$state);
+  $Iterator$tuple (*__deserialize__)($Serial$state);
+  $WORD(*__next__)($Iterator$tuple);
+};
 
-/* struct $Iterator$tuple { */
-/*   struct $Iterator$tuple$class *$class; */
-/*   $tuple src; */
-/*   int nxt; */
-/* }; */
+struct $Iterator$tuple {
+  struct $Iterator$tuple$class *$class;
+  $tuple src;
+  int nxt;
+};
 
-/* extern struct $Iterator$tuple$class $Iterator$tuple$methods; */
+extern struct $Iterator$tuple$class $Iterator$tuple$methods;

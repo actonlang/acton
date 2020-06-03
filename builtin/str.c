@@ -20,11 +20,9 @@ $str $str_deserialize($Serial$state);
 $str $str_capitalize($str s);
 $str $str_center($str s, int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
-//void $str_encode($str s, bytes_t *res);
 $bool $str_endswith($str s, $str suffix, $int start, $int end);
 $str $str_expandtabs($str s, int tabsize);      
 $int $str_find($str s, $str sub, $int start, $int end);
-//format and format_map will be replace by other methods
 $int $str_index($str s, $str sub, $int start, $int end);
 $bool $str_isalnum($str s);
 $bool $str_isalpha($str s);
@@ -62,7 +60,6 @@ struct $str$class $str$methods =
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
 
-//static $str$methods $str_methods = &$str_table;
 
 // Implementations of protocol methods
 
@@ -131,13 +128,14 @@ $str $Sliceable$str$__getitem__ ($Sliceable$str wit, $str str, $int i) {
   return $str_getitem(str,from$int(i));
 }
 
-// this should be an internal error instead; calls are prevented by typechecking.
 void $Sliceable$str$__setitem__ ($Sliceable$str wit, $str str, $int i, $str val) {
-    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("setitem: str is immutable")));
+  fprintf(stderr,"Internal error: call to mutating method setitem on string");
+  exit(-1);
 }
 
 void $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
-    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("delitem: str is immutable")));
+  fprintf(stderr,"Internal error: call to mutating method delitem on string");
+  exit(-1);
 }
 
 $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
@@ -145,11 +143,13 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
 }
 
 void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
-    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("setslice: str is immutable")));
+  fprintf(stderr,"Internal error: call to mutating method setslice on string");
+  exit(-1);
 }
 
 void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
-    RAISE(($BaseException)$NEW($NotImplementedError,from$UTF8("delslice: str is immutable")));
+  fprintf(stderr,"Internal error: call to mutating method delslice on string");
+  exit(-1);
 }
 
 $str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
@@ -638,9 +638,7 @@ $bool $str_bool($str s) {
 };
 
 $str $str_str($str s) {
-  $list s2 = $list_new(1);
-  $list_append(s2,s);
-  return $str_join_par('\'',s2,'\'');
+  return s;                 // TODO: check if str contains '
 }
 
 
@@ -958,14 +956,47 @@ $bool $str_isupper($str s) {
   return to$bool(hascased);
 }
 
+/* $str $str_join($str s, $Iterable$opaque it) { */
+/*   $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl); */
+/*   int len = 0; */
+/*   int totchars = 0; */
+/*   int totbytes = 0; */
+/*   $str nxt; */
+/*   while ((nxt = ($str)iter->$class->__next__(iter))) { */
+/*     len++; */
+/*     totchars += nxt->nchars; */
+/*     totbytes += nxt->nbytes; */
+/*   } */
+/*   if (len > 1) { */
+/*     totchars += (len-1) * s->nchars; */
+/*     totbytes += (len-1) * s->nbytes; */
+/*   } */
+/*   $str res; */
+/*   NEW_UNFILLED(res,totchars,totbytes); */
+/*   if (len > 0) { */
+/*     unsigned char *p = res->str; */
+/*     iter = it->proto->$class->__iter__(it->proto,it->impl); */
+/*     nxt = ($str)iter->$class->__next__(iter); */
+/*     memcpy(p,nxt->str,nxt->nbytes); */
+/*     p += nxt->nbytes; */
+/*     while ((nxt = ($str)iter->$class->__next__(iter))) { */
+/*       memcpy(p,s->str,s->nbytes); */
+/*       p += s->nbytes; */
+/*       memcpy(p,nxt->str,nxt->nbytes); */
+/*       p += nxt->nbytes; */
+/*     } */
+/*   } */
+/*   return res; */
+/* } */
+
 $str $str_join($str s, $Iterable$opaque it) {
-  $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-  int len = 0;
   int totchars = 0;
   int totbytes = 0;
+  $list lst = $NEW($list,it);
   $str nxt;
-  while ((nxt = ($str)iter->$class->__next__(iter))) {
-    len ++;
+  int len = lst->length;
+  for (int i=0; i<len; i++) {
+    nxt = ($str)lst->data[i];
     totchars += nxt->nchars;
     totbytes += nxt->nbytes;
   }
@@ -976,12 +1007,12 @@ $str $str_join($str s, $Iterable$opaque it) {
   $str res;
   NEW_UNFILLED(res,totchars,totbytes);
   if (len > 0) {
+    nxt = ($str)lst->data[0];
     unsigned char *p = res->str;
-    iter = it->proto->$class->__iter__(it->proto,it->impl);
-    nxt = ($str)iter->$class->__next__(iter);
     memcpy(p,nxt->str,nxt->nbytes);
     p += nxt->nbytes;
-    while ((nxt = ($str)iter->$class->__next__(iter))) {
+    for (int i=1; i<len; i++) {
+      nxt = ($str)lst->data[i];
       memcpy(p,s->str,s->nbytes);
       p += s->nbytes;
       memcpy(p,nxt->str,nxt->nbytes);
@@ -1356,3 +1387,138 @@ $str $str_join_par(char lpar, $list elems, char rpar) {
   }
   return res;
 }
+
+$str $ascii($str s) {
+  unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
+  int printable = 0;
+  int escaped = 0; // Backslash, single and double quote
+  int non_printable = 0;
+  unsigned char c;
+  for (int i=0; i<s->nbytes; i++) {
+    c = s->str[i];
+    if (c < 32 || c > 126)
+      non_printable++;
+    else if (c=='\\' || c=='\'' || c=='"')
+      escaped++;
+    else 
+      printable++;
+  }
+  int nbytes = printable+2*escaped+4*non_printable;
+  $str res;
+  NEW_UNFILLED(res,nbytes,nbytes);
+  unsigned char *p =res->str;
+  for (int i=0; i<s->nbytes; i++) {
+    c = s->str[i];
+    if (c < 32 || c > 126) {
+      *p = '\\'; p++;
+      *p = 'x'; p++;
+      *p = hexdigits[c >> 4]; p++;
+      *p = hexdigits[c & 0xf]; p++;
+    } else if (c=='\\' || c=='\'' || c=='"') {
+      *p = '\\'; p++;
+      *p = c; p++;
+    } else {
+      *p = c; p++;
+    }
+  }
+  return res;
+}
+  
+$str $bin($Integral$opaque n) {
+  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+  int sign = v<0;
+  int nbits = 1;
+  unsigned long u = labs(v);
+  if (u & 0xffffffff00000000) {
+    u >>= 32; nbits += 32;
+  }
+  if (u & 0x00000000ffff0000) {
+    u >>= 16; nbits += 16;
+  }
+  if (u & 0x000000000000ff00) {
+    u >>= 8; nbits += 8;
+  }
+  if (u & 0x00000000000000f0) {
+    u >>= 4; nbits += 4;
+  }
+  if (u & 0x000000000000000c) {
+    u >>= 2; nbits += 2;
+  }
+  if (u & 0x0000000000000002) {
+    u >>= 1; nbits += 1;
+  }
+  $str res;
+  int nbytes = sign+2+nbits;
+  NEW_UNFILLED(res,nbytes,nbytes);
+  unsigned char *p = res->str;
+  if (sign) {
+    *p = '-'; p++;
+  }
+  *p = '0'; p++;
+  *p = 'b'; p++;
+  u = labs(v);
+  for (int i = nbits-1; i>=0; i--) {
+    *p = u & (1L << i) ? '1' : '0'; p++;
+  }
+  return res;
+}
+
+$str $chr($Integral$opaque n) {
+  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+  if (v >=  0x110000)
+     RAISE(($BaseException)$NEW($ValueError,from$UTF8("chr: argument is not a valid Unicode code point")));
+  unsigned char code[4];
+  int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
+  if (nbytes==0)
+     RAISE(($BaseException)$NEW($ValueError,from$UTF8("chr: argument is not a valid Unicode code point")));
+  $str res;
+  NEW_UNFILLED(res,1,nbytes);
+  for (int i=0; i<nbytes; i++)
+    res->str[i] = code[i];
+  return res;
+}
+
+$str $hex($Integral$opaque n) {
+  unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
+  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+  int sign = v<0;
+  int nhexs = 1;
+  unsigned long u = labs(v);
+  if (u & 0xffffffff00000000) {
+    u >>= 32; nhexs += 8;
+  }
+  if (u & 0x00000000ffff0000) {
+    u >>= 16; nhexs += 4;
+  }
+  if (u & 0x000000000000ff00) {
+    u >>= 8; nhexs += 2;
+  }
+  if (u & 0x00000000000000f0) {
+    u >>= 4; nhexs += 1;
+  }
+  $str res;
+  int nbytes = sign+2+nhexs;
+  NEW_UNFILLED(res,nbytes,nbytes);
+  unsigned char *p = res->str;
+  if (sign) {
+    *p = '-'; p++;
+  }
+  *p = '0'; p++;
+  *p = 'x'; p++;
+  u = labs(v);
+  for (int i = nhexs-1; i>=0; i--) {
+    *p = hexdigits[(u>>(4*i)) & 0xf]; p++;
+  }
+  return res;
+}
+
+$int $ord($str c) {
+  if(c->nchars != 1)
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ord: argument is not a single Unicode char")));
+  int cp;
+  int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
+  if (cpnbytes < 0)
+    RAISE(($BaseException)$NEW($ValueError,from$UTF8("ord: argument is not a single Unicode char")));
+  return to$int(cp);
+}
+

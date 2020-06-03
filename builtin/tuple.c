@@ -1,6 +1,8 @@
 void $tuple_init($tuple self,int size ,$WORD *comps) {
   self->size = size;
-  self->components = comps;
+  self->components = malloc(size*sizeof($WORD));
+  for (int i=0; i<size; i++)
+    self->components[i] = comps[i];
 }
 
 $bool $tuple_bool($tuple self) {
@@ -11,7 +13,6 @@ $str $tuple_str($tuple self) {
   $list s2 = $list_new(self->size);
   for (int i=0; i< self->size; i++) {
     $Initializable elem = ($Initializable)self->components[i];
-    printf("%s\n",to$UTF8(elem->$class->__str__(elem)));
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('(',s2,')');
@@ -31,7 +32,6 @@ void $tuple_serialize($tuple self, $Serial$state state) {
     $step_serialize(self->components[i],state);
   }
 }
-
 
 $tuple $tuple_deserialize($Serial$state state) {
   $ROW this = state->row;
@@ -63,46 +63,56 @@ struct $tuple$class $tuple$methods = {
     $tuple_deserialize
 };
 
-/* // Iterators over tuples /////////////////////////////////////////////////////// */
+// Iterators over tuples ///////////////////////////////////////////////////////
 
-/* static $WORD $Iterator$tuple_next($Iterator$tuple self) { */
-/*   return self->nxt >= self->src->size ? NULL : self->src->components[self->nxt++]; */
-/* } */
+static $WORD $Iterator$tuple_next($Iterator$tuple self) {
+  return self->nxt >= self->src->size ? NULL : self->src->components[self->nxt++];
+}
 
-/* void $Iterator$tuple_init($Iterator$tuple self, $tuple lst) { */
-/*   self->src = lst; */
-/*   self->nxt = 0; */
-/* } */
+void $Iterator$tuple_init($Iterator$tuple self, $tuple lst) {
+  self->src = lst;
+  self->nxt = 0;
+}
 
-/* void $Iterator$tuple_serialize($Iterator$tuple self,$Serial$state state) { */
-/*   $step_serialize(self->src,state); */
-/*   $step_serialize(to$int(self->nxt),state); */
-/* } */
+$bool $Iterator$tuple_bool($Iterator$tuple self) {
+  return $true;
+}
 
-/* $Iterator$tuple $Iterator$tuple$_deserialize($Serial$state state) { */
-/*    $Iterator$tuple res = $DNEW($Iterator$tuple,state); */
-/*    res->src = $step_deserialize(state); */
-/*    res->nxt = from$int(($int)$step_deserialize(state)); */
-/*    return res; */
-/* } */
+$str $Iterator$tuple_str($Iterator$tuple self) {
+  char *s;
+  asprintf(&s,"<tuple iterator object at %p>",self);
+  return from$UTF8(s);
+}
+void $Iterator$tuple_serialize($Iterator$tuple self,$Serial$state state) {
+  $step_serialize(self->src,state);
+  $step_serialize(to$int(self->nxt),state);
+}
 
-/* struct $Iterator$tuple$class $Iterator$tuple$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$tuple_init, */
-/*                                                       $Iterator$tuple_serialize, $Iterator$tuple$_deserialize, $Iterator$tuple_next}; */
+$Iterator$tuple $Iterator$tuple$_deserialize($Serial$state state) {
+   $Iterator$tuple res = $DNEW($Iterator$tuple,state);
+   res->src = $step_deserialize(state);
+   res->nxt = from$int(($int)$step_deserialize(state));
+   return res;
+}
+
+struct $Iterator$tuple$class $Iterator$tuple$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$tuple_init,
+                                                        $Iterator$tuple_bool, $Iterator$tuple_str,
+                                                      $Iterator$tuple_serialize, $Iterator$tuple$_deserialize, $Iterator$tuple_next};
 
 
-/* // Iterable /////////////////////////////////////////////////////////////// */
+// Iterable ///////////////////////////////////////////////////////////////
 
-/* $Iterator $Iterable$tuple$__iter__($Iterable$tuple wit, $tuple self) { */
-/*   return ($Iterator)$NEW($Iterator$tuple,self); */
-/* } */
+$Iterator $Iterable$tuple$__iter__($Iterable$tuple wit, $tuple self) {
+  return ($Iterator)$NEW($Iterator$tuple,self);
+}
 
-/* void $Iterable$tuple$__init__($Iterable$tuple self) { */
-/*   return; */
-/* } */
+void $Iterable$tuple$__init__($Iterable$tuple self) {
+  return;
+}
 
-/* struct $Iterable$tuple$class $Iterable$tuple$methods = {"",UNASSIGNED, NULL,$Iterable$tuple$__init__,$Iterable$tuple$__iter__}; */
-/* struct $Iterable$tuple $Iterable$tuple$instance = {&$Iterable$tuple$methods}; */
-/* struct $Iterable$tuple *$Iterable$tuple$witness = &$Iterable$tuple$instance; */
+struct $Iterable$tuple$class $Iterable$tuple$methods = {"",UNASSIGNED, NULL,$Iterable$tuple$__init__,$Iterable$tuple$__iter__};
+struct $Iterable$tuple $Iterable$tuple$instance = {&$Iterable$tuple$methods};
+struct $Iterable$tuple *$Iterable$tuple$witness = &$Iterable$tuple$instance;
 
 // Sliceable ///////////////////////////////////////////////////////////////
 

@@ -352,12 +352,15 @@ chr : (Integral) -> str
 def divmod(a : Integral, b : Integral) -> (Integral, Integral): 
   return Integral.__divmod__(a,b)
 
-enumerate : (Iterable[A],?int) -> Iterable[(A,int)]
+enumerate : (Iterable[A],?int) -> Iterator[(A,int)]
 
 filter : (?((A) -> B), Iterable[A]) -> Iterator[B]
 
 #def float(x : Real) -> float:
 #   return x.__float__()
+
+def hash(x : Hashable) -> int:
+  return x.__hash__()
 
 hex : (Integral) -> str
 
