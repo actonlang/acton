@@ -25,8 +25,8 @@ instance (Transform a) => Transform (Maybe a) where
 instance Transform Stmt where
     trans env (Expr l e)                = Expr l (trans env e)
     trans env (Assign l ps e)           = Assign l ps (trans env e)
-    trans env (Update l ts e)           = Update l (trans env ts) (trans env e)
-    trans env (IUpdate l t op e)        = IUpdate l (trans env t) op (trans env e)
+    trans env (MutAssign l t e)         = MutAssign l (trans env t) (trans env e)
+    trans env (AugAssign l t op e)      = AugAssign l (trans env t) op (trans env e)
     trans env (Assert l e mbe)          = Assert l (trans env e) (trans env mbe)
     trans env (Delete l t)              = Delete l (trans env t)
     trans env (Return l mbe)            = Return l (trans env mbe)
@@ -89,12 +89,10 @@ trans' env (Paren l e)                  = Paren l (trans env e)
 trans' env e                            = e
 
 instance Transform Target where
-    trans env (TaVar l n)               = TaVar l n
-    trans env (TaTuple l ps)            = TaTuple l (trans env ps)
-    trans env (TaIndex l e ix)          = TaIndex l (trans env e) (trans env ix)
-    trans env (TaSlice l e sl)          = TaSlice l (trans env e) (trans env sl)
-    trans env (TaDot l e n)             = TaDot l (trans env e) n
-    trans env (TaParen l t)             = TaParen l (trans env t)
+    trans env (TgVar n)                 = TgVar n
+    trans env (TgIndex e ix)            = TgIndex (trans env e) (trans env ix)
+    trans env (TgSlice e sl)            = TgSlice (trans env e) (trans env sl)
+    trans env (TgDot e n)               = TgDot (trans env e) n
 
 instance Transform Exception where
     trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)

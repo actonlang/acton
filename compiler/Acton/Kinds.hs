@@ -106,9 +106,9 @@ kchkSuite env (s : ss)              = do s <- kchk env s; ss <- kchkSuite env ss
 
 instance KCheck Stmt where
     kchk env (Expr l e)             = Expr l <$> kchk env e
-    kchk env (Assign l ts e)        = Assign l <$> kchk env ts <*> kchk env e
-    kchk env (Update l ts e)        = Update l <$> kchk env ts <*> kchk env e
-    kchk env (IUpdate l t op e)     = IUpdate l <$> kchk env t <*> return op <*> kchk env e
+    kchk env (Assign l ps e)        = Assign l <$> kchk env ps <*> kchk env e
+    kchk env (MutAssign l t e)      = MutAssign l <$> kchk env t <*> kchk env e
+    kchk env (AugAssign l t op e)   = AugAssign l <$> kchk env t <*> return op <*> kchk env e
     kchk env (Assert l e mbe)       = Assert l <$> kchk env e <*> kchk env mbe
     kchk env (Pass l)               = return $ Pass l
     kchk env (Delete l p)           = Delete l <$> kchk env p
@@ -182,12 +182,10 @@ instance KCheck Pattern where
     kchk env (PParen l p)           = PParen l <$> kchk env p
 
 instance KCheck Target where
-    kchk env (TaVar l n)            = return $ TaVar l n
-    kchk env (TaTuple l ps)         = TaTuple l <$> kchk env ps
-    kchk env (TaIndex l e ix)       = TaIndex l <$> kchk env e <*> kchk env ix
-    kchk env (TaSlice l e sl)       = TaSlice l <$> kchk env e <*> kchk env sl
-    kchk env (TaDot l e n)          = TaDot l <$> kchk env e <*> return n
-    kchk env (TaParen l p)          = TaParen l <$> kchk env p
+    kchk env (TgVar n)              = return $ TgVar n
+    kchk env (TgIndex e ix)         = TgIndex <$> kchk env e <*> kchk env ix
+    kchk env (TgSlice e sl)         = TgSlice <$> kchk env e <*> kchk env sl
+    kchk env (TgDot e n)            = TgDot <$> kchk env e <*> return n
 
 instance KCheck Exception where
     kchk env (Exception e mbe)      = Exception <$> kchk env e <*> kchk env mbe
@@ -428,9 +426,9 @@ instance KSubst FX where
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
-    ksubst g (Assign l ts e)        = Assign l <$> ksubst g ts <*> ksubst g e
-    ksubst g (Update l ts e)        = Update l <$> ksubst g ts <*> ksubst g e
-    ksubst g (IUpdate l t op e)     = IUpdate l <$> ksubst g t <*> return op <*> ksubst g e
+    ksubst g (Assign l ps e)        = Assign l <$> ksubst g ps <*> ksubst g e
+    ksubst g (MutAssign l t e)      = MutAssign l <$> ksubst g t <*> ksubst g e
+    ksubst g (AugAssign l t op e)   = AugAssign l <$> ksubst g t <*> return op <*> ksubst g e
     ksubst g (Assert l e mbe)       = Assert l <$> ksubst g e <*> ksubst g mbe
     ksubst g (Pass l)               = return $ Pass l
     ksubst g (Delete l p)           = Delete l <$> ksubst g p
@@ -495,12 +493,10 @@ instance KSubst Pattern where
     ksubst g (PParen l p)           = PParen l <$> ksubst g p
 
 instance KSubst Target where
-    ksubst g (TaVar l n)            = return $ TaVar l n
-    ksubst g (TaTuple l ts)         = TaTuple l <$> ksubst g ts
-    ksubst g (TaIndex l e ix)       = TaIndex l <$> ksubst g e <*> ksubst g ix
-    ksubst g (TaSlice l e sl)       = TaSlice l <$> ksubst g e <*> ksubst g sl
-    ksubst g (TaDot l e n)          = TaDot l <$> ksubst g e <*> return n
-    ksubst g (TaParen l p)          = TaParen l <$> ksubst g p
+    ksubst g (TgVar n)              = return $ TgVar n
+    ksubst g (TgIndex e ix)         = TgIndex <$> ksubst g e <*> ksubst g ix
+    ksubst g (TgSlice e sl)         = TgSlice <$> ksubst g e <*> ksubst g sl
+    ksubst g (TgDot e n)            = TgDot <$> ksubst g e <*> return n
 
 instance KSubst Exception where
     ksubst g (Exception e mbe)      = Exception <$> ksubst g e <*> ksubst g mbe

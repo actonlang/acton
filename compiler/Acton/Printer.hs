@@ -25,11 +25,11 @@ prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
-    pretty (Update _ ts e)          = hsep . punctuate (space <> equals) $ map pretty ts ++ [pretty e]
-    pretty (IUpdate _ t o e)        = pretty t <+> pretty o <+> pretty e
+    pretty (MutAssign _ t e)        = pretty t <+> equals <+> pretty e
+    pretty (AugAssign _ t o e)      = pretty t <+> pretty o <+> pretty e
     pretty (Assert _ e mbe)         = text "assert" <+> pretty e <> nonEmpty (comma <+>) pretty mbe
     pretty (Pass _)                 = text "pass"
-    pretty (Delete _ t)             = text "del" <+> pretty t
+    pretty (Delete _ ts)            = text "del" <+> commaList ts
     pretty (Return _ e)             = text "return" <+> pretty e
     pretty (Raise _ e)              = text "raise" <+> pretty e
     pretty (Break _)                = text "break"
@@ -241,12 +241,10 @@ instance Pretty Pattern where
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
 
 instance Pretty Target where
-    pretty (TaVar _ n)              = pretty n
-    pretty (TaTuple _ ts)           = commaList ts
-    pretty (TaIndex _ e ix)         = pretty e <> brackets (commaList ix)
-    pretty (TaSlice _ e sl)         = pretty e <> brackets (commaList sl)
-    pretty (TaDot _ e n)            = pretty e <> dot <> pretty n
-    pretty (TaParen _ t)            = parens (pretty t)
+    pretty (TgVar n)                = pretty n
+    pretty (TgIndex e ix)           = pretty e <> brackets (commaList ix)
+    pretty (TgSlice e sl)           = pretty e <> brackets (commaList sl)
+    pretty (TgDot e n)              = pretty e <> dot <> pretty n
 
 prettyPats [] Nothing               = empty
 prettyPats ps Nothing               = commaSep pretty ps

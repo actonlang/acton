@@ -162,17 +162,17 @@ instance CPS [Stmt] where
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
-    cps env (Update _ ts e : ss)
+    cps env (MutAssign _ t e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
-                                             ss' <- cps env (sUpdate ts (eVar x) : ss)
+                                             ss' <- cps env (sMutAssign t (eVar x) : ss)
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
-    cps env (IUpdate _ t op e : ss)
+    cps env (AugAssign _ t op e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
-                                             ss' <- cps env (sIUpdate t op (eVar x) : ss)
+                                             ss' <- cps env (sAugAssign t op (eVar x) : ss)
                                              return $ sDef k (pospar [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
@@ -369,8 +369,8 @@ instance NeedCont Handler where
 instance NeedCont Stmt where
     needCont env (Expr _ e)             = contCall env e
     needCont env (Assign _ _ e)         = contCall env e
-    needCont env (Update _ _ e)         = contCall env e
-    needCont env (IUpdate _ _ _ e)      = contCall env e
+    needCont env (MutAssign _ _ e)      = contCall env e
+    needCont env (AugAssign _ _ _ e)    = contCall env e
     needCont env (If _ bs els)          = needCont env bs || needCont env els
     needCont env (While _ _ b els)      = needCont env b || needCont env els
     needCont env (For _ _ _ b els)      = needCont env b || needCont env els
@@ -403,8 +403,8 @@ instance PreCPS a => PreCPS (Maybe a) where
 instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
     pre env (Assign l ps e)             = Assign l <$> pre env ps <*> preTop env e
-    pre env (Update l ts e)             = Update l <$> pre env ts <*> preTop env e
-    pre env (IUpdate l t op e)          = IUpdate l <$> pre env t <*> return op <*> preTop env e
+    pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
+    pre env (AugAssign l t op e)        = AugAssign l <$> pre env t <*> return op <*> preTop env e
     pre env (Assert l e mbe)            = Assert l <$> pre env e <*> pre env mbe
     pre env (Delete l t)                = Delete l <$> pre env t
     pre env (Return l e)                = Return l <$> preTop env e
@@ -562,9 +562,7 @@ instance PreCPS Pattern where
     pre env (PData l n ixs)             = PData l n <$> pre env ixs
 
 instance PreCPS Target where
-    pre env (TaVar l n)                 = return (TaVar l n)
-    pre env (TaIndex l e ix)            = TaIndex l <$> pre env e <*> pre env ix
-    pre env (TaSlice l e sl)            = TaSlice l <$> pre env e <*> pre env sl
-    pre env (TaDot l e n)               = TaDot l <$> pre env e <*> return n
-    pre env (TaTuple l ps)              = TaTuple l <$> pre env ps
-    pre env (TaParen l p)               = TaParen l <$> pre env p
+    pre env (TgVar n)                   = return (TgVar n)
+    pre env (TgIndex e ix)              = TgIndex <$> pre env e <*> pre env ix
+    pre env (TgSlice e sl)              = TgSlice <$> pre env e <*> pre env sl
+    pre env (TgDot e n)                 = TgDot <$> pre env e <*> return n

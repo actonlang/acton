@@ -10,24 +10,23 @@ relab t = evalState (relabel t) 0
 type RM a = State Int a
 
 newLoc :: RM SrcLoc
-newLoc = do
-              o <- get
-              put (o+2)
-              return (Loc o (o+1))
+newLoc = do o <- get
+            put (o+2)
+            return (Loc o (o+1))
 
 class Relabel a where
-  relabel :: a -> RM a
+    relabel :: a -> RM a
 
 instance Relabel a => Relabel [a] where
-  relabel [] = return []
-  relabel (a:as) = (:) <$> relabel a <*> relabel as
+    relabel [] = return []
+    relabel (a:as) = (:) <$> relabel a <*> relabel as
 
 instance Relabel a => Relabel (Maybe a) where
-  relabel Nothing = return Nothing
-  relabel (Just a) = Just <$> relabel a
+    relabel Nothing = return Nothing
+    relabel (Just a) = Just <$> relabel a
 
 instance Relabel Module where
-  relabel (Module qn imps ss) = Module <$> relabel qn <*> relabel imps <*> relabel ss
+    relabel (Module qn imps ss) = Module <$> relabel qn <*> relabel imps <*> relabel ss
 
 instance Relabel Import where
     relabel (Import _ ms) = Import <$> newLoc <*> relabel ms
@@ -36,12 +35,12 @@ instance Relabel Import where
 
 instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
-    relabel (Assign _ ts e) = Assign <$> newLoc <*> relabel ts <*> relabel e
-    relabel (Update _ ts e) = Update <$> newLoc <*> relabel ts <*> relabel e
-    relabel (IUpdate _ t op e) = IUpdate <$> newLoc <*> relabel t <*> relabel op <*> relabel e
+    relabel (Assign _ ps e) = Assign <$> newLoc <*> relabel ps <*> relabel e
+    relabel (MutAssign _ t e) = MutAssign <$> newLoc <*> relabel t <*> relabel e
+    relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> relabel op <*> relabel e
     relabel (Assert _ e mbe) = Assert <$> newLoc <*> relabel e <*> relabel mbe
     relabel (Pass _) = Pass <$> newLoc
-    relabel (Delete _ t) = Delete <$> newLoc <*> relabel t
+    relabel (Delete _ ts) = Delete <$> newLoc <*> relabel ts
     relabel (Return _ mbe) = Return <$> newLoc <*> relabel mbe
     relabel (Raise _ mbex) = Raise <$> newLoc <*> relabel mbex
     relabel (Break _) = Break <$> newLoc
@@ -105,12 +104,10 @@ instance Relabel Pattern where
     relabel (PParen _ p) = PParen <$> newLoc <*> relabel p
 
 instance Relabel Target where
-    relabel (TaVar _ n) = TaVar <$> newLoc <*> relabel n
-    relabel (TaTuple _ ps) = TaTuple <$> newLoc <*> relabel ps
-    relabel (TaIndex _ e ix) = TaIndex <$> newLoc <*> relabel e <*> relabel ix
-    relabel (TaSlice _ e sl) = TaSlice <$> newLoc <*> relabel e <*> relabel sl
-    relabel (TaDot _ e n) = TaDot <$> newLoc <*> relabel e <*> relabel n
-    relabel (TaParen _ t) = TaParen <$> newLoc <*> relabel t
+    relabel (TgVar n) = TgVar <$> relabel n
+    relabel (TgIndex e ix) = TgIndex <$> relabel e <*> relabel ix
+    relabel (TgSlice e sl) = TgSlice <$> relabel e <*> relabel sl
+    relabel (TgDot e n) = TgDot <$> relabel e <*> relabel n
 
 instance Relabel Exception where
   relabel (Exception e mbe) = Exception <$> relabel e <*> relabel mbe

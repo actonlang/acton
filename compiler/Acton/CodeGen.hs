@@ -73,8 +73,8 @@ genSuite env ss                     = nest 4 $ vcat $ map (gen env) ss
 instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
-    gen env (Update _ [t] e)        = gen env t <+> equals <+> gen env e <> semi
-    gen env (IUpdate _ t op e)      = gen env t <+> gen env op <+> gen env e <> semi                    -- TODO: remove
+    gen env (MutAssign _ t e)       = gen env t <+> equals <+> gen env e <> semi
+    gen env (AugAssign _ t op e)    = gen env t <+> gen env op <+> gen env e <> semi                    -- TODO: remove
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi
@@ -205,11 +205,10 @@ instance Gen Pattern where
     gen env (PParen _ p)            = gen env p
 
 instance Gen Target where
-    gen env (TaVar _ n)             = gen env n
-    gen env (TaIndex _ e ix)        = gen env e <> brackets (commaList ix)
-    gen env (TaSlice _ e sl)        = gen env e <> brackets (commaList sl)
-    gen env (TaDot _ e n)           = gen env e <> text "->" <> gen env n
-    gen env (TaParen _ p)           = gen env p
+    gen env (TgVar n)               = gen env n
+    gen env (TgIndex e ix)          = gen env e <> brackets (commaList ix)
+    gen env (TgSlice e sl)          = gen env e <> brackets (commaList sl)
+    gen env (TgDot e n)             = gen env e <> text "->" <> gen env n
 
 instance Gen Unary where
     gen env Not                     = text "not "

@@ -107,15 +107,41 @@ instance InfEnv Stmt where
       | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, te, Assign l pats' e')
-    infEnv env (Update l targs e)       = do (cs1,t,targs') <- infer env targs
-                                             (cs2,e') <- inferSub env t e
-                                             return (cs1++cs2, [], Update l targs' e')
-    infEnv env (IUpdate l targ (Op _ o) e)
+    infEnv env (MutAssign l (TgIndex e1 ixs) e2)
+                                        = do ti <- newTVar
+                                             (cs1,ix') <- inferSub env ti ix
+                                             t0 <- newTVar
+                                             (cs2,e1') <- inferSub env (tExist $ pIndexed ti t0) e1
+                                             (cs3,e2') <- inferSub env t0 e2
+                                             return (cs1++cs2++cs3, [], Expr l (eCall (eDot (eDot e1' protoKW) setitemKW) [eDot e1' implKW, ix', e2']))
+      where ix | length ixs == 1        = head ixs
+               | otherwise              = eTuple ixs
+    infEnv env (MutAssign l (TgSlice e1 slz) e2)
+                                        = do (cs1,t,e1') <- infer env e1
+                                             (cs2,sl') <- inferSlice env sl
+                                             t0 <- newTVar
+                                             (cs3,e2') <- inferSub env (tExist $ pIterable t0) e2
+                                             w <- newWitness
+                                             return (Impl w t (pSliceable t0) :
+                                                     cs1++cs2++cs3, [], Expr l $ eCall (eDot (eVar w) setsliceKW) (e1' : toArgs sl' ++ [e2']))
+      where sl | length slz == 1        = head slz
+               | otherwise              = notYet l "Multidimensional slicing"
+            toArgs (Sliz _ e1 e2 e3)    = map (maybe eNone id) [e1,e2,e3]
+    infEnv env (MutAssign l (TgDot e1 n) e2)
+                                        = do (cs1,t1,e1') <- infer env e1
+                                             t2 <- newTVar
+                                             (cs2,e2') <- inferSub env t2 e2
+                                             fx <- currFX
+                                             st <- newTVar
+                                             return (Mut t1 n t2 :
+                                                     Cast (fxMut st) fx :
+                                                     cs1++cs2, [], MutAssign l (TgDot e1' n) e2')
+    infEnv env (AugAssign l targ (Op _ o) e)
                                         = do (cs1,t,targ') <- infer env targ
                                              (cs2,e') <- inferSub env t e
                                              w <- newWitness
                                              return (Impl w t (protocol o) :
-                                                     cs1++cs2, [], Update l [targ'] (eCall (eDot (eVar w) (method o)) [t2e targ',e']))
+                                                     cs1++cs2, [], MutAssign l targ' (eCall (eDot (eVar w) (method o)) [t2e targ',e']))
       where protocol PlusA              = pPlus
             protocol MinusA             = pMinus
             protocol MultA              = pNumber
@@ -142,12 +168,10 @@ instance InfEnv Stmt where
             method BXorA                = ixorKW
             method BAndA                = iandKW
             method MMultA               = imatmulKW
-            t2e (TaVar l n)             = Var l (NoQ n)
-            t2e (TaIndex l e ix)        = Index l e ix
-            t2e (TaSlice l e sl)        = Slice l e sl
-            t2e (TaDot l e n)           = Dot l e n
-            t2e (TaParen l tg)          = Paren l (t2e tg)
-            t2e (TaTuple l tgs)         = Tuple l (foldr PosArg PosNil $ map t2e tgs) KwdNil
+            t2e (TgVar n)               = Var NoLoc (NoQ n)
+            t2e (TgIndex e ix)          = Index NoLoc e ix
+            t2e (TgSlice e sl)          = Slice NoLoc e sl
+            t2e (TgDot e n)             = Dot NoLoc e n
     infEnv env (Assert l e1 e2)         = do (cs1,e1') <- inferBool env e1
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
@@ -1118,6 +1142,7 @@ instance InfEnvT [Pattern] where
                                              return (Cast t1 t2 :
                                                      cs1++cs2, te1++te2, t1, p':ps')
 
+
 instance Infer [Target] where
     infer env [t]                       = do (cs1,t1,t') <- infer env t
                                              return (cs1, t1, [t'])
@@ -1127,12 +1152,12 @@ instance Infer [Target] where
                                                      cs1++cs2, t1, t':ts')
 
 instance Infer Target where
-    infer env (TaVar l n)               = case findName n env of
-                                             NVar t -> return ([], t, TaVar l n)
-                                             NSVar t -> return ([], t, TaVar l n)
+    infer env (TgVar n)                 = case findName n env of
+                                             NVar t -> return ([], t, TgVar n)
+                                             NSVar t -> return ([], t, TgVar n)
                                              _ -> err1 n "Variable not mutable:"
 
-    infer env (TaIndex l e ixs)         = do (cs1,t,e') <- infer env e
+    infer env (TgIndex e ixs)           = do (cs1,t,e') <- infer env e
                                              ti <- newTVar
                                              (cs2,ix') <- inferSub env ti ix
                                              t0 <- newTVar
@@ -1142,10 +1167,10 @@ instance Infer Target where
                                              return (Impl w t (pIndexed ti t0) :
                                                      Cast t tObject : 
                                                      Cast (fxMut st) fx :
-                                                     cs1++cs2, t0, TaIndex l e' [ix'])             -- TODO: translate using w...
+                                                     cs1++cs2, t0, TgIndex e' [ix'])             -- TODO: translate using w...
       where ix | length ixs == 1        = head ixs
                | otherwise              = eTuple ixs
-    infer env (TaSlice l e slz)         = do (cs1,t,e') <- infer env e
+    infer env (TgSlice e slz)           = do (cs1,t,e') <- infer env e
                                              (cs2,sl') <- inferSlice env sl
                                              t0 <- newTVar
                                              w <- newWitness
@@ -1154,19 +1179,17 @@ instance Infer Target where
                                              return (Impl w t (pSliceable t0) :
                                                      Cast t tObject : 
                                                      Cast (fxMut st) fx :
-                                                     cs1++cs2, t, TaSlice l e' [sl'])              -- TODO: translate using w
+                                                     cs1++cs2, t, TgSlice e' [sl'])              -- TODO: translate using w
       where sl | length slz == 1        = head slz
-               | otherwise              = notYet l "Multidimensional slicing"
+               | otherwise              = notYet (loc e) "Multidimensional slicing"
             toArgs (Sliz _ e1 e2 e3)    = map (maybe eNone id) [e1,e2,e3]
-    infer env (TaDot l e n)             = do (cs,t,e') <- infer env e
+    infer env (TgDot e n)               = do (cs,t,e') <- infer env e
                                              t0 <- newTVar
                                              fx <- currFX
                                              st <- newTVar
                                              return (Mut t n t0 :
                                                      Cast (fxMut st) fx :
-                                                     cs, t0, TaDot l e' n)
-    infer env (TaTuple l targs)         = do (css,ts,targs') <- unzip3 <$> mapM (infer env) targs
-                                             return (concat css, tTuple (foldr posRow posNil ts), TaTuple l targs')
+                                                     cs, t0, TgDot e' n)
 
 {- Mark's THIH:                                            
 

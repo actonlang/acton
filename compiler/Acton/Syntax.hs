@@ -22,11 +22,11 @@ type Suite      = [Stmt]
 
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
-                | Update        { sloc::SrcLoc, targets::[Target], expr::Expr }
-                | IUpdate       { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
+                | MutAssign     { sloc::SrcLoc, target::Target, expr::Expr }
+                | AugAssign     { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
-                | Delete        { sloc::SrcLoc, target::Target}
+                | Delete        { sloc::SrcLoc, targets::[Target] }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
                 | Raise         { sloc::SrcLoc, except::Maybe Exception }
                 | Break         { sloc::SrcLoc }
@@ -90,13 +90,10 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
                 | PData         { ploc::SrcLoc, pn::Name, pixs::[Expr] }
                 deriving (Show)
 
-data Target     = TaVar         { taloc::SrcLoc, tn::Name}
-                | TaIndex       { taloc::SrcLoc, texp::Expr, tindex::[Expr] }
-                | TaSlice       { taloc::SrcLoc, texp::Expr, tslice::[Sliz] }
-                | TaDot         { taloc::SrcLoc, texp::Expr, tn::Name }
-                | TaParen       { taloc::SrcLoc, targ::Target }
-                | TaTuple       { taloc::SrcLoc, targs::[Target]}
-
+data Target     = TgVar         { tn::Name}
+                | TgIndex       { texp::Expr, tindex::[Expr] }
+                | TgSlice       { texp::Expr, tslice::[Sliz] }
+                | TgDot         { texp::Expr, tn::Name }
                 deriving (Show)
 
 data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | NoPass
@@ -143,7 +140,6 @@ data Except     = ExceptAll SrcLoc | Except SrcLoc QName | ExceptAs SrcLoc QName
 
 data Elem       = Elem Expr | Star Expr deriving (Show,Eq)
 data Assoc      = Assoc Expr Expr | StarStar Expr deriving (Show,Eq)
--- data Field      = Field Name Expr | StarStarField Expr deriving (Show,Eq)
 
 data PosPar     = PosPar Name (Maybe Type) (Maybe Expr) PosPar | PosSTAR Name (Maybe Type) | PosNIL deriving (Show,Eq)
 data KwdPar     = KwdPar Name (Maybe Type) (Maybe Expr) KwdPar | KwdSTAR Name (Maybe Type) | KwdNIL deriving (Show,Eq)
@@ -219,8 +215,8 @@ dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec fxWild
 sDef n p b      = sDecl [dDef n p b]
 sReturn e       = Return NoLoc (Just e)
 sAssign ps e    = Assign NoLoc ps e
-sUpdate ts e    = Update NoLoc ts e
-sIUpdate t o e  = IUpdate NoLoc t o e
+sMutAssign t e  = MutAssign NoLoc t e
+sAugAssign t o e = AugAssign NoLoc t o e
 sRaise e        = Raise NoLoc (Just (Exception e Nothing))
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
@@ -246,9 +242,6 @@ eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e fxWild
 pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
 
 pVar n t        = PVar NoLoc n t
-
-taVar n         = TaVar NoLoc n
-taIndex e ix    = TaIndex NoLoc e [ix]
 
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
@@ -403,8 +396,8 @@ instance Eq Import where
 instance Eq Stmt where
     x@Expr{}            ==  y@Expr{}            = expr x == expr y
     x@Assign{}          ==  y@Assign{}          = patterns x == patterns y && expr x == expr y
-    x@Update{}          ==  y@Update{}          = targets x == targets y && expr x == expr y
-    x@IUpdate{}         ==  y@IUpdate{}         = target x == target y && aop x == aop y && expr x == expr y
+    x@MutAssign{}       ==  y@MutAssign{}       = target x == target y && expr x == expr y
+    x@AugAssign{}       ==  y@AugAssign{}       = target x == target y && aop x == aop y && expr x == expr y
     x@Assert{}          ==  y@Assert{}          = expr x == expr y && optExpr x == optExpr y
     x@Pass{}            ==  y@Pass{}            = True
     x@Delete{}          ==  y@Delete{}          = target x == target y
@@ -512,13 +505,10 @@ instance Eq Pattern where
     p1                  == PParen _ p2          = p1 == p2
     _                   == _                    = False
 instance Eq Target where
-    TaVar _ n1          == TaVar _ n2           = n1 == n2
-    TaTuple _ ts1       == TaTuple _ ts2        = ts1 == ts2
-    TaIndex _ e1 ix1    == TaIndex _ e2 ix2     = e1 == e2 && ix1 == ix2
-    TaSlice _ e1 sl1    == TaSlice _ e2 sl2     = e1 == e2 && sl1 == sl2
-    TaDot _ e1 n1       == TaDot _ e2 n2        = e1 == e2 && n1 == n2
-    TaParen _ t1        == t2                   = t1 == t2
-    t1                  == TaParen _ t2         = t1 == t2
+    TgVar n1            == TgVar n2             = n1 == n2
+    TgIndex e1 ix1      == TgIndex e2 ix2       = e1 == e2 && ix1 == ix2
+    TgSlice e1 sl1      == TgSlice e2 sl2       = e1 == e2 && sl1 == sl2
+    TgDot e1 n1         == TgDot e2 n2          = e1 == e2 && n1 == n2
     _                   == _                    = False
 
 
