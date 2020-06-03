@@ -19,5 +19,7 @@ primRAISE                           = qPrim "RAISE"
 primRAISEFROM                       = qPrim "RAISEFROM"
 primASSERT                          = qPrim "ASSERT"
 
+primPACK                            = qPrim "PACK"
+
 primCLOS                            = qPrim "Clos"
 primCONT                            = qPrim "Cont"

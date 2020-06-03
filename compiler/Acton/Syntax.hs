@@ -233,9 +233,11 @@ eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
 eBool b         = Bool NoLoc b
 eBinOp e o e'   = BinOp NoLoc e (Op NoLoc o) e'
-eLambda ns e    = Lambda NoLoc (pospar ns) KwdNIL e fxWild
+eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
+eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 
-pospar xs       = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL xs
+pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
+pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
 pVar n t        = PVar NoLoc n t
 

@@ -75,7 +75,7 @@ pushH h                                 = sExpr (eCallV primPUSH [h])
 format (Int _ 0 _, cont)                = [sReturn cont]
 format (lvl, cont)                      = [sExpr (eCallV primPOP [lvl]), sReturn cont]
 
-wrapC c f env                           = eCallCont c [level, eLambda [] cont]
+wrapC c f env                           = eCallCont c [level, eLambda' [] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
@@ -147,33 +147,33 @@ instance CPS [Stmt] where
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env ss
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
     cps env (Assign _ [PVar _ x _] e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              ss' <- cps env ss
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
     cps env (Assign _ ps e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env (sAssign ps (eVar x) : ss)
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
     cps env (MutAssign _ t e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env (sMutAssign t (eVar x) : ss)
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
     cps env (AugAssign _ t op e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env (sAugAssign t op (eVar x) : ss)
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
 
     cps env (Decl l ds : ss)            = do ds' <- mapM (cps env1) ds
@@ -194,7 +194,7 @@ instance CPS [Stmt] where
                                              b' <- cpsSuite (Loop k +: env) b
                                              els' <- cpsSuite env els
                                              let body = sIf1 e b' els' : []
-                                             return $ sDef k (pospar [x]) body : 
+                                             return $ sDef k (pospar' [x]) body : 
                                                       jump k
 
     cps env [For _ p e b els]           = do ns <- newNames ["loop","res","iter"]
@@ -204,14 +204,14 @@ instance CPS [Stmt] where
                                              let advance = sAssign [p] (eCall (eDot (eVar ivar) nextKW) [])
                                                  body = sTry (advance : b') [handler qnStopIteration els'] [] [] : []
                                              return $ sAssign [pVar ivar Nothing] e :
-                                                      sDef k (pospar [x]) body :
+                                                      sDef k (pospar' [x]) body :
                                                       jump k
 
     cps env [Try _ b [] [] fin]         = do ns <- newNames ["finalizer","x","level","cont"]
                                              let [fcnt,x,lvl,cnt] = ns
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar [lvl, cnt]) fin' :
+                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
                                                       pushH (finalH x fcnt) :
                                                       b'
 
@@ -219,7 +219,7 @@ instance CPS [Stmt] where
                                              let [hcnt,x] = ns
                                              body <- hbody env x hs
                                              b' <- cpsSuite (Pop +: env) b
-                                             return $ sDef hcnt (pospar [x]) body :
+                                             return $ sDef hcnt (pospar' [x]) body :
                                                       pushH (eVar hcnt) :
                                                       b'
 
@@ -228,8 +228,8 @@ instance CPS [Stmt] where
                                              body <- hbody env x hs
                                              els' <- cpsSuite env els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: env) b
-                                             return $ sDef hcnt (pospar [x]) body :
-                                                      sDef ecnt (pospar [x]) els' :
+                                             return $ sDef hcnt (pospar' [x]) body :
+                                                      sDef ecnt (pospar' [x]) els' :
                                                       pushH (eVar hcnt) :
                                                       b'
 
@@ -238,8 +238,8 @@ instance CPS [Stmt] where
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar [lvl, cnt]) fin' :
-                                                      sDef hcnt (pospar [x]) (pushH (finalH x fcnt) : body) :
+                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
+                                                      sDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
                                                       pushH (eVar hcnt) :
                                                       b'
                                           
@@ -249,9 +249,9 @@ instance CPS [Stmt] where
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              els' <- cpsSuite (Pop +: Wrap fcnt +: env) els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar [lvl, cnt]) fin' :
-                                                      sDef hcnt (pospar [x]) (pushH (finalH x fcnt) : body) :
-                                                      sDef ecnt (pospar [x]) (pushH (finalH x fcnt) : els') :
+                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
+                                                      sDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
+                                                      sDef ecnt (pospar' [x]) (pushH (finalH x fcnt) : els') :
                                                       pushH (eVar hcnt) :
                                                       b'
 
@@ -261,8 +261,8 @@ instance CPS [Stmt] where
                                              let [m,fcnt,hcnt,x,lvl,cnt] = ns
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) [With l items b]
                                              return $ enter m item ++
-                                                      sDef fcnt (pospar [lvl, cnt]) (exit m) :
-                                                      sDef hcnt (pospar [x]) (hbody m x) :
+                                                      sDef fcnt (pospar' [lvl, cnt]) (exit m) :
+                                                      sDef hcnt (pospar' [x]) (hbody m x) :
                                                       pushH (eVar hcnt) :
                                                       b'
       where hbody m x                   = sIf1 (ifexit m x) [sReturn (eBool True)] [] : []
@@ -279,7 +279,7 @@ instance CPS [Stmt] where
                                              let [k,x] = ns
                                              ss' <- cps env ss
                                              ss1 <- cps (Seq k +: env) [s]
-                                             return $ sDef k (pospar [x]) ss' :
+                                             return $ sDef k (pospar' [x]) ss' :
                                                       ss1
 
     cps env []                          = return []
@@ -324,8 +324,8 @@ addContParam (PosPar n t e p)           = PosPar n t e (addContParam p)
 
 
 
-finalH x f                              = eLambda [x] (eCallVar f [eInt 0, raiseH])
-  where raiseH                          = eLambda [] (eCallV primRAISE [eVar x])
+finalH x f                              = eLambda' [x] (eCallVar f [eInt 0, raiseH])
+  where raiseH                          = eLambda' [] (eCallV primRAISE [eVar x])
 
 hbody env x hs                          = do hs' <- mapM (cps env) hs
                                              return $ sTry [sRaise (eVar x)] hs' [] [] :
