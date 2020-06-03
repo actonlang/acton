@@ -29,7 +29,7 @@ instance Pretty Stmt where
     pretty (AugAssign _ t o e)      = pretty t <+> pretty o <+> pretty e
     pretty (Assert _ e mbe)         = text "assert" <+> pretty e <> nonEmpty (comma <+>) pretty mbe
     pretty (Pass _)                 = text "pass"
-    pretty (Delete _ ts)            = text "del" <+> commaList ts
+    pretty (Delete _ t)             = text "del" <+> pretty t
     pretty (Return _ e)             = text "return" <+> pretty e
     pretty (Raise _ e)              = text "raise" <+> pretty e
     pretty (Break _)                = text "break"

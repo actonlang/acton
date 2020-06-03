@@ -26,7 +26,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | AugAssign     { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
-                | Delete        { sloc::SrcLoc, targets::[Target] }
+                | Delete        { sloc::SrcLoc, target::Target }
                 | Return        { sloc::SrcLoc, optExpr::Maybe Expr }
                 | Raise         { sloc::SrcLoc, except::Maybe Exception }
                 | Break         { sloc::SrcLoc }

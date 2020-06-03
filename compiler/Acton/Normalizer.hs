@@ -102,7 +102,7 @@ instance Norm Stmt where
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
-    norm env (Delete l ts)          = Delete l <$> norm env ts
+    norm env (Delete l t)           = Delete l <$> norm env t
     norm env (Return l Nothing)     = return $ Return l $ Just $ None l0
     norm env (Return l (Just e))    = do e' <- norm env e
                                          return $ Return l $ Just e'
@@ -135,7 +135,7 @@ instance Norm Stmt where
     norm env (Decl l ds)            = Decl l <$> norm env ds
     norm env (Signature l ns t d)   = return $ Signature l ns t d
 
---    norm' env (Delete l p)          =
+--    norm' env (Delete l t)          =
 
     norm' env (Assign l ts e)       = do e' <- norm env e
                                          ps <- mapM (normPat env) ts

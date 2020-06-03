@@ -114,7 +114,7 @@ instance Vars Stmt where
     free (AugAssign _ t op e)       = free t ++ free e
     free (Assert _ e mbe)           = free e ++ free mbe
     free (Pass _)                   = []
-    free (Delete _ p)               = free p ++ bound p
+    free (Delete _ t)               = free t
     free (Return _ e)               = free e
     free (Raise _ e)                = free e
     free (Break _)                  = []
@@ -138,7 +138,6 @@ instance Vars Stmt where
     bound (With _ items b)          = bound b ++ bound items
     bound (Try _ b hs els fin)      = bound b ++ concatMap bound hs ++ bound els ++ bound fin
     bound (If _ bs els)             = concatMap bound bs ++ bound els
-    bound (Delete _ p)              = bound p
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
     bound _                         = []

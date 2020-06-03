@@ -172,9 +172,8 @@ instance InfEnv Stmt where
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
-    infEnv env (Delete l pat)           = undefined
---      | nodup pat                       = do (cs,_,pat') <- infer env pat                 -- TODO: constrain pat targets to opt type
---                                            return (cs, [], Delete l pat')
+    infEnv env (Delete l tg)            = do (cs,_,tg') <- infer env tg                 -- TODO: ensure assignable, constrain Var and Dot targets to opt type
+                                             return (cs, [], Delete l tg')
     infEnv env s@(Return l Nothing)     = do t <- currRet
                                              return ([Cast tNone t], [], Return l Nothing)
     infEnv env (Return l (Just e))      = do t <- currRet

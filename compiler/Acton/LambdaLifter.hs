@@ -215,7 +215,7 @@ instance Lift Stmt where
     ll env (AugAssign l t op e)         = AugAssign l <$> ll env t <*> pure op <*> ll env e
     ll env (Assert l e mbe)             = Assert l <$> ll env e <*> ll env mbe
     ll env s@(Pass _)                   = pure s
-    ll env (Delete l targets)            = Delete l <$> ll env targets
+    ll env (Delete l t)                 = Delete l <$> ll env t
     ll env (Return l e)                 = Return l <$> ll env e
     ll env (Raise l e)                  = Raise l <$> ll env e
     ll env s@(Break _)                  = pure s

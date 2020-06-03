@@ -516,9 +516,7 @@ var_stmt = addLoc $
 del_stmt = addLoc $ do
             assertNotData
             rword "del"
-            t <- target
-            ts <- many (comma *> target)
-            return $ S.Delete NoLoc (t:ts)
+            S.Delete NoLoc <$> target
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 

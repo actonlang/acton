@@ -111,7 +111,7 @@ instance KCheck Stmt where
     kchk env (AugAssign l t op e)   = AugAssign l <$> kchk env t <*> return op <*> kchk env e
     kchk env (Assert l e mbe)       = Assert l <$> kchk env e <*> kchk env mbe
     kchk env (Pass l)               = return $ Pass l
-    kchk env (Delete l p)           = Delete l <$> kchk env p
+    kchk env (Delete l t)           = Delete l <$> kchk env t
     kchk env (Return l mbe)         = Return l <$> kchk env mbe
     kchk env (Raise l mbex)         = Raise l <$> kchk env mbex
     kchk env (Break l)              = return $ Break l
@@ -425,7 +425,7 @@ instance KSubst Stmt where
     ksubst g (AugAssign l t op e)   = AugAssign l <$> ksubst g t <*> return op <*> ksubst g e
     ksubst g (Assert l e mbe)       = Assert l <$> ksubst g e <*> ksubst g mbe
     ksubst g (Pass l)               = return $ Pass l
-    ksubst g (Delete l p)           = Delete l <$> ksubst g p
+    ksubst g (Delete l t)           = Delete l <$> ksubst g t
     ksubst g (Return l mbe)         = Return l <$> ksubst g mbe
     ksubst g (Raise l mbex)         = Raise l <$> ksubst g mbex
     ksubst g (Break l)              = return $ Break l

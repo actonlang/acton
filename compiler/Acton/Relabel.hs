@@ -40,7 +40,7 @@ instance Relabel Stmt where
     relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> relabel op <*> relabel e
     relabel (Assert _ e mbe) = Assert <$> newLoc <*> relabel e <*> relabel mbe
     relabel (Pass _) = Pass <$> newLoc
-    relabel (Delete _ ts) = Delete <$> newLoc <*> relabel ts
+    relabel (Delete _ t) = Delete <$> newLoc <*> relabel t
     relabel (Return _ mbe) = Return <$> newLoc <*> relabel mbe
     relabel (Raise _ mbex) = Raise <$> newLoc <*> relabel mbex
     relabel (Break _) = Break <$> newLoc
