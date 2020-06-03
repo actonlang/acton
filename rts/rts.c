@@ -752,34 +752,17 @@ void *main_loop(void *arg) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+// we assume that (de)serialization takes place without need for spinlock protection.
+
 $ROW $serialize_rts() {
-  $Serial$state state = malloc(sizeof(struct $Serial$state));
-  state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL);
-  state->row_no = 0;
-  state->fst = NULL;
-  state->row = NULL;
-  $step_serialize(root_actor,state);
-  spinlock_lock(&readyQ_lock);
-  spinlock_lock(&timerQ_lock);
-  $step_serialize(readyQ,state);
-  $step_serialize(timerQ,state);
-  spinlock_unlock(&timerQ_lock);
-  spinlock_unlock(&readyQ_lock);
-  return state->fst;
+  return $serialize(($Serializable)tup3(root_actor,readyQ,timerQ));
 }
 
 void $deserialize_rts($ROW row) {
-  $Serial$state state = malloc(sizeof(struct $Serial$state));
-  state->done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL);
-  state->row_no = 0;
-  state->row = row;
-  root_actor = ($Actor)$step_deserialize(state);
-  spinlock_lock(&readyQ_lock);
-  spinlock_lock(&timerQ_lock);
-  readyQ = ($Actor)$step_deserialize(state);
-  timerQ = ($Msg)$step_deserialize(state);
-  spinlock_unlock(&timerQ_lock);
-  spinlock_unlock(&readyQ_lock);
+  $tuple t = ($tuple)$deserialize(row);
+  root_actor = t->components[0];
+  readyQ = t->components[1];
+  timerQ = t->components[2];
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
