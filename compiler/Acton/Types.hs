@@ -115,13 +115,11 @@ instance InfEnv Stmt where
                                              (cs3,e2') <- inferSub env t0 e2
                                              return (cs1++cs2++cs3, [], Expr l (eCall (eDot (eDot e1' protoKW) setitemKW) [eDot e1' implKW, ix', e2']))
     infEnv env (MutAssign l (Slice _ e1 slz) e2)
-                                        = do (cs1,t,e1') <- infer env e1
-                                             (cs2,sl') <- inferSlice env sl
+                                        = do (cs1,sl') <- inferSlice env sl
                                              t0 <- newTVar
+                                             (cs2,e1') <- inferSub env (tExist $ pSliceable t0) e1
                                              (cs3,e2') <- inferSub env (tExist $ pIterable t0) e2
-                                             w <- newWitness
-                                             return (Impl w t (pSliceable t0) :
-                                                     cs1++cs2++cs3, [], Expr l $ eCall (eDot (eVar w) setsliceKW) (e1' : toArgs sl' ++ [e2']))
+                                             return (cs1++cs2++cs3, [], Expr l $ eCall (eDot (eDot e1' protoKW) setsliceKW) (eDot e1' implKW : toArgs sl' ++ [e2']))
       where sl | length slz == 1        = head slz
                | otherwise              = notYet l "Multidimensional slicing"
             toArgs (Sliz _ e1 e2 e3)    = map (maybe eNone id) [e1,e2,e3]
