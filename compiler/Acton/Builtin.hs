@@ -19,8 +19,10 @@ containsKW                          = name "__contains__"
 containsnotKW                       = name "__containsnot__"
 getitemKW                           = name "__getitem__"
 setitemKW                           = name "__setitem__"
+delitemKW                           = name "__delitem__"
 getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
+delsliceKW                          = name "__delslice__"
 boolKW                              = name "__bool__"
 
 methKWs                             = [initKW,enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
