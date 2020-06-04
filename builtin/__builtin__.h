@@ -709,6 +709,7 @@ struct $Collection$class {
     $Super$class $superclass;
     void (*__init__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
+    $WORD (*__fromiter__)($Collection, $Iterable$opaque);
     $int (*__len__)($Collection, $WORD);
 };
 
@@ -735,6 +736,7 @@ struct $Container$class {
     $Super$class $superclass;
     void (*__init__)($Container, $Eq);
     $Iterator (*__iter__)($Container, $WORD);
+    $WORD (*__fromiter__)($Container, $Iterable$opaque);
     $int (*__len__)($Container, $WORD);
     $bool (*__contains__)($Container, $WORD, $WORD);
     $bool (*__containsnot__)($Container, $WORD, $WORD);
@@ -799,6 +801,7 @@ struct $Mapping$class {
     $Super$class $superclass;
     void (*__init__)($Mapping, $Eq);
     $Iterator (*__iter__)($Mapping, $WORD);
+    $WORD (*__fromiter__)($Mapping, $Iterable$opaque);
     $int (*__len__)($Mapping, $WORD);
     $bool (*__contains__)($Mapping, $WORD, $WORD);
     $bool (*__containsnot__)($Mapping, $WORD, $WORD);
@@ -837,6 +840,7 @@ struct $Set$class {
     $Super$class $superclass;
     void (*__init__)($Set, $Eq);
     $Iterator (*__iter__)($Set, $WORD);
+    $WORD (*__fromiter__)($Set, $Iterable$opaque);
     $int (*__len__)($Set, $WORD);
     $bool (*__contains__)($Set, $WORD, $WORD);
     $bool (*__containsnot__)($Set, $WORD, $WORD);
@@ -1058,11 +1062,13 @@ struct $Collection$list$class {
     $Super$class $superclass;
     void (*__init__)($Collection$list, $Sequence$list);
     $Iterator (*__iter__)($Collection$list, $list);
+    $list (*__fromiter__)($Collection$list, $Iterable$opaque);
     $int (*__len__)($Collection$list, $list);
 };
 
 void $Collection$list$__init__ ($Collection$list, $Sequence$list);
 $Iterator $Collection$list$__iter__ ($Collection$list, $list);
+$list $Collection$list$__fromiter__ ($Collection$list, $Iterable$opaque);
 $int $Collection$list$__len__ ($Collection$list, $list);
 
 // $Plus$list ////////////////////////////////////////////////////////////
@@ -1096,6 +1102,7 @@ struct $Container$list$class {
     $Super$class $superclass;
     void (*__init__)($Container$list, $Eq);
     $Iterator (*__iter__)($Container$list, $list);
+    $list (*__fromiter__)($Container$list, $Iterable$opaque);
     $int (*__len__)($Container$list, $list);
     $bool (*__contains__)($Container$list, $list, $WORD);
     $bool (*__containsnot__)($Container$list, $list, $WORD);
@@ -1103,6 +1110,7 @@ struct $Container$list$class {
 
 void $Container$list$__init__ ($Container$list, $Eq);
 $Iterator $Container$list$__iter__ ($Container$list, $list);
+$list $Container$list$__fromiter__ ($Container$list, $Iterable$opaque);
 $int $Container$list$__len__ ($Container$list, $list);
 $bool $Container$list$__contains__ ($Container$list, $list, $WORD);
 $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
@@ -1121,6 +1129,7 @@ struct $Mapping$dict$class {
     $Super$class $superclass;
     void (*__init__)($Mapping$dict, $Hashable);
     $Iterator (*__iter__)($Mapping$dict, $dict);
+    $dict (*__fromiter__)($Mapping$dict, $Iterable$opaque);
     $int (*__len__)($Mapping$dict, $dict);
     $bool (*__contains__)($Mapping$dict, $dict, $WORD);
     $bool (*__containsnot__)($Mapping$dict, $dict, $WORD);
@@ -1135,6 +1144,7 @@ struct $Mapping$dict$class {
 
 void $Mapping$dict$__init__ ($Mapping$dict, $Hashable);
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
+$dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable$opaque);
 $int $Mapping$dict$__len__ ($Mapping$dict, $dict);
 $bool $Mapping$dict$__contains__ ($Mapping$dict, $dict, $WORD);
 $bool $Mapping$dict$__containsnot__ ($Mapping$dict, $dict, $WORD);
@@ -1185,6 +1195,7 @@ struct $Set$set$class {
     $Super$class $superclass;
     void (*__init__)($Set$set, $Hashable);
     $Iterator (*__iter__)($Set$set, $set);
+    $set (*__fromiter__)($Set$set, $Iterable$opaque);
     $int (*__len__)($Set$set, $set);
     $bool (*__contains__)($Set$set, $set, $WORD);
     $bool (*__containsnot__)($Set$set, $set, $WORD);
@@ -1196,6 +1207,7 @@ struct $Set$set$class {
 
 void $Set$set$__init__ ($Set$set, $Hashable);
 $Iterator $Set$set$__iter__ ($Set$set, $set);
+$set $Set$set$__fromiter__ ($Set$set, $Iterable$opaque);
 $int $Set$set$__len__ ($Set$set, $set);
 $bool $Set$set$__contains__ ($Set$set, $set, $WORD);
 $bool $Set$set$__containsnot__ ($Set$set, $set, $WORD);

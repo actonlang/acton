@@ -9,7 +9,8 @@ struct $Sequence$list$class $Sequence$list$methods = {"", UNASSIGNED,NULL,$Seque
 struct $Sequence$list $Sequence$list_instance = {&$Sequence$list$methods, &$Collection$list_instance,&$Plus$list_instance};
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
 
-struct $Collection$list$class $Collection$list$methods = {"",UNASSIGNED, NULL,$Collection$list$__init__,$Collection$list$__iter__,$Collection$list$__len__};
+struct $Collection$list$class $Collection$list$methods = {"",UNASSIGNED, NULL,$Collection$list$__init__,$Collection$list$__iter__,
+                                                          $Collection$list$__fromiter__,$Collection$list$__len__};
 struct $Collection$list $Collection$list_instance = {&$Collection$list$methods,&$Sequence$list_instance};
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
@@ -18,9 +19,11 @@ struct $Plus$list$class $Plus$list$methods = {"", UNASSIGNED,NULL,$Plus$list$__i
 struct $Plus$list $Plus$list_instance = {&$Plus$list$methods, &$Sequence$list_instance};
 $Plus$list $Plus$list$witness = &$Plus$list_instance;
 
-struct $Container$list$class $Container$list$methods = {"", UNASSIGNED,NULL,$Container$list$__init__,($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
-                                                                 ($int (*)($Container$list, $list))$Collection$list$__len__,
-                                                                  $Container$list$__contains__,$Container$list$__containsnot__};
+struct $Container$list$class $Container$list$methods = {"", UNASSIGNED,NULL,$Container$list$__init__,
+                                                        ($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
+                                                        ($list (*)($Container$list,$Iterable$opaque))$Collection$list$__fromiter__,
+                                                        ($int (*)($Container$list, $list))$Collection$list$__len__,
+                                                        $Container$list$__contains__,$Container$list$__containsnot__};
 
 
 $list $Plus$list$__add__ ($Plus$list wit, $list a, $list b) {
@@ -31,6 +34,10 @@ $Iterator $Collection$list$__iter__($Collection$list wit, $list self) {
   return $list_iter(self);
 }
  
+$list $Collection$list$__fromiter__ ($Collection$list wit, $Iterable$opaque iter) {
+  return $list_fromiter(iter);
+}
+
 $int $Collection$list$__len__($Collection$list wit, $list self) {
   return to$int($list_len(self));
 }

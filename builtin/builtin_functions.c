@@ -2,14 +2,14 @@
 
 // print //////////////////////////////////////////////////////////////////////////////
 
-$WORD mkstr($WORD w) {
+static $WORD mkstr($WORD w) {
   $Initializable w1 = ($Initializable)w;
   return w1->$class->__str__(w);
 }
 
-void print($tuple t) {
+void $print($tuple t) {
   $Iterable$opaque iter = $Iterable$pack(($Iterable)$Iterable$tuple$witness,t);
-  $str s = $str_join(from$UTF8(""),$Iterable$pack(($Iterable)$Iterable$Iterator$witness,$map(mkstr,iter)));
+  $str s = $str_join(to$str(""),$Iterable$pack(($Iterable)$Iterable$Iterator$witness,$map(mkstr,iter)));
   printf("%s\n",s->str);
 }
 
@@ -27,7 +27,7 @@ $bool $Iterator$enumerate_bool($Iterator$enumerate self) {
 $str $Iterator$enumerate_str($Iterator$enumerate self) {
   char *s;
   asprintf(&s,"<enumerate iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$enumerate_serialize($Iterator$enumerate self,$Serial$state state) {
@@ -78,7 +78,7 @@ $bool $Iterator$filter_bool($Iterator$filter self) {
 $str $Iterator$filter_str($Iterator$filter self) {
   char *s;
   asprintf(&s,"<filter iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$filter_serialize($Iterator$filter self,$Serial$state state) {
@@ -122,7 +122,7 @@ $bool $Iterator$map_bool($Iterator$map self) {
 $str $Iterator$map_str($Iterator$map self) {
   char *s;
   asprintf(&s,"<map iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$map_serialize($Iterator$map self,$Serial$state state) {
@@ -153,28 +153,99 @@ $Iterator $map($WORD(*f)($WORD),$Iterable$opaque iter) {
 }
 
 
-$WORD $max($Iterable$opaque iter,$WORD deflt) {
-  return NULL;
+// max, min ///////////////////////////////////////////////////////////////////////////////////
+
+$WORD $max($Ord wit, $Iterable$opaque iter, $WORD deflt) {
+  $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);  
+  $WORD res, nxt;
+  res = it->$class->__next__(it);
+  if (res) {
+    while ((nxt = it->$class->__next__(it))) {
+      if (wit->$class->__lt__(wit,res,nxt))
+        res = nxt;
+    }
+    return res;
+  } else
+    return deflt;
 }
 
-$WORD $min($Iterable$opaque iter,$WORD deflt) {
-  return NULL;
+$WORD $min($Ord wit, $Iterable$opaque iter, $WORD deflt) {
+  $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);  
+  $WORD res, nxt;
+  res = it->$class->__next__(it);
+  if (res) {
+    while ((nxt = it->$class->__next__(it))) {
+      if (wit->$class->__gt__(wit,res,nxt))
+        res = nxt;
+    }
+    return res;
+  } else
+    return deflt;
 }
  
-// print
-
 $Real$opaque $round($Real$opaque x, $int n) {
   return NULL;
 }
 
-$list $sorted($Iterable$opaque iter) {
+$list $sorted($Ord wit, $Iterable$opaque iter) {
   return NULL;
 }
 
-$WORD $sum($Iterable$opaque iter, $WORD start) {
-  return NULL;
+// sum /////////////////////////////////////////////////////////////////////////////////
+
+$WORD $sum($Plus wit, $Iterable$opaque iter, $WORD start) {
+  $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);  
+  $WORD res = start;
+  $WORD nxt;
+  while ((nxt = it->$class->__next__(it))) 
+    res = wit->$class->__add__(wit,res,nxt);
+  return res;
 }
+
+// zip ////////////////////////////////////////////////////////////////////////////////
+
+void $Iterator$zip_init($Iterator$zip self, $Iterator it1, $Iterator it2) {
+  self->it1 = it1;
+  self->it2 = it2;
+}
+
+$bool $Iterator$zip_bool($Iterator$zip self) {
+  return $true;
+}
+
+$str $Iterator$zip_str($Iterator$zip self) {
+  char *s;
+  asprintf(&s,"<zip iterator object at %p>",self);
+  return to$str(s);
+}
+
+void $Iterator$zip_serialize($Iterator$zip self,$Serial$state state) {
+  $step_serialize(self->it1,state);
+  $step_serialize(self->it2,state);
+}
+
+$Iterator$zip $Iterator$zip$_deserialize($Serial$state state) {
+   $Iterator$zip res = $DNEW($Iterator$zip,state);
+   res->it1 = $step_deserialize(state);
+   res->it2 = $step_deserialize(state);
+   return res;
+}
+
+$WORD $Iterator$zip_next($Iterator$zip it) {
+  $WORD w1 = it->it1->$class->__next__(it->it1);
+  $WORD w2 = it->it2->$class->__next__(it->it2);
+  if (w1 && w2)
+    return tup2(w1,w2);
+  else
+    return NULL;
+}
+
+struct $Iterator$zip$class $Iterator$zip$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
+                                                    $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_serialize,
+                                                    $Iterator$zip$_deserialize, $Iterator$zip_next};
 
 $Iterator $zip ($Iterable$opaque iter1, $Iterable$opaque iter2) {
-  return NULL;
+  $Iterator it1 = iter1->proto->$class->__iter__(iter1->proto,iter1->impl);
+  $Iterator it2 = iter2->proto->$class->__iter__(iter2->proto,iter2->impl);
+  return ($Iterator)$NEW($Iterator$zip,it1,it2);
 }

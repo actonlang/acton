@@ -2,10 +2,10 @@
 #include "../builtin.h"
 
 int main() {
-  $WORD comps1[] = {to$int(7),from$UTF8("A string"),to$float(3.14)};
+  $WORD comps1[] = {to$int(7),to$str("A string"),to$float(3.14)};
   $tuple tup1 = $NEW($tuple,3,comps1);
   $Sliceable$tuple wit = $Sliceable$tuple$witness;
-  printf("tup1=%s\n",to$UTF8(tup1->$class->__str__(tup1)));
+  printf("tup1=%s\n",from$str(tup1->$class->__str__(tup1)));
   int start = 0;
   int stop = 3;
   int step = 2;

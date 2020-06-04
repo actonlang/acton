@@ -154,7 +154,8 @@ static long pysiphash(void *src, long src_sz) {
         src, src_sz);
 }
 
-long $string_hash(void *src, int len) {
+long $string_hash($str s) {
+  int len = s->nbytes;
     long x;
     /*
       We make the hash of the empty string be 0, rather than using
@@ -163,7 +164,7 @@ long $string_hash(void *src, int len) {
     if (len == 0) {
         return 0;
     }
-         x = pysiphash(src, len);
+         x = pysiphash(s->str, len);
 
     if (x == -1)
         return -2;

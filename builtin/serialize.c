@@ -42,7 +42,7 @@ $bool $Null__bool__($Serializable self) {
 }
 
 $str $Null__str__($Serializable self) {
-  return from$UTF8("NULL");
+  return to$str("NULL");
 }
 
 void $Null__serialize__($Serializable self, $Serial$state state) {
@@ -233,11 +233,5 @@ $Serializable $deserialize_file(char *file) {
 
 
 void $default__init__($Initializable s) {
-  return;
-}
-void $default2__init__($Initializable s, $WORD w) {
-  return;
-}
-void $default3__init__($Initializable s, $WORD w, $WORD w2) {
   return;
 }

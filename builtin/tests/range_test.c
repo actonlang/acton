@@ -13,9 +13,9 @@ int main() {
   $serialize_file(($Serializable)r2,"range.bin");
   $range r3 = ($range)$deserialize_file("range.bin");                
   $list lst = $NEW($list,$Iterable$pack(($Iterable)$Iterable$range$witness,r3));
-  $printlist(lst);
+  $print(tup1(lst));
   $set s = $NEW($set,($Hashable)$Hashable$int$witness,$Iterable$pack(($Iterable)$Iterable$range$witness,r2));
   $Set$set wit = $NEW( $Set$set,($Hashable)$Hashable$int$witness);
   $list lst2 = $NEW($list,$Iterable$pack(($Iterable)wit,s));
-  $printlist(lst2);   
+  $print(tup1(lst2));   
 }

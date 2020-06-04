@@ -1,6 +1,6 @@
 // print /////////////////////////////////////////////////////////////////
 
-void print($tuple t);
+void $print($tuple t);
 
 // enumerate ////////////////////////////////////////////////////////////
 
@@ -82,5 +82,33 @@ struct $Iterator$map {
 extern struct $Iterator$map$class $Iterator$map$methods;
 
 $Iterator $map($WORD(*f)($WORD),$Iterable$opaque iter);
+
+
+// zip ////////////////////////////////////////////////////////////
+
+struct $Iterator$zip;
+typedef struct $Iterator$zip *$Iterator$zip;
+
+struct $Iterator$zip$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$zip, $Iterator, $Iterator);
+  $bool (*__bool__)($Iterator$zip);
+  $str (*__str__)($Iterator$zip);
+  void (*__serialize__)($Iterator$zip,$Serial$state);
+  $Iterator$zip (*__deserialize__)($Serial$state);
+  $WORD(*__next__)($Iterator$zip);
+};
+
+struct $Iterator$zip {
+  struct $Iterator$zip$class *$class;
+  $Iterator it1;
+  $Iterator it2;
+};
+
+extern struct $Iterator$zip$class $Iterator$zip$methods;
+
+$Iterator $zip($Iterable$opaque iter1, $Iterable$opaque iter2);
 
 

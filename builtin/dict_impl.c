@@ -315,7 +315,7 @@ $bool $Iterator$dict_bool($Iterator$dict self) {
 $str $Iterator$dict_str($Iterator$dict self) {
   char *s;
   asprintf(&s,"<dict keys iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$dict_serialize($Iterator$dict self, $Serial$state state) {
@@ -344,7 +344,7 @@ $Iterator $dict_iter($dict dict) {
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value) {
   long hash = from$int(hashwit->$class->__hash__(hashwit,key));
   if (insertdict(dict, hashwit, hash, key, value)<0) {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("getitem: key not in dictionary")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("getitem: key not in dictionary")));
   }      
 }
 
@@ -353,7 +353,7 @@ $WORD $dict_getitem($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
   int ix = lookdict(dict,hashwit,hash,key,&res);
   if (ix < 0)  {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: key not in dictionary")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
   }      
   return res;
 }
@@ -370,7 +370,7 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
     table->tb_indices[i] = DKIX_DUMMY;
     res = entry->value;
     if (res == NULL) {
-      RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: key not in dictionary")));
+      RAISE(($BaseException)$NEW($IndexError,to$str("setitem: key not in dictionary")));
     }
     entry->value = NULL;
     dict->numelements--;
@@ -380,6 +380,10 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////
+
+$dict $dict_fromiter($Hashable hashwit, $Iterable$opaque iter) {
+  return $NEW($dict,hashwit,iter);
+}
 
 
 long $dict_len($dict dict) {
@@ -426,7 +430,7 @@ $bool $Iterator$dict$values_bool($Iterator$dict$values self) {
 $str $Iterator$dict$values_str($Iterator$dict$values self) {
   char *s;
   asprintf(&s,"<dict values iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$dict$values_serialize($Iterator$dict$values self, $Serial$state state) {
@@ -479,7 +483,7 @@ $bool $Iterator$dict$items_bool($Iterator$dict$items self) {
 $str $Iterator$dict$items_str($Iterator$dict$items self) {
   char *s;
   asprintf(&s,"<dict items iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$dict$items_serialize($Iterator$dict$items self, $Serial$state state) {

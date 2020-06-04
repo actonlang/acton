@@ -4,7 +4,7 @@ void $list_init($list lst, $Iterable$opaque it) {
   int capacity = 4;
   lst->data = malloc(capacity*sizeof($WORD));
   if (lst->data == NULL) {
-    RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
+    RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
   }
   lst->length = 0;
   lst->capacity = capacity;
@@ -68,19 +68,19 @@ struct $list$class $list$methods = {"",UNASSIGNED,NULL, $list_init, $list_bool, 
  
 
 //prints a $list[$int]
-void $printlist($list lst) {
-  $WORD w;
-  printf("[");
-  for (int i=0; i < $list_len(lst)-1; i++) {
-    w = $list_getitem(lst,i);
-    printf("%ld, ",from$int(w));
-  }
-  if ($list_len(lst) > 0) {
-    w = $list_getitem(lst,$list_len(lst)-1);
-    printf("%ld",from$int(w));
-  }
-  printf("]\n");
-}
+/* void $printlist($list lst) { */
+/*   $WORD w; */
+/*   printf("["); */
+/*   for (int i=0; i < $list_len(lst)-1; i++) { */
+/*     w = $list_getitem(lst,i); */
+/*     printf("%ld, ",from$int(w)); */
+/*   } */
+/*   if ($list_len(lst) > 0) { */
+/*     w = $list_getitem(lst,$list_len(lst)-1); */
+/*     printf("%ld",from$int(w)); */
+/*   } */
+/*   printf("]\n"); */
+/* } */
 
 static inline int min(int a, int b) {
     if (a > b)
@@ -105,7 +105,7 @@ static void expand($list lst,int n) {
      ? malloc(newcapacity*sizeof($WORD))
      : realloc(lst->data,newcapacity*sizeof($WORD));
    if (newptr == NULL) {
-    RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
+    RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
    }
    lst->data = newptr;
    lst->capacity = newcapacity;
@@ -118,12 +118,12 @@ $list $list_new(int capacity) {
   } 
   $list lst = malloc(sizeof(struct $list));
   if (lst == NULL) {
-     RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
+     RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
   }
   if (capacity>0) {
     lst->data = malloc(capacity*sizeof($WORD));
     if (lst->data == NULL) {
-       RAISE(($BaseException)$NEW($MemoryError,from$UTF8("memory allocation failed")));
+       RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
     }
   } else {
     lst->data = NULL;
@@ -149,6 +149,9 @@ $list $list_add($list lst, $list other) {
  
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
+$list $list_fromiter($Iterable$opaque iter) {
+  return $NEW($list,iter);
+}
 
 long $list_len($list lst) {
   return (long)lst->length;
@@ -187,7 +190,7 @@ $bool $Iterator$list_bool($Iterator$list self) {
 $str $Iterator$list_str($Iterator$list self) {
   char *s;
   asprintf(&s,"<list iterator object at %p>",self);
-  return from$UTF8(s);
+  return to$str(s);
 }
 
 void $Iterator$list_serialize($Iterator$list self,$Serial$state state) {
@@ -215,7 +218,7 @@ $WORD $list_getitem($list lst, int ix) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("getitem: indexing outside list")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("getitem: indexing outside list")));
   }
   return lst->data[ix0];
 }
@@ -224,7 +227,7 @@ void $list_setitem($list lst, int ix, $WORD val) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if (ix0 < 0 || ix0 >= len) {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("setitem: indexing outside list")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("setitem: indexing outside list")));
   }
   lst->data[ix0] = val;
 }
@@ -233,7 +236,7 @@ void $list_delitem($list lst,int ix) {
   int len = lst->length;
   int ix0 = ix < 0 ? len + ix : ix;
   if(ix0 < 0 || ix0 >= len) {
-    RAISE(($BaseException)$NEW($IndexError,from$UTF8("delitem: indexing outside list")));
+    RAISE(($BaseException)$NEW($IndexError,to$str("delitem: indexing outside list")));
   }
   memmove(lst->data + ix0,
           lst->data + (ix0 + 1),
@@ -271,7 +274,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (step != 1 && olen != slen) {
-    RAISE(($BaseException)$NEW($ValueError,from$UTF8("setslice: illegal slice")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("setslice: illegal slice")));
   }
   int copy = olen <= slen ? olen : slen;
   int t = start;

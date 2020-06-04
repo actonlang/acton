@@ -2,7 +2,7 @@ struct $float$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($float, double);
+  void (*__init__)($float, $Real$opaque);
   $bool (*__bool__)($float);
   $str (*__str__)($float);
   void (*__serialize__)($float,$Serial$state);
