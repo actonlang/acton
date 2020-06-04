@@ -110,11 +110,11 @@ instance Vars a => Vars (Maybe a) where
 instance Vars Stmt where
     free (Expr _ e)                 = free e
     free (Assign _ ps e)            = free ps ++ free e
-    free (Update _ ts e)            = free ts ++ free e
-    free (IUpdate _ t op e)         = free t ++ free e
+    free (MutAssign _ t e)          = free t ++ free e
+    free (AugAssign _ t op e)       = free t ++ free e
     free (Assert _ e mbe)           = free e ++ free mbe
     free (Pass _)                   = []
-    free (Delete _ p)               = free p ++ bound p
+    free (Delete _ t)               = free t
     free (Return _ e)               = free e
     free (Raise _ e)                = free e
     free (Break _)                  = []
@@ -132,16 +132,21 @@ instance Vars Stmt where
 
     bound (Assign _ ps _)           = bound ps
     bound (VarAssign _ ps e)        = bound ps
+    bound (MutAssign _ tg _)        = boundTarget tg
+    bound (AugAssign _ tg _ _)      = boundTarget tg
+    bound (Delete _ tg)             = boundTarget tg
     bound (Data _ p b)              = bound p ++ (filter istemp $ bound b)
     bound (While _ e b els)         = bound b ++ bound els
     bound (For _ p e b els)         = bound b ++ bound els ++ bound p
     bound (With _ items b)          = bound b ++ bound items
     bound (Try _ b hs els fin)      = bound b ++ concatMap bound hs ++ bound els ++ bound fin
     bound (If _ bs els)             = concatMap bound bs ++ bound els
-    bound (Delete _ p)              = bound p
     bound (Decl _ ds)               = bound ds
     bound (Signature _ ns t d)      = ns
     bound _                         = []
+
+boundTarget (Var _ (NoQ n))         = [n]
+boundTarget _                       = []
 
 instance Vars Decl where
     free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
@@ -316,16 +321,6 @@ instance Vars Pattern where
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
     
-instance Vars Target where
-    free (TaVar _ n)                = [n]
-    free (TaIndex _ e ix)           = free e ++ free ix
-    free (TaSlice _ e sl)           = free e ++ free sl
-    free (TaDot _ e n)              = free e
-    free (TaTuple _ ts)             = free ts
-    free (TaParen _ t)              = free t
-
-    bound _                         = []
-
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn
     bound (ModuleItem qn (Just n))  = free n

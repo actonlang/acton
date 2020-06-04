@@ -4,20 +4,28 @@ import Utils
 import Acton.Syntax
     
 selfKW                              = name "__self__"
+
+protoKW                             = name "proto"              -- TExist attribute
+implKW                              = name "impl"               -- TExist attribute
+
 initKW                              = name "__init__"
+fromiterKW                          = name "__fromiter__"
+lenKW                               = name "__len__"
 enterKW                             = name "__enter__"
 exitKW                              = name "__exit__"
-iterKW                              = name "iter"
+iterKW                              = name "__iter__"
 nextKW                              = name "__next__"
 containsKW                          = name "__contains__"
 containsnotKW                       = name "__containsnot__"
 getitemKW                           = name "__getitem__"
 setitemKW                           = name "__setitem__"
+delitemKW                           = name "__delitem__"
 getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
+delsliceKW                          = name "__delslice__"
 boolKW                              = name "__bool__"
 
-methKWs                             = [enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
+methKWs                             = [initKW,enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"

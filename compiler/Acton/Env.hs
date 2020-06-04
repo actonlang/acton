@@ -251,13 +251,10 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
         isTerm NVar{}       = True
         isTerm _            = False
 
-noDecls                     :: TEnv -> TEnv
-noDecls te                  = [ (n,i) | (n,i) <- te, not $ isDecl i ]
-  where isDecl NDef{}       = True
-        isDecl NAct{}       = True
-        isDecl NClass{}     = True
-        isDecl NProto{}     = True
-        isDecl NExt{}       = True
+noDefs                      :: TEnv -> TEnv
+noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
+  where isDef NDef{}        = True
+        isDef NAct{}        = True
         isDef _             = False
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)
@@ -466,13 +463,13 @@ hasAttr env n qn            = n `elem` conAttrs env qn
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
-findVBound                  :: Env -> TVar -> Maybe TCon
-findVBound env tv           = case findName (tvname tv) env of
+findTVBound                 :: Env -> TVar -> Maybe TCon
+findTVBound env tv          = case findName (tvname tv) env of
                                 NTVar _ mba -> mba
                                 _ -> err1 tv "Unknown type variable"
 
-findVAttr                   :: Env -> TVar -> Name -> Maybe (Expr->Expr,TSchema,Deco)
-findVAttr env tv n          = case findVBound env tv of
+findTVAttr                  :: Env -> TVar -> Name -> Maybe (Expr->Expr,TSchema,Deco)
+findTVAttr env tv n         = case findTVBound env tv of
                                 Just a -> findAttr env a n
                                 Nothing -> Nothing
 
@@ -571,7 +568,7 @@ instQual env q              = do ts <- newTVars [ tvkind v | TBind v _ <- q ]
                                  cs <- qualConstraints env q ts
                                  return (cs, ts)
 
-instWitness                 :: Env -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)
+instWitness                 :: Env -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)        -- witnesses of cs already applied in e!
 instWitness env ts wit      = case wit of
                                  WClass q p w ws -> do
                                     cs <- qualConstraints env q ts
@@ -719,9 +716,11 @@ setSubstitution                         :: Map TVar Type -> TypeM ()
 setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
 
 
-newName s                               = Internal s <$> newUnique <*> return TypesPass
+pNames                                  = [ Internal "p" i TypesPass | i <- [0..] ]
+kNames                                  = [ Internal "k" i TypesPass | i <- [0..] ]
+xNames                                  = [ Internal "x" i TypesPass | i <- [0..] ]
 
-newWitness                              = newName "w"
+newWitness                              = Internal "w" <$> newUnique <*> return TypesPass
 
 newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return NoPass)
   where str KType                       = "V"

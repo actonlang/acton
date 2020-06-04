@@ -201,11 +201,6 @@ instance AddLoc S.Pattern where
          (l,pat) <- withLoc p
          return pat{S.ploc = l}
 
-instance AddLoc S.Target where
-  addLoc t = do
-         (l,targ) <- withLoc t
-         return targ{S.taloc = l}
-
 
 rwordLoc :: String -> Parser SrcLoc
 rwordLoc word = do
@@ -447,30 +442,15 @@ apat = addLoc (
 
 -- Targets -------------------------------------------------------------------------------------
 
--- gen_target = addLoc $ tuple_or_single (commaList atarget) head length (S.TaTuple NoLoc)
-
-gen_target = addLoc $ do
-               t  <- atarget
-               ts <- commaList atarget
-               case ts of
-                 [] -> return t
-                 _  -> return $ S.TaTuple NoLoc (t:ts)
-
-atarget :: Parser S.Target
-atarget = addLoc (
-            try lvalue
-        <|>
-            (try $ S.TaVar NoLoc <$> name)
-        <|>
-            (parens $ S.TaParen NoLoc <$> gen_target)
-         )
-  where lvalue = do
+target :: Parser S.Target
+target = try $ do 
             tmp <- atom_expr
             case tmp of
-                S.Dot _ e n    -> return $ S.TaDot NoLoc e n
-                S.Index _ e ix -> return $ S.TaIndex NoLoc e ix
-                S.Slice _ e sl -> return $ S.TaSlice NoLoc e sl
-                _              -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
+                S.Var _ (S.NoQ n) -> return tmp
+                S.Dot _ e n       -> return tmp
+                S.Index _ e ix    -> return tmp
+                S.Slice _ e sl    -> return tmp
+                _                 -> locate (loc tmp) >> fail ("illegal target: " ++ show tmp)
 
 ------------------------------------------------------------------------------------------------
 -- Statements ----------------------------------------------------------------------------------
@@ -488,9 +468,9 @@ small_stmt = try signature <|> expr_stmt <|> del_stmt <|> pass_stmt <|> flow_stm
 
 expr_stmt :: Parser S.Stmt
 expr_stmt = addLoc $
-            try (assertNotData *> (S.IUpdate NoLoc <$> gen_target <*> augassign <*> rhs))
-        <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)
-        <|> try (S.Update NoLoc <$> trysome update <*> rhs)
+            try (assertNotData *> (S.AugAssign NoLoc <$> target <*> augassign <*> rhs))
+        <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
+        <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
    where augassign :: Parser (S.Op S.Aug)
          augassign = addLoc (S.Op NoLoc <$> (assertNotData *> augops))
@@ -510,9 +490,6 @@ expr_stmt = addLoc $
 
 assign :: Parser S.Pattern
 assign = gen_pattern <* equals
-
-update :: Parser S.Target
-update = gen_target <* equals
 
 rhs :: Parser S.Expr
 rhs = yield_expr <|> exprlist
@@ -539,7 +516,7 @@ var_stmt = addLoc $
 del_stmt = addLoc $ do
             assertNotData
             rword "del"
-            S.Delete NoLoc <$> gen_target
+            S.Delete NoLoc <$> target
 
 pass_stmt =  S.Pass <$> rwordLoc "pass"
 
@@ -927,8 +904,10 @@ atom_expr = do
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
                       try (do
-                        is <- brackets indexlist
-                        return (\a -> S.Index NoLoc a is))
+                        ixs <- brackets indexlist
+                        let ix | length ixs > 1 = S.eTuple ixs
+                               | otherwise      = head ixs
+                        return (\a -> S.Index NoLoc a ix))
                         <|>
                       (do
                         ss <- brackets slicelist

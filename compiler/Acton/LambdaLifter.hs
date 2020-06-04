@@ -211,11 +211,11 @@ instance Lift a => Lift (Maybe a) where
 instance Lift Stmt where
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
-    ll env (Update l ts e)              = Update l <$> ll env ts <*> ll env e
-    ll env (IUpdate l t op e)           = IUpdate l <$> ll env t <*> pure op <*> ll env e
+    ll env (MutAssign l t e)            = MutAssign l <$> ll env t <*> ll env e
+    ll env (AugAssign l t op e)         = AugAssign l <$> ll env t <*> pure op <*> ll env e
     ll env (Assert l e mbe)             = Assert l <$> ll env e <*> ll env mbe
     ll env s@(Pass _)                   = pure s
-    ll env (Delete l target)            = Delete l <$> ll env target
+    ll env (Delete l t)                 = Delete l <$> ll env t
     ll env (Return l e)                 = Return l <$> ll env e
     ll env (Raise l e)                  = Raise l <$> ll env e
     ll env s@(Break _)                  = pure s
@@ -350,10 +350,3 @@ instance Lift Comp where
 instance Lift Pattern where
     ll env (PVar l n a)                 = return (PVar l n a)
     ll env (PParen l p)                 = PParen l <$> ll env p
-
-instance Lift Target where
-    ll env (TaVar l n)                  = return (TaVar l n)
-    ll env (TaIndex l e ix)             = TaIndex l <$> ll env e <*> ll env ix
-    ll env (TaSlice l e sl)             = TaSlice l <$> ll env e <*> ll env sl
-    ll env (TaDot l e n)                = TaDot l <$> ll env e <*> return n
-    ll env (TaParen l p)                = TaParen l <$> ll env p

@@ -25,8 +25,8 @@ prettySuite ss                      = nest 4 $ vcat $ map pretty ss
 instance Pretty Stmt where
     pretty (Expr _ e)               = pretty e
     pretty (Assign _ ps e)          = hsep . punctuate (space <> equals) $ map pretty ps ++ [pretty e]
-    pretty (Update _ ts e)          = hsep . punctuate (space <> equals) $ map pretty ts ++ [pretty e]
-    pretty (IUpdate _ t o e)        = pretty t <+> pretty o <+> pretty e
+    pretty (MutAssign _ t e)        = pretty t <+> equals <+> pretty e
+    pretty (AugAssign _ t o e)      = pretty t <+> pretty o <+> pretty e
     pretty (Assert _ e mbe)         = text "assert" <+> pretty e <> nonEmpty (comma <+>) pretty mbe
     pretty (Pass _)                 = text "pass"
     pretty (Delete _ t)             = text "del" <+> pretty t
@@ -122,7 +122,7 @@ instance Pretty Expr where
     pretty (BStrings _ ss)          = hcat (map pretty ss)
     pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
     pretty (Await _ e)              = text "await" <+> pretty e
-    pretty (Index _ e ix)           = pretty e <> brackets (commaList ix)
+    pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
     pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
     pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2
@@ -239,14 +239,6 @@ instance Pretty Pattern where
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)
     pretty (PData _ n ixs)          = pretty n <> hcat (map (brackets . pretty) ixs)
-
-instance Pretty Target where
-    pretty (TaVar _ n)              = pretty n
-    pretty (TaTuple _ ts)           = commaList ts
-    pretty (TaIndex _ e ix)         = pretty e <> brackets (commaList ix)
-    pretty (TaSlice _ e sl)         = pretty e <> brackets (commaList sl)
-    pretty (TaDot _ e n)            = pretty e <> dot <> pretty n
-    pretty (TaParen _ t)            = parens (pretty t)
 
 prettyPats [] Nothing               = empty
 prettyPats ps Nothing               = commaSep pretty ps
