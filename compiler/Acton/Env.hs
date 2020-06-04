@@ -717,9 +717,7 @@ setSubstitution s                       = state $ \st -> ((), st{ currsubst = s 
 
 
 pNames                                  = [ Internal "p" i TypesPass | i <- [0..] ]
-
 kNames                                  = [ Internal "k" i TypesPass | i <- [0..] ]
-
 xNames                                  = [ Internal "x" i TypesPass | i <- [0..] ]
 
 newWitness                              = Internal "w" <$> newUnique <*> return TypesPass

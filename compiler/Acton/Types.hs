@@ -445,17 +445,21 @@ matchAssumption env cl cs def
   | q0 == q1 || null q1                 = do let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- splitAndSolve env0 (tybound q0) (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qual = q0, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qual = q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do (cs1, tvs) <- instQual env q1
                                              let s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qual = [] }   -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- splitAndSolve env0 (tybound q0) (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qual = q0, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qual = q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qual def
         env0                            = defineTVars q0 env
+        pos0 | cl && dec /= Static      = PosPar nSelf t' e' $ qualPar env q0 pos'
+             | otherwise                = qualPar env q0 (pos def)
+          where PosPar nSelf t' e' pos' = pos def
+        
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -470,7 +474,7 @@ instance (Check a) => Check [a] where
                                              return (cs1++cs2, d':ds')
 
 instance Check Decl where
-    checkEnv env cl (Def l n q p k a b d fx)
+    checkEnv env cl (Def l n q p k a b dec fx)
                                         = do traceM ("## checkEnv def " ++ prstr n)
                                              t <- maybe newTVar return a
                                              pushFX fx t
@@ -483,7 +487,7 @@ instance Check Decl where
                                              checkNoEscape env (tybound q)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
-                                             matchAssumption env cl cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') d fx)
+                                             matchAssumption env cl cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
       where cswf                        = wellformed env (q,a)
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
 
@@ -582,8 +586,8 @@ mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in 
                                           (TBind v impls, wits)
                 | otherwise             = (TBind v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
-                impls                   = [ u | Impl w (TVar _ v') u <- cs, v == v' ]
-                wits                    = [ (w, constraint2type t u) | Impl w t@(TVar _ v') u <- cs, v == v' ]
+                impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
+                wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])

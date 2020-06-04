@@ -74,71 +74,63 @@ reduce' env eq c@(Impl w t@(TVar _ tv) p)
   | not $ scoped tv env                     = do defer [c]; return eq
   | Just wit <- search                      = do (cs,p',we) <- instWitness env [] wit
                                                  unifyM env (tcargs p) (tcargs p')
-                                                 reduce env ((w,constraint2type t p,we):eq) cs
+                                                 reduce env ((w, impl2type t p, we):eq) cs
   where search                              = findWitness env (NoQ $ tvname tv) (tcname p ==)
   
 reduce' env eq c@(Impl w t@(TCon _ tc) p)
   | Just wit <- search                      = do (cs,p',we) <- instWitness env (tcargs tc) wit
                                                  unifyM env (tcargs p) (tcargs p')
-                                                 reduce env ((w,constraint2type t p,we):eq) cs
+                                                 reduce env ((w, impl2type t p, we):eq) cs
   where search                              = findWitness env (tcname tc) (tcname p ==)
 
 reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
   | not $ scoped tv env                     = do defer [c]; return eq
   | Just (_,sc,dec) <- findTVAttr env tv n  = do (cs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (app t (eDot (eVar x0) n) $ witsOf cs)
-                                                 cast env (subst [(tvSelf,t1)] t) t2
-                                                 reduce env ((w,t,e):eq) cs
+                                                 let e = eLambda [(x0,t1)] (app t (eDot (eVar x0) n) $ witsOf cs)
+                                                     cs' = Cast (subst [(tvSelf,t1)] t) t2 : cs
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
   | Just wit <- search                      = do (cs1,p,we) <- instWitness env [] wit
                                                  let Just (wf,sc,dec) = findAttr env p n
                                                  (cs2,t) <- instantiate env sc
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (app t (eDot (wf we) n) $ eVar x0 : witsOf cs2) -- witnesses *after* object ref
-                                                 cast env (subst [(tvSelf,t1)] t) t2
-                                                 reduce env ((w,t,e):eq) (cs1++cs2)
+                                                 let e = eLambda [(x0,t1)] (app t (eDot (wf we) n) $ eVar x0 : witsOf cs2) -- witnesses *after* object ref
+                                                     cs' = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
   | otherwise                               = err1 n "Attribute not found"
   where search                              = findWitness env (NoQ $ tvname tv) (hasAttr env n)
 
 reduce' env eq (Sel w t1@(TCon _ tc) n t2)
   | Just (wf,sc,dec) <- findAttr env tc n   = do (cs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (app t (eDot (eVar x0) n) $ witsOf cs)
-                                                 cast env (subst [(tvSelf,t1)] t) t2
-                                                 reduce env ((w,t,e):eq) cs
+                                                 let e = eLambda [(x0,t1)] (app t (eDot (eVar x0) n) $ witsOf cs)
+                                                     cs' = Cast (subst [(tvSelf,t1)] t) t2 : cs
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
   | Just wit <- search                      = do (cs1,p,we) <- instWitness env (tcargs tc) wit
                                                  let Just (wf,sc,dec) = findAttr env p n
                                                  (cs2,t) <- instantiate env sc
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (app t (eDot (wf we) n) $ eVar x0 : witsOf cs2) -- witnesses *after* object ref
-                                                 cast env (subst [(tvSelf,t1)] t) t2
-                                                 reduce env ((w,t,e):eq) (cs1++cs2)
+                                                 let e = eLambda [(x0,t1)] (app t (eDot (wf we) n) $ eVar x0 : witsOf cs2) -- witnesses *after* object ref
+                                                     cs' = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
   | otherwise                               = err1 n "Attribute not found"
   where search                              = findWitness env (tcname tc) (hasAttr env n)
 
 reduce' env eq (Sel w t1@(TExist _ p) n t2)
   | Just (wf,sc,dec) <- findAttr env p n    = do (cs,t) <- instantiate env sc
                                                  when (tvSelf `elem` tyfree t) (err1 n "Self attribute not selectable from abstract type")
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (app t (eDot (eDot (eVar x0) protoKW) n) $ eDot (eVar x0) implKW : witsOf cs)
-                                                 cast env t t2
-                                                 reduce env eq cs
+                                                 let e = eLambda [(x0,t1)] (app t (eDot (eDot (eVar x0) protoKW) n) $ eDot (eVar x0) implKW : witsOf cs)
+                                                     cs' = Cast t t2 : cs
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
   | otherwise                               = err1 n "Attribute not found:"
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
-                                            = do cast env r (kwdRow n t2 tWild)
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (eDot (eVar x0) n)
-                                                 return ((w,t,e):eq)
+                                            = do let e = eLambda [(x0,t1)] (eDot (eVar x0) n)
+                                                     cs' = [Cast r (kwdRow n t2 tWild)]
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs'
 
 reduce' env eq (Sel w t1@(TUnion _ us) n t2)
                                             = do t <- newTVar
-                                                 castM env (map mkTCon us) (repeat t)
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (eDot (eVar x0) n)
-                                                 reduce env eq [Sel w t n t2]
+                                                 let cs' = [ Cast (mkTCon u) t | u <- us ] ++ [Sel w t n t2]
+                                                 reduce env eq cs'
   where mkTCon (ULit _)                     = tStr
         mkTCon (UCon c)                     = tCon (TC c [])
 
@@ -146,19 +138,15 @@ reduce' env eq c@(Mut t1@(TVar _ tv) n t2)
   | not $ scoped tv env                     = do defer [c]; return eq
   | Just (wf,sc,dec) <- findTVAttr env tv n = do when (dec/=Property) (noMut n)
                                                  (cs,t) <- instantiate env sc
-                                                 let t' = subst [(tvSelf,t1)] t
-                                                 cast env t1 tObject
-                                                 cast env t2 t'
-                                                 reduce env eq cs
+                                                 let cs' = Cast t1 tObject : Cast t2 (subst [(tvSelf,t1)] t) : cs
+                                                 reduce env eq cs'
   | otherwise                               = err1 n "Attribute not found:"
 
 reduce' env eq (Mut t1@(TCon _ tc) n t2)
   | Just (wf,sc,dec) <- findAttr env tc n   = do when (dec/=Property) (noMut n)
                                                  (cs,t) <- instantiate env sc
-                                                 let t' = subst [(tvSelf,t1)] t
-                                                 cast env t1 tObject
-                                                 cast env t2 t'
-                                                 reduce env eq cs
+                                                 let cs' = Cast t1 tObject : Cast t2 (subst [(tvSelf,t1)] t) : cs
+                                                 reduce env eq cs'
   | otherwise                               = err1 n "Attribute not found:"
 
 reduce' env eq c                            = noRed c
@@ -172,8 +160,6 @@ cast                                        :: Env -> Type -> Type -> TypeM ()
 cast env t1 t2                              = do t1' <- msubst t1
                                                  t2' <- msubst t2
                                                  cast' env t1' t2'
-
-castM env ts1 ts2                           = mapM_ (uncurry $ cast env) (ts1 `zip` ts2)
 
 {-  
 -- part of computing GLBs
@@ -341,30 +327,34 @@ sub' env eq w t1 t2@(TVar _ tv)
 
 sub' env eq w t1@(TExist _ p1) t2@(TExist l p2)
   | Just (wf,p') <- search                  = do unifyM env (tcargs p1) (tcargs p')
-                                                 let t = tFun fxPure (posRow t1 posNil) kwdNil t2
-                                                     e = eLambda [(x0,t1)] (eCall (eQVar primPACK) [wf $ eDot (eVar x0) protoKW, eDot (eVar x0) implKW])
-                                                 return ((w,t,e):eq)
+                                                 let e = eLambda [(x0,t1)] (eCall (eQVar primPACK) [wf $ eDot (eVar x0) protoKW, eDot (eVar x0) implKW])
+                                                 return ((w, wFun t1 t2, e):eq)
   where search                              = findAncestor env p1 (tcname p2)
 
---           as declared           as called
-sub' env eq w (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+--                as declared               as called
+sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
                                             = do w1 <- newWitness
                                                  w2 <- newWitness
                                                  w3 <- newWitness
-                                                 eq1 <- sub env eq  w1 fx1 fx2
-                                                 eq2 <- sub env eq1 w2 p2 p1            -- TODO: implement pos/kwd argument shifting
-                                                 eq3 <- sub env eq2 w3 k2 k1
-                                                 sub env eq3 w t1 t2
+                                                 let e = undefined
+                                                     cs = [Cast fx1 fx2, Sub w1 p2 p1, Sub w2 k2 k1, Sub w3 t1' t2']
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs                          -- TODO: implement pos/kwd argument shifting
 
-sub' env eq w (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do eq1 <- sub env eq w p1 p2
-                                                 sub env eq1 w k1 k2
+sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+                                            = do w1 <- newWitness
+                                                 w2 <- newWitness
+                                                 let e = undefined
+                                                     cs = [Sub w1 p1 p2, Sub w2 k1 k2]
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs
 
-sub' env eq w t1@(TNil _ k1) t2@(TNil _ k2)
-  | k1 == k2                                = return (idwit w t1 t2 : eq)
-sub' env eq w (TRow _ k n t1 r1) r2         = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
-                                                 eq1 <- sub env eq w t1 t2
-                                                 sub env eq1 w r1 r2'
+sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
+  | k1 == k2                                = return (idwit w r1 r2 : eq)
+sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
+                                                 w1 <- newWitness
+                                                 w2 <- newWitness
+                                                 let e = undefined
+                                                     cs = [Sub w1 t1 t2, Sub w2 r1' r2']
+                                                 reduce env ((w, wFun r1 r2, e):eq) cs
 sub' env eq w t1 t2                         = do cast env t1 t2
                                                  return (idwit w t1 t2 : eq)
 
@@ -396,9 +386,9 @@ findElem k r0 n r tl                        = do r0' <- msubst r0
 -- Misc.
 ----------------------------------------------------------------------------------------------------------------------
 
-constraint2type t (TC n ts)             = tCon $ TC n (t:ts)
+impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
-x0                                      = head xNames
+x0:x1:x2:_                              = xNames
 
 pPar p                                  = f pNames p
   where f ns (TRow _ PRow n t p)
@@ -427,6 +417,10 @@ exp2arg es                              = \p -> foldr PosArg p es
 
 witsOf cs                               = [ eVar w | Impl w t p <- cs ]
 
+qualPar env q                           = wit2par (qualWits env q)
+
+qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | TBind tv ps <- q, p <- ps, isProto (tcname p) env ]
+
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
@@ -439,4 +433,6 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar p, kPar k)
         PosArg pSelf pArgs              = pArg p'                    
 
-idwit w t1 t2                           = (w, tFun fxPure (posRow t1 posNil) kwdNil t2, eLambda [(x0,t1)] (eVar x0))
+idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(x0,t1)] (eVar x0))
+
+wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
