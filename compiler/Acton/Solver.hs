@@ -332,18 +332,26 @@ sub' env eq w t1@(TExist _ p1) t2@(TExist l p2)
   where search                              = findAncestor env p1 (tcname p2)
 
 --                as declared               as called
-sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
+--                existing                  expected
+sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
                                             = do w1 <- newWitness
                                                  w2 <- newWitness
                                                  w3 <- newWitness
-                                                 let e = undefined
+                                                 let e = eLambda [(x0,t1)] e'
+                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTuple p2) (KwdSTAR x2 $ Just $ tRecord k2) e0 fxPure
+                                                     e0 = eCall (eVar w3) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
+                                                     e1 = eCall (eVar w1) [eVar x1]
+                                                     e2 = eCall (eVar w2) [eVar x2]
                                                      cs = [Cast fx1 fx2, Sub w1 p2 p1, Sub w2 k2 k1, Sub w3 t1' t2']
-                                                 reduce env ((w, wFun t1 t2, e):eq) cs                          -- TODO: implement pos/kwd argument shifting
+                                                 reduce env ((w, wFun t1 t2, e):eq) cs
 
-sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
+--                existing            expected
+sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
                                             = do w1 <- newWitness
                                                  w2 <- newWitness
-                                                 let e = undefined
+                                                 let e = eLambda [(x0,t1)] (Tuple l0 (PosStar e1) (KwdStar e2))
+                                                     e1 = eCall (eVar w1) [eCall (eQVar primPosOf) [eVar x0]]
+                                                     e2 = eCall (eVar w2) [eCall (eQVar primKwdOf) [eVar x0]]
                                                      cs = [Sub w1 p1 p2, Sub w2 k1 k2]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 

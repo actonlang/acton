@@ -21,5 +21,8 @@ primASSERT                          = qPrim "ASSERT"
 
 primPACK                            = qPrim "PACK"
 
+primPosOf                           = qPrim "posOf"
+primKwdOf                           = qPrim "kwdOf"
+
 primCLOS                            = qPrim "Clos"
 primCONT                            = qPrim "Cont"
