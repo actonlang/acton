@@ -334,38 +334,74 @@ sub' env eq w t1@(TExist _ p1) t2@(TExist l p2)
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do w1 <- newWitness
-                                                 w2 <- newWitness
-                                                 w3 <- newWitness
+                                            = do wp <- newWitness
+                                                 wk <- newWitness
+                                                 wt <- newWitness
                                                  let e = eLambda [(x0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR x1 $ Just $ tTuple p2) (KwdSTAR x2 $ Just $ tRecord k2) e0 fxPure
-                                                     e0 = eCall (eVar w3) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
-                                                     e1 = eCall (eVar w1) [eVar x1]
-                                                     e2 = eCall (eVar w2) [eVar x2]
-                                                     cs = [Cast fx1 fx2, Sub w1 p2 p1, Sub w2 k2 k1, Sub w3 t1' t2']
+                                                     e0 = eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
+                                                     e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
+                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)
+                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
 --                existing            expected
 sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
-                                            = do w1 <- newWitness
-                                                 w2 <- newWitness
+                                            = do wp <- newWitness
+                                                 wk <- newWitness
                                                  let e = eLambda [(x0,t1)] (Tuple l0 (PosStar e1) (KwdStar e2))
-                                                     e1 = eCall (eVar w1) [eCall (eQVar primPosOf) [eVar x0]]
-                                                     e2 = eCall (eVar w2) [eCall (eQVar primKwdOf) [eVar x0]]
-                                                     cs = [Sub w1 p1 p2, Sub w2 k1 k2]
+                                                     e1 = Call l0 (eVar wp) (PosStar $ eCall (eQVar primPosOf) [eVar x0]) KwdNil
+                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eCall (eQVar primKwdOf) [eVar x0])
+                                                     cs = [Sub wp p1 p2, Sub wk k1 k2]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
+-- Note: a sub-row constraint R1 < R2 is witnessed by a lambda of type 
+-- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
+
 sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
-  | k1 == k2                                = return (idwit w r1 r2 : eq)
+  | k1 == k2                                = return ((w, rowFun k1 r1 r2, eLambda [] (eTuple [])) : eq)
 sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
-                                                 w1 <- newWitness
-                                                 w2 <- newWitness
-                                                 let e = undefined
-                                                     cs = [Sub w1 t1 t2, Sub w2 r1' r2']
-                                                 reduce env ((w, wFun r1 r2, e):eq) cs
+                                                 wt <- newWitness
+                                                 wr <- newWitness
+                                                 let e = rowWit k w n t1 r1' wt wr
+                                                     cs = [Sub wt t1 t2, Sub wr r1' r2']
+                                                 reduce env ((w, rowFun k r1 r2, e):eq) cs
+
 sub' env eq w t1 t2                         = do cast env t1 t2
                                                  return (idwit w t1 t2 : eq)
 
+
+
+{-
+
+round : (Real, *int) -> Real
+----
+w(round)(3.14, None)                                                    w(round)(3.14, None)
+w : ((Real,?int)->Real) -> (float,None)->$1
+----
+w = lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2)))            = (lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2))))(round)(3.14, None)     | x0=round
+wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(*x1), **wk(**x2)))(3.14, None)                      | x1=(3.14,None), x2=()
+wp : (float,None) -> (Real,?int)                                        = wt(round(*wp(3.14,None), **wk()))
+wk : () -> ()
+----
+wt = lambda x0: x0                                                      = (lambda x0: x0)(round(*wp((3.14,None)), **wk()))                                  | x0=round(...)
+wp = lambda x1,*x2: (w1(x1), *w2(*x2))                                  = round(*(lambda x1,*x2: (w1(x1), *w2(*x2)))((3.14,None)), **(lambda: ())()))       | x1=3.14, x2=(None,)
+wk = lambda: ()                                                         = round(*(w1(3.14), *w2(*(None,))), **())
+w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2(None)))
+w2 : (None) -> (?int,)
+----
+w1 = lambda x0: PACK(Real$float, x0)                                    = round(*((lambda x0: PACK(Real$float, x0))(3.14), *w2(None)))                      | x0=3.14
+w2 = lambda x1,*x2: (w21(x1), *w22(*x2))                                = round(*(PACK(Real$float, 3.14), *(lambda x1,*x2: (w21(x1), *w22(*x2)))(None)))    | x1=None, x2=()
+w21 : (None) -> ?int                                                    = round(*(PACK(Real$float, 3.14), *(w21(None), *w22())))
+w22 : () -> ()
+----
+w21 = lambda x0: x0                                                     = round(*(PACK(Real$float, 3.14), *((lambda x0: x0)(None), *w22())))                | x0=None
+w22 = lambda: ()                                                        = round(*(PACK(Real$float, 3.14), *(None, *(lambda: ())())))
+                                                                        = round(*(PACK(Real$float, 3.14), *(None, *())))
+                                                                        = round(*(PACK(Real$float, 3.14), *(None,)))
+                                                                        = round(*(PACK(Real$float, 3.14), None))
+                                                                        = round(PACK(Real$float, 3.14), None)
+-}
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -442,5 +478,16 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         PosArg pSelf pArgs              = pArg p'                    
 
 idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(x0,t1)] (eVar x0))
+
+rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTuple r2)
+rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tRecord r2)
+
+rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTuple r)) KwdNIL eTup fxPure
+  where eTup                            = Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
+        e1                              = eCall (eVar wt) [eVar x1]
+rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar x1 (Just t) Nothing $ KwdSTAR x2 (Just $ tTuple r)) eRec fxPure
+  where eRec                            = Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
+        e1                              = eCall (eVar wt) [eVar x1]
+
 
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
