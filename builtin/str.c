@@ -170,7 +170,7 @@ $bool $Hashable$str$__ne__ ($Hashable$str wit, $str a, $str b) {
 }
 
 $int $Hashable$str$__hash__($Hashable$str wit, $str str) {
-  return to$int($string_hash(str->str,str->nbytes));
+  return to$int($string_hash(str));
 }
 
 $int $Hashable$str$__keyinfo__($Hashable$str wit) {

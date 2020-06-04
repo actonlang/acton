@@ -1,4 +1,3 @@
-#include <stdarg.h>
 
 // Fundamental class, from which all classes inherit //////////////////////////////////////////////////////
 
@@ -22,8 +21,6 @@ struct $Initializable {
 // These default functions do nothing 
 
 void $default__init__($Initializable);
-void $default2__init__($Initializable, $WORD);
-void $default3__init__($Initializable, $WORD,$WORD);
 
 
 // Types for serialization ////////////////////////////////////////////////////////////////////////////

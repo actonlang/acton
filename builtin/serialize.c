@@ -235,9 +235,3 @@ $Serializable $deserialize_file(char *file) {
 void $default__init__($Initializable s) {
   return;
 }
-void $default2__init__($Initializable s, $WORD w) {
-  return;
-}
-void $default3__init__($Initializable s, $WORD w, $WORD w2) {
-  return;
-}
