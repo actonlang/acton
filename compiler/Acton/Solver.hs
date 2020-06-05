@@ -177,14 +177,12 @@ cast' env (TVar _ tv1) (TVar _ tv2)
 
 cast' env t1@(TVar _ tv) t2
   | not $ scoped tv env                     = defer [Cast t1 t2]
-  | t2 == tBoolean                          = return ()
   | Just tc <- findTVBound env tv           = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)
-  | not $ scoped tv env                           = defer [Cast t1 t2]
+  | not $ scoped tv env                     = defer [Cast t1 t2]
 
 cast' env (TCon _ c1) (TCon _ c2)
-  | c2 == cBoolean                          = return ()
   | Just (wf,c') <- search                  = unifyM env (tcargs c1) (tcargs c')        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 

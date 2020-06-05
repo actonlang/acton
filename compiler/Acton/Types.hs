@@ -960,8 +960,7 @@ infAssocs env (StarStar e : as) tk tv   = do (cs1,e') <- inferSub env (tExist $ 
 
 
 inferBool env e                         = do (cs,t,e') <- infer env e
-                                             return (Cast t tBoolean :
-                                                     cs, eCall (eDot e' boolKW) [])
+                                             return (cs, eCall (eDot e' boolKW) [])
 
 inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,e2') <- inferSub env tInt e2
