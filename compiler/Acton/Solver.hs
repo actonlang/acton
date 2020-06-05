@@ -353,12 +353,15 @@ sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                           
                                                      cs = [Sub wp p1 p2, Sub wk k1 k2]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
+
 -- Note: a sub-row constraint R1 < R2 is witnessed by a lambda of type 
 -- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
 
 sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
   | k1 == k2                                = return ((w, rowFun k1 r1 r2, eLambda [] (eTuple [])) : eq)
-sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
+
+--          existing     expected                Match labels in the order of the expected row
+sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k) n r1 (rowTail r2)
                                                  wt <- newWitness
                                                  wr <- newWitness
                                                  let e = rowWit k w n t1 r1' wt wr
@@ -372,7 +375,7 @@ sub' env eq w t1 t2                         = do cast env t1 t2
 
 {-
 
-round : (Real, *int) -> Real
+round : (Real, ?int) -> Real
 ----
 w(round)(3.14, None)                                                    w(round)(3.14, None)
 w : ((Real,?int)->Real) -> (float,None)->$1
@@ -385,8 +388,8 @@ wk : () -> ()
 wt = lambda x0: x0                                                      = (lambda x0: x0)(round(*wp((3.14,None)), **wk()))                                  | x0=round(...)
 wp = lambda x1,*x2: (w1(x1), *w2(*x2))                                  = round(*(lambda x1,*x2: (w1(x1), *w2(*x2)))((3.14,None)), **(lambda: ())()))       | x1=3.14, x2=(None,)
 wk = lambda: ()                                                         = round(*(w1(3.14), *w2(*(None,))), **())
-w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2(None)))
-w2 : (None) -> (?int,)
+w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2(None,)))
+w2 : (None,) -> (?int,)
 ----
 w1 = lambda x0: PACK(Real$float, x0)                                    = round(*((lambda x0: PACK(Real$float, x0))(3.14), *w2(None)))                      | x0=3.14
 w2 = lambda x1,*x2: (w21(x1), *w22(*x2))                                = round(*(PACK(Real$float, 3.14), *(lambda x1,*x2: (w21(x1), *w22(*x2)))(None)))    | x1=None, x2=()
@@ -399,6 +402,33 @@ w22 = lambda: ()                                                        = round(
                                                                         = round(*(PACK(Real$float, 3.14), *(None,)))
                                                                         = round(*(PACK(Real$float, 3.14), None))
                                                                         = round(PACK(Real$float, 3.14), None)
+
+
+------------------------------------------
+
+round : (x:Real, n:?int) -> Real                                        round(n=None,x=3.14)
+----
+w(round)(n=None, x=3.14)                                                w(round)(n=None,x=3.14)
+w : ((x:Real,n:?int)->Real) -> (n:None,x:float)->$1
+----
+w = lambda x0: lambda **x1: wt(x0(**wr(**x1)))                          = (lambda x0: lambda **x1: wt(x0(**wr(**x1))))(round)(n=None,x=3.14)            | x0=round
+wt : (Real) -> $1                                                       = (lambda **x1: wt(round(**wr(**x1))))(n=None,x=3.14)                           | x1=(n=None,x=3.14))
+wr : (n:None,x:float) -> (x:Real,n:?int)                                = wt(round(**wr(n=None,x=3.14)))
+----
+wt = lambda x0: x0                                                      = (lambda x0: x0 )(round(**wr(n=None,x=3.14)))                                  | x0=round(...)
+wr = lambda x,**x2: (x=w1(x), **w2(**x2))                               = round(**(lambda x,**x2: (x=w1(x), **w2(**x2)))(n=None,x=3.14))                | x=3.14, x2=(n=None,)
+w1 : (float) -> Real                                                    = round(**(x=w1(3.14), **w2(n=None,)))
+w2 : (n:None,) -> (n:?int,)
+----
+w1 = lambda x0: PACK(Real$float, x0)                                    = round(**(x=(lambda x0: PACK(Real$float, x0))(3.14), **w2(n=None,)))             | x0=3.14
+w2 = lambda n, **x2: (n=w21(n), **w22(**x2))                            = round(**(x=PACK(Real$float, 3.14), **(lambda n, **x2: (n=w21(n), **w22(**x2)))(n=None,)))
+w21 : (None) -> ?int                                                    = round(**(x=PACK(Real$float, 3.14), **(n=w21(None), **w22(**()))))
+w22 : () -> ()
+----
+w21 = lambda x0: x0                                                     = round(**(x=PACK(Real$float, 3.14), **(n=None, **())))
+w22 = lambda: ()                                                        = round(**(x=PACK(Real$float, 3.14), **(n=None)))
+                                                                        = round(**(x=PACK(Real$float, 3.14), n=None))
+                                                                        = round(x=PACK(Real$float, 3.14), n=None)
 -}
 
 
@@ -483,9 +513,9 @@ rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tRecord r2)
 rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTuple r)) KwdNIL eTup fxPure
   where eTup                            = Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
         e1                              = eCall (eVar wt) [eVar x1]
-rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar x1 (Just t) Nothing $ KwdSTAR x2 (Just $ tTuple r)) eRec fxPure
+rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR x2 (Just $ tTuple r)) eRec fxPure
   where eRec                            = Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
-        e1                              = eCall (eVar wt) [eVar x1]
+        e1                              = eCall (eVar wt) [eVar n]
 
 
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
