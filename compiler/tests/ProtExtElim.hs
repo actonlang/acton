@@ -111,7 +111,7 @@ transParents tv bs                      = map addP bs
    where addP (TC qn ts)                = TC qn (tv : ts)
 
 -- transforms [A(Eq), B, C(Hashable)] into ([A,B,C],[Eq[A],Hashable[C]])
-transParams                             :: Qual -> (Qual,[TCon])
+transParams                             :: QBinds -> (QBinds,[TCon])
 transParams qs                          = trP qs [] []
    where trP [] ws qs1                  = (reverse qs1,reverse ws)
          trP (TBind tv cs:qs) ws qs1    = trP qs ([TC nm [tVar tv] | TC nm _ <- cs]++ws) (tBind tv : qs1) 

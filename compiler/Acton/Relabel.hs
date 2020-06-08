@@ -201,8 +201,8 @@ instance Relabel TVar where
 instance Relabel TCon where
     relabel (TC n ts) = TC <$> relabel n <*> relabel ts
 
-instance Relabel TBind where
-    relabel (TBind v cs) = TBind <$> relabel v <*> relabel cs
+instance Relabel QBind where
+    relabel (Quant v cs) = Quant <$> relabel v <*> relabel cs
 
 instance Relabel Type where
     relabel (TVar _ v) = TVar <$> newLoc <*> relabel v
@@ -224,3 +224,10 @@ instance Relabel FX where
     relabel (FXMut t) = FXMut <$> relabel t
     relabel (FXPure) = return FXPure
 
+instance Relabel Constraint where
+    relabel (Cast t1 t2) = Cast <$> relabel t1 <*> relabel t2
+    relabel (Sub w t1 t2) = Sub <$> relabel w <*> relabel t1 <*> relabel t1
+    relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
+    relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
+    relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
+    

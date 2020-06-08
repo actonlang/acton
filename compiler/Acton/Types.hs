@@ -266,10 +266,10 @@ sliz2args (Sliz _ e1 e2 e3)             = map (maybe eNone id) [e1,e2,e3]
 bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
 
 autoQuantize env (TSchema l [] t)       = TSchema NoLoc q t
-  where q                               = [ TBind v [] | v <- nub (tyfree t \\ (tvSelf : tvarScope env)), not $ generated v ]
+  where q                               = [ quant v | v <- nub (tyfree t \\ (tvSelf : tvarScope env)), not $ generated v ]
 autoQuantize env sc                     = sc
 
-autoQuant env [] p k a                  = [ TBind v [] | v <- nub (tvs \\ (tvSelf : tvarScope env)), not $ generated v ]
+autoQuant env [] p k a                  = [ quant v | v <- nub (tvs \\ (tvSelf : tvarScope env)), not $ generated v ]
   where tvs                             = tyfree p ++ tyfree k ++ tyfree a
 autoQuant env q p k a                   = q
 
@@ -314,7 +314,7 @@ instance InfEnv Decl where
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  t <- newTVar
-                                                 return ([], [(n, NDef (tSchema q1 t) (deco d))], d{qual = q1})
+                                                 return ([], [(n, NDef (tSchema q1 t) (deco d))], d{qbinds = q1})
                                              _ ->
                                                  illegalRedef n
       where q1                          = autoQuant env q p k a
@@ -412,7 +412,7 @@ checkAttributes final te' te
 extensionName                           :: QName -> [TCon] -> Name
 extensionName c ps                      = Derived (deriveQ $ tcname $ head ps) (nstr $ deriveQ c)
 
-stripQual q                             = [ TBind v [] | TBind v us <- q ]
+stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -449,19 +449,19 @@ matchAssumption env cl cs def
   | q0 == q1 || null q1                 = do let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- splitAndSolve env0 (tybound q0) (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qual = q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
-  | otherwise                           = do (cs1, tvs) <- instQual env q1
+                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
+  | otherwise                           = do (cs1, tvs) <- instQBinds env q1
                                              let s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
-                                             def <- msubstWith s def{ qual = [] }   -- since the variables in (tybound q1) aren't necessarily unique
+                                             def <- msubstWith s def{ qbinds = [] }   -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- splitAndSolve env0 (tybound q0) (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qual = q0, pos = pos0, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
-        q1                              = qual def
+        q1                              = qbinds def
         env0                            = defineTVars q0 env
-        pos0 | cl && dec /= Static      = PosPar nSelf t' e' $ qualPar env q0 pos'
-             | otherwise                = qualPar env q0 (pos def)
+        pos0 def | cl && dec /= Static  = PosPar nSelf t' e' $ qualWPar env q0 pos'
+                 | otherwise            = qualWPar env q0 (pos def)
           where PosPar nSelf t' e' pos' = pos def
         
 
@@ -585,10 +585,10 @@ splitGen env fvs cs te eqs
     (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
     (gen_cs, ambig_cs)                  = split_safe safe_vs cs'              -- TODO: also include "must solve" constraints
 
-mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in (q, concat wss, filter nofit cs)
+qualify vs cs                           = let (q,wss) = unzip $ map cbind vs in (q, concat wss, filter nofit cs)
   where cbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
-                                          (TBind v impls, wits)
-                | otherwise             = (TBind v (casts ++ impls), wits)
+                                          (Quant v impls, wits)
+                | otherwise             = (Quant v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
                 impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
                 wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
@@ -596,14 +596,13 @@ mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in 
         nofit (Impl _ (TVar _ v) _)     = v `notElem` vs
         nofit _                         = True
 
-
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
 genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
                                              te <- msubst te
                                              fvs <- msubstTV (tyfree env ++ tyfixed te)
                                              (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
                                              ds <- msubst ds0
-                                             let (q,ws,xtra) = mkQual gvs gen_cs
+                                             let (q,ws,xtra) = qualify gvs gen_cs
                                                  s = tvarSupplyMap (tybound q) (tvarScope env)
                                                  te1 = map (generalize s q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
@@ -619,7 +618,7 @@ genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
     generalize s q (n, i)               = (n, i)
 
     abstract q ds ws eq d@Def{}
-      | null $ qual d                   = d{ qual = q, pos = wit2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+      | null $ qbinds d                 = d{ qbinds = q, pos = wit2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds ws (dbody d)) }
       where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
@@ -684,7 +683,7 @@ instance Infer Expr where
                                                 (cs,t) <- instantiate env sc
                                                 return (cs, t, app t x $ witsOf cs)
                                             NClass q _ _ -> do
-                                                (cs0,ts) <- instQual env q
+                                                (cs0,ts) <- instQBinds env q
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_wf,sc,_dec) -> do
                                                         (cs1,t) <- instantiate env sc
@@ -827,7 +826,7 @@ instance Infer Expr where
       | Just m <- isModule env e        = infer env (Var l (QName m n))
 
     infer env (Dot l x@(Var _ c) n)
-      | NClass q us te <- cinfo         = do (cs0,ts) <- instQual env q
+      | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
                                                 Just (_wf,sc,dec)
                                                   | isProp dec sc -> err l "Property attribute not selectable by class"
@@ -846,7 +845,7 @@ instance Infer Expr where
                                                                 t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                             return (cs1++cs2, t', app t' (eDot (wf we) n) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
-      | NProto q us te <- cinfo         = do (_,ts) <- instQual env q
+      | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
                                                 Just (wf,sc,dec) -> do
                                                     (cs1,t) <- instantiate env sc

@@ -46,10 +46,10 @@ data NameInfo               = NVar      Type
                             | NSVar     Type
                             | NDef      TSchema Deco
                             | NSig      TSchema Deco
-                            | NAct      Qual PosRow KwdRow TEnv
-                            | NClass    Qual [WTCon] TEnv
-                            | NProto    Qual [WTCon] TEnv
-                            | NExt      QName Qual [WTCon] TEnv
+                            | NAct      QBinds PosRow KwdRow TEnv
+                            | NClass    QBinds [WTCon] TEnv
+                            | NProto    QBinds [WTCon] TEnv
+                            | NExt      QName QBinds [WTCon] TEnv
                             | NTVar     Kind (Maybe TCon)
                             | NAlias    QName
                             | NMAlias   ModName
@@ -58,7 +58,7 @@ data NameInfo               = NVar      Type
                             | NBlocked
                             deriving (Eq,Show,Read,Generic)
 
-data Witness                = WClass    { binds::Qual, proto::TCon, wname::QName, wsteps::[Maybe QName] }
+data Witness                = WClass    { binds::QBinds, proto::TCon, wname::QName, wsteps::[Maybe QName] }
                             | WInst     { proto::TCon, wname::QName, wsteps::[Maybe QName] }
                             deriving (Show)
 
@@ -207,8 +207,8 @@ instance Unalias TSchema where
 instance Unalias TCon where
     unalias env (TC qn ts)          = TC (unalias env qn) (unalias env ts)
 
-instance Unalias TBind where
-    unalias env (TBind tv cs)       = TBind tv (unalias env cs)
+instance Unalias QBind where
+    unalias env (Quant tv cs)       = Quant tv (unalias env cs)
 
 instance Unalias Type where
     unalias env (TCon l c)          = TCon l (unalias env c)
@@ -322,21 +322,21 @@ define te env               = foldl addWit env1 ws
   where env1                = env{ names = reverse te ++ exclude (dom te) (names env) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
-defineTVars                 :: Qual -> Env -> Env
+defineTVars                 :: QBinds -> Env -> Env
 defineTVars [] env          = env
-defineTVars (TBind tv@(TV k n) us : q) env
+defineTVars (Quant tv@(TV k n) us : q) env
   | not $ skolem tv         = internal (loc tv) "Attempted scoping of non skolem type variable"
   | otherwise               = foldl addWit env1 ws
   where env1                = defineTVars q env{ names = (n, NTVar k mba) : names env }
         (mba,us')           = case mro2 env us of ([],_) -> (Nothing,us); _ -> (Just (head us), tail us)
         ws                  = [ (NoQ n, WInst p (NoQ (tvarWit tv p)) ws) | u <- us', (ws,p) <- findAncestry env u ]
 
-defineSelf                  :: QName -> Qual -> Env -> Env
-defineSelf qn q env         = defineTVars [TBind tvSelf [tc]] env
-  where tc                  = TC qn [ tVar tv | TBind tv _ <- q ]
+defineSelf                  :: QName -> QBinds -> Env -> Env
+defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
+  where tc                  = TC qn [ tVar tv | Quant tv _ <- q ]
 
 defineSelfOpaque            :: Env -> Env
-defineSelfOpaque env        = defineTVars [TBind tvSelf []] env
+defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
 
 
 defineMod                   :: ModName -> TEnv -> Env -> Env
@@ -397,7 +397,7 @@ tconKind n env              = case findQName n env of
                                 NProto q _ _ -> kind KProto q
                                 _            -> notClassOrProto n
   where kind k []           = k
-        kind k q            = KFun [ tvkind v | TBind v _ <- q ] k
+        kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
                                 
 isActor                     :: QName -> Env -> Bool
 isActor n env               = case findQName n env of
@@ -492,7 +492,7 @@ instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
     wf env (a,b)            = wf env a ++ wf env b
 
 instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | TBind v us <- q, u <- us ]
+    wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
       where q               = case findQName n env of
                                 NAct q p k te  -> q
                                 NClass q us te -> q
@@ -511,8 +511,8 @@ instance WellFormed Type where
     wf env _                = []
 
 
-instance WellFormed TBind where
-    wf env (TBind v us)     = wf env us
+instance WellFormed QBind where
+    wf env (Quant v us)     = wf env us
 
 
 -- Method resolution order ------------------------------------------------------------------------------------------------------
@@ -557,26 +557,26 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
 instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
 instantiate env (TSchema _ q t)
-                            = do (cs, tvs) <- instQual env q
+                            = do (cs, tvs) <- instQBinds env q
                                  let s = tybound q `zip` tvs
                                  return (cs, subst s t)
 
-instQual                    :: Env -> Qual -> TypeM (Constraints, [Type])
-instQual env q              = do ts <- newTVars [ tvkind v | TBind v _ <- q ]
-                                 cs <- qualConstraints env q ts
+instQBinds                  :: Env -> QBinds -> TypeM (Constraints, [Type])
+instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
+                                 cs <- instQuals env q ts
                                  return (cs, ts)
 
 instWitness                 :: Env -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)        -- witnesses of cs already applied in e!
 instWitness env ts wit      = case wit of
                                  WClass q p w ws -> do
-                                    cs <- qualConstraints env q ts
+                                    cs <- instQuals env q ts
                                     return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (eQVar w) $ wvars cs))
                                  WInst p w ws ->
                                     return ([], p, wexpr ws (eQVar w))
 
-qualConstraints             :: Env -> Qual -> [Type] -> TypeM Constraints
-qualConstraints env q ts    = do let s = tybound q `zip` ts
-                                 sequence [ constr (tVar v) u | TBind v us <- subst s q, u <- us ]
+instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
+instQuals env q ts          = do let s = tybound q `zip` ts
+                                 sequence [ constr (tVar v) u | Quant v us <- subst s q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
@@ -805,7 +805,7 @@ instance Subst TSchema where
                     clashvars       = vs `intersect` newvars
                     avoidvars       = vs0 ++ vs ++ newvars
                     renaming        = tvarSupplyMap clashvars avoidvars
-                    q'              = [ TBind (subst renaming v) (subst renaming cs) | TBind v cs <- q ]
+                    q'              = [ Quant (subst renaming v) (subst renaming cs) | Quant v cs <- q ]
                     t'              = subst renaming t
 
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
@@ -837,7 +837,7 @@ testSchemaSubst = do
     putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
     putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
     putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
-  where t   = tSchema [TBind (TV KType (name "A")) [TC (noQ "Eq") []]]
+  where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]]
                             (tCon (TC (noQ "apa") [tVar (TV KType (name "A")), 
                                                    tVar (TV KType (name "B"))]))
         s1  = [(TV KType (name "B"), tSelf)]
@@ -855,10 +855,10 @@ instance Subst TCon where
     msubst (TC n ts)                = TC n <$> msubst ts
     tyfree (TC n ts)                = tyfree ts
 
-instance Subst TBind where
-    msubst (TBind v cs)             = TBind <$> msubst v <*> msubst cs
-    tyfree (TBind v cs)             = tyfree cs
-    tybound (TBind v cs)            = [v]
+instance Subst QBind where
+    msubst (Quant v cs)             = Quant <$> msubst v <*> msubst cs
+    tyfree (Quant v cs)             = tyfree cs
+    tybound (Quant v cs)            = [v]
 
 instance Subst Type where
     msubst (TVar l v)               = do s <- getSubstitution

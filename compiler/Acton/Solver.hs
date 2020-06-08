@@ -540,9 +540,9 @@ exp2arg es                              = \p -> foldr PosArg p es
 
 witsOf cs                               = [ eVar w | Impl w t p <- cs ]
 
-qualPar env q                           = wit2par (qualWits env q)
+qualWPar env q                          = wit2par (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | TBind tv ps <- q, p <- ps, isProto (tcname p) env ]
+qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
 
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx

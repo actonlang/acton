@@ -344,8 +344,8 @@ instance Vars TVar where
 instance Vars TCon where
     free (TC n ts)                  = free n ++ free ts
 
-instance Vars TBind where
-    free (TBind v cs)               = free cs
+instance Vars QBind where
+    free (Quant v cs)               = free cs
 
 instance Vars Type where
     free (TVar _ v)                 = free v
@@ -362,6 +362,13 @@ instance Vars FX where
     free (FXMut t)                  = free t
     free (FXAct t)                  = free t
     free _                          = []
+
+instance Vars Constraint where
+    free (Cast t1 t2)               = free t1 ++ free t2
+    free (Sub w t1 t2)              = free t1 ++ free t2
+    free (Impl w t p)               = free t ++ free p
+    free (Sel w t1 n t2)            = free t1 ++ free t2
+    free (Mut t1 n t2)              = free t1 ++ free t2
 
 -----------------
 

@@ -103,12 +103,12 @@ kchkSuite env (Decl l ds : ss)      = do ds <- mapM instDecl ds
         kinds (Protocol _ n q _ _)  = [(n,kind KProto q)]
         kinds _                     = []
         kind k []                   = k
-        kind k q                    = KFun [ tvkind v | TBind v _ <- q ] k
+        kind k q                    = KFun [ tvkind v | Quant v _ <- q ] k
 kchkSuite env (s : ss)              = do s <- kchk env s; ss <- kchkSuite env ss; return (s:ss)
 
-instDecl d                          = do q <- mapM instBind (qual d); return d{ qual = q }
+instDecl d                          = do q <- mapM instBind (qbinds d); return d{ qbinds = q }
         
-instBind (TBind v us)               = TBind <$> instVar v <*> return us
+instBind (Quant v us)               = Quant <$> instVar v <*> return us
 
 instVar (TV KWild n)                = TV <$> newKVar <*> return n
 instVar v                           = return v
@@ -140,19 +140,19 @@ instance KCheck Decl where
     kchk env (Def l n q p k t b d x)
       | null q                      = do vs <- mapM instVar $ nub (tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tvars env)
                                          let env1 = extvars vs env
-                                         -- Don't return an explicit q here, type-checker depends on the explicit/implicit qual distinction
+                                         -- Don't return an explicit q here, type-checker depends on the explicit/implicit quantification distinction
                                          Def l n [] <$> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
                                                  kchkSuite env1 b <*> return d <*> kexpWild KFX env1 x
       | otherwise                   = do let env1 = extvars (tybound q) env
-                                         Def l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
+                                         Def l n <$> kchkQBinds env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
                                                  kchkSuite env1 b <*> return d <*> kexpWild KFX env1 x
-    kchk env (Actor l n q p k b)    = Actor l n <$> kchkQual env q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
+    kchk env (Actor l n q p k b)    = Actor l n <$> kchkQBinds env q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
       where env1                    = extvars (tybound q) env
-    kchk env (Class l n q us b)     = Class l n <$> kchkQual env q <*> kchkBounds env1 us <*> kchkSuite env1 b
+    kchk env (Class l n q us b)     = Class l n <$> kchkQBinds env q <*> kchkBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQBinds env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Extension l n q us b) = do ext <- Extension l n <$> kchkQual env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Extension l n q us b) = do ext <- Extension l n <$> kchkQBinds env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
                                          kexpNoWild KType env1 (TC n (map tVar $ tybound q))
                                          return ext
       where env1                    = extvars (tvSelf : tybound q) env
@@ -266,19 +266,19 @@ instance KCheck TSchema where
       | not $ null ambig            = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
       | null q                      = do vs <- mapM instVar vs
                                          let env1 = extvars vs env
-                                         TSchema l [ TBind v [] | v <- vs ] <$> kexpNoWild KType env1 t
+                                         TSchema l [ Quant v [] | v <- vs ] <$> kexpNoWild KType env1 t
       | otherwise                   = do q <- mapM instBind q
                                          let env1 = extvars (tybound q) env
-                                         TSchema l <$> kchkQual env1 q <*> kexpNoWild KType env1 t
+                                         TSchema l <$> kchkQBinds env1 q <*> kexpNoWild KType env1 t
       where ambig                   = tybound q \\ tyfree t
             vs                      = nub (tyfree t) \\ (tvSelf : tvars env)
 
 
-kchkQual env []                     = return []
-kchkQual env (TBind v us : q)       = do (_k,v) <- kinferNoWild env v
+kchkQBinds env []                   = return []
+kchkQBinds env (Quant v us : q)     = do (_k,v) <- kinferNoWild env v
                                          us <- kchkBounds env us
-                                         q <- kchkQual env q
-                                         return $ TBind v us : q
+                                         q <- kchkQBinds env q
+                                         return $ Quant v us : q
 
 kchkBounds env []                   = return []
 kchkBounds env (u:us)               = do (k,u) <- kinferNoWild env u
@@ -410,8 +410,8 @@ instance KSubst TVar where
 instance KSubst TCon where
     ksubst g (TC n ts)              = TC n <$> ksubst g ts
 
-instance KSubst TBind where
-    ksubst g (TBind v cs)           = TBind <$> ksubst g v <*> ksubst g cs
+instance KSubst QBind where
+    ksubst g (Quant v cs)           = Quant <$> ksubst g v <*> ksubst g cs
 
 instance KSubst Type where
     ksubst g (TVar l v)             = TVar l <$> ksubst g v

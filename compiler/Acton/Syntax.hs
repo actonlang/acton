@@ -43,11 +43,11 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Deco, dfx::TFX }
-                | Actor         { dloc::SrcLoc, dname:: Name, qual::Qual, pos::PosPar, kwd::KwdPar, dbody::Suite }
-                | Class         { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
-                | Protocol      { dloc::SrcLoc, dname:: Name, qual::Qual, bounds::[TCon], dbody::Suite }
-                | Extension     { dloc::SrcLoc, dqname::QName, qual::Qual, bounds::[TCon], dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Deco, dfx::TFX }
+                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
+                | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
+                | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
+                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[TCon], dbody::Suite }
                 deriving (Show)
 
 data Expr       = Var           { eloc::SrcLoc, var::QName }
@@ -160,7 +160,7 @@ data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic)
 
 data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar Name | KWild deriving (Eq,Ord,Show,Read,Generic)
 
-data TSchema    = TSchema { scloc::SrcLoc, scbind::Qual, sctype::Type } deriving (Show,Read,Generic)
+data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
@@ -170,11 +170,11 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data TBind      = TBind TVar [TCon] deriving (Eq,Show,Read,Generic)
-
 data FX         = FXPure | FXMut Type | FXAct Type | FXAsync deriving (Eq,Show,Read,Generic)
 
-type Qual       = [TBind]
+data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
+
+type QBinds     = [QBind]
 
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
@@ -246,7 +246,7 @@ pVar n t        = PVar NoLoc n t
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t
 
-tBind v         = TBind v []
+quant v         = Quant v []
 
 tVar v          = TVar NoLoc v
 tCon c          = TCon NoLoc c
@@ -261,7 +261,7 @@ tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
 
-tCon0 n q       = tCon $ TC n [ tVar tv | TBind tv _ <- q ]
+tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
 
 tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
@@ -323,7 +323,7 @@ instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
 instance Data.Binary.Binary UType
-instance Data.Binary.Binary TBind
+instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
 instance Data.Binary.Binary FX

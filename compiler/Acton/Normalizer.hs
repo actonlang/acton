@@ -333,11 +333,8 @@ instance Norm TVar where
 instance Norm TCon where
     norm env (TC n ts)              = TC n <$> norm env ts
 
-instance Norm TBind where
-    norm env (TBind v cs)           = TBind <$> norm env v <*> norm env cs
-
-instance Norm Qual where
-    norm env (Qual vs cs)           = Qual <$> norm env vs <*> norm env cs
+instance Norm QBind where
+    norm env (Quant v cs)           = Quant <$> norm env v <*> norm env cs
 
 instance Norm Constraint where
     norm env (Cast t t')            = Cast <$> norm env t <*> norm env t'
