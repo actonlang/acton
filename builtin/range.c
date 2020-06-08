@@ -61,7 +61,7 @@ void $Iterator$range_init($Iterator$range self, $range rng) {
 }                                    
 
 $bool $Iterator$range_bool($Iterator$range self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$range_str($Iterator$range self) {
@@ -83,11 +83,11 @@ $Iterator$range $Iterator$range$_deserialize($Serial$state state) {
 }
 
 
-struct $range$class $range$methods = {"",UNASSIGNED,NULL,$range$__init__,$range$__bool__,$range$__str__,$range$__serialize__,$range$__deserialize__};
+struct $range$class $range$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$range$__init__,$range$__serialize__,$range$__deserialize__,$range$__bool__,$range$__str__};
 
 
-struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$range_init,$Iterator$range_bool,
-                                                        $Iterator$range_str,$Iterator$range_serialize, $Iterator$range$_deserialize, $Iterator$range_next};
+struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$range_init,
+                                                       $Iterator$range_serialize, $Iterator$range$_deserialize,$Iterator$range_bool,$Iterator$range_str,$Iterator$range_next};
 
 //$Iterator $range_iter($range rng) {
 //  return ($Iterator)$NEW($Iterator$range,rng);

@@ -21,10 +21,10 @@ struct lambda$1$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$1, $Cont);
-    $bool (*__bool__)(lambda$1);
-    $str (*__str__)(lambda$1);
     void (*__serialize__)(lambda$1, $Serial$state);
     lambda$1 (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(lambda$1);
+    $str (*__str__)(lambda$1);
     $R (*enter)(lambda$1, $Msg);    
 };
 struct lambda$1 {
@@ -37,10 +37,10 @@ struct lambda$2$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$2, Act, $int, $list);
-    $bool (*__bool__)(lambda$2);
-  $str (*__str__)(lambda$2);
     void (*__serialize__)(lambda$2, $Serial$state);
     lambda$2 (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(lambda$2);
+    $str (*__str__)(lambda$2);
     $R (*enter)(lambda$2, $Cont);    
 };
 struct lambda$2 {
@@ -55,10 +55,10 @@ struct Act$class {
     int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Act, $int, $Cont);
-    $bool (*__bool__)(Act);
-    $str (*__str__)(Act);
     void (*__serialize__)(Act, $Serial$state);
     Act (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(Act);
+    $str (*__str__)(Act);
     $R (*act$local)(Act, $int, $list, $Cont);
     $R (*act)(Act, $int, $list, $Cont);
 };
@@ -78,10 +78,10 @@ struct lambda$3$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$3, Root, $Iterator, $Cont);
-    $bool (*__bool__)(lambda$3);
-    $str (*__str__)(lambda$3);
     void (*__serialize__)(lambda$3, $Serial$state);
     lambda$3 (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(lambda$3);
+    $str (*__str__)(lambda$3);
     $R (*enter)(lambda$3, Act);
 };
 struct lambda$3 {
@@ -96,10 +96,10 @@ struct lambda$4$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)(lambda$4, $Cont);
-    $bool (*__bool__)(lambda$4);
-    $str (*__str__)(lambda$4);
     void (*__serialize__)(lambda$4, $Serial$state);
     lambda$4 (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(lambda$4);
+    $str (*__str__)(lambda$4);
     $R (*enter)(lambda$4, $WORD);
 };
 struct lambda$4 {
@@ -112,10 +112,10 @@ struct Root$class {
     int $class_id;
     $Super$class $superclass;
     $R (*__init__)(Root, $int, $Cont);
-    $bool (*__bool__)(Root);
-  $str (*__str__)(Root);
     void (*__serialize__)(Root, $Serial$state);
     Root (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(Root);
+    $str (*__str__)(Root);
 };
 struct Root {
     union {

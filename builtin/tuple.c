@@ -12,7 +12,7 @@ $bool $tuple_bool($tuple self) {
 $str $tuple_str($tuple self) {
   $list s2 = $list_new(self->size);
   for (int i=0; i< self->size; i++) {
-    $Initializable elem = ($Initializable)self->components[i];
+    $struct elem = ($struct)self->components[i];
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('(',s2,')');
@@ -55,12 +55,12 @@ $tuple $tuple_deserialize($Serial$state state) {
 struct $tuple$class $tuple$methods = {
     "tuple",
     UNASSIGNED,
-    NULL,
+    ($Super$class)&$struct$methods,
     $tuple_init,
-    $tuple_bool,
-    $tuple_str,
     $tuple_serialize,
-    $tuple_deserialize
+    $tuple_deserialize,
+    $tuple_bool,
+    $tuple_str
 };
 
 // Iterators over tuples ///////////////////////////////////////////////////////
@@ -75,7 +75,7 @@ void $Iterator$tuple_init($Iterator$tuple self, $tuple lst) {
 }
 
 $bool $Iterator$tuple_bool($Iterator$tuple self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$tuple_str($Iterator$tuple self) {
@@ -95,9 +95,8 @@ $Iterator$tuple $Iterator$tuple$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$tuple$class $Iterator$tuple$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$tuple_init,
-                                                        $Iterator$tuple_bool, $Iterator$tuple_str,
-                                                      $Iterator$tuple_serialize, $Iterator$tuple$_deserialize, $Iterator$tuple_next};
+struct $Iterator$tuple$class $Iterator$tuple$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$tuple_init,
+                                                        $Iterator$tuple_serialize,$Iterator$tuple$_deserialize,$Iterator$tuple_bool,$Iterator$tuple_str,$Iterator$tuple_next};
 
 
 // Iterable ///////////////////////////////////////////////////////////////
@@ -187,8 +186,8 @@ $bool $Hashable$tuple$__eq__ ($Hashable$tuple wit, $tuple tup1, $tuple tup2) {
   //type-checking guarantees that sizes are equal
   for (int i=0; i<tup1->size; i++)
     if (!wit->w$Hashable$tuple[i]->$class->__eq__(wit->w$Hashable$tuple[i],tup1->components[i],tup1->components[i]))
-      return $false;
-  return $true;
+      return $False;
+  return $True;
 }
 
 $bool $Hashable$tuple$__ne__ ($Hashable$tuple wit, $tuple tup1, $tuple tup2) {

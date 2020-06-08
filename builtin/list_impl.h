@@ -1,5 +1,5 @@
 
-void $list_init($list lst, $Iterable$opaque it);
+void $list_init($list lst, $Sequence$opaque seq);
 
 $list $list_copy($list lst);
 

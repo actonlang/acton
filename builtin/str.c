@@ -10,7 +10,7 @@
 
 // General methods
 
-void $str_init($str, char*);
+void $str_init($str, $struct);
 $bool $str_bool($str);
 $str $str_str($str);
 void $str_serialize($str,$Serial$state);
@@ -55,7 +55,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, int width);
 
 struct $str$class $str$methods =
-  {"",UNASSIGNED,NULL, $str_init, $str_bool, $str_str, $str_serialize, $str_deserialize, $str_capitalize, $str_center, $str_count, $str_endswith,
+  {"",UNASSIGNED,($Super$class)&$struct$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
@@ -254,9 +254,10 @@ $str to$str(char *str) {
       return res;
     }
     cpnbytes = utf8proc_iterate(p,-1,&cp);
-    if (cpnbytes < 0)
-      return NULL; //UnicodeDecodeError
-
+    if (cpnbytes < 0) {
+      RAISE(($BaseException)$NEW($ValueError,to$str("to$str: Unicode decode error")));
+      return NULL;
+    }
     nbytes += cpnbytes;
     nchars++;
     p += cpnbytes;
@@ -555,6 +556,15 @@ $Iterator$str $Iterator$str$_deserialize($Serial$state state) {
    return res;
 }
 
+$bool $Iterator$str_bool($Iterator$str self) {
+  return $True;
+}
+
+$str $Iterator$str_str($Iterator$str self) {
+  char *s;
+  asprintf(&s,"<str iterator object at %p>",self);
+  return to$str(s);
+}
 
 // this is next function for forward iteration
 static $str $Iterator$str_next($Iterator$str self) {
@@ -570,8 +580,8 @@ $Iterator $str_iter($str str) {
   return ($Iterator)$NEW($Iterator$str,str);
 }
 
-struct $Iterator$str$class $Iterator$str$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$str_init,
-                                                      $Iterator$str_serialize, $Iterator$str$_deserialize, $Iterator$str_next};
+struct $Iterator$str$class $Iterator$str$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$str_init, $Iterator$str_serialize, $Iterator$str$_deserialize,
+                                                      $Iterator$str_bool, $Iterator$str_str, $Iterator$str_next};
 
 
 // Indexed ///////////////////////////////////////////////////////////////////////////
@@ -614,28 +624,11 @@ $str $str_getslice($str s, $Slice slc) {
 
 // General methods ////////////////////////////////////////////////////////////// 
 
-void $str_init($str self, char *str) {
-  int nbytes = 0;
-  int nchars = 0;
-
-  unsigned char *p = (unsigned char*)str;
-  int cp, cpnbytes;
-  while(1) {
-    if (*p == '\0') {
-      self->nbytes = nbytes;
-      self->nchars = nchars;
-      self->str = (unsigned char*)str;
-      return;
-    }
-    cpnbytes = utf8proc_iterate(p,-1,&cp);
-    if (cpnbytes < 0)
-      return; //UnicodeDecodeError
-
-    nbytes += cpnbytes;
-    nchars++;
-    p += cpnbytes;
-
-  }
+void $str_init($str self, $struct s) {
+  $str res = s->$class->__str__(s);
+  self->nchars = res->nchars;
+  self->nbytes = res->nbytes;
+  self->str = res->str;
 }
 
 $bool $str_bool($str s) {
@@ -743,16 +736,16 @@ $int $str_count($str s, $str sub, $int start, $int end) {
 $bool $str_endswith($str s, $str sub, $int start, $int end) {
   $int st = start;
   $int en = end;
-  if (fix_start_end(s->nchars,&st,&en) < 0) return $false;
+  if (fix_start_end(s->nchars,&st,&en) < 0) return $False;
   int isascii = s->nchars==s->nbytes;
   unsigned char *p = skip_chars(s->str + s->nbytes,from$int(en) - s->nchars,isascii) - sub->nbytes;
   unsigned char *q = sub->str;
   for (int i=0; i<sub->nbytes; i++) {
     if (*p == 0 || *p++ != *q++) {
-      return $false;
+      return $False;
     }
   }
-  return $true;
+  return $True;
 }
 
 $str $str_expandtabs($str s, int tabsize){
@@ -812,15 +805,15 @@ $bool $str_isalnum($str s) {
   int codepoint;
   int nbytes;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if ((cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO) && cat != UTF8PROC_CATEGORY_ND)
-      return $false;
+      return $False;
     p += nbytes;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_isalpha($str s) {
@@ -828,25 +821,25 @@ $bool $str_isalpha($str s) {
   int codepoint;
   int nbytes;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO)
-      return $false;
+      return $False;
     p += nbytes;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_isascii($str s) {
   unsigned char *p = s->str;
   for (int i=0; i < s->nbytes; i++) {
     if (*p > 127)
-      return $false;
+      return $False;
     p++;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_isdecimal($str s) {
@@ -854,15 +847,15 @@ $bool $str_isdecimal($str s) {
   int codepoint;
   int nbytes;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat != UTF8PROC_CATEGORY_ND)
-      return $false;
+      return $False;
     p += nbytes;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_islower($str s) {
@@ -871,12 +864,12 @@ $bool $str_islower($str s) {
   int nbytes;
   int has_cased = 0;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LT|| cat == UTF8PROC_CATEGORY_LU)
-      return $false;
+      return $False;
     if (cat == UTF8PROC_CATEGORY_LL)
       has_cased = 1;
     p += nbytes;
@@ -889,15 +882,15 @@ $bool $str_isprintable($str s) {
   int codepoint;
   int nbytes;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
-      return $false;
+      return $False;
     p += nbytes;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_isspace($str s) {
@@ -905,14 +898,14 @@ $bool $str_isspace($str s) {
   int codepoint;
   int nbytes;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     if (!isspace_codepoint(codepoint))
-      return $false;
+      return $False;
     p += nbytes;
   }
-  return $true;
+  return $True;
 }
 
 $bool $str_istitle($str s) {
@@ -922,19 +915,19 @@ $bool $str_istitle($str s) {
   int hascased = 0;
   int incasedrun = 0;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT ) {
       hascased = 1;
       if (incasedrun)
-        return $false;
+        return $False;
       incasedrun = 1;
     } else if (cat == UTF8PROC_CATEGORY_LL) {
       hascased = 1;
       if (!incasedrun)
-        return $false;
+        return $False;
     } else
         incasedrun = 0;
     p += nbytes;
@@ -948,12 +941,12 @@ $bool $str_isupper($str s) {
   int nbytes;
   int hascased = 0;
   if (s->nchars == 0)
-    return $false;
+    return $False;
   for (int i=0; i < s->nchars; i++) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (cat == UTF8PROC_CATEGORY_LL)
-      return $false;
+      return $False;
     if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT)
       hascased = 1;
     p += nbytes;
@@ -964,7 +957,7 @@ $bool $str_isupper($str s) {
 $str $str_join($str s, $Iterable$opaque it) {
   int totchars = 0;
   int totbytes = 0;
-  $list lst = $NEW($list,it);
+  $list lst = $list_fromiter(it);
   $str nxt;
   int len = lst->length;
   for (int i=0; i<len; i++) {
@@ -1291,10 +1284,10 @@ $bool $str_startswith($str s, $str sub, $int start, $int end) {
   unsigned char *q = sub->str;
   for (int i=0; i<sub->nbytes; i++) {
     if (*p == 0 || *p++ != *q++) {
-      return $false;
+      return $False;
     }
   }
-  return $true;
+  return $True;
 }
 
 

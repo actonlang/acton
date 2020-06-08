@@ -6,69 +6,10 @@
 #include <string.h>
 
 typedef void *$WORD;
-/*
-struct exception;
-typedef struct exception *exception;
+#define $None ($WORD)0
 
-void RAISE(exception e);
+void $default__init__($WORD);
 
-struct $tuple$class;
-
-struct $tup1_t;
-typedef struct $tup1_t *$tup1_t;
-
-struct $tup2_t;
-typedef struct $tup2_t *$tup2_t;
-
-struct $tup3_t;
-typedef struct $tup3_t *$tup3_t;
-
-struct $tuple;
-typedef struct $tuple *$tuple;
-
-struct $tuple {
-   struct $tuple$class *$class;
-};
-
-struct $tup1_t {
-  struct $tuple$class *$class;
-  $WORD a;
-};
-
-struct $tup2_t {
-  struct $tuple$class *$class;
-  $WORD a;
-  $WORD b;
-};
-
-struct $tup3_t {
-  struct $tuple$class *$class;
-  $WORD a;
-  $WORD b;
-  $WORD c;
-};
-
-enum  exc {INDEXERROR, VALUEERROR, KEYERROR, STOPITERATION, TYPEERROR, MEMORYERROR, NOTIMPLEMENTED};
-
-typedef enum exc exc;
-
-#define MKEXCEPTION(e,sube) e=0;
-*/
-struct $Super$class;
-typedef struct $Super$class *$Super$class;
-
-struct $Super;
-typedef struct $Super *$Super;
-
-struct $Super$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-};
-
-struct $Super {
-  $Super$class $class;
-};
 
 #define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \

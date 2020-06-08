@@ -81,30 +81,18 @@ $list sieve(int n) {
 */
 // Version with protocol methods /////////////////////////////////////////////////////////////////////////////////////////
 
-/* prints a $Sequence of ints */
-void printSequence($Sequence$list wit, $WORD seq) {
-  printf("[");
-  long n = from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence, seq));
-  for (long i=0; i < n-1; i++) 
-    printf("%ld, ",from$int(wit->$class->__getitem__(wit,seq,to$int(i))));
-  if (n > 0) 
-    printf("%ld",from$int(wit->$class->__getitem__(wit,seq,to$int(n-1))));
-  printf("]\n");
-}
-
-
 $list sieveS($Sequence$list wit, int n) {
   $WORD w;
   $list isPrime = $NEW($list,NULL);
-  wit->$class->append(wit,isPrime,$false); 
-  wit->$class->append(wit,isPrime,$false);
+  wit->$class->append(wit,isPrime,$False); 
+  wit->$class->append(wit,isPrime,$False);
   for (int i=2; i < n; i++) 
-    wit->$class->append(wit,isPrime,$true);
+    wit->$class->append(wit,isPrime,$True);
   for (int i=2; i < floor(sqrt(n)); i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$int(w)) {
       for (int k=i*i; k<n; k+=i)
-        wit->$class->__setitem__(wit,isPrime,to$int(k),$false);
+        wit->$class->__setitem__(wit,isPrime,to$int(k),$False);
     }
   }
   $list primes = $NEW($list,NULL);

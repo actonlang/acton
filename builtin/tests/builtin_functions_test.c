@@ -12,10 +12,10 @@ $Iterable$opaque mkIterable($Iterator it) {
 
 int main() {
   $Iterable$opaque iter = $Iterable$pack(($Iterable)$NEW($Iterable$range),$NEW($range,to$int(10),to$int(20),to$int(1)));
-  $print(tup2(to$str("lst = "), $NEW($list,iter)));
-  $print(tup2(to$str("enumerate(lst,0) = "), $NEW($list,mkIterable($enumerate(iter,0)))));
-  $print(tup2(to$str("filter(even,lst) = "), $NEW($list,mkIterable($filter($even,iter)))));
-  $print(tup2(to$str("map(even,lst) = "), $NEW($list,mkIterable($map(($WORD(*)($WORD))$even,iter)))));
+  $print(tup2(to$str("lst = "), $list_fromiter(iter)));
+  $print(tup2(to$str("enumerate(lst,0) = "), $list_fromiter(mkIterable($enumerate(iter,0)))));
+  $print(tup2(to$str("filter(even,lst) = "), $list_fromiter(mkIterable($filter($even,iter)))));
+  $print(tup2(to$str("map(even,lst) = "), $list_fromiter(mkIterable($map(($WORD(*)($WORD))$even,iter)))));
   $str chinese = to$str("但他呼吁进行全面调查");
   $print(tup3(chinese,to$str(" in ascii is "),$ascii(chinese)));
   /* $printf("%s\n",from$str($ascii(to$str("Björn"))));*/

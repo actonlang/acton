@@ -12,7 +12,7 @@ void $Node__serialize__($Node self,$Serial$state state) {
 }
 
 $bool $Node__bool__($Node self) {
-  return $true;
+  return $True;
 }
 
 $str $Node__str__($Node self) {
@@ -25,7 +25,7 @@ $Node $Node__deserialize__($Serial$state state) {
   return res;                                        
 }
 
-struct $Node$class $Node$methods = {"",UNASSIGNED,NULL,$Node__init__,$Node__bool__,$Node__str__,$Node__serialize__,$Node__deserialize__};
+struct $Node$class $Node$methods = {"",UNASSIGNED,NULL,$Node__init__,$Node__serialize__,$Node__deserialize__,$Node__bool__,$Node__str__};
 
 // IntNodes (graph vertices) ////////////////////////////////////////////////////////////////////////////
  
@@ -35,7 +35,7 @@ void $IntNode__init__($IntNode self, $list nbors, $int ival) {
 }
 
 $bool $IntNode__bool__($IntNode self) {
-  return $true;
+  return $True;
 }
 
 $str $IntNode__str__($IntNode self) {
@@ -54,7 +54,7 @@ $IntNode $IntNode__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $IntNode$class $IntNode$methods = {"",UNASSIGNED,NULL,$IntNode__init__,$IntNode__bool__,$IntNode__str__,$IntNode__serialize__,$IntNode__deserialize__};
+struct $IntNode$class $IntNode$methods = {"",UNASSIGNED,NULL,$IntNode__init__,$IntNode__serialize__,$IntNode__deserialize__,$IntNode__bool__,$IntNode__str__};
 
 
 // FloatNodes (graph vertices) ////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ void $FloatNode__init__($FloatNode self, $list nbors, $float fval) {
 }
 
 $bool $FloatNode__bool__($FloatNode self) {
-  return $true;
+  return $True;
 }
 
 $str $FloatNode__str__($FloatNode self) {
@@ -84,7 +84,7 @@ $FloatNode $FloatNode__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $FloatNode$class $FloatNode$methods = {"",UNASSIGNED,NULL,$FloatNode__init__,$FloatNode__bool__,$FloatNode__str__,$FloatNode__serialize__,$FloatNode__deserialize__};
+struct $FloatNode$class $FloatNode$methods = {"",UNASSIGNED,NULL,$FloatNode__init__,$FloatNode__serialize__,$FloatNode__deserialize__,$FloatNode__bool__,$FloatNode__str__};
 
 
 // Graphs ////////////////////////////////////////////////////////////////////////////
@@ -95,7 +95,7 @@ void $Graph__init__($Graph self, $list nodes) {
 }
 
 $bool $Graph__bool__($Graph self) {
-  return $true;
+  return $True;
 }
 
 $str $Graph__str__($Graph self) {
@@ -112,7 +112,7 @@ $Graph $Graph__deserialize__($Serial$state state) {
   return res;
 }
 
-struct $Graph$class $Graph$methods = {"",UNASSIGNED,NULL,$Graph__init__,$Graph__bool__,$Graph__str__,$Graph__serialize__,$Graph__deserialize__};
+struct $Graph$class $Graph$methods = {"",UNASSIGNED,NULL,$Graph__init__,$Graph__serialize__,$Graph__deserialize__,$Graph__bool__,$Graph__str__};
 
 void $register_graph(){
   $register(&$Node$methods);

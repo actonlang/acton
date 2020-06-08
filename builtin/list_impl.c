@@ -1,6 +1,6 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
-void $list_init($list lst, $Iterable$opaque it) {
+void $list_init($list lst, $Sequence$opaque seq) {
   int capacity = 4;
   lst->data = malloc(capacity*sizeof($WORD));
   if (lst->data == NULL) {
@@ -8,15 +8,15 @@ void $list_init($list lst, $Iterable$opaque it) {
   }
   lst->length = 0;
   lst->capacity = capacity;
-  if (it) {
-    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+  if (seq) {
+    $Iterator iter = seq->proto->w$Collection$Sequence->$class->__iter__(seq->proto->w$Collection$Sequence,seq->impl);
     $WORD nxt;
     while((nxt = iter->$class->__next__(iter))) {
       $list_append(lst,nxt);
     }
   }
-};
-
+}  
+  
 $bool $list_bool($list self) {
   return to$bool(self->length>0);
 }
@@ -24,7 +24,7 @@ $bool $list_bool($list self) {
 $str $list_str($list self) {
   $list s2 = $list_new(self->length);
   for (int i=0; i< self->length; i++) {
-    $Initializable elem = ($Initializable)self->data[i];
+    $struct elem = ($struct)self->data[i];
     $list_append(s2,elem->$class->__str__(elem));
   }
   return $str_join_par('[',s2,']');
@@ -61,7 +61,7 @@ $list $list_deserialize($Serial$state state) {
 }
      
     
-struct $list$class $list$methods = {"",UNASSIGNED,NULL, $list_init, $list_bool, $list_str, $list_serialize,$list_deserialize,$list_copy};
+struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$struct$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,7 +150,15 @@ $list $list_add($list lst, $list other) {
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
 
 $list $list_fromiter($Iterable$opaque iter) {
-  return $NEW($list,iter);
+  $list res = $list_new(4);
+  if (iter) {
+    $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
+    $WORD nxt;
+    while ((nxt = it->$class->__next__(it))) {
+      $list_append(res,nxt);
+    }
+  }
+  return res;
 }
 
 long $list_len($list lst) {
@@ -184,7 +192,7 @@ void $Iterator$list_init($Iterator$list self, $list lst) {
 }
 
 $bool $Iterator$list_bool($Iterator$list self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$list_str($Iterator$list self) {
@@ -205,8 +213,8 @@ $Iterator$list $Iterator$list$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$list$class $Iterator$list$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,$Iterator$list_bool,$Iterator$list_str,
-                                                      $Iterator$list_serialize, $Iterator$list$_deserialize, $Iterator$list_next};
+struct $Iterator$list$class $Iterator$list$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
+                                                      $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_next};
 
 $Iterator $list_iter($list lst) {
   return ($Iterator)$NEW($Iterator$list,lst);

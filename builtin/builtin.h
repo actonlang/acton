@@ -6,6 +6,7 @@
 #include "registration.h"
 #include "Iterator.h"
 #include "complex.h"
+#include "none.h"
 #include "int.h"
 #include "slice.h"
 #include "float.h"

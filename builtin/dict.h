@@ -2,11 +2,11 @@ struct $dict$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void(*__init__)($dict, $Hashable, $Iterable$opaque);
-  $bool (*__bool__)($dict);
-  $str (*__str__)($dict);
+  void(*__init__)($dict, $Hashable, $Mapping$opaque);
   void (*__serialize__)($dict,$Serial$state);
   $dict (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($dict);
+  $str (*__str__)($dict);
 };
 
 typedef struct $table_struct *$table;
@@ -33,10 +33,10 @@ struct $Iterator$dict$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict, $dict);
-  $bool (*__bool__)($Iterator$dict);
-  $str (*__str__)($Iterator$dict);
   void (*__serialize__)($Iterator$dict,$Serial$state);
   $Iterator$dict (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$dict);
+  $str (*__str__)($Iterator$dict);
   $WORD(*__next__)($Iterator$dict);
 };
 
@@ -57,10 +57,10 @@ struct $Iterator$dict$values$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$values, $dict);
-  $bool (*__bool__)($Iterator$dict$values);
-  $str (*__str__)($Iterator$dict$values);
   void (*__serialize__)($Iterator$dict$values,$Serial$state);
   $Iterator$dict$values (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$dict$values);
+  $str (*__str__)($Iterator$dict$values);
   $WORD(*__next__)($Iterator$dict$values);
 };
 
@@ -81,10 +81,10 @@ struct $Iterator$dict$items$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$items, $dict);
-  $bool (*__bool__)($Iterator$dict$items);
-  $str (*__str__)($Iterator$dict$items);
   void (*__serialize__)($Iterator$dict$items,$Serial$state);
   $Iterator$dict$items (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$dict$items);
+  $str (*__str__)($Iterator$dict$items);
   $WORD(*__next__)($Iterator$dict$items);
 };
 

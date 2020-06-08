@@ -35,27 +35,6 @@ struct $Hashable$WORD$class $Hashable$WORD$methods = {"",UNASSIGNED,NULL,(void (
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 
-// Null methods for serialization of NULL ///////////////////////////////////////
-
-$bool $Null__bool__($Serializable self) {
-  return $false;
-}
-
-$str $Null__str__($Serializable self) {
-  return to$str("NULL");
-}
-
-void $Null__serialize__($Serializable self, $Serial$state state) {
-  $add_header(NULL_ID,0,state);
-}
-
-$Serializable $Null__deserialize__( $Serial$state state) {
-  state->row = state->row->next;
-  state->row_no++;
-  return NULL;
-}
-
-struct $Serializable$methods $Null$methods = {"",UNASSIGNED,NULL,(void (*)($Serializable,...))$default__init__, $Null__bool__, $Null__str__, $Null__serialize__,  $Null__deserialize__};
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
@@ -84,7 +63,7 @@ void $step_serialize($WORD self, $Serial$state state) {
     } else 
        (($Serializable)self)->$class->__serialize__(self,state);
   } else
-    $add_header(NULL_ID,0,state);
+    $add_header(NONE_ID,0,state);
 }
 
 $WORD $step_deserialize($Serial$state state) {
@@ -92,7 +71,7 @@ $WORD $step_deserialize($Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    if (this->class_id < 0) 
+    if (this->class_id < 0)
       return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
     else 
       return $GET_METHODS(this->class_id)->__deserialize__(state);
@@ -229,9 +208,4 @@ $ROW $read_serialized(char *file) {
        
 $Serializable $deserialize_file(char *file) {
   return $deserialize($read_serialized(file));
-}
-
-
-void $default__init__($Initializable s) {
-  return;
 }

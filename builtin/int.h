@@ -3,10 +3,10 @@ struct $int$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($int, $Integral$opaque);
-  $bool (*__bool__)($int);
-  $str (*__str__)($int);
   void (*__serialize__)($int,$Serial$state);
   $int (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($int);
+  $str (*__str__)($int);
 };
 
 struct $int {

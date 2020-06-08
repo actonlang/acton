@@ -5,20 +5,18 @@
  * We need to sort out how initialization is to be done.
  */
 
-int PREASSIGNED = 40;
-
 $list $methods;  //key is classid; values are method tables
 
 
 void $register_force(int classid, $WORD meths) {
   // we require that $methods is big enough to index it at classid. See register_builtin below.
   $list_setitem($methods,classid,meths);
-  (($Serializable$methods)meths)->$class_id = classid;
+  (($Serializable$class)meths)->$class_id = classid;
 }
     
 void $register($WORD meths) {
     $list_append($methods,meths);
-    (($Serializable$methods)meths)->$class_id = $methods->length-1;
+    (($Serializable$class)meths)->$class_id = $methods->length-1;
 }
 
 
@@ -30,7 +28,7 @@ void $register_builtin() {
   $methods = $list_new(2*PREASSIGNED); //preallocate space for PREASSIGNED user classes before doubling needed
   memset($methods->data,0,PREASSIGNED*sizeof($WORD)); // initiate PREASSIGNED first slots to NULL;
   $methods->length = PREASSIGNED;
-  $register_force(NULL_ID,&$Null$methods);
+  $register_force(NONE_ID,&$NoneType$methods);
   $register_force(INT_ID,&$int$methods);
   $register_force(FLOAT_ID,&$float$methods);
   //  $register_force(COMPLEX_ID,&$complex$methods);

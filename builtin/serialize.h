@@ -1,27 +1,4 @@
 
-// Fundamental class, from which all classes inherit //////////////////////////////////////////////////////
-
-typedef struct $Initializable$methods *$Initializable$methods;
-
-typedef struct $Initializable  *$Initializable;
-
-struct $Initializable$methods {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Initializable,...);
-  $bool (*__bool__)($Initializable);
-  $str (*__str__)($Initializable);
-};
-
-struct $Initializable {
-  struct $Initializable$methods *$class;
-};
-
-// These default functions do nothing 
-
-void $default__init__($Initializable);
-
 
 // Types for serialization ////////////////////////////////////////////////////////////////////////////
 
@@ -44,7 +21,7 @@ struct $ROWLISTHEADER {
   $ROW last;
 };
 
-typedef struct $Serial$state *$Serial$state;
+//typedef struct $Serial$state *$Serial$state;
 
 struct $Serial$state {
   char *$GCINFO;
@@ -53,30 +30,6 @@ struct $Serial$state {
   $ROW row;
   $ROW fst; //not used in deserialization
 };
-
-  
-  
-// All serializable types must have method tables as if they were subclasses of Serializable 
-
-typedef struct $Serializable$methods *$Serializable$methods;
-
-typedef struct $Serializable  *$Serializable;
-
-struct $Serializable$methods {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Serializable,...);
-  $bool (*__bool__)($Serializable);
-  $str (*__str__)($Serializable);
-  void (*__serialize__)($Serializable, $Serial$state);
-  $Serializable (*__deserialize__)($Serial$state);
-};
-
-struct $Serializable {
-  struct $Serializable$methods *$class;
-};
-
 
 // small-step helpers for defining serializations //////////////////////////////////////////////////
 

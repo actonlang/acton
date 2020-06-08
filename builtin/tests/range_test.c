@@ -12,10 +12,10 @@ int main() {
   $range r2 = $NEW($range,to$int(50),to$int(10),to$int(-4));
   $serialize_file(($Serializable)r2,"range.bin");
   $range r3 = ($range)$deserialize_file("range.bin");                
-  $list lst = $NEW($list,$Iterable$pack(($Iterable)$Iterable$range$witness,r3));
+  $list lst = $list_fromiter($Iterable$pack(($Iterable)$Iterable$range$witness,r3));
   $print(tup1(lst));
-  $set s = $NEW($set,($Hashable)$Hashable$int$witness,$Iterable$pack(($Iterable)$Iterable$range$witness,r2));
-  $Set$set wit = $NEW( $Set$set,($Hashable)$Hashable$int$witness);
-  $list lst2 = $NEW($list,$Iterable$pack(($Iterable)wit,s));
+  $set s = $set_fromiter(($Hashable)$Hashable$int$witness,$Iterable$pack(($Iterable)$Iterable$range$witness,r2));
+  $Set$set wit = $NEW($Set$set,($Hashable)$Hashable$int$witness);
+  $list lst2 = $list_fromiter($Iterable$pack(($Iterable)wit,s));
   $print(tup1(lst2));   
 }
