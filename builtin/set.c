@@ -23,7 +23,7 @@ $Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
 }
 
 $set $Set$set$__fromiter__($Set$set wit, $Iterable$opaque iter) {
-  return $NEW($set,wit->w$Hashable$Set,iter);
+  return $set_fromiter(wit->w$Hashable$Set,iter);
 }
 
 $int $Set$set$__len__ ($Set$set wit, $set set) {

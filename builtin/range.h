@@ -3,10 +3,10 @@ struct $range$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($range, $int, $int, $int);
-  $bool (*__bool__)($range);
-  $str (*__str__)($range);
   void (*__serialize__)($range,$Serial$state);
   $range (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($range);
+  $str (*__str__)($range);
 };
 
 struct $range {
@@ -37,10 +37,10 @@ struct $Iterator$range$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$range, $range);
-  $bool (*__bool__)($Iterator$range);
-  $str (*__str__)($Iterator$range);
   void (*__serialize__)($Iterator$range,$Serial$state);
   $Iterator$range (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$range);
+  $str (*__str__)($Iterator$range);
   $WORD(*__next__)($Iterator$range);
 };
 

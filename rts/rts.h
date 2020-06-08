@@ -9,8 +9,6 @@
 
 #include "../builtin/builtin.h"
 
-// typedef void *$WORD; defined in builtin
-
 struct $Msg;
 struct $Actor;
 struct $Catcher;
@@ -48,8 +46,6 @@ typedef struct $R $R;
 #define $R_FAIL(value)          ($R){$RFAIL, NULL,   (value)}
 #define $R_WAIT(cont, value)    ($R){$RWAIT, (cont), (value)}
 
-#define $None ($WORD)0
-
 #define MSG_HEADER              "Msg"
 #define ACTOR_HEADER            "Actor"
 #define CATCHER_HEADER          "Catcher"
@@ -61,10 +57,10 @@ struct $Msg$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
-    $bool (*__bool__)($Msg);
-    $str (*__str__)($Msg);
     void (*__serialize__)($Msg, $Serial$state);
     $Msg (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Msg);
+    $str (*__str__)($Msg);
 };
 struct $Msg {
     struct $Msg$class *$class;
@@ -82,10 +78,10 @@ struct $Actor$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Actor);
-    $bool (*__bool__)($Actor);
-    $str (*__str__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
     $Actor (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Actor);
+    $str (*__str__)($Actor);
 };
 struct $Actor {
     struct $Actor$class *$class;
@@ -101,10 +97,10 @@ struct $Catcher$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Catcher, $Cont);
-    $bool (*__bool__)($Catcher);
-    $str (*__str__)($Catcher);
     void (*__serialize__)($Catcher, $Serial$state);
     $Catcher (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Catcher);
+    $str (*__str__)($Catcher);
 };
 struct $Catcher {
     struct $Catcher$class *$class;
@@ -117,10 +113,10 @@ struct $Clos$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Clos);
-    $bool (*__bool__)($Clos);
-    $str (*__str__)($Clos);
     void (*__serialize__)($Clos, $Serial$state);
     $Clos (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Clos);
+    $str (*__str__)($Clos);
     $WORD (*enter)($Clos, $WORD);
 };
 struct $Clos {
@@ -132,10 +128,10 @@ struct $Cont$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Cont);
-    $bool (*__bool__)($Cont);
-    $str (*__str__)($Cont);
     void (*__serialize__)($Cont, $Serial$state);
     $Cont (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Cont);
+    $str (*__str__)($Cont);
     $R (*enter)($Cont, $WORD);
 };
 struct $Cont {
@@ -150,10 +146,10 @@ struct $RetNew$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($RetNew, $Cont, $Actor);
-    $bool (*__bool__)($RetNew);
-    $str (*__str__)($RetNew);
     void (*__serialize__)($RetNew, $Serial$state);
     $RetNew (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($RetNew);
+    $str (*__str__)($RetNew);
     $R (*enter)($RetNew, $WORD);
 };
 struct $RetNew {

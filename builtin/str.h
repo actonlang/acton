@@ -11,11 +11,11 @@ struct $str$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($str, char*);
-  $bool (*__bool__)($str);
-  $str (*__str__)($str);
+  void (*__init__)($str, $struct);
   void (*__serialize__)($str,$Serial$state);
   $str (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($str);
+  $str (*__str__)($str);
   $str (*capitalize)($str s);
   $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
@@ -78,7 +78,7 @@ $str to$str(char *str);
 // Destructor; recover the internal string.
 unsigned char *from$str($str str);
 
-// Iterators over strs ///////////////////////////////////////////////////////
+// Iterators over str's ///////////////////////////////////////////////////////
 
 typedef struct $Iterator$str *$Iterator$str; ;
 
@@ -89,6 +89,8 @@ struct $Iterator$str$class {
   void (*__init__)($Iterator$str, $str);
   void (*__serialize__)($Iterator$str,$Serial$state);
   $Iterator$str (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$str);
+  $str (*__str__)($Iterator$str);
   $str (*__next__)($Iterator$str);
 };
 

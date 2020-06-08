@@ -27,7 +27,7 @@ $str $float_str($float x) {
   return to$str(s);
 }
 
-struct $float$class $float$methods = {"",UNASSIGNED,NULL,$float_init,$float_bool,$float_str,$float_serialize, $float_deserialize};
+struct $float$class $float$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$float_init,$float_serialize, $float_deserialize,$float_bool,$float_str};
   
 $float to$float(double x) {
   $float res = malloc(sizeof(struct $float));

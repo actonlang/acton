@@ -6,10 +6,10 @@ $bool is_iterator($Super obj) {
   $Super$class c = obj->$class;
   while(c)
     if(c->$superclass == ($Super$class)&$Iterator$methods)
-      return $true;
+      return $True;
     else
       c = c->$superclass;
-  return $false;
+  return $False;
 }
   
 int main() {

@@ -35,15 +35,15 @@ struct $table_struct {
 // General methods /////////////////////////////////////////////////////////////////////////
 
 
-void $dict_init($dict dict, $Hashable hashwit, $Iterable$opaque it) { 
+void $dict_init($dict dict, $Hashable hashwit, $Mapping$opaque m) { 
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  if (it) {
-    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+  if (m) {
+    $Iterator iter = m->proto->$class->__iter__(m->proto,m->impl);
     $tuple nxt;
     while((nxt = ($tuple)iter->$class->__next__(iter))) {
       $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
@@ -61,8 +61,8 @@ $str $dict_str($dict self) {
   $tuple item;
   for (int i=0; i<self->numelements; i++) {
     item = ($tuple)iter->$class->__next__(iter);
-    $Initializable key = (($Initializable)item->components[0]);
-    $Initializable value = (($Initializable)item->components[1]);
+    $struct key = (($struct)item->components[0]);
+    $struct value = (($struct)item->components[1]);
     $str keystr = key->$class->__str__(key);
     $str valuestr = value->$class->__str__(value);
     $str elem = malloc(sizeof(struct $str));
@@ -128,7 +128,7 @@ $dict $dict_deserialize($Serial$state state) {
   }
 }
 
-struct $dict$class $dict$methods = {"", UNASSIGNED,NULL, $dict_init, $dict_bool, $dict_str, $dict_serialize,$dict_deserialize}; 
+struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$struct$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
@@ -309,7 +309,7 @@ void $Iterator$dict_init($Iterator$dict self, $dict dict) {
 
 
 $bool $Iterator$dict_bool($Iterator$dict self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$dict_str($Iterator$dict self) {
@@ -332,8 +332,8 @@ $Iterator$dict $Iterator$dict$_deserialize($Serial$state state) {
 }
 
 
-struct $Iterator$dict$class $Iterator$dict$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,$Iterator$dict_bool,$Iterator$dict_str,
-                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_next};
+struct $Iterator$dict$class $Iterator$dict$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
+                                                      $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_bool,$Iterator$dict_str, $Iterator$dict_next};
 
 $Iterator $dict_iter($dict dict) {
   return ($Iterator)$NEW($Iterator$dict,dict);
@@ -382,9 +382,22 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
 // Collection ///////////////////////////////////////////////////////////////////////////////
 
 $dict $dict_fromiter($Hashable hashwit, $Iterable$opaque iter) {
-  return $NEW($dict,hashwit,iter);
+  $dict dict = $NEW($dict,hashwit,NULL);
+  dict->numelements = 0;
+  dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
+  dict->table->tb_size = 8;
+  dict->table->tb_usable = 5;
+  dict->table->tb_nentries = 0;
+  memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
+  if (iter) {
+    $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
+    $tuple nxt;
+    while((nxt = ($tuple)it->$class->__next__(it))) {
+      $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
+    }
+  }
+  return dict;
 }
-
 
 long $dict_len($dict dict) {
   return dict->numelements;
@@ -396,7 +409,6 @@ int $dict_contains($dict dict, $Hashable hashwit, $WORD key) {
   $WORD res;
   return lookdict(dict,hashwit,from$int(hashwit->$class->__hash__(hashwit,key)),key,&res) >= 0;
 }
-
 
 // Mapping /////////////////////////////////////////////////////////////////////////////
 
@@ -424,7 +436,7 @@ void $Iterator$dict$values_init($Iterator$dict$values self, $dict dict) {
 
 
 $bool $Iterator$dict$values_bool($Iterator$dict$values self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$dict$values_str($Iterator$dict$values self) {
@@ -447,8 +459,9 @@ $Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
 
 
 
-struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,$Iterator$dict$values_bool,
-                                                                    $Iterator$dict$values_str,$Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_next};
+struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
+                                                                    $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,
+                                                                    $Iterator$dict$values_next};
 
 // items iterator
 
@@ -477,7 +490,7 @@ void $Iterator$dict$items_init($Iterator$dict$items self, $dict dict) {
 
 
 $bool $Iterator$dict$items_bool($Iterator$dict$items self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$dict$items_str($Iterator$dict$items self) {
@@ -500,8 +513,8 @@ $Iterator$dict$items $Iterator$dict$items_deserialize($Serial$state state) {
 
 
 
-struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,$Iterator$dict$items_bool,
-                                                                  $Iterator$dict$items_str, $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_next};
+struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
+                                                                  $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_bool, $Iterator$dict$items_str, $Iterator$dict$items_next};
 
 
 $Iterator $dict_keys($dict dict) {

@@ -111,7 +111,7 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
 }
 
 $bool $Msg$__bool__($Msg self) {
-  return $true;
+  return $True;
 }
 
 $str $Msg$__str__($Msg self) {
@@ -153,7 +153,7 @@ void $Actor$__init__($Actor a) {
 }
 
 $bool $Actor$__bool__($Actor self) {
-  return $true;
+  return $True;
 }
 
 $str $Actor$__str__($Actor self) {
@@ -185,7 +185,7 @@ void $Catcher$__init__($Catcher c, $Cont cont) {
 }
 
 $bool $Catcher$__bool__($Catcher self) {
-  return $true;
+  return $True;
 }
 
 $str $Catcher$__str__($Catcher self) {
@@ -210,7 +210,7 @@ $Catcher $Catcher$__deserialize__($Serial$state state) {
 void $Clos$__init__($Clos $this) { }
 
 $bool $Clos$__bool__($Clos self) {
-  return $true;
+  return $True;
 }
 
 $str $Clos$__str__($Clos self) {
@@ -232,7 +232,7 @@ $Clos $Clos$__deserialize__($Serial$state state) {
 void $Cont$__init__($Cont $this) { }
 
 $bool $Cont$__bool__($Cont self) {
-  return $true;
+  return $True;
 }
 
 $str $Cont$__str__($Cont self) {
@@ -258,7 +258,7 @@ void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
 }
 
 $bool $RetNew$__bool__($RetNew self) {
-  return $true;
+  return $True;
 }
 
 $str $RetNew$__str__($RetNew self) {
@@ -291,10 +291,10 @@ struct $Msg$class $Msg$methods = {
     UNASSIGNED,
     NULL,
     $Msg$__init__,
-    $Msg$__bool__,
-    $Msg$__str__,
     $Msg$__serialize__,
-    $Msg$__deserialize__
+    $Msg$__deserialize__,
+    $Msg$__bool__,
+    $Msg$__str__
 };
 
 struct $Actor$class $Actor$methods = {
@@ -302,10 +302,10 @@ struct $Actor$class $Actor$methods = {
     UNASSIGNED,
     NULL,
     $Actor$__init__,
-    $Actor$__bool__,
-    $Actor$__str__,
     $Actor$__serialize__,
-    $Actor$__deserialize__
+    $Actor$__deserialize__,
+    $Actor$__bool__,
+    $Actor$__str__
 };
 
 struct $Catcher$class $Catcher$methods = {
@@ -313,10 +313,10 @@ struct $Catcher$class $Catcher$methods = {
     UNASSIGNED,
     NULL,
     $Catcher$__init__,
-    $Catcher$__bool__,
-    $Catcher$__str__,
     $Catcher$__serialize__,
-    $Catcher$__deserialize__
+    $Catcher$__deserialize__,
+    $Catcher$__bool__,
+    $Catcher$__str__
 };
 
 struct $Clos$class $Clos$methods = {
@@ -324,10 +324,10 @@ struct $Clos$class $Clos$methods = {
     UNASSIGNED,
     NULL,
     $Clos$__init__,
-    $Clos$__bool__,
-    $Clos$__str__,
     $Clos$__serialize__,
     $Clos$__deserialize__,
+    $Clos$__bool__,
+    $Clos$__str__,
     NULL
 };
 
@@ -336,10 +336,10 @@ struct $Cont$class $Cont$methods = {
     UNASSIGNED,
     NULL,
     $Cont$__init__,
-    $Cont$__bool__,
-    $Cont$__str__,
     $Cont$__serialize__,
     $Cont$__deserialize__,
+    $Cont$__bool__,
+    $Cont$__str__,
     NULL
 };
 
@@ -348,10 +348,10 @@ struct $RetNew$class $RetNew$methods = {
     UNASSIGNED,
     NULL,
     $RetNew$__init__,
-    $RetNew$__bool__,
-    $RetNew$__str__,
     $RetNew$__serialize__,
     $RetNew$__deserialize__,
+    $RetNew$__bool__,
+    $RetNew$__str__,
     $RetNew$enter
 };
 
@@ -531,7 +531,7 @@ $R $DONE$enter($Cont $this, $WORD val) {
 }
 
 $bool $Done$__bool__($Cont self) {
-  return $true;
+  return $True;
 }
 
 $str $Done$__str__($Cont self) {
@@ -555,10 +555,10 @@ struct $Cont$class $Done$methods = {
     UNASSIGNED,
     NULL,
     $Cont$__init__,
-    $Done$__bool__,
-    $Done$__str__,
     $Done__serialize__,
     $Done__deserialize__,
+    $Done$__bool__,
+    $Done$__str__,
     $DONE$enter
 };
 struct $Cont $Done$instance = {

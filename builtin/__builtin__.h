@@ -14,6 +14,9 @@ typedef struct $set *$set;
 struct $str;
 typedef struct $str *$str;
 
+struct $NoneType;
+typedef struct $NoneType *$NoneType;
+
 struct $int;
 typedef struct $int *$int;
 
@@ -25,6 +28,11 @@ typedef struct $complex *$complex;
 
 struct $bool;
 typedef struct $bool *$bool;
+
+struct $Serial$state;
+typedef struct $Serial$state *$Serial$state;
+
+#include "class_hierarchy.h"
 
 struct $range;
 typedef struct $range *$range;
@@ -1743,7 +1751,7 @@ struct $Iterable$range {
 struct $Iterable$range$class {
     char *$GCINFO;
     int $class_id;
-    $Super $superclass;
+    $Super$class $superclass;
     void (*__init__)($Iterable$range);
     $Iterator (*__iter__)($Iterable$range, $range);
 };
@@ -1760,7 +1768,7 @@ struct $Iterable$tuple {
 struct $Iterable$tuple$class {
     char *$GCINFO;
     int $class_id;
-    $Super $superclass;
+    $Super$class $superclass;
     void (*__init__)($Iterable$tuple);
     $Iterator (*__iter__)($Iterable$tuple, $tuple);
 };

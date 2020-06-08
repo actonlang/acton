@@ -22,7 +22,7 @@ $str $int_str($int n) {
   return to$str(s);
 }
   
-struct $int$class $int$methods = {"",UNASSIGNED,NULL,$int_init,$int_bool,$int_str,$int_serialize,$int_deserialize};
+struct $int$class $int$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$int_init,$int_serialize,$int_deserialize,$int_bool,$int_str};
 
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));

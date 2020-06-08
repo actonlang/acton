@@ -3,7 +3,7 @@
 // print //////////////////////////////////////////////////////////////////////////////
 
 static $WORD mkstr($WORD w) {
-  $Initializable w1 = ($Initializable)w;
+  $struct w1 = ($struct)w;
   return w1->$class->__str__(w);
 }
 
@@ -21,7 +21,7 @@ void $Iterator$enumerate_init($Iterator$enumerate self, $Iterator it, $int n) {
 }
 
 $bool $Iterator$enumerate_bool($Iterator$enumerate self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$enumerate_str($Iterator$enumerate self) {
@@ -52,8 +52,8 @@ $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
 }
 
 struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$enumerate_init,
-                                                                $Iterator$enumerate_bool,$Iterator$enumerate_str, $Iterator$enumerate_serialize,
-                                                                $Iterator$enumerate$_deserialize, $Iterator$enumerate_next};
+                                                                $Iterator$enumerate_serialize, $Iterator$enumerate$_deserialize, 
+                                                                $Iterator$enumerate_bool,$Iterator$enumerate_str, $Iterator$enumerate_next};
 
 
             
@@ -72,7 +72,7 @@ void $Iterator$filter_init($Iterator$filter self, $Iterator it, $bool(*f)($WORD)
 }
 
 $bool $Iterator$filter_bool($Iterator$filter self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$filter_str($Iterator$filter self) {
@@ -100,8 +100,8 @@ $WORD $Iterator$filter_next($Iterator$filter it) {
 }
 
 struct $Iterator$filter$class $Iterator$filter$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$filter_init,
-                                                                $Iterator$filter_bool,$Iterator$filter_str, $Iterator$filter_serialize,
-                                                                $Iterator$filter$_deserialize, $Iterator$filter_next};
+                                                          $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
+                                                          $Iterator$filter_bool,$Iterator$filter_str, $Iterator$filter_next};
 
 $Iterator $filter($bool(*f)($WORD),$Iterable$opaque iter) {
   $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
@@ -116,7 +116,7 @@ void $Iterator$map_init($Iterator$map self, $Iterator it, $WORD(*f)($WORD)) {
 }
 
 $bool $Iterator$map_bool($Iterator$map self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$map_str($Iterator$map self) {
@@ -144,8 +144,8 @@ $WORD $Iterator$map_next($Iterator$map it) {
 }
 
 struct $Iterator$map$class $Iterator$map$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$map_init,
-                                                                $Iterator$map_bool,$Iterator$map_str, $Iterator$map_serialize,
-                                                                $Iterator$map$_deserialize, $Iterator$map_next};
+                                                                $Iterator$map_serialize, $Iterator$map$_deserialize,  
+                                                                $Iterator$map_bool,$Iterator$map_str, $Iterator$map_next};
 
 $Iterator $map($WORD(*f)($WORD),$Iterable$opaque iter) {
   $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
@@ -210,7 +210,7 @@ void $Iterator$zip_init($Iterator$zip self, $Iterator it1, $Iterator it2) {
 }
 
 $bool $Iterator$zip_bool($Iterator$zip self) {
-  return $true;
+  return $True;
 }
 
 $str $Iterator$zip_str($Iterator$zip self) {
@@ -241,8 +241,8 @@ $WORD $Iterator$zip_next($Iterator$zip it) {
 }
 
 struct $Iterator$zip$class $Iterator$zip$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
-                                                    $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_serialize,
-                                                    $Iterator$zip$_deserialize, $Iterator$zip_next};
+                                                    $Iterator$zip_serialize, $Iterator$zip$_deserialize, 
+                                                    $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_next};
 
 $Iterator $zip ($Iterable$opaque iter1, $Iterable$opaque iter2) {
   $Iterator it1 = iter1->proto->$class->__iter__(iter1->proto,iter1->impl);

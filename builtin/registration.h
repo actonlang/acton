@@ -11,7 +11,7 @@
  */
 
 #define UNASSIGNED -1
-#define NULL_ID 0  
+#define NONE_ID 0  
 #define INT_ID 1
 #define FLOAT_ID 2
 #define COMPLEX_ID 3
@@ -37,20 +37,27 @@
 #define ITEMSITERATOR_ID 23
 #define SETITERATOR_ID 24
 #define RANGEITERATOR_ID 25
+#define ENUMERATEITERATOR_ID 26
+#define FILTERITERATOR_ID 27
+#define MAPITERATOR_ID 28
+#define ZIPITERATOR_ID 29
 
-#define BASEEXCEPTION_ID                        26
-#define     SYSTEMEXIT_ID                       27
-#define     KEYBOARDINTERRUPT_ID                28
-#define     EXCEPTION_ID                        29
-#define         ASSERTIONERROR_ID               30
-#define         LOOKUPERROR_ID                  31
-#define             INDEXERROR_ID               32
-#define             KEYERROR_ID                 33
-#define         MEMORYERROR_ID                  34
-#define         OSERROR_ID                      35
-#define         RUNTIMEERROR_ID                 36
-#define             NOTIMPLEMENTEDERROR_ID      37
-#define         VALUEERROR_ID                   38
+#define BASEEXCEPTION_ID                        30
+#define     SYSTEMEXIT_ID                       31
+#define     KEYBOARDINTERRUPT_ID                32
+#define     EXCEPTION_ID                        33
+#define         ASSERTIONERROR_ID               34
+#define         LOOKUPERROR_ID                  35
+#define             INDEXERROR_ID               36
+#define             KEYERROR_ID                 37
+#define         MEMORYERROR_ID                  38
+#define         OSERROR_ID                      39
+#define         RUNTIMEERROR_ID                 40
+#define             NOTIMPLEMENTEDERROR_ID      41
+#define         VALUEERROR_ID                   42
+
+#define PREASSIGNED 43
+
 
 /* 
  * Register the builtin classes (those with the above class id's). This must be the first registration call,
@@ -73,12 +80,9 @@ void $register($WORD meths);
  */
 void $register_force(int classid, $WORD meths);
 
+#define $GET_CLASSID(meths)  ((meths)->$class_id)
 
-
-
-#define $GET_CLASSID(meths)  (meths)->$class_id
-
-#define $GET_METHODS(classid)  (($Serializable$methods)$list_getitem($methods,classid))
+#define $GET_METHODS(classid)  (($Serializable$class)$list_getitem($methods,classid))
 
 // list of method tables indexed by class_id. Only accessed via GET_METHODS above-
 

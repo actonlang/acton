@@ -5,9 +5,9 @@ int main() {
   $Hashable wit = ($Hashable)$Hashable$str$witness;
   $str a = to$str("a");
   $str b = to$str("b");
-  $dict dict = $NEW($dict,wit,NULL);
+  $dict dict = $dict_fromiter(wit,NULL);
   $Iterable$opaque it = $Iterable$pack(($Iterable)$Iterable$range$witness,$NEW($range,to$int(0),to$int(10),to$int(1)));
-  $list lst = $NEW($list,it);
+  $list lst = $list_fromiter(it);
   printf("lst = %s\n",(lst->$class->__str__(lst))->str);
   $dict_setitem(dict,wit, a,lst);
   $dict_setitem(dict,wit, b,lst);

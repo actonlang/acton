@@ -2,8 +2,8 @@
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
-void $bool_init($bool self, long val){
-  self->val = val;
+void $bool_init($bool self, $struct s){
+  self->val = (s->$class->__bool__(s))->val;
 }
 
 $bool $bool_bool($bool self) {
@@ -25,7 +25,7 @@ $bool $bool_deserialize($Serial$state state) {
   return to$bool((long)$val_deserialize(state));
 }
 
-struct $bool$class $bool$methods = {"",UNASSIGNED,NULL,$bool_init, $bool_bool, $bool_str, $bool_serialize, $bool_deserialize};
+struct $bool$class $bool$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$bool_init, $bool_serialize, $bool_deserialize, $bool_bool, $bool_str};
 
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));
@@ -41,5 +41,5 @@ long from$bool($bool b) {
 struct $bool $t = {&$bool$methods,1L};
 struct $bool $f = {&$bool$methods,0L};
 
-$bool $true = &$t;
-$bool $false = &$f;
+$bool $True = &$t;
+$bool $False = &$f;

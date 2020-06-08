@@ -3,10 +3,10 @@ struct $tuple$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($tuple,int,$WORD*);
-  $bool (*__bool__)($tuple);
-  $str (*__str__)($tuple);
   void (*__serialize__)($tuple,$Serial$state); 
   $tuple (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($tuple);
+  $str (*__str__)($tuple);
 };
 
 struct $tuple {
@@ -34,10 +34,10 @@ struct $Iterator$tuple$class {
   int $class_id;
   $Super$class $superclass;
   void (*__init__)($Iterator$tuple, $tuple);
-  $bool (*__bool__)($Iterator$tuple);
-  $str (*__str__)($Iterator$tuple);
   void (*__serialize__)($Iterator$tuple,$Serial$state);
   $Iterator$tuple (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$tuple);
+  $str (*__str__)($Iterator$tuple);
   $WORD(*__next__)($Iterator$tuple);
 };
 

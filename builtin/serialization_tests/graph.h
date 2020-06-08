@@ -11,10 +11,10 @@ struct $Node$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Node, $list);
-    $bool (*__bool__)($Node);
-    $str (*__str__)($Node);
     void (*__serialize__)($Node, $Serial$state);
     $Node (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Node);
+    $str (*__str__)($Node);
 };
 
 struct $Node {
@@ -35,10 +35,10 @@ struct $IntNode$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($IntNode, $list, $int);
-    $bool (*__bool__)($IntNode);
-    $str (*__str__)($IntNode);
     void (*__serialize__)($IntNode, $Serial$state);
     $IntNode (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($IntNode);
+    $str (*__str__)($IntNode);
 };
 
 struct $IntNode {
@@ -60,10 +60,10 @@ struct $FloatNode$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($FloatNode, $list, $float);
-    $bool (*__bool__)($FloatNode);
-    $str (*__str__)($FloatNode);
     void (*__serialize__)($FloatNode,$Serial$state);
     $FloatNode (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($FloatNode);
+    $str (*__str__)($FloatNode);
 };
 
 struct $FloatNode {
@@ -83,10 +83,10 @@ struct $Graph$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Graph, $list);
-    $bool (*__bool__)($Graph);
-    $str (*__str__)($Graph);
     void (*__serialize__)($Graph, $Serial$state);
     $Graph (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Graph);
+    $str (*__str__)($Graph);
 };
 
 struct $Graph {

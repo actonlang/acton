@@ -7,7 +7,7 @@ void lambda$1$__init__(lambda$1 $this, $Cont cont$0) {
 }
 
 $bool lambda$1$__bool__(lambda$1 self) {
-  return $true;
+  return $True;
 }
 
 $str lambda$1$__str__(lambda$1 self) {
@@ -35,10 +35,10 @@ struct lambda$1$class lambda$1$methods = {
     UNASSIGNED,
     NULL,
     lambda$1$__init__,
-    lambda$1$__bool__,
-    lambda$1$__str__,
     lambda$1$__serialize__,
     lambda$1$__deserialize__,
+    lambda$1$__bool__,
+    lambda$1$__str__,
     lambda$1$enter
 };
 
@@ -51,7 +51,7 @@ void lambda$2$__init__(lambda$2 $this, Act self, $int from, $list table) {
 }
 
 $bool lambda$2$__bool__(lambda$2 self) {
-  return $true;
+  return $True;
 }
 
 $str lambda$2$__str__(lambda$2 self) {
@@ -84,10 +84,10 @@ struct lambda$2$class lambda$2$methods = {
     UNASSIGNED,
     NULL,
     lambda$2$__init__,
-    lambda$2$__bool__,
-    lambda$2$__str__,
     lambda$2$__serialize__,
     lambda$2$__deserialize__,
+    lambda$2$__bool__,
+    lambda$2$__str__,
     lambda$2$enter
 };
 
@@ -103,7 +103,7 @@ $R Act$__init__(Act self, $int i, $Cont cont$0) {
 }
 
 $bool Act$__bool__(Act self) {
-  return $true;
+  return $True;
 }
 
 $str Act$__str__(Act self) {
@@ -150,10 +150,10 @@ struct Act$class Act$methods = {
     UNASSIGNED,
     NULL,
     Act$__init__,
-    Act$__bool__,
-    Act$__str__,
     Act$__serialize__,
     Act$__deserialize__,
+    Act$__bool__,
+    Act$__str__,
     Act$act$local,
     Act$act
 };
@@ -167,7 +167,7 @@ void lambda$3$__init__(lambda$3 $this, Root self, $Iterator iter$1, $Cont cont$0
 }
 
 $bool lambda$3$__bool__(lambda$3 self) {
-  return $true;
+  return $True;
 }
 
 $str lambda$3$__str__(lambda$3 self) {
@@ -199,10 +199,10 @@ struct lambda$3$class lambda$3$methods = {
     UNASSIGNED,
     NULL,
     lambda$3$__init__,
-    lambda$3$__bool__,
-    lambda$3$__str__,
     lambda$3$__serialize__,
     lambda$3$__deserialize__,
+    lambda$3$__bool__,
+    lambda$3$__str__,
     lambda$3$enter
 };
 
@@ -213,7 +213,7 @@ void lambda$4$__init__(lambda$4 $this, $Cont cont$0) {
 }
 
 $bool lambda$4$__bool__(lambda$4 self) {
-  return $true;
+  return $True;
 }
 
 $str lambda$4$__str__(lambda$4 self) {
@@ -241,10 +241,10 @@ struct lambda$4$class lambda$4$methods = {
     UNASSIGNED,
     NULL,
     lambda$4$__init__,
-    lambda$4$__bool__,
-    lambda$4$__str__,
     lambda$4$__serialize__,
     lambda$4$__deserialize__,
+    lambda$4$__bool__,
+    lambda$4$__str__,
     lambda$4$enter
 };
 
@@ -277,7 +277,7 @@ $R Root$__init__(Root self, $int _ignore, $Cont cont$0) {
 }
 
 $bool Root$__bool__(Root self) {
-  return $true;
+  return $True;
 }
 
 $str Root$__str__(Root self) {
@@ -301,10 +301,10 @@ struct Root$class Root$methods = {
     UNASSIGNED,
     NULL,
     Root$__init__,
-    Root$__bool__,
-    Root$__str__,
     Root$__serialize__,
-    Root$__deserialize__
+    Root$__deserialize__,
+    Root$__bool__,
+    Root$__str__
 };
 
 /// Initialization
