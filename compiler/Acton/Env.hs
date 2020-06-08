@@ -325,7 +325,8 @@ define te env               = foldl addWit env1 ws
 defineTVars                 :: Qual -> Env -> Env
 defineTVars [] env          = env
 defineTVars (TBind tv@(TV k n) us : q) env
-                            = foldl addWit env1 ws
+  | not $ skolem tv         = internal (loc tv) "Attempted scoping of non skolem type variable"
+  | otherwise               = foldl addWit env1 ws
   where env1                = defineTVars q env{ names = (n, NTVar k mba) : names env }
         (mba,us')           = case mro2 env us of ([],_) -> (Nothing,us); _ -> (Just (head us), tail us)
         ws                  = [ (NoQ n, WInst p (NoQ (tvarWit tv p)) ws) | u <- us', (ws,p) <- findAncestry env u ]
@@ -360,9 +361,6 @@ stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 tvarScope                   :: Env -> [TVar]
 tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
-
-scoped                      :: TVar -> Env -> Bool
-scoped tv env               = tv `elem` tvarScope env
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 

@@ -66,7 +66,11 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict vs te)
         unif n t0 (NSVar t)
           | length ts == l              = ([ Cast t t0 | t <- ts ], NSVar t0)
           where ts                      = [ t | te <- tes, Just (NSVar t) <- [lookup n te] ]
-        unif n t0 (NDef _ _)          
+        unif n t0 (NDef sc d)
+          | null (scbind sc) &&
+            length ts == l              = ([ Cast t t0 | t <- ts ], NDef (monotype t0) d)
+          where ts                      = [ sctype sc | te <- tes, Just (NDef sc d') <- [lookup n te], null (scbind sc), d==d' ]
+        unif n t0 (NDef _ _)
           | length scs == l             = case findName n env of
                                              NReserved -> err1 n "Expected a common signature for"
                                              NSig sc d -> ([], NDef sc d)
@@ -581,13 +585,16 @@ splitGen env fvs cs te eqs
     (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
     (gen_cs, ambig_cs)                  = split_safe safe_vs cs'              -- TODO: also include "must solve" constraints
 
-mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in (q, concat wss)
+mkQual vs cs                            = let (q,wss) = unzip $ map cbind vs in (q, concat wss, filter nofit cs)
   where cbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
                                           (TBind v impls, wits)
                 | otherwise             = (TBind v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
                 impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
                 wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
+        nofit (Cast (TVar _ v) TCon{})  = v `notElem` vs
+        nofit (Impl _ (TVar _ v) _)     = v `notElem` vs
+        nofit _                         = True
 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
@@ -596,7 +603,7 @@ genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
                                              fvs <- msubstTV (tyfree env ++ tyfixed te)
                                              (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
                                              ds <- msubst ds0
-                                             let (q,ws) = mkQual gvs gen_cs
+                                             let (q,ws,xtra) = mkQual gvs gen_cs
                                                  s = tvarSupplyMap (tybound q) (tvarScope env)
                                                  te1 = map (generalize s q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
