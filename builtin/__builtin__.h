@@ -352,6 +352,24 @@ typedef struct $Iterable$Iterator *$Iterable$Iterator;
 struct $Iterable$Iterator$class;
 typedef struct $Iterable$Iterator$class *$Iterable$Iterator$class;
 
+struct $Sequence$range;
+typedef struct $Sequence$range *$Sequence$range;
+
+struct $Sequence$range$class;
+typedef struct $Sequence$range$class *$Sequence$range$class;
+
+struct $Collection$range;
+typedef struct $Collection$range *$Collection$range;
+
+struct $Collection$range$class;
+typedef struct $Collection$range$class *$Collection$range$class;
+
+struct $Plus$range;
+typedef struct $Plus$range *$Plus$range;
+
+struct $Plus$range$class;
+typedef struct $Plus$range$class *$Plus$range$class;
+
 struct $Ord$str;
 typedef struct $Ord$str *$Ord$str;
 
@@ -1308,6 +1326,83 @@ struct $Iterable$Iterator$class {
 
 void $Iterable$Iterator$__init__ ($Iterable$Iterator);
 $Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
+
+// $Sequence$range ////////////////////////////////////////////////////////////
+
+struct $Sequence$range {
+    $Sequence$range$class $class;
+    $Collection$range w$Collection$Sequence;
+    $Plus$range w$Plus$Sequence;
+};
+
+struct $Sequence$range$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Sequence$range);
+    $int (*__getitem__)($Sequence$range, $range, $int);
+    void (*__setitem__)($Sequence$range, $range, $int, $int);
+    void (*__delitem__)($Sequence$range, $range, $int);
+    $range (*__getslice__)($Sequence$range, $range, $Slice);
+    void (*__setslice__)($Sequence$range, $range, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sequence$range, $range, $Slice);
+    $Iterator (*__reversed__)($Sequence$range, $range);
+    void (*insert)($Sequence$range, $range, $int, $int);
+    void (*append)($Sequence$range, $range, $int);
+    void (*reverse)($Sequence$range, $range);
+};
+
+void $Sequence$range$__init__ ($Sequence$range);
+$int $Sequence$range$__getitem__ ($Sequence$range, $range, $int);
+void $Sequence$range$__setitem__ ($Sequence$range, $range, $int, $int);
+void $Sequence$range$__delitem__ ($Sequence$range, $range, $int);
+$range $Sequence$range$__getslice__ ($Sequence$range, $range, $Slice);
+void $Sequence$range$__setslice__ ($Sequence$range, $range, $Slice, $Iterable$opaque);
+void $Sequence$range$__delslice__ ($Sequence$range, $range, $Slice);
+$Iterator $Sequence$range$__reversed__ ($Sequence$range, $range);
+void $Sequence$range$insert ($Sequence$range, $range, $int, $int);
+void $Sequence$range$append ($Sequence$range, $range, $int);
+void $Sequence$range$reverse ($Sequence$range, $range);
+
+// $Collection$range ////////////////////////////////////////////////////////////
+
+struct $Collection$range {
+    $Collection$range$class $class;
+    $Sequence$range w$Sequence$range;
+};
+
+struct $Collection$range$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Collection$range, $Sequence$range);
+    $Iterator (*__iter__)($Collection$range, $range);
+    $range (*__fromiter__)($Collection$range, $Iterable$opaque);
+    $int (*__len__)($Collection$range, $range);
+};
+
+void $Collection$range$__init__ ($Collection$range, $Sequence$range);
+$Iterator $Collection$range$__iter__ ($Collection$range, $range);
+$range $Collection$range$__fromiter__ ($Collection$range, $Iterable$opaque);
+$int $Collection$range$__len__ ($Collection$range, $range);
+
+// $Plus$range ////////////////////////////////////////////////////////////
+
+struct $Plus$range {
+    $Plus$range$class $class;
+    $Sequence$range w$Sequence$range;
+};
+
+struct $Plus$range$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Plus$range, $Sequence$range);
+    $range (*__add__)($Plus$range, $range, $range);
+};
+
+void $Plus$range$__init__ ($Plus$range, $Sequence$range);
+$range $Plus$range$__add__ ($Plus$range, $range, $range);
 
 // $Ord$str ////////////////////////////////////////////////////////////
 

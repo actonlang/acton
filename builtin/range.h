@@ -11,9 +11,9 @@ struct $range$class {
 
 struct $range {
   struct $range$class *$class;
-  int start;
-  int stop;
-  int step;
+  long start;
+  long stop;
+  long step;
 };
 
 
@@ -22,10 +22,10 @@ extern struct $range$class $range$methods;
 extern struct $Iterable$range$class $Iterable$range$methods;
 extern $Iterable$range $Iterable$range$witness;
 
-//extern struct $Sequence$range$class $Sequence$range$methods;
+extern struct $Sequence$range$class $Sequence$range$methods;
 //extern struct $Container$range$class $Container$range$methods; 
 
-//extern struct $Sequence$range *$Sequence$range$witness;
+extern struct $Sequence$range *$Sequence$range$witness;
 //extern struct $Container$range *$Container$range$witness;
 
 // Iterators over ranges ///////////////////////////////////////////////////////

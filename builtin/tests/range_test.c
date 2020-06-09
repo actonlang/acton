@@ -11,11 +11,21 @@ int main() {
   printf("\n");
   $range r2 = $NEW($range,to$int(50),to$int(10),to$int(-4));
   $serialize_file(($Serializable)r2,"range.bin");
-  $range r3 = ($range)$deserialize_file("range.bin");                
+  $range r3 = ($range)$deserialize_file("range.bin");
   $list lst = $list_fromiter($Iterable$pack(($Iterable)$Iterable$range$witness,r3));
-  $print($NEW($tuple,2,to$str("lst = "),lst));   
+  $print($NEW($tuple,2,to$str("lst = "),lst));
   $set s = $set_fromiter(($Hashable)$Hashable$int$witness,$Iterable$pack(($Iterable)$Iterable$range$witness,r2));
   $Set$set wit = $NEW($Set$set,($Hashable)$Hashable$int$witness);
   $list lst2 = $list_fromiter($Iterable$pack(($Iterable)wit,s));
-  $print($NEW($tuple,2,to$str("lst2 = "),lst2));   
+  $print($NEW($tuple,2,to$str("lst2 = "),lst2));
+  int start = 2;
+  int stop = 13;
+  int step = 3;
+  struct $Slice slc;
+  slc.start = &start;
+  slc.stop = &stop;
+  slc.step = &step;
+  $print($NEW($tuple,1,$Sequence$range$__getslice__($Sequence$range$witness,r2,&slc)));
+  $list lst3 = $NEW($list,$Sequence$pack(($Sequence)$Sequence$range$witness,r2));
+  $print($NEW($tuple,1,lst3));
 }
