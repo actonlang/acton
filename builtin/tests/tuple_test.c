@@ -2,10 +2,9 @@
 #include "../builtin.h"
 
 int main() {
-  $WORD comps1[] = {to$int(7),to$str("A string"),to$float(3.14)};
-  $tuple tup1 = $NEW($tuple,3,comps1);
+  $tuple tup1 = $NEW($tuple,3,to$int(7),to$str("A string"),to$float(3.14));
   $Sliceable$tuple wit = $Sliceable$tuple$witness;
-  printf("tup1=%s\n",from$str(tup1->$class->__str__(tup1)));
+  $print($NEW($tuple,2,to$str("tup1 = "),tup1));
   int start = 0;
   int stop = 3;
   int step = 2;
@@ -16,7 +15,7 @@ int main() {
   $float pi =  ($float)wit->$class->__getitem__(wit,tup1,to$int(2));
   printf("pi = %f\n",from$float(pi));
   $tuple tup2 = wit->$class->__getslice__(wit,tup1,&slc);
-  printf("size of tup2 is %d; 2nd element is %f\n",tup2->size,from$float(wit->$class->__getitem__(wit,tup2,to$int(1))));
+  $print($NEW($tuple,2,to$str("tup2 = "),tup2));
   $Hashable wits[] = {($Hashable)$Hashable$int$witness, ($Hashable)$Hashable$str$witness, ($Hashable)$Hashable$float$witness};
   $Hashable wit2 = ($Hashable)$NEW($Hashable$tuple,3, ($Hashable*)&wits);
   $dict d = $NEW($dict,wit2,NULL);

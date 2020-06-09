@@ -755,7 +755,7 @@ void *main_loop(void *arg) {
 // we assume that (de)serialization takes place without need for spinlock protection.
 
 $ROW $serialize_rts() {
-  return $serialize(($Serializable)tup3(root_actor,readyQ,timerQ));
+  return $serialize(($Serializable)$NEW($tuple,3,root_actor,readyQ,timerQ));
 }
 
 void $deserialize_rts($ROW row) {

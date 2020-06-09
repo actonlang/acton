@@ -13,9 +13,9 @@ int main() {
   $serialize_file(($Serializable)r2,"range.bin");
   $range r3 = ($range)$deserialize_file("range.bin");                
   $list lst = $list_fromiter($Iterable$pack(($Iterable)$Iterable$range$witness,r3));
-  $print(tup1(lst));
+  $print($NEW($tuple,2,to$str("lst = "),lst));   
   $set s = $set_fromiter(($Hashable)$Hashable$int$witness,$Iterable$pack(($Iterable)$Iterable$range$witness,r2));
   $Set$set wit = $NEW($Set$set,($Hashable)$Hashable$int$witness);
   $list lst2 = $list_fromiter($Iterable$pack(($Iterable)wit,s));
-  $print(tup1(lst2));   
+  $print($NEW($tuple,2,to$str("lst2 = "),lst2));   
 }
