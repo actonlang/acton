@@ -319,12 +319,12 @@ instance Pretty TCon where
       | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
 
-instance Pretty Qual where
+instance Pretty QBinds where
     pretty q                        = brackets (commaList q)
 
-instance Pretty TBind where
-    pretty (TBind v [])             = pretty v
-    pretty (TBind v cs)             = pretty v <> parens (commaList cs)
+instance Pretty QBind where
+    pretty (Quant v [])             = pretty v
+    pretty (Quant v cs)             = pretty v <> parens (commaList cs)
 
 instance Pretty UType where
     pretty (UCon n)                 = pretty n

@@ -610,8 +610,8 @@ funcdef =  addLoc $ do
               S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure deco <*> pure (maybe S.tWild id fx)
 
 
-optbinds :: Parser [S.TBind]
-optbinds = brackets (do b <- tbind; bs <- many (comma *> tbind); return (b:bs))
+optbinds :: Parser S.QBinds
+optbinds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
             <|>
            return []
 
@@ -1054,8 +1054,8 @@ tcon =  do n <- qual_name
 tvar :: Parser S.TVar
 tvar = S.TV S.KWild <$> tvarname
 
-tbind :: Parser S.TBind
-tbind = S.TBind <$> tvar <*> optbounds
+qbind :: Parser S.QBind
+qbind = S.Quant <$> tvar <*> optbounds
 
 optbounds :: Parser [S.TCon]
 optbounds = do bounds <- optional (parens (optional ((:) <$> tcon <*> commaList tcon)))
@@ -1064,8 +1064,8 @@ optbounds = do bounds <- optional (parens (optional ((:) <$> tcon <*> commaList 
 tschema :: Parser S.TSchema
 tschema = addLoc $
             try (do 
-                bs <- brackets (do n <- tbind
-                                   ns <- commaList tbind
+                bs <- brackets (do n <- qbind
+                                   ns <- commaList qbind
                                    return (n:ns))
                 fatarrow
                 t <- ttype
