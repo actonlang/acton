@@ -128,7 +128,7 @@ $dict $dict_deserialize($Serial$state state) {
   }
 }
 
-struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$struct$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
+struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
