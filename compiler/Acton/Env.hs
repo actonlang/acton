@@ -451,6 +451,10 @@ findConName n env           = case findQName n env of
                                 NExt n q us te -> (q,us,te)
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
+ancestorNames               :: QName -> Env -> [QName]
+ancestorNames n env         = map (tcname . snd) us
+  where (q,us,te)           = findConName n env
+
 conAttrs                    :: Env -> QName -> [Name]
 conAttrs env qn             = dom te
   where (_,_,te)            = findConName qn env

@@ -416,8 +416,8 @@ stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 --------------------------------------------------------------------------------------------------------------------------
 
-splitAndSolve env [] cs                 = simplify env cs
-splitAndSolve env vs cs                 = do (cs0,eq0) <- simplify env cs
+splitAndSolve env [] cs                 = simplify env [] cs
+splitAndSolve env vs cs                 = do (cs0,eq0) <- simplify env [] cs
                                              let (cs1',cs1) = partition (any (`elem` vs) . tyfree) cs0
                                              eq1 <- solve env cs1'
                                              return (cs1, eq1++eq0)
@@ -430,11 +430,11 @@ checkNoEscape env vs                    = do tvs <- msubstTV (tyfree env)
 addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
-matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env [Cast (prowOf p) p0, Cast (krowOf k) k0]
+matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te      -- ignore eqs here, real lifting is done in the Deactorizer
                                              return (cs ++ concat css)
   where NAct _ p0 k0 te0                = findName n0 env
-        check1 (n, NVar t)              = simplify env [Cast t t0]
+        check1 (n, NVar t)              = simplify env te [Cast t t0]
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
         check1 (n, NDef sc _)
           | scbind sc == q              = do w <- newWitness
@@ -573,7 +573,7 @@ splitGen env fvs cs te eqs
   | null ambig_cs                       = do eqs <- msubst eqs
                                              return (fvs, gvs, fixed_cs, gen_cs, te, eqs)
   | otherwise                           = do eq0 <- solve env ambig_cs
-                                             (cs,eq1) <- simplify env (fixed_cs++gen_cs)
+                                             (cs,eq1) <- simplify env te (fixed_cs++gen_cs)
                                              te <- msubst te
                                              fvs <- msubstTV fvs
                                              splitGen env fvs cs te (eq1++eq0++eqs)
@@ -585,8 +585,8 @@ splitGen env fvs cs te eqs
     (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
     (gen_cs, ambig_cs)                  = split_safe safe_vs cs'              -- TODO: also include "must solve" constraints
 
-qualify vs cs                           = let (q,wss) = unzip $ map cbind vs in (q, concat wss, filter nofit cs)
-  where cbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
+qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss, filter nofit cs)
+  where qbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
                                           (Quant v impls, wits)
                 | otherwise             = (Quant v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
@@ -597,7 +597,7 @@ qualify vs cs                           = let (q,wss) = unzip $ map cbind vs in 
         nofit _                         = True
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
-genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
+genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env te cs
                                              te <- msubst te
                                              fvs <- msubstTV (tyfree env ++ tyfixed te)
                                              (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
@@ -607,6 +607,9 @@ genEnv env cs te ds0                    = do (cs0,eq0) <- simplify env cs
                                                  te1 = map (generalize s q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              sequence [ substitute tv t | (tv,t) <- s ]
+                                             -- traceM ("## genEnv " ++ prstrs (declnames ds1))
+                                             -- traceM (render (nest 4 $ vcat $ map pretty (subst s te1)))
+                                             when (not $ null xtra) (traceM ("  with\n" ++ render (nest 4 $ vcat $ map pretty xtra)))
                                              return (fixed_cs, te1, ds1)
   where
     tyfixed te                          = tyfree $ filter (not . gen) te
@@ -960,7 +963,7 @@ infAssocs env (Assoc k v : as) tk tv    = do (cs1,k') <- inferSub env tk k
                                              (cs2,v') <- inferSub env tv v
                                              (cs3,as') <- infAssocs env as tv tk
                                              return (cs1++cs2++cs3, Elem (eTuple [k',v']) : as')    -- TODO: translate using primitive Iterator
-infAssocs env (StarStar e : as) tk tv   = do (cs1,e') <- inferSub env (tExist $ pIterable $ tTuple $ posRow tk $ posRow tv posNil) e
+infAssocs env (StarStar e : as) tk tv   = do (cs1,e') <- inferSub env (tExist $ pIterable $ tTupleP $ posRow tk $ posRow tv posNil) e
                                              (cs2,as') <- infAssocs env as tk tv
                                              return (cs1++cs2, Star e' : as')                       -- TODO: translate using primitive Iterator
 
@@ -1003,8 +1006,8 @@ instance InfEnv PosPar where
                                              return (wellformed env a ++ cs1++cs2, (n, NVar t):te, PosPar n (Just t) (Just e') p')
     infEnv env (PosSTAR n a)            = do t <- maybe newTVar return a
                                              r <- newTVarOfKind PRow
-                                             return (Cast t (tTuple r) :
-                                                     wellformed env a, [(n, NVar t)], PosSTAR n (Just $ tTuple r))
+                                             return (Cast t (tTupleP r) :
+                                                     wellformed env a, [(n, NVar t)], PosSTAR n (Just $ tTupleP r))
     infEnv env PosNIL                   = return ([], [], PosNIL)
 
 instance InfEnv KwdPar where
@@ -1017,8 +1020,8 @@ instance InfEnv KwdPar where
                                              return (wellformed env a++cs1++cs2, (n, NVar t):te, KwdPar n (Just t) (Just e') k')
     infEnv env (KwdSTAR n a)            = do t <- maybe newTVar return a
                                              r <- newTVarOfKind KRow
-                                             return (Cast t (tRecord r) :
-                                                     wellformed env a, [(n, NVar t)], KwdSTAR n (Just $ tRecord r))
+                                             return (Cast t (tTupleK r) :
+                                                     wellformed env a, [(n, NVar t)], KwdSTAR n (Just $ tTupleK r))
     infEnv env KwdNIL                   = return ([], [], KwdNIL)
 
 ---------
@@ -1029,7 +1032,7 @@ instance Infer PosArg where
                                              return (cs1++cs2, posRow t prow, PosArg e' p')
     infer env (PosStar e)               = do (cs,t,e') <- infer env e
                                              prow <- newTVarOfKind PRow
-                                             return (Cast t (tTuple prow) :
+                                             return (Cast t (tTupleP prow) :
                                                      cs, prow, PosStar e')
     infer env PosNil                    = return ([], posNil, PosNil)
     
@@ -1039,7 +1042,7 @@ instance Infer KwdArg where
                                              return (cs1++cs2, kwdRow n t krow, KwdArg n e' k')
     infer env (KwdStar e)               = do (cs,t,e') <- infer env e
                                              krow <- newTVarOfKind KRow
-                                             return (Cast t (tRecord krow) :
+                                             return (Cast t (tTupleK krow) :
                                                      cs, krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
 
@@ -1069,7 +1072,7 @@ instance InfEnvT PosPat where
                                              return (cs1++cs2, te1++te2, posRow t r, PosPat p' ps')
     infEnvT env (PosPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind PRow
-                                             return (Cast t (tTuple r) :
+                                             return (Cast t (tTupleP r) :
                                                      cs, te, r, PosPatStar p')
     infEnvT env PosPatNil               = return ([], [], posNil, PosPatNil)
 
@@ -1080,7 +1083,7 @@ instance InfEnvT KwdPat where
                                              return (cs1++cs2, te1++te2, kwdRow n t r, KwdPat n p' ps')
     infEnvT env (KwdPatStar p)          = do (cs,te,t,p') <- infEnvT env p
                                              r <- newTVarOfKind KRow
-                                             return (Cast t (tRecord r) :
+                                             return (Cast t (tTupleK r) :
                                                      cs, te, r, KwdPatStar p')
     infEnvT env KwdPatNil               = return ([], [], kwdNil, KwdPatNil)
 

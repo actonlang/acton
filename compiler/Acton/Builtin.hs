@@ -215,12 +215,11 @@ tMapping a b                        = tExist (pMapping a b)
 tSet a                              = tExist (pSet a)
 tCollection a                       = tExist (pCollection a)
 
-uniLit t (ULit l)                   = t == tStr
-uniLit t _                          = False
+uniLit (ULit l)                     = True
+uniLit _                            = False
 
 uniElem us u@(ULit l)               = u `elem` us || UCon qnStr `elem` us
 uniElem us u                        = u `elem` us
 
-uniCon us qn                        = qn `elem` uniCons && UCon qn `elem` us
-
-uniCons                             = [qnInt, qnFloat, qnBool, qnStr]
+uniCon us (TC qn ts)                = qn `elem` uniCons && ts == [] && UCon qn `elem` us
+  where uniCons                     = [qnInt, qnFloat, qnBool, qnStr]

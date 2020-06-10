@@ -3,6 +3,7 @@ module Acton.Solver where
 
 import Control.Monad
 import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 
 import Utils
 import Acton.Syntax
@@ -15,17 +16,21 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: Env -> Constraints -> TypeM (Constraints,Equations)
-simplify env cs                             = simplify' env [] cs
-  where simplify' env eq cs                 = do --traceM ("### simplify: " ++ prstrs cs)
+simplify                                    :: Env -> TEnv -> Constraints -> TypeM (Constraints,Equations)
+simplify env te cs                          = simplify' env te [] cs
+
+simplify' env te eq cs                      = do --traceM ("### simplify: " ++ prstrs cs)
                                                  eq1 <- reduce env eq cs
                                                  cs0 <- collectDeferred
                                                  cs1 <- msubst cs0
                                                  if simple cs1
                                                      -- then return (cs1,eq1)
                                                      then return ([],eq1)
-                                                     else simplify' env eq1 cs1
-        simple cs                           = True                              -- TODO: add proper test
+                                                     else do
+                                                        env1 <- msubst env 
+                                                        te1 <- msubst te
+                                                        improve env1 te1 eq1 cs1
+  where simple cs                           = True                              -- TODO: add proper test
 
 -- Reduce aggressively or fail
 solve                                       :: Env -> Constraints -> TypeM Equations
@@ -170,8 +175,18 @@ cast' env (TCon _ c1) (TCon _ c2)
 
 cast' env (TExist _ p1) (TExist l p2)
   | tcname p1 == tcname p2                  = unifyM env (tcargs p1) (tcargs p2)
+{-
+cast' env (TAsync _ p1 k1 t1) (TAsync _ p2 k2 t2)
+                                            = do cast env p2 p1
+                                                 cast env k2 k1
+                                                 cast env t1 t2
 
---         as declared           as called
+cast' env (TAsync _ p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do cast env (fxAct tWild) fx2
+                                                 cast env p2 p1
+                                                 cast env k2 k1
+                                                 cast env (tMsg t1) t2
+-}
 cast' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do cast env fx1 fx2
                                                  cast env p2 p1
@@ -182,12 +197,12 @@ cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do cast env p1 p2
                                                  cast env k1 k2
 
-cast' env (TUnion _ u1) (TUnion _ u2)
-  | all (uniElem u2) u1                     = return ()
-cast' env (TUnion _ u1) t2
-  | all (uniLit t2) u1                      = return ()
-cast' env (TCon _ (TC c1 [])) (TUnion _ u2)
-  | uniCon u2 c1                            = return ()
+cast' env (TUnion _ us1) (TUnion _ us2)
+  | all (uniElem us2) us1                   = return ()
+cast' env (TUnion _ us1) t2
+  | all uniLit us1                          = unify env tStr t2
+cast' env (TCon _ c1) (TUnion _ us2)
+  | uniCon us2 (unalias env c1)             = return ()
 
 cast' env (TOpt _ t1) (TOpt _ t2)           = cast env t1 t2
 cast' env (TNone _) (TOpt _ t)              = return ()
@@ -327,7 +342,7 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  wk <- newWitness
                                                  wt <- newWitness
                                                  let e = eLambda [(x0,t1)] e'
-                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTuple p2) (KwdSTAR x2 $ Just $ tRecord k2) e0 fxPure
+                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fxPure
                                                      e0 = eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
                                                      e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
                                                      e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)
@@ -452,58 +467,172 @@ w22 = lambda: ()                                                        = round(
                                                                         = round(x=PACK(Real$float, 3.14), n=None)
 -}
 
-
 ----------------------------------------------------------------------------------------------------------------------
 -- Variable info
 ----------------------------------------------------------------------------------------------------------------------
 
-data VInfo                  = VInfo { 
-                                cvars       :: [TVar],
-                                embedded    :: [TVar],
-                                ucbounded   :: [TVar], 
-                                uvbounded   :: [TVar], 
-                                lcbounded   :: [TVar], 
-                                lvbounded   :: [TVar],
-                                pbounded    :: [TVar],
-                                selected    :: [TVar] }
+data VInfo                                  = VInfo { 
+                                                cvars       :: [TVar],
+                                                embedded    :: [TVar],
+                                                ubounds     :: Map TVar [Type], 
+                                                lbounds     :: Map TVar [Type], 
+                                                pbounds     :: Map TVar [TCon],
+                                                selected    :: [TVar],
+                                                varvars     :: [(TVar,TVar)] }
 
-cvar v vi                   = vi{ cvars = v : cvars vi }
-embed vs vi                 = vi{ embedded = vs ++ embedded vi }
-ucbound v vi                = vi{ ucbounded = v : ucbounded vi }
-lcbound v vi                = vi{ lcbounded = v : lcbounded vi }
-uvbound v vi                = vi{ uvbounded = v : uvbounded vi }
-lvbound v vi                = vi{ lvbounded = v : lvbounded vi }
-pbound v vi                 = vi{ pbounded = v : pbounded vi }
-select v vi                 = vi{ selected = v : selected vi }
+cvar v vi                                   = vi{ cvars = v : cvars vi }
+embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
+ubound v t vi                               = vi{ ubounds = Map.insertWith (++) v [t] (ubounds vi) }
+lbound v t vi                               = vi{ lbounds = Map.insertWith (++) v [t] (lbounds vi) }
+pbound v p vi                               = vi{ pbounds = Map.insertWith (++) v [p] (pbounds vi) }
+select v vi                                 = vi{ selected = v : selected vi }
+varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 
-
-vinfo cs                                        = f cs (VInfo [] [] [] [] [] [] [] [])
+varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.empty Map.empty [] [])
   where
-    f (Impl _ (TVar _ v) p : cs)           = f cs . pbound v . cvar v
-    f (Sub _ (TVar _ v1) (TVar _ v2) : cs) = f cs . uvbound v1 . lvbound v2 . cvar v1 . cvar v2
-    f (Sub _ (TVar _ v) t : cs)            = f cs . ucbound v . embed (tyfree t) . cvar v
-    f (Sub _ t (TVar _ v) : cs)            = f cs . lcbound v . embed (tyfree t) . cvar v
-    f (Cast (TVar _ v1) (TVar _ v2) : cs)  = f cs . uvbound v1 . lvbound v2 . cvar v1 . cvar v2
-    f (Cast (TVar _ v) t : cs)             = f cs . ucbound v . embed (tyfree t) . cvar v
-    f (Cast t (TVar _ v) : cs)             = f cs . lcbound v . embed (tyfree t) . cvar v
-    f (Sel _ (TVar _ v) n _ : cs)          = f cs . select v
-    f (Mut (TVar _ v) n _ : cs)            = f cs . select v
-    f []                                   = Just
-    f (_ : cs)                             = \_ -> Nothing       -- Changed since deferred, resubmit all to reducer
+    f (Cast (TVar _ v1) (TVar _ v2) : cs)   = f cs . varvar v1 v2 . cvar v1 . cvar v2
+    f (Cast (TVar _ v) t : cs)              = f cs . ubound v t . embed (tyfree t) . cvar v
+    f (Cast t (TVar _ v) : cs)              = f cs . lbound v t . embed (tyfree t) . cvar v
+    f (Sub _ (TVar _ v1) (TVar _ v2) : cs)  = f cs . varvar v1 v2 . cvar v1 . cvar v2
+    f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t) . cvar v
+    f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t) . cvar v
+    f (Impl _ (TVar _ v) p : cs)            = f cs . pbound v p . cvar v
+    f (Sel _ (TVar _ v) n _ : cs)           = f cs . select v
+    f (Mut (TVar _ v) n _ : cs)             = f cs . select v
+    f []                                    = Just
+    f (_ : cs)                              = \_ -> Nothing
 
-simp (Just vi)
-  | null candidates         = err NoLoc "Cyclic constraint set"
-  where candidates          = cvars vi \\ embedded vi
-        lubs                = [ v | v <- candidates, length (filter (==v) $ ucbounded vi) > 1 ]
-        glbs                = [ v | v <- candidates, length (filter (==v) $ lcbounded vi) > 1 ]
-        ucs                 = candidates `intersect` ucbounded vi
+varclose xys                                = clos [] xys
+  where clos cl []                          = Right cl
+        clos cl ((x,y):xys)
+          | (x,y) `elem` cl                 = clos cl xys
+          | not $ null common               = Left (x,y:common)
+          | otherwise                       = clos ((x,y):cl)  (new_below++new_above++xys)
+          where below_x                     = below x cl
+                above_y                     = above y cl
+                common                      = below_x `intersect` above_y
+                new_below                   = [ (w,y) | w <- below_x ]
+                new_above                   = [ (x,v) | v <- above_y ]
 
+below x cl                                  = [ v | (v,w) <- cl, w==x ]
+above y cl                                  = [ w | (v,w) <- cl, v==y ]
+            
+gsimp cl obs xys                        = [ (x,y) | (x,y) <- xys,
+                                                    x `notElem` obs || y `notElem` obs,
+                                                    above x cl \\ [y] `eq` above y cl, 
+                                                    below y cl \\ [x] `eq` below x cl ]
+  where a `eq` b                        = all (`elem` b) a && all (`elem` a) b
+
+
+instwild k (TWild _)                    = newTVarOfKind k
+instwild _ (TFun l e p k t)             = TFun l <$> instwild KFX e <*> instwild PRow p <*> instwild KRow k <*> instwild KType t
+instwild _ (TTuple l p k)               = TTuple l <$> instwild PRow p <*> instwild KRow k
+instwild _ (TOpt l t)                   = TOpt l <$> instwild KType t
+instwild _ (TCon l c)                   = TCon l <$> TC (tcname c) <$> mapM (instwild KType) (tcargs c)
+instwild _ (TExist l p)                 = TExist l <$> TC (tcname p) <$> mapM (instwild KType) (tcargs p)
+instwild _ (TRow l k n t r)             = TRow l k n <$> instwild KType t <*> instwild k r
+instwild _ (TFX l (FXMut t))            = TFX l <$> FXMut <$> instwild KFX t
+instwild _ (TFX l (FXAct t))            = TFX l <$> FXMut <$> instwild KFX t
+instwild k t                            = return t
+
+wildApp (TC n ts)                       = TC n $ replicate (length ts) tWild
+
+mkGLB env vi v                          = do t' <- instwild KType $ foldr1 (glb env) $ fromJust $ Map.lookup v $ ubounds vi
+                                             return (v, t')
+
+glb env (TWild _) t2                    = t2
+glb env t1 (TWild _)                    = t1
+glb env (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2              = tCon (wildApp c1)
+  | tcname c1 `elem` us2                = tCon (wildApp c2)
+  | tcname c2 `elem` us1                = tCon (wildApp c1)
+  where us1                             = ancestorNames (tcname c1) env
+        us2                             = ancestorNames (tcname c2) env
+glb env (TExist _ p1) (TExist _ p2)
+  | tcname p1 == tcname p2              = tExist (wildApp p1)
+glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
+glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (glb env p1 p2) (glb env k1 k2)
+glb env (TUnion _ us1) (TUnion _ us2)
+  | [UCon qn] <- us                     = tCon (TC qn [])
+  | not $ null us                       = tUnion us
+  where us                              = us1 `intersect` us2
+glb env (TUnion _ us) t@(TCon _ c)
+  | uniCon us (unalias env c)           = t
+glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
+glb env (TNone _) (TNone _)             = tNone
+glb env (TOpt _ t1) t2                  = glb env t1 t2
+glb env t1 (TOpt _ t2)                  = glb env t1 t2
+glb env t1 t2                           = err1 t1 ("No common subtype: " ++ prstr t2)
+
+mkLUB env vi v                          = do t' <- instwild KType $ foldr1 (lub env) $ fromJust $ Map.lookup v $ ubounds vi
+                                             return (v, t')
+
+lub env t t'                            = undefined
+
+pmerge env vi v                         = do ps <- merge $ fromJust $ Map.lookup v $ pbounds vi
+                                             return (v, ps)
+  where merge []                        = return []
+        merge (p:ps)                    = do ps' <- merge ps
+                                             p' <- undefined
+                                             return (p':ps')
+
+replace ub lb pb c                      = rep c
+  where rep c@(Cast TVar{} TVar{})      = c
+        rep (Cast (TVar l v) t)
+          | Just t' <- lookup v ub      = Cast t' t
+        rep (Cast t (TVar l v))
+          | Just t' <- lookup v lb      = Cast t t'
+        rep c@(Sub _ TVar{} TVar{})     = c
+        rep (Sub w (TVar l v) t)
+          | Just t' <- lookup v ub      = Sub w t' t
+        rep (Sub w t (TVar l v))
+          | Just t' <- lookup v lb      = Sub w t t'
+        rep (Impl w (TVar _ v) p)
+          | Just ps <- lookup v pb      = undefined
+        rep c                           = c
+
+improve env te eq cs
+  | Nothing <- info                     = simplify' env te eq cs                                -- Contains reducible constraints, resubmit
+  | Left (v,vs) <- closure              = do unifyM env (repeat $ tVar v) (map tVar $ tail vs)  -- Unify var-var cycles
+                                             simplify' env te eq cs
+  | not $ null gsimple                  = do unifyM env (map tVar gsimple) (map tVar gsimple')  -- Remove redundant variables
+                                             simplify' env te eq cs
+  | null candidates                     = err NoLoc "Cyclic constraint set"                     -- Fail early
+  | multibounds                         = do ub <- mapM (mkGLB env vi) multiUBs
+                                             lb <- mapM (mkLUB env vi) multiLBs
+                                             pb <- mapM (pmerge env vi) multiPBs
+                                             let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ] ++ map (replace ub lb pb) cs
+                                             simplify' env te eq cs'
+  where info                            = varinfo cs
+        Just vi                         = info
+        candidates                      = cvars vi \\ embedded vi
+        multiUBs                        = [ v | v <- candidates, length (Map.lookup v $ ubounds vi) > 1 ]
+        multiLBs                        = [ v | v <- candidates, length (Map.lookup v $ lbounds vi) > 1 ]
+        multiPBs                        = [ v | v <- candidates, length (Map.lookup v $ pbounds vi) > 1 ]
+        multibounds                     = not (null multiUBs && null multiLBs && null multiPBs)
+        ucs                             = candidates `intersect` Map.keys (ubounds vi)
+        lcs                             = candidates `intersect` Map.keys (lbounds vi)
+        closure                         = varclose (varvars vi)
+        Right vclosed                   = closure
+        fixedvars                       = tyfree env
+        posvars                         = tyfree te -- for now...
+        negvars                         = posvars   -- for now...
+        obsvars                         = posvars ++ negvars ++ fixedvars
+        (gsimple,gsimple')              = unzip $ gsimp vclosed obsvars (varvars vi)
+
+-- Check if the deferred constraint set should be resubmitted
+-- Unify all var cycles
+-- Perform G-simplification on internal variables
 -- Check that there's at least one non-embedded variable
--- For all non-embedded variables: replace mulitple upper/lower con bounds with LUBs/GLBs
--- For all non-embedded variables: simplify proto constraints by taking equality and super-protocols into account
--- For non-embedded variables with just a single upper con bound: replace with bound if not positive
--- For non-embedded variables with just a single lower con bound: replace with bound if not negative
--- For non-embedded variables with only an upper var bound
+
+-- For all non-embedded variables: replace mulitple upper con bounds with a LUB
+-- For all non-embedded variables: replace mulitple lower con bounds with a GLB
+-- For all non-embedded variables: reduce proto constraints by taking equality and super-protocols into account
+
+-- For non-embedded variables with a single upper bound: replace with bound if not positive
+-- For non-embedded variables with a single lower bound: replace with bound if not negative
 
 ----------------------------------------------------------------------------------------------------------------------
 -- Misc.
@@ -558,13 +687,13 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
 
 idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(x0,t1)] (eVar x0))
 
-rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTuple r2)
-rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tRecord r2)
+rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTupleP r2)
+rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tTupleK r2)
 
-rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTuple r)) KwdNIL eTup fxPure
+rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTupleP r)) KwdNIL eTup fxPure
   where eTup                            = Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
         e1                              = eCall (eVar wt) [eVar x1]
-rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR x2 (Just $ tTuple r)) eRec fxPure
+rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR x2 (Just $ tTupleK r)) eRec fxPure
   where eRec                            = Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
         e1                              = eCall (eVar wt) [eVar n]
 
