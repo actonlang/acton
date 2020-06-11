@@ -219,6 +219,24 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem k (tNil k)
                                                  cast env t1 t2
                                                  cast env r1 r2'
 
+cast' env (TVar _ tv) t2@TFun{}
+  | not $ skolem tv                         = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
+                                                 substitute tv t1
+                                                 cast env t1 t2
+cast' env t1@TFun{} (TVar _ tv)
+  | not $ skolem tv                         = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
+                                                 substitute tv t2
+                                                 cast env t1 t2
+
+cast' env (TVar _ tv) t2@TTuple{}
+  | not $ skolem tv                         = do t1 <- instwild KType $ tTuple tWild tWild
+                                                 substitute tv t1
+                                                 cast env t1 t2
+cast' env t1@TTuple{} (TVar _ tv)
+  | not $ skolem tv                         = do t2 <- instwild KType $ tTuple tWild tWild
+                                                 substitute tv t2
+                                                 cast env t1 t2
+
 cast' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
@@ -367,6 +385,30 @@ sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k)
                                                  let e = rowWit k w n t1 r1' wt wr
                                                      cs = [Sub wt t1 t2, Sub wr r1' r2']
                                                  reduce env ((w, rowFun k r1 r2, e):eq) cs
+sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k) n r2 (rowTail r1)
+                                                 wt <- newWitness
+                                                 wr <- newWitness
+                                                 let e = rowWit k w n t2 r2' wt wr
+                                                     cs = [Sub wt t1 t2, Sub wr r1' r2']
+                                                 reduce env ((w, rowFun k r1 r2, e):eq) cs
+
+sub' env eq w (TVar _ tv) t2@TFun{}
+  | not $ skolem tv                         = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
+                                                 substitute tv t1
+                                                 sub env eq w t1 t2
+sub' env eq w t1@TFun{} (TVar _ tv)
+  | not $ skolem tv                         = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
+                                                 substitute tv t2
+                                                 sub env eq w t1 t2
+
+sub' env eq w (TVar _ tv) t2@TTuple{}
+  | not $ skolem tv                         = do t1 <- instwild KType $ tTuple tWild tWild
+                                                 substitute tv t1
+                                                 sub env eq w t1 t2
+sub' env eq w t1@TTuple{} (TVar _ tv)
+  | not $ skolem tv                         = do t2 <- instwild KType $ tTuple tWild tWild
+                                                 substitute tv t2
+                                                 sub env eq w t1 t2
 
 sub' env eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit w t1 t2 : eq)
@@ -471,7 +513,7 @@ data VInfo                                  = VInfo {
                                                 embedded    :: [TVar],
                                                 ubounds     :: Map TVar [Type], 
                                                 lbounds     :: Map TVar [Type], 
-                                                pbounds     :: Map TVar [TCon],
+                                                pbounds     :: Map TVar [(Name,TCon)],
                                                 selected    :: [TVar],
                                                 varvars     :: [(TVar,TVar)] }
 
@@ -479,7 +521,7 @@ cvar v vi                                   = vi{ cvars = v : cvars vi }
 embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
 ubound v t vi                               = vi{ ubounds = Map.insertWith (++) v [t] (ubounds vi) }
 lbound v t vi                               = vi{ lbounds = Map.insertWith (++) v [t] (lbounds vi) }
-pbound v p vi                               = vi{ pbounds = Map.insertWith (++) v [p] (pbounds vi) }
+pbound v w p vi                             = vi{ pbounds = Map.insertWith (++) v [(w,p)] (pbounds vi) }
 select v vi                                 = vi{ selected = v : selected vi }
 varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 
@@ -491,7 +533,7 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
     f (Sub _ (TVar _ v1) (TVar _ v2) : cs)  = f cs . varvar v1 v2 . cvar v1 . cvar v2
     f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t) . cvar v
     f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t) . cvar v
-    f (Impl _ (TVar _ v) p : cs)            = f cs . pbound v p . cvar v
+    f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p . cvar v
     f (Sel _ (TVar _ v) n _ : cs)           = f cs . select v
     f (Mut (TVar _ v) n _ : cs)             = f cs . select v
     f []                                    = Just
@@ -549,11 +591,18 @@ glb env (TCon _ c1) (TCon _ c2)
   | isAncestor env c1 (tcname c2)       = tCon c1
   | isAncestor env c2 (tcname c1)       = tCon c2
 
+glb env t1@(TCon _ tc) (TExist _ p)
+  | Just _ <- search                    = t1
+  where search                          = findWitness env (tcname tc) (tcname p ==)
+glb env (TExist _ p) t2@(TCon _ tc)
+  | Just _ <- search                    = t2
+  where search                          = findWitness env (tcname tc) (tcname p ==)
 glb env (TExist _ p1) (TExist _ p2)
   | tcname p1 == tcname p2              = tExist p1
+  -- TODO: allow p1 and p2 to have a common sub-protocol...
 
-glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
-                                        = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
+glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)                                           -- tWilds instead of glbs enable the special
+                                        = tFun tWild (lub env p1 p2) (lub env k1 k2) tWild  -- async rules in sub and cast
 glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple (glb env p1 p2) (glb env k1 k2)
 
@@ -628,8 +677,17 @@ lub env (TCon _ c1) (TCon _ c2)
   | not $ null common                   = tCon $ head common
   where common                          = commonAncestors env c1 c2
 
+lub env (TCon _ tc) t1@(TExist _ p)
+  | Just _ <- search                    = t1
+  where search                          = findWitness env (tcname tc) (tcname p ==)
+lub env t2@(TExist _ p) (TCon _ tc)
+  | Just _ <- search                    = t2
+  where search                          = findWitness env (tcname tc) (tcname p ==)
 lub env (TExist _ p1) (TExist _ p2)
-  | tcname p1 == tcname p2              = tExist p1
+  | isAncestor env p1 (tcname p2)       = tExist p2
+  | isAncestor env p2 (tcname p1)       = tExist p1
+  | not $ null common                   = tExist $ head common
+  where common                          = commonAncestors env p1 p2
 
 lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
                                         = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
@@ -675,27 +733,31 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 -- Merge
 ----------------------------------------
 
-pmerge env vi v                         = do ps <- merge $ fromJust $ Map.lookup v $ pbounds vi
-                                             return (v, ps)
-  where merge []                        = return []
-        merge (p:ps)                    = do ps' <- merge ps
-                                             p' <- undefined
-                                             return (p':ps')
+pImprove env vi v                       = imp [] [] $ fromJust $ Map.lookup v $ pbounds vi
+  where imp eq wps ((w,p):wps')
+          | (w',wf,p'):_ <- hits        = do unifyM env (tcargs p) (tcargs p')
+                                             imp ((w, impl2type (tVar v) p, wf (eVar w')) : eq) wps wps'
+          | otherwise                   = imp eq ((w,p):wps) wps'
+          where hits                    = [ (w',wf,p1) | (w',p1) <- wps++wps', w'/=w, Just (wf,p') <- [findAncestor env p1 (tcname p)] ]
 
-replace ub lb pb c                      = rep c
+
+replace ub lb c                         = rep c
   where rep c@(Cast TVar{} TVar{})      = c
-        rep (Cast (TVar l v) t)
+        rep (Cast (TVar _ v) t)
           | Just t' <- lookup v ub      = Cast t' t
-        rep (Cast t (TVar l v))
+        rep (Cast t (TVar _ v))
           | Just t' <- lookup v lb      = Cast t t'
         rep c@(Sub _ TVar{} TVar{})     = c
-        rep (Sub w (TVar l v) t)
+        rep (Sub w (TVar _ v) t)
           | Just t' <- lookup v ub      = Sub w t' t
-        rep (Sub w t (TVar l v))
+        rep (Sub w t (TVar _ v))
           | Just t' <- lookup v lb      = Sub w t t'
-        rep (Impl w (TVar _ v) p)
-          | Just ps <- lookup v pb      = undefined
         rep c                           = c
+
+remove ws []                            = []
+remove ws (Impl w t p : cs)
+  | w `elem` ws                         = remove ws cs
+remove ws (c : cs)                      = c : remove ws cs
 
 improve env te eq cs
   | Nothing <- info                     = simplify' env te eq cs                                -- Contains reducible constraints, resubmit
@@ -704,20 +766,25 @@ improve env te eq cs
   | not $ null gsimple                  = do unifyM env (map tVar gsimple) (map tVar gsimple')  -- Remove redundant variables
                                              simplify' env te eq cs
   | null candidates                     = err NoLoc "Cyclic constraint set"                     -- Fail early
-  | multibounds                         = do ub <- mapM (mkGLB env vi) multiUBs
+  | multiBounds                         = do ub <- mapM (mkGLB env vi) multiUBs
                                              lb <- mapM (mkLUB env vi) multiLBs
-                                             pb <- mapM (pmerge env vi) multiPBs
-                                             let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ] ++ map (replace ub lb pb) cs
-                                             simplify' env te eq cs'
+                                             let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ] ++ map (replace ub lb) cs
+                                             eq' <- concat <$> mapM (pImprove env vi) multiPBs
+                                             simplify' env te (eq'++eq) (remove [w|(w,_,_)<-eq'] cs')
+  | polBounds                           = do sequence [ unify env (tVar v) t | v <- ubs, t <- fromJust $ Map.lookup v $ ubounds vi ]
+                                             sequence [ unify env (tVar v) t | v <- lbs, t <- fromJust $ Map.lookup v $ lbounds vi ]
+                                             simplify' env te eq cs
+  | otherwise                           = return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
         candidates                      = cvars vi \\ embedded vi
         multiUBs                        = [ v | v <- candidates, length (Map.lookup v $ ubounds vi) > 1 ]
         multiLBs                        = [ v | v <- candidates, length (Map.lookup v $ lbounds vi) > 1 ]
         multiPBs                        = [ v | v <- candidates, length (Map.lookup v $ pbounds vi) > 1 ]
-        multibounds                     = not (null multiUBs && null multiLBs && null multiPBs)
-        ucs                             = candidates `intersect` Map.keys (ubounds vi)
-        lcs                             = candidates `intersect` Map.keys (lbounds vi)
+        multiBounds                     = not $ null multiUBs && null multiLBs && null multiPBs
+        ubs                             = (candidates \\ posvars) `intersect` Map.keys (ubounds vi)
+        lbs                             = (candidates \\ negvars) `intersect` Map.keys (lbounds vi)
+        polBounds                       = not $ null ubs && null lbs
         closure                         = varclose (varvars vi)
         Right vclosed                   = closure
         fixedvars                       = tyfree env
