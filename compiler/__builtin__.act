@@ -316,6 +316,8 @@ extension set[A(Hashable)] (Set[A]): pass
 
 extension Iterator[A](Iterable[A]): pass
 
+extension range (Sequence[int]): pass
+
 extension str (Ord): pass
 
 extension str (Container[str]): pass

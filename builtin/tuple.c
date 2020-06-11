@@ -1,8 +1,13 @@
-void $tuple_init($tuple self,int size ,$WORD *comps) {
+#include <stdarg.h>
+
+void $tuple_init($tuple self,int size ,...) {
+  va_list args;
+  va_start(args,size);
   self->size = size;
   self->components = malloc(size*sizeof($WORD));
   for (int i=0; i<size; i++)
-    self->components[i] = comps[i];
+    self->components[i] = va_arg(args,$WORD);
+  va_end(args);
 }
 
 $bool $tuple_bool($tuple self) {
@@ -202,23 +207,3 @@ $int $Hashable$tuple$__hash__ ($Hashable$tuple wit, $tuple tup) {
 struct $Hashable$tuple$class $Hashable$tuple$methods = {"",UNASSIGNED, NULL,$Hashable$tuple$__init__,
                                                           $Hashable$tuple$__eq__,$Hashable$tuple$__ne__,$Hashable$tuple$__hash__};
 
-
-$tuple tup1($WORD a) {
-  $WORD comps[] = {a};
-  return $NEW($tuple,1,comps);
-}
-
-$tuple tup2($WORD a, $WORD b) {
-  $WORD comps[] = {a,b};
-  return $NEW($tuple,2,comps);
-}
-
-$tuple tup3($WORD a, $WORD b, $WORD c) {
-  $WORD comps[] = {a,b,c};
-  return $NEW($tuple,3,comps);
-}
-
-$tuple tup4($WORD a, $WORD b, $WORD c, $WORD d) {
-  $WORD comps[] = {a,b,c,d};
-  return $NEW($tuple,4,comps);
-}

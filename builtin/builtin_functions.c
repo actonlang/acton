@@ -44,10 +44,9 @@ $Iterator$enumerate $Iterator$enumerate$_deserialize($Serial$state state) {
 
 $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
   $WORD w = it->it->$class->__next__(it->it);
-  if (w) {
-    $WORD comps[] = {w,to$int(it->nxt++)};
-    return $NEW($tuple,2,comps);
-  } else
+  if (w)
+    return $NEW($tuple,2,w,to$int(it->nxt++));
+  else
     return NULL;
 }
 
@@ -235,7 +234,7 @@ $WORD $Iterator$zip_next($Iterator$zip it) {
   $WORD w1 = it->it1->$class->__next__(it->it1);
   $WORD w2 = it->it2->$class->__next__(it->it2);
   if (w1 && w2)
-    return tup2(w1,w2);
+    return $NEW($tuple,2,w1,w2);
   else
     return NULL;
 }

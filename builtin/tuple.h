@@ -2,7 +2,7 @@ struct $tuple$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($tuple,int,$WORD*);
+  void (*__init__)($tuple,int,...);
   void (*__serialize__)($tuple,$Serial$state); 
   $tuple (*__deserialize__)($Serial$state);
   $bool (*__bool__)($tuple);
@@ -48,8 +48,3 @@ struct $Iterator$tuple {
 };
 
 extern struct $Iterator$tuple$class $Iterator$tuple$methods;
-
-$tuple tup1($WORD a);
-$tuple tup2($WORD a, $WORD b);
-$tuple tup3($WORD a, $WORD b, $WORD c);
-$tuple tup4($WORD a, $WORD b, $WORD c, $WORD d);

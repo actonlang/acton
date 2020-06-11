@@ -23,5 +23,5 @@ int main() {
   $ROW row2 = $read_serialized("test2.bin");
   $write_serialized(row2,"test3.bin");
   $list lst0 = $list_getitem(lst3,4);
-  $print(tup1(lst3->$class->__str__(lst3)));
+  $print($NEW($tuple,1,lst3));
 }
