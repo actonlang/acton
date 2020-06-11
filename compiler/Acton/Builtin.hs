@@ -218,8 +218,10 @@ tCollection a                       = tExist (pCollection a)
 uniLit (ULit l)                     = True
 uniLit _                            = False
 
+uniCon (TC qn ts)                   = qn `elem` uniCons && ts == []
+  where uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
+
 uniElem us u@(ULit l)               = u `elem` us || UCon qnStr `elem` us
 uniElem us u                        = u `elem` us
 
-uniCon us (TC qn ts)                = qn `elem` uniCons && ts == [] && UCon qn `elem` us
-  where uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
+uniConElem us tc                    = uniCon tc && UCon (tcname tc) `elem` us

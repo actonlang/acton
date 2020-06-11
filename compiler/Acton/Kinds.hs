@@ -13,7 +13,6 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Env (tybound, tyfree)
 import qualified Acton.Env
-import Acton.Solver
 
 
 check                               :: Acton.Env.Env -> Module -> IO Module

@@ -436,6 +436,13 @@ findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
 
+isAncestor                  :: Env -> TCon -> QName -> Bool
+isAncestor env c qn         = maybe False (const True) $ findAncestor env c qn
+
+commonAncestors             :: Env -> TCon -> TCon -> [TCon]
+commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
+  where ns                  = map (tcname . snd) (findAncestry env c2)
+
 findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
@@ -450,10 +457,6 @@ findConName n env           = case findQName n env of
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
-
-ancestorNames               :: QName -> Env -> [QName]
-ancestorNames n env         = map (tcname . snd) us
-  where (q,us,te)           = findConName n env
 
 conAttrs                    :: Env -> QName -> [Name]
 conAttrs env qn             = dom te

@@ -175,18 +175,12 @@ cast' env (TCon _ c1) (TCon _ c2)
 
 cast' env (TExist _ p1) (TExist l p2)
   | tcname p1 == tcname p2                  = unifyM env (tcargs p1) (tcargs p2)
-{-
-cast' env (TAsync _ p1 k1 t1) (TAsync _ p2 k2 t2)
+
+cast' env (TFun _ (TFX _ FXAsync) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
                                             = do cast env p2 p1
                                                  cast env k2 k1
-                                                 cast env t1 t2
-
-cast' env (TAsync _ p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do cast env (fxAct tWild) fx2
-                                                 cast env p2 p1
-                                                 cast env k2 k1
                                                  cast env (tMsg t1) t2
--}
+
 cast' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = do cast env fx1 fx2
                                                  cast env p2 p1
@@ -202,7 +196,7 @@ cast' env (TUnion _ us1) (TUnion _ us2)
 cast' env (TUnion _ us1) t2
   | all uniLit us1                          = unify env tStr t2
 cast' env (TCon _ c1) (TUnion _ us2)
-  | uniCon us2 (unalias env c1)             = return ()
+  | uniConElem us2 (unalias env c1)         = return ()
 
 cast' env (TOpt _ t1) (TOpt _ t2)           = cast env t1 t2
 cast' env (TNone _) (TOpt _ t)              = return ()
@@ -343,10 +337,10 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  wt <- newWitness
                                                  let e = eLambda [(x0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fxPure
-                                                     e0 = eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
+                                                     e0 = asynwrap fx1 fx2 $ eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
                                                      e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
                                                      e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)
-                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
+                                                     cs = [asyncast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, asynsub fx1 fx2 wt t1' t2']
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
 
@@ -408,6 +402,7 @@ findElem k r0 n r tl                        = do r0' <- msubst r0
         findElem' e0 n r2 tl                = noUnify r2 (tRow k n tWild tWild)
         revApp (TRow l k n t r1) r2         = revApp r1 (TRow l k n t r2)
         revApp (TNil _ _) r2                = r2
+
 
 {-
 
@@ -535,41 +530,150 @@ instwild _ (TFX l (FXMut t))            = TFX l <$> FXMut <$> instwild KFX t
 instwild _ (TFX l (FXAct t))            = TFX l <$> FXMut <$> instwild KFX t
 instwild k t                            = return t
 
-wildApp (TC n ts)                       = TC n $ replicate (length ts) tWild
+
+----------------------------------------
+-- GLB
+----------------------------------------
 
 mkGLB env vi v                          = do t' <- instwild KType $ foldr1 (glb env) $ fromJust $ Map.lookup v $ ubounds vi
                                              return (v, t')
 
 glb env (TWild _) t2                    = t2
 glb env t1 (TWild _)                    = t1
+
+glb env TVar{} _                        = tWild        -- (Might occur in recursive calls)
+glb env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
+
 glb env (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2              = tCon (wildApp c1)
-  | tcname c1 `elem` us2                = tCon (wildApp c2)
-  | tcname c2 `elem` us1                = tCon (wildApp c1)
-  where us1                             = ancestorNames (tcname c1) env
-        us2                             = ancestorNames (tcname c2) env
+  | c1 == c2                            = tCon c1
+  | isAncestor env c1 (tcname c2)       = tCon c1
+  | isAncestor env c2 (tcname c1)       = tCon c2
+
 glb env (TExist _ p1) (TExist _ p2)
-  | tcname p1 == tcname p2              = tExist (wildApp p1)
+  | tcname p1 == tcname p2              = tExist p1
+
 glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
                                         = tFun (glb env e1 e2) (lub env p1 p2) (lub env k1 k2) (glb env t1 t2)
 glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple (glb env p1 p2) (glb env k1 k2)
+
 glb env (TUnion _ us1) (TUnion _ us2)
   | [UCon qn] <- us                     = tCon (TC qn [])
   | not $ null us                       = tUnion us
   where us                              = us1 `intersect` us2
-glb env (TUnion _ us) t@(TCon _ c)
-  | uniCon us (unalias env c)           = t
+glb env t1@(TUnion _ us) t2@(TCon _ c)
+  | uniConElem us (unalias env c)       = t2
+  | all uniLit us && t2 == tStr         = t1
+glb env t1@(TCon _ c) t2@(TUnion _ us)
+  | uniConElem us (unalias env c)       = t1
+  | all uniLit us && t1 == tStr         = t2
+  
 glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
-glb env (TNone _) (TNone _)             = tNone
+glb env (TNone _) t2                    = tNone
+glb env t1 (TNone _)                    = tNone
 glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
-glb env t1 t2                           = err1 t1 ("No common subtype: " ++ prstr t2)
+
+glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
+  where glfx FXAsync FXAsync            = FXAsync
+        glfx FXAsync (FXAct _)          = FXAsync
+        glfx (FXAct _) FXAsync          = FXAsync
+        glfx FXAsync fx2                = noGLB t1 t2
+        glfx fx1 FXAsync                = noGLB t1 t2
+        glfx FXPure _                   = FXPure
+        glfx _ FXPure                   = FXPure
+        glfx (FXMut t1) _               = FXMut t1
+        glfx _ (FXMut t2)               = FXMut t2
+        glfx (FXAct t1) (FXAct t2)      = FXAct t1
+
+glb env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+glb env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- lookupElem n r      = tRow k n (glb env t1 t2) (glb env r1 r2)
+
+glb env t1 t2                           = noGLB t1 t2
+    
+noGLB t1 t2                             = err1 t1 ("No common subtype: " ++ prstr t2)
+
+
+lookupElem n (TRow l k n' t r)
+  | n == n'                                 = Just (t,r)
+  | otherwise                               = case lookupElem n r of
+                                                Nothing -> Nothing
+                                                Just (t',r') -> Just (t, TRow l k n' t r')
+lookupElem n (TVar _ _)                     = Just (tWild,tWild)
+lookupElem n (TNil _ _)                     = Nothing
+    
+
+
+----------------------------------------
+-- LUB
+----------------------------------------
 
 mkLUB env vi v                          = do t' <- instwild KType $ foldr1 (lub env) $ fromJust $ Map.lookup v $ ubounds vi
                                              return (v, t')
 
-lub env t t'                            = undefined
+lub env (TWild _) t2                    = t2
+lub env t1 (TWild _)                    = t1
+
+lub env TVar{} _                        = tWild        -- (Might occur in recursive calls)
+lub env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
+
+lub env (TCon _ c1) (TCon _ c2)
+  | c1 == c2                            = tCon c1
+  | uniCon (unalias env c1),
+    uniCon (unalias env c2)             = tUnion [UCon (tcname c1), UCon (tcname c2)]
+  | isAncestor env c1 (tcname c2)       = tCon c2
+  | isAncestor env c2 (tcname c1)       = tCon c1
+  | not $ null common                   = tCon $ head common
+  where common                          = commonAncestors env c1 c2
+
+lub env (TExist _ p1) (TExist _ p2)
+  | tcname p1 == tcname p2              = tExist p1
+
+lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
+                                        = tFun (lub env e1 e2) (glb env p1 p2) (glb env k1 k2) (lub env t1 t2)
+lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                        = tTuple (lub env p1 p2) (lub env k1 k2)
+
+lub env (TUnion _ us1) (TUnion _ us2)   = tUnion $ us1 `union` us2
+lub env t1@(TUnion _ us) t2@(TCon _ c)
+  | all uniLit us && t2 == tStr         = t2
+  | uniCon (unalias env c)              = tUnion $ us `union` [UCon (tcname c)]
+lub env t1@(TCon _ c) t2@(TUnion _ us)
+  | all uniLit us && t1 == tStr         = t1
+  | uniConElem us (unalias env c)       = tUnion $ us `union` [UCon (tcname c)]
+  
+lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
+lub env (TNone _) t2                    = tOpt t2
+lub env t1 (TNone _)                    = tOpt t1
+lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
+lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
+
+lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
+  where lufx FXAsync FXAsync            = FXAsync
+        lufx FXAsync (FXAct t2)         = FXAct t2
+        lufx (FXAct t1) FXAsync         = FXAct t1
+        lufx FXAsync fx2                = noLUB t1 t2
+        lufx fx1 FXAsync                = noLUB t1 t2
+        lufx (FXAct t1) _               = FXAct t1
+        lufx _ (FXAct t2)               = FXAct t2
+        lufx (FXMut t1) _               = FXMut t1
+        lufx _ (FXMut t2)               = FXMut t2
+        lufx FXPure FXPure              = FXPure
+
+lub env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                            = tNil k1
+lub env (TRow _ k n t1 r1) r
+  | Just (t2,r2) <- lookupElem n r      = tRow k n (lub env t1 t2) (lub env r1 r2)
+
+lub env t1 t2                           = noLUB t1 t2
+
+noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ prstr t2)
+
+----------------------------------------
+-- Merge
+----------------------------------------
 
 pmerge env vi v                         = do ps <- merge $ fromJust $ Map.lookup v $ pbounds vi
                                              return (v, ps)
@@ -637,6 +741,22 @@ improve env te eq cs
 ----------------------------------------------------------------------------------------------------------------------
 -- Misc.
 ----------------------------------------------------------------------------------------------------------------------
+
+asyncast t1@TFun{} t2@TFun{}
+  | fx t2 == fxAsync                    = Cast t1 t2{ fx = tWild }  -- Special function cast for actor interfaces
+asyncast fx1 fx2
+  | fx2 == fxAsync                      = Cast fx1 tWild            -- Special effect cast for subtyping functions
+asyncast t1 t2                          = Cast t1 t2
+
+asynsub fx1 fx2 w t1 t2
+  | fx2 == fxAsync                      = Sub w t1 t2
+  | fx1 == fxAsync                      = Sub w (tMsg t1) t2        -- Special result constraint for subtyping functions
+  | otherwise                           = Sub w t1 t2
+
+asynwrap fx1 fx2 e
+  | fx1 == fxAsync                      = e
+  | fx2 == fxAsync                      = eCall (eQVar primASYNC) [eLambda [] e]    -- Async term wrapper for subtyping functions
+  | otherwise                           = e
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 

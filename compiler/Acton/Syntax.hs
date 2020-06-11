@@ -261,6 +261,7 @@ tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
 tRow k          = TRow NoLoc k
+tTFX fx         = TFX NoLoc fx
 
 tCon0 n q       = tCon $ TC n [ tVar tv | Quant tv _ <- q ]
 
@@ -270,10 +271,10 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxAsync         = TFX NoLoc FXAsync
-fxAct t         = TFX NoLoc (FXAct t)
-fxMut t         = TFX NoLoc (FXMut t)
-fxPure          = TFX NoLoc FXPure
+fxAsync         = tTFX FXAsync
+fxAct t         = tTFX (FXAct t)
+fxMut t         = tTFX (FXMut t)
+fxPure          = tTFX FXPure
 fxWild          = tWild
 
 posRow t r      = TRow NoLoc PRow (name "_") t r

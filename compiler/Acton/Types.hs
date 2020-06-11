@@ -297,7 +297,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
         mkBSig n                        = do t <- newTVar
                                              return (n, NSig (monotype t) NoDec)
         dvars ss                        = nub $ concat $ map dvs ss
-          where dvs (Decl _ ds)         = [ n | Def _ n _ _ _ _ _ _ _ <- ds ]
+          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds ]
                 dvs (If _ bs els)       = foldr intersect (dvars els) [ dvars ss | Branch _ ss <- bs ]
                 dvs _                   = []
         pvars ss                        = nub $ concat $ map pvs ss
@@ -340,16 +340,15 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- splitAndSolve env1 (tybound q) cs         --TODO: add eq1...
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 nsigs <- mapM newSig nterms
-                                                 return (cs1, [(n, NClass q as (nsigs++te))], Class l n q us b')
+                                                 return (cs1, [(n, NClass q as (map newSig nterms ++ te))], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = define (nSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
             te'                         = parentTEnv env as
             
-            newSig (n, NDef sc dec)     = do t <- newTVar; return (n, NSig (monotype t) dec)
-            newSig (n, NVar t)          = do t <- newTVar; return (n, NSig (monotype t) Static)
-            newSig (n, i)               = return (n,i)
+            newSig (n, NDef sc dec)     = (n, NSig sc dec)
+            newSig (n, NVar t)          = (n, NSig (monotype t) Static)
+            newSig (n, i)               = (n,i)
 
     infEnv env (Protocol l n q us b)    = case findName n env of
                                              NReserved -> do
@@ -431,19 +430,17 @@ addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
 matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (prowOf p) p0, Cast (krowOf k) k0]
-                                             (css,eqs) <- unzip <$> mapM check1 te      -- ignore eqs here, real lifting is done in the Deactorizer
-                                             return (cs ++ concat css)
+                                             (css,eqs) <- unzip <$> mapM check1 te
+                                             return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, NVar t)              = simplify env te [Cast t t0]
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
         check1 (n, NDef sc _)
-          | scbind sc == q              = do w <- newWitness
-                                             (cs,eq) <- splitAndSolve (defineTVars q env) (tybound q) [Sub w (sctype sc) t0]
-                                             checkNoEscape env (tybound q)
+          | scbind sc == q              = do (cs,eq) <- splitAndSolve (defineTVars q env) (tybound q) [asyncast (sctype sc) t0]
+                                             checkNoEscape env (tybound q)      
                                              return (cs,eq)
           | otherwise                   = internal (loc n) "checkActAssump"
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
-
 
 matchAssumption env cl cs def
   | q0 == q1 || null q1                 = do let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
@@ -452,7 +449,7 @@ matchAssumption env cl cs def
                                              return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do (cs1, tvs) <- instQBinds env q1
                                              let s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
-                                             def <- msubstWith s def{ qbinds = [] }   -- since the variables in (tybound q1) aren't necessarily unique
+                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- splitAndSolve env0 (tybound q0) (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
@@ -501,17 +498,24 @@ instance Check Decl where
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te1 $ define te0 env1) b
-                                             csa <- matchActorAssumption env1 n p' k' te
+                                             (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- splitAndSolve env1 (tybound q) (cswf++csp++csk++csb)
+                                             (cs1,eq1) <- splitAndSolve env1 (tybound q) (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env (tybound q)
                                              tvs <- msubstTV (tyfree env)
                                              when (tvar st `elem` tvs) $ err1 l "Actor state escapes"
-                                             return (cs1, Actor l n q p' k' (bindWits eq1 ++ b'))
+                                             return (cs1, Actor l n q p' k' (bindWits (eq1++eq0) ++ b'))
       where cswf                        = wellformed env q
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ 
                                           setInDecl False env
+                                          -- Don't look up n and include its NAct tenv here. That tenv shows the external
+                                          -- actor view, with async def signatures wherever possible. Instead, let a local
+                                          -- env build up sequentially inside the actor so that methods can refer to each 
+                                          -- other as normal functions (effectuated by "setInDecl False"). Only later, in 
+                                          -- matchActorAssumption, is this local env matched against the external one. But 
+                                          -- the async method defs are still implied here, though. The actual async wrappers 
+                                          -- around methods of the external interface will be applied in the Deactorizer.
 
     checkEnv env cl (Class l n q us b)  = do traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
