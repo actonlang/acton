@@ -39,7 +39,7 @@ data Args       = Args {
                     imports :: Bool,
                     kinds   :: Bool,
                     types   :: Bool,
-                    iface   :: Bool,
+                    sigs    :: Bool,
                     norm    :: Bool,
                     deact   :: Bool,
                     cps     :: Bool,
@@ -61,7 +61,7 @@ getArgs         = Args
                     <*> switch (long "imports" <> help "Show the contents of imported modules")
                     <*> switch (long "kinds"   <> help "Show all the result after kind-checking (Acton files only)")
                     <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
-                    <*> switch (long "iface"   <> help "Show the inferred type interface (Acton files only)")
+                    <*> switch (long "sigs"    <> help "Show the inferred type signatures (Acton files only)")
                     <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
                     <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
@@ -182,13 +182,13 @@ runRestPasses args paths src env original = (do
                           kchecked <- Acton.Kinds.check env' original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
                           
-                          (sigs,tchecked) <- Acton.Types.reconstruct outbase env' kchecked
+                          (iface,tchecked) <- Acton.Types.reconstruct outbase env' kchecked
                           iff (types args) $ dump "types" (Pretty.print tchecked)
-                          iff (iface args) $ dump "iface" (Pretty.vprint sigs)
+                          iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
 
                           if (not (nobuiltin args)) 
                            then do
-                            normalized <- Acton.Normalizer.normalize (sigs,env') tchecked
+                            normalized <- Acton.Normalizer.normalize (iface,env') tchecked
                             iff (norm args) $ dump "norm" (Pretty.print normalized)
 
                             deacted <- Acton.Deactorizer.deactorize env' normalized
@@ -210,7 +210,7 @@ runRestPasses args paths src env original = (do
                             unless (projSrcRoot paths == projSysRoot paths)
                                $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
-                            return (env'{Acton.Env.names = initnms},sigs)
+                            return (env'{Acton.Env.names = initnms},iface)
                            else return (undefined,undefined)
                              )
                                `catch` handle generalError src paths

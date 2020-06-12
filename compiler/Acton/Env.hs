@@ -709,7 +709,7 @@ defer                                   :: Constraints -> TypeM ()
 defer cs                                = state $ \st -> ((), st{ deferred = cs ++ deferred st })
 
 collectDeferred                         :: TypeM Constraints
-collectDeferred                         = state $ \st -> (deferred st, st)
+collectDeferred                         = state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
 substitute tv t                         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
@@ -803,6 +803,7 @@ split_safe vs cs
 
 
 instance Subst TSchema where
+    msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
             vs0                     = tyfree sc
@@ -815,6 +816,7 @@ instance Subst TSchema where
                     q'              = [ Quant (subst renaming v) (subst renaming cs) | Quant v cs <- q ]
                     t'              = subst renaming t
 
+    tyfree (TSchema _ [] t)         = tyfree t
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t)         = tybound q
 
