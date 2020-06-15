@@ -61,10 +61,10 @@ instance Pretty Decl where
     pretty (Extension _ n q a b)    = text "extension" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
 
-prettyDecFX d fx                    = prettyDec d . (prettyFX fx <+>)
+prettyDecFX d fx                    = prettyDec d . (prettyFXnoWild fx <+>)
 
-prettyFX (TWild _)                  = empty
-prettyFX fx                         = pretty fx
+prettyFXnoWild (TWild _)            = empty
+prettyFXnoWild fx                   = pretty fx
 
 prettyBranch kw (Branch e b)        = text kw <+> pretty e <> colon $+$ prettySuite b
 
@@ -131,7 +131,7 @@ instance Pretty Expr where
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i False)       = pretty e <> dot <> pretty i
     pretty (DotI _ e i True)        = pretty e <> dot <> pretty i <> text "*"
-    pretty (Lambda _ ps ks e fx)    = prettyFX fx <+> text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
+    pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
@@ -352,7 +352,7 @@ instance Pretty Type where
     pretty (TVar _ v)               = pretty v
     pretty (TCon  _ c)              = pretty c
     pretty (TExist  _ p)            = pretty p
-    pretty (TFun _ fx p k t)        = prettyTFX fx <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
+    pretty (TFun _ fx p k t)        = prettyFXnoPure fx <+> parens (prettyFunRow p k) <+> text "->" <+> pretty t
       where spaceSep f              = hsep . punctuate space . map f
     pretty (TTuple _ (TRow _ _ _ t (TNil _ _)) (TNil _ _))
                                     = parens (pretty t <> comma)
@@ -368,9 +368,8 @@ instance Pretty Type where
     pretty r@TNil{rkind=KRow}       = parens $ prettyKwdRow r
     pretty (TFX _ fx)               = pretty fx
 
-prettyTFX (TFX _ FXPure)            = empty
-prettyTFX (TFX _ fx)                = pretty fx
-prettyTFX t                         = pretty t
+prettyFXnoPure (TFX _ FXPure)       = empty
+prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
     pretty (FXAsync)                = text "async"
