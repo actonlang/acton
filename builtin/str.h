@@ -17,11 +17,11 @@ struct $str$class {
   $bool (*__bool__)($str);
   $str (*__str__)($str);
   $str (*capitalize)($str s);
-  $str (*center)($str s, int width, $str fill);                 // raises TYPEERROR if fill is not a single char
+  $str (*center)($str s, $int width, $str fill);                 // raises TYPEERROR if fill is not a single char
   $int (*count)($str s, $str sub, $int start, $int end);
-  //void encode($str s, bytes_t *res);                          // only utf-8 encoding and strict error handling
+  $bytearray (*encode)($str s);                                    // only utf-8 encoding and strict error handling
   $bool (*endswith)($str s, $str suffix, $int start, $int end);
-  $str (*expandtabs)($str s, int tabsize);     
+  $str (*expandtabs)($str s, $int tabsize);     
   $int (*find)($str s, $str sub, $int start, $int end);         // returns -1 when not found
   $int (*index)($str s, $str sub, $int start, $int end);        // like find but raises VALUEERROR when not found
   $bool (*isalnum)($str s);                                     // not exactly as in Python; all chars c satisfy isalpha(c) or isdecimal(c)
@@ -37,25 +37,25 @@ struct $str$class {
   $bool (*istitle)($str s);
   $bool (*isupper)($str s);
   $str (*join)($str sep, $Iterable$opaque it);
-  $str (*ljust)($str s, int width, $str fill);                   // raises TYPEERROR if fill is not a single char
+  $str (*ljust)($str s, $int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $str (*lower)($str s);
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
   //maketrans not implemented
-  void (*partition)($str s, $str sep, $str *ls, $str *ssep, $str *rs);
+  $tuple (*partition)($str s, $str sep);
   $str (*replace)($str s, $str old, $str new, $int count);
   $int (*rfind)($str s, $str sub, $int start, $int end);         // returns -1 when not found
   $int (*rindex)($str s, $str sub, $int start, $int end);        // like rfind but raises VALUEERROR when not found
-  $str (*rjust)($str s, int width, $str fill);                   // raises TYPEERROR if fill is not a single char
-  void (*rpartition)($str s, $str sep, $str *ls, $str *ssep, $str *rs); 
-  //$list (*rsplit)($str s, $str sep, int maxsplit);             // not implemented sep may be NULL; then separation is indicated by a whitespace string
+  $str (*rjust)($str s, $int width, $str fill);                   // raises TYPEERROR if fill is not a single char
+  $tuple (*rpartition)($str s, $str sep); 
+  //$list (*rsplit)($str s, $str sep, int maxsplit);             // not implemented. sep may be NULL; then separation is indicated by a whitespace string
   $str (*rstrip)($str s,$str cs);                                //  cs may be NULL, then defaulting to whitespace removal.
   $list (*split)($str s, $str sep, $int maxsplit);               // raises VALUEERROR when separator is empty string
-  $list (*splitlines)($str s);                                   // keepends parameter absent; only \n recognized as line separator
+  $list (*splitlines)($str s, $bool);                                   // keepends parameter absent; only \n recognized as line separator
   $bool (*startswith)($str s, $str prefix, $int start, $int end); 
   $str (*strip)($str s, $str cs);                                // cs may be NULL, then defaulting to whitespace removal.
 // translate not implemented
   $str (*upper)($str s);
-  $str (*zfill)($str s, int width);
+  $str (*zfill)($str s, $int width);
 };
 
 extern struct $str$class $str$methods;
@@ -101,6 +101,77 @@ struct $Iterator$str {
 };
 
 extern struct  $Iterator$str$class  $Iterator$str$methods;
+
+// bytearray /////////////////////////////////////////////////////////////////////////////////////
+
+
+struct $bytearray$class;
+
+struct $bytearray {
+  struct $bytearray$class *$class;
+  int nbytes;        
+  unsigned char *str;
+};
+
+struct $bytearray$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($bytearray, $Sequence$opaque);
+  void (*__serialize__)($bytearray,$Serial$state);
+  $bytearray (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($bytearray);
+  $str (*__str__)($bytearray);
+  $bytearray (*capitalize)($bytearray s);
+  $bytearray (*center)($bytearray s, $int width, $bytearray fill);                 
+  $int (*count)($bytearray s, $bytearray sub, $int start, $int end);
+  $str (*decode)($bytearray);
+  $bool (*endswith)($bytearray s, $bytearray suffix, $int start, $int end);
+  $bytearray (*expandtabs)($bytearray s, $int tabsize);     
+  $int (*find)($bytearray s, $bytearray sub, $int start, $int end);         
+  $int (*index)($bytearray s, $bytearray sub, $int start, $int end);        
+  $bool (*isalnum)($bytearray s);                                     
+  $bool (*isalpha)($bytearray s);
+  $bool (*isascii)($bytearray s);
+  $bool (*isdigit)($bytearray s);
+  $bool (*islower)($bytearray s);
+  //  $bool (*isprintable)($bytearray s);
+  $bool (*isspace)($bytearray s);
+  $bool (*istitle)($bytearray s);
+  $bool (*isupper)($bytearray s);
+  $bytearray (*join)($bytearray sep, $Iterable$opaque it);
+  $bytearray (*ljust)($bytearray s, $int width, $bytearray fill);                  
+  $bytearray (*lower)($bytearray s);
+  $bytearray (*lstrip)($bytearray s,$bytearray cs);                               
+  $tuple (*partition)($bytearray s, $bytearray sep);
+  $bytearray (*replace)($bytearray s, $bytearray old, $bytearray new, $int count);
+  $int (*rfind)($bytearray s, $bytearray sub, $int start, $int end);
+  $int (*rindex)($bytearray s, $bytearray sub, $int start, $int end);       
+  $bytearray (*rjust)($bytearray s, $int width, $bytearray fill);                  
+  $tuple (*rpartition)($bytearray s, $bytearray sep); 
+  //$list (*rsplit)($bytearray s, $bytearray sep, int maxsplit);             
+  $bytearray (*rstrip)($bytearray s,$bytearray cs);                                
+  $list (*split)($bytearray s, $bytearray sep, $int maxsplit);               
+  $list (*splitlines)($bytearray s, $bool keepends);                                   
+  $bool (*startswith)($bytearray s, $bytearray prefix, $int start, $int end);
+  $bytearray (*strip)($bytearray s, $bytearray cs);                                
+  $bytearray (*upper)($bytearray s);
+  $bytearray (*zfill)($bytearray s, $int width);
+};
+
+extern struct $bytearray$class $bytearray$methods;
+
+extern struct $Ord$bytearray$class $Ord$bytearray$methods;
+extern struct $Hashable$bytearray$class $Hashable$bytearray$methods;
+extern struct $Plus$bytearray$class $Plus$bytearraymethods;
+extern struct $Sliceable$bytearray$class $Sliceable$bytearray$methods;
+extern struct $Container$bytearray$class $Container$bytearray$methods;
+
+extern struct $Ord$bytearray *$Ord$bytearray$witness;
+extern struct $Hashable$bytearray *$Hashable$bytearray$witness;
+extern struct $Plus$bytearray *$Plus$bytearray$witness;
+extern struct $Sliceable$bytearray *$Sliceable$bytearray$witness;
+extern struct $Container$bytearray *$Container$bytearray$witness;
 
 //builtin functions //////////////////////////////////////////////////////////////////////////////////
 
