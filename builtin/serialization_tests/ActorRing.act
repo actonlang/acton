@@ -65,7 +65,7 @@ actor Act(i : int):
     var rcv_dict : dict[int,int] = dict(None)
     var snd_dict : dict[int,int] = dict(None)
 
-    def act$local(from : int, table : list[Act]) -> None:
+    def act(from : int, table : list[Act]) -> None:
         if Ord$int$witness.__lt__(count, total_msgs):
             count = Plus$int$witness.__add__(count, to$int(1))
             to : int = Integral$int$witness.__mod__(Plus$int$witness.__add__(i, to$int(1)), no_actors)
@@ -74,9 +74,6 @@ actor Act(i : int):
             print("Actor {i}: count={count}, from={from}, to={to}\n")
             Sequence$list$witness.__getitem__(table,to).act(i, table)
     
-    def act(from : int, table : list[Act]) -> Msg[None]:
-        return $ASYNC(self, lambda: act$local(from, table))
-            
 actor Root(_ignore : int):
     table : list[Act] = list(None)
 

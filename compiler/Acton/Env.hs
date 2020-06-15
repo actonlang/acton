@@ -436,6 +436,13 @@ findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
 
+isAncestor                  :: Env -> TCon -> QName -> Bool
+isAncestor env c qn         = maybe False (const True) $ findAncestor env c qn
+
+commonAncestors             :: Env -> TCon -> TCon -> [TCon]
+commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
+  where ns                  = map (tcname . snd) (findAncestry env c2)
+
 findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
@@ -702,7 +709,7 @@ defer                                   :: Constraints -> TypeM ()
 defer cs                                = state $ \st -> ((), st{ deferred = cs ++ deferred st })
 
 collectDeferred                         :: TypeM Constraints
-collectDeferred                         = state $ \st -> (deferred st, st)
+collectDeferred                         = state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
 substitute tv t                         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
@@ -796,6 +803,7 @@ split_safe vs cs
 
 
 instance Subst TSchema where
+    msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
             vs0                     = tyfree sc
@@ -808,6 +816,7 @@ instance Subst TSchema where
                     q'              = [ Quant (subst renaming v) (subst renaming cs) | Quant v cs <- q ]
                     t'              = subst renaming t
 
+    tyfree (TSchema _ [] t)         = tyfree t
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t)         = tybound q
 

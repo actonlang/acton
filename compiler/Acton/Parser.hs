@@ -607,7 +607,7 @@ funcdef =  addLoc $ do
               n <- name
               q <- optbinds
               (ppar,kpar) <- parens (funpars True)
-              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> pure deco <*> pure (maybe S.tWild id fx)
+              S.Def NoLoc n q ppar kpar <$> optional (arrow *> ttype) <*> suite DEF p <*> return deco <*> return (maybe S.tWild id fx)
 
 
 optbinds :: Parser S.QBinds
@@ -1025,7 +1025,6 @@ effect  = addLoc $
         <|> rword "act" *> optvar S.fxAct
         <|> rword "mut" *> optvar S.fxMut
         <|> rword "pure" *> return S.fxPure
-        <|> return S.fxPure
   where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
 
 posrow :: Parser S.PosRow 
@@ -1089,8 +1088,10 @@ ttype    =  addLoc (
                     arrow
                     t <- ttype
                     return (S.TFun NoLoc (maybe S.fxPure id mbfx) p k t))
-        <|> try (do (p,k) <- parens funrows
-                    return (S.TTuple NoLoc p k))
+        <|> try (do r <- parens (funItems S.posRow S.posVar S.posNil ttype (optional tvar) kwdrow S.kwdNil)
+                    case r of
+                      Left (p,k) -> return (S.TTuple NoLoc p k)
+                      Right t -> return t)
         <|> parens (return (S.TTuple NoLoc S.posNil S.kwdNil))
         <|> try (brackets (Builtin.tSequence <$> ttype))
         <|> try (S.TVar NoLoc <$> tvar)
