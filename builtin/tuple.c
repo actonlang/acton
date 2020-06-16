@@ -204,6 +204,6 @@ $int $Hashable$tuple$__hash__ ($Hashable$tuple wit, $tuple tup) {
   return to$int($tuple_hash(wit,tup));
 }
 
-struct $Hashable$tuple$class $Hashable$tuple$methods = {"",UNASSIGNED, NULL,$Hashable$tuple$__init__,
+struct $Hashable$tuple$class $Hashable$tuple$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$Hashable$tuple$__init__,
                                                           $Hashable$tuple$__eq__,$Hashable$tuple$__ne__,$Hashable$tuple$__hash__};
 

@@ -128,7 +128,7 @@ $dict $dict_deserialize($Serial$state state) {
   }
 }
 
-struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$struct$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
+struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
@@ -457,8 +457,6 @@ $Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
    return res;
 }
 
-
-
 struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
                                                                     $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,
                                                                     $Iterator$dict$values_next};
@@ -473,10 +471,7 @@ static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
     $entry_t entry =  &TB_ENTRIES(table)[i];
     if (entry->value != NULL) {
       self->nxt = i+1;
-      $WORD *comps = malloc(2*sizeof($WORD));
-      comps[0] = entry->key;
-      comps[1] = entry->value;
-      return $NEW($tuple,2,comps);
+      return $NEW($tuple,2,entry->key,entry->value);
     }
     i++;
   }
@@ -545,15 +540,12 @@ $tuple $dict_popitem($dict dict, $Hashable hashwit) {
   while (ix >= 0) {
     $entry_t entry =  &TB_ENTRIES(table)[ix];
     if (entry->value != NULL) {
-      $WORD *comps = malloc(2*sizeof($WORD));
-      comps[0] = entry->key;
-      comps[1] = entry->value;
       long hash = from$int(hashwit->$class->__hash__(hashwit,entry->key));
       int i = lookdict_index(table,hash,ix);
       table->tb_indices[i] = DKIX_DUMMY;
       dict->numelements--;
       table->tb_nentries = ix;
-      return $NEW($tuple,2,comps);
+      return $NEW($tuple,2,entry->key,entry->value);
     }
     ix--;
   }

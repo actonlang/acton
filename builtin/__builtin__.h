@@ -14,6 +14,9 @@ typedef struct $set *$set;
 struct $str;
 typedef struct $str *$str;
 
+struct $bytearray;
+typedef struct $bytearray *$bytearray;
+
 struct $NoneType;
 typedef struct $NoneType *$NoneType;
 

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <limits.h>
-#include "builtin.h"
+#include <ctype.h>
 #include "utf8proc.h"
 
 
@@ -18,10 +18,11 @@ $str $str_deserialize($Serial$state);
 
 // String-specific methods
 $str $str_capitalize($str s);
-$str $str_center($str s, int width, $str fill);
+$str $str_center($str s, $int width, $str fill);
 $int $str_count($str s, $str sub, $int start, $int end);
+$bytearray $str_encode($str s);
 $bool $str_endswith($str s, $str suffix, $int start, $int end);
-$str $str_expandtabs($str s, int tabsize);      
+$str $str_expandtabs($str s, $int tabsize);      
 $int $str_find($str s, $str sub, $int start, $int end);
 $int $str_index($str s, $str sub, $int start, $int end);
 $bool $str_isalnum($str s);
@@ -37,25 +38,25 @@ $bool $str_isspace($str s);
 $bool $str_istitle($str s);
 $bool $str_isupper($str s);
 $str $str_join($str sep, $Iterable$opaque it);
-$str $str_ljust($str s, int width, $str fill); 
+$str $str_ljust($str s, $int width, $str fill); 
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
-void $str_partition($str s, $str sep, $str *ls, $str *ssep, $str *rs);
+$tuple $str_partition($str s, $str sep);
 $str $str_replace($str s, $str old, $str new, $int count);
 $int $str_rfind($str s, $str sub, $int start, $int end);
 $int $str_rindex($str s, $str sub, $int start, $int end);
-$str $str_rjust($str s, int width, $str fill);  
-void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs); 
+$str $str_rjust($str s, $int width, $str fill);  
+$tuple $str_rpartition($str s, $str sep); 
 $str $str_rstrip($str s,$str cs);
 $list $str_split($str s, $str sep, $int maxsplit);  
-$list $str_splitlines($str s); 
+$list $str_splitlines($str s, $bool keepends); 
 $bool $str_startswith($str s, $str prefix, $int start, $int end); 
 $str $str_strip($str s,$str cs);
 $str $str_upper($str s);
-$str $str_zfill($str s, int width);
+$str $str_zfill($str s, $int width);
 
 struct $str$class $str$methods =
-  {"",UNASSIGNED,($Super$class)&$struct$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_endswith,
+  {"",UNASSIGNED,($Super$class)&$struct$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
@@ -201,39 +202,32 @@ $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A) {
   wit->w$Eq$A = w$Eq$A;
 }
-
-/*
-$Ord$str $Ord$str_new() {
-  return $Ord$str$witness;
-}
-
-$Hashable$str $Hashable$str_new() {
-  return $Hashable$str$witness;
-}
-
-$Plus$str $Plus$str_new() {
-  return $Plus$str$witness;
-}
-
-$Sliceable$str $Sliceable$str_new() {
-  return $Sliceable$str$witness;
-}
-
-$Container$str $Container$str_new() {
-  return $Container$str$witness;
-}
-*/
+ 
 static unsigned char nul = 0;
 
 static struct $str null_struct = {&$str$methods,0,0,&nul};
 
 static $str null_str = &null_struct;
 
+static struct $str space_struct = {&$str$methods,1,1,(unsigned char *)" "};
 
-#define NEW_UNFILLED(nm,nchrs,nbtes)         \
+static $str space_str = &space_struct;
+
+static struct $str whitespace_struct = {&$str$methods,6,6,(unsigned char *)" \t\n\r\x0b\x0c"};
+
+static $str whitespace_str = &whitespace_struct;
+
+#define NEW_UNFILLED_STR(nm,nchrs,nbtes)         \
 nm = malloc(sizeof(struct $str)); \
 (nm)->$class = &$str$methods; \
 (nm)->nchars = nchrs;            \
+(nm)->nbytes = nbtes;            \
+(nm)->str = malloc((nm)->nbytes + 1);    \
+(nm)->str[(nm)->nbytes] = 0
+
+#define NEW_UNFILLED_BYTEARRAY(nm,nbtes)         \
+nm = malloc(sizeof(struct $bytearray)); \
+(nm)->$class = &$bytearray$methods; \
 (nm)->nbytes = nbtes;            \
 (nm)->str = malloc((nm)->nbytes + 1);    \
 (nm)->str[(nm)->nbytes] = 0
@@ -261,7 +255,6 @@ $str to$str(char *str) {
     nbytes += cpnbytes;
     nchars++;
     p += cpnbytes;
-
   }
 }
 
@@ -300,7 +293,6 @@ typedef int (*transform)(int codepoint);
 // maybe not worthwhile to keep.
 static $str str_transform($str s, transform f) {
   int cp, cpu, cplen, cpulen;
-  int ulen = 1;
   unsigned char *p = s->str;
   unsigned char buffer[4*s->nchars];
   unsigned char *up = buffer;
@@ -313,7 +305,7 @@ static $str str_transform($str s, transform f) {
   }
   int nbytes = (int)(up-buffer);
   $str res;
-  NEW_UNFILLED(res,s->nchars,nbytes);
+  NEW_UNFILLED_STR(res,s->nchars,nbytes);
   memcpy(res->str,buffer,nbytes);
   return res;
 }
@@ -408,7 +400,7 @@ static int fix_start_end(int nchars, $int *start, $int *end) {
 // Builds a new one-char string starting at p.
 static $str mk_char(unsigned char *p) {
   $str res;
-  NEW_UNFILLED(res,1,byte_length2(*p));
+  NEW_UNFILLED_STR(res,1,byte_length2(*p));
   for (int i=0; i<res->nbytes; i++)
     res->str[i] = p[i];
   return res;
@@ -421,7 +413,13 @@ static int isspace_codepoint(int codepoint) {
 }
 
 static int islinebreak_codepoint(int codepoint) {
-  return codepoint == 0x0a;
+  // category not useful; all the seven codepoints we handle are in category Other, control.
+  return (codepoint <= 0x0a && codepoint <= 0x0d) ||
+    (codepoint >= 0x1c && codepoint <= 0x1e);
+    // For now we ignore the three codepoints below which are counted as linebreaks by
+    // Python's splitlines for strings.
+    //  || codepoint == 0x85 || codepoint == 0x2028 ||codepoint == 0x2029;
+    
 }
 
 // The Boyer-Moore-Horspool algorithm for searching for pattern in text.
@@ -471,7 +469,7 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
 // Protocol instances /////////////////////////////////////////////////////////////////////////////
 /* 
 Note: We make str instances for Indexed and Sliceable even though these protocols 
-include mutating methods. These methods raise NOTIMPLEMENTED.
+include mutating methods. 
 */
 
 // $Ord ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -485,7 +483,8 @@ int $str_neq($str a, $str b) {
   return !$str_eq(a,b);
 }
 
-// the comparisons below are OK only for ASCII! Not clear how to do this for UTF-8.
+// The comparisons below do lexicographic byte-wise comparisons.
+// Thus they do not in general reflect locale-dependent order conventions.
  
 int $str_lt($str a, $str b) {
   return (strcmp((char *)a->str,(char *)b->str) < 0);
@@ -513,7 +512,7 @@ int $str_ge($str a, $str b) {
 
 $str $str_add($str s, $str t) {
   $str res;
-  NEW_UNFILLED(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
+  NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
   memcpy(res->str,s->str,s->nbytes);
   memcpy(res->str+s->nbytes,t->str,t->nbytes);
   return res;
@@ -614,7 +613,7 @@ $str $str_getslice($str s, $Slice slc) {
     t = skip_chars(t,step-1,isascii);
   }
   $str res;
-  NEW_UNFILLED(res,slen,nbytes);
+  NEW_UNFILLED_STR(res,slen,nbytes);
   if (nbytes > 0)
     memcpy(res->str,buffer,nbytes);
  return res;
@@ -636,7 +635,7 @@ $bool $str_bool($str s) {
 };
 
 $str $str_str($str s) {
-  return s;                 // TODO: check if str contains '
+  return s;
 }
 
 
@@ -674,32 +673,40 @@ $str $str_capitalize($str s) {
   if (s->nchars==0) {
     return null_str;
   }
+  int cp, cpu, cplen, cpulen;
   unsigned char *p = s->str;
-  int cp;
-  int cplen = utf8proc_iterate(p,-1,&cp);
-  int cpt = utf8proc_totitle(cp);
-  int nbytes = s->nbytes - cplen + byte_length(cpt);
+  unsigned char buffer[4*s->nchars];
+  unsigned char *up = buffer;
+  for (int i=0; i < s->nchars; i++) {
+    cplen = utf8proc_iterate(p,-1,&cp);
+    cpu = i==0? utf8proc_totitle(cp) : utf8proc_tolower(cp);
+    cpulen = utf8proc_encode_char(cpu,up);
+    p+=cplen;
+    up += cpulen;
+  }
+  int nbytes = (int)(up-buffer);
   $str res;
-  NEW_UNFILLED(res,s->nchars,nbytes);
-  int cpulen = utf8proc_encode_char(cpt,res->str);
-  memcpy(res->str+cpulen,s->str+cplen,s->nbytes-cplen);
+  NEW_UNFILLED_STR(res,s->nchars,nbytes);
+  memcpy(res->str,buffer,nbytes);
   return res;
 }
 
-$str $str_center($str s, int width, $str fill) {
+$str $str_center($str s, $int width, $str fill) {
+  if (!fill)
+    fill = space_str;
   if (fill->nchars != 1) {
     RAISE(($BaseException)$NEW($ValueError,to$str("center: fill string not single char")));
   }
-  if (width <= s->nchars) {
+  if (width->val <= s->nchars) {
     return s;
   }
-  int pad = (width-s->nchars);
+  int pad = (width->val-s->nchars);
   int padleft = pad/2; // Below we make use of the fact padright >= padleft.
   int padright = pad-padleft;
   int fillbytes = fill->nbytes;
   int sbytes = s->nbytes;
   $str res;
-  NEW_UNFILLED(res, width,sbytes+pad*fillbytes);
+  NEW_UNFILLED_STR(res, width->val,sbytes+pad*fillbytes);
   unsigned char *c = fill->str;
   unsigned char *p = res->str;
   p += padleft*fillbytes+sbytes;
@@ -733,6 +740,13 @@ $int $str_count($str s, $str sub, $int start, $int end) {
   return to$int(res);
 }
 
+$bytearray $str_encode($str s) {
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+  memcpy(res->str,s->str,s->nbytes);
+  return res;
+}
+
 $bool $str_endswith($str s, $str sub, $int start, $int end) {
   $int st = start;
   $int en = end;
@@ -748,16 +762,17 @@ $bool $str_endswith($str s, $str sub, $int start, $int end) {
   return $True;
 }
 
-$str $str_expandtabs($str s, int tabsize){
+$str $str_expandtabs($str s, $int tabsize){
+  int tabsz = (int)tabsize?tabsize->val:8;
   int pos = 0;
   int expanded = 0;
-  tabsize = tabsize <= 0 ? 1 : tabsize;
-  unsigned char buffer[tabsize * s->nchars];
+  tabsz = tabsz <= 0 ? 1 : tabsz;
+  unsigned char buffer[tabsz * s->nchars];
   unsigned char *p = s->str;
   unsigned char *q = buffer;
   for (int i=0; i<s->nchars; i++) {
     if (*p == '\t') {
-      int n = tabsize - pos % tabsize;
+      int n = tabsz - pos % tabsz;
       for (int j=0; j < n; j++) {
         *q++ = ' ';
       }
@@ -775,7 +790,7 @@ $str $str_expandtabs($str s, int tabsize){
     }
   }
   $str res;
-  NEW_UNFILLED(res,s->nchars+expanded,s->nbytes+expanded);
+  NEW_UNFILLED_STR(res,s->nchars+expanded,s->nbytes+expanded);
   memcpy(res->str,buffer,s->nbytes+expanded);
   return res;
 }
@@ -970,7 +985,7 @@ $str $str_join($str s, $Iterable$opaque it) {
     totbytes += (len-1) * s->nbytes;
   }
   $str res;
-  NEW_UNFILLED(res,totchars,totbytes);
+  NEW_UNFILLED_STR(res,totchars,totbytes);
   if (len > 0) {
     nxt = ($str)lst->data[0];
     unsigned char *p = res->str;
@@ -987,16 +1002,17 @@ $str $str_join($str s, $Iterable$opaque it) {
   return res;
 }
 
-$str $str_ljust($str s, int width, $str fill) {
+$str $str_ljust($str s, $int width, $str fill) {
+  if (!fill) fill = space_str;
   if (fill->nchars != 1) {
     RAISE(($BaseException)$NEW($ValueError,to$str("ljust: fill str not single char")));
   }
-  if (width <= s->nchars) {
+  if (width->val <= s->nchars) {
     return s;
   }
-  int pad = (width-s->nchars);
+  int pad = (width->val-s->nchars);
   $str res;
-  NEW_UNFILLED(res,width, s->nbytes+pad*fill->nbytes);
+  NEW_UNFILLED_STR(res,width->val, s->nbytes+pad*fill->nbytes);
   unsigned char *c = fill->str;
   unsigned char *p = res->str + s->nbytes;
   for (int i = 0; i<pad; i++) {
@@ -1023,27 +1039,25 @@ $str $str_lstrip($str s, $str cs) {
   }
   nbytes = s->nbytes + s->str - p;
   $str res;
-  NEW_UNFILLED(res,s->nchars-i,nbytes);
+  NEW_UNFILLED_STR(res,s->nchars-i,nbytes);
   memcpy(res->str,p,nbytes);
   return res;
 }
 
-void $str_partition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
+$tuple $str_partition($str s, $str sep) {
   int n = from$int($str_find(s,sep,NULL,NULL));
   if (n<0) {
-    *ls = s; *ssep = null_str; *rs = null_str;
+    return $NEW($tuple,3,s,null_str,null_str);
   } else {
     int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
-    $str res1;
-    NEW_UNFILLED(res1,n,nb);
-    memcpy(res1->str,s->str,nb);
-    *ls = res1;
-    $str res2;
+    $str ls;
+    NEW_UNFILLED_STR(ls,n,nb);
+    memcpy(ls->str,s->str,nb);
+    $str rs;
     int nbr = s->nbytes - sep->nbytes - nb;
-    NEW_UNFILLED(res2,s->nchars-n-sep->nchars,nbr);
-    memcpy(res2->str,s->str+nb+sep->nbytes,nbr);
-    *rs = res2;
-    *ssep = sep;
+    NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return $NEW($tuple,3,ls,sep,rs);
   }
 }
 
@@ -1058,7 +1072,7 @@ $str $str_replace($str s, $str old, $str new, $int count) {
   int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
   int nchars = s->nchars+c0*(new->nchars-old->nchars);
   $str res;
-  NEW_UNFILLED(res,nchars,nbytes);
+  NEW_UNFILLED_STR(res,nchars,nbytes);
   unsigned char *p = s->str;
   unsigned char *q = res->str;
   unsigned char *pold = old->str;
@@ -1103,16 +1117,17 @@ $int $str_rindex($str s, $str sub, $int start, $int end) {
   return n;
 }
 
-$str $str_rjust($str s, int width, $str fill) {
+$str $str_rjust($str s, $int width, $str fill) {
+  if (!fill) fill = space_str;
   if (fill->nchars != 1) {
     RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
   }
-  if (width <= s->nchars) {
+  if (width->val <= s->nchars) {
     return s;
   }
-  int pad = (width-s->nchars);
+  int pad = (width->val-s->nchars);
   $str res;
-  NEW_UNFILLED(res,width,s->nbytes+pad*fill->nbytes);
+  NEW_UNFILLED_STR(res,width->val,s->nbytes+pad*fill->nbytes);
   unsigned char *c = fill->str;
   unsigned char *p = res->str;
   for (int i = 0; i<pad; i++) {
@@ -1123,22 +1138,20 @@ $str $str_rjust($str s, int width, $str fill) {
   return res;
 }
                                 
-void $str_rpartition($str s, $str sep, $str *ls, $str *ssep, $str *rs) {
+$tuple $str_rpartition($str s, $str sep) {
   int n = from$int($str_rfind(s,sep,NULL,NULL));
   if (n<0) {
-    *ls = null_str; *ssep = null_str; *rs = s;
+    return $NEW($tuple,3,null_str,null_str,s);
   } else {
     int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
-    $str res1;
-    NEW_UNFILLED(res1,n,nb);
-    memcpy(res1->str,s->str,nb);
-    *ls = res1;
+    $str ls;
+    NEW_UNFILLED_STR(ls,n,nb);
+    memcpy(ls->str,s->str,nb);
     int nbr = s->nbytes - sep->nbytes - nb;
-    $str res2;    
-    NEW_UNFILLED(res2,s->nchars-n-sep->nchars,nbr);
-    memcpy(res2->str,s->str+nb+sep->nbytes,nbr);
-    *rs = res2;
-    *ssep = sep;
+    $str rs;    
+    NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return  $NEW($tuple,3,ls,sep,rs);
   }
 }
 
@@ -1170,7 +1183,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
           if (inword) {
             inword = 0;
             $str word;
-            NEW_UNFILLED(word,wordlength,p-q);
+            NEW_UNFILLED_STR(word,wordlength,p-q);
             memcpy(word->str,q,p-q);
             $list_append(res,word);
           }
@@ -1182,14 +1195,14 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     if (remaining == 0) {
       if (inword) {
         $str word;
-        NEW_UNFILLED(word,wordlength,p-q);
+        NEW_UNFILLED_STR(word,wordlength,p-q);
         memcpy(word->str,q,p-q);
         $list_append(res,word);
       }
     } else {
       $str word;
       p = s->str+s->nbytes;
-      NEW_UNFILLED(word,remaining,p-q);
+      NEW_UNFILLED_STR(word,remaining,p-q);
       memcpy(word->str,q,p-q);
       $list_append(res,word);
     }
@@ -1207,56 +1220,53 @@ $list $str_split($str s, $str sep, $int maxsplit) {
     rs = s;
     // Note: This builds many intermediate rs strings...
     while (rs->nchars>0 && $list_len(res) < from$int(maxsplit)) {
-     $str_partition(rs,sep,&ls,&ssep,&rs);
-     $list_append(res,ls);
+     $tuple t = $str_partition(rs,sep);
+     ssep = ($str)t->components[1];
+     rs =  ($str)t->components[2];
+     $list_append(res,($str)t->components[0]);
     }
     if (ssep->nchars>0)
       $list_append(res,rs);
     return res;
   }
 }
-
-$list $str_splitlines($str s) {
+ 
+$list $str_splitlines($str s, $bool keepends) {
+  if (!keepends)
+    keepends = $False;
   $list res = $NEW($list,NULL);
-  int remaining = s->nchars;
   unsigned char *p = s->str;
-  int nbytes, codepoint, wordlength;
-  if (remaining==0) {
+  unsigned char *q = p;
+  int nbytes, codepoint, linelength;
+  if (s->nbytes==0) {
     return res;
   }
-  int inword = 0;
-  unsigned char *q;
-  while (remaining > 0) {
+  while (p < s->str + s->nbytes) {
     nbytes = utf8proc_iterate(p,-1,&codepoint);
     utf8proc_category_t cat = utf8proc_category(codepoint);
     if (!islinebreak_codepoint(codepoint)) {
-      if (!inword) {
-        inword = 1;
-        q = p;
-        wordlength = 1;
-      } else
-        wordlength++;
+        linelength++;
+        p += nbytes;
     } else {
-      if (inword) {
-        inword = 0;
-        $str word;
-        NEW_UNFILLED(word,wordlength,p-q);
-        memcpy(word->str,q,p-q);
-        $list_append(res,word);
-      }
+      // all the codepoints we count as linebreaks are ascii bytes, i.e. nbytes = 1.
+      $str line;
+      int winend = *p=='\r' && *(p+1)=='\n';
+      int size = p-q + (keepends->val ? 1 + winend : 0);
+      NEW_UNFILLED_STR(line,linelength + (keepends->val ? 1 + winend : 0),size);
+      memcpy(line->str,q,size);
+      p += 1 + winend;
+      q = p;
+      $list_append(res,line);
     }
-    remaining--;
-    p += nbytes;
   }
-  if (inword) {
-    $str word;
-    NEW_UNFILLED(word,wordlength,p-q);
-    memcpy(word->str,q,p-q);
-    $list_append(res,word);
+  if (q < p) {
+    $str line;
+    NEW_UNFILLED_STR(line,linelength,p-q);
+    memcpy(line->str,q,p-q);
+    $list_append(res,line);
   }
   return res;
 } 
-
 
 $str $str_rstrip($str s, $str cs) {
   unsigned char *p = s->str + s->nbytes;
@@ -1270,7 +1280,7 @@ $str $str_rstrip($str s, $str cs) {
   }
   nbytes = p + byte_length2(*p) - s->str;
   $str res;
-  NEW_UNFILLED(res,s->nchars-i,nbytes);
+  NEW_UNFILLED_STR(res,s->nchars-i,nbytes);
   memcpy(res->str,s->str,nbytes);
   return res;
 }
@@ -1278,7 +1288,7 @@ $str $str_rstrip($str s, $str cs) {
 $bool $str_startswith($str s, $str sub, $int start, $int end) {
   $int st = start;
   $int en = end;
-  if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
+  if (fix_start_end(s->nchars,&st,&en) < 0) return $False;
   int isascii = s->nchars==s->nbytes;
   unsigned char *p = skip_chars(s->str,from$int(st),isascii);
   unsigned char *q = sub->str;
@@ -1299,12 +1309,12 @@ $str $str_upper($str s) {
   return str_transform(s,utf8proc_toupper);
 }
 
-$str $str_zfill($str s, int width) {
-  int fill = width - s->nchars;
+$str $str_zfill($str s, $int width) {
+  int fill = width->val - s->nchars;
   if (fill < 0)
     return s;
   $str res;
-  NEW_UNFILLED(res,width,s->nbytes+fill);
+  NEW_UNFILLED_STR(res,width->val,s->nbytes+fill);
   unsigned char *p = s->str;
   unsigned char *q = res->str;
   int hassign = (*p=='+' | *p=='-');
@@ -1334,7 +1344,7 @@ $str $str_join_par(char lpar, $list elems, char rpar) {
     totbytes += (len-1) * 2; 
   }
   $str res;
-  NEW_UNFILLED(res,totchars,totbytes);
+  NEW_UNFILLED_STR(res,totchars,totbytes);
   res->str[0] = lpar;
   res->str[totbytes-1] = rpar;
   if (len > 0) {
@@ -1361,34 +1371,50 @@ $str $ascii($str s) {
   unsigned char c;
   for (int i=0; i<s->nbytes; i++) {
     c = s->str[i];
-    if (c < 32 || c > 126)
+    if ((c < 32 || c > 126)&& c != '\t' && c != '\r' && c != '\n')
       non_printable++;
-    else if (c=='\\' || c=='\'' || c=='"')
+    else if (c=='\\' || c=='\'' || c=='"' || c=='\n' || c=='\t' || c=='\r')
       escaped++;
     else 
       printable++;
   }
   int nbytes = printable+2*escaped+4*non_printable;
   $str res;
-  NEW_UNFILLED(res,nbytes,nbytes);
+  NEW_UNFILLED_STR(res,nbytes,nbytes);
   unsigned char *p =res->str;
   for (int i=0; i<s->nbytes; i++) {
     c = s->str[i];
-    if (c < 32 || c > 126) {
+    if ((c < 32 || c > 126) && c != '\t' && c != '\r' && c != '\n') {
       *p = '\\'; p++;
       *p = 'x'; p++;
       *p = hexdigits[c >> 4]; p++;
       *p = hexdigits[c & 0xf]; p++;
-    } else if (c=='\\' || c=='\'' || c=='"') {
-      *p = '\\'; p++;
-      *p = c; p++;
-    } else {
-      *p = c; p++;
-    }
+    } else switch (c) {
+      case '\\':
+      case '\'':
+      case '\"':
+        *p = '\\'; p++;
+        *p = c; p++;
+        break;
+      case '\t':
+        *p = '\\'; p++;
+        *p = 't'; p++;
+        break;
+      case '\n':
+        *p = '\\'; p++;
+        *p = 'n'; p++;
+        break;
+      case '\r':
+        *p = '\\'; p++;
+        *p = 'r'; p++;
+        break;
+      default:        
+        *p = c; p++;
+      }
   }
   return res;
 }
-  
+   
 $str $bin($Integral$opaque n) {
   long v = n->proto->$class->__int__(n->proto,n->impl)->val;
   int sign = v<0;
@@ -1414,7 +1440,7 @@ $str $bin($Integral$opaque n) {
   }
   $str res;
   int nbytes = sign+2+nbits;
-  NEW_UNFILLED(res,nbytes,nbytes);
+  NEW_UNFILLED_STR(res,nbytes,nbytes);
   unsigned char *p = res->str;
   if (sign) {
     *p = '-'; p++;
@@ -1437,7 +1463,7 @@ $str $chr($Integral$opaque n) {
   if (nbytes==0)
      RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   $str res;
-  NEW_UNFILLED(res,1,nbytes);
+  NEW_UNFILLED_STR(res,1,nbytes);
   for (int i=0; i<nbytes; i++)
     res->str[i] = code[i];
   return res;
@@ -1463,7 +1489,7 @@ $str $hex($Integral$opaque n) {
   }
   $str res;
   int nbytes = sign+2+nhexs;
-  NEW_UNFILLED(res,nbytes,nbytes);
+  NEW_UNFILLED_STR(res,nbytes,nbytes);
   unsigned char *p = res->str;
   if (sign) {
     *p = '-'; p++;
@@ -1485,5 +1511,744 @@ $int $ord($str c) {
   if (cpnbytes < 0)
     RAISE(($BaseException)$NEW($ValueError,to$str("ord: argument is not a single Unicode char")));
   return to$int(cp);
+}
+
+// bytearray //////////////////////////////////////////////////////////////////////////////
+
+
+static struct $bytearray null_bytearraystruct = {&$bytearray$methods,0,&nul};
+
+static $bytearray null_bytearray = &null_bytearraystruct;
+
+static struct $bytearray space_bytearraystruct = {&$bytearray$methods,1,(unsigned char*)" "};
+
+static $bytearray space_bytearray = &space_bytearraystruct;
+
+static struct $bytearray whitespace_bytearraystruct = {&$bytearray$methods,6,(unsigned char*)" \t\n\r\x0b\x0c"};
+
+static $bytearray whitespace_bytearray = &whitespace_bytearraystruct;
+
+
+$NoneType $bytearray_setitem($bytearray b, $int n, $int v) {
+  b->str[n->val] = (unsigned char)(v->val & 0xff);
+  return $None;
+}
+
+// General methods
+
+void $bytearray_init($bytearray, $Sequence$opaque);
+void $bytearray_serialize($bytearray,$Serial$state);
+$bytearray $bytearray_deserialize($Serial$state);
+$bool $bytearray_bool($bytearray);
+$str $bytearray_str($bytearray);
+
+void $bytearray_init($bytearray self, $Sequence$opaque s) {
+  if (!s) {
+    self->nbytes = 0;
+    self->str = NULL;
+    return;
+  }
+  $Collection wit = s->proto->w$Collection$Sequence;
+  self->nbytes = wit->$class->__len__(wit,s->impl)->val;
+  self->str = malloc(self->nbytes+1);
+  
+  $Iterator iter = wit->$class->__iter__(wit,s->impl);
+  for (int i=0; i<self->nbytes; i++)
+    $bytearray_setitem(self,to$int(i),iter->$class->__next__(iter));
+  self->str[self->nbytes] = 0;
+}
+
+
+$bool $bytearray_bool($bytearray s) {
+  return to$bool(s->nbytes > 0);
+};
+
+$str $bytearray_str($bytearray s) {
+  $str bs;
+  NEW_UNFILLED_STR(bs,s->nbytes,s->nbytes);
+  bs->str = s->str;        // bs may not be a correctly UTF8-encoded string
+  $str as = $ascii(bs);    // but we can use $ascii on it anyhow.
+  $str res;
+  int n = as->nbytes + 14; // "bytearray(b'" + "')"
+  NEW_UNFILLED_STR(res,n,n);
+  memcpy(res->str, "bytearray(b'",12);
+  memcpy(&res->str[12],as->str,as->nbytes);
+  memcpy(&res->str[n-2],"')",2);
+  return res;
+}
+
+
+void $bytearray_serialize($bytearray str,$Serial$state state) {
+  int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+  $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
+  long nbytes = (long)str->nbytes;                    
+  memcpy(row->blob,&nbytes,sizeof($WORD));            
+  memcpy(row->blob+1,str->str,nbytes+1);
+}
+
+$bytearray $bytearray_deserialize($Serial$state state) {
+  $ROW this = state->row;
+  state->row =this->next;
+  state->row_no++;
+  $bytearray res = malloc(sizeof(struct $bytearray));
+  long nbytes;
+  memcpy(&nbytes,this->blob,sizeof($WORD));
+  res->$class = &$bytearray$methods;
+  res->nbytes = (int)nbytes;
+  res->str = malloc(nbytes+1);
+  memcpy(res->str,this->blob+1,nbytes+1);
+  return res;
+}
+
+// bytearray methods ///////////////////////////////////////////////////////////////////////
+
+$bytearray $bytearray_capitalize($bytearray s);
+$bytearray $bytearray_center($bytearray s, $int width, $bytearray fill);
+$int $bytearray_count($bytearray s, $bytearray sub, $int start, $int end);
+$str $bytearray_decode($bytearray s);
+$bool $bytearray_endswith($bytearray s, $bytearray suffix, $int start, $int end);
+$bytearray $bytearray_expandtabs($bytearray s, $int tabsize);      
+$int $bytearray_find($bytearray s, $bytearray sub, $int start, $int end);
+$int $bytearray_index($bytearray s, $bytearray sub, $int start, $int end);
+$bool $bytearray_isalnum($bytearray s);
+$bool $bytearray_isalpha($bytearray s);
+$bool $bytearray_isascii($bytearray s);
+$bool $bytearray_isdecimal($bytearray s);
+$bool $bytearray_isdigit($bytearray s);
+$bool $bytearray_isidentifier($bytearray s);
+$bool $bytearray_islower($bytearray s);
+$bool $bytearray_isnumeric($bytearray s);
+$bool $bytearray_isprintable($bytearray s);
+$bool $bytearray_isspace($bytearray s);
+$bool $bytearray_istitle($bytearray s);
+$bool $bytearray_isupper($bytearray s);
+$bytearray $bytearray_join($bytearray sep, $Iterable$opaque it);
+$bytearray $bytearray_ljust($bytearray s, $int width, $bytearray fill); 
+$bytearray $bytearray_lower($bytearray s);
+$bytearray $bytearray_lstrip($bytearray s,$bytearray cs); 
+$tuple $bytearray_partition($bytearray s, $bytearray sep);
+$bytearray $bytearray_replace($bytearray s, $bytearray old, $bytearray new, $int count);
+$int $bytearray_rfind($bytearray s, $bytearray sub, $int start, $int end);
+$int $bytearray_rindex($bytearray s, $bytearray sub, $int start, $int end);
+$bytearray $bytearray_rjust($bytearray s, $int width, $bytearray fill);  
+$tuple $bytearray_rpartition($bytearray s, $bytearray sep); 
+$bytearray $bytearray_rstrip($bytearray s,$bytearray cs);
+$list $bytearray_split($bytearray s, $bytearray sep, $int maxsplit);  
+$list $bytearray_splitlines($bytearray s, $bool keepends); 
+$bool $bytearray_startswith($bytearray s, $bytearray prefix, $int start, $int end); 
+$bytearray $bytearray_strip($bytearray s,$bytearray cs);
+$bytearray $bytearray_upper($bytearray s);
+$bytearray $bytearray_zfill($bytearray s, $int width);
+
+struct $bytearray$class $bytearray$methods =
+  {"",UNASSIGNED,($Super$class)&$struct$methods, $bytearray_init, $bytearray_serialize, $bytearray_deserialize, $bytearray_bool,
+   $bytearray_str, $bytearray_capitalize, $bytearray_center, $bytearray_count,  $bytearray_decode, $bytearray_endswith,
+   $bytearray_expandtabs, $bytearray_find, $bytearray_index,
+   $bytearray_isalnum, $bytearray_isalpha, $bytearray_isascii, $bytearray_isdigit, $bytearray_islower, $bytearray_isspace,
+   $bytearray_istitle, $bytearray_isupper, $bytearray_join, $bytearray_ljust, $bytearray_lower, $bytearray_lstrip, $bytearray_partition, $bytearray_replace,
+   $bytearray_rfind, $bytearray_rindex, $bytearray_rjust,
+   $bytearray_rpartition, $bytearray_rstrip, $bytearray_split, $bytearray_splitlines, $bytearray_startswith, $bytearray_strip, $bytearray_upper, $bytearray_zfill};
+
+static $bytearray $bytearray_copy($bytearray s) {
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+  res->nbytes = s->nbytes;
+  memcpy(res->str,s->str,s->nbytes);
+  return res;
+}
+
+$bytearray $bytearray_capitalize($bytearray s) {
+  if (s->nbytes==0) {
+    return null_bytearray;
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+  for (int i=0; i<s->nbytes; i++) 
+    res->str[i] = i==0 ? toupper(s->str[i]) : tolower(s->str[i]);
+   return res;
+}
+
+$bytearray $bytearray_center($bytearray s, $int width, $bytearray fill) {
+  if (!fill) fill = space_bytearray;
+  if (fill->nbytes != 1) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("center: fill bytearray not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return $bytearray_copy(s);
+  }
+  int pad = (width->val-s->nbytes);
+  int padleft = pad/2; 
+  int padright = pad-padleft;
+  int sbytes = s->nbytes;
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res, width->val);
+  unsigned char c = fill->str[0];
+  unsigned char *p = res->str;
+  p += padleft+sbytes;
+  for (int i = 0; i<padright; i++) {
+      p[i] = c;
+   }
+  memcpy(res->str,p,padleft);
+  p -= sbytes;
+  memcpy(p,s->str,sbytes);
+  return res;
+}
+
+
+$int $bytearray_count($bytearray s, $bytearray sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(0);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &p[en->val-st->val];
+  int res = 0;
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
+  while (n>=0) {
+    res++;
+    p += n + (sub->nbytes>0 ? sub->nbytes : 1);
+    n = bmh(p,sub->str,q-p,sub->nbytes);
+  }
+  return to$int(res);
+}
+
+$str $bytearray_decode($bytearray s) {
+  return to$str((char*)s->str);
+}
+
+$bool $bytearray_endswith($bytearray s, $bytearray sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+  unsigned char *p = &s->str[en->val-sub->nbytes];
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
+    if (*p == 0 || *p++ != *q++) {
+      return $False;
+    }
+  }
+  return $True;
+}
+
+$bytearray $bytearray_expandtabs($bytearray s, $int tabsz){
+  int pos = 0;
+  int expanded = 0;
+  int tabsize = tabsz->val;
+  tabsize = tabsize <= 0 ? 1 : tabsize;
+  unsigned char buffer[tabsize * s->nbytes];
+  unsigned char *p = s->str;
+  unsigned char *q = buffer;
+  for (int i=0; i<s->nbytes; i++) {
+    if (*p == '\t') {
+      int n = tabsize - pos % tabsize;
+      for (int j=0; j < n; j++) {
+        *q++ = ' ';
+      }
+      p++;
+      expanded += n-1;
+      pos+=n;
+    } else if (*p=='\n' || *p == '\r') {
+      *q++ = *p++;
+      pos = 0;
+    } else {
+      for (int j=0; j< byte_length2(*p); j++) {
+        *q++ = *p++;
+        pos++;
+      }
+    }
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes+expanded);
+  memcpy(res->str,buffer,s->nbytes+expanded);
+  return res;
+}
+
+$int $bytearray_find($bytearray s, $bytearray sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &s->str[en->val];
+  int n = bmh(p,sub->str,q-p,sub->nbytes);
+  if (n<0) return to$int(-1);
+  return to$int(n+p-s->str);
+}
+
+
+$int $bytearray_index($bytearray s, $bytearray sub, $int start, $int end) {
+  $int n = $bytearray_find(s,sub,start,end);
+  if (n->val<0) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("index: substring not found")));
+  }
+  return n;
+}
+
+$bool $bytearray_isalnum($bytearray s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytearray_isalpha($bytearray s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytearray_isascii($bytearray s) {
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c > 0x7f)
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytearray_isdigit($bytearray s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c<'0' || c > '9')
+      return $False;
+  }
+  return $True;
+}
+ 
+
+$bool $bytearray_islower($bytearray s) {
+  int has_lower = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >= 'A' && c <= 'Z')
+      return $False;
+    if (c >= 'a' && c <= 'z')
+      has_lower = 1;
+  }
+  return to$bool(has_lower);
+}
+
+/*
+$bool $bytearray_isprintable($bytearray s) {
+  unsigned char *p = s->str;
+  int codepoint;
+  int nbytes;
+  if (s->nchars == 0)
+    return $False;
+  for (int i=0; i < s->nchars; i++) {
+    nbytes = utf8proc_iterate(p,-1,&codepoint);
+    utf8proc_category_t cat = utf8proc_category(codepoint);
+    if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
+      return $False;
+    p += nbytes;
+  }
+  return $True;
+}
+*/
+
+$bool $bytearray_isspace($bytearray s) {
+  if (s->nbytes==0)
+    return $False;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
+      return $False;
+  }
+  return $True;
+}
+
+$bool $bytearray_istitle($bytearray s) {
+  if (s->nbytes==0)
+    return $False;
+  int incasedrun = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >='A' && c <= 'Z') {
+      if (incasedrun)
+        return $False;
+      incasedrun = 1;
+    } else if (c >='a' && c <= 'z') {
+      if (!incasedrun)
+        return $False;
+    } else
+        incasedrun = 0;
+  }
+  return $True;
+}
+
+$bool $bytearray_isupper($bytearray s) {
+  int has_upper = 0;
+  for (int i=0; i < s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    if (c >= 'a' && c <= 'z')
+      return $False;
+    if (c >= 'a' && c <= 'z')
+      has_upper = 1;
+  }
+  return to$bool(has_upper);
+}
+
+$bytearray $bytearray_join($bytearray s, $Iterable$opaque it) {
+  int totbytes = 0;
+  $list lst = $list_fromiter(it);
+  $bytearray nxt;
+  int len = lst->length;
+  for (int i=0; i<len; i++) {
+    nxt = ($bytearray)lst->data[i];
+    totbytes += nxt->nbytes;
+  }
+  if (len > 1) {
+    totbytes += (len-1) * s->nbytes;
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,totbytes);
+  if (len > 0) {
+    nxt = ($bytearray)lst->data[0];
+    unsigned char *p = res->str;
+    memcpy(p,nxt->str,nxt->nbytes);
+    p += nxt->nbytes;
+    for (int i=1; i<len; i++) {
+      nxt = ($bytearray)lst->data[i];
+      memcpy(p,s->str,s->nbytes);
+      p += s->nbytes;
+      memcpy(p,nxt->str,nxt->nbytes);
+      p += nxt->nbytes;
+    }
+  }
+  return res;
+}
+
+$bytearray $bytearray_ljust($bytearray s, $int width, $bytearray fill) {
+  if (fill->nbytes != 1) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("bytearray ljust: fill array not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return $bytearray_copy(s);
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,width->val);
+  memcpy(res->str,s->str,s->nbytes);
+  unsigned char c = fill->str[0];
+  for (int i = s->nbytes; i<width->val; i++) {
+      res->str[i] = c;
+  }
+  return res;
+}
+
+$bytearray $bytearray_lower($bytearray s) {
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+  for (int i=0; i< s->nbytes; i++)
+    res->str[i] = tolower(res->str[i]);
+  return res;
+}
+
+$bytearray $bytearray_lstrip($bytearray s, $bytearray cs) {
+  if (!cs)
+    cs = whitespace_bytearray;
+  int nstrip = 0;
+  for (int i=0; i<s->nbytes; i++) {
+    unsigned char c = s->str[i];
+    int found = 0;
+    for (int j=0; j<cs->nbytes; j++)
+      if (c == cs->str[j]) {
+        found = 1;
+        break;
+      }
+    if (!found)
+      break;
+    nstrip++;
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes-nstrip);
+  memcpy(res->str,s->str+nstrip,res->nbytes);       
+  return res;
+}
+
+
+$tuple $bytearray_partition($bytearray s, $bytearray sep) {
+  int n = from$int($bytearray_find(s,sep,NULL,NULL));
+  if (n<0) {
+    return $NEW($tuple,3,s,null_bytearray,null_bytearray);
+  } else {
+    int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $bytearray ls;
+    NEW_UNFILLED_BYTEARRAY(ls,nb);
+    memcpy(ls->str,s->str,nb);
+    $bytearray rs;
+    int nbr = s->nbytes - sep->nbytes - nb;
+    NEW_UNFILLED_BYTEARRAY(rs,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return $NEW($tuple,3,ls,sep,rs);
+  }
+}
+
+
+$bytearray $bytearray_replace($bytearray s, $bytearray old, $bytearray new, $int count) {
+  if (count==NULL)
+    count = to$int(INT_MAX);
+  int c = from$int($bytearray_count(s,old,NULL,NULL));
+  int c0 = from$int(count) < c ? from$int(count) : c;
+  if (c0==0){
+    return $bytearray_copy(s);
+  }
+  int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,nbytes);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
+  unsigned char *pold = old->str;
+  unsigned char *pnew = new->str;
+  int plen = s->nbytes;
+  int n;
+  for (int i=0; i<c0; i++) {
+    n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
+    if (n>0) {
+      memcpy(q,p,n);
+      p+=n; q+=n;
+    }
+    memcpy(q,pnew,new->nbytes);
+    p += old->nbytes;
+    q += new->nbytes;
+    plen -= n+old->nbytes;
+  }
+  if (plen>0)
+    memcpy(q,p,plen);
+  return res;
+}
+      
+
+$int $bytearray_rfind($bytearray s, $bytearray sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return to$int(-1);
+  unsigned char *p = &s->str[st->val];
+  unsigned char *q = &s->str[en->val];
+  int n = rbmh(p,sub->str,q-p,sub->nbytes);
+  if (n<0) return to$int(-1);
+  return to$int(n+p-s->str);
+}
+
+
+$int $bytearray_rindex($bytearray s, $bytearray sub, $int start, $int end) {
+  $int n = $bytearray_rfind(s,sub,start,end);
+  if (from$int(n)<0) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("rindex for bytearray: substring not found")));
+  };
+  return n;
+}
+
+$bytearray $bytearray_rjust($bytearray s, $int width, $bytearray fill) {
+  if (fill->nbytes != 1) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("rjust: fill string not single char")));
+  }
+  if (width->val <= s->nbytes) {
+    return $bytearray_copy(s);
+  }
+  int pad = (width->val-s->nbytes);
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,width->val);
+  unsigned char c = fill->str[0];
+  for (int i = 0; i<pad; i++) {
+      res->str[i] = c;
+  }
+  memcpy(&res->str[pad],s->str,s->nbytes);
+  return res;
+}
+                                
+$tuple $bytearray_rpartition($bytearray s, $bytearray sep) {
+  int n = from$int($bytearray_rfind(s,sep,NULL,NULL));
+  if (n<0) {
+    return $NEW($tuple,3,null_str,null_str,s);
+  } else {
+    int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+    $bytearray ls;
+    NEW_UNFILLED_BYTEARRAY(ls,nb);
+    memcpy(ls->str,s->str,nb);
+    int nbr = s->nbytes - sep->nbytes - nb;
+    $bytearray rs;    
+    NEW_UNFILLED_BYTEARRAY(rs,nbr);
+    memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
+    return  $NEW($tuple,3,ls,sep,rs);
+  }
+}
+
+$bytearray $bytearray_rstrip($bytearray s, $bytearray cs) {
+  if (!cs)
+    cs = whitespace_bytearray;
+  int nstrip = 0;
+  for (int i=s->nbytes-1; i>=0; i--) {
+    unsigned char c = s->str[i];
+    int found = 0;
+    for (int j=0; j<cs->nbytes; j++)
+      if (c == cs->str[j]) {
+        found = 1;
+        break;
+      }
+    if (!found)
+      break;
+    nstrip++;
+  }
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes-nstrip);
+  memcpy(res->str,s->str,res->nbytes);       
+  return res;
+}
+ 
+$list $bytearray_split($bytearray s, $bytearray sep, $int maxsplit) {
+  $list res = $NEW($list,NULL);
+  if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
+  if (sep == NULL) {
+    unsigned char *p = s->str;
+    if (s->nbytes==0) {
+      return res;
+    }
+    int inword = 0;
+    unsigned char *q;
+    while (p < s->str + s->nbytes) {
+      if  (*p !=' ' && *p != '\t' && *p != '\n' && *p != '\r' && *p != '\x0b' && *p != '\f') {
+        if (!inword) {
+          inword = 1;
+          q = p;
+          if ($list_len(res) == from$int(maxsplit))
+            break; // we have now removed leading whitespace in remainder
+        } 
+      } else {
+          if (inword) {
+            inword = 0;
+            $bytearray word;
+            NEW_UNFILLED_BYTEARRAY(word,p-q);
+            memcpy(word->str,q,p-q);
+            $list_append(res,word);
+          }
+      }
+      p++;
+    }
+    // this if statement should be simplified; almost code duplication.
+    if (p < s->str + s->nbytes) { // we did not break out of the while loop
+      if (inword) {
+        $bytearray word;
+        NEW_UNFILLED_BYTEARRAY(word,p-q);
+        memcpy(word->str,q,p-q);
+        $list_append(res,word);
+      }
+    } else {
+      $bytearray word;
+      p = s->str+s->nbytes;
+      NEW_UNFILLED_BYTEARRAY(word,p-q);
+      memcpy(word->str,q,p-q);
+      $list_append(res,word);
+    }
+    return res;
+  } else { // separator given
+    if (sep->nbytes==0) {
+    RAISE(($BaseException)$NEW($ValueError,to$str("split for bytearray: separator is empty string")));
+    }
+    if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
+      $list_append(res,null_str);
+      return res;
+    }
+    $bytearray ls, rs, ssep;
+    rs = s;
+    // Note: This builds many intermediate rs strings...
+    while (rs->nbytes>0 && $list_len(res) < from$int(maxsplit)) {
+     $tuple t = $bytearray_partition(rs,sep);
+     ssep = ($bytearray)t->components[1];
+     rs =  ($bytearray)t->components[2];
+     $list_append(res,($bytearray)t->components[0]);
+    }
+    if (ssep->nbytes>0)
+      $list_append(res,rs);
+    return res;
+  }
+}
+
+$list $bytearray_splitlines($bytearray s, $bool keepends) {
+  if (!keepends)
+    keepends = $False;
+  $list res = $NEW($list,NULL);
+  if (s->nbytes==0) {
+    return res;
+  }
+  int winend;
+  unsigned char *p = s->str;
+  unsigned char *q = p;
+  while (p < s->str + s->nbytes) {
+    if (*p != '\n' && *p != '\r') {
+      p++;
+    } else {
+      $bytearray line;
+      winend = *p=='\r' && *(p+1)=='\n';
+      int size = p-q + (keepends->val ? 1 + winend : 0);
+      NEW_UNFILLED_BYTEARRAY(line,size);
+      memcpy(line->str,q,size);
+      p+= 1 + winend;
+      q = p;
+      $list_append(res,line);
+    }
+  }
+  if (q < p) {
+    $bytearray line;
+    NEW_UNFILLED_BYTEARRAY(line,p-q);
+    memcpy(line->str,q,p-q);
+    $list_append(res,line);
+  }
+  return res;
+} 
+
+$bool $bytearray_startswith($bytearray s, $bytearray sub, $int start, $int end) {
+  $int st = start;
+  $int en = end;
+  if (fix_start_end(s->nbytes,&st,&en) < 0) return $False;
+  unsigned char *p = s->str + st->val;
+  if (p+sub->nbytes >= s->str+s->nbytes) return $False;
+  unsigned char *q = sub->str;
+  for (int i=0; i<sub->nbytes; i++) {
+    if (p >= s->str + en->val || *p++ != *q++) {
+      return $False;
+    }
+  }
+  return $True;
+}
+
+
+$bytearray $bytearray_strip($bytearray s, $bytearray cs) {
+  return $bytearray_lstrip($bytearray_rstrip(s,cs),cs);
+}
+
+$bytearray $bytearray_upper($bytearray s) {
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
+  for (int i=0; i< s->nbytes; i++)
+    res->str[i] = toupper(res->str[i]);
+  return res;
+}
+
+$bytearray $bytearray_zfill($bytearray s, $int width) {
+  int fill = width->val - s->nbytes;
+  if (fill < 0)
+    return $bytearray_copy(s);
+  $bytearray res;
+  NEW_UNFILLED_BYTEARRAY(res,width->val);
+  unsigned char *p = s->str;
+  unsigned char *q = res->str;
+  int hassign = (*p=='+' | *p=='-');
+  if (hassign) {
+    *q = *p;
+    q++;
+  }
+  for (int i=0; i < fill; i++) 
+    *q++ = '0';
+  memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+  return res;
 }
 

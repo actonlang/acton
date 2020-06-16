@@ -21,7 +21,7 @@ void $register($WORD meths) {
 
 
 /*
- * We do not register rts classid's here, since we do be able to serialize without including all of rts.o with its  
+ * We do not register rts classid's here, since we want to be able to serialize without including all of rts.o with its  
  * special main and handling of $ROOT. Doing so would complicate testing of builtin types significantly.
  */
 void $register_builtin() {
@@ -39,12 +39,18 @@ void $register_builtin() {
   $register_force(SET_ID,&$set$methods);
   $register_force(RANGE_ID,&$range$methods);
   $register_force(TUPLE_ID,&$tuple$methods);
+  $register_force(BYTEARRAY_ID,&$bytearray$methods);
   $register_force(STRITERATOR_ID,&$Iterator$str$methods);
   $register_force(LISTITERATOR_ID,&$Iterator$list$methods);
   $register_force(DICTITERATOR_ID,&$Iterator$dict$methods);
   $register_force(VALUESITERATOR_ID,&$Iterator$dict$values$methods);
   $register_force(ITEMSITERATOR_ID,&$Iterator$dict$items$methods);
   $register_force(SETITERATOR_ID,&$Iterator$set$methods);
+  $register_force(RANGEITERATOR_ID,&$Iterator$range$methods);
+  $register_force(ENUMERATEITERATOR_ID,&$Iterator$enumerate$methods);
+  $register_force(FILTERITERATOR_ID,&$Iterator$filter$methods);
+  $register_force(MAPITERATOR_ID,&$Iterator$map$methods);
+  $register_force(ZIPITERATOR_ID,&$Iterator$zip$methods);
   $register_force(BASEEXCEPTION_ID,&$BaseException$methods);
   $register_force(SYSTEMEXIT_ID,&$SystemExit$methods);
   $register_force(KEYBOARDINTERRUPT_ID,&$KeyboardInterrupt$methods);

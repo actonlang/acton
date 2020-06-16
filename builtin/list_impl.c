@@ -1,21 +1,24 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
 void $list_init($list lst, $Sequence$opaque seq) {
-  int capacity = 4;
-  lst->data = malloc(capacity*sizeof($WORD));
+  if (!seq) {
+    lst->length = 0;
+    lst->capacity = 0;
+    lst->data = NULL;
+    return;
+  }
+  $Collection wit = seq->proto->w$Collection$Sequence;
+  int len = wit->$class->__len__(wit,seq->impl)->val;
+  lst->data = malloc(len*sizeof($WORD));
   if (lst->data == NULL) {
     RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
   }
-  lst->length = 0;
-  lst->capacity = capacity;
-  if (seq) {
-    $Iterator iter = seq->proto->w$Collection$Sequence->$class->__iter__(seq->proto->w$Collection$Sequence,seq->impl);
-    $WORD nxt;
-    while((nxt = iter->$class->__next__(iter))) {
-      $list_append(lst,nxt);
-    }
-  }
-}  
+  lst->length = len;
+  lst->capacity = len;
+  $Iterator iter = wit->$class->__iter__(wit,seq->impl);
+  for (int i=0; i<len; i++)
+    $list_setitem(lst,i,iter->$class->__next__(iter));
+}
   
 $bool $list_bool($list self) {
   return to$bool(self->length>0);
@@ -61,7 +64,7 @@ $list $list_deserialize($Serial$state state) {
 }
      
     
-struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$struct$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
+struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
  
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////

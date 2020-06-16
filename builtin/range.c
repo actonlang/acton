@@ -177,8 +177,9 @@ $range $Collection$range$__fromiter__ ($Collection$range wit, $Iterable$opaque i
 }
   
 $int $Collection$range$__len__ ($Collection$range wit, $range self) {
-  long res = (self->stop-self->start)/self->step;
-return to$int(res < 0 ? 0 : res);
+  if (self->step < 0) 
+    return to$int(self->stop >= self->start ? 0 : 1+(self->stop+1-self->start)/self->step);
+  return to$int(self->stop <= self->start ? 0 : 1+(self->stop-1-self->start)/self->step);
 }
 
 // $Plus$range ////////////////////////////////////////////////////////////

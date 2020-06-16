@@ -43,4 +43,9 @@ int main() {
   }
   $str chinese = to$str("但他呼吁进行全面调查");
   printf("chinese nbytes = %d, nchars = %d\n",chinese->nbytes,chinese->nchars);
+  $str s = to$str("firstSEPsecondSEPthörd");
+  $print($NEW($tuple,1,s->$class->partition(s,to$str("SEP"))));
+  $print($NEW($tuple,1,s->$class->rpartition(s,to$str("SEP"))));
+  $print($NEW($tuple,1,s->$class->capitalize(s)));
+  $print($NEW($tuple,1,s->$class->center(s,to$int(50),NULL)));
 }
