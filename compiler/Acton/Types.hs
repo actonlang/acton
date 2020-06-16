@@ -11,6 +11,7 @@ import Acton.Env
 import Acton.Solver
 import Acton.Transform
 import qualified InterfaceFiles
+import qualified Data.Map
 
 reconstruct                             :: String -> Env -> Module -> IO (TEnv, Module)
 reconstruct fname env (Module m imp ss) = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
@@ -418,7 +419,8 @@ stripQual q                             = [ Quant v [] | Quant v us <- q ]
 --------------------------------------------------------------------------------------------------------------------------
 
 splitAndSolve env [] cs                 = simplify env [] cs
-splitAndSolve env vs cs                 = do (cs0,eq0) <- simplify env [] cs
+splitAndSolve env vs cs                 = do cs <- msubst cs
+                                             (cs0,eq0) <- simplify env [] cs
                                              let (cs1',cs1) = partition (any (`elem` vs) . tyfree) cs0
                                              eq1 <- solve env cs1'
                                              return (cs1, eq1++eq0)
@@ -466,7 +468,8 @@ matchAssumption env cl cs def
                  | otherwise            = qualWPar env q0 (pos def)
           where PosPar nSelf t' e' pos' = pos def
         
-
+instance Pretty (TVar,Type) where
+    pretty (tv,t) = pretty t Pretty.<> text "/" Pretty.<> pretty tv
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -579,47 +582,47 @@ instance Check Branch where
 splitGen                                :: Env -> [TVar] -> Constraints -> TEnv -> Equations 
                                            -> TypeM ([TVar],[TVar], Constraints,Constraints, TEnv, Equations)
 splitGen env fvs cs te eqs
-  | null ambig_cs                       = do eqs <- msubst eqs
+  | not $ null noqual_cs                = do eq0 <- solve env noqual_cs
+                                             splitAgain (fixed_cs++cs2) (eq0++eqs)
+  | not $ null ambig_cs                 = do eq0 <- solve env ambig_cs
+                                             splitAgain (fixed_cs++cs3) (eq0++eqs)
+  | otherwise                           = do eqs <- msubst eqs
                                              return (fvs, gvs, fixed_cs, gen_cs, te, eqs)
-  | otherwise                           = do eq0 <- solve env ambig_cs
-                                             (cs,eq1) <- simplify env te (fixed_cs++gen_cs)
+  where (fixed_cs, cs1)                 = split_fixed fvs cs
+        (noqual_cs, cs2)                = split_noqual cs1
+        (ambig_cs, cs3)                 = split_ambig safe_vs cs2
+
+        safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
+        def_vss                         = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te, null $ scbind sc ]
+        gvs                             = nub (foldr union [] def_vss ++ tyfree gen_cs)
+        gen_cs                          = cs3
+        
+        splitAgain cs eqs               = do (cs,eq1) <- simplify env te cs
                                              te <- msubst te
                                              fvs <- tyfree <$> msubst (map tVar fvs)
-                                             splitGen env fvs cs te (eq1++eq0++eqs)
-  where
-    def_vss                             = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te, null $ scbind sc ]
-    gvs                                 = nub (foldr union [] def_vss ++ tyfree gen_cs)
-    safe_vs | null def_vss              = []
-            | otherwise                 = nub $ foldr1 intersect def_vss
-    (fixed_cs, cs')                     = partition (null . (\\fvs) . tyfree) cs
-    (gen_cs, ambig_cs)                  = split_safe safe_vs cs'              -- TODO: also include "must solve" constraints
+                                             splitGen env fvs cs te (eq1++eqs)
 
-qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss, filter nofit cs)
-  where qbind v | length casts > 1      = trace ("### Multiple class bounds for " ++ prstr v ++ " in " ++ prstrs cs) $ 
-                                          (Quant v impls, wits)
-                | otherwise             = (Quant v (casts ++ impls), wits)
+qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
+  where qbind v                         = (Quant v (casts ++ impls), wits)
           where casts                   = [ u | Cast (TVar _ v') (TCon _ u) <- cs, v == v' ]
                 impls                   = [ p | Impl w (TVar _ v') p <- cs, v == v' ]
                 wits                    = [ (w, impl2type t p) | Impl w t@(TVar _ v') p <- cs, v == v' ]
-        nofit (Cast (TVar _ v) TCon{})  = v `notElem` vs
-        nofit (Impl _ (TVar _ v) _)     = v `notElem` vs
-        nofit _                         = True
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
-genEnv env cs te ds0                    = do traceM ("## genEnv 1 " ++ prstrs te)
+genEnv env cs te ds0                    = do te <- msubst te
+                                             traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te cs
                                              te <- msubst te
                                              fvs <- (tyfixed te ++) . tyfree <$> msubst env
                                              (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
-                                             traceM ("## genEnv 2 [" ++ prstrs gvs ++ "] " ++ prstrs te)
+                                             traceM ("## genEnv 2 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              ds <- msubst ds0
-                                             let (q,ws,xtra) = qualify gvs gen_cs
+                                             let (q,ws) = qualify gvs gen_cs
                                                  s = tvarSupplyMap (tybound q) (tvarScope env)
                                                  te1 = map (generalize s q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
                                              sequence [ substitute tv t | (tv,t) <- s ]
-                                             traceM ("## genEnv 3 [" ++ prstrs (rng s) ++ "] " ++ prstrs te1)
-                                             when (not $ null xtra) (traceM ("  with " ++ render (nest 4 $ vcat $ map pretty xtra)))
+                                             traceM ("## genEnv 3 [" ++ prstrs (rng s) ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fixed_cs, te1, ds1)
   where
     tyfixed te                          = tyfree $ filter (not . gen) te
@@ -627,8 +630,8 @@ genEnv env cs te ds0                    = do traceM ("## genEnv 1 " ++ prstrs te
             gen _                       = False
 
     generalize s q (n, NDef sc d)
-      | null $ scbind sc                = trace ("gen " ++ prstr n) $ (n, NDef (tSchema (subst s q) (subst s (sctype sc))) d)
-    generalize s q (n, i)               = trace ("no gen " ++ prstr n) $ (n, i)
+      | null $ scbind sc                = (n, NDef (tSchema (subst s q) (subst s (sctype sc))) d)
+    generalize s q (n, i)               = (n, i)
 
     abstract q ds ws eq d@Def{}
       | null $ qbinds d                 = d{ qbinds = q, pos = wit2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }

@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, DeriveGeneric #-}
-module Acton.Printer where
+module Acton.Printer (module Acton.Printer, module Pretty) where
 
 import Utils
 import Pretty
