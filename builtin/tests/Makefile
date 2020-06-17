@@ -13,6 +13,7 @@ all:
 	gcc ../builtin.o range_test.c -o range_test -lutf8proc
 	gcc ../builtin.o tuple_test.c -o tuple_test -lutf8proc
 	gcc ../builtin.o builtin_functions_test.c -o builtin_functions_test -lutf8proc
+	gcc ../builtin.o bytearray_test.c -o bytearray_test -lutf8proc
 
 Pingpong: Pingpong.c Pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
@@ -34,7 +35,7 @@ Pingpong2: ../../rts/rts.c Pingpong.c Pingpong.h
 
 clean:
 	rm -f *.o
-	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test iterator_test range_test tuple_test builtin_functions_test Pingpong Pingpong2
+	rm -f slice_test sieve protocol_test str_test2 hash_test container_test dict_test2 set_test int_test float_test iterator_test range_test tuple_test builtin_functions_test bytearray_test Pingpong Pingpong2
 
 runtests:
 	./slice_test
@@ -51,5 +52,6 @@ runtests:
 	./range_test
 	./tuple_test
 	./builtin_functions_test
+	./bytearray_test
 
 

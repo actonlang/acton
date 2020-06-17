@@ -318,7 +318,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
 void $list_delslice($list lst, $Slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
-  normalize_slice(slc, len, &len, &start, &stop, &step);
+  normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (slen==0) return;
   for (int ix = start+step*(slen-1); ix>= start; ix -= step)
     $list_delitem(lst,ix);

@@ -363,8 +363,13 @@ extension str (Sliceable[str]): pass
 
 extension str (Plus): pass
 
-extension str(Hashable): pass
+extension str (Hashable): pass
 
+extension bytearray (Ord): pass
+
+extension bytearray (Sequence[int]): pass
+
+extension bytearray (Container[int]): pass
 
 ## Builtin functions #####################################################
 
