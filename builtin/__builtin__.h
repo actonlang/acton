@@ -493,6 +493,36 @@ typedef struct $Hashable$tuple *$Hashable$tuple;
 struct $Hashable$tuple$class;
 typedef struct $Hashable$tuple$class *$Hashable$tuple$class;
 
+struct $Ord$bytearray;
+typedef struct $Ord$bytearray *$Ord$bytearray;
+
+struct $Ord$bytearray$class;
+typedef struct $Ord$bytearray$class *$Ord$bytearray$class;
+
+struct $Sequence$bytearray;
+typedef struct $Sequence$bytearray *$Sequence$bytearray;
+
+struct $Sequence$bytearray$class;
+typedef struct $Sequence$bytearray$class *$Sequence$bytearray$class;
+
+struct $Collection$bytearray;
+typedef struct $Collection$bytearray *$Collection$bytearray;
+
+struct $Collection$bytearray$class;
+typedef struct $Collection$bytearray$class *$Collection$bytearray$class;
+
+struct $Plus$bytearray;
+typedef struct $Plus$bytearray *$Plus$bytearray;
+
+struct $Plus$bytearray$class;
+typedef struct $Plus$bytearray$class *$Plus$bytearray$class;
+
+struct $Container$bytearray;
+typedef struct $Container$bytearray *$Container$bytearray;
+
+struct $Container$bytearray$class;
+typedef struct $Container$bytearray$class *$Container$bytearray$class;
+
 // $Eq ////////////////////////////////////////////////////////////
 
 struct $Eq {
@@ -1925,3 +1955,132 @@ void $Hashable$tuple$__init__ ($Hashable$tuple,int,$Hashable*);
 $bool $Hashable$tuple$__eq__ ($Hashable$tuple, $tuple, $tuple);
 $bool $Hashable$tuple$__ne__ ($Hashable$tuple, $tuple, $tuple);
 $int $Hashable$tuple$__hash__ ($Hashable$tuple, $tuple);
+
+// $Ord$bytearray ////////////////////////////////////////////////////////////
+
+struct $Ord$bytearray {
+    $Ord$bytearray$class $class;
+};
+
+struct $Ord$bytearray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Ord$bytearray);
+    $bool (*__eq__)($Ord$bytearray, $bytearray, $bytearray);
+    $bool (*__ne__)($Ord$bytearray, $bytearray, $bytearray);
+    $bool (*__lt__)($Ord$bytearray, $bytearray, $bytearray);
+    $bool (*__le__)($Ord$bytearray, $bytearray, $bytearray);
+    $bool (*__gt__)($Ord$bytearray, $bytearray, $bytearray);
+    $bool (*__ge__)($Ord$bytearray, $bytearray, $bytearray);
+};
+
+void $Ord$bytearray$__init__ ($Ord$bytearray);
+$bool $Ord$bytearray$__eq__ ($Ord$bytearray, $bytearray, $bytearray);
+$bool $Ord$bytearray$__ne__ ($Ord$bytearray, $bytearray, $bytearray);
+$bool $Ord$bytearray$__lt__ ($Ord$bytearray, $bytearray, $bytearray);
+$bool $Ord$bytearray$__le__ ($Ord$bytearray, $bytearray, $bytearray);
+$bool $Ord$bytearray$__gt__ ($Ord$bytearray, $bytearray, $bytearray);
+$bool $Ord$bytearray$__ge__ ($Ord$bytearray, $bytearray, $bytearray);
+
+// $Sequence$bytearray ////////////////////////////////////////////////////////////
+
+struct $Sequence$bytearray {
+    $Sequence$bytearray$class $class;
+    $Collection$bytearray w$Collection$Sequence;
+    $Plus$bytearray w$Plus$Sequence;
+};
+
+struct $Sequence$bytearray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Sequence$bytearray);
+    $int (*__getitem__)($Sequence$bytearray, $bytearray, $int);
+    void (*__setitem__)($Sequence$bytearray, $bytearray, $int, $int);
+    void (*__delitem__)($Sequence$bytearray, $bytearray, $int);
+    $bytearray (*__getslice__)($Sequence$bytearray, $bytearray, $Slice);
+    void (*__setslice__)($Sequence$bytearray, $bytearray, $Slice, $Iterable$opaque);
+    void (*__delslice__)($Sequence$bytearray, $bytearray, $Slice);
+    $Iterator (*__reversed__)($Sequence$bytearray, $bytearray);
+    void (*insert)($Sequence$bytearray, $bytearray, $int, $int);
+    void (*append)($Sequence$bytearray, $bytearray, $int);
+    void (*reverse)($Sequence$bytearray, $bytearray);
+};
+
+void $Sequence$bytearray$__init__ ($Sequence$bytearray);
+$int $Sequence$bytearray$__getitem__ ($Sequence$bytearray, $bytearray, $int);
+void $Sequence$bytearray$__setitem__ ($Sequence$bytearray, $bytearray, $int, $int);
+void $Sequence$bytearray$__delitem__ ($Sequence$bytearray, $bytearray, $int);
+$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray, $bytearray, $Slice);
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $bytearray, $Slice, $Iterable$opaque);
+void $Sequence$bytearray$__delslice__ ($Sequence$bytearray, $bytearray, $Slice);
+$Iterator $Sequence$bytearray$__reversed__ ($Sequence$bytearray, $bytearray);
+void $Sequence$bytearray$insert ($Sequence$bytearray, $bytearray, $int, $int);
+void $Sequence$bytearray$append ($Sequence$bytearray, $bytearray, $int);
+void $Sequence$bytearray$reverse ($Sequence$bytearray, $bytearray);
+
+// $Collection$bytearray ////////////////////////////////////////////////////////////
+
+struct $Collection$bytearray {
+    $Collection$bytearray$class $class;
+    $Sequence$bytearray w$Sequence$bytearray;
+};
+
+struct $Collection$bytearray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Collection$bytearray, $Sequence$bytearray);
+    $Iterator (*__iter__)($Collection$bytearray, $bytearray);
+    $bytearray (*__fromiter__)($Collection$bytearray, $Iterable$opaque);
+    $int (*__len__)($Collection$bytearray, $bytearray);
+};
+
+void $Collection$bytearray$__init__ ($Collection$bytearray, $Sequence$bytearray);
+$Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
+$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable$opaque);
+$int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
+
+// $Plus$bytearray ////////////////////////////////////////////////////////////
+
+struct $Plus$bytearray {
+    $Plus$bytearray$class $class;
+    $Sequence$bytearray w$Sequence$bytearray;
+};
+
+struct $Plus$bytearray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Plus$bytearray, $Sequence$bytearray);
+    $bytearray (*__add__)($Plus$bytearray, $bytearray, $bytearray);
+};
+
+void $Plus$bytearray$__init__ ($Plus$bytearray, $Sequence$bytearray);
+$bytearray $Plus$bytearray$__add__ ($Plus$bytearray, $bytearray, $bytearray);
+
+// $Container$bytearray ////////////////////////////////////////////////////////////
+
+struct $Container$bytearray {
+    $Container$bytearray$class $class;
+    $Eq w$Eq$A;
+};
+
+struct $Container$bytearray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Container$bytearray, $Eq);
+    $Iterator (*__iter__)($Container$bytearray, $bytearray);
+    $int (*__len__)($Container$bytearray, $bytearray);
+    $bool (*__contains__)($Container$bytearray, $bytearray, $int);
+    $bool (*__containsnot__)($Container$bytearray, $bytearray, $int);
+};
+
+void $Container$bytearray$__init__ ($Container$bytearray, $Eq);
+$Iterator $Container$bytearray$__iter__ ($Container$bytearray, $bytearray);
+$int $Container$bytearray$__len__ ($Container$bytearray, $bytearray);
+$bool $Container$bytearray$__contains__ ($Container$bytearray, $bytearray, $int);
+$bool $Container$bytearray$__containsnot__ ($Container$bytearray, $bytearray, $int);
+

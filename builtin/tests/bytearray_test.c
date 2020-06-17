@@ -22,4 +22,24 @@ int main() {
   $print($NEW($tuple,1,b5));
   $print($NEW($tuple,1,b5->$class->splitlines(b5,NULL)));
   $print($NEW($tuple,1,b5->$class->splitlines(b5,$True)));
+  $bytearray b6 = to$bytearray("abcdefgh");
+  $list lst = $NEW($list,$Sequence$pack(($Sequence)$Sequence$bytearray$witness,b6));
+  $print($NEW($tuple,1,lst));
+  int start = 1;
+  int stop = 6;
+  int step = 2;
+  struct $Slice slc;
+  slc.start = &start;
+  slc.stop = &stop;
+  slc.step = &step;
+  $Sequence$bytearray$witness->$class->__delslice__($Sequence$bytearray$witness,b6,&slc);
+  $print($NEW($tuple,1,b6));
+  $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(65));
+  $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(66));
+  $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(67));
+  $print($NEW($tuple,1,b6));
+  // for (int i=0; i<100000; i++)
+  //    $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(65+i%26));
+  $print($NEW($tuple,1,b6));
+    
 }

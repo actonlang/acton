@@ -109,7 +109,8 @@ struct $bytearray$class;
 
 struct $bytearray {
   struct $bytearray$class *$class;
-  int nbytes;        
+  int nbytes;
+  int capacity;
   unsigned char *str;
 };
 
@@ -162,16 +163,43 @@ struct $bytearray$class {
 extern struct $bytearray$class $bytearray$methods;
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
-extern struct $Hashable$bytearray$class $Hashable$bytearray$methods;
+extern struct $Sequence$bytearray$class $Sequence$bytearraymethods;
+extern struct $Collection$bytearray$class $Collection$bytearraymethods;
 extern struct $Plus$bytearray$class $Plus$bytearraymethods;
-extern struct $Sliceable$bytearray$class $Sliceable$bytearray$methods;
 extern struct $Container$bytearray$class $Container$bytearray$methods;
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
-extern struct $Hashable$bytearray *$Hashable$bytearray$witness;
+extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
+extern struct $Collection$bytearray *$Collection$bytearray$witness;
 extern struct $Plus$bytearray *$Plus$bytearray$witness;
-extern struct $Sliceable$bytearray *$Sliceable$bytearray$witness;
 extern struct $Container$bytearray *$Container$bytearray$witness;
+
+$bytearray to$bytearray(char *str); 
+unsigned char *from$bytearray($bytearray b);
+
+// Iterators over bytearrays ///////////////////////////////////////////////////////
+
+typedef struct $Iterator$bytearray *$Iterator$bytearray; ;
+
+struct $Iterator$bytearray$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$bytearray, $bytearray);
+  void (*__serialize__)($Iterator$bytearray,$Serial$state);
+  $Iterator$bytearray (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$bytearray);
+  $str (*__str__)($Iterator$bytearray);
+  $int (*__next__)($Iterator$bytearray);
+};
+
+struct $Iterator$bytearray {
+  struct $Iterator$bytearray$class *$class;
+  $bytearray src;
+  int nxt;
+};
+
+extern struct  $Iterator$bytearray$class  $Iterator$bytearray$methods;
 
 //builtin functions //////////////////////////////////////////////////////////////////////////////////
 
