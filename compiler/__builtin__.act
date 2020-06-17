@@ -432,6 +432,9 @@ def reversed(seq : Sequence[A]) -> Iterator[A]:
 def reversed2(seq):
   return Sequence.__reversed__(seq)
 
+def reversed3(seq):
+  return seq.__reversed__()
+
 round : (x : Real,n : ?int) -> Real
 
 sorted : [A(Ord)] => (Iterable[A]) -> list[A]

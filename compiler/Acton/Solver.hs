@@ -574,26 +574,26 @@ w22 = lambda: ()                                                        = round(
 -- Variable info
 ----------------------------------------------------------------------------------------------------------------------
 
-data VInfo                                  = VInfo { 
+data VInfo                                  = VInfo {
+                                                varvars     :: [(TVar,TVar)],
                                                 embedded    :: [TVar],
                                                 ubounds     :: Map TVar [Type], 
                                                 lbounds     :: Map TVar [Type], 
                                                 pbounds     :: Map TVar [(Name,TCon)],
-                                                selattrs    :: Map TVar [Name],
                                                 mutattrs    :: Map TVar [Name],
-                                                varvars     :: [(TVar,TVar)] }
+                                                selattrs    :: Map TVar [Name] }
 
+varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
 ubound v t vi                               = vi{ ubounds = Map.insertWith (++) v [t] (ubounds vi) }
 lbound v t vi                               = vi{ lbounds = Map.insertWith (++) v [t] (lbounds vi) }
 pbound v w p vi                             = vi{ pbounds = Map.insertWith (++) v [(w,p)] (pbounds vi) }
-selattr v n vi                              = vi{ selattrs = Map.insertWith (++) v [n] (selattrs vi) }
 mutattr v n vi                              = vi{ mutattrs = Map.insertWith (++) v [n] (mutattrs vi) }
-varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
+selattr v n vi                              = vi{ selattrs = Map.insertWith (++) v [n] (selattrs vi) }
 
 pbounds' v vi                               = maybe [] id $ Map.lookup v (pbounds vi)
 
-varinfo cs                                  = f cs (VInfo [] Map.empty Map.empty Map.empty Map.empty Map.empty [])
+varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.empty Map.empty Map.empty Map.empty)
   where
     f (Cast (TVar _ v1) (TVar _ v2) : cs)
       | v1 == v2                            = f cs
@@ -604,8 +604,8 @@ varinfo cs                                  = f cs (VInfo [] Map.empty Map.empty
     f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t)
     f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t)
     f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p
-    f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
     f (Mut (TVar _ v) n _ : cs)             = f cs . mutattr v n
+    f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -845,23 +845,23 @@ improve env te eq cs
   | otherwise                           = return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
-        freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
+        closure                         = varclose (varvars vi)
+        Right vclosed                   = closure
+        gsimple                         = gsimp vclosed obsvars (varvars vi)
         cyclic                          = if null freevars then filter (not . null . (intersect $ embedded vi) . tyfree) cs else []
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
+        transCast                       = [ Cast t t' | (v,t) <- lowerBnd, (v',t') <- upperBnd, v == v' || (v,v') `elem` vclosed, not $ castP env t t' ]
         posLBnd                         = [ (v,u) | (v,t) <- lowerBnd, u:us <- [supImplAll env (pbounds' v vi) t], null us || v `notElem` negvars ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (pbounds' v vi) t ]
-        transCast                       = [ Cast t t' | (v,t) <- lowerBnd, (v',t') <- upperBnd, v == v' || (v,v') `elem` vclosed, not $ castP env t t' ]
-        closure                         = varclose (varvars vi)
-        Right vclosed                   = closure
         fixedvars                       = tyfree env
         posvars                         = tyfree te                         -- TODO: implement true polarity assignment
         negvars                         = posvars                           -- TODO: implement true polarity assignment
         obsvars                         = posvars ++ negvars ++ fixedvars
-        gsimple                         = gsimp vclosed obsvars (varvars vi)
+        freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
 
 approximate env eq []                   = return eq
 approximate env eq cs
@@ -874,12 +874,21 @@ approximate env eq cs
   | not $ null upperBnd                 = trace ("  *S-approx (up) " ++ prstrs (map fst upperBnd)) $ 
                                           do sequence [ unify env (tVar v) t | (v,t) <- upperBnd ]
                                              solve' env eq cs
+  | not $ null muts                     = trace ("  *unique mutation target " ++ prstrs (map fst muts)) $ 
+                                          do sequence [ unify env (tVar v) <$> instwild KType t | (v,t) <- muts ]
+                                             solve' env eq cs
+  | not $ null sels                     = trace ("  *unique selection source " ++ prstrs (map fst sels)) $
+                                          do sequence [ instwild KType t >>= unify env (tVar v) | (v,t) <- sels ]
+                                             cs' <- msubst cs
+                                             solve' env eq cs
   | otherwise                           = trace ("##### Unsolvable: " ++ prstrs cs) $ error "STOP"
   where info                            = varinfo cs
         Just vi                         = info
-        lowerBnd                        = [ (v,t) | (v,[t0]) <- Map.assocs (lbounds vi), t:_ <- [supImplAll env (pbounds' v vi) t0] ]
-        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi) ]
         vvs                             = varvars vi
+        lowerBnd                        = [ (v,u) | (v,[t]) <- Map.assocs (lbounds vi), u:_ <- [supImplAll env (pbounds' v vi) t] ]
+        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi) ]
+        muts                            = [ (v,t) | (v,ns) <- Map.assocs (mutattrs vi), [t] <- [mutClassByAttrs env ns] ]
+        sels                            = [ (v,t) | (v,ns) <- Map.assocs (selattrs vi), [t] <- [selTypeByAttrs env ns] ]
 
 
 
@@ -894,13 +903,13 @@ approximate env eq cs
 
 -- For a variable v with a (single) upper bound t, unify v with t
 
--- TODO:
+-- Solve all Mut constraints by searching for a unique object sub-class which contains all assigned attributes
+-- Fail if none exists
 
 -- Solve all Sel constraints by searching for a unique class or existential which contains all selected attributes
 -- If none exists, solve by a kwd tuple
 
--- Solve all Mut constraints by searching for a unique object sub-class which contains all assigned attributes
--- Fail if none exists
+-- TODO:
 
 -- Solve ambiguous Impl constraints according to a predefined defaulting table
 -- Fail if no table row matches

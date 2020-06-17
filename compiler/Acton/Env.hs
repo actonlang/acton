@@ -463,6 +463,23 @@ conAttrs env qn             = dom te
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
 
+mutClassByAttrs             :: Env -> [Name] -> [Type]
+mutClassByAttrs env ns      = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- names env, matchC te us ]
+  where matchC te us        = not (null ns1) && cObject `elem` map snd us && all (`elem` inherited) ns2
+          where (ns1,ns2)   = partition (`elem` dom (propSigs te)) ns
+                inherited   = concat [ dom (propSigs te) | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
+
+selTypeByAttrs              :: Env -> [Name] -> [Type]
+selTypeByAttrs env ns       = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- names env, matchC c te us ] ++
+                              [ tExist $ TC (NoQ p) (map (const tWild) q) | (p, NProto q us te) <- names env, matchP te us ]
+  where matchC cn te us     = not (null ns1) && all (`elem` inherited) ns2
+          where (ns1,ns2)   = partition (`elem` dom te) ns
+                inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ] ++
+                              concat [ dom te | (c,w) <- wits env, qmatch env c (NoQ cn), let (_,_,te) = findConName (tcname $ proto w) env ]
+        matchP te us        = not (null ns1) && all (`elem` inherited) ns2
+                  where (ns1,ns2)   = partition (`elem` dom te) ns
+                        inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
+
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
