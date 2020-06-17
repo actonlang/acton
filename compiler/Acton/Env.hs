@@ -165,8 +165,6 @@ instance Subst WTCon where
     
     tyfree (w,u)                = tyfree u
 
-msubstTV tvs                    = fmap tyfree $ mapM msubst $ map tVar tvs
-
 
 -------------------------------------------------------------------------------------------------------------------
 
@@ -779,7 +777,7 @@ instance Subst a => Subst (Maybe a) where
 
 instance Subst Constraint where
     msubst (Cast t1 t2)             = Cast <$> msubst t1 <*> msubst t2
-    msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t1
+    msubst (Sub w t1 t2)            = Sub w <$> msubst t1 <*> msubst t2
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
@@ -790,16 +788,23 @@ instance Subst Constraint where
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
+split_fixed fvs cs                  = partition fixed cs
+  where fixed c                     = null (tyfree c \\ fvs)
 
-split_safe vs cs
-  | null dep_vs                     = (safe_cs, amb_cs)
-  | otherwise                       = split_safe (dep_vs ++ vs) cs
-  where (safe_cs,amb_cs)            = partition safe cs
-        dep_vs                      = tyfree safe_cs \\ vs
-        safe (Impl w t p)           = all (`elem` vs) (tyfree t)
-        safe (Cast t t')            = all (`elem` vs) (tyfree t)
-        safe (Sub w t t')           = all (`elem` vs) (tyfree t)
-        safe c                      = all (`elem` vs) (tyfree c)
+split_noqual cs                     = partition noqual cs
+  where noqual (Cast _ TVar{})      = True
+        noqual Sub{}                = True
+        noqual Sel{}                = True
+        noqual Mut{}                = True
+        noqual _                    = False
+
+split_ambig vs cs
+  | null vs'                        = (amb_cs, safe_cs)
+  | otherwise                       = split_ambig (vs'++vs) cs
+  where (amb_cs,safe_cs)            = partition ambig cs
+        vs'                         = tyfree safe_cs \\ vs
+        ambig (Impl w t p)          = any (`notElem` vs) (tyfree t)
+        ambig c                     = any (`notElem` vs) (tyfree c)
 
 
 instance Subst TSchema where
@@ -876,7 +881,7 @@ instance Subst Type where
                                             Nothing -> return (TVar l v)
     msubst (TCon l c)               = TCon l <$> msubst c
     msubst (TExist l p)             = TExist l <$> msubst p
-    msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k<*> msubst t
+    msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k <*> msubst t
     msubst (TTuple l p k)           = TTuple l <$> msubst p <*> msubst k
     msubst (TUnion l as)            = return $ TUnion l as
     msubst (TOpt l t)               = TOpt l <$> msubst t

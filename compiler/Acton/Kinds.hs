@@ -47,8 +47,6 @@ newName s                           = Internal s <$> newUnique <*> return KindPa
 
 newKVar                             = KVar <$> newName "K"
 
-newWitness                          = newName "w"
-
 
 data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
 
@@ -313,7 +311,7 @@ instance KInfer TCon where
 
 instance KInfer Type where
     kinfer env True (TWild l)       = do k <- newKVar
-                                         n <- newName "W"
+                                         n <- newName "_"
                                          return (k, TVar l (TV k n))
     kinfer env False (TWild l)      = Acton.Env.err1 l "Illegal wildcard type"
     kinfer env w (TVar l v)         = do (k,v) <- kinfer env w v
