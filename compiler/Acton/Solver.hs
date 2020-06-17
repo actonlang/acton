@@ -575,40 +575,37 @@ w22 = lambda: ()                                                        = round(
 ----------------------------------------------------------------------------------------------------------------------
 
 data VInfo                                  = VInfo { 
-                                                cvars       :: [TVar],
                                                 embedded    :: [TVar],
-                                                ubounds0    :: Map TVar [Type], 
-                                                lbounds0    :: Map TVar [Type], 
-                                                pbounds0    :: Map TVar [(Name,TCon)],
-                                                selattr0    :: Map TVar [Name],
+                                                ubounds     :: Map TVar [Type], 
+                                                lbounds     :: Map TVar [Type], 
+                                                pbounds     :: Map TVar [(Name,TCon)],
+                                                selattrs    :: Map TVar [Name],
+                                                mutattrs    :: Map TVar [Name],
                                                 varvars     :: [(TVar,TVar)] }
 
-cvar v vi                                   = if v `elem` cvars vi then vi else vi{ cvars = v : cvars vi }
 embed vs vi                                 = vi{ embedded = vs ++ embedded vi }
-ubound v t vi                               = vi{ ubounds0 = Map.insertWith (++) v [t] (ubounds0 vi) }
-lbound v t vi                               = vi{ lbounds0 = Map.insertWith (++) v [t] (lbounds0 vi) }
-pbound v w p vi                             = vi{ pbounds0 = Map.insertWith (++) v [(w,p)] (pbounds0 vi) }
-selattr v n vi                              = vi{ selattr0 = Map.insertWith (++) v [n] (selattr0 vi) }
+ubound v t vi                               = vi{ ubounds = Map.insertWith (++) v [t] (ubounds vi) }
+lbound v t vi                               = vi{ lbounds = Map.insertWith (++) v [t] (lbounds vi) }
+pbound v w p vi                             = vi{ pbounds = Map.insertWith (++) v [(w,p)] (pbounds vi) }
+selattr v n vi                              = vi{ selattrs = Map.insertWith (++) v [n] (selattrs vi) }
+mutattr v n vi                              = vi{ mutattrs = Map.insertWith (++) v [n] (mutattrs vi) }
 varvar v1 v2 vi                             = vi{ varvars = (v1,v2) : varvars vi }
 
-ubounds v vi                                = maybe [] id $ Map.lookup v (ubounds0 vi)
-lbounds v vi                                = maybe [] id $ Map.lookup v (lbounds0 vi)
-pbounds v vi                                = maybe [] id $ Map.lookup v (pbounds0 vi)
-selattrs v vi                               = maybe [] id $ Map.lookup v (selattr0 vi)
+pbounds' v vi                               = maybe [] id $ Map.lookup v (pbounds vi)
 
-varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.empty Map.empty Map.empty [])
+varinfo cs                                  = f cs (VInfo [] Map.empty Map.empty Map.empty Map.empty Map.empty [])
   where
     f (Cast (TVar _ v1) (TVar _ v2) : cs)
       | v1 == v2                            = f cs
-      | otherwise                           = f cs . varvar v1 v2 . cvar v1 . cvar v2
-    f (Cast (TVar _ v) t : cs)              = f cs . ubound v t . embed (tyfree t) . cvar v
-    f (Cast t (TVar _ v) : cs)              = f cs . lbound v t . embed (tyfree t) . cvar v
-    f (Sub _ (TVar _ v1) (TVar _ v2) : cs)  = f cs . varvar v1 v2 . cvar v1 . cvar v2
-    f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t) . cvar v
-    f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t) . cvar v
-    f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p . cvar v
+      | otherwise                           = f cs . varvar v1 v2
+    f (Cast (TVar _ v) t : cs)              = f cs . ubound v t . embed (tyfree t)
+    f (Cast t (TVar _ v) : cs)              = f cs . lbound v t . embed (tyfree t)
+    f (Sub _ (TVar _ v1) (TVar _ v2) : cs)  = f cs . varvar v1 v2
+    f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t)
+    f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t)
+    f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p
     f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
-    f (Mut (TVar _ v) n _ : cs)             = f cs
+    f (Mut (TVar _ v) n _ : cs)             = f cs . mutattr v n
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -650,8 +647,8 @@ instwild k t                            = return t
 -- GLB
 ----------------------------------------------------------------------------------------------------------------------
 
-mkGLB env vi v                          = do t' <- instwild KType $ foldr1 (glb env) $ ubounds v vi
-                                             return (v, t')
+mkGLB env (v,ts)                        = do t <- instwild KType $ foldr1 (glb env) ts
+                                             return (v, t)
 
 glb env (TWild _) t2                    = t2
 glb env t1 (TWild _)                    = t1
@@ -732,8 +729,8 @@ lookupElem n (TNil _ _)                 = Nothing
 -- LUB
 ----------------------------------------------------------------------------------------------------------------------
 
-mkLUB env vi v                          = do t' <- instwild KType $ foldr1 (lub env) $ lbounds v vi
-                                             return (v, t')
+mkLUB env (v,ts)                        = do t <- instwild KType $ foldr1 (lub env) ts
+                                             return (v, t)
 
 lub env (TWild _) t2                    = t2
 lub env t1 (TWild _)                    = t1
@@ -825,11 +822,11 @@ improve env te eq cs
                                           do sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te eq cs
   | not $ null cyclic                   = err2 cyclic "Cyclic constraint set: "
-  | not $ null (multiUBnd++multiLBnd)   = trace ("  *GLB " ++ prstrs multiUBnd) $
-                                          trace ("  *LUB " ++ prstrs multiLBnd) $
+  | not $ null (multiUBnd++multiLBnd)   = trace ("  *GLB " ++ prstrs (dom multiUBnd)) $
+                                          trace ("  *LUB " ++ prstrs (dom multiLBnd)) $
                                           trace ("  # in " ++ prstrs cs) $
-                                          do ub <- mapM (mkGLB env vi) multiUBnd
-                                             lb <- mapM (mkLUB env vi) multiLBnd
+                                          do ub <- mapM (mkGLB env) multiUBnd
+                                             lb <- mapM (mkLUB env) multiLBnd
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
                                              simplify' env te eq (cs' ++ map (replace ub lb) cs)
   | not $ null transCast                = trace "  *Transitive cast" $ 
@@ -840,7 +837,7 @@ improve env te eq cs
   | not $ null negUBnd                  = trace ("  *S-simplify (up) " ++ prstrs (map fst negUBnd)) $ 
                                           do sequence [ unify env (tVar v) t | (v,t) <- negUBnd ]
                                              simplify' env te eq cs
-  | not $ null multiPBnd                = trace ("  *Context red " ++ prstrs multiPBnd) $ 
+  | not $ null multiPBnd                = trace ("  *Context red " ++ prstrs (map fst multiPBnd)) $ 
                                           do eq' <- concat <$> mapM (pImprove env vi) multiPBnd
                                              if not $ null eq' 
                                                 then return (cs, eq)
@@ -848,19 +845,16 @@ improve env te eq cs
   | otherwise                           = return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
-        candidates                      = cvars vi \\ embedded vi
-        cyclic                          = if null candidates then filter (not . null . (intersect $ embedded vi) . tyfree) cs else []
-        multiUBnd                       = [ v | v <- candidates, length (ubounds v vi) > 1 ]
-        multiLBnd                       = [ v | v <- candidates, length (lbounds v vi) > 1 ]
-        multiPBnd                       = [ v | v <- candidates, length (pbounds v vi) > 1 ]
-        lowerBnd                        = candidates `intersect` Map.keys (lbounds0 vi)
-        upperBnd                        = candidates `intersect` Map.keys (ubounds0 vi)
-        protoBnd                        = candidates `intersect` Map.keys (pbounds0 vi)
-        posLBnd                         = [ (v,t) | v <- lowerBnd, t0 <- lbounds v vi, t:ts <- [supImplAll env (pbounds v vi) t0], null ts || v `notElem` negvars ]
-        negUBnd                         = [ (v,t) | v <- upperBnd \\ posvars, t <- ubounds v vi, implAll env (pbounds v vi) t ]
-        doubleBnd                       = [ (v,v) | v <- lowerBnd `intersect` upperBnd ] ++ chainBnd
-        chainBnd                        = [ (v,v') | (v,v') <- vclosed, v `elem` lowerBnd, v' `elem` upperBnd ]
-        transCast                       = [ Cast t t' | (v,v') <- doubleBnd, t <- lbounds v vi, t' <- ubounds v vi, not $ castP env t t' ]
+        freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
+        cyclic                          = if null freevars then filter (not . null . (intersect $ embedded vi) . tyfree) cs else []
+        multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
+        multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
+        multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
+        lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
+        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
+        posLBnd                         = [ (v,u) | (v,t) <- lowerBnd, u:us <- [supImplAll env (pbounds' v vi) t], null us || v `notElem` negvars ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (pbounds' v vi) t ]
+        transCast                       = [ Cast t t' | (v,t) <- lowerBnd, (v',t') <- upperBnd, v == v' || (v,v') `elem` vclosed, not $ castP env t t' ]
         closure                         = varclose (varvars vi)
         Right vclosed                   = closure
         fixedvars                       = tyfree env
@@ -883,9 +877,8 @@ approximate env eq cs
   | otherwise                           = trace ("##### Unsolvable: " ++ prstrs cs) $ error "STOP"
   where info                            = varinfo cs
         Just vi                         = info
-        lowerBnd                        = [ (v,t) | (v,[t0]) <- Map.assocs (lbounds0 vi), t:_ <- [supImplAll env (pbounds v vi) t0] ]
-        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds0 vi) ]
-        selBnd                          = Map.assocs (pbounds0 vi)
+        lowerBnd                        = [ (v,t) | (v,[t0]) <- Map.assocs (lbounds vi), t:_ <- [supImplAll env (pbounds' v vi) t0] ]
+        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi) ]
         vvs                             = varvars vi
 
 
@@ -933,7 +926,7 @@ replace ub lb c                         = rep c
           | Just t' <- lookup v lb      = Sub w t t'
         rep c                           = c
 
-pImprove env vi v                       = imp [] [] $ pbounds v vi
+pImprove env vi (v,wps)                 = imp [] [] wps
   where imp eq wps ((w,p):wps')
           | (w',wf,p'):_ <- hits        = do unifyM env (tcargs p) (tcargs p')
                                              imp ((w, impl2type (tVar v) p, wf (eVar w')) : eq) wps wps'
