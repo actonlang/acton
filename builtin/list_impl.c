@@ -320,8 +320,13 @@ void $list_delslice($list lst, $Slice slc) {
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (slen==0) return;
-  for (int ix = start+step*(slen-1); ix>= start; ix -= step)
-    $list_delitem(lst,ix);
+  $WORD *p = lst->data + start;
+  for (int i=0; i<slen-1; i++) {
+    memmove(p,p+i+1,(step-1)*sizeof($WORD));
+    p+=step-1;
+  }
+  memmove(p,p+slen,(len-1-(start+step*(slen-1)))*sizeof($WORD));
+  lst->length-=slen;
 }
 
 // Sequence /////////////////////////////////////////////////////////////////////////////

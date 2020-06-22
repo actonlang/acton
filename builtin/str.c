@@ -2340,8 +2340,14 @@ void $bytearray_delslice($bytearray self, $Slice slc) {
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   if (slen==0) return;
-  for (int ix = start+step*(slen-1); ix>= start; ix -= step)
-    $bytearray_delitem(self,ix);
+  unsigned char *p = self->str + start;
+  for (int i=0; i<slen-1; i++) {
+    memmove(p,p+i+1,step-1);
+    p+=step-1;
+  }
+  memmove(p,p+slen,len-1-(start+step*(slen-1)));
+  self->nbytes-=slen;
+  self->str[self->nbytes] = '\0';
 }
 
 // Sequence
