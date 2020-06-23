@@ -38,8 +38,14 @@ int main() {
   $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(66));
   $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(67));
   $print($NEW($tuple,1,b6));
-  // for (int i=0; i<100000; i++)
-  //    $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(65+i%26));
+  for (int i=0; i<100000; i++)
+    $Sequence$bytearray$witness->$class->append($Sequence$bytearray$witness,b6,to$int(65+i%26));
+  start = 8;
+  stop = 100000;
+  for (int i = 26; i>1; i--) {
+    step = i;
+    $Sequence$bytearray$witness->$class->__delslice__($Sequence$bytearray$witness,b6,&slc);
+  }
   $print($NEW($tuple,1,b6));
     
 }
