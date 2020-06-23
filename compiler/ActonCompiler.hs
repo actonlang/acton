@@ -141,9 +141,6 @@ data Paths      = Paths {projSrcRoot :: FilePath,
 srcFile paths           = joinPath (projSrcRoot paths:modpath paths) ++ ext paths
 outBase paths           = joinPath (projSysRoot paths:modpath paths)
 
-mPath                   :: A.ModName -> [String]
-mPath (A.ModName ns)    = map A.nstr ns
-
 checkDirs               :: FilePath -> [String] -> IO ()
 checkDirs path []       = return ()
 checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
@@ -270,7 +267,7 @@ chaseImportsAndCompile args paths task
                                       System.Exit.exitFailure
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _    = False
-        showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (mPath (name t)))++" ") ts
+        showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
         pythonFiles    = ["dwdm", "getenv", "logging", "netconf_","power","re","timestamp","traceback","xmlparse", "xmlprint"]
 
 chaseImportedFiles :: Args -> Paths -> [A.ModName] -> [CompileTask] -> IO ([CompileTask])
@@ -279,7 +276,7 @@ chaseImportedFiles args paths imps tasks
                                  let newtasks' = concat newtasks
                                  chaseRecursively (tasks++newtasks') (map name newtasks') (concatMap importsOf newtasks')
 
-  where readAFile tasks mn  = do let ps = mPath mn  -- read and parse file qn in the project directory, unless it is already in tasks 
+  where readAFile tasks mn  = do let ps = A.modPath mn  -- read and parse file qn in the project directory, unless it is already in tasks 
                                      srcBase = joinPath (projSrcRoot paths:ps)
                                  if head ps == "python"
                                   then return []
@@ -318,13 +315,13 @@ doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
                              = do ok <- checkUptoDate paths ".ty" actFile tyFile [pyFile] (syspath args) (importsOf t)
                                   if ok then do iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                                 return ifaces
-                                   else do checkDirs (projSysRoot paths) (init (mPath qn))
+                                   else do checkDirs (projSysRoot paths) (init (A.modPath qn))
                                            iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
-                                           (env',te) <- runRestPasses args (paths{modpath = mPath qn, ext = ".act"}) src env m
+                                           (env',te) <- runRestPasses args (paths{modpath = A.modPath qn, ext = ".act"}) src env m
                                            iff (verbose args) (putStrLn "Done.")
                                            return (Acton.Env.addMod qn te env', yangifaces)
-  where actFile             = joinPath (projSrcRoot paths : mPath qn)++ ".act"
-        outBase             = joinPath (projSysRoot paths : mPath qn)
+  where actFile             = joinPath (projSrcRoot paths : A.modPath qn)++ ".act"
+        outBase             = joinPath (projSysRoot paths : A.modPath qn)
         tyFile              = outBase ++ ".ty"
         pyFile              = outBase ++ ".py"
 {-        
@@ -335,25 +332,25 @@ doTask args paths ifaces@(env, yangifaces) t@(YangTask qn m) = do
          ok <- checkUptoDate paths ".yt" yangFile ytFile outFiles (syspath args) (importsOf t)
          if ok then do iff (verbose args) (putStrLn ("Skipping  "++ yangFile ++ " (files are up to date)."))
                        return ifaces
-          else do checkDirs (projSysRoot paths) (init (mPath qn))
+          else do checkDirs (projSysRoot paths) (init (A.modPath qn))
                   iff (verbose args) (putStr ("Compiling "++ yangFile ++ "... ") >> hFlush stdout)
-                  (etree,yangifaces',mbt) <- YangCompiler.runRestPasses qn (mkYangArgs args) (yangFile,joinPath (projSysRoot paths:init (mPath qn)),outbase) yangifaces m
+                  (etree,yangifaces',mbt) <- YangCompiler.runRestPasses qn (mkYangArgs args) (yangFile,joinPath (projSysRoot paths:init (A.modPath qn)),outbase) yangifaces m
                   iff (verbose args) (putStrLn ("Done."))
                   case mbt of
                      Nothing -> return (env, ((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
                      Just m -> do 
                                 iff (verbose args) (putStr ("Compiling "++  actFile ++ "... ") >> hFlush stdout)
                                 let m1 = Acton.Relabel.relab m
-                                (amods,t) <- runRestPasses args (Paths (projSysRoot paths) (projSysRoot paths) (mPath qn) ".act") "" env m1
+                                (amods,t) <- runRestPasses args (Paths (projSysRoot paths) (projSysRoot paths) (A.modPath qn) ".act") "" env m1
                                 iff (verbose args) (putStrLn ("Done."))
                                 return ((qn,t):amods,((id,Y.revisionOf etree),etree):((id,Nothing),etree):yangifaces')
-   where yangFile = joinPath (projSrcRoot paths: mPath qn) ++ ".yang"
-         outbase  = joinPath (projSysRoot paths: mPath qn)
+   where yangFile = joinPath (projSrcRoot paths: A.modPath qn) ++ ".yang"
+         outbase  = joinPath (projSysRoot paths: A.modPath qn)
          ytFile   = outbase ++ ".yt"
          tyFile   = outbase ++ ".ty"
          pyFile   = outbase ++ ".py"
          actFile  = outbase ++ ".act"
-         [_,i]    = mPath qn
+         [_,i]    = A.modPath qn
          id       = Y.Ident SpanEmpty i
 -}
 doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
@@ -365,7 +362,7 @@ doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
                                       InterfaceFiles.writeFile tyFile te
                                       putStrLn ("Done.")
                                       return (Acton.Env.addMod qn te env, yangifaces)
-   where pythonBase     = joinPath (syspath args : mPath qn)
+   where pythonBase     = joinPath (syspath args : A.modPath qn)
          typesFile      =  pythonBase ++ ".types"
          tyFile         =  pythonBase ++ ".ty"
          
@@ -378,19 +375,12 @@ checkUptoDate paths ext srcFile iFile outFiles libRoot imps
                                       outTimes <- mapM System.Directory.getModificationTime (iFile:outFiles)
                                       impsOK   <- mapM (impOK (head outTimes)) imps
                                       return (all (srcTime <) outTimes && and impsOK)
-  where impOK iTime mn = do let impFile = joinPath (projSysRoot paths : mPath mn) ++ ext
+  where impOK iTime mn = do let impFile = joinPath (projSysRoot paths : A.modPath mn) ++ ext
                             ok <- System.Directory.doesFileExist impFile
                             if ok then do impfileTime <- System.Directory.getModificationTime impFile
                                           return (impfileTime < iTime)
-                             else do let impSysFile = joinPath (libRoot : mPath mn) ++ ext
+                             else do let impSysFile = joinPath (libRoot : A.modPath mn) ++ ext
                                      ok <-  System.Directory.doesFileExist impSysFile
                                      if ok then do impfileTime <- System.Directory.getModificationTime impSysFile
                                                    return (impfileTime < iTime)
                                        else error ("********************\nError: cannot find interface file "++impFile)
-
-
-
--- Data.Graph requires that the type of keys for nodes is an instance of Ord 
-instance Ord A.ModName where
-    compare n1 n2 = compare (mPath n1) (mPath n2)
-    

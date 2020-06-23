@@ -165,7 +165,10 @@ instance Pretty ModName where
     pretty (ModName ns)             = dotCat pretty ns
 
 instance Pretty QName where
-    pretty (QName m n)              = pretty m <> dot <> pretty n
+    pretty (QName m n)
+--      | m == mBuiltin               = text "$" <> pretty n
+      | m == mBuiltin               = pretty n
+      | otherwise                   = pretty m <> dot <> pretty n
     pretty (NoQ n)                  = pretty n
 
 instance Pretty ModRef where
@@ -312,11 +315,11 @@ instance Pretty TVar where
 
 instance Pretty TCon where
     pretty (TC n [])                = pretty n
-    pretty (TC n [t])
-      | n == qnSequence             = brackets (pretty t)
-      | n == qnSetP                 = braces (pretty t)
-    pretty (TC n [kt,vt])
-      | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
+--    pretty (TC n [t])
+--      | n == qnSequence             = brackets (pretty t)
+--      | n == qnSetP                 = braces (pretty t)
+--    pretty (TC n [kt,vt])
+--      | n == qnMapping              = braces (pretty kt <> colon <+> pretty vt)
     pretty (TC n ts)                = pretty n <> brackets (commaList ts)
 
 instance Pretty QBinds where
@@ -395,7 +398,11 @@ instance Pretty Constraint where
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
 
 
-instance Pretty Substitution where
-    pretty s                        = vcat (map pr s)
-      where pr (tv,t)               = pretty tv <+> text "->" <+> pretty t
+instance Pretty (TVar,TVar) where
+    pretty (tv,tv')                 = pretty tv <+> text "~>" <+> pretty tv'
 
+instance Pretty (TVar,Type) where
+    pretty (tv,t)                   = pretty tv <+> text "~>" <+> pretty t
+
+instance Pretty Substitution where
+    pretty s                        = vcat (map pretty s)

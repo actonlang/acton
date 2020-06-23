@@ -119,7 +119,12 @@ data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
 modName ss      = ModName (map name ss)
 
-data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } deriving (Show,Read,Eq,Generic)
+modPath (ModName ns) = map nstr ns
+
+instance Ord ModName where
+    compare a b = compare (modPath a) (modPath b)
+
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } deriving (Show,Read,Eq,Ord,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 

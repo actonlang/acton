@@ -72,10 +72,11 @@ wmatch env (x,a)      (y,b)         = qmatch env x y && match a b
         match a@WInst{}  b@WInst{}  = qmatch env (tcname (proto a)) (tcname (proto b))
         match a          b          = False
 
-qmatch env a@QName{}  b@QName{}     = mname a == mname b && noq a == noq b
-qmatch env a@NoQ{}    b@NoQ{}       = noq a == noq b
-qmatch env a@NoQ{}    b@QName{}     = defaultmod env == mname b && noq a == noq b
-qmatch env a@QName{}  b@NoQ{}       = mname a == defaultmod env && noq a == noq b
+qmatch env a b                      = match (unalias env a) (unalias env b)
+  where match a@QName{}  b@QName{}  = mname a == mname b && noq a == noq b
+        match a@NoQ{}    b@NoQ{}    = noq a == noq b
+        match a@NoQ{}    b@QName{}  = defaultmod env == mname b && noq a == noq b
+        match a@QName{}  b@NoQ{}    = mname a == defaultmod env && noq a == noq b
 
 
 instance Pretty (QName,Witness) where
@@ -179,6 +180,7 @@ instance (Unalias a) => Unalias (Maybe a) where
     unalias env                     = fmap (unalias env)
 
 instance Unalias ModName where
+    unalias env m | m == mBuiltin   = m
     unalias env (ModName ns0)       = norm (names env) [] ns0
       where
         norm te pre []              = ModName (reverse pre)
@@ -193,6 +195,7 @@ instance Unalias QName where
                                                       Just (NAlias qn) -> qn
                                                       Just _ -> QName m' n
                                                       _ -> noItem m n
+                                        Nothing | inBuiltin env -> QName m n
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
@@ -368,7 +371,8 @@ findQName (QName m n) env   = case maybeFindMod (unalias env m) env of
                                     Just (NAlias qn) -> findQName qn env
                                     Just i -> i
                                     _ -> noItem m n
-                                _ -> noModule m
+                                Nothing | inBuiltin env -> findQName (NoQ n) env
+                                        | otherwise -> noModule m
 findQName (NoQ n) env       = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just info -> info
@@ -418,6 +422,9 @@ findWitness env cn f        = listToMaybe [ w | (c,w) <- wits env, qmatch env c 
 hasWitness                  :: Env -> QName -> QName -> Bool
 hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn)
 
+implProto                   :: Env -> TCon -> QName -> Bool
+implProto env p             = qmatch env (tcname p)
+
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
@@ -434,8 +441,8 @@ findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
 
-isAncestor                  :: Env -> TCon -> QName -> Bool
-isAncestor env c qn         = maybe False (const True) $ findAncestor env c qn
+hasAncestor                 :: Env -> TCon -> QName -> Bool
+hasAncestor env c qn        = maybe False (const True) $ findAncestor env c qn
 
 commonAncestors             :: Env -> TCon -> TCon -> [TCon]
 commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
@@ -464,14 +471,14 @@ hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
 
 mutClassByAttrs             :: Env -> [Name] -> [Type]
-mutClassByAttrs env ns      = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- names env, matchC te us ]
+mutClassByAttrs env ns      = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- unfold env $ names env, matchC te us ]
   where matchC te us        = not (null ns1) && cObject `elem` map snd us && all (`elem` inherited) ns2
           where (ns1,ns2)   = partition (`elem` dom (propSigs te)) ns
                 inherited   = concat [ dom (propSigs te) | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
 
 selTypeByAttrs              :: Env -> [Name] -> [Type]
-selTypeByAttrs env ns       = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- names env, matchC c te us ] ++
-                              [ tExist $ TC (NoQ p) (map (const tWild) q) | (p, NProto q us te) <- names env, matchP te us ]
+selTypeByAttrs env ns       = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- unfold env $ names env, matchC c te us ] ++
+                              [ tExist $ TC (NoQ p) (map (const tWild) q) | (p, NProto q us te) <- unfold env $ names env, matchP te us ]
   where matchC cn te us     = not (null ns1) && all (`elem` inherited) ns2
           where (ns1,ns2)   = partition (`elem` dom te) ns
                 inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ] ++
@@ -479,6 +486,11 @@ selTypeByAttrs env ns       = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NC
         matchP te us        = not (null ns1) && all (`elem` inherited) ns2
                   where (ns1,ns2)   = partition (`elem` dom te) ns
                         inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
+
+
+unfold env te               = map exp te
+  where exp (n, NAlias qn)  = (n, findQName qn env)
+        exp (n, i)          = (n, i)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
@@ -1021,6 +1033,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | LackSig Name
                                     | LackDef Name
                                     | NoRed Constraint
+                                    | NoSolve [Constraint]
                                     | NoUnify Type Type
                                     deriving (Show)
 
@@ -1041,6 +1054,7 @@ instance HasLoc TypeError where
     loc (LackSig n)                 = loc n
     loc (LackDef n)                 = loc n
     loc (NoRed c)                   = loc c
+    loc (NoSolve cs)                = loc cs
     loc (NoUnify t1 t2)             = loc t1
 
 typeError err                       = (loc err,render (expl err))
@@ -1058,6 +1072,7 @@ typeError err                       = (loc err,render (expl err))
     expl (LackSig n)                = text "Declaration lacks accompanying signature"
     expl (LackDef n)                = text "Signature lacks accompanying definition"
     expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+    expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
     expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
 
@@ -1110,5 +1125,6 @@ noMut n                             = Control.Exception.throw $ NoMut n
 lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
 lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
 noRed c                             = Control.Exception.throw $ NoRed c
+noSolve cs                          = Control.Exception.throw $ NoSolve cs
 noUnify t1 t2                       = Control.Exception.throw $ NoUnify t1 t2
 

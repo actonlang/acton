@@ -415,10 +415,15 @@ kwdpat = kwdItems (uncurry S.KwdPat) S.KwdPatStar S.KwdPatNil kpat apat
                      p <- apat
                      return (v,p)
      
-gen_pattern = do r <- funItems  S.PosPat S.PosPatStar S.PosPatNil apat apat kwdpat S.KwdPatNil
+gen_pattern = do r <- funItems  S.PosPat S.PosPatStar S.PosPatNil apat apat (fail "No kwdpat") S.KwdPatNil
                  case r of
                    Left (p,k) -> return $ S.PTuple NoLoc p k
                    Right p -> return p
+
+gen_pattern1 = do r <- funItems  S.PosPat S.PosPatStar S.PosPatNil apat apat kwdpat S.KwdPatNil
+                  case r of
+                    Left (p,k) -> return $ S.PTuple NoLoc p k
+                    Right p -> return p
 
 pelems ::Parser ([S.Pattern], Maybe S.Pattern)
 pelems = do
@@ -433,7 +438,7 @@ apat = addLoc (
         <|>
             ((try . parens) $ return $ S.PParen NoLoc (S.PTuple NoLoc S.PosPatNil S.KwdPatNil))
         <|>
-            ((try . parens) $ S.PParen NoLoc <$> gen_pattern)
+            ((try . parens) $ S.PParen NoLoc <$> gen_pattern1)
         <|>
             (brackets $ (maybe (S.PList NoLoc [] Nothing) (\(ps,mbp)-> S.PList NoLoc ps mbp)) <$> optional pelems)
         )
@@ -1079,7 +1084,7 @@ ttype    =  addLoc (
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)
-                       return (maybe (Builtin.tSet t) (Builtin.tMapping t) mbt))
+                       return (maybe (Builtin.tSetExist t) (Builtin.tMapping t) mbt))
         <|> try (parens (do alts <- some (try (utype <* vbar))
                             alt <- utype
                             return $ S.TUnion NoLoc (alts++[alt])))

@@ -17,7 +17,7 @@ class range:
   pass
 
 class BaseException:
-  pass
+  __init__ : () -> None
 
 class SystemExit (BaseException):
   pass
@@ -426,21 +426,12 @@ ord : (str) -> int
 def pow [A(Complex)] (a : A, b : A) -> A:
   return Complex.__pow__(a,b)
 
-def pow2 (a, b):
-  return Complex.__pow__(a,b)
-
 print :  (*A) -> None
 
 def reversed(seq : Sequence[A]) -> Iterator[A]:
   return seq.__reversed__()
 
-def reversed2(seq):
-  return Sequence.__reversed__(seq)
-
-def reversed3(seq):
-  return seq.__reversed__()
-
-round : (x : Real,n : ?int) -> Real
+round : [A(Real)] => (x : A, n : ?int) -> A
 
 sorted : [A(Ord)] => (Iterable[A]) -> list[A]
 
