@@ -218,7 +218,7 @@ instance InfEnv Stmt where
     
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = return ([], [(n, NSig (autoQuantize env sc) dec) | n <- ns], d)
+      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], d)
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
@@ -267,14 +267,6 @@ sliz2args (Sliz _ e1 e2 e3)             = map (maybe eNone id) [e1,e2,e3]
 
 bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
 
-autoQuantize env (TSchema l [] t)       = TSchema NoLoc q t
-  where q                               = [ quant v | v <- nub (tyfree t \\ (tvSelf : tvarScope env)), not $ generated v ]
-autoQuantize env sc                     = sc
-
-autoQuant env [] p k a                  = [ quant v | v <- nub (tvs \\ (tvSelf : tvarScope env)), not $ generated v ]
-  where tvs                             = tyfree p ++ tyfree k ++ tyfree a
-autoQuant env q p k a                   = q
-
 
 matchingDec n sc dec NoDec              = True
 matchingDec n sc dec dec'
@@ -285,7 +277,7 @@ matchingDec n sc dec dec'
 infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ dom sigs)
                                              bsigs <- mapM mkBSig (pvars ss \\ dom (sigs++dsigs))
                                              return (sigs ++ dsigs ++ bsigs)
-  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = autoQuantize env $ async sc, n <- ns ]
+  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns ]
         async (TSchema l q (TFun l' fx p k t))
           | canAsync q fx               = TSchema l q (TFun l' fxAsync p k t)
         async sc                        = sc
@@ -317,10 +309,9 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  t <- newTVar
                                                  traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
-                                                 return ([], [(n, NDef (monotype t) (deco d))], d{qbinds = q1})
+                                                 return ([], [(n, NDef (monotype t) (deco d))], d)
                                              _ ->
                                                  illegalRedef n
-      where q1                          = autoQuant env q p k a
 
     infEnv env d@(Actor _ n q p k b)
       | nodup (p,k)                     = case findName n env of
@@ -747,6 +738,10 @@ instance Infer Expr where
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
                                              t0 <- newTVar
+--                                             w <- newWitness
+--                                             (cs2,t,e') <- infer env e
+--                                             return (Impl w t (pIndexed ti t0) :
+--                                                     cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
                                              (cs2,e') <- inferSub env (tExist $ pIndexed ti t0) e
                                              return (cs1++cs2, t0, eCall (eDot (eDot e' protoKW) getitemKW) [eDot e' implKW, ix'])
     infer env (Slice l e [sl])          = do (cs1,t,e') <- infer env e
