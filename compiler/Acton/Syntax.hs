@@ -169,7 +169,7 @@ data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } derivi
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
 
-skolem tv       = case tvname tv of Name{} -> True; _ -> False
+skolem tv       = case tvname tv of Internal{} -> False; _ -> True
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 

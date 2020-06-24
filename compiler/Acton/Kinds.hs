@@ -133,25 +133,22 @@ instance KCheck Stmt where
     kchk env (Decl l ds)            = Decl l <$> kchk env ds
     kchk env (Signature l ns t d)   = Signature l ns <$> kchk env t <*> return d
 
-autoQuant env q p k a               = q ++ [ quant v | v <- nub (tvs \\ (tvSelf : tybound q ++ tvars env)), not $ generated v ]
-  where tvs                         = tyfree p ++ tyfree k ++ tyfree a
-
 instance KCheck Decl where
     kchk env (Def l n q p k t b d x)
-                                    = do q <- mapM instBind (q ++ auto_q)
-                                         let env1 = extvars (tybound q) env
-                                         Def l n <$> kchkQBinds env q <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
+                                    = do q1 <- mapM instBind q1
+                                         let env1 = extvars (tybound q1) env
+                                         Def l n <$> kchkQBinds env q1 <*> kchk env1 p <*> kchk env1 k <*> kexpWild KType env1 t <*>
                                                  kchkSuite env1 b <*> return d <*> kexpWild KFX env1 x
       where auto_q                  = map quant $ nub (tyfree p ++ tyfree k ++ tyfree t) \\ (tvSelf : tybound q ++ tvars env)
+            q1                      = q ++ auto_q
     kchk env (Actor l n q p k b)    = Actor l n <$> kchkQBinds env q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
       where env1                    = extvars (tybound q) env
     kchk env (Class l n q us b)     = Class l n <$> kchkQBinds env q <*> kchkBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
     kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQBinds env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Extension l n q us b) = do ext <- Extension l n <$> kchkQBinds env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-                                         kexpNoWild KType env1 (TC n (map tVar $ tybound q))
-                                         return ext
+    kchk env (Extension l n q us b) = do kexpNoWild KType env1 (TC n (map tVar $ tybound q))
+                                         Extension l n <$> kchkQBinds env q <*> kchkPBounds env1 us <*> kchkSuite env1 b
       where env1                    = extvars (tvSelf : tybound q) env
 
 instance KCheck Expr where
@@ -265,13 +262,13 @@ instance KCheck TSchema where
                                          let env1 = extvars (tybound q1) env
                                          TSchema l <$> kchkQBinds env1 q1 <*> kexpNoWild KType env1 t
       where ambig                   = tybound q \\ tyfree t
-            q1 | null q             = map quant $ nub (tyfree t) \\ (tvSelf : tvars env)
+            auto_q                  = map quant $ nub (tyfree t) \\ (tvSelf : tvars env)
+            q1 | null q             = auto_q
                | otherwise          = q
 
 
 kchkQBinds env []                   = return []
-kchkQBinds env (Quant v us : q)     = do (_k,v) <- kinferNoWild env v
-                                         us <- kchkBounds env us
+kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us
                                          q <- kchkQBinds env q
                                          return $ Quant v us : q
 
