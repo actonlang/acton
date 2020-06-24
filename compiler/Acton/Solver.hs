@@ -76,7 +76,7 @@ reduce' env eq (Cast t1 t2)                 = do cast' env t1 t2
 reduce' env eq (Sub w t1 t2)                = sub' env eq w t1 t2
 
 reduce' env eq c@(Impl w t@(TVar _ tv) p)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | univar tv                               = do defer [c]; return eq
   | Just wit <- search                      = do (cs,p',we) <- instWitness env [] wit
                                                  unifyM env (tcargs p) (tcargs p')
                                                  reduce env ((w, impl2type t p, we):eq) cs
@@ -95,7 +95,7 @@ reduce' env eq c@(Impl w t@(TExist _ pc) p)
   where search                              = findAncestor env pc (tcname p)
 
 reduce' env eq c@(Sel w t1@(TVar _ tv) n t2)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | univar tv                               = do defer [c]; return eq
   | Just (_,sc,dec) <- findTVAttr env tv n  = do (cs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
                                                  let e = eLambda [(x0,t1)] (app t (eDot (eVar x0) n) $ witsOf cs)
@@ -146,7 +146,7 @@ reduce' env eq (Sel w t1@(TUnion _ us) n t2)
         mkTCon (UCon c)                     = tCon (TC c [])
 
 reduce' env eq c@(Mut t1@(TVar _ tv) n t2)
-  | not $ skolem tv                         = do defer [c]; return eq
+  | univar tv                               = do defer [c]; return eq
   | Just (wf,sc,dec) <- findTVAttr env tv n = do when (dec/=Property) (noMut n)
                                                  (cs,t) <- instantiate env sc
                                                  let cs' = Cast t1 tObject : Cast t2 (subst [(tvSelf,t1)] t) : cs
@@ -232,20 +232,20 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem k (tNil k)
                                                  cast env r1 r2'
 
 cast' env (TVar _ tv) t2@TFun{}
-  | not $ skolem tv                         = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
+  | univar tv                               = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
                                                  substitute  tv t1
                                                  cast env t1 t2
 cast' env t1@TFun{} (TVar _ tv)
-  | not $ skolem tv                         = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
+  | univar tv                               = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  cast env t1 t2
 
 cast' env (TVar _ tv) t2@TTuple{}
-  | not $ skolem tv                         = do t1 <- instwild KType $ tTuple tWild tWild
+  | univar tv                               = do t1 <- instwild KType $ tTuple tWild tWild
                                                  substitute tv t1
                                                  cast env t1 t2
 cast' env t1@TTuple{} (TVar _ tv)
-  | not $ skolem tv                         = do t2 <- instwild KType $ tTuple tWild tWild
+  | univar tv                               = do t2 <- instwild KType $ tTuple tWild tWild
                                                  substitute tv t2
                                                  cast env t1 t2
 
@@ -253,11 +253,11 @@ cast' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 cast' env t1@(TVar _ tv) t2
-  | not $ skolem tv                         = defer [Cast t1 t2]
+  | univar tv                               = defer [Cast t1 t2]
   | Just tc <- findTVBound env tv           = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = defer [Cast t1 t2]
+  | univar tv                               = defer [Cast t1 t2]
   | otherwise                               = noRed (Cast t1 t2)
 
 cast' env t1 (TOpt _ t2)                    = cast env t1 t2                -- Only matches when t1 is NOT a variable
@@ -318,7 +318,7 @@ castP env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = True
 
 castP env t1@(TVar _ tv) t2
-  | not $ skolem tv                         = False
+  | univar tv                               = False
   | Just tc <- findTVBound env tv           = castP env (tCon tc) t2
 
 castP env t1 t2@(TVar _ tv)                 = False
@@ -385,10 +385,10 @@ unify' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 unify' env (TVar _ tv) t2
-  | not $ skolem tv                         = do when (tv `elem` tyfree t2) (infiniteType tv)
+  | univar tv                               = do when (tv `elem` tyfree t2) (infiniteType tv)
                                                  substitute tv t2
 unify' env t1 (TVar _ tv)
-  | not $ skolem tv                         = do when (tv `elem` tyfree t1) (infiniteType tv)
+  | univar tv                               = do when (tv `elem` tyfree t1) (infiniteType tv)
                                                  substitute tv t1
 
 unify' env t1 t2                            = noUnify t1 t2
@@ -467,20 +467,20 @@ sub' env eq w r1@(TRow _ k n t1 r1') r2     = do (t2,r2') <- findElem k (tNil k)
                                                  reduce env ((w, rowFun k r1 r2, e):eq) cs
 
 sub' env eq w (TVar _ tv) t2@TFun{}
-  | not $ skolem tv                         = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
+  | univar tv                               = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t1
                                                  sub env eq w t1 t2
 sub' env eq w t1@TFun{} (TVar _ tv)
-  | not $ skolem tv                         = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
+  | univar tv                               = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  sub env eq w t1 t2
 
 sub' env eq w (TVar _ tv) t2@TTuple{}
-  | not $ skolem tv                         = do t1 <- instwild KType $ tTuple tWild tWild
+  | univar tv                               = do t1 <- instwild KType $ tTuple tWild tWild
                                                  substitute tv t1
                                                  sub env eq w t1 t2
 sub' env eq w t1@TTuple{} (TVar _ tv)
-  | not $ skolem tv                         = do t2 <- instwild KType $ tTuple tWild tWild
+  | univar tv                               = do t2 <- instwild KType $ tTuple tWild tWild
                                                  substitute tv t2
                                                  sub env eq w t1 t2
 
@@ -488,10 +488,10 @@ sub' env eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
   | tv1 == tv2                              = return (idwit w t1 t2 : eq)
 
 sub' env eq w t1@(TVar _ tv) t2
-  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
+  | univar tv                               = do defer [Sub w t1 t2]; return eq
 
 sub' env eq w t1 t2@(TVar _ tv)
-  | not $ skolem tv                         = do defer [Sub w t1 t2]; return eq
+  | univar tv                               = do defer [Sub w t1 t2]; return eq
 
 sub' env eq w t1 t2                         = do cast env t1 t2
                                                  return (idwit w t1 t2 : eq)
@@ -510,7 +510,7 @@ findElem k r0 n r tl                        = do r0' <- msubst r0
         findElem' r0 n (TNil _ _) tl        = kwdNotFound n
         findElem' r0 n r2@(TVar _ tv) tl
           | r2 == tl                        = conflictingRow tv
-          | skolem tv                       = kwdNotFound n
+          | not $ univar tv                 = kwdNotFound n
           | otherwise                       = do t <- newTVar
                                                  r <- newTVarOfKind k
                                                  substitute tv (tRow k n t r)

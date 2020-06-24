@@ -36,7 +36,7 @@ type NormM a                        = State Int a
 newName                             :: String -> NormM Name
 newName s                           = do n <- get
                                          put (n+1)
-                                         return $ Internal s n NormPass
+                                         return $ Internal NormPass s n
 
                                     -- builtin names are last in global; local names are first in local
 data NormEnv                        = NormEnv {global :: TEnv, local :: [Name], currentmod :: ModName} deriving Show

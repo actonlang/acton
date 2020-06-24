@@ -92,26 +92,25 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
 
 type Target     = Expr
 
-data Pass       = ParsePass | KindPass | TypesPass | NormPass | CPSPass | DeactPass | LLiftPass | CPass | NoPass
+data Prefix     = Kindvar | Wildvar | Typevar | Witness | TypesPass | NormPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
-data Name       = Name SrcLoc String | Derived Name String | Internal String Int Pass deriving (Generic)
+data Name       = Name SrcLoc String | Derived Name String | Internal Prefix String Int deriving (Generic)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
 
 nstr (Name _ s)             = s
 nstr (Derived n s)          = nstr n ++ "$" ++ s
-nstr (Internal s i p)       = s ++ "$" ++ show i ++ suffix p
-  where suffix ParsePass    = "p"
-        suffix KindPass     = "k"
-        suffix TypesPass    = "t"
-        suffix NormPass     = "n"
-        suffix CPSPass      = "c"
-        suffix DeactPass    = "d"
-        suffix LLiftPass    = "l"
-        suffix CPass        = "C"
-        suffix NoPass       = ""
+nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
+  where prefix Kindvar      = "K"
+        prefix Wildvar      = "_"
+        prefix Typevar      = "T"
+        prefix Witness      = "w"
+        prefix TypesPass    = "t"
+        prefix NormPass     = "n"
+        prefix CPSPass      = "c"
+        prefix LLiftPass    = "l"
 
 name            = Name NoLoc
 
@@ -168,8 +167,6 @@ data Kind       = KType | KProto | KFX | PRow | KRow | KFun [Kind] Kind | KVar N
 data TSchema    = TSchema { scloc::SrcLoc, scbind::QBinds, sctype::Type } deriving (Show,Read,Generic)
 
 data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Generic) -- the Name is an uppercase letter, optionally followed by digits.
-
-skolem tv       = case tvname tv of Internal{} -> False; _ -> True
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
@@ -321,7 +318,7 @@ tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
 type Substitution = [(TVar,Type)]
 
 
-instance Data.Binary.Binary Pass
+instance Data.Binary.Binary Prefix
 instance Data.Binary.Binary Name
 instance Data.Binary.Binary ModName
 instance Data.Binary.Binary QName
@@ -473,13 +470,13 @@ instance Eq Expr where
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
     Derived n1 s1       == Derived n2 s2        = n1 == n2 && s1 == s2
-    Internal s1 i1 p1   == Internal s2 i2 p2    = s1 == s2 && i1 == i2 && p1 == p2
+    Internal p1 _ i1    == Internal p2 _ i2     = p1 == p2 && i1 == i2
     _                   == _                    = False
 
 instance Ord Name where
     Name _ s1           <= Name _ s2            = s1 <= s2
     Derived n1 s1       <= Derived n2 s2        = (n1,s1) <= (n2,s2)
-    Internal s1 i1 p1   <= Internal s2 i2 p2    = (s1,i1,p1) <= (s2,i2,p2)
+    Internal p1 _ i1    <= Internal p2 _ i2     = (p1,i1) <= (p2,i2)
     Name{}              <= Derived{}            = True
     Name{}              <= Internal{}           = True
     Derived{}           <= Internal{}           = True

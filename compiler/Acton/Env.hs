@@ -326,7 +326,7 @@ define te env               = foldl addWit env1 ws
 defineTVars                 :: QBinds -> Env -> Env
 defineTVars [] env          = env
 defineTVars (Quant tv@(TV k n) us : q) env
-  | not $ skolem tv         = internal (loc tv) "Attempted scoping of non skolem type variable"
+  | univar tv               = internal (loc tv) "Attempted scoping of unification variable"
   | otherwise               = foldl addWit env1 ws
   where env1                = defineTVars q env{ names = (n, NTVar k mba) : names env }
         (mba,us')           = case mro2 env us of ([],_) -> (Nothing,us); _ -> (Just (head us), tail us)
@@ -748,18 +748,23 @@ setSubstitution                         :: Map TVar Type -> TypeM ()
 setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
 
 
-pNames                                  = [ Internal "p" i TypesPass | i <- [0..] ]
-kNames                                  = [ Internal "k" i TypesPass | i <- [0..] ]
-xNames                                  = [ Internal "x" i TypesPass | i <- [0..] ]
+univar (TV _ (Internal Typevar _ _))    = True
+univar (TV _ (Internal Wildvar _ _))    = True
+univar _                                = False
 
-newWitness                              = Internal "w" <$> newUnique <*> return TypesPass
 
-newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal (str k) <$> newUnique <*> return NoPass)
-  where str KType                       = "V"
-        str KFX                         = "X"
-        str PRow                        = "P"
-        str KRow                        = "K"
-        str _                           = "C"
+pNames                                  = map (Internal TypesPass "p") [0..]
+kNames                                  = map (Internal TypesPass "k") [0..]
+xNames                                  = map (Internal TypesPass "x") [0..]
+
+newWitness                              = Internal Witness "" <$> newUnique
+
+newTVarOfKind k                         = TVar NoLoc <$> TV k <$> (Internal Typevar (str k) <$> newUnique)
+  where str KType                       = ""
+        str KFX                         = "x"
+        str PRow                        = "p"
+        str KRow                        = "k"
+        str _                           = ""
 
 newTVars ks                             = mapM newTVarOfKind ks
 
@@ -774,7 +779,7 @@ subst s x0
         (s0,s1)                         = partition ((`elem` clash) . fst) s
         clash                           = dom s `intersect` tyfree (rng s)
         used                            = dom s ++ tyfree (rng s)                             
-        tmp                             = take (length clash) $ map (\u -> TV KWild (Internal "T" u TypesPass)) [1 ..] \\ used
+        tmp                             = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
 
 erase x                                 = subst s x
   where s                               = [ (tv, tWild) | tv <- nub (tyfree x) ]

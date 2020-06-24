@@ -43,9 +43,9 @@ getSubstitution                     :: KindM (Map KVar Kind)
 getSubstitution                     = state $ \st -> (currsubst st, st)
 
 
-newName s                           = Internal s <$> newUnique <*> return KindPass
+newWildvar                          = Internal Wildvar "" <$> newUnique
 
-newKVar                             = KVar <$> newName "K"
+newKVar                             = KVar <$> (Internal Kindvar "" <$> newUnique)
 
 
 data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
@@ -306,7 +306,7 @@ instance KInfer TCon where
 
 instance KInfer Type where
     kinfer env True (TWild l)       = do k <- newKVar
-                                         n <- newName "_"
+                                         n <- newWildvar
                                          return (k, TVar l (TV k n))
     kinfer env False (TWild l)      = Acton.Env.err1 l "Illegal wildcard type"
     kinfer env w (TVar l v)         = do (k,v) <- kinfer env w v

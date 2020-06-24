@@ -65,7 +65,7 @@ runL                            :: LiftM a -> (a, LiftState)
 runL m                          = runState m ([],[],[1..])
 
 newName                         :: String -> LiftM Name
-newName s                       = state (\(totop,tonext,uniq:supply) -> (Internal s uniq LLiftPass, (totop,tonext,supply)))
+newName s                       = state (\(totop,tonext,uniq:supply) -> (Internal LLiftPass s uniq, (totop,tonext,supply)))
 
 swapLifted                      :: [Stmt] -> LiftM [Stmt]
 swapLifted stmts                = state (\(totop,tonext,supply) -> (tonext, (totop,stmts,supply)))
