@@ -86,8 +86,8 @@ instance Transform Type where
                                           else maybe (trans env p) (flip posRow (trans env p)) (fstpar env)
     trans env (TOpt loc t)              = TOpt loc $ trans env t
     trans env (TRow loc k nm s r)       = TRow loc k nm (trans env s) (trans env r)
-    trans env (TCon loc tc)             = maybe (TCon NoLoc (trans env tc)) (const (TExist NoLoc (trans env tc))) (lookup (noq (tcname tc)) (protocols env))
-    trans env (TExist _ tc)             = TExist NoLoc (trans env tc)
+--    trans env (TCon loc tc)             = maybe (TCon NoLoc (trans env tc)) (const (TExist NoLoc (trans env tc))) (lookup (noq (tcname tc)) (protocols env))
+--    trans env (TExist _ tc)             = TExist NoLoc (trans env tc)
     trans env t                         = t
 
 instance Transform TCon where

@@ -100,7 +100,6 @@ instance CPretty Type where
     cpretty env (TUnion _ as)           = parens (vbarSep pretty as)
       where vbarSep f                   = hsep . punctuate (space <> char '|') . map f
     cpretty env (TOpt _ t)              = cpretty env t
-    cpretty env (TExist _ p)            = cpretty env p <> text "$opaque"
     cpretty env (TNone _)               = text "void"
     cpretty env (TWild _)               = text "_"
     cpretty env row                     = prettyKwdRow row

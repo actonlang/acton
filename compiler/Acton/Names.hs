@@ -353,7 +353,6 @@ instance Vars Type where
     free (TTuple _ p k)             = free p ++ free k
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
-    free (TExist  _ p)              = free p
     free (TRow _ _ _ t r)           = free t ++ free r
     free (TFX _ fx)                 = free fx
     free _                          = []

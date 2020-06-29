@@ -122,26 +122,32 @@ instance (InfEnv a) => InfEnv [a] where
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
+
     infEnv env (Assign l pats e)
       | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, te, Assign l pats' e')
-    infEnv env (MutAssign l tg e)       = do (cs1,t0,tg') <- infTarget env tg
-                                             (cs2,e') <- inferSub env (bound tg' t0) e
-                                             return (cs1++cs2, [], assign tg' e')
-      where bound Slice{} t             = tExist $ pIterable t
-            bound _ t                   = t
-            assign (Index _ e ix) rhs   = Expr l $ eCall (eDot (eDot e protoKW) setitemKW) [eDot e implKW, ix, rhs]
-            assign (Slice _ e [sl]) rhs = Expr l $ eCall (eDot (eDot e protoKW) setsliceKW) (eDot e implKW : sliz2args sl ++ [rhs])
-            assign tg rhs               = MutAssign l tg rhs
+
+    infEnv env (MutAssign l tg e)       = do (cs1,t,w,tg') <- infTarget env tg
+                                             (cs2,e') <- inferSub env t e
+                                             return (cs1++cs2, [], assign w tg' e')
+      where assign w (Index _ e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
+            assign w (Slice _ e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
+            assign _ tg r               = MutAssign l tg r
+
     infEnv env (AugAssign l tg (Op _ o) e)
-                                        = do (cs1,t,lval) <- infTarget env tg
+                                        = do (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
                                              (cs3,e') <- inferSub env t e
-                                             w <- newWitness
-                                             return (Impl w t (protocol o) : 
-                                                     cs1++cs2++cs3, [], assign lval $ eCall (eDot (eVar w) (method o)) [rval,e'])
-      where protocol PlusA              = pPlus
+                                             w' <- newWitness
+                                             return (Impl w' t (protocol o) : 
+                                                     cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
+      where assign _ (Var l (NoQ n)) r  = Assign l [PVar NoLoc n Nothing] r
+            assign w (Index l e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
+            assign w (Slice l e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
+            assign _ tg r               = MutAssign l tg r
+            
+            protocol PlusA              = pPlus
             protocol MinusA             = pMinus
             protocol MultA              = pComplex
             protocol PowA               = pComplex
@@ -167,24 +173,22 @@ instance InfEnv Stmt where
             method BXorA                = ixorKW
             method BAndA                = iandKW
             method MMultA               = imatmulKW
-            assign (Var l (NoQ n)) rhs  = Assign l [PVar NoLoc n Nothing] rhs
-            assign (Index l e ix) rhs   = Expr l $ eCall (eDot (eDot e protoKW) setitemKW) [eDot e implKW, ix, rhs]
-            assign (Slice l e [sl]) rhs = Expr l $ eCall (eDot (eDot e protoKW) setsliceKW) (eDot e implKW : sliz2args sl ++ [rhs])
-            assign tg rhs               = MutAssign l tg rhs
+            
     infEnv env (Assert l e1 e2)         = do (cs1,e1') <- inferBool env e1
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
-    infEnv env (Delete l tg)            = do (cs,t,tg') <- infTarget env tg
-                                             return (constr tg' t ++ cs, [], delete tg')
-      where constr Var{} t              = [Cast tNone t]
+    infEnv env (Delete l tg)            = do (cs,t,w,tg') <- infTarget env tg
+                                             return (constr tg' t ++ cs, [], delete w tg')
+      where delete _ (Var _ (NoQ n))    = Assign l [PVar NoLoc n Nothing] eNone
+            delete w (Index _ e ix)     = Expr l $ eCall (eDot (eVar w) delitemKW) [e, ix]
+            delete w (Slice _ e [sl])   = Expr l $ eCall (eDot (eVar w) delsliceKW) (e : sliz2args sl)
+            delete _ tg                 = MutAssign l tg eNone
+            
+            constr Var{} t              = [Cast tNone t]
             constr Dot{} t              = [Cast tNone t]
             constr _ t                  = []
-            delete (Var _ (NoQ n))      = Assign l [PVar NoLoc n Nothing] eNone
-            delete (Index _ e ix)       = Expr l $ eCall (eDot (eDot e protoKW) delitemKW) [eDot e implKW, ix]
-            delete (Slice _ e [sl])     = Expr l $ eCall (eDot (eDot e protoKW) delsliceKW) (eDot e implKW : sliz2args sl)
-            delete tg                   = MutAssign l tg eNone
-            
+
     infEnv env s@(Return l Nothing)     = do t <- currRet
                                              return ([Cast tNone t], [], Return l Nothing)
     infEnv env (Return l (Just e))      = do t <- currRet
@@ -254,20 +258,26 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                              NSig (TSchema _ [] t') _ ->
                                                  err1 n "Variable not yet assigned"
                                              NVar t ->
-                                                 return ([], t, Var l (NoQ n))
+                                                 return ([], t, name "_", Var l (NoQ n))
                                              NSVar t ->
-                                                 return ([], t, Var l (NoQ n))
+                                                 return ([], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
-                                             t <- newTVar
-                                             (cs2,e') <- inferSub env (tExist $ pIndexed ti t) e
-                                             return (cs1++cs2, t, Index l e' ix')
+                                             (cs2,t,e') <- infer env e
+                                             t0 <- newTVar
+                                             w <- newWitness
+                                             return (Impl w t (pIndexed ti t0) :
+                                                     Cast t tObject :
+                                                     cs1++cs2, t0, w, Index l e' ix')
 infTarget env (Slice l e [sl])          = do (cs1,sl') <- inferSlice env sl
-                                             t <- newTVar
-                                             (cs2,e') <- inferSub env (tExist $ pSliceable t) e
-                                             return (cs1++cs2, t, Slice l e' [sl'])
+                                             (cs2,t,e') <- infer env e
+                                             t0 <- newTVar
+                                             w <- newWitness
+                                             return (Impl w t (pSliceable t0) :
+                                                     Cast t tObject :
+                                                     cs1++cs2, t, w, Slice l e' [sl'])
 infTarget env (Slice l e slz)           = notYet l "Multidimensional slicing"
 infTarget env (Dot l e n)               = do (cs,t1,e') <- infer env e
                                              t2 <- newTVar
@@ -275,7 +285,7 @@ infTarget env (Dot l e n)               = do (cs,t1,e') <- infer env e
                                              st <- newTVar
                                              return (Mut t1 n t2 :
                                                      Cast (fxMut st) fx :
-                                                     cs, t2, Dot l e' n)
+                                                     cs, t2, name "_", Dot l e' n)
 
 sliz2args (Sliz _ e1 e2 e3)             = map (maybe eNone id) [e1,e2,e3]
 
@@ -758,8 +768,8 @@ instance Infer Expr where
                                              (cs2,t,e') <- infer env e
                                              return (Impl w t (pIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
-    infer env (Slice l e [sl])          = do (cs1,t,e') <- infer env e
-                                             (cs2,sl') <- inferSlice env sl
+    infer env (Slice l e [sl])          = do (cs1,sl') <- inferSlice env sl
+                                             (cs2,t,e') <- infer env e
                                              t0 <- newTVar
                                              w <- newWitness
                                              return (Impl w t (pSliceable t0) :

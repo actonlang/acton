@@ -5,9 +5,6 @@ import Acton.Syntax
     
 selfKW                              = name "__self__"
 
-protoKW                             = name "proto"              -- TExist attribute
-implKW                              = name "impl"               -- TExist attribute
-
 initKW                              = name "__init__"
 fromiterKW                          = name "__fromiter__"
 lenKW                               = name "__len__"
@@ -219,10 +216,10 @@ tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
 ---
-tSequence a                         = tExist (pSequence a)
-tMapping a b                        = tExist (pMapping a b)
-tSetExist a                         = tExist (pSet a)
-tCollection a                       = tExist (pCollection a)
+tSequence a                         = tCon (pSequence a)
+tMapping a b                        = tCon (pMapping a b)
+tSetExist a                         = tCon (pSet a)
+tCollection a                       = tCon (pCollection a)
 
 uniLit (ULit l)                     = True
 uniLit _                            = False

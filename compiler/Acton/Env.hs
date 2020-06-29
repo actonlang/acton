@@ -223,7 +223,6 @@ instance Unalias QBind where
 
 instance Unalias Type where
     unalias env (TCon l c)          = TCon l (unalias env c)
-    unalias env (TExist l p)        = TExist l (unalias env p)
     unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
@@ -551,7 +550,6 @@ instance WellFormed TCon where
             
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc
-    wf env (TExist _ tc)    = wf env tc
     wf env (TFun _ x p k t) = wf env x ++ wf env p ++ wf env p ++ wf env k ++ wf env t
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
@@ -927,7 +925,6 @@ instance Subst Type where
                                             Just t ->  msubst t
                                             Nothing -> return (TVar l v)
     msubst (TCon l c)               = TCon l <$> msubst c
-    msubst (TExist l p)             = TExist l <$> msubst p
     msubst (TFun l fx p k t)        = TFun l <$> msubst fx <*> msubst p <*> msubst k <*> msubst t
     msubst (TTuple l p k)           = TTuple l <$> msubst p <*> msubst k
     msubst (TUnion l as)            = return $ TUnion l as
@@ -940,7 +937,6 @@ instance Subst Type where
 
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
-    tyfree (TExist _ p)             = tyfree p
     tyfree (TFun _ fx p k t)        = tyfree fx ++ tyfree p ++ tyfree k ++ tyfree t
     tyfree (TTuple _ p k)           = tyfree p ++ tyfree k
     tyfree (TUnion _ as)            = []
