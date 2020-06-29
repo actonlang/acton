@@ -92,7 +92,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Kindvar | Wildvar | Typevar | Witness | TypesPass | NormPass | CPSPass | LLiftPass
+data Prefix     = Kindvar | Xistvar | Wildvar | Typevar | Witness | TypesPass | NormPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Derived Name String | Internal Prefix String Int deriving (Generic)
@@ -104,6 +104,7 @@ nstr (Name _ s)             = s
 nstr (Derived n s)          = nstr n ++ "$" ++ s
 nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
   where prefix Kindvar      = "K"
+        prefix Xistvar      = "X"
         prefix Wildvar      = "_"
         prefix Typevar      = "T"
         prefix Witness      = "w"
@@ -205,10 +206,6 @@ data Constraint = Cast  Type Type
                 deriving (Show,Read,Generic)
 
 type Constraints = [Constraint]
-
-generated (TV k n)  = case n of
-                        Name{} -> False
-                        _      -> True
 
 dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec fxWild
 

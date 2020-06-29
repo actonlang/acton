@@ -399,10 +399,16 @@ instance Pretty Constraint where
 
 
 instance Pretty (TVar,TVar) where
-    pretty (tv,tv')                 = pretty tv <+> text "~>" <+> pretty tv'
+    pretty (tv,tv')                 = pretty tv <+> text "~" <+> pretty tv'
 
 instance Pretty (TVar,Type) where
-    pretty (tv,t)                   = pretty tv <+> text "~>" <+> pretty t
+    pretty (tv,t)                   = pretty tv <+> text "~" <+> pretty t
+
+instance Pretty (TVar,TCon) where
+    pretty (tv,tc)                  = pretty tv <+> text "~" <+> pretty tc
+
+instance Pretty (TVar,Name) where
+    pretty (tv,n)                   = pretty tv <> text "." <> pretty n
 
 instance Pretty Substitution where
     pretty s                        = vcat (map pretty s)
