@@ -31,19 +31,27 @@ simplify' env te eq cs                      = do eq1 <- reduce env eq cs
                                                  env1 <- msubst env 
                                                  te1 <- msubst te
                                                  improve env1 te1 eq1 cs1
- 
--- Reduce aggressively or fail
-solve                                       :: Env -> Constraints -> TypeM Equations
-solve env cs                                = do cs <- msubst cs
+
+
+-- Reduce aggressively or fail:
+
+solve                                       :: (Subst a, Pretty a) => Env -> a -> Constraints -> TypeM (Constraints,Equations)
+solve env te cs                             = do cs <- msubst cs
                                                  traceM ("  =solve: " ++ prstrs cs)
-                                                 solve' env [] cs
+                                                 solve' env te [] cs
 
-solve'                                      :: Env -> Equations -> Constraints -> TypeM Equations
-solve' env eq []                            = return eq
-solve' env eq cs                            = do (cs1,eq1) <- simplify' env ([]::TEnv) eq cs
-                                                 approximate env eq1 cs1
+solve'                                      :: (Subst a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+solve' env te eq []                         = return ([], eq)
+solve' env te eq cs                         = do (cs1,eq1) <- simplify' env te eq cs
+                                                 approximate env te eq1 cs1
 
--- approximation criteria: all cs / all cs under a QBind / all noqual cs / all ambig cs
+solveAll                                    :: (Subst a, Pretty a) => Env -> a -> Constraints -> TypeM Equations
+solveAll env te cs                          = do (cs',eq') <- solve env te cs
+                                                 loop eq' cs'
+  where loop eq []                          = return eq
+        loop eq cs                          = do (cs',eq') <- solve' env te eq cs
+                                                 loop (eq'++eq) cs'
+
 
 ----------------------------------------------------------------------------------------------------------------------
 -- reduce
@@ -613,12 +621,13 @@ instwild k (TWild _)                    = newTVarOfKind k
 instwild _ (TFun l e p k t)             = TFun l <$> instwild KFX e <*> instwild PRow p <*> instwild KRow k <*> instwild KType t
 instwild _ (TTuple l p k)               = TTuple l <$> instwild PRow p <*> instwild KRow k
 instwild _ (TOpt l t)                   = TOpt l <$> instwild KType t
-instwild _ (TCon l c)                   = TCon l <$> TC (tcname c) <$> mapM (instwild KType) (tcargs c)
+instwild _ (TCon l c)                   = TCon l <$> instwildcon c
 instwild _ (TRow l k n t r)             = TRow l k n <$> instwild KType t <*> instwild k r
 instwild _ (TFX l (FXMut t))            = TFX l <$> FXMut <$> instwild KFX t
 instwild _ (TFX l (FXAct t))            = TFX l <$> FXMut <$> instwild KFX t
 instwild k t                            = return t
 
+instwildcon c                           = TC (tcname c) <$> mapM (instwild KType) (tcargs c)
 
 ----------------------------------------------------------------------------------------------------------------------
 -- GLB
@@ -863,29 +872,30 @@ findWitAttrs env attrs bounds           = [ ((v,n), WInst p (NoQ w) ws) | (v,ns)
 -- Solve ambiguous Impl constraints according to a predefined defaulting table
 -- Fail if no table row matches
 
-approximate env eq []                   = return eq
-approximate env eq cs
+approximate                             :: (Subst a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+approximate env te eq []                = return ([], eq)
+approximate env te eq cs
   | not $ null vvs                      = trace ("  *varvar-approx " ++ prstrs vvs) $ 
                                           do sequence [ unify env (tVar v) (tVar v') | (v,v') <- vvs ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | not $ null lowerBnd                 = do traceM ("  *S-approx (dn) " ++ prstrs lowerBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- lowerBnd ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | not $ null upperBnd                 = do traceM ("  *S-approx (up) " ++ prstrs upperBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- upperBnd ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | not $ null mutC                     = trace ("  *Unique mutation target " ++ prstrs mutC) $ 
                                           do sequence [ unify env (tVar v) =<< instwild KType t | (v,t) <- mutC ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | not $ null selC                     = trace ("  *Unique selection class " ++ prstrs selC) $
                                           do sequence [ unify env (tVar v) =<< instwild KType t | (v,t) <- selC ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | not $ null selP                     = trace ("  *Unique selection protocol " ++ prstrs selP) $
-                                          do cs' <- sequence [ Impl <$> newWitness <*> return (tVar v) <*> return p | (v,p) <- selP ]
-                                             solve' env eq (cs'++cs)
+                                          do cs' <- sequence [ Impl <$> newWitness <*> return (tVar v) <*> instwildcon p | (v,p) <- selP ]
+                                             simplify' env te eq (cs'++cs)
   | not $ null defaults                 = trace ("  *defaulting " ++ prstrs defaults) $
                                           do sequence [ unify env (tVar v) =<< instwild KType t | (v,t) <- defaults ]
-                                             solve' env eq cs
+                                             simplify' env te eq cs
   | otherwise                           = --trace ("names env:\n" ++ prstr (unalias env $ names env)) $ 
                                           trace ("no approx ") $ noSolve cs
   where info                            = varinfo cs
