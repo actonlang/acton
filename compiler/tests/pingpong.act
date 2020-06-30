@@ -1,0 +1,10 @@
+actor Pingpong(i):
+    var count = 0
+    def ping():
+        count = count + 1
+        print('{i} Ping {count}')
+        after 1: pong(-count)
+    def pong(q):
+        print('{i}      {q} Pong')
+        after 2: ping()
+    ping()

@@ -521,6 +521,7 @@ instance Eq Type where
     TWild _             == TWild _              = True
     TNil _ s1           == TNil _ s2            = s1 == s2
     TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
+    TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
 
 

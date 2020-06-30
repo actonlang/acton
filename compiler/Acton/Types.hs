@@ -49,9 +49,15 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              (cs,te,ss1) <- (if inBuiltin env then infEnv else infSuiteEnv) env ss
                                              popFX
                                              eq <- solveAll env te cs
-                                             te1 <- msubst te
-                                             let (sigs,decls) = splitSigs te1
-                                             return (decls ++ exclude (dom decls) sigs, bindWits eq ++ ss1)
+                                             te <- msubst te
+                                             let s = [ (tv,tStr) | tv <- tyfree te ]
+                                                 te1 = subst s te
+                                             case inBuiltin env of
+                                                False -> return (te1, bindWits eq ++ ss1)
+                                                True -> let (sigs,decls) = splitSigs te1
+                                                            te2 = decls ++ unSig (exclude (dom decls) sigs)
+                                                        in return (te2, bindWits eq ++ ss1)
+
 
 class Infer a where
     infer                               :: Env -> a -> TypeM (Constraints,Type,a)
@@ -330,7 +336,8 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
 instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ _)
       | nodup (p,k)                     = case findName n env of
-                                             NSig sc dec | matchingDec n sc dec (deco d) ->
+                                             NSig sc dec | matchingDec n sc dec (deco d) -> do
+                                                 traceM ("\n## infEnv def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  t <- newTVar
@@ -460,16 +467,12 @@ matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (p
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, NVar t)              = simplify env te [Cast t t0]
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
-        check1 (n, NDef sc _)
-          -- Note: defs in actor bodies arent't generalized, so the only possibility sc can have a nonempty scbind 
-          -- is that it was copied from a signature (NSig) for n (see infEnv Def above). And then that signature
-          -- has to be the sig resulting from the lookup in te0 below. Otherwise (if scbind sc is empty) then n had
-          -- no real signature, so the sig in te0 must have been synthesized with an empty q in infActorEnv (mkDSig).
-          | scbind sc == q              = do (cs,eq) <- solveScoped (defineTVars q env) (tybound q) te [asyncast (sctype sc) t0]
-                                             checkNoEscape env (tybound q)      
-                                             return (cs,eq)
-          | otherwise                   = internal (loc n) "checkActAssump"
+        check1 (n, NDef sc _)           = do (cs1,t) <- instantiate env sc
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te (asyncast t t0 : cs1)
+                                             checkNoEscape env (tybound q)
+                                             return (cs2, eq)
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
+        check1 (n, i)                   = return ([], [])
 
 matchAssumption env cl cs def
   | null q1                             = do traceM ("## matchAssumption 1 ")
@@ -522,7 +525,7 @@ instance Check Decl where
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchAssumption env cl cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
       where cswf                        = wellformed env (q,a)
-            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q env
+            env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
 
     checkEnv env cl (Actor l n q p k b) = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newTVar
@@ -541,13 +544,13 @@ instance Check Decl where
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ 
                                           setInDecl False env
-                                          -- Don't look up n and include its NAct tenv here. That tenv shows the external
-                                          -- actor view, with async def signatures wherever possible. Instead, let a local
-                                          -- env build up sequentially inside the actor so that methods can refer to each 
-                                          -- other as normal functions (effectuated by "setInDecl False"). Only later, in 
-                                          -- matchActorAssumption, is this local env matched against the external one. But 
-                                          -- the async method defs are still implied here, though. The actual async wrappers 
-                                          -- around methods of the external interface will be applied in the Deactorizer.
+                                          -- Don't look up n and include its NAct body in env1 here. That would show the
+                                          -- actor's external view, with async def signatures wherever possible. Instead, 
+                                          -- let a local env build up sequentially inside the actor so that methods can refer 
+                                          -- to each other as normal functions (effectuated by "setInDecl False"). Only later, 
+                                          -- in matchActorAssumption, is this local env matched against the external one. The 
+                                          -- actual async wrappers around methods of the external interface will be applied in 
+                                          -- the Deactorizer.
 
     checkEnv env cl (Class l n q us b)  = do traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
@@ -607,11 +610,11 @@ splitGen                                :: Env -> [TVar] -> Constraints -> TEnv 
                                            -> TypeM ([TVar],[TVar], Constraints,Constraints, TEnv, Equations)
 splitGen env fvs cs te eq
   | not $ null noqual_cs                = do traceM ("  #splitting noqual: " ++ prstrs noqual_cs)
-                                             traceM ("             ok    : " ++ prstrs cs2)
+                                             traceM ("             ok    : " ++ prstrs (fixed_cs++cs2))
                                              (cs',eq') <- solve env te noqual_cs
                                              splitAgain (fixed_cs++cs2) cs' (eq'++eq)
   | not $ null ambig_cs                 = do traceM ("  #splitting ambig: " ++ prstrs ambig_cs)
-                                             traceM ("             ok   : " ++ prstrs cs3)
+                                             traceM ("             ok   : " ++ prstrs (fixed_cs++cs3))
                                              (cs',eq') <- solve env te ambig_cs
                                              splitAgain (fixed_cs++cs3) cs' (eq'++eq)
   | otherwise                           = do eq <- msubst eq

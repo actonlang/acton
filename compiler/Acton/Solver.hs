@@ -329,7 +329,7 @@ castP env t1 t2                             = False
 unify                                       :: Env -> Type -> Type -> TypeM ()
 unify env t1 t2                             = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 traceM ("## unify " ++ prstr t1' ++ " and " ++ prstr t2')
+                                                 traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
                                                  unify' env t1' t2'
 
 unifyM env ts1 ts2                          = mapM_ (uncurry $ unify env) (ts1 `zip` ts2)
@@ -911,7 +911,7 @@ approximate env te eq cs
 
 supImplAll env [] t                     = [t]
 supImplAll env ps (TCon _ c)            = [ tCon c | (_,c) <- findAncestry env c, implAll c ]
-  where implAll c                       = and [ hasWitness env (tcname p) (tcname c) | (w,p) <- ps ]
+  where implAll c                       = and [ hasWitness env (tcname c) (tcname p) | (w,p) <- ps ]
 supImplAll env ps t                     = []
 
 

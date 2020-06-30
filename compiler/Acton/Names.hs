@@ -131,7 +131,7 @@ instance Vars Stmt where
     free (Signature _ ns t d)       = free t
 
     bound (Assign _ ps _)           = bound ps
-    bound (VarAssign _ ps e)        = bound ps
+--    bound (VarAssign _ ps e)        = bound ps
     bound (MutAssign _ tg _)        = boundTarget tg
     bound (AugAssign _ tg _ _)      = boundTarget tg
     bound (Delete _ tg)             = boundTarget tg

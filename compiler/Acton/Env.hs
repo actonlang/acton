@@ -295,6 +295,12 @@ parentTEnv env us           = concatMap (snd . findCon env . snd) us
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
+unSig                       :: TEnv -> TEnv
+unSig te                    = map f te
+  where f (n, NSig (TSchema _ [] t) Property)   = (n, NVar t)
+        f (n, NSig sc@(TSchema _ _ TFun{}) dec) = (n, NDef sc dec)
+        f (n, NSig (TSchema _ _ t) _)           = (n, NVar t)
+        f (n, i)                                = (n, i)
 
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
