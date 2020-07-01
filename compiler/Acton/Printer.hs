@@ -131,7 +131,7 @@ instance Pretty Expr where
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (DotI _ e i False)       = pretty e <> dot <> pretty i
     pretty (DotI _ e i True)        = pretty e <> dot <> pretty i <> text "*"
-    pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> pretty (ps,ks) <> colon <+> pretty e
+    pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
@@ -145,6 +145,16 @@ instance Pretty Expr where
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
     pretty (Paren _ e)              = parens (pretty e)
+
+prettyLambdaPar ps ks
+  | annotP ps || annotK ks          = parens (pretty (ps,ks))
+  | otherwise                       = pretty (ps,ks)
+  where annotP (PosPar _ mba _ p)   = mba /= Nothing || annotP p
+        annotP (PosSTAR _ mba)      = mba /= Nothing
+        annotP PosNIL               = False
+        annotK (KwdPar _ mba _ k)   = mba /= Nothing || annotK k
+        annotK (KwdSTAR _ mba)      = mba /= Nothing
+        annotK KwdNIL               = False
 
 instance Pretty OpArg where
     pretty (OpArg op e)             = pretty op <+> pretty e

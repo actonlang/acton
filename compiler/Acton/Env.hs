@@ -39,6 +39,7 @@ data Env                    = Env {
                                 witnesses  :: [(QName,Witness)],
                                 modules    :: [(ModName,TEnv)],
                                 defaultmod :: ModName,
+                                actorstate :: Maybe Type,
                                 indecl     :: Bool }
                             deriving (Show)
 
@@ -128,8 +129,9 @@ instance Pretty WTCon where
 instance Subst Env where
     msubst env                  = do ne <- msubst (names env)
                                      we <- msubst (witnesses env)
-                                     return env{ names = ne, witnesses = we }
-    tyfree env                  = tyfree (names env) ++ tyfree (witnesses env)
+                                     as <- msubst (actorstate env)
+                                     return env{ names = ne, witnesses = we, actorstate = as }
+    tyfree env                  = tyfree (names env) ++ tyfree (witnesses env) ++ tyfree (actorstate env)
 
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
@@ -306,19 +308,23 @@ unSig te                    = map f te
 
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
-                                then return $ Env{names = [], witnesses = [], modules = [], defaultmod = mBuiltin, indecl = False}
+                                then return $ Env{names = [], witnesses = [], modules = [], defaultmod = mBuiltin, actorstate = Nothing, indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
                                         let env0    = Env{names = [(nBuiltin,NModule envBuiltin)],
                                                           witnesses = [],
                                                           modules = [(mBuiltin,envBuiltin)],
                                                           defaultmod = mBuiltin,
+                                                          actorstate = Nothing,
                                                           indecl = False}
                                             env     = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
                                         
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
+
+setActorFX                  :: Type -> Env -> Env
+setActorFX st env           = env{ actorstate = Just st }
 
 setInDecl                   :: Bool -> Env -> Env
 setInDecl f env             = env{ indecl = f }
@@ -370,6 +376,11 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 inBuiltin                   :: Env -> Bool
 inBuiltin env               = null $ modules env
+
+actorFX                     :: Env -> SrcLoc -> Type
+actorFX env l               = case actorstate env of
+                                Just st -> fxAct st
+                                Nothing -> err l "Actor scope expected"
 
 inDecl                      :: Env -> Bool
 inDecl env                  = indecl env
@@ -757,7 +768,8 @@ collectDeferred                         :: TypeM Constraints
 collectDeferred                         = state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
+substitute tv t                         = trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $ 
+                                          state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
 getSubstitution                         = state $ \st -> (currsubst st, st)
@@ -859,6 +871,8 @@ split_ambig vs cs
 
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
+    msubst (TSchema l q t)          = TSchema l <$> msubst q <*> msubst t
+    {-
     msubst sc@(TSchema l q t)       = (msubst' . Map.toList . Map.filterWithKey relevant) <$> getSubstitution
       where relevant k v            = k `elem` vs0
             vs0                     = tyfree sc
@@ -870,10 +884,34 @@ instance Subst TSchema where
                     renaming        = tvarSupplyMap clashvars avoidvars
                     q'              = [ Quant (subst renaming v) (subst renaming cs) | Quant v cs <- q ]
                     t'              = subst renaming t
-
+    -}
     tyfree (TSchema _ [] t)         = tyfree t
     tyfree (TSchema _ q t)          = (tyfree q ++ tyfree t) \\ tybound q
     tybound (TSchema _ q t)         = tybound q
+
+testSchemaSubst = do
+    putStrLn ("t:  " ++ prstr t)
+    putStrLn ("c:  " ++ prstr c)
+    putStrLn ("s1: " ++ prstrs s1)
+    putStrLn ("s2: " ++ prstrs s2)
+    putStrLn ("s3: " ++ prstrs s3)
+    putStrLn ("s4: " ++ prstrs s4)
+    putStrLn ("s5: " ++ prstrs s5)
+    putStrLn ("subst s1 t: " ++ prstr (subst s1 t))
+    putStrLn ("subst s2 t: " ++ prstr (subst s2 t))
+    putStrLn ("subst s3 t: " ++ prstr (subst s3 t))
+    putStrLn ("subst s4 t: " ++ prstr (subst s4 t))
+    putStrLn ("subst s5 t: " ++ prstr (subst s5 t))
+    putStrLn ("subst s5 c: " ++ prstr (subst s5 c))
+  where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]] c
+        c   = (tCon (TC (noQ "apa") [tVar (TV KType (name "A")), 
+                                     tVar (TV KType (name "B")),
+                                     tVar (TV KType (name "C"))]))
+        s1  = [(TV KType (name "B"), tSelf)]
+        s2  = [(TV KType (name "A"), tSelf)]
+        s3  = [(TV KType (name "B"), tVar (TV KType (name "A")))]
+        s4  = [(TV KType (name "B"), tVar (TV KType (name "C"))), (TV KType (name "C"), tSelf)]
+        s5  = [(TV KType (name "B"), tVar (TV KType (name "D"))), (TV KType (name "D"), tSelf)]
 
 msubstRenaming                      :: Subst a => a -> TypeM (Substitution,Substitution)
 msubstRenaming c                    = do s <- Map.toList . Map.filterWithKey relevant <$> getSubstitution
@@ -893,20 +931,39 @@ msubstWith s x                      = do s0 <- getSubstitution
                                          setSubstitution s0
                                          return x'
 
-testSchemaSubst = do
-    putStrLn ("t:  " ++ render (pretty t))
-    putStrLn ("s1: " ++ render (pretty s1))
-    putStrLn ("s2: " ++ render (pretty s2))
-    putStrLn ("s3: " ++ render (pretty s3))
-    putStrLn ("subst s1 t: " ++ render (pretty (subst s1 t)))
-    putStrLn ("subst s2 t: " ++ render (pretty (subst s2 t)))
-    putStrLn ("subst s3 t: " ++ render (pretty (subst s3 t)))
+testMsubstRenaming = do
+    putStrLn ("p1: " ++ render (pretty (runTypeM p1)))
+    putStrLn ("p2: " ++ render (pretty (runTypeM p2)))
+    putStrLn ("p3: " ++ render (pretty (runTypeM p3)))
+    putStrLn ("r1: " ++ render (pretty (runTypeM r1)))
+    putStrLn ("r2: " ++ render (pretty (runTypeM r2)))
+    putStrLn ("r3: " ++ render (pretty (runTypeM r3)))
   where t   = tSchema [Quant (TV KType (name "A")) [TC (noQ "Eq") []]]
                             (tCon (TC (noQ "apa") [tVar (TV KType (name "A")), 
                                                    tVar (TV KType (name "B"))]))
-        s1  = [(TV KType (name "B"), tSelf)]
-        s2  = [(TV KType (name "A"), tSelf)]
-        s3  = [(TV KType (name "B"), tVar (TV KType (name "A")))]
+        msubst' sc@(TSchema l q t) = do (s,ren) <- msubstRenaming sc
+                                        return $ TSchema l (subst s (subst ren q)) (subst s (subst ren t))
+        p1 = do
+            substitute (TV KType (name "B")) tSelf
+            msubst t
+        p2 = do
+            substitute (TV KType (name "A")) tSelf
+            msubst t
+        p3 = do
+            substitute (TV KType (name "B")) (tVar (TV KType (name "A")))
+            msubst t
+        r1 = do
+            substitute (TV KType (name "B")) tSelf
+            msubst' t
+        r2 = do
+            substitute (TV KType (name "A")) tSelf
+            msubst' t
+        r3 = do
+            substitute (TV KType (name "B")) (tVar (TV KType (name "A")))
+            msubst' t
+        
+            
+
 
 instance Subst TVar where
     msubst v                        = do t <- msubst (TVar NoLoc v)
@@ -921,7 +978,7 @@ instance Subst TCon where
 
 instance Subst QBind where
     msubst (Quant v cs)             = Quant <$> msubst v <*> msubst cs
-    tyfree (Quant v cs)             = tyfree cs
+    tyfree (Quant v cs)             = v : tyfree cs
     tybound (Quant v cs)            = [v]
 
 instance Subst Type where
@@ -962,7 +1019,7 @@ instance Subst FX where
     tyfree _                        = []  
     
 instance Subst PosPar where
-    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> return e <*> msubst p
+    msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (PosSTAR n t)            = PosSTAR n <$> msubst t
     msubst PosNIL                   = return PosNIL
     
@@ -971,7 +1028,7 @@ instance Subst PosPar where
     tyfree PosNIL                   = []
 
 instance Subst KwdPar where
-    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> return e <*> msubst p
+    msubst (KwdPar n t e p)         = KwdPar n <$> msubst t <*> msubst e <*> msubst p
     msubst (KwdSTAR n t)            = KwdSTAR n <$> msubst t
     msubst KwdNIL                   = return KwdNIL
     
@@ -979,11 +1036,13 @@ instance Subst KwdPar where
     tyfree (KwdSTAR n t)            = tyfree t
     tyfree KwdNIL                   = []
 
-instance Subst Expr where
-    msubst e                        = return e
-    tyfree e                        = []
-
 instance Subst Decl where
+    msubst (Def l n q p k a ss de fx)   = Def l n <$> msubst q <*> msubst p <*> msubst k <*> msubst a <*> msubst ss <*> return de <*> msubst fx
+    msubst (Actor l n q p k ss)         = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst ss
+    msubst (Class l n q bs ss)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss
+    msubst (Protocol l n q bs ss)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss
+    msubst (Extension l n q bs ss)      = Extension l n <$> msubst q <*> msubst bs <*> msubst ss
+    {-
     msubst d@(Protocol l n q bs ss)     = do (s,ren) <- msubstRenaming d
                                              return $ Protocol l n (subst s (subst ren q)) (subst s (subst ren bs)) (subst s (subst ren ss))
     msubst d@(Class l n q bs ss)        = do (s,ren) <- msubstRenaming d
@@ -996,7 +1055,7 @@ instance Subst Decl where
     msubst d@(Actor l n q p k ss)       = do (s,ren) <- msubstRenaming d
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                                 (subst s (subst ren ss))
-
+    -}
     tybound (Protocol l n q ps b)   = tvSelf : tybound q
     tybound (Class l n q ps b)      = tvSelf : tybound q
     tybound (Extension l n q ps b)  = tvSelf : tybound q
@@ -1010,6 +1069,21 @@ instance Subst Decl where
     tyfree (Actor l n q p k b)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ tybound q
     
 instance Subst Stmt where
+    msubst (Expr l e)               = Expr l <$> msubst e
+    msubst (Assign l ps e)          = Assign l <$> msubst ps <*> msubst e
+    msubst (MutAssign l t e)        = MutAssign l <$> msubst t <*> msubst e
+    msubst (AugAssign l t op e)     = AugAssign l <$> msubst t <*> return op <*> msubst e
+    msubst (Assert l e mbe)         = Assert l <$> msubst e <*> msubst mbe
+    msubst (Delete l t)             = Delete l <$> msubst t
+    msubst (Return l mbe)           = Return l <$> msubst mbe
+    msubst (Raise l mbex)           = Raise l <$> msubst mbex
+    msubst (If l bs els)            = If l <$> msubst bs <*> msubst els
+    msubst (While l e b els)        = While l <$> msubst e <*> msubst b <*> msubst els
+    msubst (For l p e b els)        = For l <$> msubst p <*> msubst e <*> msubst b <*> msubst els
+    msubst (Try l b hs els fin)     = Try l <$> msubst b <*> msubst hs <*> msubst els <*> msubst fin
+    msubst (With l is b)            = With l <$> msubst is <*> msubst b
+    msubst (VarAssign l ps e)       = VarAssign l <$> msubst ps <*> msubst e
+    msubst (After l e e')           = After l <$> msubst e <*> msubst e'
     msubst (Decl l ds)              = Decl l <$> msubst ds
     msubst (Signature l ns tsc d)   = Signature l ns <$> msubst tsc <*> return d
     msubst s                        = return s
@@ -1018,6 +1092,131 @@ instance Subst Stmt where
     tyfree (Signature l ns tsc d)   = tyfree tsc
     tyfree s                        = []
 
+instance Subst Expr where
+    msubst (Call l e p k)           = Call l <$> msubst e <*> msubst p <*> msubst k
+    msubst (Await l e)              = Await l <$> msubst e
+    msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
+    msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl
+    msubst (Cond l e1 cond e2)      = Cond l <$> msubst e1 <*> msubst cond <*> msubst e2
+    msubst (BinOp l e1 op e2)       = BinOp l <$> msubst e1 <*> return op <*> msubst e2
+    msubst (CompOp l e ops)         = CompOp l <$> msubst e <*> msubst ops
+    msubst (UnOp l op e)            = UnOp l op <$> msubst e
+    msubst (Dot l e n)              = Dot l <$> msubst e <*> return n
+    msubst (DotI l e i tl)          = DotI l <$> msubst e <*> return i <*> return tl
+    msubst (Lambda l p k e fx)      = Lambda l <$> msubst p <*> msubst k <*> msubst e <*> msubst fx
+    msubst (Yield l e)              = Yield l <$> msubst e
+    msubst (YieldFrom l e)          = YieldFrom l <$> msubst e
+    msubst (Tuple l p k)            = Tuple l <$> msubst p <*> msubst k
+    msubst (List l es)              = List l <$> msubst es
+    msubst (ListComp l e c)         = ListComp l <$> msubst e <*> msubst c
+    msubst (Dict l as)              = Dict l <$> msubst as
+    msubst (DictComp l a c)         = DictComp l <$> msubst a <*> msubst c
+    msubst (Set l es)               = Set l <$> msubst es
+    msubst (SetComp l e c)          = SetComp l <$> msubst e <*> msubst c
+    msubst (Paren l e)              = Paren l <$> msubst e
+    msubst e                        = return e
+
+    tyfree e                        = []
+
+instance Subst Exception where
+    msubst (Exception e e')         = Exception <$> msubst e <*> msubst e'
+    
+    tyfree (Exception e e')         = tyfree e ++ tyfree e'
+
+instance Subst Branch where
+    msubst (Branch e b)             = Branch <$> msubst e <*> msubst b
+    
+    tyfree (Branch e b)             = tyfree e ++ tyfree b
+
+instance Subst Pattern where
+    msubst (PVar l n t)             = PVar l n <$> msubst t
+    msubst (PParen l p)             = PParen l <$> msubst p
+    msubst (PTuple l p k)           = PTuple l <$> msubst p <*> msubst k
+    msubst (PList l ps p)           = PList l <$> msubst ps <*> msubst p
+    
+    tyfree (PVar _ n t)             = tyfree t
+    tyfree (PParen _ p)             = tyfree p
+    tyfree (PTuple _ p k)           = tyfree p ++ tyfree k
+    tyfree (PList _ ps p)           = tyfree ps ++ tyfree p
+
+instance Subst PosPat where
+    msubst (PosPat p pp)            = PosPat <$> msubst p <*> msubst pp
+    msubst (PosPatStar p)           = PosPatStar <$> msubst p
+    msubst PosPatNil                = return PosPatNil
+
+    tyfree (PosPat p pp)            = tyfree p ++ tyfree pp
+    tyfree (PosPatStar p)           = tyfree p
+    tyfree PosPatNil                = []
+
+instance Subst KwdPat where
+    msubst (KwdPat n p kp)          = KwdPat n <$> msubst p <*> msubst kp
+    msubst (KwdPatStar p)           = KwdPatStar <$> msubst p
+    msubst KwdPatNil                = return KwdPatNil
+
+    tyfree (KwdPat n p kp)          = tyfree p ++ tyfree kp
+    tyfree (KwdPatStar p)           = tyfree p
+    tyfree KwdPatNil                = []
+
+instance Subst Handler where
+    msubst (Handler ex b)           = Handler ex <$> msubst b
+
+    tyfree (Handler ex b)           = tyfree b
+
+instance Subst WithItem where
+    msubst (WithItem e p)           = WithItem <$> msubst e <*> msubst p
+    
+    tyfree (WithItem e p)           = tyfree e ++ tyfree p
+
+instance Subst PosArg where
+    msubst (PosArg e p)             = PosArg <$> msubst e <*> msubst p
+    msubst (PosStar e)              = PosStar <$> msubst e
+    msubst PosNil                   = return PosNil
+
+    tyfree (PosArg e p)             = tyfree e ++ tyfree p
+    tyfree (PosStar e)              = tyfree e
+    tyfree PosNil                   = []
+
+instance Subst KwdArg where
+    msubst (KwdArg n e k)           = KwdArg n <$> msubst e <*> msubst k
+    msubst (KwdStar e)              = KwdStar <$> msubst e
+    msubst KwdNil                   = return KwdNil
+
+    tyfree (KwdArg n e k)           = tyfree e ++ tyfree k
+    tyfree (KwdStar e)              = tyfree e
+    tyfree KwdNil                   = []
+
+instance Subst Sliz where
+    msubst (Sliz l e1 e2 e3)        = Sliz l <$> msubst e1 <*> msubst e2 <*> msubst e3
+
+    tyfree (Sliz _ e1 e2 e3)        = tyfree e1 ++ tyfree e2 ++ tyfree e3
+
+instance Subst OpArg where
+    msubst (OpArg op e)             = OpArg op <$> msubst e
+
+    tyfree (OpArg op e)             = tyfree e
+
+instance Subst Elem where
+    msubst (Elem e)                 = Elem <$> msubst e
+    msubst (Star e)                 = Star <$> msubst e
+
+    tyfree (Elem e)                 = tyfree e
+    tyfree (Star e)                 = tyfree e
+
+instance Subst Assoc where
+    msubst (Assoc k v)              = Assoc <$> msubst k <*> msubst v
+    msubst (StarStar e)             = StarStar <$> msubst e
+
+    tyfree (Assoc k v)              = tyfree k ++ tyfree v
+    tyfree (StarStar e)             = tyfree e
+
+instance Subst Comp where
+    msubst (CompFor l p e c)        = CompFor l <$> msubst p <*> msubst e <*> msubst c
+    msubst (CompIf l e c)           = CompIf l <$> msubst e <*> msubst c
+    msubst NoComp                   = return NoComp
+
+    tyfree (CompFor _ p e c)        = tyfree p ++ tyfree e ++ tyfree c
+    tyfree (CompIf _ e c)           = tyfree e ++ tyfree c
+    tyfree NoComp                   = []
 
     
 -- Error handling ------------------------------------------------------------------------

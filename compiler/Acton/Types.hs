@@ -30,7 +30,7 @@ nodup x
 
 
 simpSchema (TSchema l q t)      = TSchema l (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ]) (subst s t)
-  where vs                      = tyfree q ++ tyfree t
+  where vs                      = concat [ tyfree ps | Quant v ps <- q ] ++ tyfree t
         (q1,q2)                 = partition isX q
         isX (Quant v [p])       = length (filter (==v) vs) == 1
         isX _                   = False
@@ -50,6 +50,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              popFX
                                              eq <- solveAll env te cs
                                              te <- msubst te
+                                             ss1 <- msubst ss1
                                              let s = [ (tv,tStr) | tv <- tyfree te ]
                                                  te1 = subst s te
                                              case inBuiltin env of
@@ -240,7 +241,9 @@ instance InfEnv Stmt where
     
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,t,e2') <- infer env e2
-                                             return (cs1++cs2, [], After l e1' e2')
+                                             fx <- currFX
+                                             return (Cast (actorFX env l) fx :
+                                                     cs1++cs2, [], After l e1' e2')
     
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
@@ -265,8 +268,9 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                                  err1 n "Variable not yet assigned"
                                              NVar t ->
                                                  return ([], t, name "_", Var l (NoQ n))
-                                             NSVar t ->
-                                                 return ([], t, name "_", Var l (NoQ n))
+                                             NSVar t -> do
+                                                 fx <- currFX
+                                                 return ([Cast (actorFX env l) fx], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
@@ -453,8 +457,8 @@ solveScoped env vs te cs                = do (cs,eq) <- simplify env te cs
           where (cs0,cs1)               = partition (any (`elem` vs) . tyfree) cs
 
 checkNoEscape env []                    = return ()
-checkNoEscape env vs                    = do tvs <- tyfree <$> msubst env
-                                             let escaped = vs `intersect` tvs
+checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
+                                             let escaped = vs `intersect` fvs
                                              when (not $ null escaped) $ 
                                                  err2 escaped "Escaping type variable"
 
@@ -529,7 +533,9 @@ instance Check Decl where
 
     checkEnv env cl (Actor l n q p k b) = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newTVar
+                                             traceM ("## actor statevar " ++ prstr st)
                                              pushFX (fxAct st) tNone
+                                             let env1 = env1f st
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te1 $ define te0 env1) b
@@ -537,13 +543,13 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env (tybound q)
-                                             tvs <- tyfree <$> msubst env
-                                             when (tvar st `elem` tvs) $ err1 l "Actor state escapes"
+                                             fvs <- tyfree <$> msubst env
+                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
                                              return (cs1, Actor l n q p' k' (bindWits (eq1++eq0) ++ b'))
       where cswf                        = wellformed env q
-            env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
+            env1f st                    = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ 
-                                          setInDecl False env
+                                          setActorFX st $ setInDecl False env
                                           -- Don't look up n and include its NAct body in env1 here. That would show the
                                           -- actor's external view, with async def signatures wherever possible. Instead, 
                                           -- let a local env build up sequentially inside the actor so that methods can refer 
@@ -644,16 +650,16 @@ genEnv env cs te ds0                    = do te <- msubst te
                                              traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te cs
                                              te <- msubst te
-                                             fvs <- (tyfixed te ++) . tyfree <$> msubst env
-                                             (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
+                                             fvs0 <- (tyfixed te++) . tyfree <$> msubst env
+                                             (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs0 cs0 te eq0
                                              traceM ("## genEnv 2 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              ds <- msubst ds0
                                              let (q,ws) = qualify gvs gen_cs
-                                                 s = tvarSupplyMap (tybound q) (tvarScope env)
-                                                 te1 = map (generalize s q) te
+--                                                 s = tvarSupplyMap (tybound q) (tvarScope env)
+                                                 te1 = map (generalize [] q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             sequence [ substitute tv t | (tv,t) <- s ]
-                                             traceM ("## genEnv 3 [" ++ prstrs (rng s) ++ "]\n" ++ render (nest 6 $ pretty te1))
+--                                             sequence [ substitute tv t | (tv,t) <- s ]
+                                             traceM ("## genEnv 3 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fixed_cs, te1, ds1)
   where
     tyfixed te                          = tyfree $ filter (not . gen) te
@@ -661,7 +667,8 @@ genEnv env cs te ds0                    = do te <- msubst te
             gen _                       = False
 
     generalize s q (n, NDef sc d)
-      | null $ scbind sc                = (n, NDef (tSchema (subst s q) (subst s (sctype sc))) d)
+--      | null $ scbind sc                = (n, NDef (tSchema (subst s q) (subst s (sctype sc))) d)
+      | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
     generalize s q (n, i)               = (n, i)
 
     abstract q ds ws eq d@Def{}
@@ -763,9 +770,8 @@ instance Infer Expr where
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
-                                             st <- newTVar
                                              fx <- currFX
-                                             return (Cast (fxAct st) fx :
+                                             return (Cast (actorFX env l) fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1154,8 +1160,11 @@ instance InfEnvT Pattern where
                                                      return (Cast t t' : csa, [(n, NVar t')], t, PVar l n (Just t))
                                                  NVar t' ->
                                                      return (Cast t t' : csa, [], t, PVar l n Nothing)
-                                                 NSVar t' ->
-                                                     return (Cast t t' : csa, [], t, PVar l n Nothing)
+                                                 NSVar t' -> do
+                                                     fx <- currFX
+                                                     return (Cast (actorFX env l) fx :
+                                                             Cast t t' : 
+                                                             csa, [], t, PVar l n Nothing)
                                                  _ -> 
                                                      err1 n "Variable not assignable:"
       where csa                         = wellformed env a

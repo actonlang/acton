@@ -229,7 +229,7 @@ cast' env (TRow _ k n t1 r1) r2             = do (t2,r2') <- findElem k (tNil k)
 
 cast' env (TVar _ tv) t2@TFun{}
   | univar tv                               = do t1 <- instwild KType $ tFun tWild tWild tWild tWild
-                                                 substitute  tv t1
+                                                 substitute tv t1
                                                  cast env t1 t2
 cast' env t1@TFun{} (TVar _ tv)
   | univar tv                               = do t2 <- instwild KType $ tFun tWild tWild tWild tWild
@@ -329,7 +329,7 @@ castP env t1 t2                             = False
 unify                                       :: Env -> Type -> Type -> TypeM ()
 unify env t1 t2                             = do t1' <- msubst t1
                                                  t2' <- msubst t2
-                                                 traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
+                                                 --traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
                                                  unify' env t1' t2'
 
 unifyM env ts1 ts2                          = mapM_ (uncurry $ unify env) (ts1 `zip` ts2)
@@ -418,7 +418,7 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
 sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
                                             = do wp <- newWitness
                                                  wk <- newWitness
-                                                 let e = eLambda [(x0,t1)] (Tuple l0 (PosStar e1) (KwdStar e2))
+                                                 let e = eLambda [(x0,t1)] (Paren l0 $ Tuple l0 (PosStar e1) (KwdStar e2))
                                                      e1 = Call l0 (eVar wp) (PosStar $ eCall (eQVar primPosOf) [eVar x0]) KwdNil
                                                      e2 = Call l0 (eVar wk) PosNil (KwdStar $ eCall (eQVar primKwdOf) [eVar x0])
                                                      cs = [Sub wp p1 p2, Sub wk k1 k2]
@@ -428,7 +428,7 @@ sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                           
 -- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
 
 sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
-  | k1 == k2                                = return ((w, rowFun k1 r1 r2, eLambda [] (eTuple [])) : eq)
+  | k1 == k2                                = return ((w, rowFun k1 r1 r2, eLambda [] (Paren l0 $ eTuple [])) : eq)
 
 --          existing     expected                Match labels in the order of the expected row
 sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k) n r1 (rowTail r2)
@@ -624,7 +624,7 @@ instwild _ (TOpt l t)                   = TOpt l <$> instwild KType t
 instwild _ (TCon l c)                   = TCon l <$> instwildcon c
 instwild _ (TRow l k n t r)             = TRow l k n <$> instwild KType t <*> instwild k r
 instwild _ (TFX l (FXMut t))            = TFX l <$> FXMut <$> instwild KFX t
-instwild _ (TFX l (FXAct t))            = TFX l <$> FXMut <$> instwild KFX t
+instwild _ (TFX l (FXAct t))            = TFX l <$> FXAct <$> instwild KFX t
 instwild k t                            = return t
 
 instwildcon c                           = TC (tcname c) <$> mapM (instwild KType) (tcargs c)
@@ -748,10 +748,8 @@ lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
   where lufx FXAsync FXAsync            = FXAsync
-        lufx FXAsync (FXAct t2)         = FXAct t2
-        lufx (FXAct t1) FXAsync         = FXAct t1
-        lufx FXAsync fx2                = noLUB t1 t2
-        lufx fx1 FXAsync                = noLUB t1 t2
+        lufx FXAsync _                  = FXAct tWild
+        lufx _ FXAsync                  = FXAct tWild
         lufx (FXAct t1) _               = FXAct t1
         lufx _ (FXAct t2)               = FXAct t2
         lufx (FXMut t1) _               = FXMut t1
@@ -1045,10 +1043,10 @@ rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tTupleK r2)
 
 rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTupleP r)) KwdNIL eTup fxPure
-  where eTup                            = Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
+  where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
         e1                              = eCall (eVar wt) [eVar x1]
 rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR x2 (Just $ tTupleK r)) eRec fxPure
-  where eRec                            = Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
+  where eRec                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
         e1                              = eCall (eVar wt) [eVar n]
 
 
