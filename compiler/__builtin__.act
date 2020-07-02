@@ -1,5 +1,10 @@
 ## Built-in types ##################################################################################
 
+class struct:
+  __init__ : () -> None
+
+class object:
+  pass
 
 class int:
   pass
@@ -14,10 +19,10 @@ class bool:
   pass
 
 class range:
-  pass
+  __init__ : (int) -> None
 
 class BaseException:
-  __init__ : () -> None
+  pass
 
 class SystemExit (BaseException):
   pass
@@ -58,10 +63,10 @@ class ValueError (Exception):
 class Slice:
   pass
   
-class list[A] ():
+class list[A] (object):
   copy : () -> list[A]
 
-class Iterator[A] ():
+class Iterator[A] (object):
   __next__     : () -> A
   
 protocol Iterable[A]:
@@ -103,7 +108,7 @@ class str:
   upper        : () -> str
   zfill        : (str,int) -> str
 
-class bytearray:
+class bytearray (object):
   capitalize   : () -> bytearray
   center       : (int,bytearray) -> bytearray
   count        : (bytearray,int,int) -> int
@@ -179,10 +184,10 @@ protocol Minus:
 protocol Hashable (Eq):
   __hash__     : () -> int
 
-class dict[A(Hashable),B] ():
+class dict[A(Hashable),B] (object):
   pass
 
-class set[A(Hashable)] ():
+class set[A(Hashable)] (object):
   pass
 
 ## Number protocols ################################################################################

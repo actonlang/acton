@@ -829,7 +829,7 @@ improve env te eq cs
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
         transCast                       = [ Cast t t' | (v,t) <- lowerBnd, (v',t') <- upperBnd, v == v' || (v,v') `elem` vclosed, not $ castP env t t' ]
         posLBnd                         = [ (v,u) | (v,t) <- lowerBnd, u:us <- [supImplAll env (lookup' v $ pbounds vi) t], null us || v `notElem` negvars ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` (posvars ++ pvars) ]
         optBnd                          = [ v | (v, TOpt _ _) <- upperBnd ]
         actBnd                          = [ (v,t) | (v, t@(TCon _ c)) <- upperBnd, isActor (tcname c) env ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
@@ -838,6 +838,7 @@ improve env te eq cs
         selP                            = findWitAttrs env (selattrs vi) (pbounds vi)
         dots                            = dom mutC ++ dom selC ++ dom selP
         fixedvars                       = tyfree env
+        pvars                           = Map.keys (pbounds vi)
         posvars                         = tyfree te                         -- TODO: implement true polarity assignment
         negvars                         = posvars                           -- TODO: implement true polarity assignment
         obsvars                         = posvars ++ negvars ++ fixedvars
@@ -888,6 +889,9 @@ approximate env te eq cs
   | not $ null selC                     = trace ("  *Unique selection class " ++ prstrs selC) $
                                           do sequence [ unify env (tVar v) =<< instwild KType t | (v,t) <- selC ]
                                              simplify' env te eq cs
+  | not $ null selA                     = trace ("  *Unique selection actor " ++ prstrs selA) $
+                                          do sequence [ unify env (tVar v) =<< instwild KType t | (v,t) <- selA ]
+                                             simplify' env te eq cs
   | not $ null selP                     = trace ("  *Unique selection protocol " ++ prstrs selP) $
                                           do cs' <- sequence [ Impl <$> newWitness <*> return (tVar v) <*> instwildcon p | (v,p) <- selP ]
                                              simplify' env te eq (cs'++cs)
@@ -899,10 +903,12 @@ approximate env te eq cs
   where info                            = varinfo cs
         Just vi                         = info
         vvs                             = varvars vi
+        pvars                           = Map.keys (pbounds vi)
         lowerBnd                        = [ (v,u) | (v,[t]) <- Map.assocs (lbounds vi), u:_ <- [supImplAll env (lookup' v $ pbounds vi) t] ]
-        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi) ]
+        upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` pvars ]
         mutC                            = [ (v,t) | (v,ns) <- Map.assocs (mutattrs vi), [t] <- [findClassByProps env ns] ]
         selC                            = [ (v,t) | (v,ns) <- Map.assocs (selattrs vi), [t] <- [findClassByAttrs env ns] ]
+        selA                            = [ (v,t) | (v,ns) <- Map.assocs (selattrs vi), [t] <- [findActorByAttrs env ns] ]
         selP                            = [ (v,t) | (v,ns) <- Map.assocs (selattrs vi), [t] <- [findProtoByAttrs env ns] ]
         defaults                        = [ (v,t) | (v,ps) <- Map.assocs (pbounds vi), t:_ <- [applyDefaults env ps]]
 

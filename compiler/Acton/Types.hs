@@ -50,14 +50,14 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              popFX
                                              eq <- solveAll env te cs
                                              te <- msubst te
-                                             ss1 <- msubst ss1
+                                             ss2 <- msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tStr) | tv <- tyfree te ]
                                                  te1 = subst s te
                                              case inBuiltin env of
-                                                False -> return (te1, bindWits eq ++ ss1)
+                                                False -> return (te1, ss2)
                                                 True -> let (sigs,decls) = splitSigs te1
                                                             te2 = decls ++ unSig (exclude (dom decls) sigs)
-                                                        in return (te2, bindWits eq ++ ss1)
+                                                        in return (te2, ss2)
 
 
 class Infer a where
@@ -248,7 +248,7 @@ instance InfEnv Stmt where
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
       | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], d)
-      where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
+      where redefs                      = [ n | n <- ns, not (inDecl env && n == initKW), findName n env /= NReserved ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -347,6 +347,10 @@ instance InfEnv Decl where
                                                  t <- newTVar
                                                  traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
                                                  return ([], [(n, NDef (monotype t) (deco d))], d)
+                                             NDef{} | inDecl env && n == initKW -> do
+                                                 t <- newTVar
+                                                 traceM ("\n## infEnv def " ++ prstr (n, NDef (monotype t) (deco d)))
+                                                 return ([], [(n, NDef (monotype t) (deco d))], d)
                                              _ ->
                                                  illegalRedef n
 
@@ -372,11 +376,12 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te cs         --TODO: add eq1...
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as (map newSig nterms ++ te))], Class l n q us b')
+                                                 return (cs1, [(n, NClass q as' (map newSig nterms ++ te))], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = define (nSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
-            te'                         = parentTEnv env as
+            as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
+            te'                         = parentTEnv env as'
             
             newSig (n, NDef sc dec)     = (n, NSig sc dec)
             newSig (n, NVar t)          = (n, NSig (monotype t) Static)
@@ -432,7 +437,7 @@ checkAttributes final te' te
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
         nterms                          = exclude (dom allsigs) terms
         abssigs                         = dom allsigs \\ dom allterms
-        osigs                           = dom sigs `intersect` dom sigs'
+        osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
 
@@ -737,6 +742,7 @@ instance Infer Expr where
                                                 return (cs, t, app t x $ witsOf cs)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
+                                                traceM ("## Instantiating " ++ prstr n)
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_wf,sc,_dec) -> do
                                                         (cs1,t) <- instantiate env sc
@@ -912,7 +918,9 @@ instance Infer Expr where
                                                 Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
 
-    infer env (Dot l e n)               = do (cs,t,e') <- infer env e
+    infer env (Dot l e n)
+      | n == initKW                     = err1 n "__init__ cannot be selected by instance"
+      | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              t0 <- newTVar
                                              return (Sel w t n t0 :

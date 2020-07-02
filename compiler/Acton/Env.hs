@@ -510,6 +510,10 @@ findClassByAttrs env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NC
           where (ns1,ns2)   = partition (`elem` dom te) ns
                 inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
 
+findActorByAttrs            :: Env -> [Name] -> [Type]
+findActorByAttrs env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NAct q p k te) <- unfold env $ names env, hasAll te ]
+  where hasAll te           = all (`elem` dom te) ns
+
 findProtoByAttrs            :: Env -> [Name] -> [TCon]
 findProtoByAttrs env ns     = [ TC (NoQ p) (map (const tWild) q) | (p, NProto q us te) <- unfold env $ names env, hasAll te us ]
   where hasAll te us        = not (null ns1) && all (`elem` inherited) ns2
