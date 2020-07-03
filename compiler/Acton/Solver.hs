@@ -201,7 +201,7 @@ cast' env (TUnion _ us1) (TUnion _ us2)
 cast' env (TUnion _ us1) t2
   | all uniLit us1                          = unify env tStr t2
 cast' env (TCon _ c1) (TUnion _ us2)
-  | uniConElem us2 (unalias env c1)         = return ()
+  | uniConElem env us2 c1                   = return ()
 
 cast' env (TOpt _ t1) (TOpt _ t2)           = cast env t1 t2
 cast' env (TNone _) (TOpt _ t)              = return ()
@@ -286,7 +286,7 @@ castP env (TUnion _ us1) (TUnion _ us2)
 castP env (TUnion _ us1) t2
   | all uniLit us1                          = t2 == tStr
 castP env (TCon _ c1) (TUnion _ us2)
-  | uniConElem us2 (unalias env c1)         = True
+  | uniConElem env us2 c1                   = True
 
 castP env (TOpt _ t1) (TOpt _ t2)           = castP env t1 t2
 castP env (TNone _) (TOpt _ t)              = True
@@ -351,9 +351,9 @@ unify' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do unify env p1 p2
                                                  unify env k1 k2
 
-unify' env (TUnion _ u1) (TUnion _ u2)
-  | all (uniElem u2) u1,
-    all (uniElem u1) u2                     = return ()
+unify' env (TUnion _ us1) (TUnion _ us2)
+  | all (uniElem us2) us1,
+    all (uniElem us1) us2                   = return ()
 
 unify' env (TOpt _ t1) (TOpt _ t2)          = unify env t1 t2
 unify' env (TNone _) (TNone _)              = return ()
@@ -659,11 +659,11 @@ glb env (TUnion _ us1) (TUnion _ us2)
   | not $ null us                       = tUnion us
   where us                              = us1 `intersect` us2
 glb env t1@(TUnion _ us) t2@(TCon _ c)
-  | uniConElem us (unalias env c)       = t2
-  | all uniLit us && eqStr env t2       = t1
+  | uniConElem env us c                 = t2
+  | all uniLit us && isStr env t2       = t1
 glb env t1@(TCon _ c) t2@(TUnion _ us)
-  | uniConElem us (unalias env c)       = t1
-  | all uniLit us && eqStr env t1       = t2
+  | uniConElem env us c                 = t1
+  | all uniLit us && isStr env t1       = t2
   
 glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
 glb env (TNone _) t2                    = tNone
@@ -692,7 +692,7 @@ glb env t1 t2                           = noGLB t1 t2
     
 noGLB t1 t2                             = err1 t1 ("No common subtype: " ++ prstr t2)
 
-eqStr env (TCon _ c)                    = qmatch env (tcname c) qnStr
+isStr env (TCon _ c)                    = qmatch env (tcname c) qnStr
 
 lookupElem n (TRow l k n' t r)
   | n == n'                             = Just (t,r)
@@ -708,7 +708,8 @@ lookupElem n (TNil _ _)                 = Nothing
 -- LUB
 ----------------------------------------------------------------------------------------------------------------------
 
-mkLUB env (v,ts)                        = do t <- instwild KType $ foldr1 (lub env) ts
+mkLUB env (v,ts)                        = do traceM ("   lub " ++ prstrs ts ++ " ...")
+                                             t <- instwild KType $ foldr1 (lub env) ts
                                              traceM ("   lub " ++ prstrs ts ++ " = " ++ prstr t)
                                              return (v, t)
 
@@ -719,9 +720,9 @@ lub env TVar{} _                        = tWild        -- (Might occur in recurs
 lub env _ TVar{}                        = tWild        -- (Might occur in recursive calls)
 
 lub env (TCon _ c1) (TCon _ c2)
-  | c1 == c2                            = tCon c1
-  | uniCon (unalias env c1),
-    uniCon (unalias env c2)             = tUnion [UCon (tcname c1), UCon (tcname c2)]
+  | qmatch env (tcname c1) (tcname c2)  = tCon c1
+  | Just u1 <- uniCon env c1,
+    Just u2 <- uniCon env c2            = tUnion [u1, u2]
   | hasAncestor env c1 (tcname c2)      = tCon c2
   | hasAncestor env c2 (tcname c1)      = tCon c1
   | not $ null common                   = tCon $ head common
@@ -735,12 +736,14 @@ lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
 lub env (TUnion _ us1) (TUnion _ us2)   = tUnion $ us1 `union` us2
 lub env t1@(TUnion _ us) t2@(TCon _ c)
   | all uniLit us && t2 == tStr         = t2
-  | uniCon (unalias env c)              = tUnion $ us `union` [UCon (tcname c)]
+  | Just u <- uniCon env c              = tUnion $ us `union` [u]
 lub env t1@(TCon _ c) t2@(TUnion _ us)
   | all uniLit us && t1 == tStr         = t1
-  | uniConElem us (unalias env c)       = tUnion $ us `union` [UCon (tcname c)]
+  | Just u <- uniCon env c              = tUnion $ us `union` [u]
   
 lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
+lub env (TNone _) t2@TOpt{}             = t2
+lub env t1@TOpt{} (TNone _)             = t1
 lub env (TNone _) t2                    = tOpt t2
 lub env t1 (TNone _)                    = tOpt t1
 lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2

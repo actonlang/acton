@@ -224,14 +224,3 @@ tSequence a                         = tCon (pSequence a)
 tMapping a b                        = tCon (pMapping a b)
 tSetExist a                         = tCon (pSet a)
 tCollection a                       = tCon (pCollection a)
-
-uniLit (ULit l)                     = True
-uniLit _                            = False
-
-uniCon (TC qn ts)                   = qn `elem` uniCons && ts == []
-  where uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
-
-uniElem us u@(ULit l)               = u `elem` us || UCon qnStr `elem` us
-uniElem us u                        = u `elem` us
-
-uniConElem us tc                    = uniCon tc && UCon (tcname tc) `elem` us

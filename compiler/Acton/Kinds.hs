@@ -473,7 +473,7 @@ instance KInfer Type where
     kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
-    kinfer env (TUnion l as)        = return (KType, TUnion l as)
+    kinfer env (TUnion l us)        = return (KType, TUnion l $ Acton.Env.uniNorm (impenv env) l us)
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)
     kinfer env (TNone l)            = return (KType, TNone l)

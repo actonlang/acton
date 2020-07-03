@@ -629,6 +629,8 @@ splitGen env fvs cs te eq
                                              (cs',eq') <- solve env te ambig_cs
                                              splitAgain (fixed_cs++cs3) cs' (eq'++eq)
   | otherwise                           = do eq <- msubst eq
+                                             traceM ("  #splitting fixed: " ++ prstrs fixed_cs)
+                                             traceM ("  #          gen  : " ++ prstrs gen_cs)
                                              return (fvs, gvs, fixed_cs, gen_cs, te, eq)
   where (fixed_cs, cs1)                 = split_fixed fvs cs
         (noqual_cs, cs2)                = split_noqual cs1
@@ -639,10 +641,10 @@ splitGen env fvs cs te eq
         gvs                             = nub (foldr union [] def_vss ++ tyfree gen_cs)
         gen_cs                          = cs3
         
-        splitAgain cs cs' eq            = do cs <- msubst cs
+        splitAgain cs cs' eq            = do (cs,eq') <- simplify env te cs
                                              te <- msubst te
                                              fvs <- tyfree <$> msubst (map tVar fvs)
-                                             splitGen env fvs (cs++cs') te eq
+                                             splitGen env fvs (cs'++cs) te (eq'++eq)
 
 qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
   where qbind v                         = (Quant v (casts ++ impls), wits)

@@ -251,7 +251,37 @@ instance Unalias WTCon where
 
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
-    
+
+-- Union type handling -------------------------------------------------------------------------------------------------
+
+uniLit (ULit l)             = True
+uniLit _                    = False
+
+uniCon env (TC n [])
+  | qn `elem` qns           = Just $ UCon qn
+  where qn                  = unalias env n
+        qns                 = [qnInt, qnFloat, qnBool, qnStr]
+uniCon env _                = Nothing
+
+uniElem us u@(ULit l)       = u `elem` us || UCon qnStr `elem` us
+uniElem us u                = u `elem` us
+
+uniConElem env us c
+  | Just u <- uniCon env c  = uniElem us u
+  | otherwise               = False
+
+uniNorm env l us
+  | not $ null dups         = err l ("Duplicate union element: " ++ prstr (head dups))
+  | otherwise               = us1
+  where us1                 = norm us
+        dups                = duplicates us1
+        norm []             = []
+        norm (ULit l : us)  = ULit l : norm us
+        norm (UCon n : us)  = case uniCon env (TC n []) of
+                                Just u -> u : norm us
+                                _ -> err1 n "Illegal union element:"
+
+
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
 nSigs                       :: TEnv -> TEnv
@@ -643,7 +673,7 @@ instWitness env ts wit      = case wit of
 
 instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = tybound q `zip` ts
-                                 sequence [ constr (tVar v) u | Quant v us <- subst s q, u <- us ]
+                                 sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
