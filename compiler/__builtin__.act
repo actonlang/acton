@@ -149,6 +149,12 @@ class Msg[A] ():
     
 ## General protocols ###############################################################################
 
+protocol Identity:
+  @staticmethod
+  __is__        : (Self,Self) -> bool
+  @staticmethod
+  __isnot__     : (Self,Self) -> bool
+
 protocol Eq:
   @staticmethod
   __eq__       : (Self,Self) -> bool

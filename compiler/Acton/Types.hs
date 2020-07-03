@@ -180,7 +180,7 @@ instance InfEnv Stmt where
             method BAndA                = iandKW
             method MMultA               = imatmulKW
             
-    infEnv env (Assert l e1 e2)         = do (cs1,e1') <- inferBool env e1
+    infEnv env (Assert l e1 e2)         = do (cs1,_,e1') <- inferBool env e1
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
@@ -209,8 +209,8 @@ instance InfEnv Stmt where
                                              (cs0,te,els') <- infLiveEnv env els
                                              (cs1,te1) <- commonTEnv env $ catMaybes (te:tes)
                                              return (cs0++cs1++concat css, te1, If l bs' els')
-    infEnv env (While l e b els)        = do (cs1,e') <- inferBool env e
-                                             (cs2,te1,b') <- infSuiteEnv env b
+    infEnv env (While l e b els)        = do (cs1,env',e') <- inferBool env e
+                                             (cs2,te1,b') <- infSuiteEnv env' b
                                              (cs3,te2,els') <- infSuiteEnv env els
                                              return (cs1++cs2++cs3, [], While l e' b' els')
     infEnv env (For l p e b els)
@@ -703,8 +703,8 @@ genEnv env cs te ds0                    = do te <- msubst te
 --------------------------------------------------------------------------------------------------------------------------
 
 instance InfEnv Branch where
-    infEnv env (Branch e b)             = do (cs1,e') <- inferBool env e
-                                             (cs2,te,b') <- infEnv env b
+    infEnv env (Branch e b)             = do (cs1,env',e') <- inferBool env e
+                                             (cs2,te,b') <- infEnv env' b
                                              return (cs1++cs2, te, Branch e' b')
 
 instance InfEnv WithItem where
@@ -795,13 +795,13 @@ instance Infer Expr where
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) (e' : sliz2args sl'))
     infer env (Slice l e slz)           = notYet l "Multidimensional slicing"
     infer env (Cond l e1 e e2)          = do t0 <- newTVar
-                                             (cs1,e1') <- inferSub env t0 e1
+                                             (cs0,env',e') <- inferBool env e
+                                             (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
-                                             (cs3,e') <- inferBool env e
-                                             return (cs1++cs2++cs3, t0, Cond l e1' e' e2')
+                                             return (cs0++cs1++cs2, t0, Cond l e1' e' e2')
     infer env (BinOp l e1 op e2)
-      | op `elem` [Or,And]              = do (cs1,e1') <- inferBool env e1
-                                             (cs2,e2') <- inferBool env e2
+      | op `elem` [Or,And]              = do (cs1,env1,e1') <- inferBool env e1
+                                             (cs2,env2,e2') <- inferBool env1 e2
                                              return (cs1++cs2, tBool, BinOp l e1' op e2')
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
@@ -836,7 +836,7 @@ instance Infer Expr where
             method BAnd                 = andKW
             method MMult                = matmulKW
     infer env (UnOp l op e)
-      | op == Not                       = do (cs,e') <- inferBool env e
+      | op == Not                       = do (cs,_,e') <- inferBool env e
                                              return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
@@ -1036,8 +1036,22 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
                                                      cs1++cs2, Star e' : as')                       -- TODO: translate using primitive Iterator
 
 
+inferBool env (BinOp l e1 And e2)       = do (cs1,env1,e1') <- inferBool env e1
+                                             (cs2,env2,e2') <- inferBool env1 e2
+                                             return (cs1++cs2, env2, BinOp l e1' And e2')
+inferBool env (CompOp l e1@(Var _ (NoQ n)) [OpArg IsNot e2@None{}])
+                                        = do t <- newTVar
+                                             (cs1,e1') <- inferSub env (tOpt t) e1
+                                             return (cs1, define [(n,NVar t)] env, eCall (eDot (eQVar witIdentityOpt) isnotKW) [e1',e2])
+inferBool env (CompOp l e1@(Var _ (NoQ n)) [OpArg NEq e2@None{}])
+                                        = do t <- newTVar
+                                             (cs1,e1') <- inferSub env (tOpt t) e1
+                                             w <- newWitness
+                                             return (Impl w t pEq :
+                                                     cs1, define [(n,NVar t)] env, eCall (eDot (eCall (eQVar witEqOpt) [eVar w]) neKW) [e1',e2])
 inferBool env e                         = do (cs,t,e') <- infer env e
-                                             return (cs, eCall (eDot e' boolKW) [])
+                                             return (cs, env, eCall (eDot e' boolKW) [])
+
 
 inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,e2') <- inferSub env tInt e2
@@ -1116,8 +1130,8 @@ instance Infer KwdArg where
 
 instance InfEnv Comp where
     infEnv env NoComp                   = return ([], [], NoComp)
-    infEnv env (CompIf l e c)           = do (cs1,e') <- inferBool env e
-                                             (cs2,te,c') <- infEnv env c
+    infEnv env (CompIf l e c)           = do (cs1,env',e') <- inferBool env e
+                                             (cs2,te,c') <- infEnv env' c
                                              return (cs1++cs2, te, CompIf l e' c')
     infEnv env (CompFor l p e c)        = do (cs1,te1,t1,p') <- infEnvT (reserve (bound p) env) p
                                              t2 <- newTVar

@@ -97,6 +97,16 @@ reduce' env eq c@(Impl w t@(TCon _ tc) p)
                                                  reduce env ((w, impl2type t p, we):eq) cs
   where witSearch                           = findWitness env (tcname tc) (implProto env p)
 
+reduce' env eq c@(Impl w t@(TOpt _ t') p)
+  | qmatch env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar witIdentityOpt):eq)
+  | qmatch env (tcname p) qnEq              = do w' <- newWitness
+                                                 let e = eCall (eQVar witEqOpt) [eVar w']
+                                                 reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
+
+reduce' env eq c@(Impl w t@(TUnion _ us) p)
+  | qmatch env (tcname p) qnEq              = do let e = eQVar $ if all uniLit us then witEqStr else witEqUnion
+                                                 return ((w, impl2type t p, e):eq)
+
 reduce' env eq c@(Sel w (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
   | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
@@ -203,6 +213,8 @@ cast' env (TUnion _ us1) t2
 cast' env (TCon _ c1) (TUnion _ us2)
   | uniConElem env us2 c1                   = return ()
 
+cast' env (TOpt _ t1@TOpt{}) t2             = cast env t1 t2
+cast' env t1 (TOpt _ t2@TOpt{})             = cast env t1 t2
 cast' env (TOpt _ t1) (TOpt _ t2)           = cast env t1 t2
 cast' env (TNone _) (TOpt _ t)              = return ()
 cast' env (TNone _) (TNone _)               = return ()
@@ -798,7 +810,7 @@ improve env te eq cs
                                              traceM ("  *LUB " ++ prstrs lb)
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
                                              simplify' env te eq (cs' ++ map (replace ub lb) cs)
-  | not $ null transCast                = do traceM ("  *Transitive cast")
+  | not $ null transCast                = do traceM ("  *Transitive cast: " ++ prstrs transCast)
                                              simplify' env te eq (transCast ++ cs)
   | not $ null posLBnd                  = do traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- posLBnd ]
@@ -830,7 +842,7 @@ improve env te eq cs
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
-        transCast                       = [ Cast t t' | (v,t) <- lowerBnd, (v',t') <- upperBnd, v == v' || (v,v') `elem` vclosed, not $ castP env t t' ]
+        transCast                       = [ Cast t t' | (v,t@TCon{}) <- lowerBnd, (v',t'@TCon{}) <- upperBnd, v==v' || (v,v') `elem` vclosed, not $ castP env t t' ]
         posLBnd                         = [ (v,u) | (v,t) <- lowerBnd, u:us <- [supImplAll env (lookup' v $ pbounds vi) t], null us || v `notElem` negvars ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` (posvars ++ pvars) ]
         optBnd                          = [ v | (v, TOpt _ _) <- upperBnd ]
