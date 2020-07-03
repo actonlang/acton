@@ -159,11 +159,6 @@ instance AddLoc S.Name where
              S.Name _ n -> return (S.Name l n)
              _          -> return name
 
-instance AddLoc (S.Op a) where
-  addLoc p = do
-         (l,S.Op _ a) <- withLoc p
-         return $ S.Op l a
-
 instance AddLoc S.Except where
   addLoc p = do
          (l,exc) <- withLoc p
@@ -207,12 +202,6 @@ rwordLoc word = do
           off <- getOffset
           rword word
           return $ Loc off (off+length word)
-
-opPrefLoc :: String -> Parser SrcLoc
-opPrefLoc op = do
-          off <- getOffset
-          opPref op
-          return $ Loc off (off+length op)
 
 locate (Loc l _) = setOffset l
 
@@ -477,8 +466,8 @@ expr_stmt = addLoc $
         <|> try (S.Assign NoLoc <$> trysome assign <*> rhs)                                 -- Single variable lhs matches here
         <|> try (S.MutAssign NoLoc <$> target <* equals <*> rhs)                            -- and not here
         <|> assertNotData *> (S.Expr NoLoc <$> rhs)
-   where augassign :: Parser (S.Op S.Aug)
-         augassign = addLoc (S.Op NoLoc <$> (assertNotData *> augops))
+   where augassign :: Parser S.Aug
+         augassign = assertNotData *> augops
           where augops = S.PlusA   <$ symbol "+="
                      <|> S.MinusA  <$ symbol "-="
                      <|> S.MultA   <$ symbol "*="
@@ -774,12 +763,12 @@ lambdef_nocond = try $ lambdefGen expr_nocond
 
 -- Three auxiliary functions used in building tables for makeExprParser
 binary name op = InfixL $ do
-                l <- name
-                return $ \e1 e2 ->  S.BinOp (S.eloc e1 `upto` S.eloc e2) e1 (S.Op l op) e2
+                name
+                return $ \e1 e2 ->  S.BinOp (S.eloc e1 `upto` S.eloc e2) e1 op e2
 
 unop name op = do
-                l <- name
-                return $ \e -> S.UnOp (l `upto` S.eloc e) (S.Op l op) e
+                name
+                return $ \e -> S.UnOp (S.eloc e) op e
 
 prefix name op = Prefix (unop name op)
 
@@ -793,7 +782,7 @@ btable = [ [ prefix (rwordLoc "not") S.Not]
 comparison = addLoc (do
   e <- arithexpr
   ps <- many (do
-                 op <- addLoc (S.Op NoLoc <$> comp_op)
+                 op <- comp_op
                  S.OpArg op <$> arithexpr)
   case ps of
         [] -> return e
@@ -820,26 +809,25 @@ arithexpr :: Parser S.Expr
 arithexpr = makeExprParser factor table <?> "arithmetic expression"
 
 table :: [[Operator Parser S.Expr]]
-table = [ [ binary (opPrefLoc "*") S.Mult, binary (opPrefLoc "/") S.Div, binary (opPrefLoc "@") S.MMult,
-            binary (opPrefLoc "//") S.EuDiv, binary (opPrefLoc "%") S.Mod]
-        , [ binary (opPrefLoc "+") S.Plus, binary (opPrefLoc "-") S.Minus]
-        , [ binary (opPrefLoc "<<") S.ShiftL, binary (opPrefLoc ">>") S.ShiftR]
-        , [ binary (opPrefLoc "&") S.BAnd]
-        , [ binary (opPrefLoc "^") S.BXor]
-        , [ binary (opPrefLoc "|") S.BOr]
+table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div, binary (opPref "@") S.MMult,
+            binary (opPref "//") S.EuDiv, binary (opPref "%") S.Mod]
+        , [ binary (opPref "+") S.Plus, binary (opPref "-") S.Minus]
+        , [ binary (opPref "<<") S.ShiftL, binary (opPref ">>") S.ShiftR]
+        , [ binary (opPref "&") S.BAnd]
+        , [ binary (opPref "^") S.BXor]
+        , [ binary (opPref "|") S.BOr]
         ]
 
 factor :: Parser S.Expr
-factor = ((unop (opPrefLoc "+") S.UPlus <|> unop (opPrefLoc "-") S.UMinus <|> unop (opPrefLoc "~") S.BNot) <*> factor)
+factor = ((unop (opPref "+") S.UPlus <|> unop (opPref "-") S.UMinus <|> unop (opPref "~") S.BNot) <*> factor)
         <|> power
 
 power = addLoc $ do
            ae <- atom_expr
            mbe <- optional expo
-           return (maybe ae (\(l,f) -> S.BinOp NoLoc ae (S.Op l S.Pow) f) mbe)
-  where expo = do l <- opPrefLoc "**"
-                  f <- factor
-                  return (l,f)
+           return (maybe ae (S.BinOp NoLoc ae S.Pow) mbe)
+  where expo = do opPref "**"
+                  factor
 
 -- recurring pattern below
 commaList p = many (try (comma *> p)) <* optional comma

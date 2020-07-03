@@ -97,7 +97,7 @@ instance Norm Import where
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (MutAssign l t e)      = MutAssign l <$> norm env t <*> norm env e
-    norm env (AugAssign l t op e)   = AugAssign l <$> norm env t <*> norm env op <*> norm env e
+    norm env (AugAssign l t op e)   = AugAssign l <$> norm env t <*> pure op <*> norm env e
     norm env (Assert l e mbe)       = do e' <- norm env e
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
@@ -182,8 +182,8 @@ instance Norm Expr where
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
-    norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> norm env op <*> norm env e2   -- only Or,And
-    norm env (UnOp l op e)          = UnOp l <$> norm env op <*> norm env e                     -- only Not
+    norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
+    norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
     norm env (DotI l e i t)         = DotI l <$> norm env e <*> return i <*> return t
     norm env (Lambda l ps ks e fx)  = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e <*> return fx
@@ -238,9 +238,6 @@ instance Norm ModuleItem where
 
 instance Norm ImportItem where
     norm env (ImportItem nm mbn)    = ImportItem <$> norm env nm <*> norm env mbn
-
-instance Norm (Op a) where
-    norm env (Op l a)               = Op l <$> return a
 
 instance Norm Branch where
     norm env (Branch e ss)          = Branch <$> norm env e <*> norm env ss
@@ -303,7 +300,7 @@ instance Norm KwdPat where
     norm env KwdPatNil              = return KwdPatNil
     
 instance Norm OpArg where
-    norm env (OpArg op e)           = OpArg <$> norm env op <*> norm env e
+    norm env (OpArg op e)           = OpArg op <$> norm env e
 
 instance Norm Comp where
     norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (extLocal (bound p) env) c

@@ -142,8 +142,7 @@ instance InfEnv Stmt where
             assign w (Slice _ e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
             assign _ tg r               = MutAssign l tg r
 
-    infEnv env (AugAssign l tg (Op _ o) e)
-                                        = do (cs1,t,w,lval) <- infTarget env tg
+    infEnv env (AugAssign l tg o e)     = do (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
                                              (cs3,e') <- inferSub env t e
                                              w' <- newWitness
@@ -800,10 +799,10 @@ instance Infer Expr where
                                              (cs2,e2') <- inferSub env t0 e2
                                              (cs3,e') <- inferBool env e
                                              return (cs1++cs2++cs3, t0, Cond l e1' e' e2')
-    infer env (BinOp l e1 o@(Op _ op) e2)
+    infer env (BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs1,e1') <- inferBool env e1
                                              (cs2,e2') <- inferBool env e2
-                                             return (cs1++cs2, tBool, BinOp l e1' o e2')
+                                             return (cs1++cs2, tBool, BinOp l e1' op e2')
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
                                              (cs2,e2') <- inferSub env t e2
@@ -836,9 +835,9 @@ instance Infer Expr where
             method BXor                 = xorKW
             method BAnd                 = andKW
             method MMult                = matmulKW
-    infer env (UnOp l o@(Op _ op) e)
+    infer env (UnOp l op e)
       | op == Not                       = do (cs,e') <- inferBool env e
-                                             return (cs, tBool, UnOp l o e')
+                                             return (cs, tBool, UnOp l op e')
       | otherwise                       = do (cs,t,e') <- infer env e
                                              w <- newWitness
                                              return (Impl w t (protocol op) :
@@ -849,7 +848,7 @@ instance Infer Expr where
             method UPlus                = posKW
             method UMinus               = negKW
             method BNot                 = invertKW
-    infer env (CompOp l e1 [OpArg (Op _ op) e2])
+    infer env (CompOp l e1 [OpArg op e2])
       | op `elem` [In,NotIn]            = do t1 <- newTVar
                                              (cs1,e1') <- inferSub env t1 e1
                                              t2 <- newTVar

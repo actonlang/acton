@@ -156,9 +156,6 @@ instance Gen Integer where
 instance Gen String where
     gen env s                       = text s
 
-instance Gen a => Gen (Op a) where
-    gen env (Op _ a)                = gen env a
-
 instance Gen Exception where
     gen env (Exception e1 e2)       = gen env e1 <+> nonEmpty (text "from" <+>) (gen env) e2
 

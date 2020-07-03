@@ -184,9 +184,6 @@ instance Pretty QName where
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
     
-instance Pretty a => Pretty (Op a) where
-    pretty (Op _ a)                 = pretty a
-
 instance Pretty Exception where
     pretty (Exception e1 e2)        = pretty e1 <+> nonEmpty (text "from" <+>) pretty e2
 

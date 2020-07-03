@@ -37,7 +37,7 @@ instance Relabel Stmt where
     relabel (Expr _ e) = Expr <$> newLoc <*> relabel e
     relabel (Assign _ ps e) = Assign <$> newLoc <*> relabel ps <*> relabel e
     relabel (MutAssign _ t e) = MutAssign <$> newLoc <*> relabel t <*> relabel e
-    relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> relabel op <*> relabel e
+    relabel (AugAssign _ t op e) = AugAssign <$> newLoc <*> relabel t <*> pure op <*> relabel e
     relabel (Assert _ e mbe) = Assert <$> newLoc <*> relabel e <*> relabel mbe
     relabel (Pass _) = Pass <$> newLoc
     relabel (Delete _ t) = Delete <$> newLoc <*> relabel t
@@ -80,9 +80,9 @@ instance Relabel Expr where
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
-    relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> relabel op <*> relabel r
+    relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> pure op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
-    relabel (UnOp _ op e) = UnOp <$> newLoc <*> relabel op <*> relabel e 
+    relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e 
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
     relabel (DotI _ e i t) = DotI <$> newLoc <*> relabel e <*> return i <*> return t
     relabel (Lambda _ ps ks e fx) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e <*> relabel fx
@@ -126,9 +126,6 @@ instance Relabel ModuleItem where
 instance Relabel ImportItem where
   relabel (ImportItem nm mbn) = ImportItem <$> relabel nm <*> relabel mbn
 
-instance Relabel (Op a) where
-  relabel (Op _ a) = Op <$> newLoc <*> return a
-
 instance Relabel Branch where
     relabel (Branch e ss) = Branch <$> relabel e <*> relabel ss
 
@@ -171,7 +168,7 @@ instance Relabel KwdPat where
     relabel KwdPatNil = return KwdPatNil
     
 instance Relabel OpArg where
-    relabel (OpArg op e) = OpArg <$> relabel op <*> relabel e
+    relabel (OpArg op e) = OpArg op <$> relabel e
 
 instance Relabel Comp where
     relabel (CompFor _ p e c) = CompFor <$> newLoc <*> relabel p <*> relabel e <*> relabel c

@@ -23,7 +23,7 @@ type Suite      = [Stmt]
 data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Assign        { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | MutAssign     { sloc::SrcLoc, target::Target, expr::Expr }
-                | AugAssign     { sloc::SrcLoc, target::Target, aop::Op Aug, expr::Expr }
+                | AugAssign     { sloc::SrcLoc, target::Target, aop::Aug, expr::Expr }
                 | Assert        { sloc::SrcLoc, expr::Expr, optExpr::Maybe Expr }
                 | Pass          { sloc::SrcLoc }
                 | Delete        { sloc::SrcLoc, target::Target }
@@ -65,9 +65,9 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
-                | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Op Binary, exp2::Expr }
+                | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Binary, exp2::Expr }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
-                | UnOp          { eloc::SrcLoc, uop::Op Unary, exp1::Expr }
+                | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
                 | Dot           { eloc::SrcLoc, exp1::Expr, attr::Name }
                 | DotI          { eloc::SrcLoc, exp1::Expr, ival::Integer, tl :: Bool }
                 | Lambda        { eloc::SrcLoc, ppar::PosPar, kpar::KwdPar, exp1::Expr, efx::TFX }
@@ -133,7 +133,6 @@ noQ s           = NoQ (name s)
 data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq)
-data Op a       = Op SrcLoc a deriving (Show)
 data Exception  = Exception Expr (Maybe Expr) deriving (Show,Eq)
 data Branch     = Branch Expr Suite deriving (Show,Eq)
 data Handler    = Handler Except Suite deriving (Show,Eq)
@@ -151,7 +150,7 @@ data KwdArg     = KwdArg Name Expr KwdArg | KwdStar Expr | KwdNil deriving (Show
 data PosPat     = PosPat Pattern PosPat | PosPatStar Pattern | PosPatNil deriving (Show,Eq)
 data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil deriving (Show,Eq)
 
-data OpArg      = OpArg (Op Comparison) Expr deriving (Eq,Show)
+data OpArg      = OpArg Comparison Expr deriving (Eq,Show)
 data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
@@ -232,7 +231,7 @@ eDot e n        = Dot NoLoc e n
 eNone           = None NoLoc
 eInt n          = Int NoLoc n (show n)
 eBool b         = Bool NoLoc b
-eBinOp e o e'   = BinOp NoLoc e (Op NoLoc o) e'
+eBinOp e o e'   = BinOp NoLoc e o e'
 eLambda nts e   = Lambda NoLoc (pospar nts) KwdNIL e fxPure
 eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 
@@ -477,9 +476,6 @@ instance Ord Name where
     Derived{}           <= Internal{}           = True
     _                   <= _                    = False
 
-instance Eq a => Eq (Op a) where
-    Op _ x              ==  Op _ y              = x == y
-
 instance Eq Except where
     ExceptAll _         ==  ExceptAll _         = True
     Except _ x1         ==  Except _ x2         = x1 == x2
@@ -548,9 +544,9 @@ importsOf (Module _ imps _)         = impsOf imps
     mRef (ModRef (0,Just qn))       = qn
     mRef _                          = error "dot prefix in name of import modules not supported"
 
-unop op e                           = UnOp l0 (Op l0 op) e
-binop e1 op e2                      = BinOp l0 e1 (Op l0 op) e2
-cmp e1 op e2                        = CompOp l0 e1 [OpArg (Op l0 op) e2]
+unop op e                           = UnOp l0 op e
+binop e1 op e2                      = BinOp l0 e1 op e2
+cmp e1 op e2                        = CompOp l0 e1 [OpArg op e2]
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
 
