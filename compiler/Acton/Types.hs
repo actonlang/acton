@@ -50,7 +50,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              popFX
                                              eq <- solveAll env te cs
                                              te <- msubst te
-                                             ss2 <- msubst (bindWits eq ++ ss1)
+                                             ss2 <- transform <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tStr) | tv <- tyfree te ]
                                                  te1 = subst s te
                                              case inBuiltin env of
@@ -454,7 +454,7 @@ solveScoped env [] te cs                = simplify env te cs
 solveScoped env vs te cs                = do (cs,eq) <- simplify env te cs
                                              loop eq cs
   where loop eq cs
-          | null cs0                    = return (cs1, [])
+          | null cs0                    = return (cs1, eq)
           | otherwise                   = do (cs',eq') <- solve env te cs0
                                              cs1 <- msubst cs1
                                              loop (eq'++eq) (cs1++cs')
@@ -490,18 +490,20 @@ matchAssumption env cl cs def
                                              return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do traceM ("## matchAssumption 2 ")
                                              (cs1, tvs) <- instQBinds env q1
-                                             let s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
+                                             let eq0 = witSubst env q1 cs1
+                                                 s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qbinds def
         env0                            = defineTVars q0 env
-        pos0 def | cl && dec /= Static  = PosPar nSelf t' e' $ qualWPar env q0 pos'
+        pos0 def | cl && dec /= Static  = case pos def of
+                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
+                                            _ -> err1 (dname def) "Missing self parameter"
                  | otherwise            = qualWPar env q0 (pos def)
-          where PosPar nSelf t' e' pos' = pos def
         
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -661,10 +663,8 @@ genEnv env cs te ds0                    = do te <- msubst te
                                              traceM ("## genEnv 2 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              ds <- msubst ds0
                                              let (q,ws) = qualify gvs gen_cs
---                                                 s = tvarSupplyMap (tybound q) (tvarScope env)
-                                                 te1 = map (generalize [] q) te
+                                                 te1 = map (generalize q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
---                                             sequence [ substitute tv t | (tv,t) <- s ]
                                              traceM ("## genEnv 3 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fixed_cs, te1, ds1)
   where
@@ -672,13 +672,15 @@ genEnv env cs te ds0                    = do te <- msubst te
       where gen (n, NDef sc _)          = null $ scbind sc
             gen _                       = False
 
-    generalize s q (n, NDef sc d)
---      | null $ scbind sc                = (n, NDef (tSchema (subst s q) (subst s (sctype sc))) d)
+    generalize q (n, NDef sc d)
       | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
-    generalize s q (n, i)               = (n, i)
+    generalize q (n, i)                 = (n, i)
 
     abstract q ds ws eq d@Def{}
-      | null $ qbinds d                 = d{ qbinds = q, pos = wit2par ws (pos d), dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+      | null $ qbinds d                 = d{ qbinds = stripQual q, 
+                                             pos = wit2par ws (pos d),
+                                             dbody = bindWits eq ++ wsubst ds ws (dbody d) }
+      | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
     abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds ws (dbody d)) }
       where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
@@ -688,16 +690,9 @@ genEnv env cs te ds0                    = do te <- msubst te
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
             
     wsubst ds []                        = id
-    wsubst ds ws                        = transform trans
-      where
-        trans ns (Call l x@(Var _ (NoQ n)) p k)
-          | Just _ <- wfind n ns        = Just $ Call l x (wit2arg ws p) k
-        trans ns x@(Var _ (NoQ n))
-          | Just (p,k,fx) <- wfind n ns = Just $ Lambda NoLoc p k (Call NoLoc x (wit2arg ws (pArg p)) (kArg k)) fx
-        trans ns _                      = Nothing
-    
-        wfind n ns | n `elem` ns        = Nothing
-                   | otherwise          = lookup n [ (n,(p,k,fx)) | Def _ n [] p k _ _ _ fx <- ds ]
+    wsubst ds ws                        = trsubst s
+      where s                           = [ (n, Lambda l0 p k (Call l0 (eVar n) (wit2arg ws (pArg p)) (kArg k)) fx) 
+                                            | Def _ n [] p k _ _ _ fx <- ds ]
 
 
 --------------------------------------------------------------------------------------------------------------------------

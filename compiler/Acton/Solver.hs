@@ -1046,6 +1046,10 @@ qualWPar env q                          = wit2par (qualWits env q)
 
 qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
 
+witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
+  where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
+        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
+
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!

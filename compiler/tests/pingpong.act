@@ -1,7 +1,7 @@
 actor Pingpong(i):
     var count = 0
     def ping():
-        count = count + 1
+        count = count + i
         print('{i} Ping {count}')
         after 1: pong(-count)
     def pong(q):

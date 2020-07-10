@@ -673,10 +673,15 @@ instWitness env ts wit      = case wit of
 
 instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = tybound q `zip` ts
+--                                     cs = subst s [ constr' v u | Quant v us <- q, u <- us ]
+--                                     ws = [ w | Impl w _ _ <- cs ]
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
+--        constr' tv u@(TC n _)
+--          | isProto n env   = Impl (tvarWit tv u) (tVar tv) u
+--          | otherwise       = Cast (tVar tv) (tCon u)
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
@@ -686,7 +691,7 @@ wexpr (Just n : w)          = wexpr w . (\e -> eDot e (noq n))
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
-
+                                                 
 -- Import handling (local definitions only) ----------------------------------------------
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
