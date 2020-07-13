@@ -28,6 +28,9 @@ trfind n env                            = case lookup n (trscope env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
 
+instance Pretty (Name,Expr) where
+    pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
+
 wtrans env (Assign l p@[PVar _ n _] e : ss)
   | Lambda{} <- e                       = wtrans (extscope [(n,e)] env) ss
   | Var{} <- e                          = wtrans (extscope [(n,e)] env) ss
@@ -81,12 +84,13 @@ instance Transform Expr where
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
     trans env (Call l e p k)
-      | Lambda{} <- e'                  = trsubst s (exp1 e')
+      | Lambda{} <- e',
+        Just s1 <- pzip (ppar e') p',
+        Just s2 <-  kzip (kpar e') k'   = trsubst (s1++s2) (exp1 e')
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
             k'                          = trans env k
-            s                           = pzip (ppar e') p' ++ kzip (kpar e') k'
     trans env (Await l e)               = Await l (trans env e)
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
@@ -113,13 +117,15 @@ instance Transform Expr where
     trans env (Paren l e)               = Paren l (trans env e)
     trans env e                         = e
 
-pzip (PosPar n _ _ p) (PosArg e a)      = (n, e) : pzip p a
-pzip (PosSTAR n _) a                    = [(n, Tuple NoLoc a KwdNil)]
-pzip _ _                                = []
+pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
+pzip (PosSTAR n _) a                    = Just [(n, Tuple NoLoc a KwdNil)]
+pzip PosNIL _                           = Just []
+pzip _ _                                = Nothing
 
-kzip (KwdPar n _ _ k) (KwdArg _ e a)    = (n, e) : kzip k a              -- Requires perfectly sorted args, which the type-checker produces
-kzip (KwdSTAR n _) a                    = [(n, Tuple NoLoc PosNil a)]
-kzip _ _                                = []
+kzip (KwdPar n _ _ k) (KwdArg _ e a)    = do k' <- kzip k a; return $ (n, e) : k'       -- Requires perfectly sorted args, which the type-checker produces
+kzip (KwdSTAR n _) a                    = Just [(n, Tuple NoLoc PosNil a)]
+kzip KwdNIL _                           = Just []
+kzip _ _                                = Nothing
 
 
 instance Transform Exception where
@@ -142,6 +148,8 @@ instance Transform KwdPar where
     
 instance Transform PosArg where
     trans env (PosArg e p)              = PosArg (trans env e) (trans env p)
+    trans env (PosStar e)
+      | Tuple _ p _ <- trans env e      = p
     trans env (PosStar (Paren _ e))
       | Tuple _ p _ <- trans env e      = p
     trans env (PosStar e)               = PosStar (trans env e)
@@ -149,6 +157,8 @@ instance Transform PosArg where
     
 instance Transform KwdArg where
     trans env (KwdArg n e k)            = KwdArg n (trans env e) (trans env k)
+    trans env (KwdStar e)
+      | Tuple _ _ k <- trans env e      = k
     trans env (KwdStar (Paren _ e))
       | Tuple _ _ k <- trans env e      = k
     trans env (KwdStar e)               = KwdStar (trans env e)

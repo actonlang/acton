@@ -95,13 +95,17 @@ instance Pretty (PosPar,KwdPar) where
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
-    pretty (PosStar e)              = text "*" <> pretty e
+    pretty (PosStar e@Var{})        = text "*" <> pretty e
+    pretty (PosStar e@Paren{})      = text "*" <> pretty e
+    pretty (PosStar e)              = text "*" <> parens (pretty e)
     pretty PosNil                   = empty
 
 instance Pretty KwdArg where
     pretty (KwdArg n e KwdNil)      = pretty n <+> equals <+> pretty e
     pretty (KwdArg n e k)           = pretty n <+> equals <+> pretty e <> comma <+> pretty k
-    pretty (KwdStar e)              = text "**" <> pretty e
+    pretty (KwdStar e@Var{})        = text "**" <> pretty e
+    pretty (KwdStar e@Paren{})      = text "**" <> pretty e
+    pretty (KwdStar e)              = text "**" <> parens (pretty e)
     pretty KwdNil                   = empty
 
 instance Pretty (PosArg,KwdArg) where
