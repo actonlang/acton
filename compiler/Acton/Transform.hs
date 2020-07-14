@@ -149,18 +149,18 @@ instance Transform KwdPar where
 instance Transform PosArg where
     trans env (PosArg e p)              = PosArg (trans env e) (trans env p)
     trans env (PosStar e)
-      | Tuple _ p _ <- trans env e      = p
-    trans env (PosStar (Paren _ e))
-      | Tuple _ p _ <- trans env e      = p
+      | Tuple _ p _ <- e'               = p
+      | Paren _ (Tuple _ p _) <- e'     = p
+      where e'                          = trans env e
     trans env (PosStar e)               = PosStar (trans env e)
     trans env PosNil                    = PosNil
     
 instance Transform KwdArg where
     trans env (KwdArg n e k)            = KwdArg n (trans env e) (trans env k)
     trans env (KwdStar e)
-      | Tuple _ _ k <- trans env e      = k
-    trans env (KwdStar (Paren _ e))
-      | Tuple _ _ k <- trans env e      = k
+      | Tuple _ _ k <- e'               = k
+      | Paren _ (Tuple _ _ k) <- e'     = k
+      where e'                          = trans env e
     trans env (KwdStar e)               = KwdStar (trans env e)
     trans env KwdNil                    = KwdNil
     
