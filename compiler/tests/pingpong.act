@@ -1,10 +1,15 @@
+def relay(t,m):
+    after t: m()
+
 actor Pingpong(i):
     var count = 0
-    def ping():
+    def _ping():
         count = count + i
         print('{i} Ping {count}')
-        after 1: pong(-count)
-    def pong(q):
+        after 1: _pong(-count)
+    def _pong(q):
         print('{i}      {q} Pong')
-        after 2: ping()
-    ping()
+        #after 2: ping()
+        relay(2, _ping)
+    _ping()
+

@@ -39,7 +39,6 @@ data Env                    = Env {
                                 witnesses  :: [(QName,Witness)],
                                 modules    :: [(ModName,TEnv)],
                                 defaultmod :: ModName,
-                                actorstate :: Maybe Type,
                                 indecl     :: Bool }
                             deriving (Show)
 
@@ -131,9 +130,8 @@ instance Pretty WTCon where
 instance Subst Env where
     msubst env                  = do ne <- msubst (names env)
                                      we <- msubst (witnesses env)
-                                     as <- msubst (actorstate env)
-                                     return env{ names = ne, witnesses = we, actorstate = as }
-    tyfree env                  = tyfree (names env) ++ tyfree (witnesses env) ++ tyfree (actorstate env)
+                                     return env{ names = ne, witnesses = we }
+    tyfree env                  = tyfree (names env) ++ tyfree (witnesses env)
 
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
@@ -340,23 +338,19 @@ unSig te                    = map f te
 
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
-                                then return $ Env{names = [], witnesses = [], modules = [], defaultmod = mBuiltin, actorstate = Nothing, indecl = False}
+                                then return $ Env{names = [], witnesses = [], modules = [], defaultmod = mBuiltin, indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
                                         let env0    = Env{names = [(nBuiltin,NModule envBuiltin)],
                                                           witnesses = [],
                                                           modules = [(mBuiltin,envBuiltin)],
                                                           defaultmod = mBuiltin,
-                                                          actorstate = Nothing,
                                                           indecl = False}
                                             env     = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
                                         
 setDefaultMod               :: ModName -> Env -> Env
 setDefaultMod m env         = env{ defaultmod = m }
-
-setActorFX                  :: Type -> Env -> Env
-setActorFX st env           = env{ actorstate = Just st }
 
 setInDecl                   :: Bool -> Env -> Env
 setInDecl f env             = env{ indecl = f }
@@ -408,11 +402,6 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 inBuiltin                   :: Env -> Bool
 inBuiltin env               = null $ modules env
-
-actorFX                     :: Env -> SrcLoc -> Type
-actorFX env l               = case actorstate env of
-                                Just st -> fxAct st
-                                Nothing -> err l "Actor scope expected"
 
 inDecl                      :: Env -> Bool
 inDecl env                  = indecl env

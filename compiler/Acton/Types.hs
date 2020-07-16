@@ -241,7 +241,8 @@ instance InfEnv Stmt where
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,t,e2') <- infer env e2
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             st <- newTVar
+                                             return (Cast (fxAct st) fx :
                                                      cs1++cs2, [], After l e1' e2')
     
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
@@ -269,7 +270,7 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                                  return ([], t, name "_", Var l (NoQ n))
                                              NSVar t -> do
                                                  fx <- currFX
-                                                 return ([Cast (actorFX env l) fx], t, name "_", Var l (NoQ n))
+                                                 return ([Cast (fxAct tSelf) fx], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
@@ -543,7 +544,7 @@ instance Check Decl where
             env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
 
     checkEnv env cl (Actor l n q p k b) = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- newTVar
+                                             st <- return tSelf -- newTVar
                                              pushFX (fxAct st) tNone
                                              let env1 = env1f st
                                              (csp,te0,p') <- infEnv env1 p
@@ -552,14 +553,14 @@ instance Check Decl where
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te (cswf++csp++csk++csb++cs0)
-                                             checkNoEscape env (tybound q)
-                                             fvs <- tyfree <$> msubst env
-                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
+                                             checkNoEscape env (tvSelf : tybound q)
+--                                             fvs <- tyfree <$> msubst env
+--                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
                                              return (cs1, Actor l n q p' k' (bindWits (eq1++eq0) ++ b'))
       where cswf                        = wellformed env q
             env1f st                    = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ 
-                                          setActorFX st $ setInDecl False env
+                                          defineSelfOpaque $ setInDecl False env
                                           -- Don't look up n and include its NAct body in env1 here. That would show the
                                           -- actor's external view, with async def signatures wherever possible. Instead, 
                                           -- let a local env build up sequentially inside the actor so that methods can refer 
@@ -573,7 +574,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tybound q)
+                                             checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Class l n q us b')        -- TODO: add wits(q) and eq1 to each def in b'
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q env
             NClass _ _ te               = findName n env
@@ -584,7 +585,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tybound q)
+                                             checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Protocol l n q us b')     -- TODO: translate into class, add wits(q) to props, eq1 to __init__
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q env
             NProto _ _ te               = findName n env
@@ -595,7 +596,7 @@ instance Check Decl where
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tybound q)
+                                             checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Extension l n q us b')   -- TODO: translate into class, add wits(q) to props, eq1 to __init__
       where env1                        = define te $ defineSelf n q $ defineTVars q env
             n'                          = extensionName n us
@@ -731,12 +732,11 @@ instance InfEnv Except where
       where t                           = tCon (TC x [])
 
 instance Infer Expr where
-    infer env x@(Var _ n)               = case findQName n env of
+    infer env x@(Var l n)               = case findQName n env of
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
-                                                st <- newTVar
-                                                return ([Cast (fxMut st) fx], t, x)
+                                                return ([Cast (fxAct tSelf) fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,t) <- instantiate env sc
                                                 return (cs, t, app t x $ witsOf cs)
@@ -777,7 +777,8 @@ instance Infer Expr where
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             st <- newTVar
+                                             return (Cast (fxAct st) fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1184,7 +1185,7 @@ instance InfEnvT Pattern where
                                                      return (Cast t t' : csa, [], t, PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast (actorFX env l) fx :
+                                                     return (Cast (fxAct tSelf) fx :
                                                              Cast t t' : 
                                                              csa, [], t, PVar l n Nothing)
                                                  _ -> 

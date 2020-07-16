@@ -72,7 +72,6 @@ success             = return ()
 
 assertTop           = ifCtx [TOP]                   [IF]                success (fail "declaration only allowed on the module top level")
 assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
-assertActScope      = ifCtx [ACTOR]                 [IF,SEQ,LOOP,DEF]   success (fail "statement only allowed inside an actor scope")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
 assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class or protocol")
 assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
@@ -493,7 +492,6 @@ trysome p = do x <- p; rest [x]
 
 after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
-                assertActScope
                 rword "after"
                 e <- expr
                 colon
