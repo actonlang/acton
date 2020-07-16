@@ -215,7 +215,7 @@ instance Relabel Type where
     relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
 
 instance Relabel FX where
-    relabel (FXAsync) = return FXAsync
+    relabel (FXAction) = return FXAction
     relabel (FXAct t) = FXAct <$> relabel t
     relabel (FXMut t) = FXMut <$> relabel t
     relabel (FXPure) = return FXPure

@@ -51,7 +51,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              eq <- solveAll env te cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
-                                             let s = [ (tv,tStr) | tv <- tyfree te ]
+                                             let s = [ (tv,tWild) | tv <- tyfree te ]
                                                  te1 = subst s te
                                              case inBuiltin env of
                                                 False -> return (te1, ss2)
@@ -315,7 +315,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
                                              return (sigs ++ dsigs ++ bsigs)
   where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
         async (TSchema l q (TFun l' fx p k t))
-          | canAsync q fx               = TSchema l q (TFun l' fxAsync p k t)
+          | canAsync q fx               = TSchema l q (TFun l' fxAction p k t)
         async sc                        = sc
         canAsync q (TVar _ tv)          = tv `notElem` tybound q
         canAsync q (TFX _ (FXAct _))    = True
@@ -324,7 +324,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
         mkDSig n                        = do p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow
                                              t <- newTVar
-                                             return (n, NSig (monotype $ tFun fxAsync p k t) NoDec)
+                                             return (n, NSig (monotype $ tFun fxAction p k t) NoDec)
         mkBSig n                        = do t <- newTVar
                                              return (n, NSig (monotype t) NoDec)
         dvars ss                        = nub $ concat $ map dvs ss

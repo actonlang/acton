@@ -191,7 +191,7 @@ cast' env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = unifyM env (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 
-cast' env (TFun _ (TFX _ FXAsync) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
+cast' env (TFun _ (TFX _ FXAction) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
                                             = do cast env p2 p1
                                                  cast env k2 k1
                                                  cast env (tMsg t1) t2
@@ -227,7 +227,7 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX (FXMut t1) (FXMut t2)        = Just $ unify env t1 t2
         castFX (FXMut t1) (FXAct t2)        = Just $ unify env t1 t2
         castFX (FXAct t1) (FXAct t2)        = Just $ unify env t1 t2
-        castFX FXAsync FXAsync              = Just $ return ()
+        castFX FXAction FXAction              = Just $ return ()
         castFX fx1 fx2                      = Nothing
 
 cast' env (TNil _ k1) (TNil _ k2)
@@ -285,7 +285,7 @@ castP env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = tcargs c1 == tcargs c'
   where search                              = findAncestor env c1 (tcname c2)
 
-castP env (TFun _ (TFX _ FXAsync) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
+castP env (TFun _ (TFX _ FXAction) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
                                             = castP env p2 p1 && castP env k2 k1 && castP env (tMsg t1) t2
 
 castP env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
@@ -311,7 +311,7 @@ castP env (TFX _ fx1) (TFX _ fx2)           = castP' fx1 fx2
         castP' (FXMut t1) (FXMut t2)        = t1 == t2
         castP' (FXMut t1) (FXAct t2)        = t1 == t2
         castP' (FXAct t1) (FXAct t2)        = t1 == t2
-        castP' FXAsync FXAsync              = True
+        castP' FXAction FXAction              = True
         castP' fx1 fx2                      = False
 
 castP env (TNil _ k1) (TNil _ k2)
@@ -375,7 +375,7 @@ unify' env (TFX _ fx1) (TFX _ fx2)
   where unifyFX FXPure FXPure               = Just $ return ()
         unifyFX (FXMut t1) (FXMut t2)       = Just $ unify env t1 t2
         unifyFX (FXAct t1) (FXAct t2)       = Just $ unify env t1 t2
-        unifyFX FXAsync FXAsync             = Just $ return ()
+        unifyFX FXAction FXAction             = Just $ return ()
         unifyFX fx1 fx2                     = Nothing
 
 unify' env (TNil _ k1) (TNil _ k2)
@@ -684,11 +684,11 @@ glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
 glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
-  where glfx FXAsync FXAsync            = FXAsync
-        glfx FXAsync (FXAct _)          = FXAsync
-        glfx (FXAct _) FXAsync          = FXAsync
-        glfx FXAsync fx2                = noGLB t1 t2
-        glfx fx1 FXAsync                = noGLB t1 t2
+  where glfx FXAction FXAction            = FXAction
+        glfx FXAction (FXAct _)          = FXAction
+        glfx (FXAct _) FXAction          = FXAction
+        glfx FXAction fx2                = noGLB t1 t2
+        glfx fx1 FXAction                = noGLB t1 t2
         glfx FXPure _                   = FXPure
         glfx _ FXPure                   = FXPure
         glfx (FXMut t1) _               = FXMut t1
@@ -762,9 +762,9 @@ lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
-  where lufx FXAsync FXAsync            = FXAsync
-        lufx FXAsync _                  = FXAct tWild
-        lufx _ FXAsync                  = FXAct tWild
+  where lufx FXAction FXAction            = FXAction
+        lufx FXAction _                  = FXAct tWild
+        lufx _ FXAction                  = FXAct tWild
         lufx (FXAct t1) _               = FXAct t1
         lufx _ (FXAct t2)               = FXAct t2
         lufx (FXMut t1) _               = FXMut t1
@@ -996,19 +996,19 @@ defaultmap                              = Map.fromList [
 ----------------------------------------------------------------------------------------------------------------------
 
 asyncast t1@TFun{} t2@TFun{}
-  | fx t2 == fxAsync                    = Cast t1 t2{ fx = tWild }  -- Special function cast for actor interfaces
+  | fx t2 == fxAction                   = Cast t1 t2{ fx = tWild }  -- Special function cast for actor interfaces
 asyncast fx1 fx2
-  | fx2 == fxAsync                      = Cast fx1 tWild            -- Special effect cast for subtyping functions
+  | fx2 == fxAction                     = Cast fx1 tWild            -- Special effect cast for subtyping functions
 asyncast t1 t2                          = Cast t1 t2
 
 asynsub fx1 fx2 w t1 t2
-  | fx2 == fxAsync                      = Sub w t1 t2
-  | fx1 == fxAsync                      = Sub w (tMsg t1) t2        -- Special result constraint for subtyping functions
+  | fx2 == fxAction                     = Sub w t1 t2
+  | fx1 == fxAction                     = Sub w (tMsg t1) t2        -- Special result constraint for subtyping functions
   | otherwise                           = Sub w t1 t2
 
 asynwrap fx1 fx2 e
-  | fx1 == fxAsync                      = e
-  | fx2 == fxAsync                      = eCall (eQVar primASYNC) [eLambda [] e]    -- Async term wrapper for subtyping functions
+  | fx1 == fxAction                     = e
+  | fx2 == fxAction                     = eCall (eQVar primASYNC) [eLambda [] e]    -- Async term wrapper for subtyping functions
   | otherwise                           = e
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)

@@ -172,7 +172,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut Type | FXAct Type | FXAsync deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut Type | FXAct Type | FXAction deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
@@ -267,7 +267,7 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxAsync         = tTFX FXAsync
+fxAction        = tTFX FXAction
 fxAct t         = tTFX (FXAct t)
 fxMut t         = tTFX (FXMut t)
 fxPure          = tTFX FXPure

@@ -387,7 +387,7 @@ prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty (FXAsync)                = text "async"
+    pretty (FXAction)                = text "action"
     pretty (FXAct t)                = text "act" <> brackets (pretty t)
     pretty (FXMut t)                = text "mut" <> brackets (pretty t)
     pretty (FXPure)                 = text "pure"

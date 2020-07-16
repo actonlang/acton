@@ -1012,7 +1012,7 @@ effect  :: Parser S.Type
 effect  = addLoc $  
             S.TVar NoLoc <$> tvar
         <|> rword "_" *> return (S.TWild NoLoc)
-        <|> rword "async" *> return S.fxAsync
+        <|> rword "action" *> return S.fxAction
         <|> rword "act" *> optvar S.fxAct
         <|> rword "mut" *> optvar S.fxMut
         <|> rword "pure" *> return S.fxPure

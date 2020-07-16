@@ -486,7 +486,7 @@ instance KInfer Type where
                                          return (KFX, TFX l fx)
 
 instance KCheck FX where
-    kchk env (FXAsync)              = return FXAsync
+    kchk env (FXAction)              = return FXAction
     kchk env (FXAct t)              = FXAct <$> kexp KType env t
     kchk env (FXMut t)              = FXMut <$> kexp KType env t
     kchk env (FXPure)               = return FXPure
@@ -570,7 +570,7 @@ instance KSubst FX where
     ksubst g FXPure                 = return FXPure
     ksubst g (FXMut t)              = FXMut <$> ksubst g t
     ksubst g (FXAct t)              = FXAct <$> ksubst g t
-    ksubst g FXAsync                = return FXAsync
+    ksubst g FXAction                = return FXAction
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
