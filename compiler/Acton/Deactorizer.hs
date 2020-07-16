@@ -27,11 +27,9 @@ withStore m                         = do ss0 <- swapStore []
                                          ss1 <- swapStore ss0
                                          return (r, ss1)
 
-data DeactEnv                       = DeactEnv { actor :: Maybe Name, locals :: [Name] }
+data DeactEnv                       = DeactEnv { locals :: [Name] }
 
-deactEnv env                        = DeactEnv { actor = Nothing, locals = [] }
-
-realActor env                       = fromJust $ actor env
+deactEnv env                        = DeactEnv { locals = [] }
 
 selfRef n env                       = n `elem` locals env
 
@@ -68,8 +66,7 @@ instance Deact Stmt where
     deact env (Try l b hs els fin)  = Try l <$> deact env b <*> deact env hs <*> deact env els <*> deact env fin
     deact env (With l is b)         = With l <$> deact env is <*> deact env b
     deact env (Data l mbt ss)       = Data l <$> deact env mbt <*> deact env ss
-    deact env (VarAssign l ps e)    = do let [PVar _ n (Just t)] = ps
-                                         store [Signature l0 [n] (monotype t) Property]
+    deact env (VarAssign l ps e)    = do store [Signature l0 [n] (monotype t) Property | PVar _ n (Just t) <- ps ]
                                          Assign l <$> deact env ps <*> deact env e
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
@@ -96,7 +93,7 @@ deactA env (Actor l n q p k b)      = do (bint,sext) <- withStore (deact env1 b)
                                              extern = Class l n q [] (reverse sext' ++ [Decl l0 [_init_]])
                                              intern = Class l n' q [] (ssigs ++ [Decl l0 [_init']] ++ ds)
                                          return [intern, extern]
-  where env1                        = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b, actor = Just n' }
+  where env1                        = env{ locals = nub $ bound (p,k) ++ bound b ++ statedefs b }
         selfRef n                   = Dot l0 (Var l0 (NoQ selfKW)) n
         isSig Signature{}           = True
         isSig _                     = False

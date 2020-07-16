@@ -100,18 +100,20 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":" <+> pretty t
+    pretty (n, NAct q p k [])   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
+                                  parens (prettyFunRow p k) <> colon <+> text "pass"
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us
+                                  nonEmpty parens commaList us <> colon <+> text "pass"
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (n, NProto q us [])  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us
+                                  nonEmpty parens commaList us <> colon <+> text "pass"
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
     pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
-                                  colon $+$ (nest 4 $ pretty te)
+                                  colon $+$ (nest 4 $ pretty te) <> colon <+> text "pass"
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
                                   brackets (commaList $ tybound q) <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ pretty te)

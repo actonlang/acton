@@ -50,7 +50,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              popFX
                                              eq <- solveAll env te cs
                                              te <- msubst te
-                                             ss2 <- transform <$> msubst (bindWits eq ++ ss1)
+                                             ss2 <- termred <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tStr) | tv <- tyfree te ]
                                                  te1 = subst s te
                                              case inBuiltin env of
@@ -312,12 +312,13 @@ matchingDec n sc dec dec'
 infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ dom sigs)
                                              bsigs <- mapM mkBSig (pvars ss \\ dom (sigs++dsigs))
                                              return (sigs ++ dsigs ++ bsigs)
-  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns ]
+  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
         async (TSchema l q (TFun l' fx p k t))
           | canAsync q fx               = TSchema l q (TFun l' fxAsync p k t)
         async sc                        = sc
         canAsync q (TVar _ tv)          = tv `notElem` tybound q
         canAsync q (TFX _ (FXAct _))    = True
+        canAsync q (TFX _ (FXMut _))    = True
         canAsync q _                    = False
         mkDSig n                        = do p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow
@@ -326,11 +327,11 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
         mkBSig n                        = do t <- newTVar
                                              return (n, NSig (monotype t) NoDec)
         dvars ss                        = nub $ concat $ map dvs ss
-          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds ]
+          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds, not $ isHidden (dname d) ]
                 dvs (If _ bs els)       = foldr intersect (dvars els) [ dvars ss | Branch _ ss <- bs ]
                 dvs _                   = []
         pvars ss                        = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = bound pats
+          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
                 pvs _                   = []
 
@@ -340,7 +341,7 @@ instance InfEnv Decl where
     infEnv env d@(Def _ n q p k a _ _ _)
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
-                                                 traceM ("\n## infEnv def " ++ prstr (n, NDef sc dec))
+                                                 traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
                                                  return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  t <- newTVar
@@ -463,7 +464,9 @@ solveScoped env vs te cs                = do (cs,eq) <- simplify env te cs
 checkNoEscape env []                    = return ()
 checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
                                              let escaped = vs `intersect` fvs
-                                             when (not $ null escaped) $ 
+                                             when (not $ null escaped) $ do
+                                                 env1 <- msubst env
+                                                 traceM ("####### env:\n" ++ prstr env1)
                                                  err2 escaped "Escaping type variable"
 
 addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
@@ -475,7 +478,9 @@ matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (p
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, NVar t)              = simplify env te [Cast t t0]
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
-        check1 (n, NDef sc _)           = do (cs1,t) <- instantiate env sc
+        check1 (n, NDef sc _)
+          | isHidden n                  = return ([], [])
+          | otherwise                   = do (cs1,t) <- instantiate env sc
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te (asyncast t t0 : cs1)
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
@@ -539,7 +544,6 @@ instance Check Decl where
 
     checkEnv env cl (Actor l n q p k b) = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newTVar
-                                             traceM ("## actor statevar " ++ prstr st)
                                              pushFX (fxAct st) tNone
                                              let env1 = env1f st
                                              (csp,te0,p') <- infEnv env1 p
@@ -690,7 +694,7 @@ genEnv env cs te ds0                    = do te <- msubst te
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
             
     wsubst ds []                        = id
-    wsubst ds ws                        = trsubst s
+    wsubst ds ws                        = termsubst s
       where s                           = [ (n, Lambda l0 p k (Call l0 (eVar n) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
 

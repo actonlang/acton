@@ -5,6 +5,7 @@ import Utils
 import Pretty
 import Acton.Syntax
 import Acton.Builtin
+import Acton.Prim
 import Prelude hiding ((<>))
 
 
@@ -180,6 +181,7 @@ instance Pretty ModName where
 
 instance Pretty QName where
     pretty (QName m n)
+      | m == mPrim                  = text "$" <> pretty n
 --      | m == mBuiltin               = text "$" <> pretty n
       | m == mBuiltin               = pretty n
       | otherwise                   = pretty m <> dot <> pretty n

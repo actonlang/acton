@@ -7,24 +7,26 @@ import Acton.Names
 import Acton.Printer
 
 
-transform                               :: Suite -> Suite
-transform b                             = wtrans env0 b
+termred                                 :: Suite -> Suite
+termred b                               = wtrans env0 b
 
-trsubst                                 :: (Transform a) => [(Name,Expr)] -> a -> a
-trsubst s x                             = trans (extscope s env0) x
+termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
+termsubst s x                           = trans (extsubst s env0) x
 
 class Transform a where
     trans                               :: TransEnv -> a -> a
 
-data TransEnv                           = TransEnv { trscope :: [(Name,Maybe Expr)] }
+data TransEnv                           = TransEnv { trsubst :: [(Name,Maybe Expr)], witscope :: [(Name,Expr)] }
 
-env0                                    = TransEnv{ trscope = [] }
+env0                                    = TransEnv{ trsubst = [], witscope = [] }
 
-blockscope ns env                       = env{ trscope = (ns `zip` repeat Nothing) ++ trscope env }
+blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothing) ++ trsubst env }
 
-extscope ns env                         = env{ trscope = [ (n,Just e) | (n,e) <- ns ] ++ trscope env }
+extsubst ns env                         = env{ trsubst = [ (n,Just e) | (n,e) <- ns ] ++ trsubst env }
 
-trfind n env                            = case lookup n (trscope env) of
+extscope n e env                        = env{ witscope = (n,e) : witscope env }
+
+trfind n env                            = case lookup n (trsubst env) of
                                             Just (Just e) -> Just e
                                             _ -> Nothing
 
@@ -32,10 +34,13 @@ instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
 wtrans env (Assign l p@[PVar _ n _] e : ss)
-  | Lambda{} <- e                       = wtrans (extscope [(n,e)] env) ss
-  | Var{} <- e                          = wtrans (extscope [(n,e)] env) ss
-  | Dot _ Var{} _ <- e                  = wtrans (extscope [(n,e)] env) ss
-  | Internal Witness _ _ <- n           = Assign l p (trans env e) : wtrans env ss
+  | Lambda{} <- e                       = wtrans (extsubst [(n,e)] env) ss
+  | Var{} <- e                          = wtrans (extsubst [(n,e)] env) ss
+  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e)] env) ss
+  | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
+  | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n e1 env) ss
+  where hits                            = [ eVar n' | (n',e') <- witscope env, e' == e1 ]
+        e1                              = trans env e
 wtrans env ss                           = trans env ss
                                 
 
@@ -86,7 +91,7 @@ instance Transform Expr where
     trans env (Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
-        Just s2 <-  kzip (kpar e') k'   = trsubst (s1++s2) (exp1 e')
+        Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p

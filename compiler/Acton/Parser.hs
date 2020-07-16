@@ -1044,7 +1044,7 @@ tcon =  do n <- qual_name
            return $ S.TC n (maybe [] id args)
 
 tvar :: Parser S.TVar
-tvar = S.TV S.KWild <$> tvarname
+tvar = S.TV S.KWild <$> try tvarname
 
 qbind :: Parser S.QBind
 qbind = S.Quant <$> tvar <*> optbounds

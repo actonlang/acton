@@ -135,7 +135,7 @@ instance Vars Stmt where
     bound (MutAssign _ tg _)        = boundTarget tg
     bound (AugAssign _ tg _ _)      = boundTarget tg
     bound (Delete _ tg)             = boundTarget tg
-    bound (Data _ p b)              = bound p ++ (filter istemp $ bound b)
+    bound (Data _ p b)              = bound p ++ (filter isHidden $ bound b)
     bound (While _ e b els)         = bound b ++ bound els
     bound (For _ p e b els)         = bound b ++ bound els ++ bound p
     bound (With _ items b)          = bound b ++ bound items

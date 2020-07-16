@@ -563,9 +563,8 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "try","var","while","with","yield"
                                       ]
 
-istemp (Name _ str)                 = length (takeWhile (=='_') str) == 1
-
-notemp                              = not . istemp
+isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
+isHidden _                          = False
 
 posParLen PosNIL                    = 0
 posParLen (PosSTAR _ _)             = 0
