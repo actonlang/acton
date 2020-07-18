@@ -418,7 +418,7 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  wk <- newWitness
                                                  wt <- newWitness
                                                  let e = eLambda [(x0,t1)] e'
-                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fxPure
+                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fx2
                                                      e0 = asynwrap fx1 fx2 $ eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
                                                      e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
                                                      e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)

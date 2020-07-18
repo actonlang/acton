@@ -309,32 +309,28 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-
-infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ dom sigs)
-                                             bsigs <- mapM mkBSig (pvars ss \\ dom (sigs++dsigs))
-                                             return (sigs ++ dsigs ++ bsigs)
-  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
-        async (TSchema l q (TFun l' fx p k t))
-          | canAsync q fx               = TSchema l q (TFun l' fxAction p k t)
-        async sc                        = sc
-        canAsync q (TVar _ tv)          = tv `notElem` tybound q
-        canAsync q (TFX _ (FXAct _))    = True
-        canAsync q (TFX _ (FXMut _))    = True
-        canAsync q _                    = False
-        mkDSig n                        = do p <- newTVarOfKind PRow
-                                             k <- newTVarOfKind KRow
-                                             t <- newTVar
-                                             return (n, NSig (monotype $ tFun fxAction p k t) NoDec)
-        mkBSig n                        = do t <- newTVar
-                                             return (n, NSig (monotype t) NoDec)
-        dvars ss                        = nub $ concat $ map dvs ss
-          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds, not $ isHidden (dname d) ]
-                dvs (If _ bs els)       = foldr intersect (dvars els) [ dvars ss | Branch _ ss <- bs ]
-                dvs _                   = []
-        pvars ss                        = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
-                pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
-                pvs _                   = []
+matchAssumption env cl cs def
+  | null q1                             = do traceM ("## matchAssumption 1 ")
+                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
+                                             checkNoEscape env (tybound q0)
+                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
+  | otherwise                           = do traceM ("## matchAssumption 2 ")
+                                             (cs1, tvs) <- instQBinds env q1
+                                             let eq0 = witSubst env q1 cs1
+                                                 s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
+                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
+                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
+                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
+                                             checkNoEscape env (tybound q0)
+                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
+  where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
+        q1                              = qbinds def
+        env0                            = defineTVars q0 env
+        pos0 def | cl && dec /= Static  = case pos def of
+                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
+                                            _ -> err1 (dname def) "Missing self parameter"
+                 | otherwise            = qualWPar env q0 (pos def)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -473,8 +469,48 @@ checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
 addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
-matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (prowOf p) p0, Cast (krowOf k) k0]
+--------------------------------------------------------------------------------------------------------------------------
+
+class Check a where
+    checkEnv                            :: Env -> Bool -> a -> TypeM (Constraints,a)
+
+instance (Check a) => Check [a] where
+    checkEnv env cl []                  = return ([], [])
+    checkEnv env cl (d:ds)              = do (cs1,d') <- checkEnv env cl d
+                                             (cs2,ds') <- checkEnv env cl ds
+                                             return (cs1++cs2, d':ds')
+
+------------------
+
+infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ dom sigs)
+                                             bsigs <- mapM mkBSig (pvars ss \\ dom (sigs++dsigs))
+                                             return (sigs ++ dsigs ++ bsigs)
+  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
+        async (TSchema l q (TFun l' fx p k t))
+          | mustWrap q fx               = TSchema l q (TFun l' fxAction p k t)
+        async sc                        = sc
+        mustWrap q (TVar _ tv)          = tv `notElem` tybound q
+        mustWrap q (TFX _ FXPure)       = False
+        mustWrap q _                    = True
+        mkDSig n                        = do p <- newTVarOfKind PRow
+                                             k <- newTVarOfKind KRow
+                                             t <- newTVar
+                                             return (n, NSig (monotype $ tFun fxAction p k t) NoDec)
+        mkBSig n                        = do t <- newTVar
+                                             return (n, NSig (monotype t) NoDec)
+        dvars ss                        = nub $ concat $ map dvs ss
+          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds, not $ isHidden (dname d) ]
+                dvs (If _ bs els)       = foldr intersect (dvars els) [ dvars ss | Branch _ ss <- bs ]
+                dvs _                   = []
+        pvars ss                        = nub $ concat $ map pvs ss
+          where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
+                pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
+                pvs _                   = []
+
+matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
+                                             (cs,eq) <- simplify env te [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
+                                             traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, NVar t)              = simplify env te [Cast t t0]
@@ -488,44 +524,9 @@ matchActorAssumption env n0 p k te      = do (cs,eq) <- simplify env te [Cast (p
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
         check1 (n, i)                   = return ([], [])
 
-matchAssumption env cl cs def
-  | null q1                             = do traceM ("## matchAssumption 1 ")
-                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
-                                             checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
-  | otherwise                           = do traceM ("## matchAssumption 2 ")
-                                             (cs1, tvs) <- instQBinds env q1
-                                             let eq0 = witSubst env q1 cs1
-                                                 s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
-                                             def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
-                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
-                                             checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
-  where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
-        q1                              = qbinds def
-        env0                            = defineTVars q0 env
-        pos0 def | cl && dec /= Static  = case pos def of
-                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q0 pos'
-                                            _ -> err1 (dname def) "Missing self parameter"
-                 | otherwise            = qualWPar env q0 (pos def)
-        
-
---------------------------------------------------------------------------------------------------------------------------
-
-class Check a where
-    checkEnv                            :: Env -> Bool -> a -> TypeM (Constraints,a)
-
-instance (Check a) => Check [a] where
-    checkEnv env cl []                  = return ([], [])
-    checkEnv env cl (d:ds)              = do (cs1,d') <- checkEnv env cl d
-                                             (cs2,ds') <- checkEnv env cl ds
-                                             return (cs1++cs2, d':ds')
-
 instance Check Decl where
     checkEnv env cl (Def l n q p k a b dec fx)
-                                        = do traceM ("## checkEnv def " ++ prstr n ++ ", q: " ++ prstrs q)
+                                        = do traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return a
                                              pushFX fx t
                                              (csp,te0,p') <- infEnv env1 p
@@ -552,7 +553,7 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te1 $ define te0 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (cswf++csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env1 (tvSelf : tybound q) te (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env (tvSelf : tybound q)
 --                                             fvs <- tyfree <$> msubst env
 --                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"

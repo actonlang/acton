@@ -145,10 +145,16 @@ instance Transform Handler where
 
 instance Transform PosPar where
     trans env (PosPar n t e p)          = PosPar n t (trans env e) (trans env p)
+    trans env (PosSTAR n (Just t))
+      | Internal{} <- n,
+        TTuple _ TNil{} _ <- t          = PosNIL
     trans env p                         = p
     
 instance Transform KwdPar where
     trans env (KwdPar n t e k)          = KwdPar n t (trans env e) (trans env k)
+    trans env (KwdSTAR n (Just t))
+      | Internal{} <- n,
+        TTuple _ _ TNil{} <- t          = KwdNIL
     trans env k                         = k
     
 instance Transform PosArg where
