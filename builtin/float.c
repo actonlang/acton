@@ -82,8 +82,10 @@ $Integral$opaque $Real$float$__ceil__ ($Real$float wit, $float x) {
   return $Integral$pack(($Integral)$Integral$int$witness,to$int((long)ceil(from$float(x))));
 }
   
-$Integral$opaque $Real$float$__round__ ($Real$float wit, $float x) {
-  return $Integral$pack(($Integral)$Integral$int$witness,to$int((long)round(from$float(x))));
+$float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
+  double pval = p==NULL ? 0.0 : (double)p->val;
+  double p10 = pow(10.0,pval);
+  return to$float(round(x->val * p10)/p10);
 }
     
 

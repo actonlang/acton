@@ -978,7 +978,7 @@ struct $Real$class {
     $Integral$opaque (*__trunc__)($Real, $WORD);
     $Integral$opaque (*__floor__)($Real, $WORD);
     $Integral$opaque (*__ceil__)($Real, $WORD);
-    $Integral$opaque (*__round__)($Real, $WORD);
+    $WORD (*__round__)($Real, $WORD, $int);
 };
 
 struct $Real$opaque {
@@ -1012,7 +1012,7 @@ struct $Rational$class {
     $Integral$opaque (*__trunc__)($Rational, $WORD);
     $Integral$opaque (*__floor__)($Rational, $WORD);
     $Integral$opaque (*__ceil__)($Rational, $WORD);
-    $Integral$opaque (*__round__)($Rational, $WORD);
+    $WORD (*__round__)($Rational, $WORD,$int);
     $Integral$opaque (*numerator)($Rational, $WORD);
     $Integral$opaque (*denominator)($Rational, $WORD);
 };
@@ -1049,7 +1049,7 @@ struct $Integral$class {
     $Integral$opaque (*__trunc__)($Integral, $WORD);
     $Integral$opaque (*__floor__)($Integral, $WORD);
     $Integral$opaque (*__ceil__)($Integral, $WORD);
-    $Integral$opaque (*__round__)($Integral, $WORD);
+    $WORD (*__round__)($Integral, $WORD, $int);
     $Integral$opaque (*numerator)($Integral, $WORD);
     $Integral$opaque (*denominator)($Integral, $WORD);
     $int (*__int__)($Integral, $WORD);
@@ -1576,7 +1576,7 @@ struct $Integral$int$class {
     $Integral$opaque (*__trunc__)($Integral$int, $int);
     $Integral$opaque (*__floor__)($Integral$int, $int);
     $Integral$opaque (*__ceil__)($Integral$int, $int);
-    $Integral$opaque (*__round__)($Integral$int, $int);
+    $int (*__round__)($Integral$int, $int, $int);
     $Integral$opaque (*numerator)($Integral$int, $int);
     $Integral$opaque (*denominator)($Integral$int, $int);
     $int (*__int__)($Integral$int, $int);
@@ -1600,7 +1600,7 @@ $float $Integral$int$__float__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__trunc__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__floor__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__ceil__ ($Integral$int, $int);
-$Integral$opaque $Integral$int$__round__ ($Integral$int, $int);
+$int $Integral$int$__round__ ($Integral$int, $int, $int);
 $Integral$opaque $Integral$int$numerator ($Integral$int, $int);
 $Integral$opaque $Integral$int$denominator ($Integral$int, $int);
 $int $Integral$int$__int__ ($Integral$int, $int);
@@ -1755,7 +1755,7 @@ struct $Real$float$class {
     $Integral$opaque (*__trunc__)($Real$float, $float);
     $Integral$opaque (*__floor__)($Real$float, $float);
     $Integral$opaque (*__ceil__)($Real$float, $float);
-    $Integral$opaque (*__round__)($Real$float, $float);
+    $float (*__round__)($Real$float, $float, $int);
 };
 
 void $Real$float$__init__ ($Real$float);
@@ -1769,7 +1769,7 @@ $float $Real$float$__float__ ($Real$float, $float);
 $Integral$opaque $Real$float$__trunc__ ($Real$float, $float);
 $Integral$opaque $Real$float$__floor__ ($Real$float, $float);
 $Integral$opaque $Real$float$__ceil__ ($Real$float, $float);
-$Integral$opaque $Real$float$__round__ ($Real$float, $float);
+$float $Real$float$__round__ ($Real$float, $float, $int);
 
 // $Complex$float ////////////////////////////////////////////////////////////
 

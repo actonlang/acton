@@ -238,7 +238,8 @@ protocol Real (Ord,Complex):  # Eq implemented in both parents!
   __trunc__    : () -> Integral
   __floor__    : () -> Integral
   __ceil__     : () -> Integral
-  __round__    : () -> Integral
+
+  __round__    : (?int) -> Self
 
 protocol Rational (Real):
   numerator    : () -> Integral
@@ -442,7 +443,8 @@ print :  (*A) -> None
 def reversed(seq : Sequence[A]) -> Iterator[A]:
   return seq.__reversed__()
 
-round : [A(Real)] => (x : A, n : ?int) -> A
+def round [A(Real)] (x : A, n : ?int) -> A:
+  return x.__round__(n)
 
 sorted : [A(Ord)] => (Iterable[A]) -> list[A]
 
