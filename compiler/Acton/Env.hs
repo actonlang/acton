@@ -131,7 +131,7 @@ instance Subst Env where
     msubst env                  = do ne <- msubst (names env)
                                      we <- msubst (witnesses env)
                                      return env{ names = ne, witnesses = we }
-    tyfree env                  = tyfree (names env) ++ tyfree (witnesses env)
+    tyfree env                  = tvarScope env ++ tyfree (names env) ++ tyfree (witnesses env)
 
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
@@ -208,6 +208,7 @@ instance Unalias QName where
                                                       Just _ -> QName m' n
                                                       _ -> noItem m n
                                         Nothing | inBuiltin env -> QName m n
+                                                | otherwise -> trace ("#### unalias fails for " ++ prstr (QName m n)) $ QName m n
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
@@ -258,10 +259,11 @@ uniLit (ULit l)             = True
 uniLit _                    = False
 
 uniCon env (TC n [])
-  | qn `elem` qns           = Just $ UCon qn
+  | qn `elem` uniCons       = Just $ UCon qn
   where qn                  = unalias env n
-        qns                 = [qnInt, qnFloat, qnBool, qnStr]
 uniCon env _                = Nothing
+
+uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
 
 uniElem us u@(ULit l)       = u `elem` us || UCon qnStr `elem` us
 uniElem us u                = u `elem` us
@@ -466,7 +468,10 @@ isProto n env               = case findQName n env of
                                 _ -> False
 
 findWitness                 :: Env -> QName -> (QName->Bool) -> Maybe Witness
-findWitness env cn f        = listToMaybe [ w | (c,w) <- witnesses env, qmatch env c cn, f $ tcname $ proto w ]
+findWitness env cn f        = listToMaybe $ filter (f . tcname . proto) $ allWitnesses env cn
+
+allWitnesses                :: Env -> QName -> [Witness]
+allWitnesses env cn         = [ w | (c,w) <- witnesses env, qmatch env c cn ]
 
 hasWitness                  :: Env -> QName -> QName -> Bool
 hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn)
@@ -490,12 +495,23 @@ findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 findAncestor                :: Env -> TCon -> QName -> Maybe (Expr->Expr,TCon)
 findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
 
-hasAncestor                 :: Env -> TCon -> QName -> Bool
-hasAncestor env c qn        = maybe False (const True) $ findAncestor env c qn
+hasAncestor'                :: Env -> QName -> QName -> Bool
+hasAncestor' env qn qn'     = any (qmatch env qn') [ tcname c' | (w,c') <- us ]
+  where (_,us,_)            = findConName qn env
+
+hasAncestor                 :: Env -> TCon -> TCon -> Bool
+hasAncestor env c c'        = hasAncestor' env (tcname c) (tcname c')
 
 commonAncestors             :: Env -> TCon -> TCon -> [TCon]
 commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
   where ns                  = map (tcname . snd) (findAncestry env c2)
+
+allAncestors                :: Env -> QName -> [QName]
+allAncestors env qn         = map (tcname . snd) us
+  where (q,us,te)           = findConName qn env
+
+allDescendants              :: Env -> QName -> [QName]
+allDescendants env qn       = [ n | n <- allCons env, hasAncestor' env n qn ]
 
 findCon                     :: Env -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
@@ -518,6 +534,9 @@ conAttrs env qn             = dom te
 
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
+
+allAttrs                    :: Env -> QName -> [Name]
+allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
 
 findClassByProps            :: Env -> [Name] -> [Type]
 findClassByProps env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- unfold env $ names env, hasAll te us ]
@@ -546,6 +565,21 @@ unfold env te               = map exp te
   where exp (n, NAlias qn)  = (n, findQName qn env)
         exp (n, i)          = (n, i)
 
+allCons                     :: Env -> [QName]
+allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons [n] te' | (n,NModule te') <- names env ]
+  where con NClass{}        = True
+        con NAct{}          = True
+        con _               = False
+        cons ns te          = [ QName (ModName ns) n | (n,i) <- te, con i ] ++ concat [ cons (ns++[n]) te' | (n,NModule te') <- te ]
+
+allProtos                   :: Env -> [QName]
+allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos [n] te' | (n,NModule te') <- names env ]
+  where proto NProto{}      = True
+        proto _             = False
+        protos ns te        = [ QName (ModName ns) n | (n,i) <- te, proto i ] ++ concat [ protos (ns++[n]) te' | (n,NModule te') <- te ]
+        
+allVars                     :: Env -> Kind -> [TVar]
+allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
@@ -882,21 +916,50 @@ instance Subst Constraint where
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
 
-split_fixed fvs cs                  = partition fixed cs
-  where fixed c                     = null (tyfree c \\ fvs)
 
-split_noqual cs                     = partition (not . qual) cs
-  where qual (Cast TVar{} TCon{})   = True
-        qual Impl{}                 = True
-        qual _                      = False
+headvar (Impl w (TVar _ v) p)       = v
+headvar (Cast (TVar _ v) t)
+  | univar v                        = v
+headvar (Cast t (TVar _ v))         = v
+headvar (Sub w (TVar _ v) t)
+  | univar v                        = v
+headvar (Sub w t (TVar _ v))        = v
+headvar (Sel w (TVar _ v) n t)      = v
+headvar (Mut (TVar _ v) n t)        = v
 
-split_ambig vs cs
-  | null vs'                        = (amb_cs, safe_cs)
-  | otherwise                       = split_ambig (vs'++vs) cs
-  where (amb_cs,safe_cs)            = partition ambig cs
-        vs'                         = tyfree safe_cs \\ vs
-        ambig (Impl w t p)          = any (`notElem` vs) (tyfree t)
-        ambig c                     = any (`notElem` vs) (tyfree c)
+splitFixed fvs cs
+  | null fvs'                       = (fixed,cs')
+  | otherwise                       = splitFixed (fvs'++fvs) cs
+  where (fixed,cs')                 = partition (fixedP fvs) cs
+        fvs'                        = concat (map depVars cs) \\ fvs
+
+fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
+fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
+fixedP vs c                             = headvar c `elem` vs
+        
+depVars (Cast TVar{} t@TCon{})      = tyfree t
+depVars (Sub _ TVar{} t@TCon{})     = tyfree t
+depVars (Impl _ TVar{} p)           = tyfree p
+depVars _                           = []
+        
+solveP (Cast (TVar _ v) (TVar _ w)) = not (univar v && univar w)
+solveP (Sub _ (TVar _ v) (TVar _ w))= not (univar v && univar w)
+solveP (Cast (TVar _ v) TCon{})     = not (univar v)
+solveP (Impl _ (TVar _ v) _)        = not (univar v)
+solveP _                            = True
+
+collapseP (Cast TVar{} TVar{})      = True
+collapseP (Sub _ TVar{} TVar{})     = True
+collapseP _                         = False
+
+ambigP vs (Impl _ (TVar _ v) _)     = v `notElem` vs
+ambigP vs c                         = False
+
+findAmbig safe cs
+  | null safe'                      = nub [ headvar c | c <- amb_cs ]
+  | otherwise                       = findAmbig (safe'++safe) cs
+  where (amb_cs,cs')                = partition (ambigP safe) cs
+        safe'                       = concat (map depVars cs') \\ safe
 
 
 instance Subst TSchema where

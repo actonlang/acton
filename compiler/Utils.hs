@@ -81,7 +81,7 @@ errReport (SpanCoLinear file row start end,msg) src
   where rowstr                  = show row
         line1                   = file ++ " "++show row++":"++show start++"-"++show end
         line2                   = replicate (length rowstr+1) ' '++"|"
-        line3                   = rowstr ++ " |" ++ lines(src)!!(row-1)
+        line3                   = rowstr ++ " |" ++ lines(src)!!!(row-1)
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (start-1) ' '++replicate (end-start+1) '^'
 errReport (SpanMultiLine file srow scol erow ecol,msg) src
                                 =unlines (line1:line2:quote++(if erow-srow<=2 then [] else [replicate (length erowstr) ' ' ++ " | ..."])++[line2,msg])
@@ -92,15 +92,18 @@ errReport (SpanMultiLine file srow scol erow ecol,msg) src
           where nstr            = show n
         quote                   = map line [srow..minimum [srow+2,erow,length ls]]
         ls                      = lines src
-        line n                  = pad n ++ " |" ++ ls!!(n-1)
+        line n                  = pad n ++ " |" ++ ls!!!(n-1)
 errReport (SpanPoint file row col,msg) src
                                 = unlines [line1,line2,line3,line4,msg]
   where rowstr                  = show row
         line1                   = file ++ " "++show row++":"++show col
         line2                   = replicate (length rowstr+1) ' '++"|"
-        line3                   = rowstr ++ " |" ++ lines src!!(row-1)
+        line3                   = rowstr ++ " |" ++ lines src!!!(row-1)
         line4                   = replicate (length rowstr+1) ' '++"|"++replicate (col-1) ' '++"^"
 errReport (SpanEmpty,msg) _     = msg
+
+lst !!! ix | ix >= length lst   = lst !! 0
+           | otherwise          = lst !! ix
 
 ---------------------------------
 

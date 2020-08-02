@@ -416,8 +416,12 @@ instance Pretty (TVar,TVar) where
 instance Pretty (TVar,Type) where
     pretty (tv,t)                   = pretty tv <+> text "~" <+> pretty t
 
-instance Pretty (TVar,TCon) where
-    pretty (tv,tc)                  = pretty tv <+> text "~" <+> pretty tc
+--instance Pretty (TVar,TCon) where
+--    pretty (tv,tc)                  = pretty tv <+> text "~" <+> pretty tc
+
+instance Pretty (TVar,Either TCon Type) where
+    pretty (tv, Left p)             = pretty tv <+> text "~" <+> text "protocol" <+> pretty p
+    pretty (tv, Right t)            = pretty (tv,t)
 
 instance Pretty (TVar,Name) where
     pretty (tv,n)                   = pretty tv <> text "." <> pretty n
