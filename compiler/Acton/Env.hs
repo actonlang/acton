@@ -933,33 +933,23 @@ splitFixed fvs cs
   where (fixed,cs')                 = partition (fixedP fvs) cs
         fvs'                        = concat (map depVars cs) \\ fvs
 
-fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
-fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
-fixedP vs c                             = headvar c `elem` vs
+        fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
+        fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
+        fixedP vs c                             = headvar c `elem` vs
         
 depVars (Cast TVar{} t@TCon{})      = tyfree t
 depVars (Sub _ TVar{} t@TCon{})     = tyfree t
 depVars (Impl _ TVar{} p)           = tyfree p
 depVars _                           = []
         
-solveP (Cast (TVar _ v) (TVar _ w)) = not (univar v && univar w)
-solveP (Sub _ (TVar _ v) (TVar _ w))= not (univar v && univar w)
-solveP (Cast (TVar _ v) TCon{})     = not (univar v)
-solveP (Impl _ (TVar _ v) _)        = not (univar v)
-solveP _                            = True
-
-collapseP (Cast TVar{} TVar{})      = True
-collapseP (Sub _ TVar{} TVar{})     = True
-collapseP _                         = False
-
-ambigP vs (Impl _ (TVar _ v) _)     = v `notElem` vs
-ambigP vs c                         = False
-
 findAmbig safe cs
   | null safe'                      = nub [ headvar c | c <- amb_cs ]
   | otherwise                       = findAmbig (safe'++safe) cs
   where (amb_cs,cs')                = partition (ambigP safe) cs
         safe'                       = concat (map depVars cs') \\ safe
+
+        ambigP vs (Impl _ (TVar _ v) _) = v `notElem` vs
+        ambigP vs c                     = False
 
 
 instance Subst TSchema where
@@ -1311,7 +1301,67 @@ instance Subst Comp where
     tyfree (CompIf _ e c)           = tyfree e ++ tyfree c
     tyfree NoComp                   = []
 
-    
+class (Subst a) => Polarity a where
+    polvars                         :: a -> ([TVar],[TVar])
+
+(p,n) `polcat` (p',n')              = (p++p', n++n')
+
+polneg (p,n)                        = (n,p)
+
+(p,n) `polminus` vs                 = (p\\vs, n\\vs)
+
+instance Polarity Type where
+    polvars (TVar _ v)              = ([v],[])
+    polvars (TCon _ c)              = polvars c
+    polvars (TFun _ fx p k t)       = polvars fx `polcat` polvars t `polcat` polneg (polvars p `polcat` polvars k)
+    polvars (TTuple _ p k)          = polvars p `polcat` polvars k
+    polvars (TUnion _ as)           = ([],[])
+    polvars (TOpt _ t)              = polvars t
+    polvars (TNone _)               = ([],[])
+    polvars (TWild _)               = ([],[])
+    polvars (TNil _ _)              = ([],[])
+    polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
+    polvars (TFX l fx)              = polvars fx
+
+instance Polarity TCon where
+    polvars (TC c ts)               = (vs,vs) where vs = tyfree ts
+
+instance Polarity FX where
+    polvars (FXMut t)               = polvars t
+    polvars (FXAct t)               = polvars t
+    polvars _                       = ([],[])
+
+instance Polarity QBind where
+    polvars (Quant v cs)            = (vs,vs) where vs = v : tyfree cs
+
+instance Polarity TSchema where
+    polvars (TSchema _ q t)         = (polvars q `polcat` polvars t) `polminus` tybound q
+
+instance Polarity NameInfo where
+    polvars (NVar t)                = polvars t
+    polvars (NSVar t)               = polvars t
+    polvars (NDef t d)              = polvars t
+    polvars (NSig t d)              = polvars t
+    polvars (NAct q p k te)         = (polvars q `polcat` polvars p `polcat` polvars k `polcat` polvars te) `polminus` (tvSelf : tybound q)
+    polvars (NClass q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
+    polvars (NProto q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
+    polvars (NExt n q ps te)        = (polvars q `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : tybound q)
+    polvars (NTVar k mba)           = polvars mba
+    polvars _                       = ([],[])
+
+instance Polarity WTCon where
+    polvars (w, c)                  = polvars c
+
+instance Polarity (Name,NameInfo) where
+    polvars (n, i)                  = polvars i
+
+instance (Polarity a) => Polarity (Maybe a) where
+    polvars                         = maybe ([],[]) polvars
+
+instance (Polarity a) => Polarity [a] where
+    polvars                         = foldr polcat ([],[]) . map polvars
+
+
 -- Error handling ------------------------------------------------------------------------
 
 data CheckerError                   = FileNotFound ModName

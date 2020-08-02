@@ -17,14 +17,14 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: (Subst a, Pretty a) => Env -> a -> Constraints -> TypeM (Constraints,Equations)
+simplify                                    :: (Polarity a, Pretty a) => Env -> a -> Constraints -> TypeM (Constraints,Equations)
 simplify env te cs                          = do cs <- msubst cs
                                                  te <- msubst te
                                                  traceM ("  -simplify: " ++ prstrs cs)
                                                  traceM ("  -for: " ++ prstr te)
                                                  simplify' env te [] cs
 
-simplify'                                   :: (Subst a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+simplify'                                   :: (Polarity a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 simplify' env te eq []                      = return ([], eq)
 simplify' env te eq cs                      = do eq1 <- reduce env eq cs
                                                  cs1 <- msubst =<< collectDeferred
@@ -47,8 +47,6 @@ instance Subst Equation where
     
     tyfree (w, t, e)                        = tyfree t ++ tyfree e
 
-
-data Polarity                               = Neg | Inv | Pos deriving (Show)
 
 reduce                                      :: Env -> Equations -> Constraints -> TypeM Equations
 reduce env eq []                            = return eq
@@ -791,7 +789,7 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 
 
 
-improve                                 :: (Subst a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+improve                                 :: (Polarity a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te eq []                    = return ([], eq)
 improve env te eq cs
   | Nothing <- info                     = do traceM ("  *Resubmit")
@@ -831,7 +829,7 @@ improve env te eq cs
   | not $ null dots                     = do traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te (eq'++eq) cs'
-  | otherwise                           = return (cs, eq)
+  | otherwise                           = trace ("  *improvement done, polvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars ++ ", vvsL: " ++ prstrs vvsL ++ ", negUBnd: " ++ prstrs negUBnd) $ return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
         closure                         = varclose (varvars vi)
@@ -858,8 +856,7 @@ improve env te eq cs
         dots                            = dom mutC ++ dom selC ++ dom selP
         fixedvars                       = tyfree env
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
-        posvars                         = tyfree te                         -- TODO: implement true polarity assignment
-        negvars                         = posvars                           -- TODO: implement true polarity assignment
+        (posvars,negvars)               = polvars te
         obsvars                         = posvars ++ negvars ++ fixedvars ++ pvars
         freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
 
@@ -934,7 +931,7 @@ allBelow env _                          = []
 
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
 protos env (CVar v)                     = map (tcname . proto) $ allWitnesses env (NoQ $ tvname v)
-protos env CNone                        = [qnIdentity]
+protos env CNone                        = [qnIdentity,qnEq]
 protos env _                            = []
 
 attrs env (CProto n)                    = allAttrs env n
@@ -1001,7 +998,7 @@ candidates env k                        = map CVar (allVars env k)
 -- Solve all constraints on vs using a closed world assumption
 --
 
-solve                                   :: (Subst a, Pretty a) => Env -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
+solve                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
 solve env te eq [] cs                   = return (cs, eq)
 solve env te eq vs cs                   = do traceM ("###collapse among " ++ prstrs vs)
                                              (cs,eq) <- collapse env eq vs cs
@@ -1047,13 +1044,14 @@ collapse env eq vs cs                   = col [] eq cs
 
 
 -- Problems:
---  1. Lack of polarity info on variables makes S-simplification too weak
 --  2. Self as a skolemized state doesn't work for mutually recursive actors (which should have unique and incompatible 'Self' states)
 --  3. Automatic sealing of act[Self] to action doesn't work...
 
 
+implAll env [] t                        = True
 implAll env ps (TCon _ c)               = and [ hasWitness env (tcname c) (tcname p) | (w,p) <- ps ]
-implAll env [p] TUnion{}                = qmatch env (tcname $ snd p) qnEq
+implAll env ps (TOpt _ _)               = all (\(_,p) -> any (qmatch env $ tcname p) [qnIdentity,qnEq]) ps
+implAll env ps TUnion{}                 = all (qmatch env qnEq . tcname . snd) ps
 implAll env ps t                        = False
 
 

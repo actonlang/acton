@@ -738,6 +738,16 @@ splitGen env fvs cs te eq
         def_vss                         = [ nub $ tyfree sc \\ fixed_vs | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union [] def_vss)
         
+        solveP (Cast (TVar _ v) (TVar _ w))  = not (univar v && univar w)
+        solveP (Sub _ (TVar _ v) (TVar _ w)) = not (univar v && univar w)
+        solveP (Cast (TVar _ v) TCon{})      = not (univar v)
+        solveP (Impl _ (TVar _ v) _)         = not (univar v)
+        solveP _                             = True
+
+        collapseP (Cast TVar{} TVar{})  = True
+        collapseP (Sub _ TVar{} TVar{}) = True
+        collapseP _                     = False
+
         splitAgain cs cs' eq            = do (cs,eq') <- simplify env te cs
                                              te <- msubst te
                                              fvs <- tyfree <$> msubst (map tVar fvs)
