@@ -2361,7 +2361,7 @@ $Iterator $bytearray_reversed($bytearray self) {
 void $bytearray_insert($bytearray self, int ix, $int elem) {
   int len = self->nbytes;
   expand_bytearray(self,1);
-  int ix0 = ix < 0 ? max(len+ix,0) : min(ix,len);
+  int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
   memmove(self->str + (ix0 + 1),
           self->str + ix0 ,
           len - ix0 + 1); // +1 to move also terminating '\0'

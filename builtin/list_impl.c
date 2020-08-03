@@ -62,41 +62,11 @@ $list $list_deserialize($Serial$state state) {
     return res;
   }
 }
-     
-    
+
 struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
- 
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
-
-//prints a $list[$int]
-/* void $printlist($list lst) { */
-/*   $WORD w; */
-/*   printf("["); */
-/*   for (int i=0; i < $list_len(lst)-1; i++) { */
-/*     w = $list_getitem(lst,i); */
-/*     printf("%ld, ",from$int(w)); */
-/*   } */
-/*   if ($list_len(lst) > 0) { */
-/*     w = $list_getitem(lst,$list_len(lst)-1); */
-/*     printf("%ld",from$int(w)); */
-/*   } */
-/*   printf("]\n"); */
-/* } */
-
-static inline int min(int a, int b) {
-    if (a > b)
-        return b;
-    return a;
-}
-
-static inline int max(int a, int b) {
-    if (a > b)
-        return a;
-    return b;
-}
-
 // For now, expansion doubles capacity. 
 static void expand($list lst,int n) {
    if (lst->capacity >= lst->length + n)
@@ -262,8 +232,8 @@ $list $list_getslice($list lst, $Slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
-  //slice notation have been eliminated and default values applied.
-  // slen now is the length of the slice
+  // slice notation has been eliminated and default values applied.
+  // slen is now the length of the slice
   $list rlst = $list_new(slen);
   int t = start;
   for (int i=0; i<slen; i++) {
@@ -349,7 +319,7 @@ $Iterator $list_reversed($list lst){
 void $list_insert($list lst, int ix, $WORD val) {
   int len = lst->length;
   expand(lst,1);
-  int ix0 = ix < 0 ? max(len+ix,0) : min(ix,len);
+  int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
   memmove(lst->data + (ix0 + 1),
           lst->data + ix0 ,
           (len - ix0) * sizeof($WORD));
