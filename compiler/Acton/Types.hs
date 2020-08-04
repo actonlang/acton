@@ -248,7 +248,7 @@ instance InfEnv Stmt where
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
       | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], d)
-      where redefs                      = [ n | n <- ns, not (inDecl env && n == initKW), findName n env /= NReserved ]
+      where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -375,7 +375,7 @@ instance InfEnv Decl where
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  return (cs1, [(n, NClass q as' (map newSig nterms ++ te))], Class l n q us b')
                                              _ -> illegalRedef n
-      where env1                        = define (nSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (exclude [initKW] $ nSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
             te'                         = parentTEnv env as'
@@ -637,74 +637,6 @@ instance Check Branch where
 
 
 --------------------------------------------------------------------------------------------------------------------------
-
--- New strategy: fixed_vs are all tyfree env 
---               + closure obtained by following v --> tyfree ts for each Cast/Sub (TVar v) (TCon (TC c ts)) or Impl (TVar v) (TC c ts)
--- Solution targets are tyfree te \\ fixed_vs when generalizing, or [ headvar c | c <- cs, any (`elem`q) (tyfree c) ] in solveScoped
--- Collapse Cats/Sub TVar TVar only if *both* sides are solution targets
--- Ignore all other Cast/Sub TVar TVar constraint when solving
-
-{-
-  #solving noqual:  c'T$135x', f'T$29', f'T$38', s'T$116', s'T$73', 'T$77', 'T$138'
-           gen   :  'T$141' < 'T$131', 
-                    act[Self] < c'T$135x', 
-                    'w$32' : f'T$29' (Ord), 
-                    'w$30' : int < f'T$29', 
-                    'w$44' : f'T$36' (Integral), 
-                    'w$42' : f'T$38' < f'T$36',                                 <<<<
-                    'w$41' : f'T$38' (Plus), 
-                    'w$40' : int < f'T$38', 
-                    'w$47' : 'T$27' < f'T$46',                                      ????    neither var in solve_vs
-                    f'T$83x' < c'T$135x',                                       <<<<
-                    'w$92' : 'T$27' < f'T$90',                                      ????    neither var in solve_vs
-                    'w$60' : f'T$36' < f'T$59',                                     ????    neither var in solve_vs (as it appears during collapse!)
-                    f'T$98x' < c'T$135x',                                       <<<<
-                    'w$107' : f'T$36' < f'T$105',                                   ????    neither var in solve_vs (as it appears during collapse!)
-                    'w$118' : ("Actor {i}: count={count}, src={src, dst={dst}\n") < s'T$116', 
-                    'w$115' : None < s'T$73', 
-                    c'T$120x' < c'T$135x',                                      <<<<
-                    'w$79' : s'T$77'.act < c'T$120x'(f'T$127', 'T$131') -> 'T$81', 
-                    'w$78' : 'T$131' (Indexed['T$75', s'T$77']), 
-                    'w$76' : f'T$36' < 'T$75',                                      ????    neither var in solve_vs (as it appears during collapse!)
-                    None < s'T$138'
-           fixed :  'w$31' : F'T$3' < f'T$29', 
-                    'w$39' : F'T$10' < f'T$38', 
-                    'w$43' : F'T$1' < f'T$36', 
-                    'w$49' : F'T$13' (Indexed[f'T$46', int]), 
-                    F'T$13' < object, 
-                    'w$51' : F'T$13'.get < f'T$83x'(f'T$90', int) -> int, 
-                    'w$62' : F'T$19' (Indexed[f'T$59', int]), 
-                    F'T$19' < object, 
-                    'w$64' : F'T$19'.get < f'T$98x'(f'T$105', int) -> int,
-                    'w$129' : F'T$10' < f'T$127'
-           fvs   :  Self, F'T$19', F'T$13', F'T$10', F'T$8p', F'T$9k', F'T$5p', F'T$6k', F'T$7', F'T$3', F'T$1'
-           fix_vs:  Self, F'T$19', F'T$13', F'T$10', F'T$8p', F'T$9k', F'T$5p', F'T$6k', F'T$7', F'T$3', F'T$1',
-                    f'T$29', f'T$38', f'T$36', f'T$46', f'T$83x', f'T$90', f'T$59', f'T$98x', f'T$105', f'T$127'
-
-          collapse  f'T$38' ~ f'T$36'
-          collapse  f'T$83x' ~ c'T$135x'
-          collapse  f'T$98x' ~ c'T$135x'
-          collapse  c'T$120x' ~ c'T$135x'
-
-      ### solving:  c'T$135x', f'T$29', f'T$36', s'T$116', s'T$73', s'T$77', s'T$138'
-          in:       'T$141' < 'T$131', 
-                    act[Self] < c'T$135x', 
-                    'w$32' : f'T$29' (Ord), 
-                    'w$30' : int < f'T$29', 
-                    'w$44' : f'T$36' (Integral), 
-                    'w$41' : f'T$36' (Plus), 
-                    'w$40' : int < f'T$36', 
-                    'w$47' : 'T$27' < f'T$46', 
-                    'w$92' : 'T$27' < 'T$90', 
-                    'w$60' : f'T$36' < f'T$59', 
-                    'w$107' : f'T$36' < f'T$105', 
-                    'w$118' : ("Actor {i}: count={count}, src={src, dst={dst}\n") < s'T$116', 
-                    'w$115' : None < s'T$73', 
-                    'w$79' : s'T$77'.act < c'T$135x'(f'T$127', 'T$131') -> 'T$81', 
-                    'w$78' : 'T$131' (Indexed['T$75', s'T$77']), 
-                    'w$76' : f'T$36' < 'T$75', 
-                    None < s'T$138'
--}
 
 splitGen                                :: Env -> [TVar] -> Constraints -> TEnv -> Equations 
                                            -> TypeM ([TVar], Constraints, Constraints, TEnv, Equations)
