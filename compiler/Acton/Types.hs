@@ -448,15 +448,23 @@ stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 --------------------------------------------------------------------------------------------------------------------------
 
+solveAll env te cs                      = do (cs,eq) <- simplify env te cs
+                                             loop eq cs
+  where loop eq []                      = return eq
+        loop eq cs                      = do (cs,eq) <- solve env te eq vs cs
+                                             loop eq cs
+          where vs                      = nub [ headvar c | c <- cs ]
+
 solveScoped env [] te cs                = simplify env te cs
-solveScoped env vs te cs                = do (cs,eq) <- simplify env te cs
+solveScoped env vs te cs                = do traceM ("## solveScoped " ++ prstrs vs)
+                                             (cs,eq) <- simplify env te cs
                                              loop eq cs
   where loop eq cs
-          | null cs0                    = return (cs1, eq)
-          | otherwise                   = do (cs',eq') <- solve env te cs0
-                                             cs1 <- msubst cs1
-                                             loop (eq'++eq) (cs1++cs')
-          where (cs0,cs1)               = partition (any (`elem` vs) . tyfree) cs
+          | null vs1                    = return (cs, eq)
+          | otherwise                   = do traceM ("## solving " ++ prstrs vs1 ++ " in " ++ prstrs cs)
+                                             (cs,eq) <- solve env te eq vs1 cs
+                                             loop eq cs
+          where vs1                     = nub [ headvar c | c <- cs, any (`elem` vs) (tyfree c), univar (headvar c) ]
 
 checkNoEscape env []                    = return ()
 checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
@@ -513,13 +521,19 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
-        check1 (n, NVar t)              = simplify env te [Cast t t0]
+        check1 (n, NVar t)              = do (cs,eq) <- simplify env te [Cast t t0]
+--                                             i <- msubst (fromJust $ lookup n te0)
+--                                             when (tvSelf `elem` tyfree i) (err (loc n) ("Actor state escapes: " ++ prstr (n,i)))
+                                             return (cs,eq)
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
         check1 (n, NDef sc _)
           | isHidden n                  = return ([], [])
-          | otherwise                   = do (cs1,t) <- instantiate env sc
+          | otherwise                   = do traceM ("## matchActorAssumption for method " ++ prstr n)
+                                             (cs1,t) <- instantiate env sc
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te (asyncast t t0 : cs1)
                                              checkNoEscape env (tybound q)
+--                                             i <- msubst (fromJust $ lookup n te0)
+--                                             when (tvSelf `elem` tyfree i) (err (loc n) ("Actor state escapes: " ++ prstr (n,i)))
                                              return (cs2, eq)
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
         check1 (n, i)                   = return ([], [])
@@ -624,30 +638,116 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-splitGen                                :: Env -> [TVar] -> Constraints -> TEnv -> Equations 
-                                           -> TypeM ([TVar],[TVar], Constraints,Constraints, TEnv, Equations)
-splitGen env fvs cs te eq
-  | not $ null noqual_cs                = do traceM ("  #splitting noqual: " ++ prstrs noqual_cs)
-                                             traceM ("             ok    : " ++ prstrs (fixed_cs++cs2))
-                                             (cs',eq') <- solve env te noqual_cs
-                                             splitAgain (fixed_cs++cs2) cs' (eq'++eq)
-  | not $ null ambig_cs                 = do traceM ("  #splitting ambig: " ++ prstrs ambig_cs)
-                                             traceM ("             ok   : " ++ prstrs (fixed_cs++cs3))
-                                             (cs',eq') <- solve env te ambig_cs
-                                             splitAgain (fixed_cs++cs3) cs' (eq'++eq)
-  | otherwise                           = do eq <- msubst eq
-                                             traceM ("  #splitting fixed: " ++ prstrs fixed_cs)
-                                             traceM ("  #          gen  : " ++ prstrs gen_cs)
-                                             return (fvs, gvs, fixed_cs, gen_cs, te, eq)
-  where (fixed_cs, cs1)                 = split_fixed fvs cs
-        (noqual_cs, cs2)                = split_noqual cs1
-        (ambig_cs, cs3)                 = split_ambig safe_vs cs2
+-- New strategy: fixed_vs are all tyfree env 
+--               + closure obtained by following v --> tyfree ts for each Cast/Sub (TVar v) (TCon (TC c ts)) or Impl (TVar v) (TC c ts)
+-- Solution targets are tyfree te \\ fixed_vs when generalizing, or [ headvar c | c <- cs, any (`elem`q) (tyfree c) ] in solveScoped
+-- Collapse Cats/Sub TVar TVar only if *both* sides are solution targets
+-- Ignore all other Cast/Sub TVar TVar constraint when solving
 
+{-
+  #solving noqual:  c'T$135x', f'T$29', f'T$38', s'T$116', s'T$73', 'T$77', 'T$138'
+           gen   :  'T$141' < 'T$131', 
+                    act[Self] < c'T$135x', 
+                    'w$32' : f'T$29' (Ord), 
+                    'w$30' : int < f'T$29', 
+                    'w$44' : f'T$36' (Integral), 
+                    'w$42' : f'T$38' < f'T$36',                                 <<<<
+                    'w$41' : f'T$38' (Plus), 
+                    'w$40' : int < f'T$38', 
+                    'w$47' : 'T$27' < f'T$46',                                      ????    neither var in solve_vs
+                    f'T$83x' < c'T$135x',                                       <<<<
+                    'w$92' : 'T$27' < f'T$90',                                      ????    neither var in solve_vs
+                    'w$60' : f'T$36' < f'T$59',                                     ????    neither var in solve_vs (as it appears during collapse!)
+                    f'T$98x' < c'T$135x',                                       <<<<
+                    'w$107' : f'T$36' < f'T$105',                                   ????    neither var in solve_vs (as it appears during collapse!)
+                    'w$118' : ("Actor {i}: count={count}, src={src, dst={dst}\n") < s'T$116', 
+                    'w$115' : None < s'T$73', 
+                    c'T$120x' < c'T$135x',                                      <<<<
+                    'w$79' : s'T$77'.act < c'T$120x'(f'T$127', 'T$131') -> 'T$81', 
+                    'w$78' : 'T$131' (Indexed['T$75', s'T$77']), 
+                    'w$76' : f'T$36' < 'T$75',                                      ????    neither var in solve_vs (as it appears during collapse!)
+                    None < s'T$138'
+           fixed :  'w$31' : F'T$3' < f'T$29', 
+                    'w$39' : F'T$10' < f'T$38', 
+                    'w$43' : F'T$1' < f'T$36', 
+                    'w$49' : F'T$13' (Indexed[f'T$46', int]), 
+                    F'T$13' < object, 
+                    'w$51' : F'T$13'.get < f'T$83x'(f'T$90', int) -> int, 
+                    'w$62' : F'T$19' (Indexed[f'T$59', int]), 
+                    F'T$19' < object, 
+                    'w$64' : F'T$19'.get < f'T$98x'(f'T$105', int) -> int,
+                    'w$129' : F'T$10' < f'T$127'
+           fvs   :  Self, F'T$19', F'T$13', F'T$10', F'T$8p', F'T$9k', F'T$5p', F'T$6k', F'T$7', F'T$3', F'T$1'
+           fix_vs:  Self, F'T$19', F'T$13', F'T$10', F'T$8p', F'T$9k', F'T$5p', F'T$6k', F'T$7', F'T$3', F'T$1',
+                    f'T$29', f'T$38', f'T$36', f'T$46', f'T$83x', f'T$90', f'T$59', f'T$98x', f'T$105', f'T$127'
+
+          collapse  f'T$38' ~ f'T$36'
+          collapse  f'T$83x' ~ c'T$135x'
+          collapse  f'T$98x' ~ c'T$135x'
+          collapse  c'T$120x' ~ c'T$135x'
+
+      ### solving:  c'T$135x', f'T$29', f'T$36', s'T$116', s'T$73', s'T$77', s'T$138'
+          in:       'T$141' < 'T$131', 
+                    act[Self] < c'T$135x', 
+                    'w$32' : f'T$29' (Ord), 
+                    'w$30' : int < f'T$29', 
+                    'w$44' : f'T$36' (Integral), 
+                    'w$41' : f'T$36' (Plus), 
+                    'w$40' : int < f'T$36', 
+                    'w$47' : 'T$27' < f'T$46', 
+                    'w$92' : 'T$27' < 'T$90', 
+                    'w$60' : f'T$36' < f'T$59', 
+                    'w$107' : f'T$36' < f'T$105', 
+                    'w$118' : ("Actor {i}: count={count}, src={src, dst={dst}\n") < s'T$116', 
+                    'w$115' : None < s'T$73', 
+                    'w$79' : s'T$77'.act < c'T$135x'(f'T$127', 'T$131') -> 'T$81', 
+                    'w$78' : 'T$131' (Indexed['T$75', s'T$77']), 
+                    'w$76' : f'T$36' < 'T$75', 
+                    None < s'T$138'
+-}
+
+splitGen                                :: Env -> [TVar] -> Constraints -> TEnv -> Equations 
+                                           -> TypeM ([TVar], Constraints, Constraints, TEnv, Equations)
+splitGen env fvs cs te eq
+  | not $ null solve_vs                 = do traceM ("  #solving vs    : " ++ prstrs solve_vs)
+                                             traceM ("           gen   : " ++ prstrs gen_cs)
+                                             traceM ("           fixed : " ++ prstrs fixed_cs)
+                                             (cs',eq') <- solve env te eq solve_vs gen_cs
+                                             splitAgain fixed_cs cs' eq'
+  | not $ null collapse_vs              = do traceM ("  #collapsing vs    : " ++ prstrs collapse_vs)
+                                             traceM ("              gen   : " ++ prstrs gen_cs)
+                                             traceM ("              fixed : " ++ prstrs fixed_cs)
+                                             (cs',eq') <- collapse env eq collapse_vs gen_cs
+                                             splitAgain fixed_cs cs' eq'
+  | not $ null ambig_vs                 = do traceM ("  #defaulting vs    : " ++ prstrs ambig_vs)
+                                             traceM ("              gen   : " ++ prstrs gen_cs)
+                                             traceM ("              fixed : " ++ prstrs fixed_cs)
+                                             (cs',eq') <- solve env te eq ambig_vs gen_cs
+                                             splitAgain fixed_cs cs' eq'
+  | otherwise                           = do eq <- msubst eq
+                                             traceM ("  #returning gen   : " ++ prstrs gen_cs)
+                                             traceM ("             fixed : " ++ prstrs fixed_cs)
+                                             return (gen_vs, fixed_cs, gen_cs, te, eq)
+  where (fixed_cs, gen_cs)              = splitFixed fvs cs
+
+        solve_vs                        = [ headvar c | c <- gen_cs, solveP c ]
+        collapse_vs                     = concat [ tyfree c | c <- gen_cs, collapseP c ]
+        ambig_vs                        = findAmbig safe_vs gen_cs
+        fixed_vs                        = nub $ fvs ++ tyfree fixed_cs
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
-        def_vss                         = [ nub $ tyfree sc \\ fvs | (_, NDef sc _) <- te, null $ scbind sc ]
-        gvs                             = nub (foldr union [] def_vss ++ tyfree gen_cs)
-        gen_cs                          = cs3
+        def_vss                         = [ nub $ tyfree sc \\ fixed_vs | (_, NDef sc _) <- te, null $ scbind sc ]
+        gen_vs                          = nub (foldr union [] def_vss)
         
+        solveP (Cast (TVar _ v) (TVar _ w))  = not (univar v && univar w)
+        solveP (Sub _ (TVar _ v) (TVar _ w)) = not (univar v && univar w)
+        solveP (Cast (TVar _ v) TCon{})      = not (univar v)
+        solveP (Impl _ (TVar _ v) _)         = not (univar v)
+        solveP _                             = True
+
+        collapseP (Cast TVar{} TVar{})  = True
+        collapseP (Sub _ TVar{} TVar{}) = True
+        collapseP _                     = False
+
         splitAgain cs cs' eq            = do (cs,eq') <- simplify env te cs
                                              te <- msubst te
                                              fvs <- tyfree <$> msubst (map tVar fvs)
@@ -664,14 +764,15 @@ genEnv env cs te ds0                    = do te <- msubst te
                                              traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te cs
                                              te <- msubst te
-                                             fvs0 <- (tyfixed te++) . tyfree <$> msubst env
-                                             (fvs,gvs, fixed_cs,gen_cs, te, eq1) <- splitGen env fvs0 cs0 te eq0
-                                             traceM ("## genEnv 2 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             fvs <- (tyfixed te++) . tyfree <$> msubst env
+                                             traceM ("## splitGen: " ++ prstrs cs0)
+                                             (gen_vs, fixed_cs, gen_cs, te, eq1) <- splitGen env fvs cs0 te eq0
+                                             traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              ds <- msubst ds0
-                                             let (q,ws) = qualify gvs gen_cs
+                                             let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize q) te
                                                  ds1 = map (abstract q ds ws eq1) ds
-                                             traceM ("## genEnv 3 [" ++ prstrs gvs ++ "]\n" ++ render (nest 6 $ pretty te1))
+                                             traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fixed_cs, te1, ds1)
   where
     tyfixed te                          = tyfree $ filter (not . gen) te
@@ -1179,8 +1280,10 @@ instance InfEnvT Pattern where
     infEnvT env (PVar l n a)            = do t <- maybe newTVar return a
                                              case findName n env of
                                                  NReserved -> do
+                                                     traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
                                                      return (csa, [(n, NVar t)], t, PVar l n (Just t))
-                                                 NSig (TSchema _ [] t') _ ->
+                                                 NSig (TSchema _ [] t') _ -> do
+                                                     traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
                                                      return (Cast t t' : csa, [(n, NVar t')], t, PVar l n (Just t))
                                                  NVar t' ->
                                                      return (Cast t t' : csa, [], t, PVar l n Nothing)
