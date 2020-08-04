@@ -98,7 +98,7 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NVar t)          = pretty n <+> colon <+> pretty t
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
-    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":" <+> pretty t
+    pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":::" <+> pretty t
     pretty (n, NAct q p k [])   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon <+> text "pass"
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <+> nonEmpty brackets commaList q <+>
@@ -698,15 +698,10 @@ instWitness env ts wit      = case wit of
 
 instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = tybound q `zip` ts
---                                     cs = subst s [ constr' v u | Quant v us <- q, u <- us ]
---                                     ws = [ w | Impl w _ _ <- cs ]
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
           | isProto n env   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
---        constr' tv u@(TC n _)
---          | isProto n env   = Impl (tvarWit tv u) (tVar tv) u
---          | otherwise       = Cast (tVar tv) (tCon u)
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
@@ -909,12 +904,14 @@ instance Subst Constraint where
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
+    msubst (Seal w fx1 fx2 t1 t2)   = Seal w <$> msubst fx1 <*> msubst fx2 <*> msubst t1 <*> msubst t2
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
+    tyfree (Seal w fx1 fx2 t1 t2)   = tyfree fx1 ++ tyfree fx2 ++ tyfree t1 ++ tyfree t2
 
 
 headvar (Impl w (TVar _ v) p)       = v
@@ -926,6 +923,8 @@ headvar (Sub w (TVar _ v) t)
 headvar (Sub w t (TVar _ v))        = v
 headvar (Sel w (TVar _ v) n t)      = v
 headvar (Mut (TVar _ v) n t)        = v
+headvar (Seal w (TVar _ v) _ _ _)   = v
+headvar (Seal w _ (TVar _ v) _ _)   = v
 
 splitFixed fvs cs
   | null fvs'                       = (fixed,cs')
@@ -935,7 +934,7 @@ splitFixed fvs cs
 
         fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
         fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
-        fixedP vs c                             = headvar c `elem` vs
+        fixedP vs c                 = headvar c `elem` vs
         
 depVars (Cast TVar{} t@TCon{})      = tyfree t
 depVars (Sub _ TVar{} t@TCon{})     = tyfree t

@@ -226,4 +226,4 @@ instance Relabel Constraint where
     relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
     relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
-    
+    relabel (Seal w fx1 fx2 t1 t2) = Seal w <$> relabel fx1 <*> relabel fx2 <*> relabel t1 <*> relabel t2

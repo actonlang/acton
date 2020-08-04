@@ -387,7 +387,7 @@ prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty (FXAction)                = text "action"
+    pretty (FXAction)               = text "action"
     pretty (FXAct t)                = text "act" <> brackets (pretty t)
     pretty (FXMut t)                = text "mut" <> brackets (pretty t)
     pretty (FXPure)                 = text "pure"
@@ -408,6 +408,8 @@ instance Pretty Constraint where
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
+    pretty (Seal w fx1 fx2 t1 t2)   = maybe empty ((<+> colon) . pretty) w  <+> text "seal" <+> 
+                                      parens (pretty fx1 <+> text "<" <+> pretty fx2) <+> parens (pretty t1 <+> text "<" <+> pretty t2)
 
 
 instance Pretty (TVar,TVar) where
