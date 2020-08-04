@@ -50,35 +50,32 @@ void printlist($list lst) {
   }
   printf("]\n");
 }
-
+*/
 
 // Sieve of Erathostenes 
 $list sieve(int n) {
-  $WORD false = toWord(0);
-  $WORD true = toWord(1);
-  $WORD w;
   $list isPrime = $NEW($list,NULL); 
-  $list_append(isPrime,false); 
-  $list_append(isPrime,false);
+  $list_append(isPrime,$False); 
+  $list_append(isPrime,$False);
   for (int i=2; i < n; i++) 
-    $list_append(isPrime,true);
+    $list_append(isPrime,$True);
   for (int i=2; i < floor(sqrt(n)); i++) {
-    w = $list_getitem(isPrime,i);
-    if (fromWord(w)) {
+    //if (from$bool(isPrime->data[i])) {
+    if (from$bool($list_getitem(isPrime,i))) {
       for (int k=i*i; k<n; k+=i)
-        $list_setitem(isPrime,k,false);
+        $list_setitem(isPrime,k,$False);
     }
   }
   $list primes = $NEW($list,NULL);
   for (int i=0; i<n; i++) {
-    w = $list_getitem(isPrime,i);
-    if (fromWord(w)) {
-      $list_append(primes,toWord(i));
+    //if (from$bool(isPrime->data[i])) {
+    if (from$bool($list_getitem(isPrime,i))) {
+      $list_append(primes,to$int(i));
     }
   }
   return primes;
 }
-*/
+
 // Version with protocol methods /////////////////////////////////////////////////////////////////////////////////////////
 
 $list sieveS($Sequence$list wit, int n) {
@@ -104,12 +101,12 @@ $list sieveS($Sequence$list wit, int n) {
   }
   return primes;
 }
- 
+
 int main() {
 
-  // printf("%d\n",*$list_len(sieve(10000000)));
+  printf("%ld\n",$list_len(sieve(10000000)));
 
-  $Sequence$list wit = $Sequence$list$witness;
-  $list primes = sieveS(wit,1000000);
-  printf("%ld\n",from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence,primes)));
+  //$Sequence$list wit = $Sequence$list$witness;
+  //$list primes = sieveS(wit,10000000);
+  //printf("%ld\n",from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence,primes)));
 }

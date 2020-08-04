@@ -469,6 +469,30 @@ typedef struct $Hashable$float *$Hashable$float;
 struct $Hashable$float$class;
 typedef struct $Hashable$float$class *$Hashable$float$class;
 
+struct $Complex$complex;
+typedef struct $Complex$complex *$Complex$complex;
+
+struct $Complex$complex$class;
+typedef struct $Complex$complex$class *$Complex$complex$class;
+
+struct $Plus$complex;
+typedef struct $Plus$complex *$Plus$complex;
+
+struct $Plus$complex$class;
+typedef struct $Plus$complex$class *$Plus$complex$class;
+
+struct $Minus$complex;
+typedef struct $Minus$complex *$Minus$complex;
+
+struct $Minus$complex$class;
+typedef struct $Minus$complex$class *$Minus$complex$class;
+
+struct $Hashable$complex;
+typedef struct $Hashable$complex *$Hashable$complex;
+
+struct $Hashable$complex$class;
+typedef struct $Hashable$complex$class *$Hashable$complex$class;
+
 struct $Iterable$range;
 typedef struct $Iterable$range *$Iterable$range;
 
@@ -978,7 +1002,7 @@ struct $Real$class {
     $Integral$opaque (*__trunc__)($Real, $WORD);
     $Integral$opaque (*__floor__)($Real, $WORD);
     $Integral$opaque (*__ceil__)($Real, $WORD);
-    $Integral$opaque (*__round__)($Real, $WORD);
+    $WORD (*__round__)($Real, $WORD, $int);
 };
 
 struct $Real$opaque {
@@ -1012,7 +1036,7 @@ struct $Rational$class {
     $Integral$opaque (*__trunc__)($Rational, $WORD);
     $Integral$opaque (*__floor__)($Rational, $WORD);
     $Integral$opaque (*__ceil__)($Rational, $WORD);
-    $Integral$opaque (*__round__)($Rational, $WORD);
+    $WORD (*__round__)($Rational, $WORD,$int);
     $Integral$opaque (*numerator)($Rational, $WORD);
     $Integral$opaque (*denominator)($Rational, $WORD);
 };
@@ -1049,7 +1073,7 @@ struct $Integral$class {
     $Integral$opaque (*__trunc__)($Integral, $WORD);
     $Integral$opaque (*__floor__)($Integral, $WORD);
     $Integral$opaque (*__ceil__)($Integral, $WORD);
-    $Integral$opaque (*__round__)($Integral, $WORD);
+    $WORD (*__round__)($Integral, $WORD, $int);
     $Integral$opaque (*numerator)($Integral, $WORD);
     $Integral$opaque (*denominator)($Integral, $WORD);
     $int (*__int__)($Integral, $WORD);
@@ -1576,7 +1600,7 @@ struct $Integral$int$class {
     $Integral$opaque (*__trunc__)($Integral$int, $int);
     $Integral$opaque (*__floor__)($Integral$int, $int);
     $Integral$opaque (*__ceil__)($Integral$int, $int);
-    $Integral$opaque (*__round__)($Integral$int, $int);
+    $int (*__round__)($Integral$int, $int, $int);
     $Integral$opaque (*numerator)($Integral$int, $int);
     $Integral$opaque (*denominator)($Integral$int, $int);
     $int (*__int__)($Integral$int, $int);
@@ -1600,7 +1624,7 @@ $float $Integral$int$__float__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__trunc__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__floor__ ($Integral$int, $int);
 $Integral$opaque $Integral$int$__ceil__ ($Integral$int, $int);
-$Integral$opaque $Integral$int$__round__ ($Integral$int, $int);
+$int $Integral$int$__round__ ($Integral$int, $int, $int);
 $Integral$opaque $Integral$int$numerator ($Integral$int, $int);
 $Integral$opaque $Integral$int$denominator ($Integral$int, $int);
 $int $Integral$int$__int__ ($Integral$int, $int);
@@ -1755,7 +1779,7 @@ struct $Real$float$class {
     $Integral$opaque (*__trunc__)($Real$float, $float);
     $Integral$opaque (*__floor__)($Real$float, $float);
     $Integral$opaque (*__ceil__)($Real$float, $float);
-    $Integral$opaque (*__round__)($Real$float, $float);
+    $float (*__round__)($Real$float, $float, $int);
 };
 
 void $Real$float$__init__ ($Real$float);
@@ -1769,7 +1793,7 @@ $float $Real$float$__float__ ($Real$float, $float);
 $Integral$opaque $Real$float$__trunc__ ($Real$float, $float);
 $Integral$opaque $Real$float$__floor__ ($Real$float, $float);
 $Integral$opaque $Real$float$__ceil__ ($Real$float, $float);
-$Integral$opaque $Real$float$__round__ ($Real$float, $float);
+$float $Real$float$__round__ ($Real$float, $float, $int);
 
 // $Complex$float ////////////////////////////////////////////////////////////
 
@@ -1869,6 +1893,104 @@ void $Hashable$float$__init__ ($Hashable$float);
 $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
+
+// $Complex$complex ////////////////////////////////////////////////////////////
+
+struct $Complex$complex {
+    $Complex$complex$class $class;
+    $Plus$complex w$Plus$Complex;
+    $Minus$complex w$Minus$Complex;
+};
+
+struct $Complex$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Complex$complex);
+    $bool (*__eq__)($Complex$complex, $complex, $complex);
+    $bool (*__ne__)($Complex$complex, $complex, $complex);
+    $complex (*__complx__)($Complex$complex, $complex);
+    $complex (*__mul__)($Complex$complex, $complex, $complex);
+    $complex (*__truediv__)($Complex$complex, $complex, $complex);
+    $complex (*__pow__)($Complex$complex, $complex, $complex);
+    $complex (*__neg__)($Complex$complex, $complex);
+    $complex (*__pos__)($Complex$complex, $complex);
+    $Real$opaque (*real)($Complex$complex, $complex);
+    $Real$opaque (*imag)($Complex$complex, $complex);
+    $Real$opaque (*__abs__)($Complex$complex, $complex);
+    $complex (*conjugate)($Complex$complex, $complex);
+};
+
+void $Complex$complex$__init__ ($Complex$complex);
+$bool $Complex$complex$__eq__ ($Complex$complex, $complex, $complex);
+$bool $Complex$complex$__ne__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__complx__ ($Complex$complex, $complex);
+$complex $Complex$complex$__mul__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__truediv__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__pow__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__neg__ ($Complex$complex, $complex);
+$complex $Complex$complex$__pos__ ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$real ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$imag ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$__abs__ ($Complex$complex, $complex);
+$complex $Complex$complex$conjugate ($Complex$complex, $complex);
+
+// $Plus$complex ////////////////////////////////////////////////////////////
+
+struct $Plus$complex {
+    $Plus$complex$class $class;
+    $Complex$complex w$Complex$complex;
+};
+
+struct $Plus$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Plus$complex, $Complex$complex);
+    $complex (*__add__)($Plus$complex, $complex, $complex);
+};
+
+void $Plus$complex$__init__ ($Plus$complex, $Complex$complex);
+$complex $Plus$complex$__add__ ($Plus$complex, $complex, $complex);
+
+// $Minus$complex ////////////////////////////////////////////////////////////
+
+struct $Minus$complex {
+    $Minus$complex$class $class;
+    $Complex$complex w$Complex$complex;
+};
+
+struct $Minus$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Minus$complex, $Complex$complex);
+    $complex (*__sub__)($Minus$complex, $complex, $complex);
+};
+
+void $Minus$complex$__init__ ($Minus$complex, $Complex$complex);
+$complex $Minus$complex$__sub__ ($Minus$complex, $complex, $complex);
+
+// $Hashable$complex ////////////////////////////////////////////////////////////
+
+struct $Hashable$complex {
+    $Hashable$complex$class $class;
+};
+
+struct $Hashable$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Hashable$complex);
+    $bool (*__eq__)($Hashable$complex, $complex, $complex);
+    $bool (*__ne__)($Hashable$complex, $complex, $complex);
+    $int (*__hash__)($Hashable$complex, $complex);
+};
+
+void $Hashable$complex$__init__ ($Hashable$complex);
+$bool $Hashable$complex$__eq__ ($Hashable$complex, $complex, $complex);
+$bool $Hashable$complex$__ne__ ($Hashable$complex, $complex, $complex);
+$int $Hashable$complex$__hash__ ($Hashable$complex, $complex);
 
 // $Iterable$range ////////////////////////////////////////////////////////////
 

@@ -1,3 +1,13 @@
+// Auxiliary //////////////////////////////////////////////////////////////////////////////
+
+// only called with e>=0.
+static long longpow(long a, long e) {
+  if (e == 0) return 1;
+  if (e == 1) return a;
+  if (e%2 == 0) return longpow(a*a,e/2);
+  return a * longpow(a*a,e/2);
+}
+
 // General methods ///////////////////////////////////////////////////////////////////////
 
 void $int_init($int self, $Integral$opaque n){
@@ -23,7 +33,7 @@ $str $int_str($int n) {
 }
   
 struct $int$class $int$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$int_init,$int_serialize,$int_deserialize,$int_bool,$int_str};
-
+/*
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
   res->$class = &$int$methods;
@@ -34,8 +44,7 @@ $int to$int(long i) {
 long from$int($int w) {
   return w->val;
 }
-
-
+*/
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
 $bool $Integral$int$__eq__ ($Integral$int wit, $int a, $int b) {
@@ -78,8 +87,18 @@ $Integral$opaque $Integral$int$__ceil__ ($Integral$int wit, $int n) {
   return $Integral$pack(($Integral)wit,n);
 }
   
-$Integral$opaque $Integral$int$__round__ ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,n);
+$int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
+  long nval = n->val;
+  if (nval<0)
+    return to$int(-$Integral$int$__round__(wit,to$int(-nval),p)->val);
+  long pval = p==NULL ? 0 : p->val;
+  if (pval>=0)
+    return n;
+  long p10 = longpow(10,-pval);
+  long res = nval/p10;
+  if (nval%p10 * 2 > p10)
+    res++; 
+  return to$int (res * p10);
 }
   
 $Integral$opaque $Integral$int$numerator ($Integral$int wit, $int n) {
@@ -99,8 +118,8 @@ $int $Integral$int$__index__($Integral$int wit, $int n) {
 }
 
 $tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
-  int n = from$int(a);
-  int d = from$int(b);
+  int n = a->val;
+  int d = b->val;
   $WORD *comps = malloc(2*sizeof($WORD));
   comps[0] = to$int(n/d);
   comps[1] = to$int(n%d);
@@ -108,38 +127,38 @@ $tuple $Integral$int$__divmod__($Integral$int wit, $int a, $int b) {
 }
 
 $int $Integral$int$__floordiv__($Integral$int wit, $int a, $int b) {
-  return to$int(from$int(a) / from$int(b));
+  return to$int(a->val / b->val);
 }
 
 $int $Integral$int$__mod__($Integral$int wit, $int a, $int b) {
-  return to$int(from$int(a) % from$int(b));
+  return to$int(a->val % b->val);
 }
 
 $int $Integral$int$__lshift__($Integral$int wit,  $int a, $int b) {
-  return to$int(from$int(a) << from$int(b));
+  return to$int(a->val << b->val);
 }
 
 $int $Integral$int$__rshift__($Integral$int wit,  $int a, $int b) {
-  return to$int(from$int(a) >> from$int(b));
+  return to$int(a->val >> b->val);
 }
  
 $int $Integral$int$__invert__($Integral$int wit,  $int a) {
-  return to$int(~from$int(a));
+  return to$int(~a->val);
 }
 
 
 // Logical$int  ////////////////////////////////////////////////////////////////////////////////////////
 
 $int $Logical$int$__and__($Logical$int wit,  $int a, $int b) {
-  return to$int(from$int(a) & from$int(b));
+  return to$int(a->val & b->val);
 }
                                                  
 $int $Logical$int$__or__($Logical$int wit,  $int a, $int b) {
-  return to$int(from$int(a) | from$int(b));
+  return to$int(a->val | b->val);
 }
                                                  
 $int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
-  return to$int(from$int(a) ^ from$int(b));
+  return to$int(a->val ^ b->val);
 }  
 
 // $Complex$int //////////////////////////////////////////////////////////////////////////////////////
@@ -153,11 +172,11 @@ $bool $Complex$int$__ne__ ($Complex$int wit, $int a, $int b) {
 }
 
 $complex $Complex$int$__complx__($Complex$int wit, $int a) {
-  return to$complex(to$float((double)from$int(a)),to$float(0.0));
+  return to$complex((double)a->val);
 }
 
 $int $Complex$int$__mul__($Complex$int wit,  $int a, $int b) {
-  return to$int(from$int(a) * from$int(b));
+  return to$int(a->val * b->val);
 }  
 
 // The typechecker will reject true division between two integers.
@@ -166,24 +185,17 @@ $int $Complex$int$__truediv__($Complex$int wit,  $int a, $int b) {
   return NULL;
 }  
 
-// only called with e>=0.
-static int intpow(int a, int e) {
-  if (e == 0) return 1;
-  if (e == 1) return a;
-  if (e % 2 == 0) return intpow(a*a,e/2);
-  return a * intpow(a*a,e/2);
-}
   
 $int $Complex$int$__pow__($Complex$int wit,  $int a, $int b) {
-  if ( from$int(b) < 0) {
+  if ( b->val < 0) {
     // raise VALUEERROR;
     return NULL;
   }
-  return to$int(intpow(from$int(a),from$int(b)));
+  return to$int(longpow(a->val,b->val));
 }
 
 $int $Complex$int$__neg__($Complex$int wit,  $int a) {
-  return to$int(-from$int(a));
+  return to$int(-a->val);
 }
 
 $int $Complex$int$__pos__($Complex$int wit,  $int a) {
@@ -199,7 +211,7 @@ $Real$opaque $Complex$int$imag($Complex$int wit,  $int a) {
 }
 
 $Real$opaque $Complex$int$__abs__($Complex$int wit,  $int a) {
-  return  $Real$pack(($Real)wit,to$int(labs(from$int(a))));
+  return  $Real$pack(($Real)wit,to$int(labs(a->val)));
 }
 
 $int $Complex$int$__conjugate__($Complex$int wit,  $int a) {
@@ -209,13 +221,13 @@ $int $Complex$int$__conjugate__($Complex$int wit,  $int a) {
 // $Plus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
 $int $Plus$int$__add__($Plus$int wit,  $int a, $int b) {
-  return to$int(from$int(a) + from$int(b));
+  return to$int(a->val + b->val);
 }  
  
 // $Minus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
 $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
-  return to$int(from$int(a) - from$int(b));
+  return to$int(a->val - b->val);
 }  
 
 // $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////

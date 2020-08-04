@@ -238,7 +238,8 @@ protocol Real (Ord,Complex):  # Eq implemented in both parents!
   __trunc__    : () -> Integral
   __floor__    : () -> Integral
   __ceil__     : () -> Integral
-  __round__    : () -> Integral
+
+  __round__    : (?int) -> Self
 
 protocol Rational (Real):
   numerator    : () -> Integral
@@ -271,6 +272,8 @@ extension int (Hashable):pass
 extension float (Real):pass
 extension float (Hashable):pass
 
+extension complex (Complex):pass
+extension complex (Hashable):pass
 
 ## Collection protocols ############################################################################
 
@@ -442,7 +445,8 @@ print :  (*A) -> None
 def reversed(seq : Sequence[A]) -> Iterator[A]:
   return seq.__reversed__()
 
-round : [A(Real)] => (x : A, n : ?int) -> A
+def round [A(Real)] (x : A, n : ?int) -> A:
+  return x.__round__(n)
 
 sorted : [A(Ord)] => (Iterable[A]) -> list[A]
 
