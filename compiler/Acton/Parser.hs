@@ -855,6 +855,7 @@ atom_expr = do
                              mbe <- optional dictorsetmaker
                              return $ maybe (S.Dict NoLoc []) id mbe)
                <|> var
+               <|>  (try ((\f -> S.Imaginary NoLoc f (show f ++ "j")) <$> lexeme (L.float <* string "j")))
                <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
                <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
                <|> (\i -> S.Int NoLoc i ("0x"++showHex i "")) <$> (string "0x" *> lexeme L.hexadecimal)

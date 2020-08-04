@@ -469,6 +469,30 @@ typedef struct $Hashable$float *$Hashable$float;
 struct $Hashable$float$class;
 typedef struct $Hashable$float$class *$Hashable$float$class;
 
+struct $Complex$complex;
+typedef struct $Complex$complex *$Complex$complex;
+
+struct $Complex$complex$class;
+typedef struct $Complex$complex$class *$Complex$complex$class;
+
+struct $Plus$complex;
+typedef struct $Plus$complex *$Plus$complex;
+
+struct $Plus$complex$class;
+typedef struct $Plus$complex$class *$Plus$complex$class;
+
+struct $Minus$complex;
+typedef struct $Minus$complex *$Minus$complex;
+
+struct $Minus$complex$class;
+typedef struct $Minus$complex$class *$Minus$complex$class;
+
+struct $Hashable$complex;
+typedef struct $Hashable$complex *$Hashable$complex;
+
+struct $Hashable$complex$class;
+typedef struct $Hashable$complex$class *$Hashable$complex$class;
+
 struct $Iterable$range;
 typedef struct $Iterable$range *$Iterable$range;
 
@@ -1869,6 +1893,104 @@ void $Hashable$float$__init__ ($Hashable$float);
 $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
+
+// $Complex$complex ////////////////////////////////////////////////////////////
+
+struct $Complex$complex {
+    $Complex$complex$class $class;
+    $Plus$complex w$Plus$Complex;
+    $Minus$complex w$Minus$Complex;
+};
+
+struct $Complex$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Complex$complex);
+    $bool (*__eq__)($Complex$complex, $complex, $complex);
+    $bool (*__ne__)($Complex$complex, $complex, $complex);
+    $complex (*__complx__)($Complex$complex, $complex);
+    $complex (*__mul__)($Complex$complex, $complex, $complex);
+    $complex (*__truediv__)($Complex$complex, $complex, $complex);
+    $complex (*__pow__)($Complex$complex, $complex, $complex);
+    $complex (*__neg__)($Complex$complex, $complex);
+    $complex (*__pos__)($Complex$complex, $complex);
+    $Real$opaque (*real)($Complex$complex, $complex);
+    $Real$opaque (*imag)($Complex$complex, $complex);
+    $Real$opaque (*__abs__)($Complex$complex, $complex);
+    $complex (*conjugate)($Complex$complex, $complex);
+};
+
+void $Complex$complex$__init__ ($Complex$complex);
+$bool $Complex$complex$__eq__ ($Complex$complex, $complex, $complex);
+$bool $Complex$complex$__ne__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__complx__ ($Complex$complex, $complex);
+$complex $Complex$complex$__mul__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__truediv__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__pow__ ($Complex$complex, $complex, $complex);
+$complex $Complex$complex$__neg__ ($Complex$complex, $complex);
+$complex $Complex$complex$__pos__ ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$real ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$imag ($Complex$complex, $complex);
+$Real$opaque $Complex$complex$__abs__ ($Complex$complex, $complex);
+$complex $Complex$complex$conjugate ($Complex$complex, $complex);
+
+// $Plus$complex ////////////////////////////////////////////////////////////
+
+struct $Plus$complex {
+    $Plus$complex$class $class;
+    $Complex$complex w$Complex$complex;
+};
+
+struct $Plus$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Plus$complex, $Complex$complex);
+    $complex (*__add__)($Plus$complex, $complex, $complex);
+};
+
+void $Plus$complex$__init__ ($Plus$complex, $Complex$complex);
+$complex $Plus$complex$__add__ ($Plus$complex, $complex, $complex);
+
+// $Minus$complex ////////////////////////////////////////////////////////////
+
+struct $Minus$complex {
+    $Minus$complex$class $class;
+    $Complex$complex w$Complex$complex;
+};
+
+struct $Minus$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Minus$complex, $Complex$complex);
+    $complex (*__sub__)($Minus$complex, $complex, $complex);
+};
+
+void $Minus$complex$__init__ ($Minus$complex, $Complex$complex);
+$complex $Minus$complex$__sub__ ($Minus$complex, $complex, $complex);
+
+// $Hashable$complex ////////////////////////////////////////////////////////////
+
+struct $Hashable$complex {
+    $Hashable$complex$class $class;
+};
+
+struct $Hashable$complex$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($Hashable$complex);
+    $bool (*__eq__)($Hashable$complex, $complex, $complex);
+    $bool (*__ne__)($Hashable$complex, $complex, $complex);
+    $int (*__hash__)($Hashable$complex, $complex);
+};
+
+void $Hashable$complex$__init__ ($Hashable$complex);
+$bool $Hashable$complex$__eq__ ($Hashable$complex, $complex, $complex);
+$bool $Hashable$complex$__ne__ ($Hashable$complex, $complex, $complex);
+$int $Hashable$complex$__hash__ ($Hashable$complex, $complex);
 
 // $Iterable$range ////////////////////////////////////////////////////////////
 

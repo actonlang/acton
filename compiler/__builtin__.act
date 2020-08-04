@@ -272,6 +272,8 @@ extension int (Hashable):pass
 extension float (Real):pass
 extension float (Hashable):pass
 
+extension complex (Complex):pass
+extension complex (Hashable):pass
 
 ## Collection protocols ############################################################################
 

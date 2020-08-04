@@ -100,44 +100,42 @@ $bool $Complex$float$__ne__ ($Complex$float wit, $float a, $float b) {
 }
 
 $complex $Complex$float$__complx__($Complex$float wit, $float a) {
-  return to$complex(to$float(from$float(a)),to$float(0.0));
+  return to$complex(a->val);
 }
 
 $float $Complex$float$__mul__($Complex$float wit,  $float a, $float b) {
   return to$float(from$float(a) * from$float(b));
 }  
 
-// The typechecker will reject true division between two integers.
 $float $Complex$float$__truediv__($Complex$float wit,  $float a, $float b) {
   return to$float(from$float(a) / from$float(b));
 }  
 
- 
 $float $Complex$float$__pow__($Complex$float wit,  $float a, $float b) {
   return to$float(exp(from$float(b) * log(from$float(a))));
   }
 
-$float $Complex$float$__neg__($Complex$float wit,  $float a) {
+$float $Complex$float$__neg__($Complex$float wit, $float a) {
   return to$float(-from$float(a));
 }
 
-$float $Complex$float$__pos__($Complex$float wit,  $float a) {
+$float $Complex$float$__pos__($Complex$float wit, $float a) {
   return a;
 }
 
-$Real$opaque $Complex$float$real($Complex$float wit,  $float a) {
-  return $Real$pack(($Real)wit,a);
+$Real$opaque $Complex$float$real($Complex$float wit, $float a) {
+  return $Real$pack(($Real)$Real$float$witness,a);
 }
 
 $Real$opaque $Complex$float$imag($Complex$float wit,  $float a) {
-  return  $Real$pack(($Real)wit,to$float(0.0));
+  return  $Real$pack(($Real)$Real$float$witness,to$float(0.0));
 }
 
 $Real$opaque $Complex$float$__abs__($Complex$float wit,  $float a) {
-  return  $Real$pack(($Real)wit,to$float(fabs(from$float(a))));
+  return  $Real$pack(($Real)$Real$float$witness,to$float(fabs(from$float(a))));
 }
 
-$float $Complex$float$__conjugate__($Complex$float wit,  $float a) {
+$float $Complex$float$conjugate($Complex$float wit,  $float a) {
   return a;
 }
 
@@ -166,6 +164,8 @@ $bool $Hashable$float$__neq__($Hashable$float wit, $float a, $float b) {
 $int $Hashable$float$__hash__($Hashable$float wit, $float a) {
   return to$int($float_hash(a));
 }
+
+// init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Real$float_init($Real$float wit) {
   wit-> w$Complex$Real = $NEW($Complex$float,wit);
@@ -200,7 +200,7 @@ struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float
 
 struct $Complex$float$class $Complex$float$methods = {"", UNASSIGNED,NULL, $Complex$float_init,$Complex$float$__eq__,$Complex$float$__ne__,$Complex$float$__complx__,
                                                $Complex$float$__mul__,$Complex$float$__truediv__,$Complex$float$__pow__,$Complex$float$__neg__,
-                                               $Complex$float$__pos__,$Complex$float$real,$Complex$float$imag,$Complex$float$__abs__,$Complex$float$__conjugate__};
+                                               $Complex$float$__pos__,$Complex$float$real,$Complex$float$imag,$Complex$float$__abs__,$Complex$float$conjugate};
  struct $Complex$float $Complex$float_instance = {&$Complex$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
  $Complex$float $Complex$float$witness = &$Complex$float_instance;
 

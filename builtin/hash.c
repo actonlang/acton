@@ -106,6 +106,21 @@ long $float_hash($float v) {
   return double_hash(from$float(v));
 }
 
+long $complex_hash($complex c) {
+  // we use the tuple_hash algorithm (see below)
+  long h1 = double_hash(creal(c->val));
+  long h2 = double_hash(cimag(c->val));
+  long x = 0x345678UL;
+  long mult = _PyHASH_MULTIPLIER;
+  x = (x ^ h1) * mult;
+  mult +=  (long)82522UL;
+  x = (x ^ h2) * mult;
+  x += 97531UL;
+  if (x == (long)-1) 
+    x = -2;
+  return x;
+}  
+ 
 long $pointer_hash($WORD p) {
     long x;
     long y = (long)p;

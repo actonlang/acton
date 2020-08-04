@@ -172,7 +172,7 @@ $bool $Complex$int$__ne__ ($Complex$int wit, $int a, $int b) {
 }
 
 $complex $Complex$int$__complx__($Complex$int wit, $int a) {
-  return to$complex(to$float((double)a->val),to$float(0.0));
+  return to$complex((double)a->val);
 }
 
 $int $Complex$int$__mul__($Complex$int wit,  $int a, $int b) {

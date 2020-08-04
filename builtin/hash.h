@@ -1,6 +1,7 @@
 
 long $int_hash($int n);
 long $float_hash($float v);
+long $complex_hash($complex c);
 
 long $string_hash($str s);
 
