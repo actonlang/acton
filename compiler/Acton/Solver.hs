@@ -129,6 +129,38 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
   | otherwise                               = err1 n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
+reduce' env eq (Seal Nothing (TVar _ v1) (TVar _ v2) t1 t2)
+  | v1 == v2                                = reduce env eq [Cast t1 t2]
+reduce' env eq (Seal (Just w) fx@(TVar _ v1) (TVar _ v2) t1 t2)
+  | v1 == v2                                = do let e = eCall (eVar x0) []
+                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) [Cast t1 t2]
+  where lambdaFX e                          = Lambda NoLoc (pospar [(x0,t)]) KwdNIL e fx
+        t                                   = tFun fx posNil kwdNil t1
+reduce' env eq c@(Seal w TVar{} _ _ _)      = do defer [c]; return eq                               -- Defer until both effects
+reduce' env eq c@(Seal w _ TVar{} _ _)      = do defer [c]; return eq                               -- are instantiated
+reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
+  | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #sealing cast")                         -- Unsealing:
+                                                 let cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
+                                                 reduce env eq cs
+  | otherwise                               = do traceM ("  #no sealing cast")                      -- No sealing needed:
+                                                 let cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
+                                                 reduce env eq cs
+reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
+  | fx1 /= fxAction, fx2 == fxAction        = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
+                                                 let e = eCall (eQVar primASYNC) [eVar x0]          --   Wrap closure into an async message
+                                                     cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
+                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
+  | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
+                                                 let e = eCall (eVar x0) []                         --   Call action closure right away
+                                                     cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
+                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
+  | otherwise                               = do traceM ("  #no sealing " ++ prstr w)               -- No sealing needed:
+                                                 let e = eCall (eVar x0) []                         --   Call closure right away
+                                                     cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
+                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
+  where lambdaFX e                          = Lambda NoLoc (pospar [(x0,t)]) KwdNIL e fx1
+        t                                   = tFun fx1 posNil kwdNil t1
+
 reduce' env eq c                            = noRed c
 
 
@@ -158,6 +190,7 @@ solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec/=Property) (noMut n)
 cast                                        :: Env -> Type -> Type -> TypeM ()
 cast env t1 t2                              = do t1' <- msubst t1
                                                  t2' <- msubst t2
+                                                 traceM ("   cast " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  cast' env t1' t2'
 
 castM env ts1 ts2                           = mapM_ (uncurry $ cast env) (ts1 `zip` ts2)
@@ -170,16 +203,10 @@ cast' env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = unifyM env (tcargs c') (tcargs c2)        -- TODO: cast/unify based on polarities
   where search                              = findAncestor env c1 (tcname c2)
 
-cast' env (TFun _ (TFX _ FXAction) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
-                                            = do cast env p2 p1
-                                                 cast env k2 k1
-                                                 cast env (tMsg t1) t2
-
 cast' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do cast env fx1 fx2
+                                            = do reduce env [] [Seal Nothing fx1 fx2 t1 t2]
                                                  cast env p2 p1
                                                  cast env k2 k1
-                                                 cast env t1 t2
 
 cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do cast env p1 p2
@@ -241,7 +268,7 @@ cast' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 cast' env t1@(TVar _ tv) t2
-  | univar tv                               = defer [Cast t1 t2]
+  | univar tv                               = trace ("   deferring " ++ prstr (Cast t1 t2)) $ defer [Cast t1 t2]
   | Just tc <- findTVBound env tv           = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)
@@ -265,11 +292,9 @@ castP env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = tcargs c1 == tcargs c'
   where search                              = findAncestor env c1 (tcname c2)
 
-castP env (TFun _ (TFX _ FXAction) p1 k1 t1) (TFun _ (TFX _ (FXAct _)) p2 k2 t2)
-                                            = castP env p2 p1 && castP env k2 k1 && castP env (tMsg t1) t2
-
 castP env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = castP env fx1 fx2 && castP env p2 p1 && castP env k2 k1 && castP env t1 t2
+  | fx1 == fxAction , fx2 /= fxAction       = castP env fx1 fx2 && castP env p2 p1 && castP env k2 k1 && castP env (tMsg t1) t2
+  | otherwise                               = castP env fx1 fx2 && castP env p2 p1 && castP env k2 k1 && castP env t1 t2
 
 castP env (TTuple _ p1 k1) (TTuple _ p2 k2) = castP env p1 p2 && castP env k1 k2
 
@@ -356,7 +381,7 @@ unify' env (TFX _ fx1) (TFX _ fx2)
   where unifyFX FXPure FXPure               = Just $ return ()
         unifyFX (FXMut t1) (FXMut t2)       = Just $ unify env t1 t2
         unifyFX (FXAct t1) (FXAct t2)       = Just $ unify env t1 t2
-        unifyFX FXAction FXAction             = Just $ return ()
+        unifyFX FXAction FXAction           = Just $ return ()
         unifyFX fx1 fx2                     = Nothing
 
 unify' env (TNil _ k1) (TNil _ k2)
@@ -395,15 +420,18 @@ sub' env eq w t1 t2@(TWild _)               = return (idwit w t1 t2 : eq)
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wp <- newWitness
+                                            = do wx <- newWitness
+                                                 wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
+                                                 tv <- newTVar
                                                  let e = eLambda [(x0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fx2
-                                                     e0 = asynwrap fx1 fx2 $ eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]
+                                                     e0 = eCall (eVar wx) [lambda0 fx1 $ eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]]
                                                      e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
                                                      e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)
-                                                     cs = [asyncast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, asynsub fx1 fx2 wt t1' t2']
+                                                     cs = [Seal (Just wx) fx1 fx2 t1' tv, Sub wp p2 p1, Sub wk k2 k1, Sub wt tv t2']
+
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
 
@@ -445,6 +473,7 @@ sub' env eq w t1@TFun{} (TVar _ tv)
   | univar tv                               = do t2 <- instwild env KType $ tFun tWild tWild tWild tWild
                                                  substitute tv t2
                                                  sub env eq w t1 t2
+
 
 sub' env eq w (TVar _ tv) t2@TTuple{}
   | univar tv                               = do t1 <- instwild env KType $ tTuple tWild tWild
@@ -585,6 +614,10 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
     f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p
     f (Mut (TVar _ v) n _ : cs)             = f cs . mutattr v n
     f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
+    f (Seal w fx1 fx2 t1 t2 : cs)
+      | TVar _ v1 <- fx1, TVar _ v2 <- fx2  = f cs . varvar v1 v2 . embed (tyfree [t1,t2])
+      | TVar _ v <- fx1                     = f cs . ubound v fx2 . embed (tyfree [t1,t2])
+      | TVar _ v <- fx2                     = f cs . lbound v fx1 . embed (tyfree [t1,t2])
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -773,7 +806,6 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 -- Check that there's at least one non-embedded variable
 -- For all non-embedded variables: replace multiple lower/upper con bounds with a LUB/GLB
 -- For non-embedded variables with a single lower/upper bound: replace with bound if not negative/positive
--- For non-embedded variables or chains with both a lower and an upper con bound: ensure the bounds are also related
 -- For non-embedded variables with multiple protocol constraints: identify equal and subtype-related protocols
 
 -- After improvement:
@@ -809,8 +841,6 @@ improve env te eq cs
                                              traceM ("  *LUB " ++ prstrs lb)
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
                                              simplify' env te eq (cs' ++ map (replace ub lb) cs)
-  | not $ null transCast                = do traceM ("  *Transitive cast: " ++ prstrs transCast)
-                                             simplify' env te eq (transCast ++ cs)
   | not $ null posLBnd                  = do traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- posLBnd ]
                                              simplify' env te eq cs
@@ -844,9 +874,8 @@ improve env te eq cs
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
-        transCast                       = [ Cast t t' | (v,t@TCon{}) <- lowerBnd, (v',t'@TCon{}) <- upperBnd, v==v' || (v,v') `elem` vclosed, not $ castP env t t' ]
-        posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` (negvars++vvsU), implAll env (lookup' v $ pbounds vi) t ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` (posvars++vvsL), implAll env (lookup' v $ pbounds vi) t ]
+        posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` (negvars++vvsU++sealU), implAll env (lookup' v $ pbounds vi) t ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` (posvars++vvsL++sealL), implAll env (lookup' v $ pbounds vi) t ]
         closUBnd                        = [ (v,t) | (v, t) <- upperBnd, uClosed env t ]
         closLBnd                        = [ (v,t) | (v, t) <- lowerBnd, lClosed env t ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
@@ -856,6 +885,8 @@ improve env te eq cs
         dots                            = dom mutC ++ dom selC ++ dom selP
         fixedvars                       = tyfree env
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
+        sealL                           = [ v | Seal _ (TVar _ v) _ _ _ <- cs ]
+        sealU                           = [ v | Seal _ _ (TVar _ v) _ _ <- cs ]
         (posvars,negvars)               = polvars te
         obsvars                         = posvars ++ negvars ++ fixedvars ++ pvars
         freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
@@ -905,7 +936,7 @@ allAbove env (TOpt _ t)                 = allAbove env t
 allAbove env (TNone _)                  = [CNone]           -- extend with 'candidates env KType' when polarities are implemented
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
-allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct,CAction]
+allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
 allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
@@ -943,36 +974,6 @@ protoattrs env c                        = concat [ allAttrs env n | n <- protos 
 
 type Solution                           = Map TVar [Candidate]
 
-
---     Pt               int         
---    /  \
--- Pt3D  ColorPt
-
--- allAbove Pt         = [Pt,None]
--- allAbove CPt        = [CPt,Pt,None]
--- allAbove Pt3D       = [Pt3D,Pt,None]
--- allAbove int        = [int,None]
--- allAbove None       = [None,int,Pt,CPt,Pt3D]
--- allAbove ?t         = super t
-
--- allBelow Pt         = [Pt,CPt,Pt3D]
--- allBelow CPt        = [CPt]
--- allBelow Pt3D       = [Pt3D]
--- allBelow int        = [int]
--- allBelow None       = [None]
--- allBelow ?t         = sub t ++ [None]
-
--- X = [Pt,CPt,Pt3D,int,None]
-
--- Cast CPt X       ==>     X `intersect` allAbove CPt     = [CPt,Pt,None]
--- Cast X Pt        ==>     X `intersect` allBelow Pt      = [Pt,CPt,Pt3D]
-
--- Cast ?int X      ==>     X `intersect` allAbove ?int    = X `intersect` [None,int]  = [None,int]
--- Cast X ?int      ==>     X `intersect` allBelow ?int    = X `intersect` [None,int]  = [None,int]
-
--- Cast ?CPt X      ==>     X `intersect` allAbove ?CPt    = X `intersect` [CPt,Pt3D,None]     = [CPt,Pt3D,None]
--- Cast X ?Pt       ==>     X `intersect` allBelow ?Pt     = X `intersect` [Pt,CPt,Pt3D,None]  = [Pt,CPt,Pt3D,None]
-
 constrain                               :: Env -> Solution -> Constraint -> Solution
 constrain env vs (Cast (TVar _ v) (TVar _ v'))
   | univar v && univar v'               = vs
@@ -987,6 +988,14 @@ constrain env vs (Sub w t (TVar _ v))   = Map.adjust (intersect $ allAbove env t
 constrain env vs (Impl w (TVar _ v) p)  = Map.adjust (filter (\c -> any (qmatch env $ tcname p) (protos env c))) v vs
 constrain env vs (Mut (TVar _ v) n t)   = Map.adjust (filter (\c -> n `elem` attrs env c)) v vs
 constrain env vs (Sel w (TVar _ v) n t) = Map.adjust (filter (\c -> n `elem` attrs env c || n `elem` protoattrs env c)) v vs
+constrain env vs (Seal w (TVar _ v) (TVar _ v') _ _)
+  | univar v && univar v'               = vs
+constrain env vs (Seal w (TVar _ v) t _ _)
+  | t == fxAction                       = Map.adjust (intersect $ allBelow env t ++ [CPure,CMut,CAct,CAction]) v vs
+  | otherwise                           = Map.adjust (intersect $ allBelow env t) v vs
+constrain env vs (Seal w t (TVar _ v) _ _)
+  | t == fxAction                       = Map.adjust (intersect $ allAbove env t) v vs
+  | otherwise                           = Map.adjust (intersect $ allAbove env t ++ [CAction]) v vs
 constrain env vs _                      = vs
 
 
@@ -1000,7 +1009,7 @@ candidates env k                        = map CVar (allVars env k)
 
 solve                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
 solve env te eq [] cs                   = return (cs, eq)
-solve env te eq vs cs                   = do traceM ("###collapse among " ++ prstrs vs)
+solve env te eq vs cs                   = do traceM ("###trying collapse " ++ prstrs vs)
                                              (cs,eq) <- collapse env eq vs cs
                                              vs' <- (nub . filter univar . tyfree) <$> msubst (map tVar vs)
                                              solve' env te eq vs' (reverse cs)
@@ -1033,19 +1042,25 @@ collapse                                :: Env -> Equations -> [TVar] -> Constra
 collapse env eq vs cs                   = col [] eq cs
   where col cs eq []                    = do cs <- msubst cs
                                              return (cs,eq)
-        col cs eq (Cast t@TVar{} u@TVar{} : cs')
-          | tvar t `elem` vs,
-            tvar u `elem` vs            = unify env t u >> msubst cs' >>= col cs eq
-        col cs eq (Sub w t@TVar{} u@TVar{} : cs')
-          | tvar t `elem` vs,
-            tvar u `elem` vs            = unify env t u >> msubst cs' >>= col cs (idwit w t u : eq)
+        col cs eq (Cast t1@TVar{} t2@TVar{} : cs')
+          | tvar t1 `elem` vs,
+            tvar t2 `elem` vs           = unify env t1 t2 >> msubst cs' >>= col cs eq
+        col cs eq (Sub w t1@TVar{} t2@TVar{} : cs')
+          | tvar t1 `elem` vs,
+            tvar t2 `elem` vs           = unify env t1 t2 >> msubst cs' >>= col cs (idwit w t1 t2 : eq)
+        col cs eq (Seal w fx1@TVar{} fx2@TVar{} t1 t2 : cs')
+          | tvar fx1 `elem` vs,
+            tvar fx2 `elem` vs          = trace ("### collapse " ++ prstr w) $ unify env fx1 fx2 >> msubst cs' >>= col (Cast t1 t2 : cs) eq'
+          where eq' | Just w' <- w      = (w', wFun t t2, e) : eq
+                    | otherwise         = eq
+                t                       = tFun fx1 posNil kwdNil t1
+                e                       = Lambda NoLoc (pospar [(x0,t)]) KwdNIL (eCall (eVar x0) []) fx2
         col cs eq (c : cs')             = col (c : cs) eq cs'
 
 
 
 -- Problems:
 --  2. Self as a skolemized state doesn't work for mutually recursive actors (which should have unique and incompatible 'Self' states)
---  3. Automatic sealing of act[Self] to action doesn't work...
 
 
 implAll env [] t                        = True
@@ -1065,6 +1080,12 @@ replace ub lb (Sub w (TVar _ v) t)
   | Just t' <- lookup v ub              = Sub w t' t
 replace ub lb (Sub w t (TVar _ v))
   | Just t' <- lookup v lb              = Sub w t t'
+replace ub lb c@(Seal _ TVar{} TVar{} _ _)
+                                        = c
+replace ub lb (Seal w (TVar _ v) fx t t')
+  | Just fx' <- lookup v ub             = Seal w fx' fx t t'
+replace ub lb (Seal w fx (TVar _ v) t t')
+  | Just fx' <- lookup v lb             = Seal w fx fx' t t'
 replace ub lb c                         = c
 
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
@@ -1197,3 +1218,5 @@ rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) No
 
 
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
+
+lambda0 fx e                            = Lambda NoLoc PosNIL KwdNIL e fx
