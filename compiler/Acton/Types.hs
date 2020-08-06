@@ -48,8 +48,8 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
                                              (cs,te,ss1) <- (if inBuiltin env then infEnv else infSuiteEnv) env ss
                                              popFX
-                                             traceM ("###solveAll " ++ prstrs cs)
-                                             eq <- solveAll (define te env) te cs
+                                             traceM ("### solveAll " ++ prstrs cs)
+                                             eq <- solveAll env te tNone cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tWild) | tv <- tyfree te ]
@@ -312,7 +312,7 @@ matchingDec n sc dec dec'
 matchDefAssumption env cl cs def
   | null q1                             = do traceM ("## matchDefAssumption 1 ")
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
+                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs)
                                              checkNoEscape env (tybound q0)
                                              return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do traceM ("## matchDefAssumption 2 ")
@@ -321,7 +321,7 @@ matchDefAssumption env cl cs def
                                                  s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
+                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if cl then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
                                              return (cs2, def{ qbinds = q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
@@ -370,7 +370,7 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te cs         --TODO: add eq1...
+                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs         --TODO: add eq1...
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  return (cs1, [(n, NClass q as' (map newSig nterms ++ te))], Class l n q us b')
@@ -390,7 +390,7 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te cs         --TODO: add eq1...
+                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs         --TODO: add eq1...
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature"
@@ -409,7 +409,7 @@ instance InfEnv Decl where
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te cs             --TODO: add eq1...
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs             --TODO: add eq1...
                                              checkNoEscape env (tybound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols"
@@ -448,21 +448,21 @@ stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 --------------------------------------------------------------------------------------------------------------------------
 
-solveAll env te cs                      = do (cs,eq) <- simplify env te cs
+solveAll env te tt cs                   = do (cs,eq) <- simplify env te tt cs
                                              loop eq cs
   where loop eq []                      = return eq
-        loop eq cs                      = do (cs,eq) <- solve env te eq vs cs
+        loop eq cs                      = do (cs,eq) <- solve env te tt eq vs cs
                                              loop eq cs
           where vs                      = nub [ headvar c | c <- cs ]
 
-solveScoped env [] te cs                = simplify env te cs
-solveScoped env vs te cs                = do traceM ("## solveScoped " ++ prstrs vs)
-                                             (cs,eq) <- simplify env te cs
+solveScoped env [] te tt cs             = simplify env te tt cs
+solveScoped env vs te tt cs             = do traceM ("## solveScoped " ++ prstrs vs)
+                                             (cs,eq) <- simplify env te tt cs
                                              loop eq cs
   where loop eq cs
           | null vs1                    = return (cs, eq)
           | otherwise                   = do traceM ("## solving " ++ prstrs vs1 ++ " in " ++ prstrs cs)
-                                             (cs,eq) <- solve env te eq vs1 cs
+                                             (cs,eq) <- solve env te tt eq vs1 cs
                                              loop eq cs
           where vs1                     = nub [ headvar c | c <- cs, any (`elem` vs) (tyfree c), univar (headvar c) ]
 
@@ -516,19 +516,19 @@ infActorEnv env ss                      = do dsigs <- mapM mkDSig (dvars ss \\ d
                 pvs _                   = []
 
 matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
-                                             (cs,eq) <- simplify env te [Cast (prowOf p) p0, Cast (krowOf k) k0]
+                                             (cs,eq) <- simplify env te tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
                                              traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
-        check1 (n, NVar t)              = do (cs,eq) <- simplify env te [Cast t t0]
+        check1 (n, NVar t)              = do (cs,eq) <- simplify env te tNone [Cast t t0]
                                              return (cs,eq)
           where NSig (TSchema _ _ t0) _ = fromJust $ lookup n te0
         check1 (n, NDef sc _)
           | isHidden n                  = return ([], [])
           | otherwise                   = do traceM ("## matchActorAssumption for method " ++ prstr n)
                                              (cs1,t) <- instantiate env sc
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te (asyncast t t0 : cs1)
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te tNone (asyncast t t0 : cs1)
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
           where NSig (TSchema _ q t0) _ = fromJust $ lookup n te0
@@ -548,7 +548,7 @@ instance Check Decl where
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                                  csx = [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) t1 (cswf++csp++csk++csb++cst++csx)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) [] t1 (cswf++csp++csk++csb++cst++csx)
                                              checkNoEscape env (tybound q)
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
@@ -566,7 +566,7 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te1 $ define te0 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (cswf++csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env (tybound q)
                                              fvs <- tyfree <$> msubst env
                                              when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
@@ -587,7 +587,7 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Class l n q us b')        -- TODO: add wits(q) and eq1 to each def in b'
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q env
@@ -598,7 +598,7 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Protocol l n q us b')     -- TODO: translate into class, add wits(q) to props, eq1 to __init__
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q env
@@ -609,7 +609,7 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 True b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (wellformed env1 (q,us)++csb)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env (tvSelf : tybound q)
                                              return (cs1, Extension l n q us b')   -- TODO: translate into class, add wits(q) to props, eq1 to __init__
       where env1                        = define te $ defineSelf n q $ defineTVars q env
@@ -624,7 +624,7 @@ instance Check Stmt where
     checkEnv env cl (Decl l ds)         = do (cs,ds') <- checkEnv env cl ds
                                              return (cs, Decl l ds')
     checkEnv env cl (Signature l ns sc dec)
-                                        = do _ <- solveAll env1 sc (wellformed env (q,t))
+                                        = do _ <- solveAll env1 [] sc (wellformed env (q,t))
                                              return ([], Signature l ns sc dec)
       where TSchema _ q t               = sc
             env1                        = defineTVars q env
@@ -643,7 +643,7 @@ splitGen env cs te eq
   | not $ null solve_vs                 = do traceM ("  #solving vs    : " ++ prstrs solve_vs)
                                              traceM ("           gen   : " ++ prstrs gen_cs)
                                              traceM ("           fixed : " ++ prstrs fixed_cs)
-                                             (cs',eq') <- solve env te eq solve_vs gen_cs
+                                             (cs',eq') <- solve env te tNone eq solve_vs gen_cs
                                              splitAgain (fixed_cs++cs') eq'
   | not $ null collapse_vs              = do traceM ("  #collapsing vs    : " ++ prstrs collapse_vs)
                                              traceM ("              gen   : " ++ prstrs gen_cs)
@@ -653,13 +653,13 @@ splitGen env cs te eq
   | not $ null ambig_vs                 = do traceM ("  #defaulting vs    : " ++ prstrs ambig_vs)
                                              traceM ("              gen   : " ++ prstrs gen_cs)
                                              traceM ("              fixed : " ++ prstrs fixed_cs)
-                                             (cs',eq') <- solve env te eq ambig_vs gen_cs
+                                             (cs',eq') <- solve env te tNone eq ambig_vs gen_cs
                                              splitAgain (fixed_cs++cs') eq'
   | otherwise                           = do eq <- msubst eq
                                              traceM ("  #returning gen   : " ++ prstrs gen_cs)
                                              traceM ("             fixed : " ++ prstrs fixed_cs)
                                              return (gen_vs, fixed_cs, gen_cs, te, eq)
-  where fvs                             = tyfixed te ++ tyfree env
+  where fvs                             = tyfree env
         (fixed_cs, gen_cs)              = splitFixed fvs cs
 
         solve_vs                        = [ headvar c | c <- gen_cs, solveP c ]
@@ -680,14 +680,14 @@ splitGen env cs te eq
         collapseP (Sub _ TVar{} TVar{}) = True
         collapseP _                     = False
 
-        tyfixed te                      = tyfree $ filter (not . gen) te
-          where gen (n, NDef sc _)      = null $ scbind sc
-                gen _                   = False
-
-        splitAgain cs eq                = do (cs,eq') <- simplify env te cs
+        splitAgain cs eq                = do (cs,eq') <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              splitGen env cs te (eq'++eq)
+
+tyfixed te                              = tyfree $ filter (not . gen) te
+  where gen (n, NDef sc _)              = null $ scbind sc
+        gen _                           = False
 
 qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in (q, concat wss)
   where qbind v                         = (Quant v (casts ++ impls), wits)
@@ -698,7 +698,7 @@ qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
 genEnv env cs te ds0                    = do te <- msubst te
                                              traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
-                                             (cs0,eq0) <- simplify env te cs
+                                             (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
                                              traceM ("## splitGen: " ++ prstrs cs0)

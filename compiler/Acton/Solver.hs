@@ -17,20 +17,21 @@ import Acton.Env
 
 
 -- Reduce conservatively and remove entailed constraints
-simplify                                    :: (Polarity a, Pretty a) => Env -> a -> Constraints -> TypeM (Constraints,Equations)
-simplify env te cs                          = do cs <- msubst cs
+simplify                                    :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Constraints -> TypeM (Constraints,Equations)
+simplify env te tt cs                       = do cs <- msubst cs
                                                  te <- msubst te
                                                  traceM ("  -simplify: " ++ prstrs cs)
                                                  traceM ("  -for: " ++ prstr te)
-                                                 simplify' env te [] cs
+                                                 simplify' env te tt [] cs
 
-simplify'                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-simplify' env te eq []                      = return ([], eq)
-simplify' env te eq cs                      = do eq1 <- reduce env eq cs
+simplify'                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+simplify' env te tt eq []                   = return ([], eq)
+simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  cs1 <- msubst =<< collectDeferred
                                                  env1 <- msubst env 
                                                  te1 <- msubst te
-                                                 improve env1 te1 eq1 cs1
+                                                 tt1 <- msubst tt
+                                                 improve env1 te1 tt1 eq1 cs1
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -825,45 +826,46 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 --  no Sel/Mut covered by Cast/Sub/Impl bounds
 
 
-improve                                 :: (Polarity a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
-improve env te eq []                    = return ([], eq)
-improve env te eq cs
+improve                                 :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+improve env te tt eq []                 = return ([], eq)
+improve env te tt eq cs
   | Nothing <- info                     = do traceM ("  *Resubmit")
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | Left (v,vs) <- closure              = do traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
                                              sequence [ unify env (tVar v) (tVar v') | v' <- vs ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null gsimple                  = do traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
                                              sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null cyclic                   = err2 cyclic ("Cyclic subtyping:")
   | not $ null openFX                   = do traceM ("  *Close actor FX: " ++ prstrs openFX)
-                                             simplify' env te eq ([ Cast (tVar tv) fxAction | tv <- openFX ] ++ cs)
+                                             simplify' env te tt eq ([ Cast (tVar tv) fxAction | tv <- openFX ] ++ cs)
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd
                                              lb <- mapM (mkLUB env) multiLBnd
                                              traceM ("  *GLB " ++ prstrs ub)
                                              traceM ("  *LUB " ++ prstrs lb)
                                              let cs' = [ Cast (tVar v) t | (v,t) <- ub ] ++ [ Cast t (tVar v) | (v,t) <- lb ]
-                                             simplify' env te eq (cs' ++ map (replace ub lb) cs)
+                                             simplify' env te tt eq (cs' ++ map (replace ub lb) cs)
   | not $ null posLBnd                  = do traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- posLBnd ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null negUBnd                  = do traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- negUBnd ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null closUBnd                 = do traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- closUBnd ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null closLBnd                 = do traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
                                              sequence [ unify env (tVar v) t | (v,t) <- closLBnd ]
-                                             simplify' env te eq cs
+                                             simplify' env te tt eq cs
   | not $ null redEq                    = do traceM ("  *(Context red) " ++ prstrs [ w | (w,_,_) <- redEq ])
                                              sequence [ unify env t1 t2 | (t1,t2) <- redUni ]
-                                             simplify' env te (redEq++eq) (remove [ w | (w,_,_) <- redEq ] cs)
+                                             simplify' env te tt (redEq++eq) (remove [ w | (w,_,_) <- redEq ] cs)
   | not $ null dots                     = do traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
-                                             simplify' env te (eq'++eq) cs'
-  | otherwise                           = trace ("  *improvement done, posvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars) $ return (cs, eq)
+                                             simplify' env te tt (eq'++eq) cs'
+  | otherwise                           = trace ("  *improvement done, posvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars ++ 
+                                                 ", actFX: " ++ prstrs actFX ++ ", openFX: " ++ prstrs openFX) $ return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
         closure                         = varclose (varvars vi)
@@ -871,7 +873,7 @@ improve env te eq cs
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vclosed obsvars (varvars vi)
         openFX                          = [ v | v <- actFX, fxAction `notElem` lookup' v (ubounds vi) ]
-        actFX                           = [ v | (n,i@NAct{}) <- names env, v <- tyfree i, univar v, tvkind v == KFX ]
+        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- tyfree i, univar v, tvkind v == KFX ]
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
@@ -890,7 +892,7 @@ improve env te eq cs
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
         sealL                           = [ v | Seal _ (TVar _ v) _ _ _ <- cs ]
         sealU                           = [ v | Seal _ _ (TVar _ v) _ _ <- cs ]
-        (posvars0,negvars0)             = polvars te
+        (posvars0,negvars0)             = polvars te `polcat` polvars tt
         (posvars,negvars)               = (posvars0++fixedvars++vvsL++sealL, negvars0++fixedvars++vvsU++sealU)
         obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
@@ -1013,12 +1015,12 @@ candidates env k                        = map CVar (allVars env k)
 -- Solve all constraints on vs using a closed world assumption
 --
 
-solve                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
-solve env te eq [] cs                   = return (cs, eq)
-solve env te eq vs cs                   = do traceM ("###trying collapse " ++ prstrs vs1)
+solve                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
+solve env te tt eq [] cs                = return (cs, eq)
+solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ prstrs vs1)
                                              (cs,eq) <- collapse env eq vs1 cs
                                              vs2 <- (nub . filter univar . tyfree) <$> msubst (map tVar vs1)
-                                             solve' env te eq vs2 (reverse cs)
+                                             solve' env te tt eq vs2 (reverse cs)
   where vs0                             = vs \\ embedded
         vs1 | null vs0                  = vs
             | otherwise                 = vs0
@@ -1034,12 +1036,12 @@ solve env te eq vs cs                   = do traceM ("###trying collapse " ++ pr
         emb _                           = []
         
 
-solve' env te eq vs cs                  = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
+solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
                                              env <- msubst env
                                              te <- msubst te
-                                             simplify' env te eq (cs'++cs)
+                                             simplify' env te tt eq (cs'++cs)
   where tvmap0                          = Map.fromList [ (v, candidates env (tvkind v)) | v <- vs ]
         tvmap1                          = foldl (constrain env) tvmap0 cs
         solved                          = [ (v, solution v) | v <- vs ]
