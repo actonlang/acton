@@ -212,8 +212,7 @@ instance Unalias QName where
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
-                                        Just _ -> QName (defaultmod env) n
-                                        _ -> NoQ n  -- trace ("#unalias") $ nameNotFound n
+                                        _ -> NoQ n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -1469,7 +1468,7 @@ notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
 err l s                             = Control.Exception.throw $ OtherError l s
 
 err1 x s                            = err (loc x) (s ++ " " ++ prstr x)
-err2 (x:_) s                        = err1 x s
+err2 xs s                           = err (loc $ head xs) (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
 

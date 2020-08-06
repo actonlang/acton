@@ -24,7 +24,7 @@ simplify env te cs                          = do cs <- msubst cs
                                                  traceM ("  -for: " ++ prstr te)
                                                  simplify' env te [] cs
 
-simplify'                                   :: (Polarity a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+simplify'                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 simplify' env te eq []                      = return ([], eq)
 simplify' env te eq cs                      = do eq1 <- reduce env eq cs
                                                  cs1 <- msubst =<< collectDeferred
@@ -611,7 +611,7 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
     f (Sub _ (TVar _ v1) (TVar _ v2) : cs)  = f cs . varvar v1 v2
     f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t)
     f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t)
-    f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p
+    f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p . embed (tyfree p)
     f (Mut (TVar _ v) n _ : cs)             = f cs . mutattr v n
     f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
     f (Seal w fx1 fx2 t1 t2 : cs)
@@ -635,13 +635,18 @@ varclose xys                                = clos [] xys
 
 below x cl                                  = [ v | (v,w) <- cl, w==x ]
 above y cl                                  = [ w | (v,w) <- cl, v==y ]
-            
-gsimp cl obs xys                        = [ (x,y) | (x,y) <- xys,
-                                                    x `notElem` obs || y `notElem` obs,
-                                                    (above x cl \\ [y]) `eq` above y cl, 
-                                                    (below y cl \\ [x]) `eq` below x cl ]
-  where a `eq` b                        = all (`elem` b) a && all (`elem` a) b
 
+gsimp cl obs []                         = []
+gsimp cl obs ((x,y):xys)
+  | not subsumed                        = gsimp cl obs xys
+  | x_obs && y_obs                      = gsimp cl obs xys
+  | x_obs                               = (x,y) : gsimp cl (y:obs) xys
+  | y_obs                               = (x,y) : gsimp cl (x:obs) xys
+  | otherwise                           = (x,y) : gsimp cl obs xys
+  where subsumed                        = (above x cl \\ [y]) `eq` above y cl && (below y cl \\ [x]) `eq` below x cl
+        a `eq` b                        = all (`elem` b) a && all (`elem` a) b
+        x_obs                           = x `elem` obs
+        y_obs                           = y `elem` obs
 
 instwild env k (TWild _)                = newTVarOfKind k
 instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> instwild env PRow p <*> instwild env KRow k <*> instwild env KType t
@@ -819,9 +824,10 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 --  no redundant Impl
 --  no Sel/Mut covered by Cast/Sub/Impl bounds
 
+-- Problems:
+--  2. Self as a skolemized state doesn't work for mutually recursive actors (which should have unique and incompatible 'Self' states)
 
-
-improve                                 :: (Polarity a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
+improve                                 :: (Polarity a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te eq []                    = return ([], eq)
 improve env te eq cs
   | Nothing <- info                     = do traceM ("  *Resubmit")
@@ -832,7 +838,7 @@ improve env te eq cs
   | not $ null gsimple                  = do traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
                                              sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te eq cs
-  | not $ null cyclic                   = err2 cyclic "Cyclic constraint set: "
+  | not $ null cyclic                   = err2 cyclic ("Cyclic subtyping:")
   | not $ null openFX                   = do traceM ("  *Close actor FX: " ++ prstrs openFX)
                                              simplify' env te eq ([ Cast (tVar tv) fxAction | tv <- openFX ] ++ cs)
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd
@@ -859,23 +865,22 @@ improve env te eq cs
   | not $ null dots                     = do traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te (eq'++eq) cs'
-  | otherwise                           = trace ("  *improvement done, polvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars ++ ", vvsL: " ++ prstrs vvsL ++ ", negUBnd: " ++ prstrs negUBnd) $ return (cs, eq)
+  | otherwise                           = trace ("  *improvement done, posvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars) $ return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
         closure                         = varclose (varvars vi)
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vclosed obsvars (varvars vi)
-        cyclic                          = if null freevars then filter (not . null . (intersect $ embedded vi) . tyfree) cs else []
-        openFX                          = [ v | (v,ts) <- Map.assocs (ubounds vi), v `elem` actFX, fxAction `notElem` ts ]
+        openFX                          = [ v | v <- actFX, fxAction `notElem` lookup' v (ubounds vi) ]
         actFX                           = [ v | (n,i@NAct{}) <- names env, v <- tyfree i, univar v, tvkind v == KFX ]
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
-        posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` (negvars++vvsU++sealU), implAll env (lookup' v $ pbounds vi) t ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` (posvars++vvsL++sealL), implAll env (lookup' v $ pbounds vi) t ]
+        posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t ]
         closUBnd                        = [ (v,t) | (v, t) <- upperBnd, uClosed env t ]
         closLBnd                        = [ (v,t) | (v, t) <- lowerBnd, lClosed env t ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
@@ -887,9 +892,12 @@ improve env te eq cs
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
         sealL                           = [ v | Seal _ (TVar _ v) _ _ _ <- cs ]
         sealU                           = [ v | Seal _ _ (TVar _ v) _ _ <- cs ]
-        (posvars,negvars)               = polvars te
-        obsvars                         = posvars ++ negvars ++ fixedvars ++ pvars
-        freevars                        = (Map.keys (ubounds vi) ++ Map.keys (lbounds vi)) \\ embedded vi
+        (posvars0,negvars0)             = polvars te
+        (posvars,negvars)               = (posvars0++fixedvars++vvsL++sealL, negvars0++fixedvars++vvsU++sealU)
+        obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi
+        boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
+        boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
+        cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
 
 
 uClosed env (TCon _ c)                  = isActor (tcname c) env
@@ -1009,14 +1017,30 @@ candidates env k                        = map CVar (allVars env k)
 
 solve                                   :: (Polarity a, Pretty a) => Env -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
 solve env te eq [] cs                   = return (cs, eq)
-solve env te eq vs cs                   = do traceM ("###trying collapse " ++ prstrs vs)
-                                             (cs,eq) <- collapse env eq vs cs
-                                             vs' <- (nub . filter univar . tyfree) <$> msubst (map tVar vs)
-                                             solve' env te eq vs' (reverse cs)
+solve env te eq vs cs                   = do traceM ("###trying collapse " ++ prstrs vs1)
+                                             (cs,eq) <- collapse env eq vs1 cs
+                                             vs2 <- (nub . filter univar . tyfree) <$> msubst (map tVar vs1)
+                                             solve' env te eq vs2 (reverse cs)
+  where vs0                             = vs \\ embedded
+        vs1 | null vs0                  = vs
+            | otherwise                 = vs0
+        embedded                        = concat $ map emb cs
+        emb (Cast TVar{} TVar{})        = []
+        emb (Cast TVar{} t)             = tyfree t
+        emb (Cast t TVar{})             = tyfree t
+        emb (Sub _ TVar{} TVar{})       = []
+        emb (Sub _ TVar{} t)            = tyfree t
+        emb (Sub _ t TVar{})            = tyfree t
+        emb (Impl _ t p)                = tyfree p
+        emb (Seal _ fx1 fx2 t1 t2)      = emb (Cast fx1 fx2) ++ emb (Cast t1 t2)
+        emb _                           = []
+        
 
 solve' env te eq vs cs                  = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
+                                             env <- msubst env
+                                             te <- msubst te
                                              simplify' env te eq (cs'++cs)
   where tvmap0                          = Map.fromList [ (v, candidates env (tvkind v)) | v <- vs ]
         tvmap1                          = foldl (constrain env) tvmap0 cs
@@ -1056,11 +1080,6 @@ collapse env eq vs cs                   = col [] eq cs
                 t                       = tFun fx1 posNil kwdNil t1
                 e                       = Lambda NoLoc (pospar [(x0,t)]) KwdNIL (eCall (eVar x0) []) fx2
         col cs eq (c : cs')             = col (c : cs) eq cs'
-
-
-
--- Problems:
---  2. Self as a skolemized state doesn't work for mutually recursive actors (which should have unique and incompatible 'Self' states)
 
 
 implAll env [] t                        = True
@@ -1138,20 +1157,8 @@ defaultmap                              = Map.fromList [
 ----------------------------------------------------------------------------------------------------------------------
 
 asyncast t1@TFun{} t2@TFun{}
-  | fx t2 == fxAction                   = Cast t1 t2{ fx = tWild }  -- Special function cast for actor interfaces
-asyncast fx1 fx2
-  | fx2 == fxAction                     = Cast fx1 tWild            -- Special effect cast for subtyping functions
-asyncast t1 t2                          = Cast t1 t2
-
-asynsub fx1 fx2 w t1 t2
-  | fx2 == fxAction                     = Sub w t1 t2
-  | fx1 == fxAction                     = Sub w (tMsg t1) t2        -- Special result constraint for subtyping functions
-  | otherwise                           = Sub w t1 t2
-
-asynwrap fx1 fx2 e
-  | fx1 == fxAction                     = e
-  | fx2 == fxAction                     = eCall (eQVar primASYNC) [eLambda [] e]    -- Async term wrapper for subtyping functions
-  | otherwise                           = e
+  | fx t2 == fxAction                   = Cast t1 t2{ fx = fx t1 }  -- Special function cast for actor interfaces
+  | otherwise                           = Cast t1 t2
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
