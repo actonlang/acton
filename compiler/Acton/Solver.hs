@@ -824,8 +824,6 @@ noLUB t1 t2                             = err1 t1 ("No common supertype: " ++ pr
 --  no redundant Impl
 --  no Sel/Mut covered by Cast/Sub/Impl bounds
 
--- Problems:
---  2. Self as a skolemized state doesn't work for mutually recursive actors (which should have unique and incompatible 'Self' states)
 
 improve                                 :: (Polarity a, Pretty a) => Env -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 improve env te eq []                    = return ([], eq)

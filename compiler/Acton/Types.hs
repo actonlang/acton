@@ -242,8 +242,7 @@ instance InfEnv Stmt where
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,t,e2') <- infer env e2
                                              fx <- currFX
-                                             st <- newTVar
-                                             return (Cast (fxAct st) fx :
+                                             return (Cast (actorFX env l) fx :
                                                      cs1++cs2, [], After l e1' e2')
     
     infEnv env d@(Signature _ ns sc@(TSchema _ q t) dec)
@@ -271,7 +270,7 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                                  return ([], t, name "_", Var l (NoQ n))
                                              NSVar t -> do
                                                  fx <- currFX
-                                                 return ([Cast (fxAct tSelf) fx], t, name "_", Var l (NoQ n))
+                                                 return ([Cast (actorFX env l) fx], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
@@ -540,6 +539,8 @@ instance Check Decl where
                                         = do traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
                                              t <- maybe newTVar return a
                                              pushFX fx t
+                                             st <- newTVar
+                                             let env1 = env1f st
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infSuiteEnv (define te1 (define te0 env1)) b
@@ -553,10 +554,11 @@ instance Check Decl where
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchDefAssumption env cl cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
       where cswf                        = wellformed env (q,a)
-            env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
+            env1f st                    = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $
+                                          maybeSetActorFX st env
 
     checkEnv env cl (Actor l n q p k b) = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- return tSelf -- newTVar
+                                             st <- newTVar
                                              pushFX (fxAct st) tNone
                                              let env1 = env1f st
                                              (csp,te0,p') <- infEnv env1 p
@@ -564,15 +566,15 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te1 $ define te0 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 ({-tvSelf : -}tybound q) te (cswf++csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env (tybound q)
---                                             fvs <- tyfree <$> msubst env
---                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
+                                             fvs <- tyfree <$> msubst env
+                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
                                              return (cs1, Actor l n q p' k' (bindWits (eq1++eq0) ++ b'))
       where cswf                        = wellformed env q
             env1f st                    = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ 
-                                          defineSelfOpaque $ setInDecl False env
+                                          setActorFX st $ setInDecl False env
                                           -- Don't look up n and include its NAct body in env1 here. That would show the
                                           -- actor's external view, with async def signatures wherever possible. Instead, 
                                           -- let a local env build up sequentially inside the actor so that methods can refer 
@@ -768,7 +770,7 @@ instance Infer Expr where
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
-                                                return ([Cast (fxAct tSelf) fx], t, x)
+                                                return ([Cast (actorFX env l) fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,t) <- instantiate env sc
                                                 return (cs, t, app t x $ witsOf cs)
@@ -809,8 +811,7 @@ instance Infer Expr where
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
-                                             st <- newTVar
-                                             return (Cast (fxAct st) fx :
+                                             return (Cast (actorFX env l) fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1219,7 +1220,7 @@ instance InfEnvT Pattern where
                                                      return (Cast t t' : csa, [], t, PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast (fxAct tSelf) fx :
+                                                     return (Cast (actorFX env l) fx :
                                                              Cast t t' : 
                                                              csa, [], t, PVar l n Nothing)
                                                  _ -> 
