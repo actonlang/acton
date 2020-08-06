@@ -7,9 +7,9 @@ x5 : ?B12                                                # option type; type var
 x6 : Set[int]                                            # Class with type argument
 x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained type
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
-x9 : act X (int,*A,b : bool,**B) -> set[int]             # function with effects and all kinds of parameters
+x9 : act[X] (int,*A,b : bool,**B) -> set[int]            # function with effects and all kinds of parameters
 
-x10: act(int, *A, b: bool) -> Msg[int]
+x10: action(int, *A, b: bool) -> Msg[int]
 x11: X(f: X(A)->B, a: [A]) -> [B]
 #x12: st[Y](int, list[Y,str]) -> str
 #x13: st(int, dict[int]) -> None
@@ -28,11 +28,11 @@ a6 : {[int]:(int) -> bool}                               # a dict (protocol)
 a7 : (set[int],list[float],dict[{int},bool])             # tuple of mutable data structures
 
 y1 : (x: float, y: A, **B)                               # open struct
-y2 : (**)                                                # open struct
+#y2 : (**)                                                # open struct
 y3 : (**A)                                               # open struct
 y4 : (int, bool, *A)                                     # open tuple
-y5 : (int, bool, *)                                      # open tuple
-y6 : (*)                                                 # open tuple
+#y5 : (int, bool, *)                                      # open tuple
+#y6 : (*)                                                 # open tuple
 y7 : (*A)                                                # open tuple
 y8 : ()                                                  # empty tuple (should count as empty struct as well?)
 
@@ -41,12 +41,12 @@ f1 : (int) -> bool
 f2 : (int,) -> int
 f3 : (int,bool) -> int
 f4 : (int,bool,) -> int
-f5 : (int,bool,*) -> int
-f6 : (int,bool,*,) -> int
+#f5 : (int,bool,*) -> int
+#f6 : (int,bool,*,) -> int
 f7 : (int,bool,*A) -> int
 f8 : (int,bool,*A,) -> int
-f9 : (*) -> int
-f10 : (*,) -> int
+#f9 : (*) -> int
+#f10 : (*,) -> int
 f11 : (*A) -> int
 f12 : (*A,) -> int
 f12a : (**A) -> bool
@@ -55,16 +55,14 @@ f12b : (**A,) -> bool
 f13 : (x : float) -> int
 f14 : (x : float,) -> int
 f15 : (x : float, y : str) -> int
-f16 : (x : float, y : str, **) -> int
+#f16 : (x : float, y : str, **) -> int
 f17 : (x : float, y : str, **A) -> int
-f18 : (x : float, y : str,**,) -> int
+#f18 : (x : float, y : str,**,) -> int
 f19 : (x : float, y : str,**A,) -> int
 
 f20 : (int, x : float) -> int
 f21 : (int, *A,x:float, **B,) -> int
 f22 : (,) -> int                                        # Should this really be allowed??
-
-f23 : [A] => (Self, y:Self) -> [A]                      # functiona with Self and [A] disambiguation!
 
 z0 : (int,bool,*A,)
 z1 : (x : float)
@@ -72,7 +70,7 @@ z2 : (x : (y : float,z : bool),**A,)
 z3 : [A]                                                # sequence that also could be the start of a qualified type
 
 
-def elem [A(Eq), B(Boolean)] (x:A, xs:[A]) -> B:        # function with explicit quant/qualifiers
+def elem [A(Eq), B(Ord)] (x:A, xs:[A]) -> B:        # function with explicit quant/qualifiers
     pass
 
 def f24():
@@ -85,8 +83,8 @@ def f26(a,):
     pass
     
 def f27(a,*b):
-    a.0 = (7)
-    a.*1 = (2,)
+#    a.0 = (7)
+#    a.*1 = (2,)
     return ()
     
 def f28(a,*b,):
@@ -140,6 +138,7 @@ def f40b(**c,):
 
 
 class Apa:
+    @property
     x : int
     
     def __init__(self):
@@ -155,7 +154,6 @@ if True:
 
 protocol Bepa [A] ():
         
-    @classattr
     x : int
     
     @staticmethod
@@ -186,8 +184,8 @@ extension __builtin__.int (Eq):
 protocol MyIndexed[A,B]:                                 # just a protocol
     __getit__ : (A) -> B
 
-g : ([A]=>(A)->A, int, str) -> (int,str)                 # a rank-2 scheme with positional arguments
+g : [A] => ((A)->A, int, str) -> (int,str)               # explicit quantification
 
-h : (f:[A]=>(A)->A, x:int, y:dict[int,str]) -> str      # a rank-2 scheme with keyword arguments
+h : [A] => ((A)->A, x:int, y:dict[int,str]) -> str       # mixing positional and keyword arguments
 
 ff : (**A) -> bool
