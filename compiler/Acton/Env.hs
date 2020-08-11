@@ -43,6 +43,23 @@ data Env                    = Env {
                                 indecl     :: Bool }
                             deriving (Show)
 
+{-  TEnv principles:
+    -   A TEnv is an association of NameInfo details to a list of names.
+    -   NSig holds the schema of an explicit Signature, while NDef and NVar give schemas and types to names created by Defs and assignments.
+    -   NClass, NProto, NExt and NAct represent class, protocol, extension and actor declarations. They each contain a TEnv of visible local attributes.
+    -   Signatures must appear before the defs/assignments they describe, and every TEnv respects the order of the syntactic constructs binding each name.
+    -   The attribute TEnvs of NClass, NProto, NExt and NAct are searched left-to-right, thus favoring (explicit) NSigs over (inferred) NDefs/NVars.
+    -   The global inference TEnv (names env) is searched right-to-left, thereby prioritizing NDefs/NVars over NSigs, as well as any inner bindings in scope.
+    -   The NameInfo assumption on a (recursive) Def is always an NDef, initialized to the corresponding NSig if present, or a fresh unquantified variable.
+    -   The inferred schema for each def is checked to be no less general than the corresponding NDef assumption.
+    -   Unquantified NDefs are generalized at the close of the outermost recursive declaration in scope.
+    -   An NSig is always fully quantified, not possible to generalize
+    -   To enable method override (and disable method signature override), the NSigs of parent class are inserted into the global env when checking a child class
+    -   For the same reason, NDefs and NVars without an NSig of a parent class are inserted as NSigs when a child class is checked
+
+
+-}
+
 data NameInfo               = NVar      Type
                             | NSVar     Type
                             | NDef      TSchema Deco
@@ -499,6 +516,8 @@ findAttr                    :: Env -> TCon -> Name -> Maybe (Expr->Expr,TSchema,
 findAttr env tc n           = findIn [ (w,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
   where findIn ((w,te):tes) = case lookup n te of
                                 Just (NSig sc d) -> Just (wexpr w, sc, d)
+                                Just (NDef sc d) -> Just (wexpr w, sc, d)
+                                Just (NVar t)    -> Just (wexpr w, monotype t, NoDec)
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
@@ -539,6 +558,7 @@ findConName n env           = case findQName n env of
                                 NClass q us te -> (q,us,te)
                                 NProto q us te -> (q,us,te)
                                 NExt n q us te -> (q,us,te)
+                                NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
 conAttrs                    :: Env -> QName -> [Name]
@@ -550,28 +570,6 @@ hasAttr env n qn            = n `elem` conAttrs env qn
 
 allAttrs                    :: Env -> QName -> [Name]
 allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
-
-findClassByProps            :: Env -> [Name] -> [Type]
-findClassByProps env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- unfold env $ names env, hasAll te us ]
-  where hasAll te us        = not (null ns1) && cObject `elem` map snd us && all (`elem` inherited) ns2
-          where (ns1,ns2)   = partition (`elem` dom (propSigs te)) ns
-                inherited   = concat [ dom (propSigs te) | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
-
-findClassByAttrs            :: Env -> [Name] -> [Type]
-findClassByAttrs env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NClass q us te) <- unfold env $ names env, hasAll te us ]
-  where hasAll te us        = not (null ns1) && all (`elem` inherited) ns2
-          where (ns1,ns2)   = partition (`elem` dom te) ns
-                inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
-
-findActorByAttrs            :: Env -> [Name] -> [Type]
-findActorByAttrs env ns     = [ tCon $ TC (NoQ c) (map (const tWild) q) | (c, NAct q p k te) <- unfold env $ names env, hasAll te ]
-  where hasAll te           = all (`elem` dom te) ns
-
-findProtoByAttrs            :: Env -> [Name] -> [TCon]
-findProtoByAttrs env ns     = [ TC (NoQ p) (map (const tWild) q) | (p, NProto q us te) <- unfold env $ names env, hasAll te us ]
-  where hasAll te us        = not (null ns1) && all (`elem` inherited) ns2
-          where (ns1,ns2)   = partition (`elem` dom te) ns
-                inherited   = concat [ dom te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
 
 
 unfold env te               = map exp te
@@ -632,6 +630,7 @@ instance WellFormed TCon where
                                 NAct q p k te  -> q
                                 NClass q us te -> q
                                 NProto q us te -> q
+                                NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
             constr u t      = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u)

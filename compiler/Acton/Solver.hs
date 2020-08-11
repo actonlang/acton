@@ -999,7 +999,7 @@ constrain env vs (Sel w (TVar _ v) n t) = Map.adjust (filter (\c -> n `elem` att
 constrain env vs (Seal w (TVar _ v) (TVar _ v') _ _)
   | univar v && univar v'               = vs
 constrain env vs (Seal w (TVar _ v) t _ _)
-  | t == fxAction                       = Map.adjust (intersect $ allBelow env t ++ [CPure,CMut,CAct,CAction]) v vs
+  | t == fxAction                       = Map.adjust (intersect $ allBelow env t) v vs
   | otherwise                           = Map.adjust (intersect $ allBelow env t) v vs
 constrain env vs (Seal w t (TVar _ v) _ _)
   | t == fxAction                       = Map.adjust (intersect $ allAbove env t) v vs
