@@ -40,8 +40,11 @@ data Env                    = Env {
                                 modules    :: [(ModName,TEnv)],
                                 defaultmod :: ModName,
                                 actorstate :: Maybe Type,
+                                context    :: EnvCtx,
                                 indecl     :: Bool }
                             deriving (Show)
+
+data EnvCtx                 = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
 
 {-  TEnv principles:
     -   A TEnv is an association of NameInfo details to a list of names.
@@ -124,11 +127,11 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NClass q us [])  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon <+> text "pass"
     pretty (n, NClass q us te)  = text "class" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty $ prioSig te)
     pretty (n, NProto q us [])  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon <+> text "pass"
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <+> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty $ prioSig te)
     pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ pretty te) <> colon <+> text "pass"
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
@@ -347,6 +350,15 @@ parentTEnv env us           = concatMap (snd . findCon env . snd) us
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
+prioSig                     :: TEnv -> TEnv
+prioSig te                  = f [] te
+  where
+    f ns []                 = []
+    f ns ((n,i@NSig{}):te)  = (n,i) : f (n:ns) te
+    f ns ((n,i):te)
+      | n `elem` ns         = f ns te
+      | otherwise           = (n,i) : f ns te
+
 unSig                       :: TEnv -> TEnv
 unSig te                    = map f te
   where f (n, NSig (TSchema _ [] t) Property)   = (n, NVar t)
@@ -354,20 +366,28 @@ unSig te                    = map f te
         f (n, NSig (TSchema _ _ t) _)           = (n, NVar t)
         f (n, i)                                = (n, i)
 
+
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
-                                then return $ Env{names = [], witnesses = [], modules = [], defaultmod = mBuiltin, actorstate = Nothing, indecl = False}
+                                then return $ Env{names = [],
+                                                  witnesses = [],
+                                                  modules = [],
+                                                  defaultmod = mBuiltin,
+                                                  actorstate = Nothing,
+                                                  context = CtxTop,
+                                                  indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
-                                        let env0    = Env{names = [(nBuiltin,NModule envBuiltin)],
-                                                          witnesses = [],
-                                                          modules = [(mBuiltin,envBuiltin)],
-                                                          defaultmod = mBuiltin,
-                                                          actorstate = Nothing,
-                                                          indecl = False}
-                                            env     = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
+                                        let env0 = Env{names = [(nBuiltin,NModule envBuiltin)],
+                                                       witnesses = [],
+                                                       modules = [(mBuiltin,envBuiltin)],
+                                                       defaultmod = mBuiltin,
+                                                       actorstate = Nothing,
+                                                       context = CtxTop,
+                                                       indecl = False}
+                                            env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
                                         
 setDefaultMod               :: ModName -> Env -> Env
@@ -379,8 +399,14 @@ setActorFX st env           = env{ actorstate = Just st }
 maybeSetActorFX             :: Type -> Env -> Env
 maybeSetActorFX st env      = maybe (setActorFX st env) (const env) (actorstate env)       -- Only set if not already present
 
-setInDecl                   :: Bool -> Env -> Env
-setInDecl f env             = env{ indecl = f }
+setInAct                    :: Env -> Env
+setInAct env                = env{ context = CtxAct }
+
+setInClass                  :: Env -> Env
+setInClass env              = env{ context = CtxClass }
+
+setInDecl                   :: Env -> Env
+setInDecl env               = env{ indecl = True }
 
 addWit                      :: Env -> (QName,Witness) -> Env
 addWit env cwit
@@ -434,6 +460,12 @@ actorFX                     :: Env -> SrcLoc -> Type
 actorFX env l               = case actorstate env of
                                 Just st -> fxAct st
                                 Nothing -> err l "Actor scope expected"
+
+inAct                       :: Env -> Bool
+inAct env                   = context env == CtxAct
+
+inClass                     :: Env -> Bool
+inClass env                 = context env == CtxClass
 
 inDecl                      :: Env -> Bool
 inDecl env                  = indecl env

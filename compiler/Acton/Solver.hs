@@ -1156,10 +1156,6 @@ defaultmap                              = Map.fromList [
 -- Misc.
 ----------------------------------------------------------------------------------------------------------------------
 
-asyncast t1@TFun{} t2@TFun{}
-  | fx t2 == fxAction                   = Cast t1 t2{ fx = fx t1 }  -- Special function cast for actor interfaces
-  | otherwise                           = Cast t1 t2
-
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 x0:x1:x2:_                              = xNames

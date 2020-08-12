@@ -3,6 +3,8 @@ def relay(t,m):
 
 actor Pingpong(i):
     var count = 0
+#    ping : action() -> None
+#    _pong : action(int) -> None
     def ping():
         count = count + i
         print('{i} Ping {count}')

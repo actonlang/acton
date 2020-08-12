@@ -35,7 +35,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | While         { sloc::SrcLoc, expr::Expr, body::Suite, els::Suite }
                 | For           { sloc::SrcLoc, pattern::Pattern, expr::Expr, body::Suite, els::Suite }
                 | Try           { sloc::SrcLoc, body::Suite, handlers::[Handler], els::Suite, finally::Suite }
-                | With          { sloc::SrcLoc, context::[WithItem], body::Suite }
+                | With          { sloc::SrcLoc, witems::[WithItem], body::Suite }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
                 | After         { sloc::SrcLoc, expr::Expr, expr2::Expr }
@@ -411,7 +411,7 @@ instance Eq Stmt where
                                                   && els x == els y
     x@Try{}             ==  y@Try{}             = body x == body y && handlers x == handlers y && els x == els y
                                                   && finally x == finally y
-    x@With{}            ==  y@With{}            = context x == context y && body x == body y
+    x@With{}            ==  y@With{}            = witems x == witems y && body x == body y
     x@Data{}            ==  y@Data{}            = mbpat x == mbpat y && dsuite x == dsuite y
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
     x@After{}           ==  y@After{}           = expr x == expr y && expr2 x == expr2 y
