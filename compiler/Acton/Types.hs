@@ -86,6 +86,7 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict vs te)
         unif n t0 (NSVar t)
           | length ts == l              = ([ Cast t t0 | t <- ts ], NSVar t0)
           where ts                      = [ t | te <- tes, Just (NSVar t) <- [lookup n te] ]
+{-
         unif n t0 (NDef sc d)
           | null (scbind sc) &&
             length ts == l              = ([ Cast t t0 | t <- ts ], NDef (monotype t0) d)
@@ -95,6 +96,7 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict vs te)
                                              NReserved -> err1 n "Expected a common signature for"
                                              NSig sc d -> ([], NDef sc d)
           where scs                     = [ sc | te <- tes, Just (NDef sc d) <- [lookup n te] ]
+-}
         unif n _ _                      = err1 n "Inconsistent bindings for"
 
     
@@ -514,10 +516,7 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
                                              return (n, NDef (monotype $ tFun fxAction p k t) NoDec)
         mkNVar n                        = do t <- newTVar
                                              return (n, NVar t)
-        dvars ss                        = nub $ concat $ map dvs ss
-          where dvs (Decl _ ds)         = [ dname d | d@Def{} <- ds, not $ isHidden (dname d) ]
-                dvs (If _ bs els)       = foldr intersect (dvars els) [ dvars ss | Branch _ ss <- bs ]
-                dvs _                   = []
+        dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
         pvars ss                        = nub $ concat $ map pvs ss
           where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]

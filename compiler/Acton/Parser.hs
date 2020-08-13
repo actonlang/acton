@@ -70,11 +70,11 @@ onlyIn s            = fail ("statement only allowed inside " ++ s)
 notIn s             = fail ("statement not allowed inside " ++ s)
 success             = return ()
 
-assertTop           = ifCtx [TOP]                   [IF]                success (fail "declaration only allowed on the module top level")
+assertTop           = ifCtx [TOP]                   []                  success (fail "declaration only allowed on the module top level")
 assertActBody       = ifCtx [ACTOR]                 []                  success (fail "statement only allowed inside an actor body")
 assertLoop          = ifCtx [LOOP]                  [IF,SEQ]            success (fail "statement only allowed inside a loop")
-assertDecl          = ifCtx [CLASS,PROTO,EXT]       [IF]                success (fail "decoration only allowed inside a class or protocol")
-assertClass         = ifCtx [CLASS]                 [IF]                success (fail "decoration only allowed inside a class")
+assertDecl          = ifCtx [CLASS,PROTO,EXT]       []                  success (fail "decoration only allowed inside a class or protocol")
+assertClass         = ifCtx [CLASS]                 []                  success (fail "decoration only allowed inside a class")
 assertDef           = ifCtx [DEF]                   [IF,SEQ,LOOP]       success (fail "statement only allowed inside a function")
 assertNotDecl       = ifCtx [CLASS,PROTO,EXT]       [IF]                (fail "statement not allowed inside a class, protocol or extension") success
 assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "statement not allowed inside a data tree") success
