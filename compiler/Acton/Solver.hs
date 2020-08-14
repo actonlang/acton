@@ -1160,20 +1160,6 @@ impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 x0:x1:x2:_                              = xNames
 
-pPar p                                  = f pNames p
-  where f ns (TRow _ PRow n t p)
-          | n == name "_"               = PosPar (head ns) (Just t) Nothing (f (tail ns) p)
-          | otherwise                   = PosPar n (Just t) Nothing (f ns p)
-        f ns (TNil _ PRow)              = PosNIL
-        f ns t                          = PosSTAR (head ns) (Just t)
-
-kPar k                                  = f kNames k
-  where f ns (TRow _ KRow n t p)
-          | n == name "_"               = KwdPar (head ns) (Just t) Nothing (f (tail ns) p)
-          | otherwise                   = KwdPar n (Just t) Nothing (f ns p)
-        f ns (TNil _ KRow)              = KwdNIL
-        f ns t                          = KwdSTAR (head ns) (Just t)
-
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)
 
@@ -1198,13 +1184,13 @@ witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zi
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
-        (p',k')                         = (pPar p, kPar k)
+        (p',k')                         = (pPar pNames p, kPar kNames k)
 
 app2nd Static tx e es                   = app tx e es
 app2nd _ tx e []                        = e
 app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosArg pSelf (exp2arg es pArgs)) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
-        (p',k')                         = (pPar p, kPar k)
+        (p',k')                         = (pPar pNames p, kPar kNames k)
         PosArg pSelf pArgs              = pArg p'                    
 
 idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(x0,t1)] (eVar x0))

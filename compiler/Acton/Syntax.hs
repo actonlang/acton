@@ -303,6 +303,18 @@ kArg (KwdPar n a _ p)   = KwdArg n (eVar n) (kArg p)
 kArg (KwdSTAR n a)      = KwdStar (eVar n)
 kArg KwdNIL             = KwdNil
 
+pPar ns (TRow _ PRow n t p)
+  | n == name "_"       = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
+  | otherwise           = PosPar n (Just t) Nothing (pPar ns p)
+pPar ns (TNil _ PRow)   = PosNIL
+pPar ns t               = PosSTAR (head ns) (Just t)
+
+kPar ns (TRow _ KRow n t p)
+  | n == name "_"       = KwdPar (head ns) (Just t) Nothing (kPar (tail ns) p)
+  | otherwise           = KwdPar n (Just t) Nothing (kPar ns p)
+kPar ns (TNil _ KRow)   = KwdNIL
+kPar ns t               = KwdSTAR (head ns) (Just t)
+
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVWXYZ" ]
 
@@ -567,6 +579,12 @@ isKeyword x                         = x `Data.Set.member` rws
 
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
 isHidden _                          = False
+
+isSig Signature{}                   = True
+isSig _                             = False
+
+isDecl Decl{}                       = True
+isDecl _                            = False
 
 posParLen PosNIL                    = 0
 posParLen (PosSTAR _ _)             = 0

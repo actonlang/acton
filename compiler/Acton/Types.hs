@@ -97,7 +97,7 @@ commonTEnv env (te:tes)                 = unifEnv tes (restrict vs te)
                                              NSig sc d -> ([], NDef sc d)
           where scs                     = [ sc | te <- tes, Just (NDef sc d) <- [lookup n te] ]
 -}
-        unif n _ _                      = err1 n "Inconsistent bindings for"
+        unif n _ _                      = err1 n "Conflicting bindings for"
 
     
 

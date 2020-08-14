@@ -8,6 +8,8 @@ mPrim                               = ModName [name "$"]
 
 qPrim s                             = QName mPrim (name s)
 
+primActor                           = qPrim "Actor"
+
 primIsNone                          = qPrim "IsNone"
 primASYNC                           = qPrim "ASYNC"
 primAFTER                           = qPrim "AFTER"
