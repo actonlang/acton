@@ -127,7 +127,7 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
+    gen env (Call _ e ts ps _)      = gen env e <> parens (gen env ps)
     gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
     gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2               -- TODO: remove
     gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove

@@ -732,20 +732,21 @@ genEnv env cs te ds0
     abstract q ds ws eq d@Def{}
       | null $ qbinds d                 = d{ qbinds = stripQual q, 
                                              pos = wit2par ws (pos d),
-                                             dbody = bindWits eq ++ wsubst ds ws (dbody d) }
-      | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
-    abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds ws (dbody d) }
-    abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds ws (dbody d)) }
+                                             dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
+      | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
+    abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
+    abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds q ws (dbody d)) }
       where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
             bindInDef (If l bs els)     = If l [ Branch l (map bindInDef ss) | Branch l ss <- bs ] (map bindInDef els)
             bindInDef stmt              = stmt
             bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }
             
-    wsubst ds []                        = id
-    wsubst ds ws                        = termsubst s
-      where s                           = [ (n, Lambda l0 p k (Call l0 (eVar n) (wit2arg ws (pArg p)) (kArg k)) fx) 
+    wsubst ds q []                      = id
+    wsubst ds q ws                      = termsubst s
+      where s                           = [ (n, Lambda l0 p k (Call l0 (eVar n) ts (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
+            ts                          = map tVar (tybound q)
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -814,14 +815,14 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tUnion [ULit $ concat ss], e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
-    infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e
+    infer env (Call l e [] ps ks)       = do (cs1,t,e') <- infer env e
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newTVar
                                              fx <- currFX
                                              w <- newWitness
                                              return (Sub w t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) [] ps' ks')
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX

@@ -273,10 +273,10 @@ instance Lift Expr where
     ll env e@Ellipsis{}                 = pure e
     ll env e@Strings{}                  = pure e
     ll env e@BStrings{}                 = pure e
-    ll env (Call l (Var _ (NoQ n)) p _k)
-      | Just vs <- findFree n env       = Call l (eVar (liftedname env n)) <$> ll env (extras vs p) <*> return _k
+    ll env (Call l (Var _ (NoQ n)) ts p _k)
+      | Just vs <- findFree n env       = Call l (eVar (liftedname env n)) ts <$> ll env (extras vs p) <*> return _k
       where extras vs p                 = foldr (PosArg . eVar) p vs
-    ll env (Call l e p _k)              = Call l <$> ll env e <*> ll env p <*> return _k
+    ll env (Call l e ts p _k)           = Call l <$> ll env e <*> pure ts <*> ll env p <*> return _k
     ll env (Index l e ix)               = Index l <$> ll env e <*> ll env ix
     ll env (Slice l e sl)               = Slice l <$> ll env e <*> ll env sl
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2

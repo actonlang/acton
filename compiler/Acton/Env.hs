@@ -1219,7 +1219,7 @@ instance Subst Stmt where
     tyfree s                        = []
 
 instance Subst Expr where
-    msubst (Call l e p k)           = Call l <$> msubst e <*> msubst p <*> msubst k
+    msubst (Call l e ts p k)        = Call l <$> msubst e <*> pure ts <*> msubst p <*> msubst k
     msubst (Await l e)              = Await l <$> msubst e
     msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
     msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl

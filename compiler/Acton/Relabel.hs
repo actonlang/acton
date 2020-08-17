@@ -75,7 +75,7 @@ instance Relabel Expr where
     relabel (Ellipsis _) = Ellipsis <$> newLoc
     relabel (Strings _ ss) = Strings <$> newLoc <*> return ss
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
-    relabel (Call _ e ps ks) = Call <$> newLoc <*> relabel e <*> relabel ps <*> relabel ks
+    relabel (Call _ e ts ps ks) = Call <$> newLoc <*> relabel e <*> relabel ts <*> relabel ps <*> relabel ks
     relabel (Await _ e) = Await <$> newLoc <*> relabel e
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl

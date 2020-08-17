@@ -180,7 +180,7 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l [catStrings ss]
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
-    norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
+    norm env (Call l e ts ps ks)    = Call l <$> norm env e <*> pure ts <*> norm env ps <*> norm env ks
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
     norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
