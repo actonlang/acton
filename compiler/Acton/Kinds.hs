@@ -11,7 +11,7 @@ import Utils
 import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
-import Acton.Env (tybound, tyfree)
+import Acton.Subst
 import qualified Acton.Env
 
 

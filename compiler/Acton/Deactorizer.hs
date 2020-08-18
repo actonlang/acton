@@ -2,13 +2,14 @@ module Acton.Deactorizer where
 
 import Acton.Syntax
 import Acton.Names
-import Acton.Env
+import Acton.Subst
 import Acton.Prim
 import Acton.Builtin
+import Acton.QuickType
 import Utils
 import Control.Monad.State.Lazy
 
-deactorize                          :: Env -> Module -> IO Module
+deactorize                          :: x -> Module -> IO Module
 deactorize env0 m                   = return $ evalState (deact env m) []
   where env                         = deactEnv env0
 

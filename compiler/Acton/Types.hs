@@ -9,7 +9,9 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Env
 import Acton.Solver
+import Acton.Subst
 import Acton.Transform
+import Acton.TypeM
 import qualified InterfaceFiles
 import qualified Data.Map
 

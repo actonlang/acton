@@ -12,6 +12,8 @@ import Acton.Builtin
 import Acton.Names
 import Acton.Prim
 import Acton.Env
+import Acton.Subst
+import Acton.TypeM
 
 
 
