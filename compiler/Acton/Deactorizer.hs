@@ -74,7 +74,7 @@ instance Deact Stmt where
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
                                          let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct tWild)
-                                         return $ Expr l $ Call l0 (eQVar primAFTER) [] (PosArg e1' $ PosArg lambda PosNil) KwdNil  -- TODO: supply the type args
+                                         return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e1' $ PosArg lambda PosNil) KwdNil  -- TODO: supply type args
     deact env (Decl l ds)           = Decl l <$> deact env ds
     deact env (Signature l ns t d)  = return $ Signature l ns t d
 
@@ -119,9 +119,9 @@ instance Deact Decl where
             wrapMeth (Def l n q p k (Just t) b d fx)
                                     = Decl l0 [Def l0 n q (addSelf p) k (Just t) [Return l0 (Just $ async)] d fx]
               where n'              = localName n
-                    async           = Call l0 (Var l0 primASYNC) [] (PosArg self (PosArg clos PosNil)) KwdNil       -- TODO: supply the type args
+                    async           = Call l0 (Var l0 primASYNC) (PosArg self (PosArg clos PosNil)) KwdNil       -- TODO: supply type args
                     self            = Var l0 (NoQ selfKW)
-                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (selfRef n') ts (parToArg p) KwdNil) fx
+                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (selfRef n') (parToArg p) KwdNil) fx      -- TODO: supply type args
                     ts              = map tVar (tybound q)
 
     deact env def@Def{dbody = b}    = do b <- deact env b
@@ -151,7 +151,7 @@ instance Deact Expr where
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)             = return $ Var l n
     deact env (Await l e)           = do e' <- deact env e
-                                         return $ Call l (eQVar primAWAIT) [] (PosArg e' PosNil) KwdNil     -- TODO: supply the type args
+                                         return $ Call l (eQVar primAWAIT) (PosArg e' PosNil) KwdNil     -- TODO: supply the type args
     deact env (Int l i s)           = return $ Int l i s
     deact env (Float l f s)         = return $ Float l f s
     deact env (Imaginary l i s)     = return $ Imaginary l i s
@@ -161,7 +161,8 @@ instance Deact Expr where
     deact env (Ellipsis l)          = return $ Ellipsis l
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
-    deact env (Call l e ts ps _)    = Call l <$> deact env e <*> pure ts <*> deact env ps <*> return KwdNil
+    deact env (Call l e ps _)       = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
+    deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Index l e is)        = Index l <$> deact env e <*> deact env is
     deact env (Slice l e sl)        = Slice l <$> deact env e <*> deact env sl
     deact env (Cond l e1 e2 e3)     = Cond l <$> deact env e1 <*> deact env e2 <*> deact env e3

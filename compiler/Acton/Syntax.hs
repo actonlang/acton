@@ -60,7 +60,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Ellipsis      { eloc::SrcLoc }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
-                | Call          { eloc::SrcLoc, function::Expr, targs::[Type], pargs::PosArg, kargs::KwdArg }
+                | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
+                | TApp          { eloc::SrcLoc, function::Expr, targs::[Type] }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
@@ -222,7 +223,7 @@ sIf1 e b els    = sIf [Branch e b] els
 
 handler qn b    = Handler (Except NoLoc qn) b
 
-eCall e es      = Call NoLoc e [] (foldr PosArg PosNil es) KwdNil
+eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
 eTuple es       = Tuple NoLoc (foldr PosArg PosNil es) KwdNil
@@ -451,7 +452,8 @@ instance Eq Expr where
     x@Ellipsis{}        ==  y@Ellipsis{}        = True
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
-    x@Call{}            ==  y@Call{}            = function x == function y && targs x == targs y && pargs x == pargs y && kargs x == kargs y
+    x@Call{}            ==  y@Call{}            = function x == function y && pargs x == pargs y && kargs x == kargs y
+    x@TApp{}            ==  y@TApp{}            = function x == function y && targs x == targs y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y

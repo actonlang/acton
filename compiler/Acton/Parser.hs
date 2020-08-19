@@ -498,7 +498,7 @@ after_stmt = addLoc $ do
                 e' <- addLoc $ do
                     n <- name
                     (ps,ks) <- parens funargs
-                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQ n)) [] ps ks
+                    return $ S.Call NoLoc (S.Var (S.nloc n) (S.NoQ n)) ps ks
                 return $ S.After NoLoc e e'
 
 var_stmt :: Parser S.Stmt
@@ -907,7 +907,7 @@ atom_expr = do
                         <|>
                       (do
                         (ps,ks) <- parens funargs
-                        return (\a -> S.Call NoLoc a [] ps ks))
+                        return (\a -> S.Call NoLoc a ps ks))
                         <|>
                       (do
                          dot

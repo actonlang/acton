@@ -315,7 +315,7 @@ instance CPS Handler where
 jump k                                  = sReturn (eCall (eVar k) [eNone]) : []
 
 
-addContArg (Call l e ts pos KwdNil) c   = Call NoLoc e ts (add pos c) KwdNil
+addContArg (Call l e pos KwdNil) c      = Call NoLoc e (add pos c) KwdNil
   where add PosNil c                    = PosArg c PosNil
         add (PosArg e p) c              = PosArg e (add p c)
 
@@ -332,17 +332,17 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
                                                       []
 
 
-contCall env (Call l (Var _ n) ts p k)
+contCall env (Call l (Var _ n) p k)
   | n == primAWAIT                      = True
   | isPrim n                            = False
   | n `elem` ns0                        = False
   where ns0                             = [qnStr,qnInt,qnLen,qnPrint]
         isPrim (QName m _)              = m == mPrim
         isPrim _                        = False
-contCall env (Call l (Dot _ _ n) ts p k)
+contCall env (Call l (Dot _ _ n) p k)
   | n `elem` ns0                        = False
   where ns0                             = attrKWs
-contCall env (Call l e ts p k)          = True                      -- TODO: utilize type...
+contCall env (Call l e p k)             = True                      -- TODO: utilize type...
 contCall env _                          = False
 
 contDef env l n m
@@ -444,13 +444,14 @@ instance PreCPS KwdArg where
     pre env KwdNil                      = return KwdNil
 
 instance PreCPS Expr where
-    pre env e0@(Call l e ts ps ks)
+    pre env e0@(Call l e ps ks)
       | contCall env e0                 = do ps1 <- pre env ps                                          -- TODO: utilize type of e
                                              ks1 <- pre env ks
                                              v <- newName "sync"
-                                             prefix [sAssign [pVar v Nothing] (Call l e ts ps1 ks1)]
+                                             prefix [sAssign [pVar v Nothing] (Call l e ps1 ks1)]
                                              return (eVar v)
-    pre env (Call l e ts ps ks)         = Call l <$> pre env e <*> pure ts <*> pre env ps <*> pre env ks
+    pre env (Call l e ps ks)            = Call l <$> pre env e <*> pre env ps <*> pre env ks
+    pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
     pre env (Index l e ix)              = Index l <$> pre env e <*> pre env ix
     pre env (Slice l e sl)              = Slice l <$> pre env e <*> pre env sl
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
@@ -499,8 +500,8 @@ instance PreCPS Expr where
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e
 
-    preTop env e0@(Call l e ts ps ks)
-      | contCall env e0                 = Call l e ts <$> pre env ps <*> pre env ks
+    preTop env e0@(Call l e ps ks)
+      | contCall env e0                 = Call l e <$> pre env ps <*> pre env ks
     preTop env e                        = pre env e
 
 

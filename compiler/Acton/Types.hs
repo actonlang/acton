@@ -536,7 +536,7 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              Just (NSig (TSchema _ _ t0) _) -> t0
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             (cs1,t) <- instantiate env sc
+                                             (cs1,_,t) <- instantiate env sc
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te tNone (Cast t (openAction env t0) : cs1)
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
@@ -746,9 +746,9 @@ genEnv env cs te ds0
             
     wsubst ds q []                      = id
     wsubst ds q ws                      = termsubst s
-      where s                           = [ (n, Lambda l0 p k (Call l0 (eVar n) ts (wit2arg ws (pArg p)) (kArg k)) fx) 
+      where s                           = [ (n, Lambda l0 p k (Call l0 (tApp (eVar n) tvs) (wit2arg ws (pArg p)) (kArg k)) fx) 
                                             | Def _ n [] p k _ _ _ fx <- ds ]
-            ts                          = map tVar (tybound q)
+            tvs                         = map tVar $ tybound q
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -789,21 +789,21 @@ instance Infer Expr where
                                                 fx <- currFX
                                                 return ([Cast (actorFX env l) fx], t, x)
                                             NDef sc d -> do 
-                                                (cs,t) <- instantiate env sc
-                                                return (cs, t, app t x $ witsOf cs)
+                                                (cs,tvs,t) <- instantiate env sc
+                                                return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 traceM ("## Instantiating " ++ prstr n)
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_wf,sc,_dec) -> do
-                                                        (cs1,t) <- instantiate env sc
+                                                        (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC n ts
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        return (cs1, t', app t' x $ witsOf (cs0++cs1))
+                                                        return (cs1, t', app t' (tApp x tvs) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
                                                 st <- newTVar
-                                                (cs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
-                                                return (cs, t, app t x $ witsOf cs)
+                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
+                                                return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
                                             NBlocked -> nameBlocked n
@@ -817,14 +817,15 @@ instance Infer Expr where
     infer env e@(Ellipsis _)            = notYetExpr e
     infer env e@(Strings _ ss)          = return ([], tUnion [ULit $ concat ss], e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
-    infer env (Call l e [] ps ks)       = do (cs1,t,e') <- infer env e
+    infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
                                              t0 <- newTVar
                                              fx <- currFX
                                              w <- newWitness
                                              return (Sub w t (tFun fx prow krow t0) :
-                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) [] ps' ks')
+                                                     cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
+    infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
@@ -943,29 +944,29 @@ instance Infer Expr where
                                                 Just (_wf,sc,dec)
                                                   | isProp dec sc -> err l "Property attribute not selectable by class"
                                                   | otherwise -> do
-                                                      (cs1,t) <- instantiate env sc
+                                                      (cs1,tvs,t) <- instantiate env sc
                                                       let t0 = tCon $ TC c ts
                                                           t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                      return (cs0++cs1, t', app2nd dec t' (Dot l x n) $ witsOf (cs0++cs1))
+                                                      return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
                                                     case findWitness env c (hasAttr env n) of
                                                         Just wit -> do
                                                             (cs1,p,we) <- instWitness env ts wit
                                                             let Just (wf,sc,dec) = findAttr env p n
-                                                            (cs2,t) <- instantiate env sc
+                                                            (cs2,tvs,t) <- instantiate env sc
                                                             let t0 = tCon $ TC c ts
                                                                 t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                            return (cs1++cs2, t', app t' (eDot (wf we) n) $ witsOf cs2)
+                                                            return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) (ts++tvs)) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
                                                 Just (wf,sc,dec) -> do
-                                                    (cs1,t) <- instantiate env sc
+                                                    (cs1,tvs,t) <- instantiate env sc
                                                     t0 <- newTVar
                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Impl w t0 (TC c ts) :
-                                                            cs1, t', app t' (Dot l (wf $ eVar w) n) $ witsOf cs1)
+                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) (ts++tvs)) $ witsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
 

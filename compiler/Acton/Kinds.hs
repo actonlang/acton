@@ -302,7 +302,8 @@ instance KCheck Expr where
     kchk env (Ellipsis l)           = return $ Ellipsis l
     kchk env (Strings l ss)         = return $ Strings l ss
     kchk env (BStrings l ss)        = return $ BStrings l ss
-    kchk env (Call l e [] ps ks)    = Call l <$> kchk env e <*> pure [] <*> kchk env ps <*> kchk env ks
+    kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
+    kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
@@ -613,7 +614,8 @@ instance KSubst Expr where
     ksubst g (Ellipsis l)           = return $ Ellipsis l
     ksubst g (Strings l ss)         = return $ Strings l ss
     ksubst g (BStrings l ss)        = return $ BStrings l ss
-    ksubst g (Call l e ts ps ks)    = Call l <$> ksubst g e <*> ksubst g ts <*> ksubst g ps <*> ksubst g ks
+    ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
+    ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
     ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3

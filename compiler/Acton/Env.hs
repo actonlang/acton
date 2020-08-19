@@ -738,11 +738,11 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
 -- Instantiation -------------------------------------------------------------------------------------------------------------------
 
-instantiate                 :: Env -> TSchema -> TypeM (Constraints, Type)
+instantiate                 :: Env -> TSchema -> TypeM (Constraints, [Type], Type)
 instantiate env (TSchema _ q t)
                             = do (cs, tvs) <- instQBinds env q
                                  let s = tybound q `zip` tvs
-                                 return (cs, subst s t)
+                                 return (cs, tvs, subst s t)
 
 instQBinds                  :: Env -> QBinds -> TypeM (Constraints, [Type])
 instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]

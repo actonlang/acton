@@ -109,11 +109,6 @@ instance Pretty KwdArg where
     pretty (KwdStar e)              = text "**" <> parens (pretty e)
     pretty KwdNil                   = empty
 
-instance Pretty ([Type],PosArg,KwdArg) where
-    pretty ([], PosNil, KwdNil)     = empty
-    pretty ([], ps, ks)             = pretty (ps, ks)
-    pretty (ts, ps, ks)             = commaSep ((text "@" <>) . pretty) ts <> comma <+> pretty (ps, ks)
-
 instance Pretty (PosArg,KwdArg) where
     pretty (PosNil, ks)             = pretty ks
     pretty (ps, KwdNil)             = pretty ps
@@ -130,7 +125,8 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
-    pretty (Call _ e ts ps ks)      = pretty e <> parens (pretty (ts,ps,ks))
+    pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
+    pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)

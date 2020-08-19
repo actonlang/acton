@@ -182,7 +182,8 @@ instance Vars Expr where
     free (Ellipsis _)               = []
     free (Strings _ ss)             = []
     free (BStrings _ ss)            = []
-    free (Call _ e ts ps ks)        = free e ++ free ts ++ free ps ++ free ks
+    free (Call _ e ps ks)           = free e ++ free ps ++ free ks
+    free (TApp _ e ts)              = free e ++ free ts
     free (Await _ e)                = free e
     free (Index _ e ix)             = free e ++ free ix
     free (Slice _ e sl)             = free e ++ free sl

@@ -88,15 +88,15 @@ instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
-    trans env (Call l e ts p k)
+    trans env (Call l e p k)
       | Lambda{} <- e',
-        null ts,
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
-      | otherwise                       = Call l e' ts p' k'
+      | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
             k'                          = trans env k
+    trans env (TApp l e ts)             = TApp l (trans env e) ts
     trans env (Await l e)               = Await l (trans env e)
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
