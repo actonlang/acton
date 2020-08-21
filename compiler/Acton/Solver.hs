@@ -285,66 +285,6 @@ cast' env t1 t2                             = noRed (Cast t1 t2)
 
 
 ----------------------------------------------------------------------------------------------------------------------
--- castP (cast predicate)
-----------------------------------------------------------------------------------------------------------------------
-
-castP                                       :: Env -> Type -> Type -> Bool
-castP env (TWild _) t2                      = True
-castP env t1 (TWild _)                      = True
-
-castP env (TCon _ c1) (TCon _ c2)
-  | Just (wf,c') <- search                  = tcargs c1 == tcargs c'
-  where search                              = findAncestor env c1 (tcname c2)
-
-castP env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-  | fx1 == fxAction , fx2 /= fxAction       = castP env fx1 fx2 && castP env p2 p1 && castP env k2 k1 && castP env (tMsg t1) t2
-  | otherwise                               = castP env fx1 fx2 && castP env p2 p1 && castP env k2 k1 && castP env t1 t2
-
-castP env (TTuple _ p1 k1) (TTuple _ p2 k2) = castP env p1 p2 && castP env k1 k2
-
-castP env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem us2) us1                   = True
-castP env (TUnion _ us1) t2
-  | all uniLit us1                          = t2 == tStr
-castP env (TCon _ c1) (TUnion _ us2)
-  | uniConElem env us2 c1                   = True
-
-castP env (TOpt _ t1) (TOpt _ t2)           = castP env t1 t2
-castP env (TNone _) (TOpt _ t)              = True
-castP env (TNone _) (TNone _)               = True
-
-castP env (TFX _ fx1) (TFX _ fx2)           = castP' fx1 fx2
-  where castP' FXPure FXPure                = True
-        castP' FXPure (FXMut _)             = True
-        castP' FXPure (FXAct _)             = True
-        castP' (FXMut t1) (FXMut t2)        = t1 == t2
-        castP' (FXMut t1) (FXAct t2)        = t1 == t2
-        castP' (FXAct t1) (FXAct t2)        = t1 == t2
-        castP' FXAction FXAction            = True
-        castP' FXAction (FXAct _)           = True
-        castP' fx1 fx2                      = False
-
-castP env (TNil _ k1) (TNil _ k2)
-  | k1 == k2                                = True
-castP env (TRow _ k n t1 r1) r2
-  | Just (t2,r2') <- lookupElem n r2        = t2 /= tWild && castP env t1 t2 && r2' /= tWild && castP env r1 r2'
-
-castP env (TVar _ tv1) (TVar _ tv2)
-  | tv1 == tv2                              = True
-
-castP env t1@(TVar _ tv) t2
-  | univar tv                               = False
-  | Just tc <- findTVBound env tv           = castP env (tCon tc) t2
-
-castP env t1 t2@(TVar _ tv)                 = False
-
-castP env t1 (TOpt _ t2)                    = castP env t1 t2
-
-castP env t1 t2                             = False
-
-
-
-----------------------------------------------------------------------------------------------------------------------
 -- unify
 ----------------------------------------------------------------------------------------------------------------------
 
@@ -723,7 +663,7 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = tNil k1
 glb env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- lookupElem n r      = tRow k n (glb env t1 t2) (glb env r1 r2)
+  | Just (t2,r2) <- findInRow n r       = tRow k n (glb env t1 t2) (glb env r1 r2)
 
 glb env t1 t2                           = noGLB t1 t2
     
@@ -731,14 +671,6 @@ noGLB t1 t2                             = err1 t1 ("No common subtype: " ++ prst
 
 isStr env (TCon _ c)                    = qmatch env (tcname c) qnStr
 
-lookupElem n (TRow l k n' t r)
-  | n == n'                             = Just (t,r)
-  | otherwise                           = case lookupElem n r of
-                                            Nothing -> Nothing
-                                            Just (t',r') -> Just (t, TRow l k n' t r')
-lookupElem n (TVar _ _)                 = Just (tWild,tWild)
-lookupElem n (TNil _ _)                 = Nothing
-    
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -799,7 +731,7 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = tNil k1
 lub env (TRow _ k n t1 r1) r
-  | Just (t2,r2) <- lookupElem n r      = tRow k n (lub env t1 t2) (lub env r1 r2)
+  | Just (t2,r2) <- findInRow n r       = tRow k n (lub env t1 t2) (lub env r1 r2)
 
 lub env t1 t2                           = noLUB t1 t2
 
@@ -1183,9 +1115,6 @@ qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p
 witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
         ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
-
-tApp e []                               = e
-tApp e ts                               = TApp NoLoc e ts
 
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx

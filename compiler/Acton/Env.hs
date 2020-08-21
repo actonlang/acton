@@ -570,6 +570,10 @@ findAttr env tc n           = findIn [ (w,te') | (w,u) <- findAncestry env tc, l
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
+findAttr'                   :: Env -> TCon -> Name -> TSchema
+findAttr' env tc n          = sc
+  where Just (_, sc, _)     = findAttr env tc n
+
 findAncestry                :: Env -> TCon -> [WTCon]
 findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 
@@ -772,7 +776,82 @@ wexpr (Just n : w)          = wexpr w . (\e -> eDot e (noq n))
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
 
-                                                 
+
+----------------------------------------------------------------------------------------------------------------------
+-- castable predicate
+----------------------------------------------------------------------------------------------------------------------
+
+castable                                    :: Env -> Type -> Type -> Bool
+castable env (TWild _) t2                   = True
+castable env t1 (TWild _)                   = True
+
+castable env (TCon _ c1) (TCon _ c2)
+  | Just (wf,c') <- search                  = tcargs c1 == tcargs c'
+  where search                              = findAncestor env c1 (tcname c2)
+
+castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+  | fx1 == fxAction , fx2 /= fxAction       = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env (tMsg t1) t2
+  | otherwise                               = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
+
+castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = castable env p1 p2 && castable env k1 k2
+
+castable env (TUnion _ us1) (TUnion _ us2)
+  | all (uniElem us2) us1                   = True
+castable env (TUnion _ us1) t2
+  | all uniLit us1                          = t2 == tStr
+castable env (TCon _ c1) (TUnion _ us2)
+  | uniConElem env us2 c1                   = True
+
+castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
+castable env (TNone _) (TOpt _ t)           = True
+castable env (TNone _) (TNone _)            = True
+
+castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
+  where castable' FXPure FXPure             = True
+        castable' FXPure (FXMut _)          = True
+        castable' FXPure (FXAct _)          = True
+        castable' (FXMut t1) (FXMut t2)     = t1 == t2
+        castable' (FXMut t1) (FXAct t2)     = t1 == t2
+        castable' (FXAct t1) (FXAct t2)     = t1 == t2
+        castable' FXAction FXAction         = True
+        castable' FXAction (FXAct _)        = True
+        castable' fx1 fx2                   = False
+
+castable env (TNil _ k1) (TNil _ k2)
+  | k1 == k2                                = True
+castable env (TRow _ k n t1 r1) r2
+  | Just (t2,r2') <- findInRow n r2         = t2 /= tWild && castable env t1 t2 && r2' /= tWild && castable env r1 r2'
+
+castable env (TVar _ tv1) (TVar _ tv2)
+  | tv1 == tv2                              = True
+
+castable env t1@(TVar _ tv) t2
+  | univar tv                               = False
+  | Just tc <- findTVBound env tv           = castable env (tCon tc) t2
+
+castable env t1 t2@(TVar _ tv)              = False
+
+castable env t1 (TOpt _ t2)                 = castable env t1 t2
+
+castable env t1 t2                          = False
+
+
+findInRow n (TRow l k n' t r)
+  | n == n'                                 = Just (t,r)
+  | otherwise                               = case findInRow n r of
+                                                Nothing -> Nothing
+                                                Just (t',r') -> Just (t, TRow l k n' t r')
+findInRow n (TVar _ _)                      = Just (tWild,tWild)
+findInRow n (TNil _ _)                      = Nothing
+
+maxtype env (t:ts)                          = maxt t ts
+  where maxt top (t:ts)
+          | castable env t top              = maxt top ts
+          | otherwise                       = maxt t ts
+        maxt top []                         = top
+
+
 -- Import handling (local definitions only) ----------------------------------------------
 
 getImps                         :: (FilePath,FilePath) -> Env -> [Import] -> IO Env

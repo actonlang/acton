@@ -223,6 +223,9 @@ sIf1 e b els    = sIf [Branch e b] els
 
 handler qn b    = Handler (Except NoLoc qn) b
 
+tApp e []       = e
+tApp e ts       = TApp NoLoc e ts
+
 eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es

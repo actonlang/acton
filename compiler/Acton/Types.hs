@@ -799,7 +799,7 @@ instance Infer Expr where
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC n ts
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        return (cs1, t', app t' (tApp x tvs) $ witsOf (cs0++cs1))
+                                                        return (cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
                                                 st <- newTVar
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
@@ -1054,7 +1054,7 @@ instance Infer Expr where
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]
                                              p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow
-                                             return (TTuple NoLoc (foldl (flip posRow) p ts) k, head ts, TTuple NoLoc p kwdNil)
+                                             return (TTuple NoLoc (foldl (flip posRow) p ts) k, head ts, TTuple NoLoc p k)
 
 isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
   where dotChain (Var _ (NoQ n))        = Just [n]
