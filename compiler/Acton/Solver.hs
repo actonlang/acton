@@ -177,8 +177,7 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
                                                  (cs1,p,we) <- instWitness env ts wit
                                                  let Just (wf,sc,dec) = findAttr env p n
                                                  (cs2,tvs,t) <- instantiate env sc
-                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar x0 : witsOf cs2) 
-                                                         -- witnesses *after* object ref
+                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar x0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
                                                  return ([(w, wFun t1 t2, e)], cs)
 

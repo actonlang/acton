@@ -87,7 +87,6 @@ instance TypeOf Expr where
     typeOf env (Paren _ e)          = typeOf env e
 
 --  The following constructs are translated away during type inference:
-
 --  typeOf env (Index _ e is)       = undefined
 --  typeOf env (Slice _ e sl)       = undefined
 --  typeOf env (BinOp _ l op r)     = undefined
@@ -147,8 +146,15 @@ instance EnvOf Stmt where
     envOf (VarAssign _ ps e)        = envOf ps
     envOf (Decl _ ds)               = envOf ds
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
-    envOf (If _ bs els)             = restrict (foldr1 intersect $ map bound bs) (envOf els)
+    envOf (If _ bs els)             = commonEnvOf $ [ ss | Branch _ ss <- bs ] ++ [els]
+    envOf (Try _ b hs els fin)      = commonEnvOf $ [ ss | Handler _ ss <- hs ] ++ [b++els]
+    envOf (With _ items b)          = exclude (bound items) (envOf b)
     envOf s                         = []
+
+commonEnvOf suites
+  | null liveSuites                 = []
+  | otherwise                       = restrict (foldr1 intersect $ map bound $ tail liveSuites) (envOf $ head liveSuites)
+  where liveSuites                  = filter fallsthru suites
 
 instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx)
@@ -156,9 +162,9 @@ instance EnvOf Decl where
     envOf (Class _ n q as ss)       = [(n, NClass q as' (envOf ss))]
       where as'                     = [ ([Nothing],a) | a <- as ]
 
---  The following constructs are translated away during type inference:
+    envOf (Actor _ n q p k b)       = [(n, NAct q (prowOf p) (krowOf k) (envOf b))]
 
---  envOf (Actor _ n q ps ks b)     = undefined
+--  The following constructs are translated away during type inference:
 --  envOf (Protocol _ n q as ss)    = undefined
 --  envOf (Extension _ n q as ss)   = undefined
 

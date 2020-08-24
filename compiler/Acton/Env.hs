@@ -827,8 +827,8 @@ castable env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = True
 
 castable env t1@(TVar _ tv) t2
-  | univar tv                               = False
   | Just tc <- findTVBound env tv           = castable env (tCon tc) t2
+  | otherwise                               = False
 
 castable env t1 t2@(TVar _ tv)              = False
 

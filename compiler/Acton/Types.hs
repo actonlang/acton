@@ -20,7 +20,7 @@ reconstruct fname env (Module m imp ss) = do InterfaceFiles.writeFile (fname ++ 
                                              return (map simpSig te, Module m imp ss1)
   where env1                            = reserve (bound ss) env
         (te,ss1)                        = runTypeM $ infTop env1 ss
-        env2                            = define te env1
+        env2                            = define te env
 
 solverError                             = typeError
 
@@ -376,7 +376,7 @@ instance InfEnv Decl where
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  return (cs1, [(n, NClass q as' ({-map newSig nterms ++ -}te))], Class l n q us b')
                                              _ -> illegalRedef n
-      where env1                        = define (exclude [initKW] $ intoSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (exclude [initKW] $ toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
             te'                         = parentTEnv env as'
@@ -394,7 +394,7 @@ instance InfEnv Decl where
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  return (cs1, [(n, NProto q ps te)], Protocol l n q us b')
                                              _ -> illegalRedef n
-      where env1                        = define (intoSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
             te'                         = parentTEnv env ps
 
@@ -413,17 +413,16 @@ instance InfEnv Decl where
                                              when (not (null asigs || inBuiltin env)) $ err2 asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              return (cs1, [(extensionName n us, NExt n q ps te)], Extension l n q us b')
-      where env1                        = define (intoSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
             te'                         = parentTEnv env ps
-            ts                          = map tVar (tybound q)
 
 --------------------------------------------------------------------------------------------------------------------------
 
 checkAttributes final te' te
   | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
-  | not $ null props                    = err2 props "Property attribute cannot have a class-level definition"
+  | not $ null props                    = err2 props "Property attributes cannot have class-level definitions"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden"
   | otherwise                           = return (nterms, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
@@ -443,7 +442,7 @@ extensionName c ps                      = Derived (deriveQ $ tcname $ head ps) (
 
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
-intoSigs te                             = map makeSig te
+toSigs te                               = map makeSig te
   where sigs                            = [ n | (n,NSig{}) <- te ]
         makeSig (n, i) | n `elem` sigs  = (n,i)
         makeSig (n, NDef sc dec)        = trace ("### makeSig " ++ prstr (n, NSig sc dec)) $ (n, NSig sc dec)
@@ -622,6 +621,49 @@ instance Check Decl where
             n'                          = extensionName n us
             NExt _ _ _ te               = findName n' env
 
+{-
+
+class cc[A(q),B] (dd[t]):                       class cc[A,B] (dd[t]):
+    __init__ : [Z(r)] => (p,k) - None   ==>         __init__ : [Z] => (q[A],r[Z],p,k) -> None
+    nn       : [Z(r)] => (p,k) - t                  nn       : [Z] => (q[A],r[Z],p,k) -> t
+
+protocol pp[A(q),B] (aa[t],bb[u]):              class pp[S,A,B] (aa[S,t]):
+    mm : [Z(r)] => (p,k) -> t           ==>         mm       : [Z] => (r[Z],S,p,k) -> t
+                                                    __init__ : (q[A]) -> None
+                                                    @property w$q$A$pp : q[A]
+                                                    @property w$bb$pp  : bb[S,u]
+
+extension cc[X(q),Y] (pp[ts],rr[us]):           class pp$cc[X,Y] (pp[cc[X,Y],ts]):                              class rr$cc[X,Y] (rr[cc[X,Y],us]):
+    mm : [Z(r)] => (p,k) -> t           ==>         mm       : [Z] => (r[Z],cc[X,Y],p,k) -> t           ;           ...
+                                                    __init__ : (q[X]) -> None                                       __init__ : (pp$cc[X,Y]) -> None
+                                                    @property w$q$X$cc : q[X]                                       @property w$pp$cc : pp$cc[X,Y]
+                                                    @property w$rr$cc  : rr[cc[X,Y],us]
+
+For (n, NClass q as te):
+    (Remove any protocols from as and define a separate extension (n, NExt ...))
+    Dequal all qualified schemas in te into witness params of the respective function
+    Dequal q into witness params of all function schemas in te
+    Return (n, NClass q' as' te')
+
+For (n, NProto q ps te):
+    Remove all redundant protocols from ps
+    Prepend a new variable S to q and the arguments of all protocols in ps, as well as to the parameters of all function schemas in te
+    Dequal q into witness params of new method __init__, and also into property attributes named w$p$X$n (for X(p) in q)
+    Dequal all qualified schemas in te into witness params of the respective function
+    Remove tail(ps) and append to te as property attributes named w$p$n (for p in tail(ps))
+    Return (n, NClass q' ps' te')
+
+For (n, NExt q ps te):
+    Remove all redundant protocols from ps
+    Prepend n[bound(q)] to the arguments of all protocols in ps, as well as to the parameters of all function schemas in te
+    Dequal q into witness params of method __init__, and also into property attributes named w$p$X$n (for X(p) in q)
+    Dequal all qualified schemas in te into witness params of the respective function
+    Remove tail(ps) and append to te as property attributes named w$p$n (for p in tail(ps))
+    Return (pi$n, NClass q' (pi) tei') for each pi in ps', where tei' is the fraction of te' belonging to pi, plus
+        __init__ and property attributes as above, for p0
+        __init__ : (p0) -> None and $ property w$p0$n : p0, for p1..
+        
+-}
 
 instance Check Stmt where
     checkEnv env (If l bs els)          = do (cs1,bs') <- checkEnv env bs

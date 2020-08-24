@@ -38,6 +38,11 @@ extend te env                       = env{ mainenv = define te (mainenv env),
                                            locals = locals env \\ ns }
   where ns                          = dom te
 
+extendTVars q env                   = env{ mainenv = defineTVars q (mainenv env) }
+
+setActor actions locals env         = env{ actions = actions, locals = locals }
+
+
 class Deact a where
     deact                           :: DeactEnv -> a -> DeactM a
 
@@ -80,7 +85,8 @@ instance Deact Stmt where
                                          e2' <- deact env e2
                                          let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct tWild)
                                          return $ Expr l $ Call l0 (eQVar primAFTER) (PosArg e1' $ PosArg lambda PosNil) KwdNil  -- TODO: supply type args
-    deact env (Decl l ds)           = Decl l <$> deact env ds
+    deact env (Decl l ds)           = Decl l <$> deact env1 ds
+      where env1                    = extend (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
 
 instance Deact Decl where
@@ -88,7 +94,9 @@ instance Deact Decl where
                                          decls <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tWild)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
-      where (decls,ss)              = partition isDecl b
+      where env1                    = setActor actions locals $ extend (envOf p ++ envOf k) $ extendTVars q env
+
+            (decls,ss)              = partition isDecl b
             meths                   = bound decls
             inits                   = filter (not . isSig) ss
             stvars                  = statedefs b
@@ -119,8 +127,6 @@ instance Deact Decl where
               where env2            = extend (envOf p ++ envOf k) env1
                     n'              = if n `elem` actions then localName n else n
 
-            env1                    = env{ actions = actions, locals = locals }
-
             wrapMeth (Def l n q p k (Just t) b d fx)
                                     = Decl l0 [Def l0 n q (addSelf p) k (Just t) [Return l0 (Just $ async)] d fx]
               where n'              = localName n
@@ -132,14 +138,17 @@ instance Deact Decl where
     deact env (Def l n q p k t b d fx)
                                     = do b <- deact env b
                                          return $ Def l n q p k t b d fx
-      where env1                    = extend (envOf p ++ envOf k) env
+      where env1                    = extend (envOf p ++ envOf k) $ extendTVars q env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
+      where env1                    = extendTVars q env
     deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
+      where env1                    = extendTVars q env
     deact env (Extension l n q u b) = Extension l n q u <$> deact env b
+      where env1                    = extendTVars q env
 
 localName n                         = Derived n "local"
 
-addSelf p                           = PosPar selfKW Nothing Nothing p
+addSelf p                           = PosPar selfKW (Just tSelf) Nothing p
 
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
@@ -147,9 +156,9 @@ parToArg PosNIL                     = PosNil
 parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQ n)) (parToArg p)
 
 
--- $ASYNC : act[S](Ref[S], act[S]()->A) -> A
--- $AFTER : act[S](int, act[S]()->A) -> None
--- $AWAIT : act[S](Msg[A]) -> A
+-- $ASYNC : [S,A] => act[S]($Actor, act[S]()->A) -> A
+-- $AFTER : [S,A] => act[S](int, act[S]()->A) -> None
+-- $AWAIT : [S,A] => act[S](Msg[A]) -> A
 
 
 instance Deact Expr where

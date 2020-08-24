@@ -145,7 +145,7 @@ class Sliceable[S,A] (Indexed[S,int,A]):
       Indexed.__init__($wself, Eq$int())
 
   __getslice__ : (S,Slice) -> S
-  __setslice__ : (S,Slice,Iterable$opaque[A]) -> None
+  __setslice__ : [X] => (Iterable[X,A],S,Slice,X) -> None
   __delslice__ : (S,Slice) -> None
   
 class Iterable[S,A] ():
@@ -154,15 +154,11 @@ class Iterable[S,A] ():
 
   __iter__     : (S) -> Iterator[A]
 
-class Iterable$opaque[A] ():            # Exists S:
-    proto      : Iterable[S,A]
-    impl       : S
-
 class Collection[S,A] (Iterable[S,A]):
   def __init__($wself):
       Iterable.__init__($wself)
 
-  __fromiter__ : (Iterable$opaque[A]) -> S
+  __fromiter__ : [X] => (Iterable[X,A],X) -> S
   __len__      : (S) -> int
   
 class Container[S,A]] (Collection[S,A]):
@@ -218,7 +214,7 @@ class Mapping[S,A,B] (Container[S,A]):
   keys        : (S) -> Iterator[A]
   values      : (S) -> Iterator[Bw$Eq$A]:
   items       : (S) -> Iterator[(A,B)]
-  update      : (S,Iterable$opaque[(A,B)]) -> None  
+  update      : [X] => (Iterable[X,(A,B)],S,X) -> None  
   popitem     : (S) -> (A,B)
   setdefault  : (S,A,B) -> None
 
@@ -267,84 +263,288 @@ class Set[S,A] (Container[S,A]):
 #   Integral <--------
 
 class Complex[S] (Eq[S]):
-  w$Plus$Complex   : Plus[S]
-  w$Minus$Complex  : Minus[S]
-  def __init__($wself, w$Plus$Complex : Plus[S], w$Minus$Complex : Minus[S]):
-      Eq.__init__($wself)
-      $wself.w$Plus$Complex = w$Plus$Complex
-      $wself.w$Minus$Complex = w$Minus$Complex
+    $Plus       : Plus[S]
+    $Minus      : Minus[S]
   
-  __complex__  : (S) -> complex
-  __bool__     : (S) -> bool
+    __complex__ : (S) -> complex
+    __bool__    : (S) -> bool
 
-  __mul__      : (S,S) -> S
-  __truediv__  : (S,S) -> S
-  __pow__      : (S,S) -> S
+    __mul__     : (S,S) -> S
+    __truediv__ : (S,S) -> S
+    __pow__     : (S,S) -> S
 
-  __neg__      : (S) -> S
-  __pos__      : (S) -> S
+    __neg__     : (S) -> S
+    __pos__     : (S) -> S
   
-  real         : (S) -> Real$opaque
-  imag         : (S) -> Real$opaque
-  __abs__      : (S) -> Real$opaque
+    real        : [X] => (Real[X],S) -> X
+    imag        : [X] => (Real[X],S) -> X
+    __abs__     : [X] => (Real[X],S) -> X
 
-  conjugate    : (S) -> S
+    conjugate   : (S) -> S
 
+class Plus$Complex[S] (Plus[S]):
+    $Complex    : Complex[S]
 
-class Complex$opaque ():            # Exists S:
-  proto        : Complex[S]
-  impl         : S
+class Minus$Complex[S] (Minus[S]):
+    $Complex    : Complex[S]
+
+##
 
 class Real[S] (Ord[S]):
-  w$Complex$Real : Complex[S]       # Eq implemented in both parents!
-  def __init__($wself, w$Complex$Real : Complex[S]):
-      Ord.__init__($wself)
-      $wself.w$Complex$Real = w$Complex$Real
+    $Complex    : Complex[S]         # Eq implemented in both parents!
   
-  __float__    : (S) -> float
+    __float__   : (S) -> float
 
-  __trunc__    : (S) -> Integral$opaque
-  __floor__    : (S) -> Integral$opaque
-  __ceil__     : (S) -> Integral$opaque
-  __round__    : (S) -> Integral$opaque
+    __trunc__   : [X] => (Integral[X],S) -> X
+    __floor__   : [X] => (Integral[X],S) -> X
+    __ceil__    : [X] => (Integral[X],S) -> X
+    __round__   : [X] => (Integral[X],S) -> X
 
+class Complex$Real[S] (Complex[S]):
+    $Real       : Real[S]
 
-class Real$opaque ():           # Exists S:
-  proto        : Real[S]
-  impl         : S
+class Plus$Real[S] (Plus$Complex[S]):
+    $Real       : Real[S]
+
+class Minus$Real[S] (Minus$Complex[S]):
+    $Real       : Real[S]
+
+##
 
 class Rational[S] (Real[S]):
-  def __init__($wself, w$Complex$Real : Complex[S]):
-      Real.__init__($wself, w$Complex$Real)
+    numerator    : [X] => (Integral[X],S) -> X
+    denominator  : [X] => (Integral[X],S) -> X
 
-  numerator    : (S) -> Integral$opaque
-  denominator  : (S) -> Integral$opaque
+class Complex$Rational[S] (Complex$Real[S]):
+    $Rational    : Rational[S]
+
+class Plus$Rational[S] (Plus$Real[S]):
+    $Rational    : Rational[S]
+
+class Minus$Rational[S] (Minus$Real[S]):
+    $Rational    : Rational[S]
+
+##
 
 class Integral[S] (Rational[S]):
-  w$Logical$Integral : Logical[S]
-  def __init__($wself, w$Complex$Real : Complex[S], w$Logical$Integral : Logical[S]):
-      Rational.__init__($wself, w$Complex$Real)
-      $wself.w$Logical$Integral = w$Logical$Integral
+    $Logical     : Logical[S]
   
-  __int__      : (S) -> int
-  __index__    : (S) -> int
+    __int__      : (S) -> int
+    __index__    : (S) -> int
 
-  __divmod__   : (S,S) -> (S,S)
-  __floordiv__ : (S,S) -> S
-  __mod__      : (S,S) -> S
+    __divmod__   : (S,S) -> (S,S)
+    __floordiv__ : (S,S) -> S
+    __mod__      : (S,S) -> S
 
-  __lshift__   : (S,S) -> S
-  __rshift__   : (S,S) -> S
+    __lshift__   : (S,S) -> S
+    __rshift__   : (S,S) -> S
 
-  __invert__   : (S) -> S
+    __invert__   : (S) -> S
 
+class Logical$Integral[S] (Logical[S]):
+    $Integral    : Integral[S]
 
-class Integral$opaque ():       # Exists S:
-  proto       : Integral[S]
-  impl        : S
+class Complex$Integral[S] (Complex$Rational[S]):
+    $Integral    : Integral[S]
+
+class Plus$Integral[S] (Plus$Rational[S]):
+    $Integral    : Integral[S]
+
+class Minus$Integral[S] (Minus$Rational[S]):
+    $Integral    : Integral[S]
+
 
 
 ## Extensions ######################################################################################
+
+extension int (Integral):
+    # __mod__, numerator, __trunc__, __le__, __eq__, __or__, __mul__, __add__, __sub__
+
+# ==> 
+
+class Integral$int (Integral[int]):
+    def __init__($wself):
+        $wself.$Complex  = Complex$int($wself)
+        $wself.$Logical  = Logical$int($wself)
+    # __mod__, numerator, __trunc__, __le__, __eq__
+
+class Logical$int (Logical$Integral[int]):
+    def __init__($wself, w$Integral : Integral$int):
+        $wself.$Integral = w$Integral
+    # __or__
+
+class Complex$int (Complex$Integral[int]):
+    def __init__($wself, w$Integral : Integral$int):
+        $wself.$Plus     = Plus$int($wself, w$Integral)
+        $wself.$Minus    = Minus$int($wself, w$Integral)
+        $wself.$Real     = w$Integral
+        $wself.$Rational = w$Integral
+        $wself.$Integral = w$Integral
+    def __eq__($wself, a, b):
+        return $wself.$Integral.__eq__(a, b)
+    # __mul__
+
+class Plus$int (Plus$Integral[int]):
+    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
+        $wself,$Complex  = w$Complex
+        $wself.$Real     = w$Integral
+        $wself.$Rational = w$Integral
+        $wself.$Integral = w$Integral
+    # __add__
+
+class Minus$int (Minus$Integral[int]):
+    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
+        $wself,$Complex  = w$Complex
+        $wself.$Real     = w$Integral
+        $wself.$Rational = w$Integral
+        $wself.$Integral = w$Integral
+    # __sub__
+
+####
+
+extension int (Complex):
+    # __mul__, __eq__, __add__, __sub__
+...
+extension int (Integral):
+    # __mod__, numerator, __trunc__, __le__, __or__
+    
+# ==>
+
+class Complex$int (Complex[int]):
+    def __init__($wself):
+        $wself.$Plus     = Plus$int($wself)
+        $wself.$Minus    = Minus$int($wself)
+    # __mul__, __eq__
+
+class Plus$int (Plus$Complex[int]):
+    def __init__($wself, w$Complex : Complex$int):
+        $wself.$Complex  = w$Complex
+    # __add__
+
+class Minus$int (Minus$Complex[int]):
+    def __init__($wself, w$Complex : Complex$int):
+        $wself,$Complex  = w$Complex
+    # __sub__
+
+class Integral$int (Integral[int]):
+    def __init__($wself):
+        $wself.$Complex  = Complex$int()
+        $wself.$Logical  = Logical$int($wself)
+    def __eq__($wself, a, b):
+        return $wself.$Complex.__eq__(a, b)
+    # __mod__, numerator, __trunc__, __le__
+
+class Logical$int (Logical$Integral[int]):
+    def __init__($wself, w$Integral : Integral$int):
+        $wself.$Integral = w$Integral
+    # __or__
+
+####
+
+extension int (Eq):
+    # __eq__
+...
+extension int (Complex):
+    # __mul__, __add__, __sub__
+...
+extension int (Integral):
+    # __mod__, numerator, __trunc__, __le__, __or__
+    
+# ==>
+
+class Eq$int (Eq[int]):
+    def __init__($wself):
+        pass
+    # __eq__
+
+class Complex$int (Complex[int]):
+    def __init__($wself):
+        $wself.$Eq       = Eq$int()
+        $wself.$Plus     = Plus$int($wself)
+        $wself.$Minus    = Minus$int($wself)
+    def __eq__($wself, a, b):
+        ...     # code copied form Eq$int
+    # __mul__
+
+class Plus$int (Plus$Complex[int]):
+    def __init__($wself, w$Complex : Complex$int):
+        $wself.$Complex  = w$Complex
+    # __add__
+
+class Minus$int (Minus$Complex[int]):
+    def __init__($wself, w$Complex : Complex$int):
+        $wself,$Complex  = w$Complex
+    # __sub__
+
+class Integral$int (Integral[int]):
+    def __init__($wself):
+        $wself.$Complex  = Complex$int()
+        $wself.$Logical  = Logical$int($wself)
+    def __eq__($wself, a, b):
+        ...     # code copied form Eq$int
+    # __mod__, numerator, __trunc__, __le__
+
+class Logical$int (Logical$Integral[int]):
+    def __init__($wself, w$Integral : Integral$int):
+        $wself.$Integral = w$Integral
+    # __or__
+
+####
+
+extension int (Real):
+    # __trunc__, __le__, __eq__, __mul__, __add__, __sub__
+...
+extension int (Integral):
+    # __mod__, numerator, __or__
+    
+# ==>
+
+class Real$int (Real[int]):
+    def __init__($wself):
+        $wself.$Complex  = Complex$int($wself)
+    # __trunc__, __le__, __eq__
+
+class Complex$int (Complex$Real[int]):
+    def __init__($wself, w$Real : Real$int):
+        $wself.$Plus     = Plus$int($wself, w$Integral)
+        $wself.$Minus    = Minus$int($wself, w$Integral)
+        $wself.$Real     = w$Real
+    def __eq__($wself, a, b):
+        return $wself.$Real.__eq__(a, b)
+    # __mul__
+
+class Plus$int (Plus$Real[int]):
+    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
+        $wself,$Complex  = w$Complex
+        $wself.$Real     = w$Integral
+    # __add__
+
+class Minus$int (Minus$Real[int]):
+    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
+        $wself,$Complex  = w$Complex
+        $wself.$Real     = w$Integral
+    # __sub__
+
+class Integral$int (Integral[int]):
+    def __init__($wself):
+        $wself.$Complex  = $wself.$Real
+        $wself.$Logical  = Logical$int($wself)
+    def __trunc__($wself, a):
+        ...     # code copied from Real$int
+    def __le__($wself, a, b):
+        ...     # code copied from Real$int
+    def __eq__($wself, a, b):
+        ...     # code copied from Real$int
+    # __mod__, numerator
+
+class Logical$int (Logical$Integral[int]):
+    def __init__($wself, w$Integral : Integral$int):
+        $wself.$Integral = w$Integral
+    # __or__
+
+
+################
+
 
 class Collection$list (Collection[list[A],A]):
     w$Sequence$list : Sequence$list[A]
@@ -422,26 +622,6 @@ class Hashable$str (Hashable[str]):
     def __init__($wself):
         Hashable.__init__($wself)
 
-class Logical$int (Logical[int]):
-    w$Integral$int : Integral$int
-    def __init__($wself, w$Integral$int):
-        $wself.w$Integral$int = w$Integral$int
-class Plus$int (Plus[int]):
-    w$Integral$int : Integral$int
-    def __init__($wself, w$Integral$int):
-        $wself.w$Integral$int = w$Integral$int
-class Minus$int (Minus[int]):
-    w$Integral$int : Integral$int
-    def __init__($wself, w$Integral$int):
-        $wself.w$Integral$int = w$Integral$int
-class Complex$int (Complex[int]):
-    w$Integral$int : Integral$int
-    def __init__($wself, w$Integral$int):
-        Complex.__init__($wself, Plus$int($wself), Minus$int($wself))
-        $wself.w$Integral$int = w$Integral$int
-class Integral$int (Integral[int]):
-    def __init__($wself):
-        Integral.__init__($wself, Complex$int($wself), Logical$int($wself))
 
 class Hashable$int (Hashable[int]):
     def __init__($wself):
@@ -470,6 +650,6 @@ class Hashable$float (Hashable[float]):
 
 ## Builtin functions #####################################################
 
-def abs(x : Complex$opaque) -> Real$opaque:
-    return x.$proto.__abs__(x.$impl)
+def abs[X,Y](w1:Complex[X], w2:Real[Y], x : X) -> Y:
+    return w1.__abs__@[Y](w2, x)
     
