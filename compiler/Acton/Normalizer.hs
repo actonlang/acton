@@ -183,6 +183,7 @@ instance Norm Expr where
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
     norm env (TApp l e ts)          = TApp l <$> norm env e <*> pure ts
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
+    norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
     norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm

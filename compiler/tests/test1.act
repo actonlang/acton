@@ -36,3 +36,9 @@ def f10(x : bool):
 
 def f11():
     return 'A' 'B'
+
+def f12(x : Exception):
+    return 1 if isinstance(x, NotImplementedError) else 2
+
+def f13(x : (int | bool)):
+    return x if isinstance(x, int) else -1

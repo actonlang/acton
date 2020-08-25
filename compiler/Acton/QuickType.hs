@@ -60,6 +60,7 @@ instance TypeOf Expr where
       | otherwise                   = t1
       where t1                      = typeOf env e1
             t2                      = typeOf env e2
+    typeOf env (IsInstance _ e c)   = tBool
     typeOf env (DotI _ e i tl)      = case typeOf env e of
                                         TTuple _ p k -> f i p k
       where f 0 (TRow _ _ _ t p) k

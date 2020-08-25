@@ -170,9 +170,7 @@ instance Vars Handler where
     bound (Handler ex ss)           = bound ss ++ bound ex
 
 instance Vars Expr where
-    free (Var _ (NoQ n))            = [n]
-    free (Var _ (QName m n))        = [n]
-      where ModName (n:ns)          = m
+    free (Var _ n)                  = free n
     free (Int _ _ str)              = []
     free (Float _ _ str)            = []
     free (Imaginary _ _ str)        = []
@@ -188,6 +186,7 @@ instance Vars Expr where
     free (Index _ e ix)             = free e ++ free ix
     free (Slice _ e sl)             = free e ++ free sl
     free (Cond _ e1 e e2)           = free [e1,e,e2]
+    free (IsInstance _ e c)         = free e ++ free c
     free (BinOp _ e1 o e2)          = free [e1,e2]
     free (CompOp _ e ops)           = free e ++ free ops
     free (UnOp _ o e)               = free e

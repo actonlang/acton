@@ -281,6 +281,7 @@ instance Lift Expr where
     ll env (Index l e ix)               = Index l <$> ll env e <*> ll env ix
     ll env (Slice l e sl)               = Slice l <$> ll env e <*> ll env sl
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2
+    ll env (IsInstance l e c)           = IsInstance l <$> ll env e <*> pure c
     ll env (BinOp l e1 o e2)            = BinOp l <$> ll env e1 <*> pure o <*> ll env e2
     ll env (CompOp l e ops)             = CompOp l <$> ll env e <*> ll env ops
     ll env (UnOp l o e)                 = UnOp l o <$> ll env e

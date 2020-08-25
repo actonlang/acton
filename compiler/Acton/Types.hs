@@ -903,6 +903,13 @@ instance Infer Expr where
                                              (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
                                              return (cs0++cs1++cs2, t0, Cond l e1' e' e2')
+    infer env (IsInstance l e c)        = case findQName c env of
+                                             NClass q _ _ -> do
+                                                (cs,t,e') <- infer env e
+                                                ts <- newTVars [ tvkind v | v <- tybound q ]
+                                                return (Cast (tCon (TC c ts)) t :
+                                                        cs, tBool, IsInstance l e' c)
+                                             _ -> nameUnexpected c
     infer env (BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs1,env1,e1') <- inferBool env e1
                                              (cs2,env2,e2') <- inferBool env1 e2
@@ -1153,6 +1160,15 @@ inferBool env (CompOp l e1@(Var _ (NoQ n)) [OpArg NEq e2@None{}])
                                              w <- newWitness
                                              return (Impl w t pEq :
                                                      cs1, define [(n,NVar t)] env, eCall (eDot (eCall (eQVar witEqOpt) [eVar w]) neKW) [e1',e2])
+inferBool env (IsInstance l e@(Var _ (NoQ n)) c)
+                                        = case findQName c env of
+                                             NClass q _ _ -> do
+                                                (cs,t,e') <- infer env e
+                                                ts <- newTVars [ tvkind v | v <- tybound q ]
+                                                let tc = tCon (TC c ts)
+                                                return (Cast tc t :
+                                                        cs, define [(n,NVar tc)] env, IsInstance l e' c)
+                                             _ -> nameUnexpected c
 inferBool env e                         = do (cs,t,e') <- infer env e
                                              return (cs, env, eCall (eDot e' boolKW) [])
 

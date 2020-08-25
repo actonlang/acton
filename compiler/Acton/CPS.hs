@@ -455,6 +455,7 @@ instance PreCPS Expr where
     pre env (Index l e ix)              = Index l <$> pre env e <*> pre env ix
     pre env (Slice l e sl)              = Slice l <$> pre env e <*> pre env sl
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
+    pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
     pre env (BinOp l e1 op e2)          = BinOp l <$> pre env e1 <*> return op <*> pre env e2
     pre env (CompOp l e ops)            = CompOp l <$> pre env e <*> pre env ops
     pre env (UnOp l o e)                = UnOp l o <$> pre env e

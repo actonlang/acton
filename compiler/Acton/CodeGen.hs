@@ -130,6 +130,7 @@ instance Gen Expr where
     gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
     gen env (TApp _ e ts)           = gen env e
     gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
+    gen env (IsInstance _ e c)      = gen env primIsInstance <> parens (gen env e <> comma <+> gen env c)
     gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2               -- TODO: remove
     gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove
     gen env (UnOp _ o e)            = gen env o <> gen env e                                -- TODO: remove

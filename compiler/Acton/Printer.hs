@@ -131,6 +131,7 @@ instance Pretty Expr where
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
     pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
+    pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
     pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2
     pretty (CompOp _ e ops)         = pretty e <+> hsep (map pretty ops)
     pretty (UnOp _ o e)             = pretty o <> pretty e

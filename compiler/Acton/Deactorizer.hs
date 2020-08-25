@@ -182,6 +182,7 @@ instance Deact Expr where
     deact env (Index l e is)        = Index l <$> deact env e <*> deact env is
     deact env (Slice l e sl)        = Slice l <$> deact env e <*> deact env sl
     deact env (Cond l e1 e2 e3)     = Cond l <$> deact env e1 <*> deact env e2 <*> deact env e3
+    deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
     deact env (BinOp l e1 op e2)    = BinOp l <$> deact env e1 <*> return op <*> deact env e2
     deact env (CompOp l e ops)      = CompOp l <$> deact env e <*> deact env ops
     deact env (UnOp l op e)         = UnOp l op <$> deact env e 

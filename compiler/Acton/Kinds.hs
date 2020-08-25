@@ -307,6 +307,7 @@ instance KCheck Expr where
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
+    kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return c
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 
@@ -619,6 +620,7 @@ instance KSubst Expr where
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
     ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
+    ksubst g (IsInstance l e c)     = IsInstance l <$> ksubst g e <*> return c
     ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
