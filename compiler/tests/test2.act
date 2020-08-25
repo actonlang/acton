@@ -1,0 +1,33 @@
+def fff (a, b, c):
+  return len([a // c])
+
+def abs(x : Number) -> Real:
+    return x.__abs__()
+
+def pow1 [A(Number)] (a: A, b: A) -> A:
+  return Number.__pow__(a,b)
+
+pow2 : (int,int)->int
+
+def pow2 (a, b):
+  return a**b
+
+def rev1(seq : Sequence[A]) -> Iterator[A]:
+  return seq.__reversed__()
+
+def rev2(seq):
+  return Sequence.__reversed__(seq)
+
+def rev3(seq):
+  return seq.__reversed__()
+
+def fake [A(Real)] () -> A:
+    raise ValueError()
+
+def dflt():
+    x = fake()
+    y = fake()
+    return x/y > y
+
+def genrec(n):
+    return genrec(n) + genrec(n-1)

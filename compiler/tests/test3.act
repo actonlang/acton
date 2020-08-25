@@ -1,0 +1,18 @@
+actor Apa():
+    var v = 0
+    def m():
+        v = 0
+        b = Bepa()
+#        b.meth()
+        b.methods[0]()
+#        b.bepa()
+
+actor Bepa():
+    var w = 0
+#    bepa : action() -> None
+    def bepa():
+        w -= 1
+#    methods : list[action()->None]
+    methods = []
+#    meth : action() -> None
+    meth = bepa

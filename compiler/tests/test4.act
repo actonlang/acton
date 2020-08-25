@@ -1,0 +1,25 @@
+def m1(a):
+    return a if a==a else a
+
+m2 : [A(Eq)] => (A) -> A
+def m2(a):
+    return a
+
+x = m1(3)
+y = m2(4)
+
+actor Apa():
+    m3 : [A(Eq)] => (A) -> A
+    def m3(a):
+        return a
+    def m4(a):
+        return a
+
+
+class Bepa():
+    m5 : [A(Eq)] => (A) -> A
+    def m5(self, a):
+        return a
+    def m6(self, a):
+        return a+1
+

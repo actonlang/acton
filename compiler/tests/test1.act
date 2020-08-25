@@ -1,0 +1,38 @@
+def f0(x : ?int):
+    return x + 7 if x is not None else 0
+
+def f1(x : ?(int)->int):
+    return x(7) if x is not None else 0
+
+def f2(x : ?int):
+    return x == None
+
+def f3(x : ?int):
+    return x == 7
+
+def f4(x : ?int):
+    return x + 7 if x != None else 0
+
+def f5(x : ?int):
+    return x+1 if x != None and x > 0 else 0
+
+def f6(x : ?(?int)):
+    return (x + 7 if x != None else 1) if x != None else 0
+
+def f7a(x : ?int):
+    return x == 7
+
+def f7b(x : (int | str)):
+    return x == 7
+
+def f8(x : (int | str)):
+    return x == "hello"
+
+def f9(x : str):
+    return x == True
+
+def f10(x : bool):
+    return 'A' if x else 'B'
+
+def f11():
+    return 'A' 'B'
