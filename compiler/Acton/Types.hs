@@ -856,8 +856,12 @@ instance Infer Expr where
                                             NReserved -> nameReserved n
                                             NBlocked -> nameBlocked n
                                             _ -> nameUnexpected n
-    infer env e@(Int _ val s)           = return ([], tInt, e)
-    infer env e@(Float _ val s)         = return ([], tFloat, e)
+    infer env e@(Int _ val s)           = do t <- newTVar
+                                             w <- newWitness
+                                             return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
+    infer env e@(Float _ val s)         = do t <- newTVar
+                                             w <- newWitness
+                                             return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@Imaginary{}             = notYetExpr e
     infer env e@(Bool _ val)            = return ([], tBool, e)
     infer env e@(None _)                = return ([], tNone, e)

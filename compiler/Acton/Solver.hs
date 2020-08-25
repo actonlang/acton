@@ -842,6 +842,7 @@ uClosed env (TNil _ _)                  = True
 uClosed env _                           = False
 
 lClosed env (TOpt _ _)                  = True
+lClosed env (TUnion _ _)                = True
 lClosed env (TNil _ _)                  = True
 lClosed env _                           = False
 
@@ -876,7 +877,7 @@ allAbove env (TCon _ c@(TC n _))
   where n'                              = unalias env n
 allAbove env (TVar _ v) | not(univar v) = case findTVBound env v of Just c -> [CVar v, CCon (tcname c)]; _ -> [CVar v]
 allAbove env (TOpt _ t)                 = allAbove env t
-allAbove env (TNone _)                  = [CNone]           -- extend with 'candidates env KType' when polarities are implemented
+allAbove env (TNone _)                  = candidates env KType
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
 allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
@@ -884,7 +885,7 @@ allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
 allAbove env (TUnion _ us)              = (nub $ concat $ map uAbove us) ++ [CNone]
-  where uAbobe (UCon n)                 = map CCon $ n : allAncestors env n
+  where uAbove (UCon n)                 = map CCon $ n : allAncestors env n
         uAbove (ULit s)                 = map CCon $ qnStr : allAncestors env qnStr
 allAbove env _                          = []
 

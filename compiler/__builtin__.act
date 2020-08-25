@@ -201,7 +201,7 @@ class set[A(Hashable)] (object):
 #   Eq ______________               Plus            Minus
 #    |               |               |               |
 #    |               |               |               |
-#   Ord             Complex <--------- <--------------
+#   Ord             Number <---------- <--------------
 #    |               |
 #    |               |
 #   Real <------------
@@ -212,7 +212,10 @@ class set[A(Hashable)] (object):
 #    |               |
 #   Integral <--------
 
-protocol Complex (Eq,Plus,Minus):
+protocol Number (Eq,Plus,Minus):
+  @staticmethod
+  __fromatom__ : ((int|float|bool|str)) -> Self
+
   __complex__  : () -> complex
 
   @staticmethod
@@ -232,7 +235,7 @@ protocol Complex (Eq,Plus,Minus):
   conjugate    : () -> Self
 
 
-protocol Real (Ord,Complex):  # Eq implemented in both parents!
+protocol Real (Ord,Number):  # Eq implemented in both parents!
   __float__    : () -> float
 
   __trunc__    : () -> Integral
@@ -272,7 +275,7 @@ extension int (Hashable):pass
 extension float (Real):pass
 extension float (Hashable):pass
 
-extension complex (Complex):pass
+extension complex (Number):pass
 extension complex (Hashable):pass
 
 ## Collection protocols ############################################################################
@@ -387,7 +390,7 @@ extension bytearray (Container[int]): pass
 
 ## Builtin functions #####################################################
 
-def abs(x : Complex) -> Real:
+def abs(x : Number) -> Real:
     return x.__abs__()
 
 def all(it : Iterable[A]) -> bool:
@@ -437,8 +440,8 @@ def next(x : Iterator[A]) -> A:
 
 ord : (str) -> int
 
-def pow [A(Complex)] (a : A, b : A) -> A:
-  return Complex.__pow__(a,b)
+def pow [A(Number)] (a : A, b : A) -> A:
+  return Number.__pow__(a,b)
 
 print :  (*A) -> None
 

@@ -301,7 +301,7 @@ uniCon env (TC n [])
   where qn                  = unalias env n
 uniCon env _                = Nothing
 
-uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
+uniCons                     = [qnInt, qnFloat, qnBool, qnStr] ++ map NoQ [nInt, nFloat, nBool, nStr]
 
 uniElem us u@(ULit l)       = u `elem` us || UCon qnStr `elem` us
 uniElem us u                = u `elem` us
