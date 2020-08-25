@@ -1093,5 +1093,5 @@ ttype    =  addLoc (
 
 utype :: Parser S.UType
 utype    =  S.UCon <$> qual_name
-        <|> (\str -> S.ULit (init (tail str))) <$> shortString []
+        <|> (\str -> S.ULit str) <$> shortString []
 

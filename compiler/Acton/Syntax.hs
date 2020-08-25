@@ -256,7 +256,7 @@ tFun fx p k t   = TFun NoLoc fx p k t
 tTuple p k      = TTuple NoLoc p k
 tTupleP p       = TTuple NoLoc p kwdNil
 tTupleK k       = TTuple NoLoc posNil k
-tUnion ts       = TUnion NoLoc ts
+tUnion ts       = TUnion NoLoc (sort ts)
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
@@ -539,6 +539,11 @@ instance Eq Type where
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
 
+instance Ord UType where
+    UCon a              <= UCon b               = a <= b
+    UCon a              <= ULit b               = True
+    ULit a              <= ULit b               = a <= b
+    _                   <= _                    = False
 
 -- Show & Read ----------------
 

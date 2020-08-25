@@ -157,9 +157,9 @@ instance InfEnv Stmt where
             
             protocol PlusA              = pPlus
             protocol MinusA             = pMinus
-            protocol MultA              = pComplex
-            protocol PowA               = pComplex
-            protocol DivA               = pComplex
+            protocol MultA              = pNumber
+            protocol PowA               = pNumber
+            protocol DivA               = pNumber
             protocol ModA               = pIntegral
             protocol EuDivA             = pIntegral
             protocol ShiftLA            = pIntegral
@@ -596,9 +596,10 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env tvs
                                              return (cs1, Class l n q us b')        -- TODO: add wits(q) and eq1 to each def in b'
-      where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+      where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NClass _ _ te               = findName n env
+            s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ tybound q)))]
 
     checkEnv env (Protocol l n q us b)
                                         = do traceM ("## checkEnv protocol " ++ prstr n ++ render (brackets (commaSep pretty q)))
@@ -862,7 +863,8 @@ instance Infer Expr where
     infer env e@(None _)                = return ([], tNone, e)
     infer env e@(NotImplemented _)      = notYetExpr e
     infer env e@(Ellipsis _)            = notYetExpr e
-    infer env e@(Strings _ ss)          = return ([], tUnion [ULit $ concat ss], e)
+    infer env e@(Strings _ [s])         = return ([], tUnion [ULit s], e)
+    infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e
                                              (cs2,prow,ps') <- infer env ps
@@ -909,9 +911,9 @@ instance Infer Expr where
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
       where protocol Plus               = pPlus
             protocol Minus              = pMinus
-            protocol Mult               = pComplex
-            protocol Pow                = pComplex
-            protocol Div                = pComplex
+            protocol Mult               = pNumber
+            protocol Pow                = pNumber
+            protocol Div                = pNumber
             protocol Mod                = pIntegral
             protocol EuDiv              = pIntegral
             protocol ShiftL             = pIntegral
@@ -940,8 +942,8 @@ instance Infer Expr where
                                              w <- newWitness
                                              return (Impl w t (protocol op) :
                                                      cs, t, eCall (eDot (eVar w) (method op)) [e'])
-      where protocol UPlus              = pComplex
-            protocol UMinus             = pComplex
+      where protocol UPlus              = pNumber
+            protocol UMinus             = pNumber
             protocol BNot               = pIntegral
             method UPlus                = posKW
             method UMinus               = negKW

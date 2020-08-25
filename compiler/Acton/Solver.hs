@@ -217,8 +217,6 @@ cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
 
 cast' env (TUnion _ us1) (TUnion _ us2)
   | all (uniElem us2) us1                   = return ()
-cast' env (TUnion _ us1) t2
-  | all uniLit us1                          = unify env tStr t2
 cast' env (TCon _ c1) (TUnion _ us2)
   | uniConElem env us2 c1                   = return ()
 
@@ -277,6 +275,9 @@ cast' env t1@(TVar _ tv) t2
 cast' env t1 t2@(TVar _ tv)
   | univar tv                               = defer [Cast t1 t2]
   | otherwise                               = noRed (Cast t1 t2)
+
+cast' env (TUnion _ us1) t2
+  | all uniLit us1                          = cast env tStr t2              -- Only matches when t2 is NOT a variable
 
 cast' env t1 (TOpt _ t2)                    = cast env t1 t2                -- Only matches when t1 is NOT a variable
 
@@ -1079,7 +1080,7 @@ defaultmap                              = Map.fromList [
                                             (qnSliceable, [tList tWild, tStr]),
                                             (qnPlus, [tInt, tFloat, tStr, tList tWild]),
                                             (qnMinus, [tInt, tFloat, tSet tWild]),
-                                            (qnComplex, [tInt, tFloat]),
+                                            (qnNumber, [tInt, tFloat]),
                                             (qnReal, [tFloat, tInt]),
                                             (qnRational, [tFloat]),
                                             (qnIntegral, [tInt]),

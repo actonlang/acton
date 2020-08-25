@@ -313,7 +313,7 @@ uniConElem env us c
 uniNorm env l us
   | not $ null dups         = err l ("Duplicate union element: " ++ prstr (head dups))
   | otherwise               = us1
-  where us1                 = norm us
+  where us1                 = sort $ norm us
         dups                = duplicates us1
         norm []             = []
         norm (ULit l : us)  = ULit l : norm us
