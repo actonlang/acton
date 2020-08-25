@@ -410,7 +410,7 @@ instance InfEnv Decl where
                                              checkNoEscape env (tybound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols"
-                                             when (not (null asigs || inBuiltin env)) $ err2 asigs "Protocol method/attribute lacks implementation"
+                                             when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              return (cs1, [(extensionName n us, NExt n q ps te)], Extension l n q us b')
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
@@ -429,7 +429,7 @@ checkAttributes final te' te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
         nterms                          = exclude (dom allsigs) terms
-        abssigs                         = dom allsigs \\ dom allterms
+        abssigs                         = dom allsigs \\ (dom allterms ++ final)
         osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
@@ -559,14 +559,14 @@ instance Check Decl where
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                                  csx = [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) [] t1 (cswf++csp++csk++csb++cst++csx)
-                                             checkNoEscape env (tybound q)
+                                             (cs1,eq1) <- solveScoped env1 tvs [] t1 (cswf++csp++csk++csb++cst++csx)
+                                             checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchDefAssumption env cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
       where cswf                        = wellformed env (q,a)
-            env1f st                    = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $
-                                          maybeSetActorFX st env
+            env1f st                    = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ maybeSetActorFX st env
+            tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newTVar
@@ -577,14 +577,15 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (cswf++csp++csk++csb++cs0)
-                                             checkNoEscape env (tybound q)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (cswf++csp++csk++csb++cs0)
+                                             checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
                                              return (cs1, Actor l n q p' k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where cswf                        = wellformed env q
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ setInAct env
+            tvs                         = tybound q
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
@@ -592,10 +593,11 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tvSelf : tybound q)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
+                                             checkNoEscape env tvs
                                              return (cs1, Class l n q us b')        -- TODO: add wits(q) and eq1 to each def in b'
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+            tvs                         = tvSelf : tybound q
             NClass _ _ te               = findName n env
 
     checkEnv env (Protocol l n q us b)
@@ -603,10 +605,11 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tvSelf : tybound q)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
+                                             checkNoEscape env tvs
                                              return (cs1, Protocol l n q us b')     -- TODO: translate into class, add wits(q) to props, eq1 to __init__
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
+            tvs                         = tvSelf : tybound q
             NProto _ _ te               = findName n env
 
     checkEnv env (Extension l n q us b)
@@ -614,12 +617,14 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone (wellformed env1 (q,us)++csb)
-                                             checkNoEscape env (tvSelf : tybound q)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
+                                             checkNoEscape env tvs
                                              return (cs1, Extension l n q us b')   -- TODO: translate into class, add wits(q) to props, eq1 to __init__
-      where env1                        = define te $ defineSelf n q $ defineTVars q $ setInClass env
+      where env1                        = define (subst s te) $ defineSelf n q $ defineTVars q $ setInClass env
+            tvs                         = tvSelf : tybound q
             n'                          = extensionName n us
             NExt _ _ _ te               = findName n' env
+            s                           = [(tvSelf, tCon (TC n (map tVar $ tybound q)))]
 
 {-
 

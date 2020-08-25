@@ -1096,6 +1096,7 @@ err l s                             = Control.Exception.throw $ OtherError l s
 
 err1 x s                            = err (loc x) (s ++ " " ++ prstr x)
 err2 xs s                           = err (loc $ head xs) (s ++ " " ++ prstrs xs)
+err3 l xs s                         = err l (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
 
