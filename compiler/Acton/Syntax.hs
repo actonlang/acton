@@ -66,6 +66,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
+                | IsInstance    { eloc::SrcLoc, exp1::Expr, classref::QName }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Binary, exp2::Expr }
                 | CompOp        { eloc::SrcLoc, exp1::Expr, ops::[OpArg] }
                 | UnOp          { eloc::SrcLoc, uop::Unary, exp1::Expr }
@@ -461,6 +462,7 @@ instance Eq Expr where
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
     x@Cond{}            ==  y@Cond{}            = exp1 x == exp1 y && cond x == cond y && exp2 x == exp2 y
+    x@IsInstance{}      ==  y@IsInstance{}      = exp1 x == exp1 y && classref x == classref y
     x@BinOp{}           ==  y@BinOp{}           = exp1 x == exp1 y && bop x == bop y && exp2 x == exp2 y
     x@CompOp{}          ==  y@CompOp{}          = exp1 x == exp1 y && ops x == ops y
     x@UnOp{}            ==  y@UnOp{}            = uop x == uop y && exp1 x == exp1 y
@@ -582,8 +584,8 @@ isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
                                         "False","None","NotImplemented","Self","True","actor","after","and","as",
                                         "assert","await","break","class","continue","def","del","elif","else",
-                                        "except","extension","finally","for","from","if","import","in",
-                                        "is","lambda","not","or","protocol","pass","raise","return",
+                                        "except","extension","finally","for","from","if","import","in","is",
+                                        "isinstance","lambda","not","or","pass","protocol","raise","return",
                                         "try","var","while","with","yield"
                                       ]
 

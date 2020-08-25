@@ -101,6 +101,7 @@ instance Transform Expr where
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
     trans env (Cond l e1 e2 e3)         = Cond l (trans env e1) (trans env e2) (trans env e3)
+    trans env (IsInstance l e c)        = IsInstance l (trans env e) c
     trans env (BinOp l e1 op e2)        = BinOp l (trans env e1) op (trans env e2)
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)

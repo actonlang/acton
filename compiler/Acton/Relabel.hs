@@ -81,6 +81,7 @@ instance Relabel Expr where
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl
     relabel (Cond _ e1 e2 e3) = Cond <$> newLoc <*> relabel e1 <*> relabel e2 <*> relabel e3
+    relabel (IsInstance _ e c) = IsInstance <$> newLoc <*> relabel e <*> relabel c
     relabel (BinOp _ l op r) = BinOp <$> newLoc <*> relabel l <*> pure op <*> relabel r
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
     relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e 

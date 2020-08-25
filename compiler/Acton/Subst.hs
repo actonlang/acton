@@ -292,6 +292,7 @@ instance Subst Expr where
     msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
     msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl
     msubst (Cond l e1 cond e2)      = Cond l <$> msubst e1 <*> msubst cond <*> msubst e2
+    msubst (IsInstance l e c)       = IsInstance l <$> msubst e <*> return c
     msubst (BinOp l e1 op e2)       = BinOp l <$> msubst e1 <*> return op <*> msubst e2
     msubst (CompOp l e ops)         = CompOp l <$> msubst e <*> msubst ops
     msubst (UnOp l op e)            = UnOp l op <$> msubst e
