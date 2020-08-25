@@ -94,8 +94,8 @@ extern struct $struct$class $struct$methods;
 
 // object //////////////////////////////////////////////////////
 
-// All mutable user defined classes inherit from object, as well as
-// list, dict, set, bytearray
+// All mutable user defined classes inherit from object, 
+// as well as list, dict, set, bytearray
 
 typedef struct $object$class *$object$class;
 
@@ -117,3 +117,5 @@ struct $object {
 };
 
 extern struct $object$class $object$methods;
+
+  

@@ -2,8 +2,8 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $float_init($float self, $Real$opaque x){
-  self->val = x->proto->$class->__float__(x->proto,x->impl)->val;
+void $float_init($float self, $WORD x){
+  self->val = $float_fromatom(x)->val;
 }
 
 void $float_serialize($float self, $Serial$state state) {
@@ -39,6 +39,24 @@ $float to$float(double x) {
 double from$float($float x) {
   return x->val;
 }
+
+$float $float_fromatom($Super a) {
+  if ($ISINSTANCE(a,$int)) return to$float((double)(($int)a)->val);
+  if ($ISINSTANCE(a,$float)) return ($float)a;
+  if ($ISINSTANCE(a,$bool)) return to$float((double)(($bool)a)->val);
+  if ($ISINSTANCE(a,$str)) {
+    double x;
+    int c;
+    sscanf((char *)(($str)a)->str,"%lf%n",&x,&c);
+    if (c==(($str)a)->nbytes)
+      return to$float(x);
+    else
+      RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
+  }
+  fprintf(stderr,"float_fromatom: argument not of atomic type");
+  exit(1);
+}
+
 
 // $Real$float /////////////////////////////////////////////////////////////////////////
 
@@ -89,53 +107,57 @@ $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
 }
     
 
-// $Complex$float //////////////////////////////////////////////////////////////////////////////////////
+// $Number$float //////////////////////////////////////////////////////////////////////////////////////
 
-$bool $Complex$float$__eq__ ($Complex$float wit, $float a, $float b) {
+$bool $Number$float$__eq__ ($Number$float wit, $float a, $float b) {
   return to$bool(a->val == b->val);
 }
 
-$bool $Complex$float$__ne__ ($Complex$float wit, $float a, $float b) {
+$bool $Number$float$__ne__ ($Number$float wit, $float a, $float b) {
   return to$bool(a->val != b->val);
 }
 
-$complex $Complex$float$__complx__($Complex$float wit, $float a) {
+$float $Number$float$__fromatom__($Number$float wit, $WORD w) {
+  return $float_fromatom(w);
+}
+
+$complex $Number$float$__complx__($Number$float wit, $float a) {
   return to$complex(a->val);
 }
 
-$float $Complex$float$__mul__($Complex$float wit,  $float a, $float b) {
+$float $Number$float$__mul__($Number$float wit,  $float a, $float b) {
   return to$float(from$float(a) * from$float(b));
 }  
 
-$float $Complex$float$__truediv__($Complex$float wit,  $float a, $float b) {
+$float $Number$float$__truediv__($Number$float wit,  $float a, $float b) {
   return to$float(from$float(a) / from$float(b));
 }  
 
-$float $Complex$float$__pow__($Complex$float wit,  $float a, $float b) {
+$float $Number$float$__pow__($Number$float wit,  $float a, $float b) {
   return to$float(exp(from$float(b) * log(from$float(a))));
   }
 
-$float $Complex$float$__neg__($Complex$float wit, $float a) {
+$float $Number$float$__neg__($Number$float wit, $float a) {
   return to$float(-from$float(a));
 }
 
-$float $Complex$float$__pos__($Complex$float wit, $float a) {
+$float $Number$float$__pos__($Number$float wit, $float a) {
   return a;
 }
 
-$Real$opaque $Complex$float$real($Complex$float wit, $float a) {
+$Real$opaque $Number$float$real($Number$float wit, $float a) {
   return $Real$pack(($Real)$Real$float$witness,a);
 }
 
-$Real$opaque $Complex$float$imag($Complex$float wit,  $float a) {
+$Real$opaque $Number$float$imag($Number$float wit,  $float a) {
   return  $Real$pack(($Real)$Real$float$witness,to$float(0.0));
 }
 
-$Real$opaque $Complex$float$__abs__($Complex$float wit,  $float a) {
+$Real$opaque $Number$float$__abs__($Number$float wit,  $float a) {
   return  $Real$pack(($Real)$Real$float$witness,to$float(fabs(from$float(a))));
 }
 
-$float $Complex$float$conjugate($Complex$float wit,  $float a) {
+$float $Number$float$conjugate($Number$float wit,  $float a) {
   return a;
 }
 
@@ -168,25 +190,25 @@ $int $Hashable$float$__hash__($Hashable$float wit, $float a) {
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Real$float_init($Real$float wit) {
-  wit-> w$Complex$Real = $NEW($Complex$float,wit);
+  wit-> w$Number$Real = $NEW($Number$float,wit);
 };
 
-void $Complex$float_init($Complex$float wit, $Real$float w$Real$float) {
+void $Number$float_init($Number$float wit, $Real$float w$Real$float) {
   wit->w$Real$float = w$Real$float;
-  wit-> w$Plus$Complex = $NEW($Plus$float,wit);
-  wit-> w$Minus$Complex = $NEW($Minus$float,wit);
+  wit-> w$Plus$Number = $NEW($Plus$float,wit);
+  wit-> w$Minus$Number = $NEW($Minus$float,wit);
 }
 
-void $Plus$float_init($Plus$float wit, $Complex$float w$Complex$float) {
-  wit->w$Complex$float =  w$Complex$float;
+void $Plus$float_init($Plus$float wit, $Number$float w$Number$float) {
+  wit->w$Number$float =  w$Number$float;
 }
 
-void $Minus$float_init($Minus$float wit, $Complex$float w$Complex$float) {
-  wit->w$Complex$float =  w$Complex$float;
+void $Minus$float_init($Minus$float wit, $Number$float w$Number$float) {
+  wit->w$Number$float =  w$Number$float;
 }
 
  struct $Real$float $Real$float_instance;
- struct $Complex$float $Complex$float_instance;
+ struct $Number$float $Number$float_instance;
  struct $Plus$float $Plus$float_instance;
  struct $Minus$float $Minus$float_instance;
  struct $Hashable$float $Hashable$float_instance;
@@ -198,18 +220,18 @@ struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float
  $Real$float $Real$float$witness = &$Real$float_instance;
 
 
-struct $Complex$float$class $Complex$float$methods = {"", UNASSIGNED,NULL, $Complex$float_init,$Complex$float$__eq__,$Complex$float$__ne__,$Complex$float$__complx__,
-                                               $Complex$float$__mul__,$Complex$float$__truediv__,$Complex$float$__pow__,$Complex$float$__neg__,
-                                               $Complex$float$__pos__,$Complex$float$real,$Complex$float$imag,$Complex$float$__abs__,$Complex$float$conjugate};
- struct $Complex$float $Complex$float_instance = {&$Complex$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
- $Complex$float $Complex$float$witness = &$Complex$float_instance;
+struct $Number$float$class $Number$float$methods = {"", UNASSIGNED,NULL, $Number$float_init,$Number$float$__eq__,$Number$float$__ne__,$Number$float$__fromatom__,$Number$float$__complx__,
+                                               $Number$float$__mul__,$Number$float$__truediv__,$Number$float$__pow__,$Number$float$__neg__,
+                                               $Number$float$__pos__,$Number$float$real,$Number$float$imag,$Number$float$__abs__,$Number$float$conjugate};
+ struct $Number$float $Number$float_instance = {&$Number$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
+ $Number$float $Number$float$witness = &$Number$float_instance;
 
 struct $Plus$float$class $Plus$float$methods = {"", UNASSIGNED,NULL, $Plus$float_init,$Plus$float$__add__};
- struct $Plus$float $Plus$float_instance = {&$Plus$float$methods, &$Complex$float_instance};
+ struct $Plus$float $Plus$float_instance = {&$Plus$float$methods, &$Number$float_instance};
  $Plus$float $Plus$float$witness = &$Plus$float_instance;
 
 struct $Minus$float$class $Minus$float$methods = {"", UNASSIGNED,NULL, $Minus$float_init,$Minus$float$__sub__};
- struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Complex$float_instance};
+ struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Number$float_instance};
  $Minus$float $Minus$float$witness = &$Minus$float_instance;
 
 struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$float))$default__init__,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};

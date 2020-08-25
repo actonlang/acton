@@ -61,9 +61,9 @@
 
 
 /* 
- * Register the builtin classes (those with the above class id's). This must be the first registration call,
- *  since it also initializes the data structures containing the mapping. 
- * This call does *not* register the rts class id's MSG_ID  -- ITEM_ID, which must be registered by 
+ * Register the builtin classes (those with the above class id's except MSG_ID  -- RETNEW_ID). 
+ * This must be the first registration call, since it also initializes the data structures containing the mapping. 
+ * This call does *not* register the rts class id's MSG_ID  -- RETNEW_ID, which must be registered by 
  * a call to register_rts in rts.h. 
  */
 
@@ -85,6 +85,8 @@ void $register_force(int classid, $WORD meths);
 
 #define $GET_METHODS(classid)  (($Serializable$class)$list_getitem($methods,classid))
 
-// list of method tables indexed by class_id. Only accessed via GET_METHODS above-
+// list of method tables indexed by class_id. Only accessed via GET_METHODS above
 
 $list $methods;
+
+$bool issubtype(int sub_id, int ancestor_id); 

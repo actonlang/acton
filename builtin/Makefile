@@ -1,5 +1,5 @@
 all:
-	gcc -c builtin.c
+	gcc -c -O3 builtin.c
 	cd tests && $(MAKE)
 	cd serialization_tests && $(MAKE)
 clean:

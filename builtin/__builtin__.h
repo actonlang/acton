@@ -253,14 +253,14 @@ typedef struct $Set$class *$Set$class;
 struct $Set$opaque;
 typedef struct $Set$opaque *$Set$opaque;
 
-struct $Complex;
-typedef struct $Complex *$Complex;
+struct $Number;
+typedef struct $Number *$Number;
 
-struct $Complex$class;
-typedef struct $Complex$class *$Complex$class;
+struct $Number$class;
+typedef struct $Number$class *$Number$class;
 
-struct $Complex$opaque;
-typedef struct $Complex$opaque *$Complex$opaque;
+struct $Number$opaque;
+typedef struct $Number$opaque *$Number$opaque;
 
 struct $Real;
 typedef struct $Real *$Real;
@@ -415,11 +415,11 @@ typedef struct $Logical$int *$Logical$int;
 struct $Logical$int$class;
 typedef struct $Logical$int$class *$Logical$int$class;
 
-struct $Complex$int;
-typedef struct $Complex$int *$Complex$int;
+struct $Number$int;
+typedef struct $Number$int *$Number$int;
 
-struct $Complex$int$class;
-typedef struct $Complex$int$class *$Complex$int$class;
+struct $Number$int$class;
+typedef struct $Number$int$class *$Number$int$class;
 
 struct $Plus$int;
 typedef struct $Plus$int *$Plus$int;
@@ -445,11 +445,11 @@ typedef struct $Real$float *$Real$float;
 struct $Real$float$class;
 typedef struct $Real$float$class *$Real$float$class;
 
-struct $Complex$float;
-typedef struct $Complex$float *$Complex$float;
+struct $Number$float;
+typedef struct $Number$float *$Number$float;
 
-struct $Complex$float$class;
-typedef struct $Complex$float$class *$Complex$float$class;
+struct $Number$float$class;
+typedef struct $Number$float$class *$Number$float$class;
 
 struct $Plus$float;
 typedef struct $Plus$float *$Plus$float;
@@ -469,11 +469,11 @@ typedef struct $Hashable$float *$Hashable$float;
 struct $Hashable$float$class;
 typedef struct $Hashable$float$class *$Hashable$float$class;
 
-struct $Complex$complex;
-typedef struct $Complex$complex *$Complex$complex;
+struct $Number$complex;
+typedef struct $Number$complex *$Number$complex;
 
-struct $Complex$complex$class;
-typedef struct $Complex$complex$class *$Complex$complex$class;
+struct $Number$complex$class;
+typedef struct $Number$complex$class *$Number$complex$class;
 
 struct $Plus$complex;
 typedef struct $Plus$complex *$Plus$complex;
@@ -943,48 +943,49 @@ struct $Set$opaque {
 $Set$opaque $Set$pack($Set proto, $WORD impl);
 
 
-// $Complex ////////////////////////////////////////////////////////////
+// $Number ////////////////////////////////////////////////////////////
 
-struct $Complex {
-    $Complex$class $class;
-    $Plus w$Plus$Complex;
-    $Minus w$Minus$Complex;
+struct $Number {
+    $Number$class $class;
+    $Plus w$Plus$Number;
+    $Minus w$Minus$Number;
 };
 
-struct $Complex$class {
+struct $Number$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Complex);
-    $bool (*__eq__)($Complex, $WORD, $WORD);
-    $bool (*__ne__)($Complex, $WORD, $WORD);
-    $complex (*__complx__)($Complex, $WORD);
-    $WORD (*__mul__)($Complex, $WORD, $WORD);
-    $WORD (*__truediv__)($Complex, $WORD, $WORD);
-    $WORD (*__pow__)($Complex, $WORD, $WORD);
-    $WORD (*__neg__)($Complex, $WORD);
-    $WORD (*__pos__)($Complex, $WORD);
-    $Real$opaque (*real)($Complex, $WORD);
-    $Real$opaque (*imag)($Complex, $WORD);
-    $Real$opaque (*__abs__)($Complex, $WORD);
-    $WORD (*conjugate)($Complex, $WORD);
+    void (*__init__)($Number);
+    $bool (*__eq__)($Number, $WORD, $WORD);
+    $bool (*__ne__)($Number, $WORD, $WORD);
+    $WORD (*__fromatom__)($Number,$WORD);
+    $complex (*__complx__)($Number, $WORD);
+    $WORD (*__mul__)($Number, $WORD, $WORD);
+    $WORD (*__truediv__)($Number, $WORD, $WORD);
+    $WORD (*__pow__)($Number, $WORD, $WORD);
+    $WORD (*__neg__)($Number, $WORD);
+    $WORD (*__pos__)($Number, $WORD);
+    $Real$opaque (*real)($Number, $WORD);
+    $Real$opaque (*imag)($Number, $WORD);
+    $Real$opaque (*__abs__)($Number, $WORD);
+    $WORD (*conjugate)($Number, $WORD);
 };
 
-struct $Complex$opaque {
+struct $Number$opaque {
     char *$GCINFO;
     int $class_id;
-    $Complex proto;
+    $Number proto;
     $WORD impl;
 };
 
-$Complex$opaque $Complex$pack($Complex proto, $WORD impl);
+$Number$opaque $Number$pack($Number proto, $WORD impl);
 
 
 // $Real ////////////////////////////////////////////////////////////
 
 struct $Real {
     $Real$class $class;
-    $Complex w$Complex$Real;
+    $Number w$Number$Real;
 };
 
 struct $Real$class {
@@ -1582,7 +1583,7 @@ $int $Hashable$str$__hash__ ($Hashable$str, $str);
 struct $Integral$int {
     $Integral$int$class $class;
     $Logical$int w$Logical$Integral;
-    $Complex$int w$Complex$Integral;
+    $Number$int w$Number$Integral;
 };
 
 struct $Integral$int$class {
@@ -1658,82 +1659,84 @@ $int $Logical$int$__and__ ($Logical$int, $int, $int);
 $int $Logical$int$__or__ ($Logical$int, $int, $int);
 $int $Logical$int$__xor__ ($Logical$int, $int, $int);
 
-// $Complex$int ////////////////////////////////////////////////////////////
+// $Number$int ////////////////////////////////////////////////////////////
 
-struct $Complex$int {
-    $Complex$int$class $class;
+struct $Number$int {
+    $Number$int$class $class;
     $Integral$int w$Integral$int;
-    $Plus$int w$Plus$Complex;
-    $Minus$int w$Minus$Complex;
+    $Plus$int w$Plus$Number;
+    $Minus$int w$Minus$Number;
 };
 
-struct $Complex$int$class {
+struct $Number$int$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Complex$int, $Integral$int);
-    $bool (*__eq__)($Complex$int, $int, $int);
-    $bool (*__ne__)($Complex$int, $int, $int);
-    $complex (*__complx__)($Complex$int, $int);
-    $int (*__mul__)($Complex$int, $int, $int);
-    $int (*__truediv__)($Complex$int, $int, $int);
-    $int (*__pow__)($Complex$int, $int, $int);
-    $int (*__neg__)($Complex$int, $int);
-    $int (*__pos__)($Complex$int, $int);
-    $Real$opaque (*real)($Complex$int, $int);
-    $Real$opaque (*imag)($Complex$int, $int);
-    $Real$opaque (*__abs__)($Complex$int, $int);
-    $int (*conjugate)($Complex$int, $int);
+    void (*__init__)($Number$int, $Integral$int);
+    $bool (*__eq__)($Number$int, $int, $int);
+    $bool (*__ne__)($Number$int, $int, $int);
+    $int (*__fromatom__)($Number$int,$WORD);
+    $complex (*__complx__)($Number$int, $int);
+    $int (*__mul__)($Number$int, $int, $int);
+    $int (*__truediv__)($Number$int, $int, $int);
+    $int (*__pow__)($Number$int, $int, $int);
+    $int (*__neg__)($Number$int, $int);
+    $int (*__pos__)($Number$int, $int);
+    $Real$opaque (*real)($Number$int, $int);
+    $Real$opaque (*imag)($Number$int, $int);
+    $Real$opaque (*__abs__)($Number$int, $int);
+    $int (*conjugate)($Number$int, $int);
 };
 
-void $Complex$int$__init__ ($Complex$int, $Integral$int);
-$bool $Complex$int$__eq__ ($Complex$int, $int, $int);
-$bool $Complex$int$__ne__ ($Complex$int, $int, $int);
-$complex $Complex$int__complx__ ($Complex$int, $int);
-$int $Complex$int$__mul__ ($Complex$int, $int, $int);
-$int $Complex$int$__truediv__ ($Complex$int, $int, $int);
-$int $Complex$int$__pow__ ($Complex$int, $int, $int);
-$int $Complex$int$__neg__ ($Complex$int, $int);
-$int $Complex$int$__pos__ ($Complex$int, $int);
-$Real$opaque $Complex$int$real ($Complex$int, $int);
-$Real$opaque $Complex$int$imag ($Complex$int, $int);
-$Real$opaque $Complex$int$__abs__ ($Complex$int, $int);
-$int $Complex$int$conjugate ($Complex$int, $int);
+void $Number$int$__init__ ($Number$int, $Integral$int);
+$bool $Number$int$__eq__ ($Number$int, $int, $int);
+$bool $Number$int$__ne__ ($Number$int, $int, $int);
+$int $Number$int__fromatom__ ($Number$int, $WORD);
+$complex $Number$int__complx__ ($Number$int, $int);
+$int $Number$int$__mul__ ($Number$int, $int, $int);
+$int $Number$int$__truediv__ ($Number$int, $int, $int);
+$int $Number$int$__pow__ ($Number$int, $int, $int);
+$int $Number$int$__neg__ ($Number$int, $int);
+$int $Number$int$__pos__ ($Number$int, $int);
+$Real$opaque $Number$int$real ($Number$int, $int);
+$Real$opaque $Number$int$imag ($Number$int, $int);
+$Real$opaque $Number$int$__abs__ ($Number$int, $int);
+$int $Number$int$conjugate ($Number$int, $int);
 
 // $Plus$int ////////////////////////////////////////////////////////////
 
 struct $Plus$int {
     $Plus$int$class $class;
-    $Complex$int w$Complex$int;
+    $Number$int w$Number$int;
 };
 
 struct $Plus$int$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$int, $Complex$int);
+    void (*__init__)($Plus$int, $Number$int);
     $int (*__add__)($Plus$int, $int, $int);
 };
 
-void $Plus$int$__init__ ($Plus$int, $Complex$int);
+void $Plus$int$__init__ ($Plus$int, $Number$int);
 $int $Plus$int$__add__ ($Plus$int, $int, $int);
 
 // $Minus$int ////////////////////////////////////////////////////////////
 
 struct $Minus$int {
     $Minus$int$class $class;
-    $Complex$int w$Complex$int;
+    $Number$int w$Number$int;
 };
 
 struct $Minus$int$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$int, $Complex$int);
+    void (*__init__)($Minus$int, $Number$int);
     $int (*__sub__)($Minus$int, $int, $int);
 };
 
-void $Minus$int$__init__ ($Minus$int, $Complex$int);
+void $Minus$int$__init__ ($Minus$int, $Number$int);
 $int $Minus$int$__sub__ ($Minus$int, $int, $int);
 
 // $Hashable$int ////////////////////////////////////////////////////////////
@@ -1761,7 +1764,7 @@ $int $Hashable$int$__hash__ ($Hashable$int, $int);
 
 struct $Real$float {
     $Real$float$class $class;
-    $Complex$float w$Complex$Real;
+    $Number$float w$Number$Real;
 };
 
 struct $Real$float$class {
@@ -1795,82 +1798,84 @@ $Integral$opaque $Real$float$__floor__ ($Real$float, $float);
 $Integral$opaque $Real$float$__ceil__ ($Real$float, $float);
 $float $Real$float$__round__ ($Real$float, $float, $int);
 
-// $Complex$float ////////////////////////////////////////////////////////////
+// $Number$float ////////////////////////////////////////////////////////////
 
-struct $Complex$float {
-    $Complex$float$class $class;
+struct $Number$float {
+    $Number$float$class $class;
     $Real$float w$Real$float;
-    $Plus$float w$Plus$Complex;
-    $Minus$float w$Minus$Complex;
+    $Plus$float w$Plus$Number;
+    $Minus$float w$Minus$Number;
 };
 
-struct $Complex$float$class {
+struct $Number$float$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Complex$float, $Real$float);
-    $bool (*__eq__)($Complex$float, $float, $float);
-    $bool (*__ne__)($Complex$float, $float, $float);
-    $complex (*__complx__)($Complex$float, $float);
-    $float (*__mul__)($Complex$float, $float, $float);
-    $float (*__truediv__)($Complex$float, $float, $float);
-    $float (*__pow__)($Complex$float, $float, $float);
-    $float (*__neg__)($Complex$float, $float);
-    $float (*__pos__)($Complex$float, $float);
-    $Real$opaque (*real)($Complex$float, $float);
-    $Real$opaque (*imag)($Complex$float, $float);
-    $Real$opaque (*__abs__)($Complex$float, $float);
-    $float (*conjugate)($Complex$float, $float);
+    void (*__init__)($Number$float, $Real$float);
+    $bool (*__eq__)($Number$float, $float, $float);
+    $bool (*__ne__)($Number$float, $float, $float);
+    $float (*__fromatom__)($Number$float, $WORD);
+    $complex (*__complx__)($Number$float, $float);
+    $float (*__mul__)($Number$float, $float, $float);
+    $float (*__truediv__)($Number$float, $float, $float);
+    $float (*__pow__)($Number$float, $float, $float);
+    $float (*__neg__)($Number$float, $float);
+    $float (*__pos__)($Number$float, $float);
+    $Real$opaque (*real)($Number$float, $float);
+    $Real$opaque (*imag)($Number$float, $float);
+    $Real$opaque (*__abs__)($Number$float, $float);
+    $float (*conjugate)($Number$float, $float);
 };
 
-void $Complex$float$__init__ ($Complex$float, $Real$float);
-$bool $Complex$float$__eq__ ($Complex$float, $float, $float);
-$bool $Complex$float$__ne__ ($Complex$float, $float, $float);
-$complex $Complex$float__complx__ ($Complex$float, $float);
-$float $Complex$float$__mul__ ($Complex$float, $float, $float);
-$float $Complex$float$__truediv__ ($Complex$float, $float, $float);
-$float $Complex$float$__pow__ ($Complex$float, $float, $float);
-$float $Complex$float$__neg__ ($Complex$float, $float);
-$float $Complex$float$__pos__ ($Complex$float, $float);
-$Real$opaque $Complex$float$real ($Complex$float, $float);
-$Real$opaque $Complex$float$imag ($Complex$float, $float);
-$Real$opaque $Complex$float$__abs__ ($Complex$float, $float);
-$float $Complex$float$conjugate ($Complex$float, $float);
+void $Number$float$__init__ ($Number$float, $Real$float);
+$bool $Number$float$__eq__ ($Number$float, $float, $float);
+$bool $Number$float$__ne__ ($Number$float, $float, $float);
+$float $Number$float$__fromatom__($Number$float, $WORD);
+$complex $Number$float__complx__ ($Number$float, $float);
+$float $Number$float$__mul__ ($Number$float, $float, $float);
+$float $Number$float$__truediv__ ($Number$float, $float, $float);
+$float $Number$float$__pow__ ($Number$float, $float, $float);
+$float $Number$float$__neg__ ($Number$float, $float);
+$float $Number$float$__pos__ ($Number$float, $float);
+$Real$opaque $Number$float$real ($Number$float, $float);
+$Real$opaque $Number$float$imag ($Number$float, $float);
+$Real$opaque $Number$float$__abs__ ($Number$float, $float);
+$float $Number$float$conjugate ($Number$float, $float);
 
 // $Plus$float ////////////////////////////////////////////////////////////
 
 struct $Plus$float {
     $Plus$float$class $class;
-    $Complex$float w$Complex$float;
+    $Number$float w$Number$float;
 };
 
 struct $Plus$float$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$float, $Complex$float);
+    void (*__init__)($Plus$float, $Number$float);
     $float (*__add__)($Plus$float, $float, $float);
 };
 
-void $Plus$float$__init__ ($Plus$float, $Complex$float);
+void $Plus$float$__init__ ($Plus$float, $Number$float);
 $float $Plus$float$__add__ ($Plus$float, $float, $float);
 
 // $Minus$float ////////////////////////////////////////////////////////////
 
 struct $Minus$float {
     $Minus$float$class $class;
-    $Complex$float w$Complex$float;
+    $Number$float w$Number$float;
 };
 
 struct $Minus$float$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$float, $Complex$float);
+    void (*__init__)($Minus$float, $Number$float);
     $float (*__sub__)($Minus$float, $float, $float);
 };
 
-void $Minus$float$__init__ ($Minus$float, $Complex$float);
+void $Minus$float$__init__ ($Minus$float, $Number$float);
 $float $Minus$float$__sub__ ($Minus$float, $float, $float);
 
 // $Hashable$float ////////////////////////////////////////////////////////////
@@ -1894,81 +1899,81 @@ $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
 
-// $Complex$complex ////////////////////////////////////////////////////////////
+// $Number$complex ////////////////////////////////////////////////////////////
 
-struct $Complex$complex {
-    $Complex$complex$class $class;
-    $Plus$complex w$Plus$Complex;
-    $Minus$complex w$Minus$Complex;
+struct $Number$complex {
+    $Number$complex$class $class;
+    $Plus$complex w$Plus$Number;
+    $Minus$complex w$Minus$Number;
 };
 
-struct $Complex$complex$class {
+struct $Number$complex$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Complex$complex);
-    $bool (*__eq__)($Complex$complex, $complex, $complex);
-    $bool (*__ne__)($Complex$complex, $complex, $complex);
-    $complex (*__complx__)($Complex$complex, $complex);
-    $complex (*__mul__)($Complex$complex, $complex, $complex);
-    $complex (*__truediv__)($Complex$complex, $complex, $complex);
-    $complex (*__pow__)($Complex$complex, $complex, $complex);
-    $complex (*__neg__)($Complex$complex, $complex);
-    $complex (*__pos__)($Complex$complex, $complex);
-    $Real$opaque (*real)($Complex$complex, $complex);
-    $Real$opaque (*imag)($Complex$complex, $complex);
-    $Real$opaque (*__abs__)($Complex$complex, $complex);
-    $complex (*conjugate)($Complex$complex, $complex);
+    void (*__init__)($Number$complex);
+    $bool (*__eq__)($Number$complex, $complex, $complex);
+    $bool (*__ne__)($Number$complex, $complex, $complex);
+    $complex (*__complx__)($Number$complex, $complex);
+    $complex (*__mul__)($Number$complex, $complex, $complex);
+    $complex (*__truediv__)($Number$complex, $complex, $complex);
+    $complex (*__pow__)($Number$complex, $complex, $complex);
+    $complex (*__neg__)($Number$complex, $complex);
+    $complex (*__pos__)($Number$complex, $complex);
+    $Real$opaque (*real)($Number$complex, $complex);
+    $Real$opaque (*imag)($Number$complex, $complex);
+    $Real$opaque (*__abs__)($Number$complex, $complex);
+    $complex (*conjugate)($Number$complex, $complex);
 };
 
-void $Complex$complex$__init__ ($Complex$complex);
-$bool $Complex$complex$__eq__ ($Complex$complex, $complex, $complex);
-$bool $Complex$complex$__ne__ ($Complex$complex, $complex, $complex);
-$complex $Complex$complex$__complx__ ($Complex$complex, $complex);
-$complex $Complex$complex$__mul__ ($Complex$complex, $complex, $complex);
-$complex $Complex$complex$__truediv__ ($Complex$complex, $complex, $complex);
-$complex $Complex$complex$__pow__ ($Complex$complex, $complex, $complex);
-$complex $Complex$complex$__neg__ ($Complex$complex, $complex);
-$complex $Complex$complex$__pos__ ($Complex$complex, $complex);
-$Real$opaque $Complex$complex$real ($Complex$complex, $complex);
-$Real$opaque $Complex$complex$imag ($Complex$complex, $complex);
-$Real$opaque $Complex$complex$__abs__ ($Complex$complex, $complex);
-$complex $Complex$complex$conjugate ($Complex$complex, $complex);
+void $Number$complex$__init__ ($Number$complex);
+$bool $Number$complex$__eq__ ($Number$complex, $complex, $complex);
+$bool $Number$complex$__ne__ ($Number$complex, $complex, $complex);
+$complex $Number$complex$__complx__ ($Number$complex, $complex);
+$complex $Number$complex$__mul__ ($Number$complex, $complex, $complex);
+$complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);
+$complex $Number$complex$__pow__ ($Number$complex, $complex, $complex);
+$complex $Number$complex$__neg__ ($Number$complex, $complex);
+$complex $Number$complex$__pos__ ($Number$complex, $complex);
+$Real$opaque $Number$complex$real ($Number$complex, $complex);
+$Real$opaque $Number$complex$imag ($Number$complex, $complex);
+$Real$opaque $Number$complex$__abs__ ($Number$complex, $complex);
+$complex $Number$complex$conjugate ($Number$complex, $complex);
 
 // $Plus$complex ////////////////////////////////////////////////////////////
 
 struct $Plus$complex {
     $Plus$complex$class $class;
-    $Complex$complex w$Complex$complex;
+    $Number$complex w$Number$complex;
 };
 
 struct $Plus$complex$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$complex, $Complex$complex);
+    void (*__init__)($Plus$complex, $Number$complex);
     $complex (*__add__)($Plus$complex, $complex, $complex);
 };
 
-void $Plus$complex$__init__ ($Plus$complex, $Complex$complex);
+void $Plus$complex$__init__ ($Plus$complex, $Number$complex);
 $complex $Plus$complex$__add__ ($Plus$complex, $complex, $complex);
 
 // $Minus$complex ////////////////////////////////////////////////////////////
 
 struct $Minus$complex {
     $Minus$complex$class $class;
-    $Complex$complex w$Complex$complex;
+    $Number$complex w$Number$complex;
 };
 
 struct $Minus$complex$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$complex, $Complex$complex);
+    void (*__init__)($Minus$complex, $Number$complex);
     $complex (*__sub__)($Minus$complex, $complex, $complex);
 };
 
-void $Minus$complex$__init__ ($Minus$complex, $Complex$complex);
+void $Minus$complex$__init__ ($Minus$complex, $Number$complex);
 $complex $Minus$complex$__sub__ ($Minus$complex, $complex, $complex);
 
 // $Hashable$complex ////////////////////////////////////////////////////////////

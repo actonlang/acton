@@ -10,8 +10,8 @@ static long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $int_init($int self, $Integral$opaque n){
-  self->val = n->proto->$class->__int__(n->proto,n->impl)->val;
+void $int_init($int self, $WORD a){
+  self->val = $int_fromatom(a)->val;
 }
 
 void $int_serialize($int n,$Serial$state state) {
@@ -45,6 +45,26 @@ long from$int($int w) {
   return w->val;
 }
 */
+
+$int $int_fromatom($Super a) {
+  if ($ISINSTANCE(a,$int)) return ($int)a;
+  if ($ISINSTANCE(a,$float)) return to$int(round((($float)a)->val));
+  if ($ISINSTANCE(a,$bool)) return to$int((($bool)a)->val);
+  if ($ISINSTANCE(a,$str)) {
+    long x;
+    int c;
+    sscanf((char *)(($str)a)->str,"%ld%n",&x,&c);
+    if (c==(($str)a)->nbytes)
+      return to$int(x);
+    else 
+      RAISE(($BaseException)$NEW($ValueError,to$str("int_fromatom(): invalid str literal for type int")));
+  }
+  fprintf(stderr,"int_fromatom: argument not of atomic type");
+  exit(1);
+}
+
+                  
+
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
 $bool $Integral$int$__eq__ ($Integral$int wit, $int a, $int b) {
@@ -161,32 +181,36 @@ $int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
   return to$int(a->val ^ b->val);
 }  
 
-// $Complex$int //////////////////////////////////////////////////////////////////////////////////////
+// $Number$int //////////////////////////////////////////////////////////////////////////////////////
 
-$bool $Complex$int$__eq__ ($Complex$int wit, $int a, $int b) {
+$bool $Number$int$__eq__ ($Number$int wit, $int a, $int b) {
   return to$bool(a->val == b->val);
 }
 
-$bool $Complex$int$__ne__ ($Complex$int wit, $int a, $int b) {
+$bool $Number$int$__ne__ ($Number$int wit, $int a, $int b) {
   return to$bool(a->val != b->val);
 }
 
-$complex $Complex$int$__complx__($Complex$int wit, $int a) {
+$int $Number$int$__fromatom__($Number$int wit,$WORD w) {
+  return $int_fromatom(w);
+}
+
+$complex $Number$int$__complx__($Number$int wit, $int a) {
   return to$complex((double)a->val);
 }
 
-$int $Complex$int$__mul__($Complex$int wit,  $int a, $int b) {
+$int $Number$int$__mul__($Number$int wit,  $int a, $int b) {
   return to$int(a->val * b->val);
 }  
 
 // The typechecker will reject true division between two integers.
-$int $Complex$int$__truediv__($Complex$int wit,  $int a, $int b) {
+$int $Number$int$__truediv__($Number$int wit,  $int a, $int b) {
   // raise NOTIMPLEMENTED
   return NULL;
 }  
 
   
-$int $Complex$int$__pow__($Complex$int wit,  $int a, $int b) {
+$int $Number$int$__pow__($Number$int wit,  $int a, $int b) {
   if ( b->val < 0) {
     // raise VALUEERROR;
     return NULL;
@@ -194,27 +218,27 @@ $int $Complex$int$__pow__($Complex$int wit,  $int a, $int b) {
   return to$int(longpow(a->val,b->val));
 }
 
-$int $Complex$int$__neg__($Complex$int wit,  $int a) {
+$int $Number$int$__neg__($Number$int wit,  $int a) {
   return to$int(-a->val);
 }
 
-$int $Complex$int$__pos__($Complex$int wit,  $int a) {
+$int $Number$int$__pos__($Number$int wit,  $int a) {
   return a;
 }
 
-$Real$opaque $Complex$int$real($Complex$int wit,  $int a) {
+$Real$opaque $Number$int$real($Number$int wit,  $int a) {
   return $Real$pack(($Real)wit,a);
 }
 
-$Real$opaque $Complex$int$imag($Complex$int wit,  $int a) {
+$Real$opaque $Number$int$imag($Number$int wit,  $int a) {
   return  $Real$pack(($Real)wit,to$int(0L));
 }
 
-$Real$opaque $Complex$int$__abs__($Complex$int wit,  $int a) {
+$Real$opaque $Number$int$__abs__($Number$int wit,  $int a) {
   return  $Real$pack(($Real)wit,to$int(labs(a->val)));
 }
 
-$int $Complex$int$__conjugate__($Complex$int wit,  $int a) {
+$int $Number$int$__conjugate__($Number$int wit,  $int a) {
   return a;
 }
 
@@ -245,31 +269,31 @@ $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
 }
 
 void $Integral$int_init($Integral$int wit) {
-  wit-> w$Complex$Integral = $NEW($Complex$int,wit);
+  wit-> w$Number$Integral = $NEW($Number$int,wit);
   wit-> w$Logical$Integral = $NEW($Logical$int,wit);
 };
 
-void $Complex$int_init($Complex$int wit, $Integral$int w$Integral$int) {
+void $Number$int_init($Number$int wit, $Integral$int w$Integral$int) {
   wit->w$Integral$int = w$Integral$int;
-  wit-> w$Plus$Complex = $NEW($Plus$int,wit);
-  wit-> w$Minus$Complex = $NEW($Minus$int,wit);
+  wit-> w$Plus$Number = $NEW($Plus$int,wit);
+  wit-> w$Minus$Number = $NEW($Minus$int,wit);
 }
 
 void $Logical$int_init($Logical$int wit, $Integral$int w$Integral$int) {
   wit->w$Integral$int =  w$Integral$int;
 }
 
-void $Plus$int_init($Plus$int wit, $Complex$int w$Complex$int) {
-  wit->w$Complex$int =  w$Complex$int;
+void $Plus$int_init($Plus$int wit, $Number$int w$Number$int) {
+  wit->w$Number$int =  w$Number$int;
 }
 
-void $Minus$int_init($Minus$int wit, $Complex$int w$Complex$int) {
-  wit->w$Complex$int =  w$Complex$int;
+void $Minus$int_init($Minus$int wit, $Number$int w$Number$int) {
+  wit->w$Number$int =  w$Number$int;
 }
 
 struct $Integral$int $Integral$int_instance;
 struct $Logical$int $Logical$int_instance;
-struct $Complex$int $Complex$int_instance;
+struct $Number$int $Number$int_instance;
 struct $Plus$int $Plus$int_instance;
 struct $Minus$int $Minus$int_instance;
 struct $Hashable$int $Hashable$int_instance;
@@ -288,18 +312,18 @@ struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, &$Integral$i
 $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
 
-struct $Complex$int$class $Complex$int$methods = {"", UNASSIGNED,NULL,$Complex$int_init, $Complex$int$__eq__,$Complex$int$__ne__,$Complex$int$__complx__,
-                                               $Complex$int$__mul__,$Complex$int$__truediv__,$Complex$int$__pow__,$Complex$int$__neg__,
-                                               $Complex$int$__pos__,$Complex$int$real,$Complex$int$imag,$Complex$int$__abs__,$Complex$int$__conjugate__};
-struct $Complex$int $Complex$int_instance = {&$Complex$int$methods, &$Integral$int_instance, &$Plus$int_instance, &$Minus$int_instance};
-$Complex$int $Complex$int$witness = &$Complex$int_instance;
+struct $Number$int$class $Number$int$methods = {"", UNASSIGNED,NULL,$Number$int_init, $Number$int$__eq__,$Number$int$__ne__,$Number$int$__fromatom__,$Number$int$__complx__,
+                                               $Number$int$__mul__,$Number$int$__truediv__,$Number$int$__pow__,$Number$int$__neg__,
+                                               $Number$int$__pos__,$Number$int$real,$Number$int$imag,$Number$int$__abs__,$Number$int$__conjugate__};
+struct $Number$int $Number$int_instance = {&$Number$int$methods, &$Integral$int_instance, &$Plus$int_instance, &$Minus$int_instance};
+$Number$int $Number$int$witness = &$Number$int_instance;
 
 struct $Plus$int$class $Plus$int$methods = {"",UNASSIGNED,NULL,$Plus$int_init, $Plus$int$__add__};
-struct $Plus$int $Plus$int_instance = {&$Plus$int$methods, &$Complex$int_instance};
+struct $Plus$int $Plus$int_instance = {&$Plus$int$methods, &$Number$int_instance};
 $Plus$int $Plus$int$witness = &$Plus$int_instance;
 
 struct $Minus$int$class $Minus$int$methods = {"",UNASSIGNED, NULL,$Minus$int_init, $Minus$int$__sub__};
-struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Complex$int_instance};
+struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Number$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
 
 struct $Hashable$int$class $Hashable$int$methods = {"",UNASSIGNED, NULL,(void (*)($Hashable$int))$default__init__, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};

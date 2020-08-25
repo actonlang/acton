@@ -1,3 +1,5 @@
+import pickle
+
 def test():
     d = dict();
     for i in range(1,1000000): d[str(i)] = str(i+1)
@@ -8,7 +10,10 @@ def test():
         b = d[str(r)]
         s += int(b);
     print("in dict_test after summation; last value retrieved should be",r+1,", was ",b)
-    print("Summed 100000 values; sum is ",s)
+    print("Retrieved and summed 100000 values; sum is ",s)
+    fileptr = open('pytest.bin','wb')
+    b = pickle.dumps(d)
+    print("pickled dict. Length of bytes object is",len(b))
     t1 = "678" in d
     t2 = "-1" in d
     if (t1 and not t2):

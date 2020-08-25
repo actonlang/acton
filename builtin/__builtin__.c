@@ -97,8 +97,8 @@ $Set$opaque $Set$pack($Set proto, $WORD impl){
   return res;
 }
 
-$Complex$opaque $Complex$pack($Complex proto, $WORD impl){
-  $Complex$opaque res = malloc(sizeof(struct $Complex$opaque));
+$Number$opaque $Number$pack($Number proto, $WORD impl){
+  $Number$opaque res = malloc(sizeof(struct $Number$opaque));
   res->proto = proto;
   res->impl = impl;
   return res;

@@ -65,3 +65,16 @@ void $register_builtin() {
   $register_force(NOTIMPLEMENTEDERROR_ID,&$NotImplementedError$methods);
   $register_force(VALUEERROR_ID,&$ValueError$methods);
 }
+
+
+$bool issubtype(int sub_id, int ancestor_id) {
+  if (sub_id == ancestor_id)
+    return $True;
+  $Super$class c =  ($Super$class)$GET_METHODS(sub_id)->$superclass;
+  while(c)
+    if(c->$class_id == ancestor_id)
+      return $True;
+    else
+      c = c->$superclass;
+  return $False;
+}
