@@ -251,7 +251,7 @@ class Set[S,A] (Container[S,A]):
 #   Eq ______________               Plus            Minus
 #    |               |               |               |
 #    |               |               |               |
-#   Ord             Complex <--------- <--------------
+#   Ord             Number <--------- <--------------
 #    |               |
 #    |               |
 #   Real <------------
@@ -262,7 +262,7 @@ class Set[S,A] (Container[S,A]):
 #    |               |
 #   Integral <--------
 
-class Complex[S] (Eq[S]):
+class Number[S] (Eq[S]):
     $Plus       : Plus[S]
     $Minus      : Minus[S]
   
@@ -282,16 +282,16 @@ class Complex[S] (Eq[S]):
 
     conjugate   : (S) -> S
 
-class Plus$Complex[S] (Plus[S]):
-    $Complex    : Complex[S]
+class Plus$Number[S] (Plus[S]):
+    $Number    : Number[S]
 
-class Minus$Complex[S] (Minus[S]):
-    $Complex    : Complex[S]
+class Minus$Number[S] (Minus[S]):
+    $Number    : Number[S]
 
 ##
 
 class Real[S] (Ord[S]):
-    $Complex    : Complex[S]         # Eq implemented in both parents!
+    $Number    : Number[S]         # Eq implemented in both parents!
   
     __float__   : (S) -> float
 
@@ -300,13 +300,13 @@ class Real[S] (Ord[S]):
     __ceil__    : [X] => (Integral[X],S) -> X
     __round__   : [X] => (Integral[X],S) -> X
 
-class Complex$Real[S] (Complex[S]):
+class Number$Real[S] (Number[S]):
     $Real       : Real[S]
 
-class Plus$Real[S] (Plus$Complex[S]):
+class Plus$Number$Real[S] (Plus$Number[S]):
     $Real       : Real[S]
 
-class Minus$Real[S] (Minus$Complex[S]):
+class Minus$Number$Real[S] (Minus$Number[S]):
     $Real       : Real[S]
 
 ##
@@ -315,13 +315,13 @@ class Rational[S] (Real[S]):
     numerator    : [X] => (Integral[X],S) -> X
     denominator  : [X] => (Integral[X],S) -> X
 
-class Complex$Rational[S] (Complex$Real[S]):
+class Number$Rational[S] (Number$Real[S]):
     $Rational    : Rational[S]
 
-class Plus$Rational[S] (Plus$Real[S]):
+class Plus$Number$Rational[S] (Plus$Number$Real[S]):
     $Rational    : Rational[S]
 
-class Minus$Rational[S] (Minus$Real[S]):
+class Minus$Number$Rational[S] (Minus$Number$Real[S]):
     $Rational    : Rational[S]
 
 ##
@@ -344,13 +344,13 @@ class Integral[S] (Rational[S]):
 class Logical$Integral[S] (Logical[S]):
     $Integral    : Integral[S]
 
-class Complex$Integral[S] (Complex$Rational[S]):
+class Number$Integral[S] (Number$Rational[S]):
     $Integral    : Integral[S]
 
-class Plus$Integral[S] (Plus$Rational[S]):
+class Plus$Number$Integral[S] (Plus$Number$Rational[S]):
     $Integral    : Integral[S]
 
-class Minus$Integral[S] (Minus$Rational[S]):
+class Minus$Number$Integral[S] (Minus$Number$Rational[S]):
     $Integral    : Integral[S]
 
 
@@ -364,19 +364,19 @@ extension int (Integral):
 
 class Integral$int (Integral[int]):
     def __init__($wself):
-        $wself.$Complex  = Complex$int($wself)
-        $wself.$Logical  = Logical$int($wself)
+        $wself.$Number   = Number$Integral$int($wself)
+        $wself.$Logical  = Logical$Integral$int($wself)
     # __mod__, numerator, __trunc__, __le__, __eq__
 
-class Logical$int (Logical$Integral[int]):
+class Logical$Integral$int (Logical$Integral[int]):
     def __init__($wself, w$Integral : Integral$int):
         $wself.$Integral = w$Integral
     # __or__
 
-class Complex$int (Complex$Integral[int]):
+class Number$Integral$int (Number$Integral[int]):
     def __init__($wself, w$Integral : Integral$int):
-        $wself.$Plus     = Plus$int($wself, w$Integral)
-        $wself.$Minus    = Minus$int($wself, w$Integral)
+        $wself.$Plus     = Plus$Number$Integral$int($wself, w$Integral)
+        $wself.$Minus    = Minus$Number$Integral$int($wself, w$Integral)
         $wself.$Real     = w$Integral
         $wself.$Rational = w$Integral
         $wself.$Integral = w$Integral
@@ -384,17 +384,17 @@ class Complex$int (Complex$Integral[int]):
         return $wself.$Integral.__eq__(a, b)
     # __mul__
 
-class Plus$int (Plus$Integral[int]):
-    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
-        $wself,$Complex  = w$Complex
+class Plus$Number$Integral$int (Plus$Number$Integral[int]):
+    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
+        $wself.$Number   = w$Number
         $wself.$Real     = w$Integral
         $wself.$Rational = w$Integral
         $wself.$Integral = w$Integral
     # __add__
 
-class Minus$int (Minus$Integral[int]):
-    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
-        $wself,$Complex  = w$Complex
+class Minus$Number$Integral$int (Minus$Number$Integral[int]):
+    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
+        $wself.$Number   = w$Number
         $wself.$Real     = w$Integral
         $wself.$Rational = w$Integral
         $wself.$Integral = w$Integral
@@ -402,7 +402,7 @@ class Minus$int (Minus$Integral[int]):
 
 ####
 
-extension int (Complex):
+extension int (Number):
     # __mul__, __eq__, __add__, __sub__
 ...
 extension int (Integral):
@@ -410,31 +410,31 @@ extension int (Integral):
     
 # ==>
 
-class Complex$int (Complex[int]):
+class Number$int (Number[int]):
     def __init__($wself):
-        $wself.$Plus     = Plus$int($wself)
-        $wself.$Minus    = Minus$int($wself)
+        $wself.$Plus     = Plus$Number$int($wself)
+        $wself.$Minus    = Minus$Number$int($wself)
     # __mul__, __eq__
 
-class Plus$int (Plus$Complex[int]):
-    def __init__($wself, w$Complex : Complex$int):
-        $wself.$Complex  = w$Complex
+class Plus$Number$int (Plus$Number[int]):
+    def __init__($wself, w$Number : Number$int):
+        $wself.$Number   = w$Number
     # __add__
 
-class Minus$int (Minus$Complex[int]):
-    def __init__($wself, w$Complex : Complex$int):
-        $wself,$Complex  = w$Complex
+class Minus$Number$int (Minus$Number[int]):
+    def __init__($wself, w$Number : Number$int):
+        $wself,$Number   = w$Number
     # __sub__
 
 class Integral$int (Integral[int]):
     def __init__($wself):
-        $wself.$Complex  = Complex$int()
-        $wself.$Logical  = Logical$int($wself)
+        $wself.$Number   = Number$int()
+        $wself.$Logical  = Logical$Integral$int($wself)
     def __eq__($wself, a, b):
-        return $wself.$Complex.__eq__(a, b)
+        return $wself.$Number.__eq__(a, b)
     # __mod__, numerator, __trunc__, __le__
 
-class Logical$int (Logical$Integral[int]):
+class Logical$Integral$int (Logical$Integral[int]):
     def __init__($wself, w$Integral : Integral$int):
         $wself.$Integral = w$Integral
     # __or__
@@ -444,7 +444,7 @@ class Logical$int (Logical$Integral[int]):
 extension int (Eq):
     # __eq__
 ...
-extension int (Complex):
+extension int (Number):
     # __mul__, __add__, __sub__
 ...
 extension int (Integral):
@@ -457,34 +457,34 @@ class Eq$int (Eq[int]):
         pass
     # __eq__
 
-class Complex$int (Complex[int]):
+class Number$int (Number[int]):
     def __init__($wself):
         $wself.$Eq       = Eq$int()
-        $wself.$Plus     = Plus$int($wself)
-        $wself.$Minus    = Minus$int($wself)
-    def __eq__($wself, a, b):
-        ...     # code copied form Eq$int
+        $wself.$Plus     = Plus$Number$int($wself)
+        $wself.$Minus    = Minus$Number$int($wself)
+    __eq__ = Eq$int.__eq__
+    __ne__ = Eq$int.__ne__
     # __mul__
 
-class Plus$int (Plus$Complex[int]):
-    def __init__($wself, w$Complex : Complex$int):
-        $wself.$Complex  = w$Complex
+class Plus$Number$int (Plus$Number[int]):
+    def __init__($wself, w$Number : Number$int):
+        $wself.$Number   = w$Number
     # __add__
 
-class Minus$int (Minus$Complex[int]):
-    def __init__($wself, w$Complex : Complex$int):
-        $wself,$Complex  = w$Complex
+class Minus$Number$int (Minus$Number[int]):
+    def __init__($wself, w$Number : Number$int):
+        $wself,$Number   = w$Number
     # __sub__
 
 class Integral$int (Integral[int]):
     def __init__($wself):
-        $wself.$Complex  = Complex$int()
-        $wself.$Logical  = Logical$int($wself)
-    def __eq__($wself, a, b):
-        ...     # code copied form Eq$int
+        $wself.$Number   = Number$int()
+        $wself.$Logical  = Logical$Integral$int($wself)
+    __eq__ = Eq$int.__eq__
+    __ne__ = Eq$int.__ne__
     # __mod__, numerator, __trunc__, __le__
 
-class Logical$int (Logical$Integral[int]):
+class Logical$Integral$int (Logical$Integral[int]):
     def __init__($wself, w$Integral : Integral$int):
         $wself.$Integral = w$Integral
     # __or__
@@ -501,34 +501,34 @@ extension int (Integral):
 
 class Real$int (Real[int]):
     def __init__($wself):
-        $wself.$Complex  = Complex$int($wself)
+        $wself.$Number   = Number$Real$int($wself)
     # __trunc__, __le__, __eq__
 
-class Complex$int (Complex$Real[int]):
+class Number$Real$int (Number$Real[int]):
     def __init__($wself, w$Real : Real$int):
-        $wself.$Plus     = Plus$int($wself, w$Integral)
-        $wself.$Minus    = Minus$int($wself, w$Integral)
+        $wself.$Plus     = Plus$Number$Realint($wself, w$Integral)
+        $wself.$Minus    = Minus$Number$Realint($wself, w$Integral)
         $wself.$Real     = w$Real
     def __eq__($wself, a, b):
         return $wself.$Real.__eq__(a, b)
     # __mul__
 
-class Plus$int (Plus$Real[int]):
-    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
-        $wself,$Complex  = w$Complex
+class Plus$Number$Realint (Plus$Real[int]):
+    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
+        $wself,$Number   = w$Number
         $wself.$Real     = w$Integral
     # __add__
 
-class Minus$int (Minus$Real[int]):
-    def __init__($wself, w$Complex : Complex$int, w$Integral : Integral$int):
-        $wself,$Complex  = w$Complex
+class Minus$Number$Realint (Minus$Real[int]):
+    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
+        $wself,$Number   = w$Number
         $wself.$Real     = w$Integral
     # __sub__
 
 class Integral$int (Integral[int]):
     def __init__($wself):
-        $wself.$Complex  = $wself.$Real
-        $wself.$Logical  = Logical$int($wself)
+        $wself.$Number   = $wself.$Real
+        $wself.$Logical  = Logical$Integral$int($wself)
     def __trunc__($wself, a):
         ...     # code copied from Real$int
     def __le__($wself, a, b):
@@ -537,7 +537,7 @@ class Integral$int (Integral[int]):
         ...     # code copied from Real$int
     # __mod__, numerator
 
-class Logical$int (Logical$Integral[int]):
+class Logical$Integral$int (Logical$Integral[int]):
     def __init__($wself, w$Integral : Integral$int):
         $wself.$Integral = w$Integral
     # __or__
@@ -635,14 +635,14 @@ class Minus$float (Minus[float]):
     w$Real$float : Real$float
     def __init__($wself, w$Real$float):
         $wself.w$Real$float = w$Real$float
-class Complex$float (Complex[float]):
+class Number$float (Number[float]):
     w$Real$float : Real$float
     def __init__($wself, w$Real$float):
-        Complex.__init__($wself, Plus$float($wself), Minus$float($wself))
+        Number.__init__($wself, Plus$float($wself), Minus$float($wself))
         $wself.w$Real$float = w$Real$float
 class Real$float (Real[float]):
     def __init__($wself):
-        Real.__init__($wself, Complex$float($wself))
+        Real.__init__($wself, Number$float($wself))
 
 class Hashable$float (Hashable[float]):
     def __init__($wself):
@@ -650,6 +650,6 @@ class Hashable$float (Hashable[float]):
 
 ## Builtin functions #####################################################
 
-def abs[X,Y](w1:Complex[X], w2:Real[Y], x : X) -> Y:
+def abs[X,Y](w1:Number[X], w2:Real[Y], x : X) -> Y:
     return w1.__abs__@[Y](w2, x)
     

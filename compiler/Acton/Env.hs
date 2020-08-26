@@ -531,18 +531,18 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
 
-isActor                     :: QName -> Env -> Bool
-isActor n env               = case findQName n env of
+isActor                     :: Env -> QName -> Bool
+isActor env n               = case findQName n env of
                                 NAct q p k te -> True
                                 _ -> False
 
-isClass                     :: QName -> Env -> Bool
-isClass n env               = case findQName n env of
+isClass                     :: Env -> QName -> Bool
+isClass env n               = case findQName n env of
                                 NClass q us te -> True
                                 _ -> False
 
-isProto                     :: QName -> Env -> Bool
-isProto n env               = case findQName n env of
+isProto                     :: Env -> QName -> Bool
+isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
@@ -686,7 +686,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
-            constr u t      = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u)
+            constr u t      = if isProto env (tcname u) then Impl (name "_") t u else Cast t (tCon u)
             
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc
@@ -706,8 +706,8 @@ instance WellFormed QBind where
 mro2                                    :: Env -> [TCon] -> ([WTCon],[WTCon])
 mro2 env []                             = ([], [])
 mro2 env (u:us)
-  | isActor (tcname u) env              = err1 u "Actor subclassing not allowed"
-  | isProto (tcname u) env              = ([], mro env (u:us))
+  | isActor env (tcname u)              = err1 u "Actor subclassing not allowed"
+  | isProto env (tcname u)              = ([], mro env (u:us))
   | otherwise                           = (mro env [u], mro env us)
 
 mro1 env us                             = mro env us
@@ -765,7 +765,7 @@ instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = tybound q `zip` ts
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto n env   = do w <- newWitness; return $ Impl w t u
+          | isProto env n   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
@@ -985,6 +985,11 @@ findAmbig safe cs
         ambigP vs (Impl _ (TVar _ v) _) = v `notElem` vs
         ambigP vs c                     = False
 
+closeDeps vs cs
+  | null vs'                        = nub vs
+  | otherwise                       = closeDeps (vs'++vs) cs
+  where vs'                         = concat [ depVars c \\ vs | c <- cs, headvar c `elem` vs ]
+  
 
 
 -- Error handling ------------------------------------------------------------------------

@@ -835,7 +835,7 @@ improve env te tt eq cs
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
 
 
-uClosed env (TCon _ c)                  = isActor (tcname c) env
+uClosed env (TCon _ c)                  = isActor env (tcname c)
 uClosed env (TFX _ FXPure)              = True
 uClosed env (TNone _)                   = True
 uClosed env (TNil _ _)                  = True
@@ -1096,6 +1096,9 @@ impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 x0:x1:x2:_                              = xNames
 
+wit2row ws                              = \p -> foldr f p ws
+  where f (w,t)                         = TRow NoLoc PRow w t
+
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)
 
@@ -1111,11 +1114,13 @@ witsOf cs                               = [ eVar w | Impl w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
+qualWRow env q                          = wit2row (qualWits env q)
+
+qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
-        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
+        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx
