@@ -59,8 +59,8 @@ $int $int_fromatom($Super a) {
     else 
       RAISE(($BaseException)$NEW($ValueError,to$str("int_fromatom(): invalid str literal for type int")));
   }
-  fprintf(stderr,"int_fromatom: argument not of atomic type");
-  exit(1);
+  fprintf(stderr,"internal error: int_fromatom: argument not of atomic type");
+  exit(-1);
 }
 
                   
@@ -95,16 +95,19 @@ $float $Integral$int$__float__ ($Integral$int wit, $int n) {
   return to$float((double)n->val);
 }
 
-$Integral$opaque $Integral$int$__trunc__ ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,n);
+$WORD $Integral$int$__trunc__ ($Integral$int wit, $Integral wit2, $int n) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,n);
 }
   
-$Integral$opaque $Integral$int$__floor__ ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,n);
+$WORD $Integral$int$__floor__ ($Integral$int wit, $Integral wit2, $int n) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,n);
 }
   
-$Integral$opaque $Integral$int$__ceil__ ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,n);
+$WORD $Integral$int$__ceil__ ($Integral$int wit, $Integral wit2, $int n) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,n);
 }
   
 $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
@@ -121,12 +124,14 @@ $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
   return to$int (res * p10);
 }
   
-$Integral$opaque $Integral$int$numerator ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,n);
+$WORD $Integral$int$numerator ($Integral$int wit, $Integral wit2, $int n) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,n);
 }
   
-$Integral$opaque $Integral$int$denominator ($Integral$int wit, $int n) {
-  return $Integral$pack(($Integral)wit,to$int(1L));
+$WORD $Integral$int$denominator ($Integral$int wit, $Integral wit2, $int n) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,to$int(1L));
 }
   
 $int $Integral$int$__int__ ($Integral$int wit, $int n) {
@@ -226,16 +231,19 @@ $int $Number$int$__pos__($Number$int wit,  $int a) {
   return a;
 }
 
-$Real$opaque $Number$int$real($Number$int wit,  $int a) {
-  return $Real$pack(($Real)wit,a);
+$WORD $Number$int$real($Number$int wit, $Real wit2, $int a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,a);
 }
 
-$Real$opaque $Number$int$imag($Number$int wit,  $int a) {
-  return  $Real$pack(($Real)wit,to$int(0L));
+$WORD $Number$int$imag($Number$int wit, $Real wit2,  $int a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$int(0L));
 }
 
-$Real$opaque $Number$int$__abs__($Number$int wit,  $int a) {
-  return  $Real$pack(($Real)wit,to$int(labs(a->val)));
+$WORD $Number$int$__abs__($Number$int wit, $Real wit2,  $int a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$int(labs(a->val)));
 }
 
 $int $Number$int$__conjugate__($Number$int wit,  $int a) {
@@ -268,13 +276,15 @@ $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
   return to$int($int_hash(a));
 }
 
+// Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void $Integral$int_init($Integral$int wit) {
   wit-> w$Number$Integral = $NEW($Number$int,wit);
   wit-> w$Logical$Integral = $NEW($Logical$int,wit);
 };
 
 void $Number$int_init($Number$int wit, $Integral$int w$Integral$int) {
-  wit->w$Integral$int = w$Integral$int;
+  wit-> w$Integral$int = w$Integral$int;
   wit-> w$Plus$Number = $NEW($Plus$int,wit);
   wit-> w$Minus$Number = $NEW($Minus$int,wit);
 }
@@ -303,7 +313,7 @@ struct $Integral$int$class $Integral$int$methods = {"",UNASSIGNED,NULL,$Integral
                                                      $Integral$int$__ceil__ , $Integral$int$__round__ , $Integral$int$numerator , $Integral$int$denominator ,
                                                      $Integral$int$__int__ , $Integral$int$__index__ , $Integral$int$__divmod__ , $Integral$int$__floordiv__ ,
                                                      $Integral$int$__mod__ , $Integral$int$__lshift__ , $Integral$int$__rshift__ , $Integral$int$__invert__};
-struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance};
+struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance, &$Number$int_instance};
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
 

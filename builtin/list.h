@@ -2,7 +2,7 @@ struct $list$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($list, $Sequence$opaque);
+  void (*__init__)($list, $Sequence, $WORD);
   void (*__serialize__)($list,$Serial$state);
   $list (*__deserialize__)($Serial$state);
   $bool (*__bool__)($list);

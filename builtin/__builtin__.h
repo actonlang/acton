@@ -742,7 +742,7 @@ struct $Sliceable$class {
     void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
     void (*__delitem__)($Sliceable, $WORD, $int);
     $WORD (*__getslice__)($Sliceable, $WORD, $Slice);
-    void (*__setslice__)($Sliceable, $WORD, $Slice, $Iterable$opaque);
+  void (*__setslice__)($Sliceable, $Iterable, $WORD, $Slice, $WORD);
     void (*__delslice__)($Sliceable, $WORD, $Slice);
 };
 
@@ -792,7 +792,7 @@ struct $Collection$class {
     $Super$class $superclass;
     void (*__init__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
-    $WORD (*__fromiter__)($Collection, $Iterable$opaque);
+    $WORD (*__fromiter__)($Collection, $Iterable, $WORD);
     $int (*__len__)($Collection, $WORD);
 };
 
@@ -819,7 +819,7 @@ struct $Container$class {
     $Super$class $superclass;
     void (*__init__)($Container, $Eq);
     $Iterator (*__iter__)($Container, $WORD);
-    $WORD (*__fromiter__)($Container, $Iterable$opaque);
+    $WORD (*__fromiter__)($Container, $Iterable, $WORD);
     $int (*__len__)($Container, $WORD);
     $bool (*__contains__)($Container, $WORD, $WORD);
     $bool (*__containsnot__)($Container, $WORD, $WORD);
@@ -852,7 +852,7 @@ struct $Sequence$class {
     void (*__setitem__)($Sequence, $WORD, $int, $WORD);
     void (*__delitem__)($Sequence, $WORD, $int);
     $WORD (*__getslice__)($Sequence, $WORD, $Slice);
-    void (*__setslice__)($Sequence, $WORD, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sequence, $Iterable, $WORD, $Slice, $WORD);
     void (*__delslice__)($Sequence, $WORD, $Slice);
     $Iterator (*__reversed__)($Sequence, $WORD);
     void (*insert)($Sequence, $WORD, $int, $WORD);
@@ -884,7 +884,7 @@ struct $Mapping$class {
     $Super$class $superclass;
     void (*__init__)($Mapping, $Eq);
     $Iterator (*__iter__)($Mapping, $WORD);
-    $WORD (*__fromiter__)($Mapping, $Iterable$opaque);
+    $WORD (*__fromiter__)($Mapping, $Iterable, $WORD);
     $int (*__len__)($Mapping, $WORD);
     $bool (*__contains__)($Mapping, $WORD, $WORD);
     $bool (*__containsnot__)($Mapping, $WORD, $WORD);
@@ -892,7 +892,7 @@ struct $Mapping$class {
     $Iterator (*keys)($Mapping, $WORD);
     $Iterator (*values)($Mapping, $WORD);
     $Iterator (*items)($Mapping, $WORD);
-    void (*update)($Mapping, $WORD, $Iterable$opaque);
+    void (*update)($Mapping, $Iterable, $WORD, $WORD);
     $tuple (*popitem)($Mapping, $WORD);
     void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
@@ -923,7 +923,7 @@ struct $Set$class {
     $Super$class $superclass;
     void (*__init__)($Set, $Eq);
     $Iterator (*__iter__)($Set, $WORD);
-    $WORD (*__fromiter__)($Set, $Iterable$opaque);
+    $WORD (*__fromiter__)($Set, $Iterable, $WORD);
     $int (*__len__)($Set, $WORD);
     $bool (*__contains__)($Set, $WORD, $WORD);
     $bool (*__containsnot__)($Set, $WORD, $WORD);
@@ -965,9 +965,9 @@ struct $Number$class {
     $WORD (*__pow__)($Number, $WORD, $WORD);
     $WORD (*__neg__)($Number, $WORD);
     $WORD (*__pos__)($Number, $WORD);
-    $Real$opaque (*real)($Number, $WORD);
-    $Real$opaque (*imag)($Number, $WORD);
-    $Real$opaque (*__abs__)($Number, $WORD);
+  $WORD (*real)($Number, $Real, $WORD);
+    $WORD (*imag)($Number, $Real, $WORD);
+    $WORD (*__abs__)($Number, $Real, $WORD);
     $WORD (*conjugate)($Number, $WORD);
 };
 
@@ -1000,9 +1000,9 @@ struct $Real$class {
     $bool (*__gt__)($Real, $WORD, $WORD);
     $bool (*__ge__)($Real, $WORD, $WORD);
     $float (*__float__)($Real, $WORD);
-    $Integral$opaque (*__trunc__)($Real, $WORD);
-    $Integral$opaque (*__floor__)($Real, $WORD);
-    $Integral$opaque (*__ceil__)($Real, $WORD);
+    $WORD (*__trunc__)($Real, $Integral, $WORD);
+    $WORD (*__floor__)($Real, $Integral, $WORD);
+    $WORD (*__ceil__)($Real, $Integral, $WORD);
     $WORD (*__round__)($Real, $WORD, $int);
 };
 
@@ -1034,12 +1034,12 @@ struct $Rational$class {
     $bool (*__gt__)($Rational, $WORD, $WORD);
     $bool (*__ge__)($Rational, $WORD, $WORD);
     $float (*__float__)($Rational, $WORD);
-    $Integral$opaque (*__trunc__)($Rational, $WORD);
-    $Integral$opaque (*__floor__)($Rational, $WORD);
-    $Integral$opaque (*__ceil__)($Rational, $WORD);
+    $WORD (*__trunc__)($Rational, $Integral, $WORD);
+    $WORD (*__floor__)($Rational, $Integral, $WORD);
+    $WORD (*__ceil__)($Rational, $Integral, $WORD);
     $WORD (*__round__)($Rational, $WORD,$int);
-    $Integral$opaque (*numerator)($Rational, $WORD);
-    $Integral$opaque (*denominator)($Rational, $WORD);
+    $WORD (*numerator)($Rational, $Integral, $WORD);
+    $WORD (*denominator)($Rational, $Integral, $WORD);
 };
 
 struct $Rational$opaque {
@@ -1057,6 +1057,7 @@ $Rational$opaque $Rational$pack($Rational proto, $WORD impl);
 struct $Integral {
     $Integral$class $class;
     $Logical w$Logical$Integral;
+    $Number w$Number$Integral;
 };
 
 struct $Integral$class {
@@ -1071,12 +1072,12 @@ struct $Integral$class {
     $bool (*__gt__)($Integral, $WORD, $WORD);
     $bool (*__ge__)($Integral, $WORD, $WORD);
     $float (*__float__)($Integral, $WORD);
-    $Integral$opaque (*__trunc__)($Integral, $WORD);
-    $Integral$opaque (*__floor__)($Integral, $WORD);
-    $Integral$opaque (*__ceil__)($Integral, $WORD);
+    $WORD (*__trunc__)($Integral, $Integral, $WORD);
+    $WORD (*__floor__)($Integral, $Integral, $WORD);
+    $WORD (*__ceil__)($Integral, $Integral, $WORD);
     $WORD (*__round__)($Integral, $WORD, $int);
-    $Integral$opaque (*numerator)($Integral, $WORD);
-    $Integral$opaque (*denominator)($Integral, $WORD);
+    $WORD (*numerator)($Integral, $Integral, $WORD);
+    $WORD (*denominator)($Integral, $Integral, $WORD);
     $int (*__int__)($Integral, $WORD);
     $int (*__index__)($Integral, $WORD);
     $tuple (*__divmod__)($Integral, $WORD, $WORD);
@@ -1113,7 +1114,7 @@ struct $Sequence$list$class {
     void (*__setitem__)($Sequence$list, $list, $int, $WORD);
     void (*__delitem__)($Sequence$list, $list, $int);
     $list (*__getslice__)($Sequence$list, $list, $Slice);
-    void (*__setslice__)($Sequence$list, $list, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sequence$list, $Iterable, $list, $Slice, $WORD);
     void (*__delslice__)($Sequence$list, $list, $Slice);
     $Iterator (*__reversed__)($Sequence$list, $list);
     void (*insert)($Sequence$list, $list, $int, $WORD);
@@ -1126,7 +1127,7 @@ $WORD $Sequence$list$__getitem__ ($Sequence$list, $list, $int);
 void $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
 void $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
 $list $Sequence$list$__getslice__ ($Sequence$list, $list, $Slice);
-void $Sequence$list$__setslice__ ($Sequence$list, $list, $Slice, $Iterable$opaque);
+void $Sequence$list$__setslice__ ($Sequence$list, $Iterable, $list, $Slice, $WORD);
 void $Sequence$list$__delslice__ ($Sequence$list, $list, $Slice);
 $Iterator $Sequence$list$__reversed__ ($Sequence$list, $list);
 void $Sequence$list$insert ($Sequence$list, $list, $int, $WORD);
@@ -1146,13 +1147,13 @@ struct $Collection$list$class {
     $Super$class $superclass;
     void (*__init__)($Collection$list, $Sequence$list);
     $Iterator (*__iter__)($Collection$list, $list);
-    $list (*__fromiter__)($Collection$list, $Iterable$opaque);
+    $list (*__fromiter__)($Collection$list, $Iterable, $WORD);
     $int (*__len__)($Collection$list, $list);
 };
 
 void $Collection$list$__init__ ($Collection$list, $Sequence$list);
 $Iterator $Collection$list$__iter__ ($Collection$list, $list);
-$list $Collection$list$__fromiter__ ($Collection$list, $Iterable$opaque);
+$list $Collection$list$__fromiter__ ($Collection$list, $Iterable, $WORD);
 $int $Collection$list$__len__ ($Collection$list, $list);
 
 // $Plus$list ////////////////////////////////////////////////////////////
@@ -1186,7 +1187,7 @@ struct $Container$list$class {
     $Super$class $superclass;
     void (*__init__)($Container$list, $Eq);
     $Iterator (*__iter__)($Container$list, $list);
-    $list (*__fromiter__)($Container$list, $Iterable$opaque);
+    $list (*__fromiter__)($Container$list, $Iterable, $WORD);
     $int (*__len__)($Container$list, $list);
     $bool (*__contains__)($Container$list, $list, $WORD);
     $bool (*__containsnot__)($Container$list, $list, $WORD);
@@ -1194,7 +1195,7 @@ struct $Container$list$class {
 
 void $Container$list$__init__ ($Container$list, $Eq);
 $Iterator $Container$list$__iter__ ($Container$list, $list);
-$list $Container$list$__fromiter__ ($Container$list, $Iterable$opaque);
+$list $Container$list$__fromiter__ ($Container$list, $Iterable, $WORD);
 $int $Container$list$__len__ ($Container$list, $list);
 $bool $Container$list$__contains__ ($Container$list, $list, $WORD);
 $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
@@ -1213,7 +1214,7 @@ struct $Mapping$dict$class {
     $Super$class $superclass;
     void (*__init__)($Mapping$dict, $Hashable);
     $Iterator (*__iter__)($Mapping$dict, $dict);
-    $dict (*__fromiter__)($Mapping$dict, $Iterable$opaque);
+    $dict (*__fromiter__)($Mapping$dict, $Iterable, $WORD);
     $int (*__len__)($Mapping$dict, $dict);
     $bool (*__contains__)($Mapping$dict, $dict, $WORD);
     $bool (*__containsnot__)($Mapping$dict, $dict, $WORD);
@@ -1221,14 +1222,14 @@ struct $Mapping$dict$class {
     $Iterator (*keys)($Mapping$dict, $dict);
     $Iterator (*values)($Mapping$dict, $dict);
     $Iterator (*items)($Mapping$dict, $dict);
-    void (*update)($Mapping$dict, $dict, $Iterable$opaque);
+    void (*update)($Mapping$dict, $Iterable, $dict, $WORD);
     $tuple (*popitem)($Mapping$dict, $dict);
     void (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
 };
 
 void $Mapping$dict$__init__ ($Mapping$dict, $Hashable);
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
-$dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable$opaque);
+$dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable, $WORD);
 $int $Mapping$dict$__len__ ($Mapping$dict, $dict);
 $bool $Mapping$dict$__contains__ ($Mapping$dict, $dict, $WORD);
 $bool $Mapping$dict$__containsnot__ ($Mapping$dict, $dict, $WORD);
@@ -1236,7 +1237,7 @@ $WORD $Mapping$dict$get ($Mapping$dict, $dict, $WORD, $WORD);
 $Iterator $Mapping$dict$keys ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$values ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$items ($Mapping$dict, $dict);
-void $Mapping$dict$update ($Mapping$dict, $dict, $Iterable$opaque);
+void $Mapping$dict$update ($Mapping$dict, $Iterable, $dict, $WORD);
 $tuple $Mapping$dict$popitem ($Mapping$dict, $dict);
 void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 
@@ -1279,7 +1280,7 @@ struct $Set$set$class {
     $Super$class $superclass;
     void (*__init__)($Set$set, $Hashable);
     $Iterator (*__iter__)($Set$set, $set);
-    $set (*__fromiter__)($Set$set, $Iterable$opaque);
+    $set (*__fromiter__)($Set$set, $Iterable, $WORD);
     $int (*__len__)($Set$set, $set);
     $bool (*__contains__)($Set$set, $set, $WORD);
     $bool (*__containsnot__)($Set$set, $set, $WORD);
@@ -1291,7 +1292,7 @@ struct $Set$set$class {
 
 void $Set$set$__init__ ($Set$set, $Hashable);
 $Iterator $Set$set$__iter__ ($Set$set, $set);
-$set $Set$set$__fromiter__ ($Set$set, $Iterable$opaque);
+$set $Set$set$__fromiter__ ($Set$set, $Iterable, $WORD);
 $int $Set$set$__len__ ($Set$set, $set);
 $bool $Set$set$__contains__ ($Set$set, $set, $WORD);
 $bool $Set$set$__containsnot__ ($Set$set, $set, $WORD);
@@ -1402,7 +1403,7 @@ struct $Sequence$range$class {
     void (*__setitem__)($Sequence$range, $range, $int, $int);
     void (*__delitem__)($Sequence$range, $range, $int);
     $range (*__getslice__)($Sequence$range, $range, $Slice);
-    void (*__setslice__)($Sequence$range, $range, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sequence$range, $Iterable, $range, $Slice, $WORD);
     void (*__delslice__)($Sequence$range, $range, $Slice);
     $Iterator (*__reversed__)($Sequence$range, $range);
     void (*insert)($Sequence$range, $range, $int, $int);
@@ -1415,7 +1416,7 @@ $int $Sequence$range$__getitem__ ($Sequence$range, $range, $int);
 void $Sequence$range$__setitem__ ($Sequence$range, $range, $int, $int);
 void $Sequence$range$__delitem__ ($Sequence$range, $range, $int);
 $range $Sequence$range$__getslice__ ($Sequence$range, $range, $Slice);
-void $Sequence$range$__setslice__ ($Sequence$range, $range, $Slice, $Iterable$opaque);
+void $Sequence$range$__setslice__ ($Sequence$range, $Iterable, $range, $Slice, $WORD);
 void $Sequence$range$__delslice__ ($Sequence$range, $range, $Slice);
 $Iterator $Sequence$range$__reversed__ ($Sequence$range, $range);
 void $Sequence$range$insert ($Sequence$range, $range, $int, $int);
@@ -1435,13 +1436,13 @@ struct $Collection$range$class {
     $Super$class $superclass;
     void (*__init__)($Collection$range, $Sequence$range);
     $Iterator (*__iter__)($Collection$range, $range);
-    $range (*__fromiter__)($Collection$range, $Iterable$opaque);
+    $range (*__fromiter__)($Collection$range, $Iterable, $WORD);
     $int (*__len__)($Collection$range, $range);
 };
 
 void $Collection$range$__init__ ($Collection$range, $Sequence$range);
 $Iterator $Collection$range$__iter__ ($Collection$range, $range);
-$range $Collection$range$__fromiter__ ($Collection$range, $Iterable$opaque);
+$range $Collection$range$__fromiter__ ($Collection$range, $Iterable, $WORD);
 $int $Collection$range$__len__ ($Collection$range, $range);
 
 // $Plus$range ////////////////////////////////////////////////////////////
@@ -1528,7 +1529,7 @@ struct $Sliceable$str$class {
     void (*__setitem__)($Sliceable$str, $str, $int, $str);
     void (*__delitem__)($Sliceable$str, $str, $int);
     $str (*__getslice__)($Sliceable$str, $str, $Slice);
-    void (*__setslice__)($Sliceable$str, $str, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sliceable$str, $Iterable, $str, $Slice, $WORD);
     void (*__delslice__)($Sliceable$str, $str, $Slice);
 };
 
@@ -1537,7 +1538,7 @@ $str $Sliceable$str$__getitem__ ($Sliceable$str, $str, $int);
 void $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
 void $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
 $str $Sliceable$str$__getslice__ ($Sliceable$str, $str, $Slice);
-void $Sliceable$str$__setslice__ ($Sliceable$str, $str, $Slice, $Iterable$opaque);
+void $Sliceable$str$__setslice__ ($Sliceable$str, $Iterable, $str, $Slice, $WORD);
 void $Sliceable$str$__delslice__ ($Sliceable$str, $str, $Slice);
 
 // $Plus$str ////////////////////////////////////////////////////////////
@@ -1598,12 +1599,12 @@ struct $Integral$int$class {
     $bool (*__gt__)($Integral$int, $int, $int);
     $bool (*__ge__)($Integral$int, $int, $int);
     $float (*__float__)($Integral$int, $int);
-    $Integral$opaque (*__trunc__)($Integral$int, $int);
-    $Integral$opaque (*__floor__)($Integral$int, $int);
-    $Integral$opaque (*__ceil__)($Integral$int, $int);
+    $WORD (*__trunc__)($Integral$int, $Integral, $int);
+    $WORD (*__floor__)($Integral$int, $Integral, $int);
+    $WORD (*__ceil__)($Integral$int, $Integral, $int);
     $int (*__round__)($Integral$int, $int, $int);
-    $Integral$opaque (*numerator)($Integral$int, $int);
-    $Integral$opaque (*denominator)($Integral$int, $int);
+    $WORD (*numerator)($Integral$int, $Integral, $int);
+    $WORD (*denominator)($Integral$int, $Integral, $int);
     $int (*__int__)($Integral$int, $int);
     $int (*__index__)($Integral$int, $int);
     $tuple (*__divmod__)($Integral$int, $int, $int);
@@ -1622,12 +1623,12 @@ $bool $Integral$int$__le__ ($Integral$int, $int, $int);
 $bool $Integral$int$__gt__ ($Integral$int, $int, $int);
 $bool $Integral$int$__ge__ ($Integral$int, $int, $int);
 $float $Integral$int$__float__ ($Integral$int, $int);
-$Integral$opaque $Integral$int$__trunc__ ($Integral$int, $int);
-$Integral$opaque $Integral$int$__floor__ ($Integral$int, $int);
-$Integral$opaque $Integral$int$__ceil__ ($Integral$int, $int);
+$WORD $Integral$int$__trunc__ ($Integral$int, $Integral, $int);
+$WORD $Integral$int$__floor__ ($Integral$int, $Integral, $int);
+$WORD $Integral$int$__ceil__ ($Integral$int, $Integral, $int);
 $int $Integral$int$__round__ ($Integral$int, $int, $int);
-$Integral$opaque $Integral$int$numerator ($Integral$int, $int);
-$Integral$opaque $Integral$int$denominator ($Integral$int, $int);
+$WORD $Integral$int$numerator ($Integral$int, $Integral, $int);
+$WORD $Integral$int$denominator ($Integral$int, $Integral, $int);
 $int $Integral$int$__int__ ($Integral$int, $int);
 $int $Integral$int$__index__ ($Integral$int, $int);
 $tuple $Integral$int$__divmod__ ($Integral$int, $int, $int);
@@ -1682,9 +1683,9 @@ struct $Number$int$class {
     $int (*__pow__)($Number$int, $int, $int);
     $int (*__neg__)($Number$int, $int);
     $int (*__pos__)($Number$int, $int);
-    $Real$opaque (*real)($Number$int, $int);
-    $Real$opaque (*imag)($Number$int, $int);
-    $Real$opaque (*__abs__)($Number$int, $int);
+    $WORD (*real)($Number$int, $Real, $int);
+    $WORD (*imag)($Number$int, $Real, $int);
+    $WORD (*__abs__)($Number$int, $Real, $int);
     $int (*conjugate)($Number$int, $int);
 };
 
@@ -1698,9 +1699,9 @@ $int $Number$int$__truediv__ ($Number$int, $int, $int);
 $int $Number$int$__pow__ ($Number$int, $int, $int);
 $int $Number$int$__neg__ ($Number$int, $int);
 $int $Number$int$__pos__ ($Number$int, $int);
-$Real$opaque $Number$int$real ($Number$int, $int);
-$Real$opaque $Number$int$imag ($Number$int, $int);
-$Real$opaque $Number$int$__abs__ ($Number$int, $int);
+$WORD $Number$int$real ($Number$int, $Real, $int);
+$WORD $Number$int$imag ($Number$int, $Real, $int);
+$WORD $Number$int$__abs__ ($Number$int, $Real, $int);
 $int $Number$int$conjugate ($Number$int, $int);
 
 // $Plus$int ////////////////////////////////////////////////////////////
@@ -1779,9 +1780,9 @@ struct $Real$float$class {
     $bool (*__gt__)($Real$float, $float, $float);
     $bool (*__ge__)($Real$float, $float, $float);
     $float (*__float__)($Real$float, $float);
-    $Integral$opaque (*__trunc__)($Real$float, $float);
-    $Integral$opaque (*__floor__)($Real$float, $float);
-    $Integral$opaque (*__ceil__)($Real$float, $float);
+    $WORD (*__trunc__)($Real$float, $Integral, $float);
+    $WORD (*__floor__)($Real$float, $Integral, $float);
+    $WORD (*__ceil__)($Real$float, $Integral, $float);
     $float (*__round__)($Real$float, $float, $int);
 };
 
@@ -1793,9 +1794,9 @@ $bool $Real$float$__le__ ($Real$float, $float, $float);
 $bool $Real$float$__gt__ ($Real$float, $float, $float);
 $bool $Real$float$__ge__ ($Real$float, $float, $float);
 $float $Real$float$__float__ ($Real$float, $float);
-$Integral$opaque $Real$float$__trunc__ ($Real$float, $float);
-$Integral$opaque $Real$float$__floor__ ($Real$float, $float);
-$Integral$opaque $Real$float$__ceil__ ($Real$float, $float);
+$WORD $Real$float$__trunc__ ($Real$float, $Integral, $float);
+$WORD $Real$float$__floor__ ($Real$float, $Integral, $float);
+$WORD $Real$float$__ceil__ ($Real$float, $Integral, $float);
 $float $Real$float$__round__ ($Real$float, $float, $int);
 
 // $Number$float ////////////////////////////////////////////////////////////
@@ -1821,9 +1822,9 @@ struct $Number$float$class {
     $float (*__pow__)($Number$float, $float, $float);
     $float (*__neg__)($Number$float, $float);
     $float (*__pos__)($Number$float, $float);
-    $Real$opaque (*real)($Number$float, $float);
-    $Real$opaque (*imag)($Number$float, $float);
-    $Real$opaque (*__abs__)($Number$float, $float);
+    $WORD (*real)($Number$float, $Real, $float);
+    $WORD (*imag)($Number$float, $Real, $float);
+    $WORD (*__abs__)($Number$float, $Real, $float);
     $float (*conjugate)($Number$float, $float);
 };
 
@@ -1837,9 +1838,9 @@ $float $Number$float$__truediv__ ($Number$float, $float, $float);
 $float $Number$float$__pow__ ($Number$float, $float, $float);
 $float $Number$float$__neg__ ($Number$float, $float);
 $float $Number$float$__pos__ ($Number$float, $float);
-$Real$opaque $Number$float$real ($Number$float, $float);
-$Real$opaque $Number$float$imag ($Number$float, $float);
-$Real$opaque $Number$float$__abs__ ($Number$float, $float);
+$WORD $Number$float$real ($Number$float, $Real, $float);
+$WORD $Number$float$imag ($Number$float, $Real, $float);
+$WORD $Number$float$__abs__ ($Number$float, $Real, $float);
 $float $Number$float$conjugate ($Number$float, $float);
 
 // $Plus$float ////////////////////////////////////////////////////////////
@@ -1920,9 +1921,9 @@ struct $Number$complex$class {
     $complex (*__pow__)($Number$complex, $complex, $complex);
     $complex (*__neg__)($Number$complex, $complex);
     $complex (*__pos__)($Number$complex, $complex);
-    $Real$opaque (*real)($Number$complex, $complex);
-    $Real$opaque (*imag)($Number$complex, $complex);
-    $Real$opaque (*__abs__)($Number$complex, $complex);
+    $WORD (*real)($Number$complex, $Real, $complex);
+    $WORD (*imag)($Number$complex, $Real, $complex);
+    $WORD (*__abs__)($Number$complex, $Real, $complex);
     $complex (*conjugate)($Number$complex, $complex);
 };
 
@@ -1935,9 +1936,9 @@ $complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__pow__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__neg__ ($Number$complex, $complex);
 $complex $Number$complex$__pos__ ($Number$complex, $complex);
-$Real$opaque $Number$complex$real ($Number$complex, $complex);
-$Real$opaque $Number$complex$imag ($Number$complex, $complex);
-$Real$opaque $Number$complex$__abs__ ($Number$complex, $complex);
+$WORD $Number$complex$real ($Number$complex, $Real, $complex);
+$WORD $Number$complex$imag ($Number$complex, $Real, $complex);
+$WORD $Number$complex$__abs__ ($Number$complex, $Real, $complex);
 $complex $Number$complex$conjugate ($Number$complex, $complex);
 
 // $Plus$complex ////////////////////////////////////////////////////////////
@@ -2048,7 +2049,7 @@ struct $Sliceable$tuple$class {
     void (*__setitem__)($Sliceable$tuple, $tuple, $int, $WORD);
     void (*__delitem__)($Sliceable$tuple, $tuple, $int);
     $tuple (*__getslice__)($Sliceable$tuple, $tuple, $Slice);
-    void (*__setslice__)($Sliceable$tuple, $tuple, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sliceable$tuple, $Iterable, $tuple, $Slice, $WORD);
     void (*__delslice__)($Sliceable$tuple, $tuple, $Slice);
 };
 
@@ -2057,7 +2058,7 @@ $WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple, $tuple, $int);
 void $Sliceable$tuple$__setitem__ ($Sliceable$tuple, $tuple, $int, $WORD);
 void $Sliceable$tuple$__delitem__ ($Sliceable$tuple, $tuple, $int);
 $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple, $tuple, $Slice);
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $tuple, $Slice, $Iterable$opaque);
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $Iterable, $tuple, $Slice, $WORD);
 void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $Slice);
 
 // $Hashable$tuple ////////////////////////////////////////////////////////////
@@ -2127,7 +2128,7 @@ struct $Sequence$bytearray$class {
     void (*__setitem__)($Sequence$bytearray, $bytearray, $int, $int);
     void (*__delitem__)($Sequence$bytearray, $bytearray, $int);
     $bytearray (*__getslice__)($Sequence$bytearray, $bytearray, $Slice);
-    void (*__setslice__)($Sequence$bytearray, $bytearray, $Slice, $Iterable$opaque);
+    void (*__setslice__)($Sequence$bytearray, $Iterable, $bytearray, $Slice, $WORD);
     void (*__delslice__)($Sequence$bytearray, $bytearray, $Slice);
     $Iterator (*__reversed__)($Sequence$bytearray, $bytearray);
     void (*insert)($Sequence$bytearray, $bytearray, $int, $int);
@@ -2140,7 +2141,7 @@ $int $Sequence$bytearray$__getitem__ ($Sequence$bytearray, $bytearray, $int);
 void $Sequence$bytearray$__setitem__ ($Sequence$bytearray, $bytearray, $int, $int);
 void $Sequence$bytearray$__delitem__ ($Sequence$bytearray, $bytearray, $int);
 $bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray, $bytearray, $Slice);
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $bytearray, $Slice, $Iterable$opaque);
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $Iterable, $bytearray, $Slice, $WORD);
 void $Sequence$bytearray$__delslice__ ($Sequence$bytearray, $bytearray, $Slice);
 $Iterator $Sequence$bytearray$__reversed__ ($Sequence$bytearray, $bytearray);
 void $Sequence$bytearray$insert ($Sequence$bytearray, $bytearray, $int, $int);
@@ -2160,13 +2161,13 @@ struct $Collection$bytearray$class {
     $Super$class $superclass;
     void (*__init__)($Collection$bytearray, $Sequence$bytearray);
     $Iterator (*__iter__)($Collection$bytearray, $bytearray);
-    $bytearray (*__fromiter__)($Collection$bytearray, $Iterable$opaque);
+    $bytearray (*__fromiter__)($Collection$bytearray, $Iterable, $WORD);
     $int (*__len__)($Collection$bytearray, $bytearray);
 };
 
 void $Collection$bytearray$__init__ ($Collection$bytearray, $Sequence$bytearray);
 $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
-$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable$opaque);
+$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable, $WORD);
 $int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
 
 // $Plus$bytearray ////////////////////////////////////////////////////////////

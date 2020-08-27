@@ -145,7 +145,7 @@ $range $Sequence$range$__getslice__ ($Sequence$range wit, $range self, $Slice sl
   int sstop = sstart->val + slen * sstep;
   return $NEW($range,sstart,to$int(sstop),to$int(sstep));
 }
-void $Sequence$range$__setslice__ ($Sequence$range wit, $range self, $Slice slc, $Iterable$opaque it) {
+void $Sequence$range$__setslice__ ($Sequence$range wit, $Iterable wit2, $range self, $Slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on range");
   exit(-1);
 }
@@ -171,7 +171,7 @@ $Iterator $Collection$range$__iter__ ($Collection$range wit, $range self) {
 }
   
   
-$range $Collection$range$__fromiter__ ($Collection$range wit, $Iterable$opaque it) {
+$range $Collection$range$__fromiter__ ($Collection$range wit, $Iterable wit2, $WORD iter) {
     RAISE(($BaseException)$NEW($NotImplementedError,to$str("__fromiter__ cannot be used to build range")));
     return NULL;
 }

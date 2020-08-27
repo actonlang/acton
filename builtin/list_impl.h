@@ -1,5 +1,5 @@
 
-void $list_init($list lst, $Sequence$opaque seq);
+void $list_init($list lst, $Sequence wit, $WORD seq);
 
 $list $list_copy($list lst);
 
@@ -7,7 +7,7 @@ $list $list_add($list lst, $list other);
 
 $Iterator $list_iter($list lst);
 
-$list $list_fromiter($Iterable$opaque it);
+$list $list_fromiter($Iterator it);
 long $list_len($list lst);
 
 int $list_contains($Eq w,$list lst, $WORD elem);

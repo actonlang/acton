@@ -2,7 +2,7 @@ struct $dict$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void(*__init__)($dict, $Hashable, $Mapping$opaque);
+  void(*__init__)($dict, $Hashable, $Mapping, $WORD);
   void (*__serialize__)($dict,$Serial$state);
   $dict (*__deserialize__)($Serial$state);
   $bool (*__bool__)($dict);

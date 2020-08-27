@@ -4,7 +4,7 @@ int main() {
   $register_builtin();
   $int a = to$int(17);
   $int b = to$int(36);
-  $list lst = $NEW($list,NULL);
+  $list lst = $NEW($list,NULL,NULL);
   $list_append(lst,a);
   $list_append(lst,b);
   // to serialize several objects, make a tuple.

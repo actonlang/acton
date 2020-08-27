@@ -37,7 +37,7 @@ $bool $str_isprintable($str s);
 $bool $str_isspace($str s);
 $bool $str_istitle($str s);
 $bool $str_isupper($str s);
-$str $str_join($str sep, $Iterable$opaque it);
+$str $str_join($str sep, $Iterable wit, $WORD iter);
 $str $str_ljust($str s, $int width, $str fill); 
 $str $str_lower($str s);
 $str $str_lstrip($str s,$str cs); 
@@ -73,7 +73,7 @@ int $str_ge($str,$str);
 
 $Iterator $str_iter($str);
 
-$str $str_fromiter($Iterable$opaque);
+$str $str_fromiter($Iterable, $WORD);
 $int $str_len($str str);
 
 int $str_contains ($str, $str);
@@ -114,8 +114,8 @@ $Iterator $Container$str$__iter__ ($Container$str wit, $str str) {
   return $str_iter(str);
 }
 
-$str $Container$str$__fromiter__ ($Container$str wit, $Iterable$opaque iter) {
-  return $str_join(to$str(""),iter);
+$str $Container$str$__fromiter__ ($Container$str wit, $Iterable wit2, $WORD iter) {
+  return $str_join(to$str(""),wit2,iter);
 }
 
 $int $Container$str$__len__ ($Container$str wit, $str str) {
@@ -148,7 +148,7 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
   return $str_getslice(str,slc);
 }
 
-void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $Slice slc, $Iterable$opaque it) {
+void $Sliceable$str$__setslice__ ($Sliceable$str wit, $Iterable wit2, $str str, $Slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on string");
   exit(-1);
 }
@@ -974,10 +974,10 @@ $bool $str_isupper($str s) {
   return to$bool(hascased);
 }
 
-$str $str_join($str s, $Iterable$opaque it) {
+$str $str_join($str s, $Iterable wit, $WORD iter) {
   int totchars = 0;
   int totbytes = 0;
-  $list lst = $list_fromiter(it);
+  $list lst = $list_fromiter(wit->$class->__iter__(wit,iter));
   $str nxt;
   int len = lst->length;
   for (int i=0; i<len; i++) {
@@ -1162,7 +1162,7 @@ $tuple $str_rpartition($str s, $str sep) {
 
 
 $list $str_split($str s, $str sep, $int maxsplit) {
-  $list res = $NEW($list,NULL);
+  $list res = $NEW($list,NULL,NULL);
   if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
   int remaining = s->nchars;
   if (sep == NULL) {
@@ -1239,7 +1239,7 @@ $list $str_split($str s, $str sep, $int maxsplit) {
 $list $str_splitlines($str s, $bool keepends) {
   if (!keepends)
     keepends = $False;
-  $list res = $NEW($list,NULL);
+  $list res = $NEW($list,NULL,NULL);
   unsigned char *p = s->str;
   unsigned char *q = p;
   int nbytes, codepoint, linelength;
@@ -1374,7 +1374,7 @@ static void expand_bytearray($bytearray b,int n) {
 
 
 // General methods, prototypes
-void $bytearray_init($bytearray, $Sequence$opaque);
+void $bytearray_init($bytearray, $struct);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 void $bytearray_serialize($bytearray,$Serial$state);
@@ -1403,7 +1403,7 @@ $bool $bytearray_isprintable($bytearray s);
 $bool $bytearray_isspace($bytearray s);
 $bool $bytearray_istitle($bytearray s);
 $bool $bytearray_isupper($bytearray s);
-$bytearray $bytearray_join($bytearray sep, $Iterable$opaque it);
+$bytearray $bytearray_join($bytearray sep, $Iterable wit, $WORD iter);
 $bytearray $bytearray_ljust($bytearray s, $int width, $bytearray fill); 
 $bytearray $bytearray_lower($bytearray s);
 $bytearray $bytearray_lstrip($bytearray s,$bytearray cs); 
@@ -1663,9 +1663,9 @@ $bool $bytearray_isupper($bytearray s) {
   return to$bool(has_upper);
 }
 
-$bytearray $bytearray_join($bytearray s, $Iterable$opaque it) {
+$bytearray $bytearray_join($bytearray s, $Iterable wit, $WORD iter) {
   int totbytes = 0;
-  $list lst = $list_fromiter(it);
+  $list lst = $list_fromiter(wit->$class->__iter__(wit,iter));
   $bytearray nxt;
   int len = lst->length;
   for (int i=0; i<len; i++) {
@@ -1871,7 +1871,7 @@ $bytearray $bytearray_rstrip($bytearray s, $bytearray cs) {
 }
  
 $list $bytearray_split($bytearray s, $bytearray sep, $int maxsplit) {
-  $list res = $NEW($list,NULL);
+  $list res = $NEW($list,NULL,NULL);
   if (maxsplit == NULL || from$int(maxsplit) < 0) maxsplit = to$int(INT_MAX); 
   if (sep == NULL) {
     unsigned char *p = s->str;
@@ -1941,7 +1941,7 @@ $list $bytearray_split($bytearray s, $bytearray sep, $int maxsplit) {
 $list $bytearray_splitlines($bytearray s, $bool keepends) {
   if (!keepends)
     keepends = $False;
-  $list res = $NEW($list,NULL);
+  $list res = $NEW($list,NULL,NULL);
   if (s->nbytes==0) {
     return res;
   }
@@ -2032,7 +2032,7 @@ $int $bytearray_getitem($bytearray, int);
 void $bytearray_setitem($bytearray, int, int);
 void $bytearray_delitem($bytearray, int);
 $bytearray $bytearray_getslice($bytearray, $Slice);
-void $bytearray_setslice($bytearray, $Slice, $Iterable$opaque);
+void $bytearray_setslice($bytearray, $Slice, $Iterator);
 void $bytearray_delslice($bytearray, $Slice);
 $Iterator $bytearray_reversed($bytearray);
 void $bytearray_insert($bytearray, int, $int);
@@ -2040,7 +2040,7 @@ void $bytearray_append($bytearray, $int);
 void $bytearray_reverse($bytearray);
 
 $Iterator $bytearray_iter($bytearray);
-$bytearray $bytearray_fromiter($Iterable$opaque);
+$bytearray $bytearray_fromiter($Iterable, $WORD);
 $int $bytearray_len($bytearray str);
 
 $bytearray $bytearray_add($bytearray, $bytearray);
@@ -2098,8 +2098,8 @@ $bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray
   return $bytearray_getslice(self,slc);
 }
 
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc, $Iterable$opaque it) {
-  $bytearray_setslice(self,slc,it);
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $Iterable wit2, $bytearray self, $Slice slc, $WORD iter) {
+  $bytearray_setslice(self,slc,wit2->$class->__iter__(wit2,iter));
 }
 
 void $Sequence$bytearray$__delslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc) {
@@ -2129,8 +2129,8 @@ $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray wit, $bytearray 
   return $bytearray_iter(str);
 }
 
-$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray wit, $Iterable$opaque iter) {
-  return $bytearray_join(to$bytearray(""),iter);
+$bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray wit, $Iterable wit2, $WORD iter) {
+  return $bytearray_join(to$bytearray(""),wit2,iter);
 }
 
 $int $Collection$bytearray$__len__ ($Collection$bytearray wit, $bytearray str) {
@@ -2149,8 +2149,8 @@ $Iterator $Container$bytearray$__iter__ ($Container$bytearray wit, $bytearray st
   return $bytearray_iter(str);
 }
 
-$bytearray $Container$bytearray$__fromiter__ ($Container$bytearray wit, $Iterable$opaque iter) {
-  return $bytearray_join(to$bytearray(""),iter);
+$bytearray $Container$bytearray$__fromiter__ ($Container$bytearray wit, $Iterable wit2, $WORD iter) {
+  return $bytearray_join(to$bytearray(""),wit2,iter);
 }
 
 $int $Container$bytearray$__len__ ($Container$bytearray wit, $bytearray str) {
@@ -2178,9 +2178,10 @@ struct $Ord$bytearray$class  $Ord$bytearray$methods = {"", UNASSIGNED, NULL,(voi
 struct $Ord$bytearray $Ord$bytearray_instance = {&$Ord$bytearray$methods};
 $Ord$bytearray $Ord$bytearray$witness = &$Ord$bytearray_instance;
 
-struct $Sequence$bytearray$class $Sequence$bytearray$methods = {"", UNASSIGNED,NULL,$Sequence$bytearray$__init__,$Sequence$bytearray$__getitem__, $Sequence$bytearray$__setitem__, $Sequence$bytearray$__delitem__,
-                                                      $Sequence$bytearray$__getslice__, $Sequence$bytearray$__setslice__, $Sequence$bytearray$__delslice__,
-                                                      $Sequence$bytearray$__reversed__,$Sequence$bytearray$insert,$Sequence$bytearray$append,$Sequence$bytearray$reverse};
+struct $Sequence$bytearray$class $Sequence$bytearray$methods = {"", UNASSIGNED,NULL,$Sequence$bytearray$__init__,
+                                                                $Sequence$bytearray$__getitem__, $Sequence$bytearray$__setitem__, $Sequence$bytearray$__delitem__,
+                                                                $Sequence$bytearray$__getslice__, $Sequence$bytearray$__setslice__, $Sequence$bytearray$__delslice__,
+                                                                $Sequence$bytearray$__reversed__,$Sequence$bytearray$insert,$Sequence$bytearray$append,$Sequence$bytearray$reverse};
 struct $Sequence$bytearray $Sequence$bytearray_instance = {&$Sequence$bytearray$methods, &$Collection$bytearray_instance,&$Plus$bytearray_instance};
 $Sequence$bytearray $Sequence$bytearray$witness = &$Sequence$bytearray_instance;
 
@@ -2293,8 +2294,7 @@ $bytearray $bytearray_getslice($bytearray self, $Slice slc) {
   return res;
 }
 
-void $bytearray_setslice($bytearray self, $Slice slc, $Iterable$opaque iter) {
-  $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
+void $bytearray_setslice($bytearray self, $Slice slc, $Iterator it) {
   int len = self->nbytes;
   $bytearray other;
   NEW_UNFILLED_BYTEARRAY(other,0);
@@ -2426,15 +2426,13 @@ $Iterator $bytearray_iter($bytearray self) {
 
 // Collection
   
-$bytearray $bytearray_fromiter($Iterable$opaque iter) {
+$bytearray $bytearray_fromiter($Iterable wit, $WORD iter) {
   $bytearray res;
   NEW_UNFILLED_BYTEARRAY(res,0);
-  if (iter) {
-    $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
-    $WORD nxt;
-    while ((nxt = it->$class->__next__(it))) {
-      $bytearray_append(res,($int)nxt);
-    }
+  $Iterator it = wit->$class->__iter__(wit,iter);
+  $WORD nxt;
+  while ((nxt = it->$class->__next__(it))) {
+    $bytearray_append(res,($int)nxt);
   }
   return res;
 }
@@ -2470,26 +2468,22 @@ int $bytearray_containsnot ($bytearray self, $int c) {
 
 // General methods, implementations
 
-void $bytearray_init($bytearray, $Sequence$opaque);
+void $bytearray_init($bytearray, $struct);
 void $bytearray_serialize($bytearray,$Serial$state);
 $bytearray $bytearray_deserialize($Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 
-void $bytearray_init($bytearray self, $Sequence$opaque s) {
+void $bytearray_init($bytearray self, $struct s) {
   if (!s) {
     self->nbytes = 0;
     self->str = NULL;
     return;
   }
-  $Collection wit = s->proto->w$Collection$Sequence;
-  self->nbytes = wit->$class->__len__(wit,s->impl)->val;
-  self->str = malloc(self->nbytes+1);
-  
-  $Iterator iter = wit->$class->__iter__(wit,s->impl);
-  for (int i=0; i<self->nbytes; i++)
-    self->str[i] = (unsigned char)(($int)s->proto->$class->__getitem__(s->proto,s->impl,to$int(i)))->val;
-  self->str[self->nbytes] = 0;
+  $str e = $NEW($str,s);
+  $bytearray b = e->$class->encode(e);
+  self->nbytes = b->nbytes;
+  self->str = b->str;
 }
 
 
@@ -2591,8 +2585,8 @@ $str $ascii($str s) {
   return res;
 }
    
-$str $bin($Integral$opaque n) {
-  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+$str $bin($Integral wit, $WORD n) {
+  long v = wit->$class->__int__(wit,n)->val;
   int sign = v<0;
   int nbits = 1;
   unsigned long u = labs(v);
@@ -2630,8 +2624,8 @@ $str $bin($Integral$opaque n) {
   return res;
 }
 
-$str $chr($Integral$opaque n) {
-  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+$str $chr($Integral wit, $WORD n) {
+  long v = wit->$class->__int__(wit,n)->val;
   if (v >=  0x110000)
      RAISE(($BaseException)$NEW($ValueError,to$str("chr: argument is not a valid Unicode code point")));
   unsigned char code[4];
@@ -2645,9 +2639,9 @@ $str $chr($Integral$opaque n) {
   return res;
 }
 
-$str $hex($Integral$opaque n) {
+$str $hex($Integral wit, $WORD n) {
   unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
-  long v = n->proto->$class->__int__(n->proto,n->impl)->val;
+  long v = wit->$class->__int__(wit,n)->val;
   int sign = v<0;
   int nhexs = 1;
   unsigned long u = labs(v);

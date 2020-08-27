@@ -16,7 +16,7 @@ void printSequence($Sequence wit, $WORD seq) {
 }
 
 $list range($Sequence wit, long a, long b) {
-  $list res = $NEW($list,NULL);
+  $list res = $NEW($list,NULL,NULL);
   for (long i=a; i<b; i++)
     wit->$class->append(wit,res,to$int(i));
   return res;
@@ -43,8 +43,8 @@ Plus$class Plus$int_instance = &Plus$int_struct;
 int main() {
   $Sequence wit = ($Sequence)$Sequence$list$witness;
   // first we use concat for list concatenation
-  $WORD lst = $NEW($list,NULL);
-  $WORD emptylist = $NEW($list,NULL);
+  $WORD lst = $NEW($list,NULL,NULL);
+  $WORD emptylist = $NEW($list,NULL,NULL);
   for (long i = 1; i< 10; i++) {
     wit->$class->append(wit,lst,range(wit,i,2*i));
   }

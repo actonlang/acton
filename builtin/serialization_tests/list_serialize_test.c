@@ -6,12 +6,12 @@
  
 int main() {
   $register_builtin();
-  $list lst2 = $NEW($list,NULL);
+  $list lst2 = $NEW($list,NULL,NULL);
   for (long i = 0L; i < TESTSIZE; i++) {
     if (i%2L != 0L) {
       $list_append(lst2,$list_getitem(lst2,i/2L));
     } else {
-      $list sublst = $NEW($list,NULL);
+      $list sublst = $NEW($list,NULL,NULL);
       for (long j=0L; j < i; j++)
         $list_append(sublst,to$int(j));
       $list_append(lst2,sublst);

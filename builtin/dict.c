@@ -10,8 +10,8 @@ $Iterator $Mapping$dict$__iter__ ($Mapping$dict wit, $dict dict) {
   return $dict_iter(dict);
 }
 
-$dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable$opaque iter) {
-  return $dict_fromiter(wit->w$Hashable$Mapping,iter);
+$dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable wit2, $WORD iter) {
+  return $dict_fromiter(wit->w$Hashable$Mapping,wit2->$class->__iter__(wit2,iter));
 }
 
 $int $Mapping$dict$__len__ ($Mapping$dict wit, $dict dict) {
@@ -42,8 +42,8 @@ $Iterator $Mapping$dict$items ($Mapping$dict wit, $dict dict) {
   return $dict_items(dict);
 }
 
-void $Mapping$dict$update ($Mapping$dict wit, $dict dict, $Iterable$opaque other) {
-  $dict_update(dict,wit->w$Hashable$Mapping,other);
+void $Mapping$dict$update ($Mapping$dict wit, $Iterable wit2, $dict dict, $WORD other) {
+  $dict_update(dict,wit->w$Hashable$Mapping,wit2->$class->__iter__(wit2,other));
 }
 
 $tuple $Mapping$dict$popitem ($Mapping$dict wit, $dict dict) {

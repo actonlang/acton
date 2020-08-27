@@ -36,7 +36,7 @@ struct $str$class {
   $bool (*isspace)($str s);
   $bool (*istitle)($str s);
   $bool (*isupper)($str s);
-  $str (*join)($str sep, $Iterable$opaque it);
+  $str (*join)($str sep, $Iterable wit, $WORD iter);
   $str (*ljust)($str s, $int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $str (*lower)($str s);
   $str (*lstrip)($str s,$str cs);                                // cs may be NULL, then defaulting to whitespace removal.
@@ -118,7 +118,7 @@ struct $bytearray$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($bytearray, $Sequence$opaque);
+  void (*__init__)($bytearray, $struct);
   void (*__serialize__)($bytearray,$Serial$state);
   $bytearray (*__deserialize__)($Serial$state);
   $bool (*__bool__)($bytearray);
@@ -140,7 +140,7 @@ struct $bytearray$class {
   $bool (*isspace)($bytearray s);
   $bool (*istitle)($bytearray s);
   $bool (*isupper)($bytearray s);
-  $bytearray (*join)($bytearray sep, $Iterable$opaque it);
+  $bytearray (*join)($bytearray sep, $Iterable wit, $WORD iter);
   $bytearray (*ljust)($bytearray s, $int width, $bytearray fill);                  
   $bytearray (*lower)($bytearray s);
   $bytearray (*lstrip)($bytearray s,$bytearray cs);                               
@@ -207,9 +207,9 @@ extern struct  $Iterator$bytearray$class  $Iterator$bytearray$methods;
 // All control and non-ASCII bytes are escaped using \xhh (so \x0a is used instead of \n, etc)
 // Single quotes are used as string delimiters.
 $str $ascii($str s);
-$str $bin($Integral$opaque n);
-$str $chr($Integral$opaque n);
-$str $hex($Integral$opaque n);
+$str $bin($Integral wit, $WORD n);
+$str $chr($Integral wit, $WORD n);
+$str $hex($Integral wit, $WORD n);
 $int $ord($str c);
 
 
