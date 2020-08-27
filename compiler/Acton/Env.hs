@@ -1011,6 +1011,7 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
                                     | KwdNotFound Name
+                                    | PosElemNotFound
                                     | DecorationMismatch Name TSchema Deco
                                     | EscapingVar [TVar] TSchema
                                     | NoSelStatic Name TCon
@@ -1032,6 +1033,7 @@ instance HasLoc TypeError where
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
     loc (KwdNotFound n)             = loc n
+    loc (PosElemNotFound)           = NoLoc     -- TODO: supply position
     loc (DecorationMismatch n t d)  = loc n
     loc (EscapingVar tvs t)         = loc tvs
     loc (NoSelStatic n u)           = loc n
@@ -1049,6 +1051,7 @@ typeError err                       = (loc err,render (expl err))
     expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
+    expl (PosElemNotFound)          = text "Positional element is not found"
     expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty (n,NSig t d)
     expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
@@ -1103,7 +1106,8 @@ notYetExpr e                        = notYet (loc e) e
 rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
 infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
 conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
-kwdNotFound n                       = Control.Exception.throw $ KwdNotFound n
+kwdNotFound n | n == name "_"       = Control.Exception.throw $ PosElemNotFound
+              | otherwise           = Control.Exception.throw $ KwdNotFound n
 decorationMismatch n t d            = Control.Exception.throw $ DecorationMismatch n t d
 escapingVar tvs t                   = Control.Exception.throw $ EscapingVar tvs t
 noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u

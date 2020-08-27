@@ -64,7 +64,7 @@ class list[A] (object):
   copy : () -> list[A]
 
 class range:
-  pass
+  __init__ : (int) -> None
 
 class Iterator[A] (object):
   __next__     : () -> A
