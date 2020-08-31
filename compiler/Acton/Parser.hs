@@ -578,7 +578,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = try funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef
 
 decorator :: Bool -> Parser S.Deco
 decorator sig = do
@@ -819,7 +819,8 @@ table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div, binary (opPre
 factor :: Parser S.Expr
 factor = ((unop (opPref "+") S.UPlus <|> unop (opPref "-") S.UMinus <|> unop (opPref "~") S.BNot) <*> factor)
         <|> power
-
+        <?> "factor"
+        
 power = addLoc $ do
            ae <- atom_expr
            mbe <- optional expo
@@ -841,6 +842,7 @@ atom_expr = do
               ts <- many trailer
               let e = foldl app a ts
               return $ maybe e (app e) await 
+              <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
              
         atom :: Parser S.Expr
@@ -871,7 +873,6 @@ atom_expr = do
                <|> (S.NotImplemented  <$>  rwordLoc "NotImplemented")
                <|> (\l -> S.Bool l True) <$> rwordLoc "True"
                <|> (\l -> S.Bool l False) <$> rwordLoc "False")
-               <?> "atomic expression"
 
         expr_or_tuplemaker              = do r <- funItems S.PosArg S.PosStar S.PosNil expr expr kwdarg S.KwdNil
                                              case r of

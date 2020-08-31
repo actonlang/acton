@@ -19,7 +19,7 @@ static $Iterator $set_iter_entry($set set);
 
 // General methods ///////////////////////////////////////////////////////////////////////////////////
 
-void $set_init($set set, $Hashable hashwit, $Set$opaque s) {
+void $set_init($set set, $Hashable hashwit, $Set swit, $WORD s) {
   set->numelements = 0;
   set->fill = 0;
   set->mask = MIN_SIZE-1;
@@ -27,9 +27,9 @@ void $set_init($set set, $Hashable hashwit, $Set$opaque s) {
   set->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(set->table,0,MIN_SIZE*sizeof($setentry));
   if (s) {
-    $Iterator iter = s->proto->$class->__iter__(s->proto,s->impl);
+    $Iterator it = swit->$class->__iter__(swit,s);
     $WORD nxt;
-    while((nxt = iter->$class->__next__(iter))) {
+    while((nxt = it->$class->__next__(it))) {
       $set_add(set,hashwit,nxt);
     }
   }
@@ -333,7 +333,7 @@ int $set_lt($Hashable hashwit, $set set, $set other) {
 $set $set_intersection($Hashable hashwit, $set set, $set other) {
   if ($set_len(other) > $set_len(set))
     return $set_intersection(hashwit,other,set);
-  $set res = $NEW($set,hashwit,NULL);
+  $set res = $NEW($set,hashwit,NULL,NULL);
   $Iterator iter = $set_iter_entry(set);
   $WORD w;
   while((w = $next(iter))){
@@ -431,20 +431,17 @@ int $set_isdisjoint($Hashable hashwit, $set set, $set other) {
 
 // Collection /////////////////////////////////////////////////////////////////////////////////////////////
 
-$set $set_fromiter($Hashable hashwit,$Iterable$opaque it) {
-  $set res = $NEW($set,hashwit,NULL);
+$set $set_fromiter($Hashable hashwit,$Iterator it) {
+  $set res = $NEW($set,hashwit,NULL,NULL);
   res->numelements = 0;
   res->fill = 0;
   res->mask = MIN_SIZE-1;
   res->finger = 0;
   res->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(res->table,0,MIN_SIZE*sizeof($setentry));
-  if (it) {
-    $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
-    $WORD nxt;
-    while((nxt = iter->$class->__next__(iter))) {
-      $set_add(res,hashwit,nxt);
-    }
+  $WORD nxt;
+  while((nxt = it->$class->__next__(it))) {
+    $set_add(res,hashwit,nxt);
   }
   return res;
 }

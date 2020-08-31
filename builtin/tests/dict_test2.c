@@ -18,20 +18,20 @@ long fromWord($WORD w) {
   return x;
 }
 
-$Iterable$opaque dict_iterable($Mapping$dict wit, $dict dict) {
+$Iterable dict_iterable($Mapping$dict wit) {
   $Iterable$class cl = malloc(sizeof(struct  $Iterable$class));
   cl->__iter__ = ($Iterator (*)($Iterable, $WORD))wit->$class->items;
   $Iterable wit2 = malloc(sizeof(struct $Iterable));
   wit2->$class = cl;
-  return $Iterable$pack(wit2,dict);
+  return wit2;
 }
     
 int main() {
   //$register_builtin();
   $Hashable hashwit = ($Hashable)$Hashable$str$witness;
   $Mapping$dict wit = $NEW($Mapping$dict,hashwit);
-  $dict dict = $NEW($dict,hashwit,NULL); 
-  $dict other = $NEW($dict,hashwit,NULL);
+  $dict dict = $NEW($dict,hashwit,NULL,NULL); 
+  $dict other = $NEW($dict,hashwit,NULL,NULL);
   int j;
 
   for (long i=1; i < 1000000; i++) {
@@ -95,7 +95,7 @@ int main() {
     }
   }
 
-  wit->$class->update(wit,dict,dict_iterable(wit,other));
+  wit->$class->update(wit,dict_iterable(wit),dict,other);
   if((item = wit->$class->popitem(wit,dict))) {
     printf("popitem gives: key=%ld, value=%ld\n",fromWord(item->components[0]),fromWord(item->components[1]));
   }

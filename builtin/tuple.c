@@ -164,7 +164,7 @@ $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $Slice 
   return res;
 }
 
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $tuple self, $Slice slc, $Iterable$opaque it) {
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $Iterable wit2, $tuple self, $Slice slc, $WORD iter) {
     fprintf(stderr,"%s\n","internal error: setslice on immutable tuple");
   exit(-1);
 }

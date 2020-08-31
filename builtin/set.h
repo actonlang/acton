@@ -2,7 +2,7 @@ struct $set$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($set, $Hashable, $Set$opaque);
+  void (*__init__)($set, $Hashable, $Set, $WORD);
   void (*__serialize__)($set, $Serial$state);
   $set (*__deserialize__)($Serial$state);
   $bool (*__bool__)($set);

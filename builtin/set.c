@@ -22,8 +22,8 @@ $Iterator $Set$set$__iter__ ($Set$set wit, $set set) {
   return $set_iter(set);
 }
 
-$set $Set$set$__fromiter__($Set$set wit, $Iterable$opaque iter) {
-  return $set_fromiter(wit->w$Hashable$Set,iter);
+$set $Set$set$__fromiter__($Set$set wit, $Iterable wit2, $WORD iter) {
+  return $set_fromiter(wit->w$Hashable$Set,wit2->$class->__iter__(wit2,iter));
 }
 
 $int $Set$set$__len__ ($Set$set wit, $set set) {

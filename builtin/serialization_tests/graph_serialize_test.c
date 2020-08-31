@@ -40,13 +40,13 @@ int main() {
   // We build a complete graph over SIZE nodes.
   
   $Node node[SIZE];
-  $list nodes = $NEW($list,NULL);
+  $list nodes = $NEW($list,NULL,NULL);
   $Graph g = $NEW($Graph,nodes);
   for (int i=0; i<SIZE; i += 2) {
     $int ival = to$int(i);
     $float fval = to$float(i*3.1416);
-    $list lst1 = $NEW($list,NULL);
-    $list lst2 = $NEW($list,NULL);
+    $list lst1 = $NEW($list,NULL,NULL);
+    $list lst2 = $NEW($list,NULL,NULL);
     node[i] = ($Node)$NEW($IntNode,lst1,ival);
     node[i+1] = ($Node)$NEW($FloatNode,lst2,fval);
   }

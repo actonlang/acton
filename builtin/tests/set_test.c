@@ -7,8 +7,8 @@
 int main() {
   $Hashable hashwit = ($Hashable)$Hashable$int$witness;
   $Set$set wit= $NEW($Set$set,hashwit);
-  $set s = $NEW($set,hashwit,NULL);
-  $set s2 = $NEW($set,hashwit,NULL);
+  $set s = $NEW($set,hashwit,NULL,NULL);
+  $set s2 = $NEW($set,hashwit,NULL,NULL);
   printf("sets created\n");
   for (long i = 13; i < 1000; i++) {
     wit->$class->add(wit,s,to$int(i*i));

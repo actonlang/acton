@@ -54,7 +54,7 @@ void printlist($list lst) {
 
 // Sieve of Erathostenes 
 $list sieve(int n) {
-  $list isPrime = $NEW($list,NULL); 
+  $list isPrime = $NEW($list,NULL,NULL); 
   $list_append(isPrime,$False); 
   $list_append(isPrime,$False);
   for (int i=2; i < n; i++) 
@@ -66,7 +66,7 @@ $list sieve(int n) {
         $list_setitem(isPrime,k,$False);
     }
   }
-  $list primes = $NEW($list,NULL);
+  $list primes = $NEW($list,NULL,NULL);
   for (int i=0; i<n; i++) {
     //if (from$bool(isPrime->data[i])) {
     if (from$bool($list_getitem(isPrime,i))) {
@@ -80,7 +80,7 @@ $list sieve(int n) {
 
 $list sieveS($Sequence$list wit, int n) {
   $WORD w;
-  $list isPrime = $NEW($list,NULL);
+  $list isPrime = $NEW($list,NULL,NULL);
   wit->$class->append(wit,isPrime,$False); 
   wit->$class->append(wit,isPrime,$False);
   for (int i=2; i < n; i++) 
@@ -92,7 +92,7 @@ $list sieveS($Sequence$list wit, int n) {
         wit->$class->__setitem__(wit,isPrime,to$int(k),$False);
     }
   }
-  $list primes = $NEW($list,NULL);
+  $list primes = $NEW($list,NULL,NULL);
   for (int i=0; i<n; i++) {
     w = wit->$class->__getitem__(wit,isPrime,to$int(i));
     if (from$bool(w)) {

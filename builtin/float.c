@@ -53,8 +53,8 @@ $float $float_fromatom($Super a) {
     else
       RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
   }
-  fprintf(stderr,"float_fromatom: argument not of atomic type");
-  exit(1);
+  fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
+  exit(-1);
 }
 
 
@@ -88,16 +88,19 @@ $float $Real$float$__float__ ($Real$float wit, $float x) {
   return x;
 }
 
-$Integral$opaque $Real$float$__trunc__ ($Real$float wit, $float x) {
-  return $Integral$pack(($Integral)$Integral$int$witness,to$int((long)trunc(from$float(x))));
+$WORD $Real$float$__trunc__ ($Real$float wit, $Integral wit2, $float x) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,to$int((long)trunc(from$float(x))));
 }
   
-$Integral$opaque $Real$float$__floor__ ($Real$float wit, $float x) {
-  return $Integral$pack(($Integral)$Integral$int$witness,to$int((long)floor(from$float(x))));
+$WORD $Real$float$__floor__ ($Real$float wit, $Integral wit2, $float x) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,to$int((long)floor(from$float(x))));
 }
   
-$Integral$opaque $Real$float$__ceil__ ($Real$float wit, $float x) {
-  return $Integral$pack(($Integral)$Integral$int$witness,to$int((long)ceil(from$float(x))));
+$WORD $Real$float$__ceil__ ($Real$float wit, $Integral wit2, $float x) {
+  $Number wit3 = wit2->w$Number$Integral;
+  return wit3->$class->__fromatom__(wit3,to$int((long)ceil(from$float(x))));
 }
   
 $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
@@ -145,16 +148,19 @@ $float $Number$float$__pos__($Number$float wit, $float a) {
   return a;
 }
 
-$Real$opaque $Number$float$real($Number$float wit, $float a) {
-  return $Real$pack(($Real)$Real$float$witness,a);
+$WORD $Number$float$real($Number$float wit, $Real wit2, $float a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,a);
 }
 
-$Real$opaque $Number$float$imag($Number$float wit,  $float a) {
-  return  $Real$pack(($Real)$Real$float$witness,to$float(0.0));
+$WORD $Number$float$imag($Number$float wit, $Real wit2,  $float a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$float(0.0));
 }
 
-$Real$opaque $Number$float$__abs__($Number$float wit,  $float a) {
-  return  $Real$pack(($Real)$Real$float$witness,to$float(fabs(from$float(a))));
+$WORD $Number$float$__abs__($Number$float wit, $Real wit2,  $float a) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$float(fabs(from$float(a))));
 }
 
 $float $Number$float$conjugate($Number$float wit,  $float a) {

@@ -73,16 +73,19 @@ $complex $Number$complex$__pos__ ($Number$complex wit, $complex c) {
   return c;
 }
 
-$Real$opaque $Number$complex$real ($Number$complex wit, $complex c) {
-  return $Real$pack(($Real)$Real$float$witness,to$float(creal(c->val)));
+$WORD $Number$complex$real ($Number$complex wit, $Real wit2, $complex c) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$float(creal(c->val)));
 }
 
-$Real$opaque $Number$complex$imag ($Number$complex wit, $complex c) {
-  return $Real$pack(($Real)$Real$float$witness,to$float(cimag(c->val)));
+$WORD $Number$complex$imag ($Number$complex wit, $Real wit2, $complex c) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$float(cimag(c->val)));
 }
 
-$Real$opaque $Number$complex$__abs__ ($Number$complex wit, $complex c) {
-  return $Real$pack(($Real)$Real$float$witness,to$float(cabs(c->val)));
+$WORD $Number$complex$__abs__ ($Number$complex wit, $Real wit2, $complex c) {
+  $Number wit3 = wit2->w$Number$Real;
+  return wit3->$class->__fromatom__(wit3,to$float(cabs(c->val)));
 }
 
 $complex $Number$complex$conjugate ($Number$complex wit, $complex c) {

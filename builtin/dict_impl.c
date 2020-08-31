@@ -35,15 +35,15 @@ struct $table_struct {
 // General methods /////////////////////////////////////////////////////////////////////////
 
 
-void $dict_init($dict dict, $Hashable hashwit, $Mapping$opaque m) { 
+void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping) { 
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  if (m) {
-    $Iterator iter = m->proto->$class->__iter__(m->proto,m->impl);
+  if (mapping) {
+    $Iterator iter = mwit->$class->__iter__(mwit,mapping);
     $tuple nxt;
     while((nxt = ($tuple)iter->$class->__next__(iter))) {
       $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
@@ -381,20 +381,17 @@ void $dict_delitem($dict dict, $Hashable hashwit, $WORD key) {
 
 // Collection ///////////////////////////////////////////////////////////////////////////////
 
-$dict $dict_fromiter($Hashable hashwit, $Iterable$opaque iter) {
-  $dict dict = $NEW($dict,hashwit,NULL);
+$dict $dict_fromiter($Hashable hashwit, $Iterator it) {
+  $dict dict = $NEW($dict,hashwit,NULL,NULL);
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  if (iter) {
-    $Iterator it = iter->proto->$class->__iter__(iter->proto,iter->impl);
-    $tuple nxt;
-    while((nxt = ($tuple)it->$class->__next__(it))) {
-      $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
-    }
+  $tuple nxt;
+  while((nxt = ($tuple)it->$class->__next__(it))) {
+    $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
   }
   return dict;
 }
@@ -552,10 +549,9 @@ $tuple $dict_popitem($dict dict, $Hashable hashwit) {
   return NULL;
 }
 
-void $dict_update($dict dict,  $Hashable hashwit, $Iterable$opaque it) {
-  $Iterator iter = it->proto->$class->__iter__(it->proto,it->impl);
+void $dict_update($dict dict,  $Hashable hashwit, $Iterator it) {
   $tuple item;
-  while((item = ($tuple)iter->$class->__next__(iter)))
+  while((item = ($tuple)it->$class->__next__(it)))
     $dict_setitem(dict,hashwit,item->components[0],item->components[1]);
 }
 
