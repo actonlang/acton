@@ -708,43 +708,31 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-splitGen                                :: Env -> Constraints -> TEnv -> Equations 
-                                           -> TypeM ([TVar], Constraints, Constraints, TEnv, Equations)
-splitGen env cs te eq
-  | not $ null solve_vs                 = do traceM ("  #solving vs    : " ++ prstrs solve_vs)
-                                             traceM ("           gen   : " ++ prstrs gen_cs)
-                                             traceM ("           fvs   : " ++ prstrs fvs)
-                                             traceM ("           fixed : " ++ prstrs fixed_cs)
-                                             traceM ("         fixed_vs : " ++ prstrs fixed_vs)
-                                             (cs',eq') <- solve env te tNone eq solve_vs gen_cs
-                                             splitAgain (fixed_cs++cs') eq'
-  | not $ null collapse_vs              = do traceM ("  #collapsing vs    : " ++ prstrs collapse_vs)
-                                             traceM ("              gen   : " ++ prstrs gen_cs)
-                                             traceM ("              fvs   : " ++ prstrs fvs)
-                                             traceM ("              fixed : " ++ prstrs fixed_cs)
-                                             traceM ("           fixed_vs : " ++ prstrs fixed_vs)
-                                             (cs',eq') <- collapse env eq collapse_vs gen_cs
-                                             splitAgain (fixed_cs++cs') eq'
-  | not $ null ambig_vs                 = do traceM ("  #defaulting vs    : " ++ prstrs ambig_vs)
-                                             traceM ("              gen   : " ++ prstrs gen_cs)
-                                             traceM ("              fixed : " ++ prstrs fixed_cs)
-                                             (cs',eq') <- solve env te tNone eq ambig_vs gen_cs
-                                             splitAgain (fixed_cs++cs') eq'
+refine                                  :: Env -> Constraints -> TEnv -> Equations 
+                                           -> TypeM ([TVar], Constraints, TEnv, Equations)
+refine env cs te eq
+  | not $ null solve_vs                 = do traceM ("  #solving vs : " ++ prstrs solve_vs)
+                                             traceM ("           cs : " ++ prstrs cs)
+                                             (cs',eq') <- solve (define te env) te tNone eq solve_vs cs
+                                             refineAgain cs' eq'
+  | not $ null collapse_vs              = do traceM ("  #collapsing vs : " ++ prstrs collapse_vs)
+                                             traceM ("              cs : " ++ prstrs cs)
+                                             (cs',eq') <- collapse env eq collapse_vs cs
+                                             refineAgain cs' eq'
+  | not $ null ambig_vs                 = do traceM ("  #defaulting vs : " ++ prstrs ambig_vs)
+                                             traceM ("              cs : " ++ prstrs cs)
+                                             (cs',eq') <- solve env te tNone eq ambig_vs cs
+                                             refineAgain cs' eq'
   | otherwise                           = do eq <- msubst eq
-                                             traceM ("  #returning vs    : " ++ prstrs gen_vs)
-                                             traceM ("             vss   : " ++ show def_vss)
-                                             traceM ("             gen   : " ++ prstrs gen_cs)
-                                             traceM ("             fixed : " ++ prstrs fixed_cs)
-                                             return (gen_vs, fixed_cs, gen_cs, te, eq)
-  where fvs                             = tyfree env
-        (fixed_cs, gen_cs)              = partition (all (`elem` fixed_vs) . tyfree) cs
-        fixed_vs                        = closeDepVars fvs cs
+                                             traceM ("  #returning vs : " ++ prstrs gen_vs)
+                                             traceM ("             cs : " ++ prstrs cs)
+                                             return (gen_vs, cs, te, eq)
+  where solve_vs                        = [ headvar c | c <- cs, mustSolve c ]
+        collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
+        ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
-        solve_vs                        = [ headvar c | c <- gen_cs, mustSolve c ]
-        collapse_vs                     = concat [ tyfree c | c <- gen_cs, mustCollapse c ]
-        ambig_vs                        = tyfree gen_cs \\ closeDepVars safe_vs gen_cs
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
-        def_vss                         = [ nub $ tyfree sc \\ fixed_vs | (_, NDef sc _) <- te, null $ scbind sc ]
+        def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union [] def_vss)
         
         mustSolve c                     = not (canQual c) && not (mustCollapse c)
@@ -757,10 +745,10 @@ splitGen env cs te eq
         mustCollapse (Sub _ TVar{} TVar{}) = True
         mustCollapse _                     = False
 
-        splitAgain cs eq                = do (cs,eq') <- simplify env te tNone cs
+        refineAgain cs eq               = do (cs,eq') <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             splitGen env cs te (eq'++eq)
+                                             refine env cs te (eq'++eq)
 
 tyfixed te                              = tyfree $ filter (not . gen) te
   where gen (n, NDef sc _)              = null $ scbind sc
@@ -779,24 +767,20 @@ genEnv env cs te ds0
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
                                              env <- msubst env
-                                             traceM ("## splitGen: " ++ prstrs cs0)
-                                             (gen_vs, fixed_cs, gen_cs, te, eq1) <- splitGen env cs0 te eq0
+                                             traceM ("## refine: " ++ prstrs cs0)
+                                             (gen_vs, gen_cs, te, eq1) <- refine env cs0 te eq0
                                              traceM ("## genEnv 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
                                              let (q,ws) = qualify gen_vs gen_cs
                                                  te1 = map (generalize q) te
                                                  ds1 = map (abstract q ds0 ws eq1) ds0
                                              traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
-                                             return (fixed_cs, te1, ds1)
+                                             return ([], te1, ds1)
   | otherwise                           = do te <- msubst te
-                                             traceM ("## genEnv' 1\n" ++ render (nest 6 $ pretty te))
+                                             traceM ("## noGenEnv\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
-                                             env <- msubst env
-                                             traceM ("## splitGen': " ++ prstrs cs0)
-                                             (gen_vs, fixed_cs, gen_cs, te, eq1) <- splitGen env cs0 te eq0                 -- TODO: why is this step necessary?
-                                             traceM ("## genEnv' 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
-                                             let ds1 = map (abstract [] ds0 [] eq1) ds0
-                                             return (fixed_cs++gen_cs, te, ds1)
+                                             let ds1 = map (abstract [] ds0 [] eq0) ds0
+                                             return (cs0, te, ds1)
   where
     generalize q (n, NDef sc d)
       | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)

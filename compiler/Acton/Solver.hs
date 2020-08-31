@@ -179,7 +179,6 @@ solveSelAttr env (wf,sc,_) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env 
 solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c -> tcargs c; _ -> []
                                                  (cs1,p,we) <- instWitness env ts wit
                                                  let Just (wf,sc,dec) = findAttr env p n
-                                                 traceM ("## Found attr " ++ prstr n ++ ": " ++ prstr sc)
                                                  (cs2,tvs,t) <- instantiate env sc
                                                  let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar x0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
@@ -981,6 +980,7 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         
 
 solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
+                                             traceM ("###allCons: " ++ prstrs (allCons env))
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
                                              env <- msubst env
