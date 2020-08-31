@@ -213,8 +213,8 @@ class set[A(Hashable)] (object):
 #   Integral <--------
 
 protocol Number (Eq,Plus,Minus):
-#  @staticmethod
-#  __fromatom__ : ((int|float|bool|str)) -> Self
+  @staticmethod
+  __fromatom__ : ((int|float|bool|str)) -> Self
 
   __complex__  : () -> complex
 
