@@ -11,19 +11,46 @@ import Acton.TypeM
 import Utils
 
 
-subst                                   :: Subst a => Substitution -> a -> a
-subst s x0
-  | null clash                          = evalState (msubst x0) (initTypeState $ Map.fromList s)
-  | otherwise                           = x2
-  where x1                              = evalState (msubst x0) (initTypeState $ Map.fromList (s1 ++ clash `zip` map tVar tmp))
-        x2                              = evalState (msubst x1) (initTypeState $ Map.fromList (s1 ++ tmp `zip` rng s0))
-        (s0,s1)                         = partition ((`elem` clash) . fst) s
-        clash                           = dom s `intersect` tyfree (rng s)
-        used                            = dom s ++ tyfree (rng s)                             
-        tmp                             = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
+closeDepVars vs cs
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVars (vs'++vs) cs
+  where vs'                         = concat [ deps c \\ vs | c <- cs, all (`elem` vs) (heads c) ]
+        heads (Impl w t _)          = tyfree t
+        heads (Cast t _)            = tyfree t
+        heads (Sub w t _)           = tyfree t
+        heads (Sel w t n _)         = tyfree t
+        heads (Mut t n _)           = tyfree t
+        heads (Seal q t _ t' _)     = tyfree t ++ tyfree t'
+        deps (Impl w _ p)           = tyfree p
+        deps (Cast _ t)             = typars t
+        deps (Sub w _ t)            = typars t
+        deps (Sel w _ n t)          = typars t
+        deps (Mut _ n t)            = typars t
+        deps (Seal w _ t _ t')      = typars t ++ typars t'
+        typars (TOpt _ t)           = typars t
+        typars (TCon _ c)           = tyfree c
+        typars (TFX _ fx)           = tyfree fx
+        typars _                    = []
 
-erase x                                 = subst s x
-  where s                               = [ (tv, tWild) | tv <- nub (tyfree x) ]
+closeDepVarsQ vs q
+  | null vs'                        = nub vs
+  | otherwise                       = closeDepVarsQ (vs'++vs) q
+  where vs'                         = concat [ tyfree us \\ vs | Quant v us <- q, v `elem` vs ]
+  
+
+subst                               :: Subst a => Substitution -> a -> a
+subst s x0
+  | null clash                      = evalState (msubst x0) (initTypeState $ Map.fromList s)
+  | otherwise                       = x2
+  where x1                          = evalState (msubst x0) (initTypeState $ Map.fromList (s1 ++ clash `zip` map tVar tmp))
+        x2                          = evalState (msubst x1) (initTypeState $ Map.fromList (s1 ++ tmp `zip` rng s0))
+        (s0,s1)                     = partition ((`elem` clash) . fst) s
+        clash                       = dom s `intersect` tyfree (rng s)
+        used                        = dom s ++ tyfree (rng s)                             
+        tmp                         = take (length clash) $ map (TV KWild . Internal TypesPass "") [1 ..] \\ used
+
+erase x                             = subst s x
+  where s                           = [ (tv, tWild) | tv <- nub (tyfree x) ]
 
 
 class Subst t where

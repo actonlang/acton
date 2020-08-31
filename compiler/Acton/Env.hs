@@ -478,6 +478,9 @@ actorFX env l               = case actorstate env of
                                 Just st -> fxAct st
                                 Nothing -> err l "Actor scope expected"
 
+onTop                       :: Env -> Bool
+onTop env                   = context env == CtxTop
+
 inAct                       :: Env -> Bool
 inAct env                   = context env == CtxAct
 
@@ -952,46 +955,16 @@ monotypeOf sc                           = err1 sc "Monomorphic type expected"
 headvar (Impl w (TVar _ v) p)       = v
 headvar (Cast (TVar _ v) t)
   | univar v                        = v
-headvar (Cast t (TVar _ v))         = v
+headvar (Cast t (TVar _ v))         = v     -- ?
 headvar (Sub w (TVar _ v) t)
   | univar v                        = v
-headvar (Sub w t (TVar _ v))        = v
+headvar (Sub w t (TVar _ v))        = v     -- ?
 headvar (Sel w (TVar _ v) n t)      = v
 headvar (Mut (TVar _ v) n t)        = v
 headvar (Seal w (TVar _ v) _ _ _)   = v
-headvar (Seal w _ (TVar _ v) _ _)   = v
+headvar (Seal w _ (TVar _ v) _ _)   = v     -- ?
 
-splitFixed fvs cs
-  | null fvs'                       = (fixed,cs')
-  | otherwise                       = splitFixed (fvs'++fvs) cs
-  where (fixed,cs')                 = partition (fixedP fvs) cs
-        fvs'                        = concat (map depVars cs) \\ fvs
-
-        fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
-        fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
-        fixedP vs c                 = headvar c `elem` vs
         
-depVars (Cast TVar{} t@TCon{})      = tyfree t
-depVars (Sub _ TVar{} t@TCon{})     = tyfree t
-depVars (Impl _ TVar{} p)           = tyfree p
-depVars _                           = []
-        
-findAmbig safe cs
-  | null safe'                      = nub [ headvar c | c <- amb_cs ]
-  | otherwise                       = findAmbig (safe'++safe) cs
-  where (amb_cs,cs')                = partition (ambigP safe) cs
-        safe'                       = concat (map depVars cs') \\ safe
-
-        ambigP vs (Impl _ (TVar _ v) _) = v `notElem` vs
-        ambigP vs c                     = False
-
-closeDeps vs cs
-  | null vs'                        = nub vs
-  | otherwise                       = closeDeps (vs'++vs) cs
-  where vs'                         = concat [ depVars c \\ vs | c <- cs, headvar c `elem` vs ]
-  
-
-
 -- Error handling ------------------------------------------------------------------------
 
 data CheckerError                   = FileNotFound ModName

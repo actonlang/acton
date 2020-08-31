@@ -38,9 +38,13 @@ simpSchema (TSchema l q t)      = TSchema l (subst s [ Quant v ps | Quant v ps <
         isX _                   = False
         s                       = [ (v, tCon p) | Quant v [p] <- q1 ]
         
-simpSig (n, NSig sc dec)          = (n, NSig (simpSchema sc) dec)
-simpSig (n, NDef sc dec)          = (n, NDef (simpSchema sc) dec)
-simpSig (n, i)                    = (n, i)
+simpSig (n, NSig sc dec)        = (n, NSig (simpSchema sc) dec)
+simpSig (n, NDef sc dec)        = (n, NDef (simpSchema sc) dec)
+simpSig (n, NClass q us te)     = (n, NClass q us (map simpSig te))
+simpSig (n, NProto q us te)     = (n, NProto q us (map simpSig te))
+simpSig (n, NExt n' q us te)    = (n, NExt n' q us (map simpSig te))
+simpSig (n, NAct q p k te)      = (n, NAct q p k (map simpSig te))
+simpSig (n, i)                  = (n, i)
 
 
 ------------------------------
@@ -484,7 +488,7 @@ addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
 addSelf t _                             = t
 
 openAction env (TFun l fx p k t)
-  | fx == fxAction                      = TFun l (actorFX env l) p k t
+  | fx == fxAction                      = TFun l tWild p k t
 openAction env t                        = t
 
 openAction' env (TSchema l q t)         = TSchema l q $ openAction env t
@@ -526,19 +530,23 @@ infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ d
                 pvs _                   = []
 
 matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
-                                             (cs,eq) <- simplify env te tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
+                                             (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
                                              traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, i) | isHidden n      = return ([], [])
-        check1 (n, NVar t)              = simplify env te tNone [Cast t t0]
+        check1 (n, NVar t)              = -- simplify env te0 tNone [Cast t t0]
+                                          do unify env t t0
+                                             return ([],[])
           where t0                      = case lookup n te0 of
                                              Just (NSig (TSchema _ _ t0) _) -> t0
                                              Just (NVar t0) -> t0
-        check1 (n, NDef sc _)           = do traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             (cs1,_,t) <- instantiate env sc
-                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te tNone (Cast t (openAction env t0) : cs1)
+        check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
+                                             traceM ("## matchActorAssumption for method " ++ prstr n ++ ", t0: " ++ prstr t0 ++ ", t: " ++ prstr t)
+                                             unify env t (openAction env t0)
+                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
+--                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone (Cast t (openAction env t0) : cs1)
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
           where TSchema _ q t0          = case lookup n te0 of
@@ -572,6 +580,7 @@ instance Check Decl where
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newTVar
+                                             traceM ("## actor st: " ++ prstr st)
                                              pushFX (fxAct st) tNone
                                              env1 <- return $ setActorFX st env1
                                              (csp,te1,p') <- infEnv env1 p
@@ -579,7 +588,8 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (cswf++csp++csk++csb++cs0)
+                                             st <- msubst st
+                                             (cs1,eq1) <- solveScoped env1 (tvar st : tvs) te tNone (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
@@ -703,12 +713,16 @@ splitGen                                :: Env -> Constraints -> TEnv -> Equatio
 splitGen env cs te eq
   | not $ null solve_vs                 = do traceM ("  #solving vs    : " ++ prstrs solve_vs)
                                              traceM ("           gen   : " ++ prstrs gen_cs)
+                                             traceM ("           fvs   : " ++ prstrs fvs)
                                              traceM ("           fixed : " ++ prstrs fixed_cs)
+                                             traceM ("         fixed_vs : " ++ prstrs fixed_vs)
                                              (cs',eq') <- solve env te tNone eq solve_vs gen_cs
                                              splitAgain (fixed_cs++cs') eq'
   | not $ null collapse_vs              = do traceM ("  #collapsing vs    : " ++ prstrs collapse_vs)
                                              traceM ("              gen   : " ++ prstrs gen_cs)
+                                             traceM ("              fvs   : " ++ prstrs fvs)
                                              traceM ("              fixed : " ++ prstrs fixed_cs)
+                                             traceM ("           fixed_vs : " ++ prstrs fixed_vs)
                                              (cs',eq') <- collapse env eq collapse_vs gen_cs
                                              splitAgain (fixed_cs++cs') eq'
   | not $ null ambig_vs                 = do traceM ("  #defaulting vs    : " ++ prstrs ambig_vs)
@@ -723,25 +737,25 @@ splitGen env cs te eq
                                              traceM ("             fixed : " ++ prstrs fixed_cs)
                                              return (gen_vs, fixed_cs, gen_cs, te, eq)
   where fvs                             = tyfree env
-        (fixed_cs, gen_cs)              = splitFixed fvs cs
+        (fixed_cs, gen_cs)              = partition (all (`elem` fixed_vs) . tyfree) cs
+        fixed_vs                        = closeDepVars fvs cs
 
-        solve_vs                        = [ headvar c | c <- gen_cs, solveP c ]
-        collapse_vs                     = concat [ tyfree c | c <- gen_cs, collapseP c ]
-        ambig_vs                        = findAmbig safe_vs gen_cs
-        fixed_vs                        = nub $ fvs ++ tyfree fixed_cs
+        solve_vs                        = [ headvar c | c <- gen_cs, mustSolve c ]
+        collapse_vs                     = concat [ tyfree c | c <- gen_cs, mustCollapse c ]
+        ambig_vs                        = tyfree gen_cs \\ closeDepVars safe_vs gen_cs
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ tyfree sc \\ fixed_vs | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union [] def_vss)
         
-        solveP (Cast (TVar _ v) (TVar _ w))  = not (univar v && univar w)
-        solveP (Sub _ (TVar _ v) (TVar _ w)) = not (univar v && univar w)
-        solveP (Cast (TVar _ v) TCon{})      = not (univar v)
-        solveP (Impl _ (TVar _ v) _)         = not (univar v)
-        solveP _                             = True
+        mustSolve c                     = not (canQual c) && not (mustCollapse c)
 
-        collapseP (Cast TVar{} TVar{})  = True
-        collapseP (Sub _ TVar{} TVar{}) = True
-        collapseP _                     = False
+        canQual (Cast (TVar _ v) TCon{})   = univar v
+        canQual (Impl _ (TVar _ v) _)      = univar v
+        canQual _                          = False
+
+        mustCollapse (Cast TVar{} TVar{})  = True
+        mustCollapse (Sub _ TVar{} TVar{}) = True
+        mustCollapse _                     = False
 
         splitAgain cs eq                = do (cs,eq') <- simplify env te tNone cs
                                              te <- msubst te
@@ -760,17 +774,7 @@ qualify vs cs                           = let (q,wss) = unzip $ map qbind vs in 
 
 genEnv                                  :: Env -> Constraints -> TEnv -> [Decl] -> TypeM (Constraints,TEnv,[Decl])
 genEnv env cs te ds0
-  | inAct env                           = do te <- msubst te
-                                             traceM ("## genEnv' 1\n" ++ render (nest 6 $ pretty te))
-                                             (cs0,eq0) <- simplify env te tNone cs
-                                             te <- msubst te
-                                             env <- msubst env
-                                             traceM ("## splitGen': " ++ prstrs cs0)
-                                             (gen_vs, fixed_cs, gen_cs, te, eq1) <- splitGen env cs0 te eq0         -- TODO: why is this step necessary?
-                                             traceM ("## genEnv' 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
-                                             let ds1 = map (abstract [] ds0 [] eq1) ds0
-                                             return (fixed_cs++gen_cs, te, ds1)
-  | otherwise                           = do te <- msubst te
+  | onTop env                           = do te <- msubst te
                                              traceM ("## genEnv 1\n" ++ render (nest 6 $ pretty te))
                                              (cs0,eq0) <- simplify env te tNone cs
                                              te <- msubst te
@@ -783,6 +787,16 @@ genEnv env cs te ds0
                                                  ds1 = map (abstract q ds0 ws eq1) ds0
                                              traceM ("## genEnv 3 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te1))
                                              return (fixed_cs, te1, ds1)
+  | otherwise                           = do te <- msubst te
+                                             traceM ("## genEnv' 1\n" ++ render (nest 6 $ pretty te))
+                                             (cs0,eq0) <- simplify env te tNone cs
+                                             te <- msubst te
+                                             env <- msubst env
+                                             traceM ("## splitGen': " ++ prstrs cs0)
+                                             (gen_vs, fixed_cs, gen_cs, te, eq1) <- splitGen env cs0 te eq0                 -- TODO: why is this step necessary?
+                                             traceM ("## genEnv' 2 [" ++ prstrs gen_vs ++ "]\n" ++ render (nest 6 $ pretty te))
+                                             let ds1 = map (abstract [] ds0 [] eq1) ds0
+                                             return (fixed_cs++gen_cs, te, ds1)
   where
     generalize q (n, NDef sc d)
       | null $ scbind sc                = (n, NDef (tSchema q (sctype sc)) d)
