@@ -33,6 +33,8 @@ simplify' env te tt eq cs                   = do eq1 <- reduce env eq cs
                                                  env1 <- msubst env 
                                                  te1 <- msubst te
                                                  tt1 <- msubst tt
+                                                 --traceM ("############## env:\n" ++ prstr [ (n,i) | (n,i@NAct{}) <- names env1 ])
+                                                 --traceM ("############## cs:\n" ++ render (nest 4 $ vcat (map pretty cs1)) ++ "\n##############")
                                                  improve env1 te1 tt1 eq1 cs1
 
 
@@ -562,8 +564,8 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
     f (Sub _ (TVar _ v) t : cs)             = f cs . ubound v t . embed (tyfree t)
     f (Sub _ t (TVar _ v) : cs)             = f cs . lbound v t . embed (tyfree t)
     f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p . embed (tyfree p)
-    f (Mut (TVar _ v) n _ : cs)             = f cs . mutattr v n
-    f (Sel _ (TVar _ v) n _ : cs)           = f cs . selattr v n
+    f (Mut (TVar _ v) n t : cs)             = f cs . mutattr v n . embed (tyfree t)
+    f (Sel _ (TVar _ v) n t : cs)           = f cs . selattr v n . embed (tyfree t)
     f (Seal w fx1 fx2 t1 t2 : cs)
       | TVar _ v1 <- fx1, TVar _ v2 <- fx2  = f cs . varvar v1 v2 . embed (tyfree [t1,t2])
       | TVar _ v <- fx1                     = f cs . ubound v fx2 . embed (tyfree [t1,t2])
@@ -815,7 +817,7 @@ improve env te tt eq cs
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vclosed obsvars (varvars vi)
         openFX                          = [ v | v <- actFX, fxAction `notElem` lookup' v (ubounds vi) ]
-        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- closeDepVars (tyfree i) cs, univar v, tvkind v == KFX ]
+        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- tyfree i, univar v, tvkind v == KFX ]
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
@@ -840,7 +842,6 @@ improve env te tt eq cs
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
-
 
 uClosed env (TCon _ c)                  = isActor env (tcname c)
 uClosed env (TFX _ FXPure)              = True
@@ -945,7 +946,7 @@ constrain env vs (Seal w (TVar _ v) t _ _)
   | t == fxAction                       = Map.adjust (intersect $ allBelow env t) v vs
   | otherwise                           = Map.adjust (intersect $ allBelow env t) v vs
 constrain env vs (Seal w t (TVar _ v) _ _)
-  | t == fxAction                       = Map.adjust (intersect $ allAbove env t) v vs
+  | t == fxAction || w == Nothing       = Map.adjust (intersect $ allAbove env t) v vs
   | otherwise                           = Map.adjust (intersect $ allAbove env t ++ [CAction]) v vs
 constrain env vs _                      = vs
 
@@ -960,14 +961,14 @@ candidates env k                        = map CVar (allVars env k)
 
 solve                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
 solve env te tt eq [] cs                = return (cs, eq)
-solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ prstrs vs1)
+solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ prstrs vs1 ++ " (embedded: " ++ prstrs (vs `intersect` embedded) ++ ")")
                                              (cs,eq) <- collapse env eq vs1 cs
                                              vs2 <- (nub . filter univar . tyfree) <$> msubst (map tVar vs1)
                                              solve' env te tt eq vs2 (reverse cs)
   where vs0                             = vs \\ embedded
         vs1 | null vs0                  = vs
             | otherwise                 = vs0
-        embedded                        = concat $ map emb cs
+        embedded                        = concat $ [ emb c | c <- cs, headvar c `elem` vs ]
         emb (Cast TVar{} TVar{})        = []
         emb (Cast TVar{} t)             = tyfree t
         emb (Cast t TVar{})             = tyfree t
@@ -976,11 +977,12 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         emb (Sub _ t TVar{})            = tyfree t
         emb (Impl _ t p)                = tyfree p
         emb (Seal _ fx1 fx2 t1 t2)      = emb (Cast fx1 fx2) ++ emb (Cast t1 t2)
+        emb (Sel _ TVar{} n t)          = tyfree t
+        emb (Mut TVar{} n t)            = tyfree t
         emb _                           = []
         
 
-solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
-                                             traceM ("###allCons: " ++ prstrs (allCons env))
+solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs)
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
                                              env <- msubst env

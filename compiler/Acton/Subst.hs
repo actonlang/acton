@@ -32,6 +32,7 @@ closeDepVars vs cs
         typars (TFX _ fx)           = tyfree fx
         typars _                    = []
 
+
 closeDepVarsQ vs q
   | null vs'                        = nub vs
   | otherwise                       = closeDepVarsQ (vs'++vs) q

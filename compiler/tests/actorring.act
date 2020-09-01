@@ -6,14 +6,14 @@ actor Act(i):
     var rcv_dict = {}
     var snd_dict = {}
 
-    def act(src, table):
+    def work(src, table):
         if count < total_msgs:
             count += 1
             dst = (i + 1) % no_actors
             rcv_dict[src] = rcv_dict.get(src,0) + 1
             snd_dict[dst] = snd_dict.get(dst,0) + 1
             print("Actor {i}: count={count}, src={src}, dst={dst}\n")
-            table[dst].act(i, table)
+            table[dst].work(i, table)
 
 actor Root(_ignore):
     table = []
@@ -21,4 +21,4 @@ actor Root(_ignore):
     for i in range(no_actors):
         table.append(Act(i))
 
-    table[0].act(no_actors, table)
+    table[0].work(no_actors, table)

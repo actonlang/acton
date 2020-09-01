@@ -471,7 +471,7 @@ solveScoped env vs te tt cs             = do traceM ("## solveScoped " ++ prstrs
                                              loop eq cs
   where loop eq cs
           | null vs1                    = return (cs, eq)
-          | otherwise                   = do traceM ("## solving " ++ prstrs vs1 ++ " in " ++ prstrs cs)
+          | otherwise                   = do traceM ("## solving " ++ prstrs vs1)
                                              (cs,eq) <- solve env te tt eq vs1 cs
                                              loop eq cs
           where vs1                     = nub [ headvar c | c <- cs, any (`elem` vs) (tyfree c), univar (headvar c) ]
@@ -536,17 +536,16 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, i) | isHidden n      = return ([], [])
-        check1 (n, NVar t)              = -- simplify env te0 tNone [Cast t t0]
-                                          do unify env t t0
+        check1 (n, NVar t)              = do traceM ("## matchActorAssumption for attribute " ++ prstr n)
+                                             unify env t t0
                                              return ([],[])
           where t0                      = case lookup n te0 of
                                              Just (NSig (TSchema _ _ t0) _) -> t0
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
-                                             traceM ("## matchActorAssumption for method " ++ prstr n ++ ", t0: " ++ prstr t0 ++ ", t: " ++ prstr t)
+                                             traceM ("## matchActorAssumption for method " ++ prstr n)
                                              unify env t (openAction env t0)
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
---                                             (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone (Cast t (openAction env t0) : cs1)
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
           where TSchema _ q t0          = case lookup n te0 of
@@ -579,7 +578,7 @@ instance Check Decl where
             tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- newTVar
+                                             st <- newActVar
                                              traceM ("## actor st: " ++ prstr st)
                                              pushFX (fxAct st) tNone
                                              env1 <- return $ setActorFX st env1
@@ -588,11 +587,10 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             st <- msubst st
                                              (cs1,eq1) <- solveScoped env1 (tvar st : tvs) te tNone (cswf++csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             when (tvar st `elem` fvs) $ err1 l "Actor state escapes"
+                                             when (tvar st `elem` fvs) $ err l "Actor state escapes"
                                              return (cs1, Actor l n (dequal env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where cswf                        = wellformed env q
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $

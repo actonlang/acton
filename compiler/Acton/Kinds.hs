@@ -449,21 +449,13 @@ instance KInfer TCon where
                                          k <- ksubst False k
                                          return (k, TC n ts)
 
-generated (TV k n)  = case n of
-                        Internal Kindvar _ _ -> True
-                        Internal Typevar _ _ -> True
-                        Internal Wildvar _ _ -> True
-                        _                    -> False
-
---generated (TV k n)  = case n of
---                        Name{} -> False
---                        _      -> True
-
+envBound (TV k (Internal p _ _))    = p == Xistvar
+envBound _                          = True
 
 instance KInfer Type where
     kinfer env (TWild l)            = Acton.Env.err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (not $ generated v) $ kunify l k (tvarKind v env)     -- Generated TVars are not int the environment
+                                         when (envBound v) $ kunify l k (tvarKind v env)     -- Wildvars are not int the environment
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
