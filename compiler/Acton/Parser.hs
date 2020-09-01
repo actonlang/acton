@@ -5,9 +5,12 @@ import qualified Control.Exception
 import Control.Monad (void)
 import Data.Void
 import Data.Char
+import qualified Data.List.NonEmpty as N
+import qualified Data.Set as S
 import Numeric
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import Text.Megaparsec.Error
 import Control.Monad.Combinators.Expr
 import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Data.List.NonEmpty
@@ -17,6 +20,17 @@ import qualified Acton.Names as Names
 import Utils
 import Debug.Trace
 import System.IO.Unsafe
+
+traceOff pnm p = do
+   n <- getOffset
+   trace ("entering "++pnm++" at offset "++show n) p
+
+ifMissingSuggest p str = do
+     r <- observing p
+     case r of
+        Left _ -> fancyFailure (S.singleton (ErrorFail str))
+        Right r -> return r
+   
 
 --- Main parsing and error message functions ------------------------------------------------------
 
@@ -316,7 +330,7 @@ qual_name = do
 --- Helper functions for parenthesised forms -----------------------------------
 
 parens, brackets, braces :: Parser a -> Parser a
-parens p = withCtx PAR (L.symbol sc2 "(" *> p <* char ')') <* currSC
+parens p = withCtx PAR (L.symbol sc2 "(" *> p <* (char ')') `ifMissingSuggest`"perhaps just a missing closing parenthesis?") <* currSC
 
 brackets p = withCtx PAR (L.symbol sc2 "[" *> p <* char ']') <* currSC
 
@@ -450,9 +464,9 @@ target = try $ do
 ------------------------------------------------------------------------------------------------
 
 stmt, simple_stmt :: Parser [S.Stmt]
-stmt = (try simple_stmt <|> decl_group <|> ((:[]) <$> compound_stmt)) <?> "statement"
+stmt = try simple_stmt <|> decl_group <|> ((:[]) <$> compound_stmt) <?> "statement"
 
-simple_stmt = ((small_stmt `sepEndBy1` semicolon)) <* newline1
+simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1
 
 --- Small statements ---------------------------------------------------------------------------------
 
@@ -707,7 +721,7 @@ data_stmt = addLoc $
 
 suite :: CTX -> Pos -> Parser S.Suite
 suite c p = do
-    colon
+    withCtx c colon `ifMissingSuggest` "perhaps just a missing colon?"
     withCtx c (try simple_stmt <|> indentSuite p)
   where indentSuite p = do
           newline1
@@ -829,12 +843,12 @@ power = addLoc $ do
                   factor
 
 isinstance = addLoc $ do
-                traceM ("### A")
+                -- traceM ("### A")
                 rword "isinstance"
-                traceM ("### B")
+                -- traceM ("### B")
                 (e,c) <- parens ((,) <$> expr <* comma <*> qual_name)
-                traceM ("### C e: " ++ show e)
-                traceM ("### C c: " ++ show c)
+                -- traceM ("### C e: " ++ show e)
+                -- traceM ("### C c: " ++ show c)
                 return $ S.IsInstance NoLoc e c
 
 -- recurring pattern below
@@ -866,7 +880,7 @@ atom_expr = do
                              mbe <- optional dictorsetmaker
                              return $ maybe (S.Dict NoLoc []) id mbe)
                <|> var
-               <|> try isinstance
+               <|> isinstance
                <|> (try ((\f -> S.Imaginary NoLoc f (show f ++ "j")) <$> lexeme (L.float <* string "j")))
                <|> (try ((\f -> S.Float NoLoc f (show f)) <$> lexeme L.float))
                <|> (\i -> S.Int NoLoc i ("0o"++showOct i "")) <$> (string "0o" *> lexeme L.octal)
