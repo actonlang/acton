@@ -408,7 +408,7 @@ instance KCheck TSchema where
                                          q <- kchkQBinds env1 (q++q')
                                          t <- kexp KType env1 t
                                          return $ TSchema l q t
-      where ambig                   = tybound q \\ tyfree t
+      where ambig                   = tybound q \\ closeDepVarsQ (tyfree t) q
 
 kchkQBinds env []                   = return []
 kchkQBinds env (Quant v us : q)     = do us <- kchkBounds env us

@@ -21,7 +21,7 @@ primRAISE                           = qPrim "RAISE"
 primRAISEFROM                       = qPrim "RAISEFROM"
 primASSERT                          = qPrim "ASSERT"
 
-primIsInstance                      = qPrim "isinstance"
+primIsInstance                      = qPrim "ISINSTANCE"
 
 primPosOf                           = qPrim "posOf"
 primKwdOf                           = qPrim "kwdOf"

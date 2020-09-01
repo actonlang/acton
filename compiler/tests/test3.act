@@ -12,7 +12,7 @@ actor Bepa():
 #    bepa : action() -> None
     def bepa():
         w -= 1
-#    methods : list[action()->None]
+    methods : list[action()->None]
     methods = []
 #    meth : action() -> None
     meth = bepa

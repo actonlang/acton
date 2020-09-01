@@ -12,7 +12,7 @@ actor Act(i):
             dst = (i + 1) % no_actors
             rcv_dict[src] = rcv_dict.get(src,0) + 1
             snd_dict[dst] = snd_dict.get(dst,0) + 1
-            print("Actor {i}: count={count}, src={src, dst={dst}\n")
+            print("Actor {i}: count={count}, src={src}, dst={dst}\n")
             table[dst].act(i, table)
 
 actor Root(_ignore):

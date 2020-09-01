@@ -843,12 +843,8 @@ power = addLoc $ do
                   factor
 
 isinstance = addLoc $ do
-                -- traceM ("### A")
                 rword "isinstance"
-                -- traceM ("### B")
                 (e,c) <- parens ((,) <$> expr <* comma <*> qual_name)
-                -- traceM ("### C e: " ++ show e)
-                -- traceM ("### C c: " ++ show c)
                 return $ S.IsInstance NoLoc e c
 
 -- recurring pattern below

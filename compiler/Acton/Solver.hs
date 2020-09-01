@@ -167,10 +167,13 @@ reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
 reduce' env eq c                            = noRed c
 
 
-solveSelAttr env (wf,sc,_) (Sel w t1 n t2)  = do (cs,tvs,t) <- instantiate env sc
+solveSelAttr env (wf,sc,_) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf $ eVar x0) n) tvs) $ witsOf cs)
-                                                     cs = [Cast (subst [(tvSelf,t1)] t) t2]
+                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf $ eVar x0) n) tvs) $ witsOf cs1)
+                                                     cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
+--                                                 traceM ("### solveSelAttr unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
+--                                                 unify env (subst [(tvSelf,t1)] t) t2
+--                                                 return ([(w, wFun t1 t2, e)], cs1)
                                                  return ([(w, wFun t1 t2, e)], cs)
 
 solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c -> tcargs c; _ -> []
@@ -179,6 +182,9 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
                                                  (cs2,tvs,t) <- instantiate env sc
                                                  let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar x0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
+--                                                 traceM ("### solveSelWit unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
+--                                                 unify env (subst [(tvSelf,t1)] t) t2
+--                                                 return ([(w, wFun t1 t2, e)], cs1++cs2)
                                                  return ([(w, wFun t1 t2, e)], cs)
 
 solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec/=Property) (noMut n)
@@ -598,8 +604,8 @@ instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> i
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t
 instwild env _ (TCon l c)               = TCon l <$> instwildcon env c
 instwild env _ (TRow l k n t r)         = TRow l k n <$> instwild env KType t <*> instwild env k r
-instwild env _ (TFX l (FXMut t))        = TFX l <$> FXMut <$> instwild env KFX t
-instwild env _ (TFX l (FXAct t))        = TFX l <$> FXAct <$> instwild env KFX t
+instwild env _ (TFX l (FXMut t))        = TFX l <$> FXMut <$> instwild env KType t
+instwild env _ (TFX l (FXAct t))        = TFX l <$> FXAct <$> instwild env KType t
 instwild env k t                        = return t
 
 instwildcon env c                       = case tconKind (tcname c) env of
@@ -770,6 +776,8 @@ improve env te tt eq cs
                                              sequence [ unify env (tVar v) (tVar v') | v' <- vs ]
                                              simplify' env te tt eq cs
   | not $ null gsimple                  = do traceM ("  *G-simplify " ++ prstrs [ (v,tVar v') | (v,v') <- gsimple ])
+                                             traceM ("  *obsvars: " ++ prstrs obsvars)
+                                             traceM ("  *varvars: " ++ prstrs (varvars vi))
                                              sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = err2 cyclic ("Cyclic subtyping:")
@@ -799,8 +807,7 @@ improve env te tt eq cs
   | not $ null dots                     = do traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots env mutC selC selP cs
                                              simplify' env te tt (eq'++eq) cs'
-  | otherwise                           = trace ("  *improvement done, posvars: " ++ prstrs posvars ++ ", negvars: " ++ prstrs negvars ++ 
-                                                 ", actFX: " ++ prstrs actFX ++ ", openFX: " ++ prstrs openFX) $ return (cs, eq)
+  | otherwise                           = trace ("  *improvement done") $ return (cs, eq)
   where info                            = varinfo cs
         Just vi                         = info
         closure                         = varclose (varvars vi)
@@ -808,7 +815,7 @@ improve env te tt eq cs
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vclosed obsvars (varvars vi)
         openFX                          = [ v | v <- actFX, fxAction `notElem` lookup' v (ubounds vi) ]
-        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- tyfree i, univar v, tvkind v == KFX ]
+        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- closeDepVars (tyfree i) cs, univar v, tvkind v == KFX ]
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
@@ -816,8 +823,8 @@ improve env te tt eq cs
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t ]
-        closUBnd                        = [ (v,t) | (v, t) <- upperBnd, uClosed env t ]
-        closLBnd                        = [ (v,t) | (v, t) <- lowerBnd, lClosed env t ]
+        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), lClosed env t ]
+        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), uClosed env t ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
@@ -835,7 +842,7 @@ improve env te tt eq cs
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
 
 
-uClosed env (TCon _ c)                  = isActor (tcname c) env
+uClosed env (TCon _ c)                  = isActor env (tcname c)
 uClosed env (TFX _ FXPure)              = True
 uClosed env (TNone _)                   = True
 uClosed env (TNil _ _)                  = True
@@ -973,6 +980,7 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         
 
 solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs ++ "\n   in: " ++ prstrs cs)
+                                             traceM ("###allCons: " ++ prstrs (allCons env))
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
                                              env <- msubst env
@@ -1096,6 +1104,9 @@ impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 x0:x1:x2:_                              = xNames
 
+wit2row ws                              = \p -> foldr f p ws
+  where f (w,t)                         = TRow NoLoc PRow w t
+
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)
 
@@ -1111,11 +1122,13 @@ witsOf cs                               = [ eVar w | Impl w t p <- cs ]
 
 qualWPar env q                          = wit2par (qualWits env q)
 
-qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
+qualWRow env q                          = wit2row (qualWits env q)
+
+qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
   where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
-        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto (tcname p) env ]
+        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 
 app tx e []                             = e
 app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2arg es (pArg p')) (kArg k')) fx

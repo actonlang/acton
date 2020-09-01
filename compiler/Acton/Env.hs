@@ -478,6 +478,9 @@ actorFX env l               = case actorstate env of
                                 Just st -> fxAct st
                                 Nothing -> err l "Actor scope expected"
 
+onTop                       :: Env -> Bool
+onTop env                   = context env == CtxTop
+
 inAct                       :: Env -> Bool
 inAct env                   = context env == CtxAct
 
@@ -531,18 +534,18 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
 
-isActor                     :: QName -> Env -> Bool
-isActor n env               = case findQName n env of
+isActor                     :: Env -> QName -> Bool
+isActor env n               = case findQName n env of
                                 NAct q p k te -> True
                                 _ -> False
 
-isClass                     :: QName -> Env -> Bool
-isClass n env               = case findQName n env of
+isClass                     :: Env -> QName -> Bool
+isClass env n               = case findQName n env of
                                 NClass q us te -> True
                                 _ -> False
 
-isProto                     :: QName -> Env -> Bool
-isProto n env               = case findQName n env of
+isProto                     :: Env -> QName -> Bool
+isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
@@ -686,7 +689,7 @@ instance WellFormed TCon where
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
-            constr u t      = if isProto (tcname u) env then Impl (name "_") t u else Cast t (tCon u)
+            constr u t      = if isProto env (tcname u) then Impl (name "_") t u else Cast t (tCon u)
             
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc
@@ -706,8 +709,8 @@ instance WellFormed QBind where
 mro2                                    :: Env -> [TCon] -> ([WTCon],[WTCon])
 mro2 env []                             = ([], [])
 mro2 env (u:us)
-  | isActor (tcname u) env              = err1 u "Actor subclassing not allowed"
-  | isProto (tcname u) env              = ([], mro env (u:us))
+  | isActor env (tcname u)              = err1 u "Actor subclassing not allowed"
+  | isProto env (tcname u)              = ([], mro env (u:us))
   | otherwise                           = (mro env [u], mro env us)
 
 mro1 env us                             = mro env us
@@ -765,7 +768,7 @@ instQuals                   :: Env -> QBinds -> [Type] -> TypeM Constraints
 instQuals env q ts          = do let s = tybound q `zip` ts
                                  sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
   where constr t u@(TC n _)
-          | isProto n env   = do w <- newWitness; return $ Impl w t u
+          | isProto env n   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
@@ -952,41 +955,16 @@ monotypeOf sc                           = err1 sc "Monomorphic type expected"
 headvar (Impl w (TVar _ v) p)       = v
 headvar (Cast (TVar _ v) t)
   | univar v                        = v
-headvar (Cast t (TVar _ v))         = v
+headvar (Cast t (TVar _ v))         = v     -- ?
 headvar (Sub w (TVar _ v) t)
   | univar v                        = v
-headvar (Sub w t (TVar _ v))        = v
+headvar (Sub w t (TVar _ v))        = v     -- ?
 headvar (Sel w (TVar _ v) n t)      = v
 headvar (Mut (TVar _ v) n t)        = v
 headvar (Seal w (TVar _ v) _ _ _)   = v
-headvar (Seal w _ (TVar _ v) _ _)   = v
+headvar (Seal w _ (TVar _ v) _ _)   = v     -- ?
 
-splitFixed fvs cs
-  | null fvs'                       = (fixed,cs')
-  | otherwise                       = splitFixed (fvs'++fvs) cs
-  where (fixed,cs')                 = partition (fixedP fvs) cs
-        fvs'                        = concat (map depVars cs) \\ fvs
-
-        fixedP vs (Cast (TVar _ v) (TVar _ w))  = v `elem` vs && w `elem` vs
-        fixedP vs (Sub _ (TVar _ v) (TVar _ w)) = v `elem` vs && w `elem` vs
-        fixedP vs c                 = headvar c `elem` vs
         
-depVars (Cast TVar{} t@TCon{})      = tyfree t
-depVars (Sub _ TVar{} t@TCon{})     = tyfree t
-depVars (Impl _ TVar{} p)           = tyfree p
-depVars _                           = []
-        
-findAmbig safe cs
-  | null safe'                      = nub [ headvar c | c <- amb_cs ]
-  | otherwise                       = findAmbig (safe'++safe) cs
-  where (amb_cs,cs')                = partition (ambigP safe) cs
-        safe'                       = concat (map depVars cs') \\ safe
-
-        ambigP vs (Impl _ (TVar _ v) _) = v `notElem` vs
-        ambigP vs c                     = False
-
-
-
 -- Error handling ------------------------------------------------------------------------
 
 data CheckerError                   = FileNotFound ModName
