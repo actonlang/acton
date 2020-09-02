@@ -1021,7 +1021,7 @@ instance Infer Expr where
                                                             (cs2,tvs,t) <- instantiate env sc
                                                             let t0 = tCon $ TC c ts
                                                                 t' = subst [(tvSelf,t0)] $ addSelf t dec
-                                                            return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) (ts++tvs)) $ witsOf cs2)
+                                                            return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
@@ -1031,7 +1031,7 @@ instance Infer Expr where
                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
                                                     return (Impl w t0 (TC c ts) :
-                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) (ts++tvs)) $ witsOf cs1)
+                                                            cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
 

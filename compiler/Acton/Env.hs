@@ -760,7 +760,7 @@ instWitness                 :: Env -> [Type] -> Witness -> TypeM (Constraints,TC
 instWitness env ts wit      = case wit of
                                  WClass q p w ws -> do
                                     cs <- instQuals env q ts
-                                    return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (eQVar w) $ wvars cs))
+                                    return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (tApp (eQVar w) ts) $ wvars cs))
                                  WInst p w ws ->
                                     return ([], p, wexpr ws (eQVar w))
 
