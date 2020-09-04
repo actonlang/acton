@@ -375,6 +375,29 @@ kwdItems fCons fStar fNil item staritem =
 -- Unfortunately, the parser below does not make use of posItems
 funItems :: (a1 -> t1 -> t1) -> (a -> t1) -> t1 -> Parser a1 -> Parser a -> Parser t -> t -> Parser (Either (t1,t) a1)
 funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
+            do i <- singleStar *> posstaritem
+               mbc <- optional comma
+               case mbc of
+                  Just _ -> do k <- kwdItems
+                               return  (Left (posStar i, k))
+                           <|>
+                               return  (Left (posStar i, kwdNil))
+                  Nothing ->  return  (Left (posStar i, kwdNil))
+           <|>
+            try (do k <- kwdItems; return (Left (posNil, k)))
+           <|>
+             do i <- positem
+                mbc <- optional comma
+                case mbc of
+                   Just _ -> do r <- funItems posCons posStar posNil positem posstaritem kwdItems kwdNil
+                                case r of
+                                   Left (p,k) -> return (Left (posCons i p, k))
+                                   Right p -> return (Left (posCons i (posCons p posNil),kwdNil))
+                             <|> return (Left (posCons i posNil, kwdNil))
+                   Nothing -> return (Right i)
+            <|>
+               do optional comma; return (Left (posNil, kwdNil))
+{-
               try (do i <- singleStar *> posstaritem; comma; k <- kwdItems; return (Left (posStar i, k)))
            <|>
               try (do i <- singleStar *> posstaritem; optional comma; return (Left (posStar i, kwdNil)))
@@ -395,7 +418,8 @@ funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
                          Nothing -> return (Right i))
            <|>
                (do optional comma; return (Left (posNil, kwdNil)))
- 
+-}
+
 tuple_or_single posItems headItems len tup =
       do pa <- posItems
          mbc <- optional comma
