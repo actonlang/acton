@@ -661,7 +661,7 @@ findTVAttr env tv n         = case findTVBound env tv of
                                 Nothing -> Nothing
 
 tvarWit                     :: TVar -> TCon -> Name
-tvarWit tv p                = Derived (tvname tv) (nstr $ deriveQ $ tcname p)
+tvarWit tv p                = Derived (name "w") $ Derived (deriveQ $ tcname p) (tvname tv)
 
 
 -- Well-formed tycon applications -------------------------------------------------------------------------------------------------

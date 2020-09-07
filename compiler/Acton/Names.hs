@@ -12,7 +12,7 @@ deriveQ (NoQ n)                     = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
 
 deriveMod n0 []                     = n0
-deriveMod n0 (n:m)                  = deriveMod (Derived n0 (nstr n)) m
+deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 
 
 -- Mutually recursive groups -------

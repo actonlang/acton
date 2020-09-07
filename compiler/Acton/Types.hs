@@ -252,10 +252,8 @@ instance InfEnv Stmt where
     
     infEnv env d@(Signature _ ns sc@(TSchema l q t) dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = return ([], [(n, NSig sc' dec) | n <- ns], d)
+      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], d)
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
-            sc' | null q                = sc
-                | otherwise             = sc -- let TFun l' x p k t' = t in TSchema l (dequal env q) (TFun l' x (qualWRow env q p) k t')
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -322,7 +320,7 @@ matchDefAssumption env cs def
                                              (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 dec else t0) : cs)
                                              checkNoEscape env (tybound q0)
                                              t0 <- msubst t0
-                                             return (cs2, def{ qbinds = dequal env q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
   | otherwise                           = do traceM ("## matchDefAssumption 2 " ++ prstr (dname def))
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
@@ -331,7 +329,7 @@ matchDefAssumption env cs def
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
                                              (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 dec else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
-                                             return (cs2, def{ qbinds = dequal env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
+                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
         q1                              = qbinds def
         env0                            = defineTVars q0 env
@@ -380,7 +378,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs         --TODO: add eq1...
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as' ({-map newSig nterms ++ -}te))], Class l n q us b')
+                                                 return (cs1, [(n, NClass q as' te)], Class l n q us b')
                                              _ -> illegalRedef n
       where env1                        = define (exclude [initKW] $ toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
@@ -418,7 +416,7 @@ instance InfEnv Decl where
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols"
                                              when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             return (cs1, [(extensionName n us, NExt n q ps te)], Extension l n q us b')
+                                             return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us b')
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
@@ -443,8 +441,8 @@ checkAttributes final te' te
         -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
 
 
-extensionName                           :: QName -> [TCon] -> Name
-extensionName c ps                      = Derived (deriveQ $ tcname $ head ps) (nstr $ deriveQ c)
+extensionName                           :: TCon -> QName -> Name
+extensionName p c                       = Derived (deriveQ $ tcname p) (deriveQ c)
 
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
@@ -498,12 +496,15 @@ openAction' env (TSchema l q t)         = TSchema l q $ openAction env t
 
 class Check a where
     checkEnv                            :: Env -> a -> TypeM (Constraints,a)
+    checkEnv'                           :: Env -> a -> TypeM (Constraints,[a])
+    checkEnv' env x                     = do (cs,x') <- checkEnv env x
+                                             return (cs, [x'])
 
 instance (Check a) => Check [a] where
     checkEnv env []                     = return ([], [])
-    checkEnv env (d:ds)                 = do (cs1,d') <- checkEnv env d
+    checkEnv env (d:ds)                 = do (cs1,d') <- checkEnv' env d
                                              (cs2,ds') <- checkEnv env ds
-                                             return (cs1++cs2, d':ds')
+                                             return (cs1++cs2, d'++ds')
 
 ------------------
 
@@ -591,7 +592,7 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              when (tvar st `elem` fvs) $ err l "Actor state escapes"
-                                             return (cs1, Actor l n (dequal env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
+                                             return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where cswf                        = wellformed env q
             env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ setInAct env
@@ -599,46 +600,90 @@ instance Check Decl where
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env
 
-    checkEnv env (Class l n q us b)     = do traceM ("## checkEnv class " ++ prstr n)
+    checkEnv' env (Class l n q us b)    = do traceM ("## checkEnv class " ++ prstr n)
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, Class l n (dequal env q) us b')        -- TODO: add wits(q) and eq1 to each def in b'
+                                             return (cs1, [Class l n (noqual env q) us b'])        -- TODO: add wits(q) and eq1 to each def in b'
       where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NClass _ _ te               = findName n env
             s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ tybound q)))]
 
-    checkEnv env (Protocol l n q us b)  = do traceM ("## checkEnv protocol " ++ prstr n ++ render (brackets (commaSep pretty q)))
+    checkEnv' env (Protocol l n q us b) = do traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, Class l n (Quant (TV KType (name "$S")) [] : dequal env q) us b')
+                                             return (cs1, Class l n q' us' (newbody $ bindWits eq1 ++ b') : siblings)
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NProto _ ps te              = findName n env
+            q'                          = Quant convSelf [] : noqual env q
+            us'                         = take 1 [ convProto u | ([Nothing],u) <- ps ]
+            newbody b                   = psigs ++ qsigs ++ map convStmt b
+            psigs                       = [ Signature NoLoc [witAttr w] (monotype $ tCon $ convProto p) Property | ([Just w],p) <- ps ]
+            qsigs                       = [ Signature NoLoc [qualAttr p v n] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+            siblings                    = [ Class NoLoc (pathName ws n) q' [] [Pass NoLoc] | (ws,p) <- ps, last ws /= Nothing ]
 
-    checkEnv env (Extension l n q us b) = do traceM ("## checkEnv extension " ++ prstr n)
+    checkEnv' env (Extension l n q us b)
+                                        = do traceM ("## checkEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              (csb,b') <- checkEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (wellformed env1 (q,us)++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, Class l n' q us b')   -- TODO: translate into class, add wits(q) to props, eq1 to __init__
+                                             return (cs1, [Class l n' q us b'])   -- TODO: add wits(q) to props, eq1 to __init__
       where env1                        = define (subst s te) $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
-            n'                          = extensionName n us
+            n'                          = extensionName (head us) n
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon (TC n (map tVar $ tybound q)))]
+            initdef                     = [ Def NoLoc initKW [] PosNIL KwdNIL (Just tNone) [Pass NoLoc] NoDec fxPure ]
 
-dequal env q                            = [ Quant v (filter (not . isProto env . tcname) us) | Quant v us <- q ]
+    checkEnv' env x                     = do (cs,x') <- checkEnv env x
+                                             return (cs, [x'])
 
+noqual env q                            = [ Quant v (filter (not . isProto env . tcname) us) | Quant v us <- q ]
 
+quals env q                             = [ (v, p) | Quant v ps <- q, p <- ps, isProto env (tcname p) ]
 
+pathName ws n                           = Derived (f ws) n
+  where f [Just w]                      = deriveQ w
+        f (Just w : ws)                 = Derived (f ws) (deriveQ w)
+        f (Nothing : ws)                = f ws
+
+witAttr qn                              = Derived (name "w") (deriveQ qn)
+
+qualAttr p v n                          = Derived (tvarWit v p) n
+
+convProto (TC n ts)                     = TC n (tVar convSelf : ts)
+
+convSelf                                = TV KType (name "$")
+
+convSubst t                             = subst [(tvSelf, tVar convSelf)] t
+
+convStmt (Signature l ns sc Static)     = Signature l ns (convSubst sc) NoDec
+convStmt (Signature l ns sc _)          = Signature l ns (convSubst $ convSchema sc) NoDec
+convStmt (Decl l ds)                    = Decl l (map convDecl ds)
+convStmt s                              = s
+
+--convDecl (Def l n q p k t b d x)        
+convDecl d                              = d
+
+convSchema (TSchema l q t)              = TSchema l q (convT t)
+  where convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
+        convT t                         = t
+
+convTEnv te                             = [ (n, conv i) | (n,i) <- te ]
+  where conv (NSig sc Static)           = NSig sc NoDec
+        conv (NSig sc _)                = NSig (convSchema sc) NoDec
+        conv (NDef sc Static)           = NDef sc NoDec
+        conv (NDef sc _)                = NDef (convSchema sc) NoDec
+        conv i                          = i
 
 {-
 
@@ -695,7 +740,7 @@ instance Check Stmt where
                                              return ([], Signature l ns sc' dec)
       where TSchema l q t               = sc
             sc' | null q                = sc
-                | otherwise             = sc -- let TFun l' x p k t' = t in TSchema l (dequal env q) (TFun l' x (qualWRow env q p) k t')
+                | otherwise             = let TFun l' x p k t' = t in TSchema l (noqual env q) (TFun l' x (qualWRow env q p) k t')
             env1                        = defineTVars q env
     checkEnv env s                      = return ([], s)
 
@@ -785,7 +830,7 @@ genEnv env cs te ds0
     generalize q (n, i)                 = (n, i)
 
     abstract q ds ws eq d@Def{}
-      | null $ qbinds d                 = d{ qbinds = dequal env q, 
+      | null $ qbinds d                 = d{ qbinds = noqual env q, 
                                              pos = wit2par ws (pos d),
                                              dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
       | otherwise                       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }

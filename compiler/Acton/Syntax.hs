@@ -97,13 +97,13 @@ type Target     = Expr
 data Prefix     = Kindvar | Xistvar | Actvar | Wildvar | Typevar | Witness | TypesPass | NormPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
-data Name       = Name SrcLoc String | Derived Name String | Internal Prefix String Int deriving (Generic)
+data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
 
 nstr (Name _ s)             = s
-nstr (Derived n s)          = nstr n ++ "$" ++ s
+nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
   where prefix Kindvar      = "K"
         prefix Xistvar      = "X"
