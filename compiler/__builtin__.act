@@ -74,13 +74,13 @@ protocol Iterable[A]:
   
 class str:
   capitalize   : () -> str
-  center       : (int,str) -> str
-  count        : (str,int,int) -> int
+  center       : (int,?str) -> str
+  count        : (str,?int,?int) -> int
   encode       : () -> bytearray
-  endswith     : (str,int,int) -> bool
-  expandtabs   : (int) -> str
-  find         : (str,int,int) -> int
-  index        : (str,int,int) -> int
+  endswith     : (str,?int,?int) -> bool
+  expandtabs   : (?int) -> str
+  find         : (str,?int,?int) -> int
+  index        : (str,?int,?int) -> int
   isalnum      : () -> bool
   isalpha      : () -> bool
   isascii      : () -> bool
@@ -91,32 +91,32 @@ class str:
   istitle      : () -> bool
   isupper      : () -> bool
   join         : (Iterable[str]) -> str
-  ljust        : (int,str) -> str
+  ljust        : (int,?str) -> str
   lower        : () -> str
   lstrip       : (str) -> str
   partition    : (str) -> (str,str,str)
-  replace      : (str,str,int) -> str
-  rfind        : (str,int,int) -> int
-  rindex       : (str,int,int) -> int
-  rjust        : (int,str) -> str
+  replace      : (str,str,?int) -> str
+  rfind        : (str,?int,?int) -> int
+  rindex       : (str,?int,?int) -> int
+  rjust        : (int,?str) -> str
   rpartition   : (str) -> (str,str,str)
-  rstrip       : (str) -> str
-  split        : (str,int) -> list[str]
-  splitlines   : (bool) -> list[str]
-  startswith   : (str,int,int) -> bool
-  strip        : (str) -> str
+  rstrip       : (?str) -> str
+  split        : (str,?int) -> list[str]
+  splitlines   : (?bool) -> list[str]
+  startswith   : (str,?int,?int) -> bool
+  strip        : (?str) -> str
   upper        : () -> str
   zfill        : (str,int) -> str
 
 class bytearray (object):
   capitalize   : () -> bytearray
-  center       : (int,bytearray) -> bytearray
-  count        : (bytearray,int,int) -> int
+  center       : (int,?bytearray) -> bytearray
+  count        : (bytearray,?int,?int) -> int
   decode       : () -> bytearray
-  endswith     : (bytearray,int,int) -> bool
-  expandtabs   : (int) -> bytearray
-  find         : (bytearray,int,int) -> int
-  index        : (bytearray,int,int) -> int
+  endswith     : (bytearray,?int,?int) -> bool
+  expandtabs   : (?int) -> bytearray
+  find         : (bytearray,?int,?int) -> int
+  index        : (bytearray,?int,?int) -> int
   isalnum      : () -> bool
   isalpha      : () -> bool
   isascii      : () -> bool
@@ -127,20 +127,20 @@ class bytearray (object):
   istitle      : () -> bool
   isupper      : () -> bool
   join         : (Iterable[bytearray]) -> bytearray
-  ljust        : (int,bytearray) -> bytearray
+  ljust        : (int,?bytearray) -> bytearray
   lower        : () -> bytearray
   lstrip       : (bytearray) -> bytearray
   partition    : (bytearray) -> (bytearray,bytearray,bytearray)
-  replace      : (bytearray,bytearray,int) -> bytearray
-  rfind        : (bytearray,int,int) -> int
-  rindex       : (bytearray,int,int) -> int
-  rjust        : (int,bytearray) -> bytearray
+  replace      : (bytearray,bytearray,?int) -> bytearray
+  rfind        : (bytearray,?int,?int) -> int
+  rindex       : (bytearray,?int,?int) -> int
+  rjust        : (int,?bytearray) -> bytearray
   rpartition   : (bytearray) -> (bytearray,bytearray,bytearray)
-  rstrip       : (bytearray) -> bytearray
-  split        : (bytearray,int) -> list[bytearray]
-  splitlines   : (bool) -> list[bytearray]
-  startswith   : (bytearray,int,int) -> bool
-  strip        : (bytearray) -> bytearray
+  rstrip       : (?bytearray) -> bytearray
+  split        : (bytearray,?int) -> list[bytearray]
+  splitlines   : (?bool) -> list[bytearray]
+  startswith   : (bytearray,?int,?int) -> bool
+  strip        : (?bytearray) -> bytearray
   upper        : () -> bytearray
   zfill        : (bytearray,int) -> bytearray
 
