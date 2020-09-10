@@ -1,5 +1,11 @@
 ## Built-in types ##################################################################################
 
+class struct:
+  __init__ : () -> None
+
+class object:
+  pass
+
 class int:
   pass
 
@@ -12,14 +18,70 @@ class complex:
 class bool:
   pass
 
+class BaseException:
+  pass
+
+class SystemExit (BaseException):
+  pass
+
+class KeyboardInterrupt (BaseException):
+  pass 
+
+class Exception (BaseException):
+  pass
+
+class AssertionError (Exception):
+  pass
+
+class LookupError (Exception):
+  pass
+
+class IndexError (LookupError):
+  pass
+
+class KeyError (LookupError):
+  pass
+
+class MemoryError (Exception):
+  pass
+
+class OSError (Exception):
+  pass
+
+class RuntimeError (Exception):
+  pass
+
+class NotImplementedError (RuntimeError):
+  pass
+
+class ValueError (Exception):
+  pass
+
+class Slice:
+  pass
+  
+class list[A] (object):
+  copy : () -> list[A]
+
+class range:
+  __init__ : (int) -> None
+
+class Iterator[A] ():
+  next : () -> A
+
+# protocol Iterable[A]:
+class Iterable[S,A] ():
+  __iter__     : (S) -> Iterator[A]
+
 class str:
   capitalize   : () -> str
-  center       : (int,str) -> str
-  count        : (str,int,int) -> int
-  ends$wselfh     : (str,int,int) -> bool
-  expandtabs   : (int) -> str
-  find         : (str,int,int) -> int
-  index        : (str,int,int) -> int
+  center       : (int,?str) -> str
+  count        : (str,?int,?int) -> int
+  encode       : () -> bytearray
+  endswith     : (str,?int,?int) -> bool
+  expandtabs   : (?int) -> str
+  find         : (str,?int,?int) -> int
+  index        : (str,?int,?int) -> int
   isalnum      : () -> bool
   isalpha      : () -> bool
   isascii      : () -> bool
@@ -29,222 +91,126 @@ class str:
   isspace      : () -> bool
   istitle      : () -> bool
   isupper      : () -> bool
-  join         : (Iterator[str]) -> str
-  ljust        : (int,str) -> str
+  join         : (Iterable[str]) -> str
+  ljust        : (int,?str) -> str
   lower        : () -> str
   lstrip       : (str) -> str
   partition    : (str) -> (str,str,str)
-  replace      : (str,str,int) -> str
-  rfind        : (str,int,int) -> int
-  rindex       : (str,int,int) -> int
-  rjust        : (int,str) -> str
+  replace      : (str,str,?int) -> str
+  rfind        : (str,?int,?int) -> int
+  rindex       : (str,?int,?int) -> int
+  rjust        : (int,?str) -> str
   rpartition   : (str) -> (str,str,str)
-  rstrip       : (str) -> str
-  split        : (str,int) -> list[str]
-  splitlines   : () -> list[str]
-  starts$wselfh   : (str,int,int) -> bool
-  strip        : (str) -> str
+  rstrip       : (?str) -> str
+  split        : (str,?int) -> list[str]
+  splitlines   : (?bool) -> list[str]
+  startswith   : (str,?int,?int) -> bool
+  strip        : (?str) -> str
   upper        : () -> str
-  str_zfill    : (str,int) -> str
+  zfill        : (str,int) -> str
 
-class Slice:
-  pass
-  
-class Iterator[A] ():
-  next : () -> A
-  
-class list[A] ():
-  copy : () -> list[A]
+class bytearray (object):
+  capitalize   : () -> bytearray
+  center       : (int,?bytearray) -> bytearray
+  count        : (bytearray,?int,?int) -> int
+  decode       : () -> bytearray
+  endswith     : (bytearray,?int,?int) -> bool
+  expandtabs   : (?int) -> bytearray
+  find         : (bytearray,?int,?int) -> int
+  index        : (bytearray,?int,?int) -> int
+  isalnum      : () -> bool
+  isalpha      : () -> bool
+  isascii      : () -> bool
+  isdigit      : () -> bool
+  islower      : () -> bool
+  isprintable  : () -> bool
+  isspace      : () -> bool
+  istitle      : () -> bool
+  isupper      : () -> bool
+  join         : (Iterable[bytearray]) -> bytearray
+  ljust        : (int,?bytearray) -> bytearray
+  lower        : () -> bytearray
+  lstrip       : (bytearray) -> bytearray
+  partition    : (bytearray) -> (bytearray,bytearray,bytearray)
+  replace      : (bytearray,bytearray,?int) -> bytearray
+  rfind        : (bytearray,?int,?int) -> int
+  rindex       : (bytearray,?int,?int) -> int
+  rjust        : (int,?bytearray) -> bytearray
+  rpartition   : (bytearray) -> (bytearray,bytearray,bytearray)
+  rstrip       : (?bytearray) -> bytearray
+  split        : (bytearray,?int) -> list[bytearray]
+  splitlines   : (?bool) -> list[bytearray]
+  startswith   : (bytearray,?int,?int) -> bool
+  strip        : (?bytearray) -> bytearray
+  upper        : () -> bytearray
+  zfill        : (bytearray,int) -> bytearray
 
 class Msg[A] ():
   pass
-
+    
 ## General protocols ###############################################################################
 
+# protocol Identity:
+class Identity[S] ():
+    def __init__($wself):
+        pass
+
+    __is__       : (S,S) -> bool
+    __isnot__    : (S,S) -> bool
+
+#protocol Eq:
 class Eq[S] ():
-  def __init__($wself):
-      pass
-  __eq__       : (S,S) -> bool
-  __ne__       : (S,S) -> bool            # has default defn
+    def __init__($wself):
+        pass
 
-class Ord[S] (Eq[S]):
-  def __init__($wself):
-      Eq.__init__($wself)
+    __eq__       : (S,S) -> bool
+    __ne__       : (S,S) -> bool
 
-  __lt__       : (S,S) -> bool
-  __le__       : (S,S) -> bool
-  __gt__       : (S,S) -> bool            # has default defn
-  __ge__       : (S,S) -> bool            # has default defn
-      
+# protocol Ord (Eq):
+class Ord[S] (Eq[S]):                       # (_ : Eq)
+    def __init__($wself):
+        Eq.__init__($wself)
+
+    __lt__       : (S,S) -> bool
+    __le__       : (S,S) -> bool
+    __gt__       : (S,S) -> bool
+    __ge__       : (S,S) -> bool
+
+# protocol Logical:
 class Logical[S] ():
-  def __init__($wself):
-      pass
+    def __init__($wself):
+        pass
 
-  __and__     : (S,S) -> S
-  __or__      : (S,S) -> S
-  __xor__     : (S,S) -> S
+    __and__     : (S,S) -> S
+    __or__      : (S,S) -> S
+    __xor__     : (S,S) -> S
 
+# protocol Plus:
 class Plus[S] ():
-  def __init__($wself):
-      pass
+    def __init__($wself):
+        pass
 
-  __add__      : (S,S) -> S
+    __add__      : (S,S) -> S
 
+# protocol Minus:
 class Minus[S] ():
-  def __init__($wself):
-      pass
+    def __init__($wself):
+        pass
 
-  __sub__      : (S,S) -> S
+    __sub__      : (S,S) -> S
 
-class Hashable[S] (Eq[S]):
-  def __init__($wself):
-      pass
+# protocol Hashable (Eq):
+class Hashable[S] (Eq[S]):                  # (_ : Eq)
+    def __init__($wself):
+        Eq.__init__($wself)
 
-  __hash__     : (S) -> int
+    __hash__     : (S) -> int
 
-class dict[A,B] ():                     # Note: A(Hashable) removed here
-  pass
+class dict[A,B] (object):                       # Note: A(Hashable) removed here
+    pass
 
-class set[A] ():                        # Note: A(Hashable) removed here
-  pass
-
-class Boolean[S] ():
-  def __init__($wself):
-      pass
-
-  __bool__   : (S) -> bool
-
-class Boolean$int (Boolean[int]):
-  def __init__($wself):
-      Boolean.__init__($wself)
-
-  def __bool__($wself, self):
-    return Eq$int$witness.__ne__(self,0)
-
-class Boolean$list[A] (Boolean[list[A]]):
-  def __init__($wself):
-      Boolean.__init__($wself)
-
-  def __bool__($wself, self):
-    return Ord$int$witness.__gt__(Collection$list$witness.__len__(self,0))
-
-
-## Collection protocols ############################################################################
-
-class Indexed[S,A,B] ():
-  w$Eq$A       : Eq[A]
-  def __init__($wself, w$Eq$A : Eq[A]):
-      $wself.w$Eq$A = w$Eq$A
-  
-  __getitem__  : (S,A) -> B
-  __setitem__  : (S,A,B) -> None 
-  __delitem__  : (S,A) -> None
-  
-class Sliceable[S,A] (Indexed[S,int,A]):
-  def __init__($wself):
-      Indexed.__init__($wself, Eq$int())
-
-  __getslice__ : (S,Slice) -> S
-  __setslice__ : [X] => (Iterable[X,A],S,Slice,X) -> None
-  __delslice__ : (S,Slice) -> None
-  
-class Iterable[S,A] ():
-  def __init__($wself):
-      pass
-
-  __iter__     : (S) -> Iterator[A]
-
-class Collection[S,A] (Iterable[S,A]):
-  def __init__($wself):
-      Iterable.__init__($wself)
-
-  __fromiter__ : [X] => (Iterable[X,A],X) -> S
-  __len__      : (S) -> int
-  
-class Container[S,A]] (Collection[S,A]):
-  w$Eq$A          : Eq[A]
-  def __init__($wself, w$Eq$A : Eq[A]):
-      Colleaction.__init__($wself)
-      $wself.w$Eq$A = w$Eq$A
-  
-  __contains__    : (S,A) -> bool  
-  __containsnot__ : (S,A) -> bool
-
-
-#   Indexed         Iterable
-#    |               |
-#    |               |
-#   Sliceable       Collection      Plus
-#    |               |               |
-#    |               |               |
-#   Sequence <-------- <--------------
-
-class Sequence[S,A] (Sliceable[S,A]):
-  w$Collection$Sequence : Collection[S,A]
-  w$Plus$Sequence       : Plus[S]:
-  def __init__($wself, w$Collection$Sequence : Collection[S,A], w$Plus$Sequence : Plus[S]):
-      Sliceable.__init__($wself)
-      $wself.w$Collection$Sequence = w$Collection$Sequence
-      $wself.w$Plus$Sequence = w$Plus$Sequence
-  
-  __reversed__ : (S) -> Iterator[A] 
-  insert      : (S,int,A) -> None
-  append      : (S,A) -> None   
-  reverse     : (S,) -> None       
-
-
-#   Iterable
-#    |
-#    |
-#   Collection
-#    |
-#    |
-#   Container       Indexed
-#    |               |
-#    |               |
-#   Mapping <---------
-
-class Mapping[S,A,B] (Container[S,A]):
-  w$Indexed$Mapping   : Indexed[S,A,B])
-  def __init($wself, w$Eq$A : Eq[A], w$Indexed$Mapping : Indexed[S]):
-      Container.__init__($wself, w$Eq$A)
-      $wself.w$Indexed$Mapping = w$Indexed$Mapping
-  
-  get         : (S,A,B) -> B
-  keys        : (S) -> Iterator[A]
-  values      : (S) -> Iterator[Bw$Eq$A]:
-  items       : (S) -> Iterator[(A,B)]
-  update      : [X] => (Iterable[X,(A,B)],S,X) -> None  
-  popitem     : (S) -> (A,B)
-  setdefault  : (S,A,B) -> None
-
-
-#   Iterable
-#    |
-#    |
-#   Collection      Eq
-#    |               |
-#    |               |
-#   Container       Ord             Logical         Minus
-#    |               |               |               |
-#    |               |               |               |
-#   Set <------------- <-------------- <--------------
-
-class Set[S,A] (Container[S,A]):
-  w$Ord$Set       : Ord[S]
-  w$Logical$Set   : Logical[S]
-  w$Minus$Set     : Minus[S]
-  def __init__($wself, w$Eq$A : Eq[A], w$Ord$Set : Ord[S], w$Logical$Set : Logical[S], w$Minus$Set : Minus[S]):
-      Container.__init__($wself, w$Eq$A)
-      $wself.w$Ord$Set = w$Ord$Set
-      $wself.w$Logical$Set = w$Logical$Set
-      $wself.w$Minus$Set = w$Minus$Set
-  
-  isdisjoint  : (S,S) -> bool
-  add         : (S,A) -> None  
-  discard     : (S,A) -> None  
-  pop         : (S) -> A 
-
+class set[A] (object):                          # Note: A(Hashable) removed here
+    pass
 
 ## Number protocols ################################################################################
 
@@ -262,10 +228,15 @@ class Set[S,A] (Container[S,A]):
 #    |               |
 #   Integral <--------
 
-class Number[S] (Eq[S]):
-    $Plus       : Plus[S]
-    $Minus      : Minus[S]
-  
+# protocol Number (Eq,Plus,Minus):
+class Number[S] (Eq[S]):                    # (_ : Eq, Plus : Plus, Minus : Minus)
+    w$Plus       : Plus[S]
+    w$Minus      : Minus[S]
+    def __init__($wself, w$Plus : Plus[S], w$Minus : Minus[S]):
+        Eq.__init__($wself)
+        $wself.w$Plus = w$Plus
+        $wself.w$Minus = w$Minus
+    
     __complex__ : (S) -> complex
     __bool__    : (S) -> bool
 
@@ -283,15 +254,25 @@ class Number[S] (Eq[S]):
     conjugate   : (S) -> S
 
 class Plus$Number[S] (Plus[S]):
-    $Number    : Number[S]
-
+    w$Number    : Number[S]
+    def __init__($wself, w$Number : Number[S]):
+        Plus.__init__($wself)
+        $wself.w$Number = w$Number
+    
 class Minus$Number[S] (Minus[S]):
-    $Number    : Number[S]
-
+    w$Number    : Number[S]
+    def __init__($wself, w$Number : Number[S]):
+        Minus.__init__($wself)
+        $wself.w$Number = w$Number
+    
 ##
 
-class Real[S] (Ord[S]):
-    $Number    : Number[S]         # Eq implemented in both parents!
+# protocol Real (Ord,Number):
+class Real[S] (Ord[S]):                     # (_ : Ord, Number : Number, _._ : Eq, Number.Plus : Plus, Number.Minus : Minus)
+    w$Number    : Number[S]
+    def __init__($wself, w$Number : Number[S]):
+        Ord.__init__($wself)
+        $wself.w$Number = w$Number
   
     __float__   : (S) -> float
 
@@ -301,34 +282,60 @@ class Real[S] (Ord[S]):
     __round__   : [X] => (Integral[X],S) -> X
 
 class Number$Real[S] (Number[S]):
-    $Real       : Real[S]
-
+    w$Real      : Real[S]
+    def __init__($wself, w$Plus : Plus[S], w$Minus : Minus[S], w$Real : Real[S]):
+        Number.__init__($wself, w$Plus, w$Minus)
+        $wself.w$Real = w$Real
+    
 class Plus$Number$Real[S] (Plus$Number[S]):
     $Real       : Real[S]
+    def __init__($wself, w$Number : Number[S], w$Real : Real[S]):
+        Plus$Number.__init__($wself, w$Number)
+        $wself.w$Real = w$Real
 
 class Minus$Number$Real[S] (Minus$Number[S]):
     $Real       : Real[S]
+    def __init__($wself, w$Number : Number[S], w$Real : Real[S]):
+        Plus$Number.__init__($wself, w$Number)
+        $wself.w$Real = w$Real
 
 ##
 
-class Rational[S] (Real[S]):
+# protocol Rational (Real):
+class Rational[S] (Real[S]):                # (_ : Real, _._ : Ord, _.Number : Number, _._._ : Eq, _.Number.Plus : Plus, _.Number.Minus : Minus)
     numerator    : [X] => (Integral[X],S) -> X
     denominator  : [X] => (Integral[X],S) -> X
+    def __init__($wself, w$Number : Number[S]):
+        Real.__init__($wself, w$Number)
 
 class Number$Rational[S] (Number$Real[S]):
-    $Rational    : Rational[S]
+    w$Rational   : Rational[S]
+    def __init__($wself, w$Plus : Plus[S], w$Minus : Minus[S], w$Rational : Rational[S]):
+        Number$Real.__init__($wself, w$Plus, w$Minus, w$Rational)
+        $wself.w$Rational = w$Rational
 
 class Plus$Number$Rational[S] (Plus$Number$Real[S]):
-    $Rational    : Rational[S]
+    w$Rational   : Rational[S]
+    def __init__($wself, w$Number : Number[S], w$Rational : Rational[S]):
+        Plus$Number$Real($wself, w$Number, w$Rational):
+        $wself.w$Rational = w$Rational
 
 class Minus$Number$Rational[S] (Minus$Number$Real[S]):
-    $Rational    : Rational[S]
+    w$Rational   : Rational[S]
+    def __init__($wself, w$Number : Number[S], w$Rational : Rational[S]):
+        Minus$Number$Real($wself, w$Number, w$Rational):
+        $wself.w$Rational = w$Rational
 
 ##
 
-class Integral[S] (Rational[S]):
-    $Logical     : Logical[S]
-  
+# protocol Integral (Rational,Logical):
+class Integral[S] (Rational[S]):            # (_ : Rational, _._ : Real, _._._ : Ord, _._.Number : Number, _._._._ : Eq,
+                                            #  _._.Number.Plus : Plus, _._.Number.Minus : Minus, Logical : Logical)
+    w$Logical    : Logical[S]
+    def __init__($wself, w$Number : Number[S], w$Logical : Logical[S]):
+        Rational.__init__($wself, w$Number)
+        $wself.w$Logical = w$Logical
+
     __int__      : (S) -> int
     __index__    : (S) -> int
 
@@ -341,315 +348,560 @@ class Integral[S] (Rational[S]):
 
     __invert__   : (S) -> S
 
-class Logical$Integral[S] (Logical[S]):
-    $Integral    : Integral[S]
-
 class Number$Integral[S] (Number$Rational[S]):
-    $Integral    : Integral[S]
-
+    w$Integral   : Integral[S]
+    def __init__($wself, w$Plus : Plus[S], w$Minus : Minus[S], w$Integral : Integral[S]):
+        Number$Rational.__init__($wself, w$Plus, w$Minus, w$Integral)
+        $wself.w$Integral = w$Integral
+    
 class Plus$Number$Integral[S] (Plus$Number$Rational[S]):
-    $Integral    : Integral[S]
-
+    w$Integral   : Integral[S]
+    def __init__($wself, w$Number : Number[S], w$Integral : Integral[S])):
+        Plus$Number$Rational.__init__($wself, w$Number, w$Integral)
+        $wself.w$Integral = w$Integral
+    
 class Minus$Number$Integral[S] (Minus$Number$Rational[S]):
-    $Integral    : Integral[S]
+    w$Integral   : Integral[S]
+    def __init__($wself, w$Number : Number[S], w$Integral : Integral[S])):
+        Minus$Number$Rational.__init__($wself, w$Number, w$Integral)
+        $wself.w$Integral = w$Integral
 
+class Logical$Integral[S] (Logical[S]):
+    w$Integral   : Integral[S]
+    def __init__($wself, w$Integral : Integral[S]):
+        Logical.__init__($wself)
+        $wself.w$Integral = w$Integral
+    
 
+## Number protocol extensions ######################################################################
 
-## Extensions ######################################################################################
+# extension int (Integral):
+#     __mod__, numerator, __trunc__, __le__, __eq__, __or__, __mul__, __add__, __sub__
 
-extension int (Integral):
-    # __mod__, numerator, __trunc__, __le__, __eq__, __or__, __mul__, __add__, __sub__
-
-# ==> 
-
-class Integral$int (Integral[int]):
+class Integral$int (Integral[int]):         # (_ : Integral, _._ : Rational, _._._ : Real, _._._._ : Ord, _._._.Number : Number, _._._._._ : Eq,
+                                            #  _._._.Number.Plus : Plus, _._._.Number.Minus : Minus, _.Logical : Logical)
     def __init__($wself):
-        $wself.$Number   = Number$Integral$int($wself)
-        $wself.$Logical  = Logical$Integral$int($wself)
+        Integral.__init__($wself, Number$Integral$int($wself), Logical$Integral$int($wself))
     # __mod__, numerator, __trunc__, __le__, __eq__
 
-class Logical$Integral$int (Logical$Integral[int]):
-    def __init__($wself, w$Integral : Integral$int):
-        $wself.$Integral = w$Integral
-    # __or__
-
 class Number$Integral$int (Number$Integral[int]):
-    def __init__($wself, w$Integral : Integral$int):
-        $wself.$Plus     = Plus$Number$Integral$int($wself, w$Integral)
-        $wself.$Minus    = Minus$Number$Integral$int($wself, w$Integral)
-        $wself.$Real     = w$Integral
-        $wself.$Rational = w$Integral
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Integral : Integral[int]):
+        Number$Integral.__init__($wself, Plus$Number$Integral$int($wself, w$Integral), Minus$Number$Integral$int($wself, w$Integral), w$Integral)
     def __eq__($wself, a, b):
-        return $wself.$Integral.__eq__(a, b)
+        return $wself.w$Integral.__eq__(a, b)
     # __mul__
 
 class Plus$Number$Integral$int (Plus$Number$Integral[int]):
-    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
-        $wself.$Number   = w$Number
-        $wself.$Real     = w$Integral
-        $wself.$Rational = w$Integral
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Number : Number[int], w$Integral : Integral[int]):
+        Plus$Number$Integral.__init__($wself, w$Number, w$Integral)
     # __add__
 
 class Minus$Number$Integral$int (Minus$Number$Integral[int]):
-    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
-        $wself.$Number   = w$Number
-        $wself.$Real     = w$Integral
-        $wself.$Rational = w$Integral
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Number : Number[int], w$Integral : Integral[int]):
+        Minus$Number$Integral.__init__($wself, w$Number, w$Integral)
     # __sub__
 
-####
+class Logical$Integral$int (Logical$Integral[int]):
+    def __init__($wself, w$Integral : Integral[int]):
+        Logical$Integral.__init__($wself, w$Integral)
+    # __or__
 
-extension int (Number):
-    # __mul__, __eq__, __add__, __sub__
-...
-extension int (Integral):
-    # __mod__, numerator, __trunc__, __le__, __or__
-    
-# ==>
 
-class Number$int (Number[int]):
+#### alternatively:
+
+# extension int (Number):
+#     __mul__, __eq__, __add__, __sub__
+# ...
+# extension int (Integral):
+#     __mod__, numerator, __trunc__, __le__, __or__
+
+class Number$int (Number[int]):             # (_ : Number, Number.Plus : Plus, Number.Minus : Minus)
     def __init__($wself):
-        $wself.$Plus     = Plus$Number$int($wself)
-        $wself.$Minus    = Minus$Number$int($wself)
+        Number.__init__($wself, Plus$Number$int($wself), Minus$Number$int($wself))
     # __mul__, __eq__
 
 class Plus$Number$int (Plus$Number[int]):
-    def __init__($wself, w$Number : Number$int):
-        $wself.$Number   = w$Number
+    def __init__($wself, w$Number : Number[int]):
+        Plus$Number.__init__($wself, w$Number)
     # __add__
 
 class Minus$Number$int (Minus$Number[int]):
-    def __init__($wself, w$Number : Number$int):
-        $wself,$Number   = w$Number
+    def __init__($wself, w$Number : Number[int]):
+        Minus$Number.__init__($wself, w$Number)
     # __sub__
 
-class Integral$int (Integral[int]):
+#...
+
+class Integral$int (Integral[int]):         # (_ : Integral, _._ : Rational, _._._ : Real, _._._._ : Ord, _._._.Number : Number, _._._._._ : Eq,
+                                            #  _._._.Number.Plus : Plus, _._._.Number.Minus : Minus, _.Logical : Logical)
     def __init__($wself):
-        $wself.$Number   = Number$int()
-        $wself.$Logical  = Logical$Integral$int($wself)
-    def __eq__($wself, a, b):
-        return $wself.$Number.__eq__(a, b)
-    # __mod__, numerator, __trunc__, __le__
+        Integral.__init__($wself, Number$int(), Logigal$Integral$int($wself))
 
 class Logical$Integral$int (Logical$Integral[int]):
-    def __init__($wself, w$Integral : Integral$int):
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Integral : Integral[int]):
+        Logical$Integral.__init__($wself, w$Integral)
     # __or__
 
-####
 
-extension int (Eq):
-    # __eq__
-...
-extension int (Number):
-    # __mul__, __add__, __sub__
-...
-extension int (Integral):
-    # __mod__, numerator, __trunc__, __le__, __or__
-    
-# ==>
+#### alternatively:
 
-class Eq$int (Eq[int]):
+# extension int (Eq):
+#     __eq__
+# ...
+# extension int (Number):
+#     __mul__, __add__, __sub__
+# ...
+# extension int (Integral):
+#     __mod__, numerator, __trunc__, __le__, __or__
+
+class Eq$int (Eq[int]):                     # (_ : Eq)
     def __init__($wself):
-        pass
+        Eq.__init__($wself)
     # __eq__
 
-class Number$int (Number[int]):
+#...
+
+class Number$int (Number[int]):             # (_ : Number, Number.Plus : Plus, Number.Minus : Minus)
     def __init__($wself):
-        $wself.$Eq       = Eq$int()
-        $wself.$Plus     = Plus$Number$int($wself)
-        $wself.$Minus    = Minus$Number$int($wself)
+        Number.__init__($wself, Plus$Number$int($wself), Minus$Number$int($wself))
     __eq__ = Eq$int.__eq__
     __ne__ = Eq$int.__ne__
     # __mul__
 
 class Plus$Number$int (Plus$Number[int]):
-    def __init__($wself, w$Number : Number$int):
-        $wself.$Number   = w$Number
+    def __init__($wself, w$Number : Number[int]):
+        Plus$Number.__init__($wself, w$Number)
     # __add__
 
 class Minus$Number$int (Minus$Number[int]):
-    def __init__($wself, w$Number : Number$int):
-        $wself,$Number   = w$Number
+    def __init__($wself, w$Number : Number[int]):
+        Minus$Number.__init__($wself, w$Number)
     # __sub__
 
-class Integral$int (Integral[int]):
+#...
+
+class Integral$int (Integral[int]):         # (_ : Integral, _._ : Rational, _._._ : Real, _._._._ : Ord, _._._.Number : Number, _._._._._ : Eq,
+                                            #  _._._.Number.Plus : Plus, _._._.Number.Minus : Minus, _.Logical : Logical)
     def __init__($wself):
-        $wself.$Number   = Number$int()
-        $wself.$Logical  = Logical$Integral$int($wself)
+        Integral.__init__($wself, Number$int(), Logigal$Integral$int($wself))
     __eq__ = Eq$int.__eq__
     __ne__ = Eq$int.__ne__
     # __mod__, numerator, __trunc__, __le__
 
 class Logical$Integral$int (Logical$Integral[int]):
-    def __init__($wself, w$Integral : Integral$int):
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Integral : Integral[int]):
+        Logical$Integral.__init__($wself, w$Integral)
     # __or__
 
-####
 
-extension int (Real):
-    # __trunc__, __le__, __eq__, __mul__, __add__, __sub__
-...
-extension int (Integral):
-    # __mod__, numerator, __or__
-    
-# ==>
+#### alternatively:
 
-class Real$int (Real[int]):
+# extension int (Real):
+#     __trunc__, __le__, __eq__, __mul__, __add__, __sub__
+# ...
+# extension int (Integral):
+#     __mod__, numerator, __or__
+
+class Real$int (Real[int]):                 # (_ : Real, _._ : Ord, _.Number : Number, _._._ : Eq,
+                                            #  _.Number.Plus : Plus, _.Number.Minus : Minus)
     def __init__($wself):
-        $wself.$Number   = Number$Real$int($wself)
+        Real.__init__($wself, Number$Real$int($wself))
     # __trunc__, __le__, __eq__
 
 class Number$Real$int (Number$Real[int]):
-    def __init__($wself, w$Real : Real$int):
-        $wself.$Plus     = Plus$Number$Realint($wself, w$Integral)
-        $wself.$Minus    = Minus$Number$Realint($wself, w$Integral)
-        $wself.$Real     = w$Real
+    def __init__($wself, w$Plus : Plus[int], w$Minus : Minus[int], w$Real : Real[int]):
+        Number$Real.__init__($wself, Plus$Number$Real$int($wself, w$Real), Minus$Number$Real$int($wself, w$Real), w$Real)
     def __eq__($wself, a, b):
         return $wself.$Real.__eq__(a, b)
     # __mul__
 
-class Plus$Number$Realint (Plus$Real[int]):
-    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
-        $wself,$Number   = w$Number
-        $wself.$Real     = w$Integral
+class Plus$Number$Real$int (Plus$Number$Real[int]):
+    def __init__($wself, w$Number : Number[int], w$Real : Real[int]):
+        Plus$Number.__init__($wself, w$Number, w$Real)
     # __add__
 
-class Minus$Number$Realint (Minus$Real[int]):
-    def __init__($wself, w$Number : Number$int, w$Integral : Integral$int):
-        $wself,$Number   = w$Number
-        $wself.$Real     = w$Integral
+class Minus$Number$Real$int (Minus$Number$Real[int]):
+    def __init__($wself, w$Number : Number[int], w$Real : Real[int]):
+        Minus$Number.__init__($wself, w$Number, w$Real)
     # __sub__
 
-class Integral$int (Integral[int]):
+#...
+
+class Integral$int (Integral[int]):         # (_ : Integral, _._ : Rational, _._._ : Real, _._._._ : Ord, _._._.Number : Number, _._._._._ : Eq,
+                                            #  _._._.Number.Plus : Plus, _._._.Number.Minus : Minus, _.Logical : Logical)
     def __init__($wself):
-        $wself.$Number   = $wself.$Real
-        $wself.$Logical  = Logical$Integral$int($wself)
-    def __trunc__($wself, a):
-        ...     # code copied from Real$int
-    def __le__($wself, a, b):
-        ...     # code copied from Real$int
-    def __eq__($wself, a, b):
-        ...     # code copied from Real$int
+        Integral.__init__($wself, Real$int().w$Number, Logical$Integral$int($wself))
+    __trunc__ = Real$int.__trunc__
+    __le__ = Real$int.__le__
+    __eq__ = Real$int.__eq__
     # __mod__, numerator
 
 class Logical$Integral$int (Logical$Integral[int]):
-    def __init__($wself, w$Integral : Integral$int):
-        $wself.$Integral = w$Integral
+    def __init__($wself, w$Integral : Integral[int]):
+        Logical$Integral.__init__($wself, w$Integral)
     # __or__
 
+####
 
-################
-
-
-class Collection$list (Collection[list[A],A]):
-    w$Sequence$list : Sequence$list[A]
-    def __init__($wself, w$Sequence$list):
-        Collection.__init__($wself)
-        $wself.w$Sequence$list = w$Sequence$list
-class Plus$list (Plus[list[A],A]):
-    w$Sequence$list : Sequence$list[A]
-    def __init__($wself, w$Sequence$list):
-        Plus.__init__($wself)
-        $wself.w$Sequence$list = w$Sequence$list
-class Sequence$list[A] (Sequence[list[A],A]):
+# extension int (Hashable):
+class Hashable$int (Hashable[int]):         # (_ : Eq)
     def __init__($wself):
-        Sequence.__init__(Collection$list($wself), Plus$list($wself))
+        Hashable.__init__($wself)
+    __eq__ = Real$int.__eq__
+    __ne__ = Real$int.__ne__
 
-class Container$list[A(Eq)] (Container[A]):
-    w$Sequence$list : Sequence[list[A],A]
+####
+
+# extension float (Real):
+class Real$float (Real[float]):             # (_ : Real, _._ : Ord, _.Number : Number, _._._ : Eq, _.Number.Plus : Plus, _.Number.Minus : Minus)
+    def __init__($wself):
+        Real.__init__($wself, Number$Real$float($wself))
+
+class Number$Real$float (Number$Real[float]):
+    def __init__($wself, w$Real : Real[float]):
+        Number$Real.__init__($wself, Plus$Real$float($wself), Minus$Real$float($wself), w$Real)
+
+class Plus$Real$float (Plus$Number$Real[float]):
+    def __init__($wself, w$Number : Number[float], w$Real : Real[float]):
+        Plus$Number$Real.__init__($wself, w$Number, w$Real)
+
+class Minus$Number$Real$float (Minus$Number$Real[float]):
+    def __init__($wself, w$Number : Number[float],  w$Real : Real[float]):
+        Minus$Number$Real.__init__($$wself, w$Number, w$Real)
+
+####
+
+# extension float (Hashable):
+class Hashable$float (Hashable[float]):     # (_ : Hashable, _._ : Eq)
+    def __init__($wself):
+        Hashable.__init__($wself)
+    __eq__ = Real$float.__eq__
+    __ne__ = Real$float.__ne__
+
+
+# extension complex (Number):
+
+# extension complex (Hashable):
+
+
+## Collection protocols ############################################################################
+
+# protocol Indexed[A (Eq),B]:
+class Indexed[S,A,B] ():
+    w$Eq$A$1     : Eq[A]
     def __init__($wself, w$Eq$A : Eq[A]):
-        Container.__init__($wself, w$Eq$A)
-        $wself.w$Sequence$list = Sequence$list()
+        $wself.w$Eq$A$1 = w$Eq$A
 
-class Indexed$dict (Indexed[dict[A,B],A,B]):
-    w$Mapping$dict : Mapping$dict[A,B]
-    def __init__($wself, w$Eq$A : Eq[A], w$Mapping$dict : Mapping$dict[A,B]):
-        Indexed.__init__($wself, w$Eq$A)
-        $wself.w$Mapping_dict = w$Mapping$dict
-class Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):
-    w$Hashable$A : Hashable[A]
-    def __init__($wself, w$Hashable$A : Hashable[A]):
-        Mapping.__init__($wself, Indexed$dict($wself,w$Hashable$A))
-        $wself.w$Hashable$A = w$Hashable$A
+    __getitem__  : (S,A) -> B
+    __setitem__  : (S,A,B) -> None 
+    __delitem__  : (S,A) -> None
 
-class Ord$set (Ord[set[A]]):
-    w$Set$set : Set$set[A]
-    def __init__($wself, w$Set$set):
-        Ord.__init__($wself)
-        $wself.w$Set$set = w$Set$set
-class Locical$set (Logical[set[A]]):
-    w$Set$set : Set$set[A]
-    def __init__($wself, w$Set$set):
-        Logical.__init__($wself)
-        $wself.w$Set$set = w$Set$set
-class Minus$set (Minus[set[A]]):
-    w$Set$set : Set$set[A]
-    def __init__($wself, w$Set$set):
-        Minus.__init__($wself)
-        $wself.w$Set$set = w$Set$set
-class Set$set[A] (Set[set[A],A]):
-    w$Hashable$A : Hashable[A]
-    def __init__($wself, w$Hashable$A : Hashable[A]):
-        Set.__init__($wself, w$Hashable$A, Ord$set($wself), Logical$set($wself), Minus$set($wself))
-        $wself.w$Hashable$A = w$Hashable$A
+# protocol Sliceable[A] (Indexed[int,A]):
+class Sliceable[S,A] (Indexed[S,int,A]):                # (_ : Indexed[int, A])
+    def __init__($wself):
+        Indexed.__init__($wself, Eq$int())                      # or Integral$int(), Real$int(), Number$int(), ...
 
-class Iterable$Iterator[A] (Iterable[Iterator[A],A]):
+    __getslice__ : (S,Slice) -> S
+    __setslice__ : [X] => (S,Iterable[X,A],Slice,X) -> None
+    __delslice__ : (S,Slice) -> None
+
+# protocol Collection[A] (Iterable[A]):
+class Collection[S,A] (Iterable[S,A]):                  # (_ : Iterable[A])
     def __init__($wself):
         Iterable.__init__($wself)
 
-class Ord$str (Ord[str]):
+    __fromiter__ : [X] => (Iterable[X,A],X) -> S
+    __len__      : (S) -> int
+
+# protocol Container[A(Eq)] (Collection[A]):
+class Container[S,A]] (Collection[S,A]):                # (_ : Collection[A], _._ : Iterable[A])
+    w$Eq$A$2     : Eq[A]
+    def __init__($wself, w$Eq$A : Eq[A]):
+        Collection.__init__($wself)
+        $wself.w$Eq$A$2 = w$Eq$A
+  
+    __contains__    : (S,A) -> bool  
+    __containsnot__ : (S,A) -> bool
+
+
+#   Indexed         Iterable
+#    |               |
+#    |               |
+#   Sliceable       Collection      Plus
+#    |               |               |
+#    |               |               |
+#   Sequence <-------- <--------------
+
+# protocol Sequence[A] (Sliceable[A], Collection[A], Plus):
+class Sequence[S,A] (Sliceable[S,A]):                   # (_ : Sliceable[A], _._ : Indexed[int, A], Collection : Collection[A],
+                                                        #  Collection._ : Iterable[A], Plus : Plus):
+    w$Collection  : Collection[S,A]
+    w$Plus        : Plus[S]:
+    def __init__($wself, w$Collection: Collection[S,A], w$Plus : Plus[S]):
+        Sliceable.__init__($wself)
+        $wself.w$Collection = w$Collection
+        $wself.w$Plus = w$Plus
+  
+    __reversed__  : (S) -> Iterator[A] 
+    insert        : (S,int,A) -> None
+    append        : (S,A) -> None   
+    reverse       : (S,) -> None       
+
+class Collection$Sequence[S,A] (Collection[S,A]):
+    w$Sequence    : Sequence[S,A]
+    def __init__($wself, w$Sequence : Sequence[S,A]):
+        Collection.__init__($wself)
+        $wself.w$Sequence = w$Sequence
+
+class Plus$Sequence[S,A] (Plus[S]):
+    w$Sequence    : Sequence[S,A]
+    def __init__($wself, w$Sequence : Sequence[S,A]):
+        Plus.__init__($wself)
+        $wself.w$Sequence = w$Sequence
+
+
+#   Iterable
+#    |
+#    |
+#   Collection
+#    |
+#    |
+#   Container       Indexed
+#    |               |
+#    |               |
+#   Mapping <---------
+
+# protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
+class Mapping[S,A,B] (Container[S,A]):                  # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A], Indexed : Indexed[A, B])
+    w$Indexed     : Indexed[S,A,B])
+    w$Eq$A$3      : Eq[A]
+    def __init__($wself, w$Indexed : Indexed[S,A,B], w$Eq$A : Eq[A]):
+        Container.__init__($wself, w$Eq$A)
+        $wself.w$Indexed = w$Indexed
+        $wself.w$Eq$A$3 = w$Eq$A
+
+    get           : (S,A,B) -> B
+    keys          : (S) -> Iterator[A]
+    values        : (S) -> Iterator[B]:
+    items         : (S) -> Iterator[(A,B)]
+    update        : [X] => (S,Iterable[X,(A,B)],X) -> None  
+    popitem       : (S) -> (A,B)
+    setdefault    : (S,A,B) -> None
+
+class Indexed$Mapping[S,A,B] (Indexed[S,A,B]):
+    w$Mapping     : Mapping[S,A,B]
+    w$Eq$A$4      : Eq[A]
+    def __init__($wself, w$Mapping : Mapping[S,A,B], w$Eq$A : Eq[A]):
+        Indexed.__init__($wself, w$Eq$A)
+        $wself.w$Mapping = w$Mapping
+        $wself.w$Eq$A$4 = w$Eq$A
+
+
+#   Iterable
+#    |
+#    |
+#   Collection      Eq
+#    |               |
+#    |               |
+#   Container       Ord             Logical         Minus
+#    |               |               |               |
+#    |               |               |               |
+#   Set <------------- <-------------- <--------------
+
+# protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
+class Set[S,A] (Container[S,A]):                        # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A], 
+                                                        #  Ord : Ord, Ord._ : Eq, Logical : Logical, Minus : Minus)
+    w$Ord         : Ord[S]
+    w$Logical     : Logical[S]
+    w$Minus       : Minus[S]
+    w$Eq$A$5      : Eq[A]
+    def __init_($wself, w$Ord : Ord[S], w$Logical : Logical[S], w$Minus : Minus[S], w$Eq$A : Eq[A]):
+        Container.__init__($wself, w$Eq$A)
+        $wself.w$Ord = w$Ord
+        $wself.w$Logical = w$Logical
+        $wself.w$Minus = w$Minus
+        $wself.w$Eq$A$5 = w$Eq$A
+  
+    isdisjoint    : (S,S) -> bool
+    add           : (S,A) -> None  
+    discard       : (S,A) -> None  
+    pop           : (S) -> A 
+
+class Ord$Set[S,A] (Ord[S]):
+    w$Set         : Set[S,A]
+    w$Eq$A$6      : Eq[A]
+    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+        Ord.__init__($wself)
+        $wself.w$Set = w$Set
+        $wself.w$Eq$A$6 = w$Eq$A
+
+class Logical$Set[S,A] (Logical[S]):
+    w$Set         : Set[S,A]
+    w$Eq$A$7      : Eq[A]
+    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+        Logical.__init__($wself)
+        $wself.w$Set = w$Set
+        $wself.w$Eq$A$7 = w$Eq$A
+
+class Minus$Set[S,A] (Minus[S]):
+    w$Set         : Set[S,A]
+    w$Eq$A$8      : Eq[A]
+    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+        Minus.__init__($wself)
+        $wself.w$Set = w$Set
+        $wself.w$Eq$A$8 = w$Eq$A
+
+
+## Collection protocol extensions ########################################
+
+# extension list[A] (Sequence[A]):
+class Sequence$list[A] (Sequence[list[A],A]):           # (_ : Sequence[A], _._ : Sliceable[A], _._._ : Indexed[int, A],
+                                                        #  _.Collection : Collection[A], _.Collection._ : Iterable[A], _.Plus : Plus)
+    def __init__($wself):
+        Sequence.__init__($wself, Collection$Sequence$list($wself), Plus$Sequence$list($wself))
+
+class Collection$Sequence$list[A] (Collection$Sequence[list[A],A]):
+    def __init__($wself, w$Sequence : Sequence[list[A],A]):
+        Collection$Sequence.__init__($wself, w$Sequence)
+
+class Plus$Sequence$list[A] (Plus$Sequence[list[A],A]):
+    def __init__($wself, w$Sequence : Sequence[list[A],A]):
+        Plus$Sequence.__init__($wself, w$Sequence)
+
+###
+
+# extension list[A(Eq)] (Container[A]):
+class Container$list[A] (Container[list[A],A]):         # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A])
+    w$Eq$A$9      : Eq[A]
+    def __init__($wself, w$Eq$A : Eq[A]):
+        Container.__init__($wself, w$Eq$A)
+        $wself.w$Eq$A$9 = w$Eq$A
+
+###
+
+# extension dict[A(Hashable),B] (Mapping[A,B]):
+class Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):       # (_ : Mapping[A, B], _._ : Container[A], _._._ : Collection[A],
+                                                        #  _._._._ : Iterable[A], _.Indexed : Indexed[A, B])
+    w$Hashable$A$10   : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A]):
+        Mapping.__init__($wself, Indexed$Mapping$dict($wself,w$Hashable$A))
+        $wself.w$Hashable$A$10 = w$Hashable$A
+
+class Indexed$Mapping$dict[A,B] (Indexed$Mapping[dict[A,B],A,B]):
+    w$Hashable$A$11 : Hashable[A]
+    def __init__($wself, w$Mapping : Mapping[A,B], w$Hashable$A : Hashable[A]):
+        Indexed$Mapping.__init__($wself, w$Mapping, w$Hashable$A)
+        $wself.w$Hashable$A$11 = w$Hashable$A
+
+###
+
+# extension set[A(Hashable)] (Set[A]):
+class Set$set[A] (Set[set[A],A]):                       # (_ : Set[A], _._ : Container[A], _._._ : Collection[A], _._._._ : Iterable[A],
+                                                        #  _.Ord : Ord, _.Ord._ : Eq, _.Logical : Logical, _.Minus : Minus)
+    w$Hashable$A$12 : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A]):
+        Set.__init__($wself, Ord$Set$set($wself,w$Hashable$A), Logical$Set$set($wself,w$Hashable$A), Minus$Set$set($wself,w$Hashable$A), w$Hashable$A)
+        $wself.w$Hashable$A$12 = w$Hashable$A
+
+class Ord$Set$set[A] (Ord$Set[set[A],A]):
+    w$Hashable$A$13 : Hashable[A]
+    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
+        Ord$Set.__init__($wself, w$Set, w$Hashable$A)
+        $wself.w$Hashable$A$13 = w$Hashable$A
+
+class Locical$Set$set[A] (Logical$Set[set[A],A]):
+    w$Hashable$A$14 : Hashable[A]
+    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
+        Logical$Set.__init__($wself, w$Set, w$Hashable$A)
+        $wself.w$Hashable$A$14 = w$Hashable$A
+
+class Minus$Set$set[A] (Minus$Set[set[A],A]):
+    w$Hashable$A$15 : Hashable[A]
+    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
+        Minus$Set.__init__($wself, w$Set, w$Hashable$A)
+        $wself.w$Hashable$A$15 = w$Hashable$A
+
+###
+
+# extension Iterator[A](Iterable[A]):
+class Iterable$Iterator[A] (Iterable[Iterator[A],A]):   # (_ : Iterable[A])
+    def __init__($wself):
+        Iterable.__init__($wself)
+
+###
+
+# extension range (Sequence[int]):
+class Sequence$range (Sequence[range,int]):             # (_ : Sequence[int], _._ : Sliceable[int], _._._ : Indexed[int, int], 
+                                                        #  _.Collection : Collection[int], _.Collection._ : Iterable[int], _.Plus : Plus)
+    def __init__($wself):
+        Sequence.__init__($wself, Collection$Sequence$range($wself), Plus$Sequence$range($wself))
+
+class Collection$Sequence$range (Collection$Sequence[range,int]):
+    def __init($wself, w$Sequence : Sequence[range,int]):
+        Collection$Sequence.__init__($wself, w$Sequence)
+
+class Plus$Sequence$range (Plus$Sequence[range,int]):
+    def __init__($wself, w$Sequence : Sequence[range,int]):
+        Plus$Sequence.__init__($wself, w$Sequence)
+
+###
+
+# extension str (Ord):
+class Ord$str (Ord[str]):                               # (_ : Ord, _._ : Eq)
     def __init__($wself):
         Ord.__init__($wself)
 
-class Container$str (Container[str,str]):
+# extension str (Container[str]):
+class Container$str (Container[str,str]):               # (_ : Container[str], _._ : Collection[str], _._._ : Iterable[str])
     def __init__($wself):
-        Container.__init__($wself, Eq$str())
+        Container.__init__($wself, Ord$str())
 
-class Sliceable$str (Sliceable[str,str]):
+# extension str (Sliceable[str]):
+class Sliceable$str (Sliceable[str,str]):               # (_ : Sliceable[str], _._ : Indexed[int, str])
     def __init__($wself):
         Sliceable.__init__($wself)
 
-class Plus$str (Plus[str]):
+# extension str (Plus):
+class Plus$str (Plus[str]):                             # (_ : Plus)
     def __init__($wself):
         Plus.__init__($wself)
 
-class Hashable$str (Hashable[str]):
+# extension str (Hashable):
+class Hashable$str (Hashable[str]):                     # (_ : Hashable, _._ : Eq)
     def __init__($wself):
         Hashable.__init__($wself)
+    __eq__ = Ord$str.__eq__
+    __ne__ = Ord$str.__ne__
 
-
-class Hashable$int (Hashable[int]):
+# extension bytearray (Ord):
+class Ord$bytearray (Ord(bytearray)):                   # (_ : Ord, _._ : Eq)
     def __init__($wself):
-        Hashable.__init__($wself)
+        Ord.__init__($wself)
 
-class Plus$float (Plus[float]):
-    w$Real$float : Real$float
-    def __init__($wself, w$Real$float):
-        $wself.w$Real$float = w$Real$float
-class Minus$float (Minus[float]):
-    w$Real$float : Real$float
-    def __init__($wself, w$Real$float):
-        $wself.w$Real$float = w$Real$float
-class Number$float (Number[float]):
-    w$Real$float : Real$float
-    def __init__($wself, w$Real$float):
-        Number.__init__($wself, Plus$float($wself), Minus$float($wself))
-        $wself.w$Real$float = w$Real$float
-class Real$float (Real[float]):
-    def __init__($wself):
-        Real.__init__($wself, Number$float($wself))
+###
 
-class Hashable$float (Hashable[float]):
+# extension bytearray (Sequence[int]):
+class Sequence$bytearray (Sequence[bytearray,int]):     # (_ : Sequence[int], _._ : Sliceable[int], _._._ : Indexed[int, int], 
+                                                        #  _.Collection : Collection[int], _.Collection._ : Iterable[int], _.Plus : Plus)
     def __init__($wself):
-        Hashable.__init__($wself)
+        Sequence.__init__($wself, Collection$Sequence$bytearray($wself), Plus$Sequence$bytearray($wself))
+
+class Collection$Sequence$bytearray (Collection$Sequence[bytearray,int]):
+    def __init($wself, w$Sequence : Sequence[bytearray,int]):
+        Collection$Sequence.__init__($wself, w$Sequence)
+
+class Plus$Sequence$bytearray (Plus$Sequence[bytearray,int]):
+    def __init__($wself, w$Sequence : Sequence[bytearray,int]):
+        Plus$Sequence.__init__($wself, w$Sequence)
+
+###
+
+# extension bytearray (Container[int]):
+class Container$bytearray (Container[bytearray,int]):   # (_ : Container[int], _._ : Collection[int], _._._ : Iterable[int])
+    def __init__($wself):
+        Container.__init__($wself, Integral$int())                  # or Eq$int(), Ord$int(), Real$int(), Number$int(), ...
+
+
 
 ## Builtin functions #####################################################
 
-def abs[X,Y](w1:Number[X], w2:Real[Y], x : X) -> Y:
-    return w1.__abs__@[Y](w2, x)
-    

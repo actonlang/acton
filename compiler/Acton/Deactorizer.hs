@@ -146,7 +146,7 @@ instance Deact Decl where
     deact env (Extension l n q u b) = Extension l n q u <$> deact env b
       where env1                    = extendTVars q env
 
-localName n                         = Derived n "local"
+localName n                         = Derived n (name "local")
 
 addSelf p                           = PosPar selfKW (Just tSelf) Nothing p
 
@@ -216,10 +216,12 @@ instance Deact Handler where
 
 instance Deact PosArg where
     deact env (PosArg e p)          = PosArg <$> deact env e <*> deact env p
+    deact env (PosStar e)           = PosStar <$> deact env e
     deact env PosNil                = return PosNil
 
 instance Deact KwdArg where
     deact env (KwdArg n e k)        = KwdArg n <$> deact env e <*> deact env k
+    deact env (KwdStar e)           = KwdStar <$> deact env e
     deact env KwdNil                = return KwdNil
 
 instance Deact OpArg where
