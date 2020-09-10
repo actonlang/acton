@@ -33,7 +33,7 @@ $str $int_str($int n) {
 }
   
 struct $int$class $int$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$int_init,$int_serialize,$int_deserialize,$int_bool,$int_str};
-/*
+
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
   res->$class = &$int$methods;
@@ -44,7 +44,6 @@ $int to$int(long i) {
 long from$int($int w) {
   return w->val;
 }
-*/
 
 $int $int_fromatom($Super a) {
   if ($ISINSTANCE(a,$int)) return ($int)a;

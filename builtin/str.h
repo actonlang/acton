@@ -47,7 +47,7 @@ struct $str$class {
   $int (*rindex)($str s, $str sub, $int start, $int end);        // like rfind but raises VALUEERROR when not found
   $str (*rjust)($str s, $int width, $str fill);                   // raises TYPEERROR if fill is not a single char
   $tuple (*rpartition)($str s, $str sep); 
-  //$list (*rsplit)($str s, $str sep, int maxsplit);             // not implemented. sep may be NULL; then separation is indicated by a whitespace string
+  //$list (*rsplit)($str s, $str sep, int maxsplit);             // not implemented. sep may be NULL; then separation is indicated by a whitespace string. TODO!!!
   $str (*rstrip)($str s,$str cs);                                //  cs may be NULL, then defaulting to whitespace removal.
   $list (*split)($str s, $str sep, $int maxsplit);               // raises VALUEERROR when separator is empty string
   $list (*splitlines)($str s, $bool);                                   // keepends parameter absent; only \n recognized as line separator

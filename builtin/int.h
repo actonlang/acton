@@ -30,17 +30,17 @@ extern struct $Plus$int *$Plus$int$witness;
 extern struct $Minus$int *$Minus$int$witness;
 extern struct $Hashable$int *$Hashable$int$witness;
 
-/*
+
 $int to$int(long n);
 long from$int($int n);
-*/
 
+/*
 #define to$int(n)  ({$int $res = malloc(sizeof(struct $int)); \
                      $res->$class = &$int$methods; \
                      $res->val = n; \
                      $res;})
 
 #define from$int(n)  ((($int)n)->val)
-
+*/
 
 $int $int_fromatom($Super a);

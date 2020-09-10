@@ -40,3 +40,23 @@ void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int 
   else
     *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
+
+void $Slice__init__($Slice s, $int start, $int stop, $int step) {
+  if (start) {
+    s->start = malloc(sizeof(int));
+    *s->start = start->val;
+  } else
+    s->start = NULL;
+ if (stop) {
+    s->stop = malloc(sizeof(int));
+    *s->stop = stop->val;
+  } else
+   s->stop = NULL;
+ if (step) {
+    s->step = malloc(sizeof(int));
+    *s->step = step->val;
+  } else
+   s->step = NULL;
+}
+
+struct $Slice$class $Slice$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$Slice__init__,NULL,NULL,NULL,NULL};
