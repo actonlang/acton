@@ -588,9 +588,9 @@ class Hashable$float (Hashable[float]):     # (_ : Hashable, _._ : Eq)
 
 # protocol Indexed[A (Eq),B]:
 class Indexed[S,A,B] ():
-    w$Eq$A$1     : Eq[A]
+    w$Eq$A$Indexed : Eq[A]
     def __init__($wself, w$Eq$A : Eq[A]):
-        $wself.w$Eq$A$1 = w$Eq$A
+        $wself.w$Eq$A$Indexed = w$Eq$A
 
     __getitem__  : (S,A) -> B
     __setitem__  : (S,A,B) -> None 
@@ -615,10 +615,10 @@ class Collection[S,A] (Iterable[S,A]):                  # (_ : Iterable[A])
 
 # protocol Container[A(Eq)] (Collection[A]):
 class Container[S,A]] (Collection[S,A]):                # (_ : Collection[A], _._ : Iterable[A])
-    w$Eq$A$2     : Eq[A]
+    w$Eq$A$Container : Eq[A]
     def __init__($wself, w$Eq$A : Eq[A]):
         Collection.__init__($wself)
-        $wself.w$Eq$A$2 = w$Eq$A
+        $wself.w$Eq$A$Container = w$Eq$A
   
     __contains__    : (S,A) -> bool  
     __containsnot__ : (S,A) -> bool
@@ -673,12 +673,12 @@ class Plus$Sequence[S,A] (Plus[S]):
 
 # protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
 class Mapping[S,A,B] (Container[S,A]):                  # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A], Indexed : Indexed[A, B])
-    w$Indexed     : Indexed[S,A,B])
-    w$Eq$A$3      : Eq[A]
-    def __init__($wself, w$Indexed : Indexed[S,A,B], w$Eq$A : Eq[A]):
+    w$Eq$A$Mapping : Eq[A]
+    w$Indexed      : Indexed[S,A,B])
+    def __init__($wself, w$Eq$A : Eq[A], w$Indexed : Indexed[S,A,B]):
         Container.__init__($wself, w$Eq$A)
+        $wself.w$Eq$A$Mapping = w$Eq$A
         $wself.w$Indexed = w$Indexed
-        $wself.w$Eq$A$3 = w$Eq$A
 
     get           : (S,A,B) -> B
     keys          : (S) -> Iterator[A]
@@ -689,12 +689,12 @@ class Mapping[S,A,B] (Container[S,A]):                  # (_ : Container[A], _._
     setdefault    : (S,A,B) -> None
 
 class Indexed$Mapping[S,A,B] (Indexed[S,A,B]):
-    w$Mapping     : Mapping[S,A,B]
-    w$Eq$A$4      : Eq[A]
-    def __init__($wself, w$Mapping : Mapping[S,A,B], w$Eq$A : Eq[A]):
+    w$Eq$A$Mapping : Eq[A]
+    w$Mapping      : Mapping[S,A,B]
+    def __init__($wself, w$Eq$A : Eq[A], w$Mapping : Mapping[S,A,B]):
         Indexed.__init__($wself, w$Eq$A)
+        $wself.w$Eq$A$Mapping = w$Eq$A
         $wself.w$Mapping = w$Mapping
-        $wself.w$Eq$A$4 = w$Eq$A
 
 
 #   Iterable
@@ -711,16 +711,16 @@ class Indexed$Mapping[S,A,B] (Indexed[S,A,B]):
 # protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
 class Set[S,A] (Container[S,A]):                        # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A], 
                                                         #  Ord : Ord, Ord._ : Eq, Logical : Logical, Minus : Minus)
+    w$Eq$A$Set    : Eq[A]
     w$Ord         : Ord[S]
     w$Logical     : Logical[S]
     w$Minus       : Minus[S]
-    w$Eq$A$5      : Eq[A]
-    def __init_($wself, w$Ord : Ord[S], w$Logical : Logical[S], w$Minus : Minus[S], w$Eq$A : Eq[A]):
+    def __init_($wself, w$Eq$A : Eq[A], w$Ord : Ord[S], w$Logical : Logical[S], w$Minus : Minus[S]):
         Container.__init__($wself, w$Eq$A)
+        $wself.w$Eq$A$Set = w$Eq$A
         $wself.w$Ord = w$Ord
         $wself.w$Logical = w$Logical
         $wself.w$Minus = w$Minus
-        $wself.w$Eq$A$5 = w$Eq$A
   
     isdisjoint    : (S,S) -> bool
     add           : (S,A) -> None  
@@ -728,28 +728,28 @@ class Set[S,A] (Container[S,A]):                        # (_ : Container[A], _._
     pop           : (S) -> A 
 
 class Ord$Set[S,A] (Ord[S]):
+    w$Eq$A$Set    : Eq[A]
     w$Set         : Set[S,A]
-    w$Eq$A$6      : Eq[A]
-    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+    def __init__($wself, w$Eq$A : Eq[A], w$Set : Set[S,A]):
         Ord.__init__($wself)
+        $wself.w$Eq$A$Set = w$Eq$A
         $wself.w$Set = w$Set
-        $wself.w$Eq$A$6 = w$Eq$A
 
 class Logical$Set[S,A] (Logical[S]):
+    w$Eq$A$Set    : Eq[A]
     w$Set         : Set[S,A]
-    w$Eq$A$7      : Eq[A]
-    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+    def __init__($wself, w$Eq$A : Eq[A], w$Set : Set[S,A]):
         Logical.__init__($wself)
+        $wself.w$Eq$A$Set = w$Eq$A
         $wself.w$Set = w$Set
-        $wself.w$Eq$A$7 = w$Eq$A
 
 class Minus$Set[S,A] (Minus[S]):
+    w$Eq$A$Set    : Eq[A]
     w$Set         : Set[S,A]
-    w$Eq$A$8      : Eq[A]
-    def __init__($wself, w$Set : Set[S,A], w$Eq$A : Eq[A]):
+    def __init__($wself, w$Eq$A : Eq[A], w$Set : Set[S,A]):
         Minus.__init__($wself)
+        $wself.w$Eq$A$Set = w$Eq$A
         $wself.w$Set = w$Set
-        $wself.w$Eq$A$8 = w$Eq$A
 
 
 ## Collection protocol extensions ########################################
@@ -772,54 +772,54 @@ class Plus$Sequence$list[A] (Plus$Sequence[list[A],A]):
 
 # extension list[A(Eq)] (Container[A]):
 class Container$list[A] (Container[list[A],A]):         # (_ : Container[A], _._ : Collection[A], _._._ : Iterable[A])
-    w$Eq$A$9      : Eq[A]
+    w$Eq$A$Container$list : Eq[A]
     def __init__($wself, w$Eq$A : Eq[A]):
         Container.__init__($wself, w$Eq$A)
-        $wself.w$Eq$A$9 = w$Eq$A
+        $wself.w$Eq$A$Container$list = w$Eq$A
 
 ###
 
 # extension dict[A(Hashable),B] (Mapping[A,B]):
 class Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):       # (_ : Mapping[A, B], _._ : Container[A], _._._ : Collection[A],
                                                         #  _._._._ : Iterable[A], _.Indexed : Indexed[A, B])
-    w$Hashable$A$10   : Hashable[A]
+    w$Hashable$A$Mapping$dict : Hashable[A]
     def __init__($wself, w$Hashable$A : Hashable[A]):
-        Mapping.__init__($wself, Indexed$Mapping$dict($wself,w$Hashable$A))
-        $wself.w$Hashable$A$10 = w$Hashable$A
+        Mapping.__init__($wself, Indexed$Mapping$dict(w$Hashable$A,$wself))
+        $wself.w$Hashable$A$Mapping$dict = w$Hashable$A
 
 class Indexed$Mapping$dict[A,B] (Indexed$Mapping[dict[A,B],A,B]):
-    w$Hashable$A$11 : Hashable[A]
-    def __init__($wself, w$Mapping : Mapping[A,B], w$Hashable$A : Hashable[A]):
-        Indexed$Mapping.__init__($wself, w$Mapping, w$Hashable$A)
-        $wself.w$Hashable$A$11 = w$Hashable$A
+    w$Hashable$A$Mapping$dict : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A], w$Mapping : Mapping[A,B]):
+        Indexed$Mapping.__init__($wself, w$Hashable$A, w$Mapping)
+        $wself.w$Hashable$A$Mapping$dict = w$Hashable$A
 
 ###
 
 # extension set[A(Hashable)] (Set[A]):
 class Set$set[A] (Set[set[A],A]):                       # (_ : Set[A], _._ : Container[A], _._._ : Collection[A], _._._._ : Iterable[A],
                                                         #  _.Ord : Ord, _.Ord._ : Eq, _.Logical : Logical, _.Minus : Minus)
-    w$Hashable$A$12 : Hashable[A]
+    w$Hashable$A$Set$set : Hashable[A]
     def __init__($wself, w$Hashable$A : Hashable[A]):
-        Set.__init__($wself, Ord$Set$set($wself,w$Hashable$A), Logical$Set$set($wself,w$Hashable$A), Minus$Set$set($wself,w$Hashable$A), w$Hashable$A)
-        $wself.w$Hashable$A$12 = w$Hashable$A
+        Set.__init__($wself, w$Hashable$A, Ord$Set$set(w$Hashable$A,$wself), Logical$Set$set(w$Hashable$A,$wself), Minus$Set$set(w$Hashable$A,$wself))
+        $wself.w$Hashable$A$Set$set = w$Hashable$A
 
 class Ord$Set$set[A] (Ord$Set[set[A],A]):
-    w$Hashable$A$13 : Hashable[A]
-    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
-        Ord$Set.__init__($wself, w$Set, w$Hashable$A)
-        $wself.w$Hashable$A$13 = w$Hashable$A
+    w$Hashable$A$Set$set : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A], w$Set : Set[set[A],A]):
+        Ord$Set.__init__($wself, w$Hashable$A, w$Set)
+        $wself.w$Hashable$A$Set$set = w$Hashable$A
 
 class Locical$Set$set[A] (Logical$Set[set[A],A]):
-    w$Hashable$A$14 : Hashable[A]
-    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
-        Logical$Set.__init__($wself, w$Set, w$Hashable$A)
-        $wself.w$Hashable$A$14 = w$Hashable$A
+    w$Hashable$A$Set$set : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A], w$Set : Set[set[A],A]):
+        Logical$Set.__init__($wself, w$Hashable$A, w$Set)
+        $wself.w$Hashable$A$Set$set = w$Hashable$A
 
 class Minus$Set$set[A] (Minus$Set[set[A],A]):
-    w$Hashable$A$15 : Hashable[A]
-    def __init__($wself, w$Set : Set[set[A],A], w$Hashable$A : Hashable[A]):
-        Minus$Set.__init__($wself, w$Set, w$Hashable$A)
-        $wself.w$Hashable$A$15 = w$Hashable$A
+    w$Hashable$A$Set$set : Hashable[A]
+    def __init__($wself, w$Hashable$A : Hashable[A], w$Set : Set[set[A],A]):
+        Minus$Set.__init__($wself, w$Hashable$A, w$Set)
+        $wself.w$Hashable$A$Set$set = w$Hashable$A
 
 ###
 
