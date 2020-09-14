@@ -2,25 +2,12 @@
 #include "../ndarray.h"
 
 int main() {
-  $ndarray a = malloc(sizeof(struct $ndarray));
-  a->$class = &$ndarray$methods;
-  a->ndim = 3;
-  a->elem_size = 1;
-  a->offset = 0;
-  a->elem_obj = $int_obj;
-  $list shape = $NEW($list,NULL,NULL);
-  $list strides = $NEW($list,NULL,NULL);
-  $list_append(shape,to$int(3));
-  $list_append(shape,to$int(4));
-  $list_append(shape,to$int(5));
-  $list_append(strides,to$int(20));
-  $list_append(strides,to$int(5));
-  $list_append(strides,to$int(1));
-  a->shape = shape;
-  a->strides = strides;
-  a->data = malloc(60 * sizeof(union $Bytes8));
-  for (long i= 0; i<60; i++)
-    a->data[i].l = i+3;
+  $ndarray v = $ndarray_arange(to$int(60));
+  $list newshape = $NEW($list,NULL,NULL);
+  $list_append(newshape,to$int(3));
+  $list_append(newshape,to$int(4));
+  $list_append(newshape,to$int(5));
+  $ndarray a = $ndarray_reshape(v,newshape);
   printf("a=%s\n",from$str(a->$class->__str__(a)));
   $list ix = $NEW($list,NULL,NULL);
   $list_append(ix,NULL);
@@ -41,6 +28,14 @@ int main() {
   $ndarray d = $ndarray_func1(mul2,c);
   printf("d=%s\n",from$str(d->$class->__str__(d)));
   $ndarray e = $ndarray_fromatom(($Super)to$int(3));
-  $ndarray f = $ndarray_oper1(plusi,d,e);
+  printf("e.shape = %s\n",e->shape->$class->__str__(e->shape)->str);
+  printf("e.strides = %s\n",e->strides->$class->__str__(e->strides)->str);
+  printf("e=%s\n",from$str(e->$class->__str__(e)));
+  $Plus$ndarray$int wit = $Plus$ndarray$int$witness;
+  $ndarray f = wit->$class->__add__(wit,d,e);
   printf("f=%s\n",from$str(f->$class->__str__(f)));  
+  $ndarray g = wit->$class->__add__(wit,a,e);
+  printf("g.shape = %s\n",g->shape->$class->__str__(g->shape)->str);
+  printf("g.strides = %s\n",g->strides->$class->__str__(g->strides)->str);
+  printf("g=%s\n",from$str(g->$class->__str__(g)));  
 }

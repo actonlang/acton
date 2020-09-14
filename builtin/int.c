@@ -61,7 +61,6 @@ $int $int_fromatom($Super a) {
   fprintf(stderr,"internal error: int_fromatom: argument not of atomic type");
   exit(-1);
 }
-
                   
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
