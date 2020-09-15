@@ -183,37 +183,34 @@ runRestPasses args paths src env original = (do
                           iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
 
-                          if (not (nobuiltin args)) 
-                           then do
-                            normalized <- Acton.Normalizer.normalize (iface,env') tchecked
-                            iff (norm args) $ dump "norm" (Pretty.print normalized)
+                          normalized <- Acton.Normalizer.normalize (iface,env') tchecked
+                          iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                            deacted <- Acton.Deactorizer.deactorize env' normalized
-                            iff (deact args) $ dump "deact" (Pretty.print deacted)
+                          deacted <- Acton.Deactorizer.deactorize env' normalized
+                          iff (deact args) $ dump "deact" (Pretty.print deacted)
 
-                            cpstyled <- Acton.CPS.convert [] deacted
-                            iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+                          cpstyled <- Acton.CPS.convert [] deacted
+                          iff (cps args) $ dump "cps" (Pretty.print cpstyled)
 
-                            lifted <- Acton.LambdaLifter.liftModule cpstyled
-                            iff (llift args) $ dump "llift" (Pretty.print lifted)
+                          lifted <- Acton.LambdaLifter.liftModule cpstyled
+                          iff (llift args) $ dump "llift" (Pretty.print lifted)
                                 
-                            c <- Acton.CodeGen.generate env' lifted
-                            iff (cgen args) $ dump "cgen" c
+                          c <- Acton.CodeGen.generate env' lifted
+                          iff (cgen args) $ dump "cgen" c
 {-        
-                            py3 <- Backend.Persistable.replace py2
-                            iff (persist args) $ dump "persist" (Pretty.vprint py3) 
+                          py3 <- Backend.Persistable.replace py2
+                          iff (persist args) $ dump "persist" (Pretty.vprint py3) 
     
-                            writeFile (outbase ++ ".py") (Pretty.vprint py3)
-                            unless (projSrcRoot paths == projSysRoot paths)
+                          writeFile (outbase ++ ".py") (Pretty.vprint py3)
+                          unless (projSrcRoot paths == projSysRoot paths)
                                $ copyFileWithMetadata (joinPath (projSrcRoot paths: modpath paths) ++ ".act") (outbase ++ ".act")
 -}
-                            return (env'{Acton.Env.names = initnms},iface)
-                           else return (undefined,undefined)
-                             )
-                               `catch` handle generalError src paths
-                               `catch` handle Acton.Kinds.kindError src paths
-                               `catch` handle Acton.Env.checkerError src paths
-                               `catch` handle Acton.Types.solverError src paths
+                          return (env'{Acton.Env.names = initnms},iface)
+                        ) 
+                          `catch` handle generalError src paths
+                          `catch` handle Acton.Kinds.kindError src paths
+                          `catch` handle Acton.Env.checkerError src paths
+                          `catch` handle Acton.Types.solverError src paths
 
 
 handle f src paths ex = do putStrLn "\n********************"
