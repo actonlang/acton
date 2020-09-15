@@ -44,3 +44,4 @@ long from$int($int n);
 */
 
 $int $int_fromatom($Super a);
+

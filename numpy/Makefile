@@ -3,4 +3,6 @@ all:
 	cd numpytests && $(MAKE)
 clean:
 	rm ndarray.o
-	cd numpytests && $(MAKE)
+	cd numpytests && $(MAKE) clean
+runtests:
+	cd numpytests && $(MAKE) runtests
