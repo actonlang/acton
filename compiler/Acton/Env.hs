@@ -691,6 +691,14 @@ instance WellFormed TCon where
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = tybound q `zip` ts
             constr u t      = if isProto env (tcname u) then Impl (name "_") t u else Cast t (tCon u)
+
+wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
+wfProto env (TC n ts)       = do cs <- instQuals env q ts
+                                 return (wf env ts, cs)
+  where q                   = case findQName n env of
+                                NProto q us te -> q
+                                NReserved -> nameReserved n
+                                i -> err1 n ("wfProto: Protocol name expected, got " ++ show i)
             
 instance WellFormed Type where
     wf env (TCon _ tc)      = wf env tc

@@ -497,6 +497,11 @@ wellformed env x                        = do _ <- solveAll env [] tNone cs
                                              return ()
   where cs                              = wf env x
 
+wellformedProtos                        :: Env -> [TCon] -> TypeM (Constraints, [(QName,[Expr])])
+wellformedProtos env ps                 = do (css0, css1) <- unzip <$> mapM (wfProto env) ps
+                                             _ <- solveAll env [] tNone (concat css0)
+                                             return (concat css1, [ (tcname p, witsOf cs) | (p,cs) <- ps `zip` css1 ])
+
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -624,12 +629,13 @@ instance Check Decl where
     checkEnv' env (Protocol l n q us b) = do traceM ("## checkEnv protocol " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
-                                             wellformed env1 us     -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+                                             (csu,wmap) <- wellformedProtos env1 us
+                                             traceM ("#### wmap for " ++ prstr n ++ ": " ++ prstrs (dom wmap))
                                              (csb,b') <- checkEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone csb
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, protocolClasses env n q (trim ps) eq1 b')
+                                             return (cs1, protoClasses env n q (trim ps) eq1 wmap b')
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NProto _ ps te              = findName n env
@@ -638,12 +644,12 @@ instance Check Decl where
                                         = do traceM ("## checkEnv extension " ++ prstr n)
                                              pushFX fxPure tNone
                                              wellformed env1 q
-                                             wellformed env1 us     -- !!!!!!!!!!!!!!!!!!!!!!!!!!
+                                             (csu,wmap) <- wellformedProtos env1 us
                                              (csb,b') <- checkEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 tvs te tNone csb
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, extensionClasses env n' n q (trim ps) eq1 b')
+                                             return (cs1, extClasses env n' n q (trim ps) eq1 wmap b')
       where env1                        = define (subst s te) $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             n'                          = extensionName (head us) n
@@ -653,40 +659,45 @@ instance Check Decl where
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
 
-protocolClasses env n0 q ps eq b        = mainClass : sibClasses
+protoClasses env n0 q ps eq wmap b      = mainClass : sibClasses
   where q1                              = Quant tvSelf' [] : noqual env q
         t0                              = tCon $ convProto $ TC (NoQ n0) $ map tVar $ tybound q
         w0                              = witAttr (NoQ n0)
         main                            = [ convProto p | ([],p,_) <- ps ]         -- may be empty!
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
-        allsibs                         = [ (ws, sibBase ws p inh, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p True       = TC (modOf (tcname p) $ baseName $ tcname (head main) : ws) (tVar tvSelf' : tcargs p)
-                sibBase ws p False      = TC (modOf (tcname p) $ baseName ws) (tVar tvSelf' : tcargs p)
 
         mainClass                       = Class NoLoc n0 q1 main mainClassBody
           where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : map convStmt b
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
-                mainParams              = wit2par ((selfKW',tSelf) : [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
-                mainInitBody            = bindWits eq ++ map (initCall (tcargs $ head main) [ eVar n | (n,_,True) <- immsibs ]) main ++ mainCopies
-                mainCopies              = [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
+                mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
+                mainInitBody            = bindWits eq ++ map (initCall (tcargs $ head main) mainArgs) main ++ mainCopies
+                mainArgs                = witArgs (map tcname main) wmap ++ [ eVar n | (n,_,True) <- immsibs ]
+                mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
 
-        sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws p inh) | (ws,p,inh) <- allsibs ]
-        sibClassBody ws p inh           = qsigs ++ psigs ++ Decl NoLoc [sibInit] : []
+        allsibs                         = [ (ws, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
+          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) (tVar tvSelf' : tcargs p)
+                path ws inh             = if inh then tcname (head main) : ws else ws
+
+        sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws p wes inh) | (ws,p,wes,inh) <- allsibs ]
+
+        sibClassBody ws p wes inh       = qsigs ++ psigs ++ Decl NoLoc [sibInit] : []
           where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
                 sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
-                sibParams               = wit2par ((selfKW',tSelf) : sibSubParams ++ sibCtxt) PosNIL
+                sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,t0)]
-                sibInitBody             = bindWits eq ++ [initCall (tcargs p) (sibSubArgs ++ sibCtxtArgs) p] ++ sibCopies
-                sibCopies               = [ MutAssign NoLoc (eDot (eVar selfKW') w0) (eVar w0) ]
-                sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',p',inh) <- ps, truePrefix ws ws' ]
-                sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',p',inh) <- ps, truePrefix ws ws' ]
+                sibInitBody             = bindWits eq ++ [initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p] ++ sibCopies
+                sibCopies               = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') w0) (eVar w0) ]
+                sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',p',_) <- ps, truePrefix ws ws' ]
+                sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',p',_) <- ps, truePrefix ws ws' ]
                 sibCtxtArgs             = (if inh then id else init) [ eVar n | (n,t) <- sibCtxt ]
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+        qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
+        qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
 
-extensionClasses env n1 n0 q ps eq b    = mainClass : sibClasses
+extClasses env n1 n0 q ps eq wmap b     = mainClass : sibClasses
   where q1                              = noqual env q
         tvs                             = map tVar $ tybound q1
         t0                              = tCon (TC n0 (map tVar $ tybound q))
@@ -694,34 +705,37 @@ extensionClasses env n1 n0 q ps eq b    = mainClass : sibClasses
         ts                              = tcargs (head main)
         main                            = [ instProto t0 p | ([],p,_) <- ps ]       -- never empty!
 
-        allsibs                         = [ (ws, sibBase ws p inh, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p True       = TC (modOf (tcname p) $ baseName $ tcname (head main) : ws) ts
-                sibBase ws p False      = TC (modOf (tcname p) $ baseName ws) ts
-
         mainClass                       = Class NoLoc n1 q1 main mainClassBody
           where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : map convStmt b
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
-                mainParams              = wit2par [(selfKW',tSelf)] PosNIL
-                mainInitBody            = bindWits eq ++ map (initCall ts (sibSubs [])) main
+                mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
+                mainInitBody            = bindWits eq ++ map (initCall ts (witArgs (map tcname main) wmap ++ sibSubs [])) main ++ qcopies
 
-        sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws p inh) | (ws,p,inh) <- allsibs ]
-        sibClassBody ws p inh           = qsigs ++ Decl NoLoc [sibInit] : []
+        sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws p wes inh) | (ws,p,wes,inh) <- allsibs ]
+
+        allsibs                         = [ (ws, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
+          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) ts
+                path ws inh             = if inh then tcname (head main) : ws else ws
+
+        sibClassBody ws p wes inh       = qsigs ++ Decl NoLoc [sibInit] : []
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
-                sibParams               = wit2par ((selfKW',tSelf) : sibCtxt) PosNIL
+                sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon $ head main)]
-                sibInitBody             = bindWits eq ++ [initCall ts (sibSubs ws ++ sibArgs ws) p]
+                sibInitBody             = bindWits eq ++ [initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p] ++ qcopies
 
-        sibSubs ws                      = [ eCall (tApp (eVar $ sibName ws' n1) tvs) (eVar selfKW' : sibArgs ws) | (ws',p',inh) <- ps, truePrefix ws ws' ]
+        sibSubs ws                      = [ eCall (tApp (eVar $ sibName ws' n1) tvs) (qargs ++ eVar selfKW' : sibArgs ws) | (ws',p',inh) <- ps, truePrefix ws ws' ]
 
         sibArgs []                      = []
         sibArgs ws                      = map eVar (map witAttr $ init ws) ++ [eVar w0]
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n1] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
+        qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
+        qargs                           = [ eVar n | (n,p) <- qpars ]
+        qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n1) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
 
 
 trim ps                                 = nubBy eqWit [ (catMaybes ws, p, head ws == Nothing) | (ws,p) <- ps ]
   where eqWit (ws1,_,_) (ws2,_,_)       = ws1 == ws2
-        base                            = [ tcname p | ([Nothing],p) <- ps ]
 
 truePrefix pre ws
   | Just [_] <- stripPrefix pre ws      = True
@@ -733,6 +747,10 @@ witCtxt ps ws                           = ctxt $ tail $ reverse ws
         typemap                         = [ (reverse ws, tCon $ convProto p) | (ws,p,_) <- ps ]
 
 initCall ts args p                      = Expr NoLoc (eCall (tApp (eDot (eQVar (tcname p)) initKW) ts) (eVar selfKW' : args))
+
+witArgs ws wmap                         = case lookup (head ws) wmap of
+                                            Just es -> es
+                                            -- Nothing -> trace ("##### wmap empty for " ++ prstrs ws) []
 
 mkBody []                               = [Pass NoLoc]
 mkBody b                                = b
