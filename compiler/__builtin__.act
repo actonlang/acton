@@ -198,13 +198,13 @@ class set[A(Hashable)] (object):
 
 ## Number protocols ################################################################################
 
-#   Eq ______________               Plus            Minus
-#    |               |               |               |
-#    |               |               |               |
-#   Ord             Number <---------- <--------------
+#   Plus            Minus
 #    |               |
 #    |               |
-#   Real <------------
+#   Number <----------
+#    |
+#    |
+#   Real
 #    |
 #    |
 #   Rational        Logical
@@ -212,7 +212,7 @@ class set[A(Hashable)] (object):
 #    |               |
 #   Integral <--------
 
-protocol Number (Eq,Plus,Minus):
+protocol Number (Plus,Minus):
   @staticmethod
   __fromatom__ : ((int|float|bool|str)) -> Self
 
@@ -235,7 +235,7 @@ protocol Number (Eq,Plus,Minus):
   conjugate    : () -> Self
 
 
-protocol Real (Ord,Number):  # Eq implemented in both parents!
+protocol Real (Number):
   __float__    : () -> float
 
   __trunc__    : () -> Integral
@@ -260,9 +260,9 @@ protocol Integral (Rational,Logical):
   __mod__      : (Self,Self) -> Self
 
   @staticmethod
-  __lshift__   : (Self,Self) -> Self
+  __lshift__   : (Self,int) -> Self
   @staticmethod
-  __rshift__   : (Self,Self) -> Self
+  __rshift__   : (Self,int) -> Self
 
   __invert__   : () -> Self
 
@@ -270,12 +270,15 @@ protocol Integral (Rational,Logical):
 ## Number protocol extensions ######################################################################
 
 extension int (Integral):pass
+extension int (Ord):pass
 extension int (Hashable):pass
 
 extension float (Real):pass
+extension float (Ord):pass
 extension float (Hashable):pass
 
 extension complex (Number):pass
+extension complex (Eq):pass
 extension complex (Hashable):pass
 
 ## Collection protocols ############################################################################
