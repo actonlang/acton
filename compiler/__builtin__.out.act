@@ -294,7 +294,7 @@ class Plus$Number$Real[S] (Plus$Number[S]):
 class Minus$Number$Real[S] (Minus$Number[S]):
     $Real       : Real[S]
     def __init__($self, w$Number : Number[S], w$Real : Real[S]):
-        Plus$Number.__init__($self, w$Number)
+        Minus$Number.__init__($self, w$Number)
         $self.w$Real = w$Real
 
 # protocol Rational (Real):
@@ -778,7 +778,7 @@ class Mapping$dict[A,B] (Mapping[dict[A,B],A,B]):       # (_ : Mapping[A, B], _.
                                                         #  _._._._ : Iterable[A], _.Indexed : Indexed[A, B])
     w$Hashable$A$Mapping$dict : Hashable[A]
     def __init__($self, w$Hashable$A : Hashable[A]):
-        Mapping.__init__($self, Indexed$Mapping$dict(w$Hashable$A,$self))
+        Mapping.__init__($self, w$Hashable$A, Indexed$Mapping$dict(w$Hashable$A,$self))
         $self.w$Hashable$A$Mapping$dict = w$Hashable$A
 
 class Indexed$Mapping$dict[A,B] (Indexed$Mapping[dict[A,B],A,B]):
