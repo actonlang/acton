@@ -5,7 +5,7 @@ import numpy as np
 def loess(x, y, xin, win):
     win1 = win-1       # to be compatible with Loess.py and Loess_with_np.py
     xd  = np.abs(xin[:,None] - x)
-    w   = np.clip(xd/np.sort(xd)[:,win1][:,None], 0.0, 1.0)
+    w   = np.clip(xd/np.partition(xd,win1)[:,win1][:,None], 0.0, 1.0)
     ws  = (1 - w ** 3) ** 3
     a00 = np.sum(ws,1)
     a01 = ws @ x
