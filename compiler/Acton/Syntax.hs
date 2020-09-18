@@ -104,7 +104,7 @@ nloc _          = NoLoc
 
 nstr (Name _ s)             = s
 nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
+nstr (Internal p s i)       = prefix p ++ "$" ++ unique i ++ s
   where prefix Kindvar      = "K"
         prefix Xistvar      = "X"
         prefix Actvar       = "A"
@@ -115,6 +115,8 @@ nstr (Internal p s i)       = prefix p ++ "$" ++ show i ++ s
         prefix NormPass     = "n"
         prefix CPSPass      = "c"
         prefix LLiftPass    = "l"
+        unique 0            = ""
+        unique i            = show i
 
 name            = Name NoLoc
 

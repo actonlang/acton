@@ -314,14 +314,7 @@ matchingDec n sc dec dec'
   | dec == dec'                         = True
   | otherwise                           = decorationMismatch n sc dec
 
-matchDefAssumption env cs def
-  | null q1                             = do traceM ("## matchDefAssumption 1 " ++ prstr (dname def))
-                                             let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 dec else t0) : cs)
-                                             checkNoEscape env (tybound q0)
-                                             t0 <- msubst t0
-                                             return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits eq1 ++ dbody def })
-  | otherwise                           = do traceM ("## matchDefAssumption 2 " ++ prstr (dname def))
+matchDefAssumption env cs def           = do traceM ("## matchDefAssumption " ++ prstr (dname def))
                                              (cs1, tvs) <- instQBinds env q1
                                              let eq0 = witSubst env q1 cs1
                                                  s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
@@ -375,10 +368,10 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs         --TODO: add eq1...
+                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as' te)], Class l n q us b')
+                                                 return (cs1, [(n, NClass q as' te)], Class l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude [initKW] $ toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
@@ -391,12 +384,12 @@ instance InfEnv Decl where
                                                  pushFX fxPure tNone
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
-                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs         --TODO: add eq1...
+                                                 (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
-                                                 return (cs1, [(n, NProto q ps te)], Protocol l n q us b')
+                                                 return (cs1, [(n, NProto q ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
@@ -411,13 +404,13 @@ instance InfEnv Decl where
                                              pushFX fxPure tNone
                                              (cs,te,b') <- infEnv env1 b
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs             --TODO: add eq1...
+                                             (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                              checkNoEscape env (tybound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols"
                                              when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
-                                             return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us b')
+                                             return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us (bindWits eq1 ++ b'))
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
             final                       = concat [ conAttrs env pn | (_, TC pn _) <- ps, hasWitness env n pn ]
@@ -429,6 +422,7 @@ checkAttributes final te' te
   | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
   | not $ null props                    = err2 props "Property attributes cannot have class-level definitions"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden"
+  | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
   | otherwise                           = return (nterms, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
@@ -438,6 +432,7 @@ checkAttributes final te' te
         osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
+        nself                           = negself te
 
         -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
 
@@ -630,11 +625,11 @@ instance Check Decl where
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
-                                             traceM ("#### wmap for " ++ prstr n ++ ": " ++ prstrs (dom wmap))
                                              (csb,b') <- checkEnv env1 b
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
+                                             b' <- msubst b'
                                              return (cs1, protoClasses env n q (trim ps) eq1 wmap b')
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
@@ -650,25 +645,27 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
                                              return (cs1, extClasses env n' n q (trim ps) eq1 wmap b')
-      where env1                        = define (subst s te) $ defineSelf n q $ defineTVars q $ setInClass env
+      where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             n'                          = extensionName (head us) n
             NExt _ _ ps te              = findName n' env
-            s                           = [(tvSelf, tCon (TC n (map tVar $ tybound q)))]
+            s                           = [(tvSelf, tCon $ TC n (map tVar $ tybound q))]
 
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
 
 protoClasses env n0 q ps eq wmap b      = mainClass : sibClasses
   where q1                              = Quant tvSelf' [] : noqual env q
-        t0                              = tCon $ convProto $ TC (NoQ n0) $ map tVar $ tybound q
+        p0                              = TC (NoQ n0) $ map tVar $ tybound q
+        t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
+        eq'                             = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
         main                            = [ convProto p | ([],p,_) <- ps ]         -- may be empty!
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
 
         mainClass                       = Class NoLoc n0 q1 main mainClassBody
-          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : map convStmt b
+          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : map (convStmt eq') b
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
@@ -702,11 +699,12 @@ extClasses env n1 n0 q ps eq wmap b     = mainClass : sibClasses
         tvs                             = map tVar $ tybound q1
         t0                              = tCon (TC n0 (map tVar $ tybound q))
         w0                              = witAttr (tcname $ head main)
+        eq'                             = (thisKW', tSelf, eVar selfKW') : eq
         ts                              = tcargs (head main)
         main                            = [ instProto t0 p | ([],p,_) <- ps ]       -- never empty!
 
         mainClass                       = Class NoLoc n1 q1 main mainClassBody
-          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : map convStmt b
+          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : map (convStmt eq') b
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
                 mainInitBody            = bindWits eq ++ map (initCall ts (witArgs (map tcname main) wmap ++ sibSubs [])) main ++ qcopies
@@ -776,19 +774,19 @@ convProto (TC n ts)                     = TC n (tVar tvSelf' : ts)
 
 instProto t (TC n ts)                   = TC n (t : ts)
 
-tvSelf'                                 = TV KType (name "$S")
-
-selfKW'                                 = name "$self"
+tvSelf'                                 = TV KType (Internal Typevar "S" 0)
+selfKW'                                 = Internal Witness "self" 0
+thisKW'                                 = Internal Witness "this" 0
 
 convSubst t                             = subst [(tvSelf, tVar tvSelf')] t
 
-convStmt (Signature l ns sc Static)     = Signature l ns (convSubst sc) NoDec
-convStmt (Signature l ns sc _)          = Signature l ns (convSubst $ convSchema sc) NoDec
-convStmt (Decl l ds)                    = Decl l (map convDecl ds)
-convStmt s                              = s
+convStmt eq (Signature l ns sc Static)  = Signature l ns (convSubst sc) NoDec
+convStmt eq (Signature l ns sc _)       = Signature l ns (convSubst $ convSchema sc) NoDec
+convStmt eq (Decl l ds)                 = Decl l (map (convDecl eq) ds)
+convStmt eq s                           = s
 
---convDecl (Def l n q p k t b d x)        
-convDecl d                              = d
+convDecl eq (Def l n q p k t b d x)     = Def l n (convSubst q) (wit2par [(selfKW',tSelf)] $ convSubst p) (convSubst k) (convSubst t) (bindWits eq ++ b) d x
+convDecl eq d                           = d
 
 convSchema (TSchema l q t)              = TSchema l q (convT t)
   where convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
