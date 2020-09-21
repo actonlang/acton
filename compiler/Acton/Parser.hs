@@ -530,6 +530,7 @@ trysome p = do x <- p; rest [x]
 
 after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
+                assertDef
                 rword "after"
                 e <- expr
                 colon
@@ -646,7 +647,7 @@ optbinds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
            return []
 
 actordef = addLoc $ do 
-                assertNotData
+                assertTop
                 (s,_) <- withPos (rword "actor")
                 nm <- name <?> "actor name"
                 q <- optbinds

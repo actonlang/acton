@@ -605,6 +605,10 @@ commonAncestors             :: Env -> TCon -> TCon -> [TCon]
 commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
   where ns                  = map (tcname . snd) (findAncestry env c2)
 
+directAncestors             :: Env -> QName -> [QName]
+directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catMaybes ws ]
+  where (q,us,te)           = findConName qn env
+
 allAncestors                :: Env -> QName -> [QName]
 allAncestors env qn         = map (tcname . snd) us
   where (q,us,te)           = findConName qn env
@@ -635,9 +639,11 @@ conAttrs env qn             = dom te
 hasAttr                     :: Env -> Name -> QName -> Bool
 hasAttr env n qn            = n `elem` conAttrs env qn
 
+directAttrs                 :: Env -> QName -> [Name]
+directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncestors env qn, let (_,_,te) = findConName qn' env ]
+
 allAttrs                    :: Env -> QName -> [Name]
 allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
-
 
 unfold env te               = map exp te
   where exp (n, NAlias qn)  = (n, findQName qn env)
