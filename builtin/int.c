@@ -65,28 +65,59 @@ $int $int_fromatom($Super a) {
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
-$bool $Integral$int$__eq__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val == b->val);
+
+$int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
+  return to$int(a->val + b->val);
+}  
+$int $Integral$int$__fromatom__($Integral$int wit,$WORD w) {
+  return $int_fromatom(w);
 }
 
-$bool $Integral$int$__ne__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val != b->val);
+$complex $Integral$int$__complx__($Integral$int wit, $int a) {
+  return to$complex((double)a->val);
 }
 
-$bool $Integral$int$__lt__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val < b->val);
+$int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
+  return to$int(a->val * b->val);
+}  
+
+// The typechecker will reject true division between two integers.
+$int $Integral$int$__truediv__($Integral$int wit,  $int a, $int b) {
+  // raise NOTIMPLEMENTED
+  return NULL;
+}  
+
+  
+$int $Integral$int$__pow__($Integral$int wit,  $int a, $int b) {
+  if ( b->val < 0) {
+    // raise VALUEERROR;
+    return NULL;
+  }
+  return to$int(longpow(a->val,b->val));
 }
 
-$bool $Integral$int$__le__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val <= b->val);
+$int $Integral$int$__neg__($Integral$int wit,  $int a) {
+  return to$int(-a->val);
 }
 
-$bool $Integral$int$__gt__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val > b->val);
+$int $Integral$int$__pos__($Integral$int wit,  $int a) {
+  return a;
 }
 
-$bool $Integral$int$__ge__ ($Integral$int wit, $int a, $int b) {
-  return to$bool(a->val == b->val);
+$WORD $Integral$int$real($Integral$int wit, $Real wit2, $int a) {
+  return wit2->$class->__fromatom__(wit2,a);
+}
+
+$WORD $Integral$int$imag($Integral$int wit, $Real wit2,  $int a) {
+  return wit2->$class->__fromatom__(wit2,to$int(0L));
+}
+
+$WORD $Integral$int$__abs__($Integral$int wit, $Real wit2,  $int a) {
+  return wit2->$class->__fromatom__(wit2,to$int(labs(a->val)));
+}
+
+$int $Integral$int$__conjugate__($Integral$int wit,  $int a) {
+  return a;
 }
 
 $float $Integral$int$__float__ ($Integral$int wit, $int n) {
@@ -94,18 +125,15 @@ $float $Integral$int$__float__ ($Integral$int wit, $int n) {
 }
 
 $WORD $Integral$int$__trunc__ ($Integral$int wit, $Integral wit2, $int n) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,n);
+  return wit2->$class->__fromatom__(wit2,n);
 }
   
 $WORD $Integral$int$__floor__ ($Integral$int wit, $Integral wit2, $int n) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,n);
+  return wit2->$class->__fromatom__(wit2,n);
 }
   
 $WORD $Integral$int$__ceil__ ($Integral$int wit, $Integral wit2, $int n) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,n);
+  return wit2->$class->__fromatom__(wit2,n);
 }
   
 $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
@@ -123,13 +151,11 @@ $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
 }
   
 $WORD $Integral$int$numerator ($Integral$int wit, $Integral wit2, $int n) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,n);
+  return wit2->$class->__fromatom__(wit2,n);
 }
   
 $WORD $Integral$int$denominator ($Integral$int wit, $Integral wit2, $int n) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,to$int(1L));
+  return wit2->$class->__fromatom__(wit2,to$int(1L));
 }
   
 $int $Integral$int$__int__ ($Integral$int wit, $int n) {
@@ -183,82 +209,38 @@ $int $Logical$int$__or__($Logical$int wit,  $int a, $int b) {
 $int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
   return to$int(a->val ^ b->val);
 }  
-
-// $Number$int //////////////////////////////////////////////////////////////////////////////////////
-
-$bool $Number$int$__eq__ ($Number$int wit, $int a, $int b) {
-  return to$bool(a->val == b->val);
-}
-
-$bool $Number$int$__ne__ ($Number$int wit, $int a, $int b) {
-  return to$bool(a->val != b->val);
-}
-
-$int $Number$int$__fromatom__($Number$int wit,$WORD w) {
-  return $int_fromatom(w);
-}
-
-$complex $Number$int$__complx__($Number$int wit, $int a) {
-  return to$complex((double)a->val);
-}
-
-$int $Number$int$__mul__($Number$int wit,  $int a, $int b) {
-  return to$int(a->val * b->val);
-}  
-
-// The typechecker will reject true division between two integers.
-$int $Number$int$__truediv__($Number$int wit,  $int a, $int b) {
-  // raise NOTIMPLEMENTED
-  return NULL;
-}  
-
-  
-$int $Number$int$__pow__($Number$int wit,  $int a, $int b) {
-  if ( b->val < 0) {
-    // raise VALUEERROR;
-    return NULL;
-  }
-  return to$int(longpow(a->val,b->val));
-}
-
-$int $Number$int$__neg__($Number$int wit,  $int a) {
-  return to$int(-a->val);
-}
-
-$int $Number$int$__pos__($Number$int wit,  $int a) {
-  return a;
-}
-
-$WORD $Number$int$real($Number$int wit, $Real wit2, $int a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,a);
-}
-
-$WORD $Number$int$imag($Number$int wit, $Real wit2,  $int a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$int(0L));
-}
-
-$WORD $Number$int$__abs__($Number$int wit, $Real wit2,  $int a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$int(labs(a->val)));
-}
-
-$int $Number$int$__conjugate__($Number$int wit,  $int a) {
-  return a;
-}
-
-// $Plus$int  ////////////////////////////////////////////////////////////////////////////////////////
-
-$int $Plus$int$__add__($Plus$int wit,  $int a, $int b) {
-  return to$int(a->val + b->val);
-}  
  
 // $Minus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
 $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
   return to$int(a->val - b->val);
 }  
+
+// $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
+
+$bool $Ord$int$__eq__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
+}
+
+$bool $Ord$int$__ne__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val != b->val);
+}
+
+$bool $Ord$int$__lt__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val < b->val);
+}
+
+$bool $Ord$int$__le__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val <= b->val);
+}
+
+$bool $Ord$int$__gt__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val > b->val);
+}
+
+$bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
+  return to$bool(a->val == b->val);
+}
 
 // $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -277,62 +259,44 @@ $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Integral$int_init($Integral$int wit) {
-  wit-> w$Number$Integral = $NEW($Number$int,wit);
   wit-> w$Logical$Integral = $NEW($Logical$int,wit);
 };
-
-void $Number$int_init($Number$int wit, $Integral$int w$Integral$int) {
-  wit-> w$Integral$int = w$Integral$int;
-  wit-> w$Plus$Number = $NEW($Plus$int,wit);
-  wit-> w$Minus$Number = $NEW($Minus$int,wit);
-}
 
 void $Logical$int_init($Logical$int wit, $Integral$int w$Integral$int) {
   wit->w$Integral$int =  w$Integral$int;
 }
 
-void $Plus$int_init($Plus$int wit, $Number$int w$Number$int) {
-  wit->w$Number$int =  w$Number$int;
-}
-
-void $Minus$int_init($Minus$int wit, $Number$int w$Number$int) {
-  wit->w$Number$int =  w$Number$int;
+void $Minus$int_init($Minus$int wit, $Integral$int w$Integral$int) {
+  wit->w$Integral$int =  w$Integral$int;
 }
 
 struct $Integral$int $Integral$int_instance;
 struct $Logical$int $Logical$int_instance;
-struct $Number$int $Number$int_instance;
-struct $Plus$int $Plus$int_instance;
 struct $Minus$int $Minus$int_instance;
+struct $Ord$int $Ord$int_instance;
 struct $Hashable$int $Hashable$int_instance;
 
-struct $Integral$int$class $Integral$int$methods = {"",UNASSIGNED,NULL,$Integral$int_init, $Integral$int$__eq__ , $Integral$int$__ne__ , $Integral$int$__lt__ , $Integral$int$__le__ ,
-                                                     $Integral$int$__gt__ , $Integral$int$__ge__ , $Integral$int$__float__ , $Integral$int$__trunc__ , $Integral$int$__floor__ ,
-                                                     $Integral$int$__ceil__ , $Integral$int$__round__ , $Integral$int$numerator , $Integral$int$denominator ,
-                                                     $Integral$int$__int__ , $Integral$int$__index__ , $Integral$int$__divmod__ , $Integral$int$__floordiv__ ,
-                                                     $Integral$int$__mod__ , $Integral$int$__lshift__ , $Integral$int$__rshift__ , $Integral$int$__invert__};
-struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance, &$Number$int_instance};
+struct $Integral$int$class $Integral$int$methods = {"",UNASSIGNED,NULL,$Integral$int_init,$Integral$int$__add__,$Integral$int$__fromatom__,$Integral$int$__complx__,
+                                                    $Integral$int$__mul__,$Integral$int$__truediv__,$Integral$int$__pow__,$Integral$int$__neg__,
+                                                    $Integral$int$__pos__,$Integral$int$real,$Integral$int$imag,$Integral$int$__abs__,$Integral$int$__conjugate__,
+                                                    $Integral$int$__float__ , $Integral$int$__trunc__ , $Integral$int$__floor__ ,
+                                                    $Integral$int$__ceil__ , $Integral$int$__round__ , $Integral$int$numerator , $Integral$int$denominator ,
+                                                    $Integral$int$__int__ , $Integral$int$__index__ , $Integral$int$__divmod__ , $Integral$int$__floordiv__ ,
+                                                    $Integral$int$__mod__ , $Integral$int$__lshift__ , $Integral$int$__rshift__ , $Integral$int$__invert__};
+struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance, &$Minus$int_instance};
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
-
-struct $Logical$int$class $Logical$int$methods =  {"", UNASSIGNED,NULL,$Logical$int_init, $Logical$int$__and__ , $Logical$int$__or__ , $Logical$int$__xor__};
+struct $Logical$int$class $Logical$int$methods =  {"", UNASSIGNED,NULL,$Logical$int_init, $Logical$int$__and__, $Logical$int$__or__, $Logical$int$__xor__};
 struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, &$Integral$int_instance};
 $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
-
-struct $Number$int$class $Number$int$methods = {"", UNASSIGNED,NULL,$Number$int_init, $Number$int$__eq__,$Number$int$__ne__,$Number$int$__fromatom__,$Number$int$__complx__,
-                                               $Number$int$__mul__,$Number$int$__truediv__,$Number$int$__pow__,$Number$int$__neg__,
-                                               $Number$int$__pos__,$Number$int$real,$Number$int$imag,$Number$int$__abs__,$Number$int$__conjugate__};
-struct $Number$int $Number$int_instance = {&$Number$int$methods, &$Integral$int_instance, &$Plus$int_instance, &$Minus$int_instance};
-$Number$int $Number$int$witness = &$Number$int_instance;
-
-struct $Plus$int$class $Plus$int$methods = {"",UNASSIGNED,NULL,$Plus$int_init, $Plus$int$__add__};
-struct $Plus$int $Plus$int_instance = {&$Plus$int$methods, &$Number$int_instance};
-$Plus$int $Plus$int$witness = &$Plus$int_instance;
-
 struct $Minus$int$class $Minus$int$methods = {"",UNASSIGNED, NULL,$Minus$int_init, $Minus$int$__sub__};
-struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Number$int_instance};
+struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
+
+struct $Ord$int$class $Ord$int$methods = {"",UNASSIGNED, NULL,(void (*)($Ord$int))$default__init__,$Ord$int$__eq__,$Ord$int$__ne__,$Ord$int$__lt__,$Ord$int$__le__,$Ord$int$__gt__,$Ord$int$__ge__};
+struct $Ord$int $Ord$int_instance = {&$Ord$int$methods};
+$Ord$int $Ord$int$witness = &$Ord$int_instance;
 
 struct $Hashable$int$class $Hashable$int$methods = {"",UNASSIGNED, NULL,(void (*)($Hashable$int))$default__init__, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
 struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};

@@ -19,7 +19,7 @@ void $default__init__($WORD);
                                $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
                                $t; })
 
-#define $ISINSTANCE($x,$T)    ({ $Super$class $c = ($Super$class)$x->$class; \
+#define $ISINSTANCE($x,$T)    ({ $Super$class $c = (($Super)$x)->$class; \
                                  while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
                                  $c == ($Super$class)&$T ## $methods; })
 

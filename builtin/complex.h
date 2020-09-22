@@ -21,11 +21,11 @@ extern struct $complex$class $complex$methods;
 $complex to$complex(complex double c);
 
 extern struct $Number$complex$class $Number$complex$methods;
-extern struct $Plus$complex$class $Plus$complex$methods;
 extern struct $Minus$complex$class $Minus$complex$methods;
+extern struct $Eq$complex$class $Eq$complex$methods;
 extern struct $Hashable$complex$class $Hashable$complex$methods;
 
 extern struct $Number$complex *$Number$complex$witness;
-extern struct $Plus$complex *$Plus$complex$witness;
 extern struct $Minus$complex *$Minus$complex$witness;
+extern struct $Eq$complex *$Eq$complex$witness;
 extern struct $Hashable$complex *$Hashable$complex$witness;

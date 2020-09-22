@@ -51,7 +51,7 @@ int main() {
   printSequence(wit,concat(wit->w$Collection$Sequence,($Indexed)wit,wit->w$Plus$Sequence,lst,emptylist));
   // and then to sum a list of integers
   $WORD lst2 = range(wit,1,100);
-  printf("1+2+...+99 = %ld\n",from$int(concat(wit->w$Collection$Sequence,($Indexed)wit,($Plus)$Plus$int$witness,lst2,to$int(0))));
+  printf("1+2+...+99 = %ld\n",from$int(concat(wit->w$Collection$Sequence,($Indexed)wit,($Plus)$Integral$int$witness,lst2,to$int(0))));
   // and finally as a very complicated identity function for strings
   printf("result is '%s'\n",from$str(concat(($Collection)$Container$str$witness,($Indexed)$Sliceable$str$witness,($Plus)$Plus$str$witness,to$str("Complicated identity function"),to$str(""))));
 }

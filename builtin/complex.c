@@ -41,13 +41,9 @@ struct $complex$class $complex$methods = {"",UNASSIGNED,($Super$class)&$struct$m
 
 // $Number$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
-$bool $Number$complex$__eq__ ($Number$complex wit, $complex a, $complex b) {
-  return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
-}
-
-$bool $Number$complex$__ne__ ($Number$complex wit, $complex a, $complex b) {
-  return to$bool(!from$bool($Number$complex$__eq__(wit,a,b)));
-}
+$complex $Number$complex$__add__($Number$complex wit, $complex a, $complex b) {
+  return to$complex(a->val + b->val);
+}  
 
 $complex $Number$complex$__complx__ ($Number$complex wit, $complex c) {
   return c;
@@ -74,35 +70,36 @@ $complex $Number$complex$__pos__ ($Number$complex wit, $complex c) {
 }
 
 $WORD $Number$complex$real ($Number$complex wit, $Real wit2, $complex c) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$float(creal(c->val)));
+  return wit2->$class->__fromatom__(wit2,to$float(creal(c->val)));
 }
 
 $WORD $Number$complex$imag ($Number$complex wit, $Real wit2, $complex c) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$float(cimag(c->val)));
+  return wit2->$class->__fromatom__(wit2,to$float(cimag(c->val)));
 }
 
 $WORD $Number$complex$__abs__ ($Number$complex wit, $Real wit2, $complex c) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$float(cabs(c->val)));
+  return wit2->$class->__fromatom__(wit2,to$float(cabs(c->val)));
 }
 
 $complex $Number$complex$conjugate ($Number$complex wit, $complex c) {
   return to$complex(conj(c->val));
 }
 
-// $Plus$complex  ////////////////////////////////////////////////////////////////////////////////////////
-
-$complex $Plus$complex$__add__($Plus$complex wit, $complex a, $complex b) {
-  return to$complex(a->val + b->val);
-}  
-
 // $Minus$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 $complex $Minus$complex$__sub__($Minus$complex wit, $complex a, $complex b) {
   return to$complex(a->val - b->val);
 }  
+// $Eq$complex  ////////////////////////////////////////////////////////////////////////////////////////
+
+$bool $Eq$complex$__eq__ ($Eq$complex wit, $complex a, $complex b) {
+  return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
+}
+
+$bool $Eq$complex$__ne__ ($Eq$complex wit, $complex a, $complex b) {
+  return to$bool(!from$bool($Eq$complex$__eq__(wit,a,b)));
+}
+
 
 // $Hashable$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -121,12 +118,7 @@ $int $Hashable$complex$__hash__($Hashable$complex wit, $complex a) {
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Number$complex_init ($Number$complex wit) {
-  wit-> w$Plus$Number = $NEW($Plus$complex,wit);
   wit-> w$Minus$Number = $NEW($Minus$complex,wit);
-}
-
-void $Plus$complex_init($Plus$complex wit, $Number$complex w$Number$complex) {
-  wit->w$Number$complex =  w$Number$complex;
 }
 
 void $Minus$complex_init($Minus$complex wit, $Number$complex w$Number$complex) {
@@ -134,23 +126,23 @@ void $Minus$complex_init($Minus$complex wit, $Number$complex w$Number$complex) {
 }
 
 struct $Number$complex $Number$complex_instance;
-struct $Plus$complex $Plus$complex_instance;
 struct $Minus$complex $Minus$complex_instance;
+struct $Eq$complex $Eq$complex_instance;
 struct $Hashable$complex $Hashable$complex_instance;
 
-struct $Number$complex$class $Number$complex$methods = {"", UNASSIGNED,NULL, $Number$complex_init,$Number$complex$__eq__,$Number$complex$__ne__,$Number$complex$__complx__,
+struct $Number$complex$class $Number$complex$methods = {"", UNASSIGNED,NULL, $Number$complex_init,$Number$complex$__add__,NULL,$Number$complex$__complx__,
                                                $Number$complex$__mul__,$Number$complex$__truediv__,$Number$complex$__pow__,$Number$complex$__neg__,
                                                $Number$complex$__pos__,$Number$complex$real,$Number$complex$imag,$Number$complex$__abs__,$Number$complex$conjugate};
- struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, &$Plus$complex_instance, &$Minus$complex_instance};
- $Number$complex $Number$complex$witness = &$Number$complex_instance;
+struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, &$Minus$complex_instance};
+$Number$complex $Number$complex$witness = &$Number$complex_instance;
 
-struct $Plus$complex$class $Plus$complex$methods = {"", UNASSIGNED,NULL, $Plus$complex_init,$Plus$complex$__add__};
- struct $Plus$complex $Plus$complex_instance = {&$Plus$complex$methods, &$Number$complex_instance};
- $Plus$complex $Plus$complex$witness = &$Plus$complex_instance;
+struct $Minus$complex$class $Minus$complex$methods = {"", UNASSIGNED,NULL,$Minus$complex_init,$Minus$complex$__sub__};
+struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, &$Number$complex_instance};
+$Minus$complex $Minus$complex$witness = &$Minus$complex_instance;
 
-struct $Minus$complex$class $Minus$complex$methods = {"", UNASSIGNED,NULL, $Minus$complex_init,$Minus$complex$__sub__};
- struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, &$Number$complex_instance};
- $Minus$complex $Minus$complex$witness = &$Minus$complex_instance;
+struct $Eq$complex$class $Eq$complex$methods = {"", UNASSIGNED,NULL,(void (*)($Eq$complex))$default__init__,$Eq$complex$__eq__,$Eq$complex$__ne__};
+struct $Eq$complex $Eq$complex_instance = {&$Eq$complex$methods};
+$Eq$complex $Eq$complex$witness = &$Eq$complex_instance;
 
 struct $Hashable$complex$class $Hashable$complex$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$complex))$default__init__,$Hashable$complex$__eq__,$Hashable$complex$__ne__,$Hashable$complex$__hash__};
  struct $Hashable$complex $Hashable$complex_instance = {&$Hashable$complex$methods};
