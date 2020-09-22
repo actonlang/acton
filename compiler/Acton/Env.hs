@@ -220,6 +220,11 @@ instance Polarity WTCon where
 instance Polarity (Name,NameInfo) where
     polvars (n, i)                  = polvars i
 
+negself te                          = concat $ map nself te
+  where nself (_, NSig t NoDec)     = filter (==tvSelf) (snd $ polvars t)
+        nself (_, NDef t NoDec)     = filter (==tvSelf) (snd $ polvars t)
+        nself (_, _)                = []
+
 
 -------------------------------------------------------------------------------------------------------------------
 
@@ -454,13 +459,16 @@ defineTVars q env           = foldr f env q
           where (mbc,ps)    = case mro2 env us of ([],_) -> (Nothing, us); _ -> (Just $ head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ (NoQ (tvname tv), WInst p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
+defineSelfOpaque            :: Env -> Env
+defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
+
 defineSelf                  :: QName -> QBinds -> Env -> Env
 defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
   where tc                  = TC qn [ tVar tv | Quant tv _ <- q ]
 
-defineSelfOpaque            :: Env -> Env
-defineSelfOpaque env        = defineTVars [Quant tvSelf []] env
-
+defineInst                  :: QName -> [WTCon] -> Name -> Env -> Env
+defineInst n ps w env       = foldl addWit env wits
+  where wits                = [ (n, WInst p (NoQ w) ws) | (ws,p) <- ps ]
 
 defineMod                   :: ModName -> TEnv -> Env -> Env
 defineMod m te env          = define [(n, defmod ns $ te1)] env
@@ -1086,6 +1094,7 @@ noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
 err l s                             = Control.Exception.throw $ OtherError l s
 
+err0 xs s                           = err (loc $ head xs) s
 err1 x s                            = err (loc x) (s ++ " " ++ prstr x)
 err2 xs s                           = err (loc $ head xs) (s ++ " " ++ prstrs xs)
 err3 l xs s                         = err l (s ++ " " ++ prstrs xs)

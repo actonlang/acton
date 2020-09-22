@@ -77,11 +77,11 @@ instance Transform Decl where
       where env1                        = blockscope (bound q ++ bound p ++ bound k) env
     trans env (Actor l n q p k b)       = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b)
       where env1                        = blockscope (bound q ++ bound p ++ bound k) env
-    trans env (Class l n q us b)        = Class l n q us (trans env1 b)
+    trans env (Class l n q us b)        = Class l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
-    trans env (Protocol l n q us b)     = Protocol l n q us (trans env1 b)
+    trans env (Protocol l n q us b)     = Protocol l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
-    trans env (Extension l n q us b)    = Extension l n q us (trans env1 b)
+    trans env (Extension l n q us b)    = Extension l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
 
 instance Transform Expr where
