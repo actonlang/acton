@@ -916,6 +916,7 @@ refine env cs te eq
   | otherwise                           = do eq <- msubst eq
                                              traceM ("  #returning vs : " ++ prstrs gen_vs)
                                              traceM ("             cs : " ++ prstrs cs)
+                                             traceM ("             te : " ++ prstr te)
                                              return (gen_vs, cs, te, eq)
   where solve_vs                        = [ headvar c | c <- cs, mustSolve c ]
         collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
@@ -923,7 +924,7 @@ refine env cs te eq
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union [] def_vss)
+        gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
         mustSolve c                     = not (canQual c) && not (mustCollapse c)
 
