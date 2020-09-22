@@ -18,16 +18,14 @@ extern struct $int$class $int$methods;
 
 extern struct $Integral$int$class $Integral$int$methods;
 extern struct $Logical$int$class $Logical$int$methods;
-extern struct $Number$int$class $Number$int$methods;
-extern struct $Plus$int$class $Plus$int$methods;
 extern struct $Minus$int$class $Minus$int$methods;
+extern struct $Ord$int$class $Ord$int$methods;
 extern struct $Hashable$int$class $Hashable$int$methods;
 
 extern struct $Integral$int *$Integral$int$witness;
 extern struct $Logical$int *$Logical$int$witness;
-extern struct $Number$int *$Number$int$witness;
-extern struct $Plus$int *$Plus$int$witness;
 extern struct $Minus$int *$Minus$int$witness;
+extern struct $Ord$int *$Ord$int$witness;
 extern struct $Hashable$int *$Hashable$int$witness;
 
 

@@ -35,7 +35,7 @@ $R lambda$1$enter(lambda$1 $this, $Cont then) {
     Pingpong self = $this->self;
     $int count = $this->count;
     $int q = $this->q;
-    return self->$class->pong(self, count, $Number$int$witness->$class->__neg__($Number$int$witness, q), then);
+    return self->$class->pong(self, count, $Integral$int$witness->$class->__neg__($Integral$int$witness, q), then);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -108,16 +108,16 @@ Pingpong Pingpong$__deserialize__($Serial$state state) {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
-    self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
-    $int j = $Number$int$witness->$class->__mul__($Number$int$witness, self->count, q);
+    self->count = $Integral$int$witness->$class->__add__($Integral$int$witness, self->count, to$int(1));
+    $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, self->count, q);
     printf("Ping %8ld\n", j->val);
     $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, q));
     return $R_CONT(then, $None);
 }
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
-    $int j = $Number$int$witness->$class->__mul__($Number$int$witness, n, q);
+    $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, n, q);
     printf("     %8ld Pong\n", j->val);
-    $AFTER(2, ($Cont)$NEW(lambda$2, self, $Number$int$witness->$class->__neg__($Number$int$witness, q)));
+    $AFTER(2, ($Cont)$NEW(lambda$2, self, $Integral$int$witness->$class->__neg__($Integral$int$witness, q)));
     return $R_CONT(then, $None);
 }
 

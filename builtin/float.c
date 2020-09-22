@@ -60,47 +60,67 @@ $float $float_fromatom($Super a) {
 
 // $Real$float /////////////////////////////////////////////////////////////////////////
 
-$bool $Real$float$__eq__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val == b->val);
+$float $Real$float$__add__($Real$float wit,  $float a, $float b) {
+  return to$float(from$float(a) + from$float(b));
+}  
+
+$float $Real$float$__fromatom__($Real$float wit, $WORD w) {
+  return $float_fromatom(w);
 }
 
-$bool $Real$float$__ne__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val != b->val);
+$complex $Real$float$__complx__($Real$float wit, $float a) {
+  return to$complex(a->val);
 }
 
-$bool $Real$float$__lt__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val < b->val);
+$float $Real$float$__mul__($Real$float wit,  $float a, $float b) {
+  return to$float(from$float(a) * from$float(b));
+}  
+
+$float $Real$float$__truediv__($Real$float wit,  $float a, $float b) {
+  return to$float(from$float(a) / from$float(b));
+}  
+
+$float $Real$float$__pow__($Real$float wit,  $float a, $float b) {
+  return to$float(exp(from$float(b) * log(from$float(a))));
+  }
+
+$float $Real$float$__neg__($Real$float wit, $float a) {
+  return to$float(-from$float(a));
 }
 
-$bool $Real$float$__le__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val <= b->val);
+$float $Real$float$__pos__($Real$float wit, $float a) {
+  return a;
 }
 
-$bool $Real$float$__gt__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val > b->val);
+$WORD $Real$float$real($Real$float wit, $Real wit2, $float a) {
+  return wit2->$class->__fromatom__(wit2,a);
 }
 
-$bool $Real$float$__ge__ ($Real$float wit, $float a, $float b) {
-  return to$bool(a->val == b->val);
+$WORD $Real$float$imag($Real$float wit, $Real wit2,  $float a) {
+  return wit2->$class->__fromatom__(wit2,to$float(0.0));
 }
 
+$WORD $Real$float$__abs__($Real$float wit, $Real wit2,  $float a) {
+  return wit2->$class->__fromatom__(wit2,to$float(fabs(from$float(a))));
+}
+
+$float $Real$float$conjugate($Real$float wit,  $float a) {
+  return a;
+}
 $float $Real$float$__float__ ($Real$float wit, $float x) {
   return x;
 }
 
 $WORD $Real$float$__trunc__ ($Real$float wit, $Integral wit2, $float x) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,to$int((long)trunc(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,to$int((long)trunc(from$float(x))));
 }
   
 $WORD $Real$float$__floor__ ($Real$float wit, $Integral wit2, $float x) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,to$int((long)floor(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,to$int((long)floor(from$float(x))));
 }
   
 $WORD $Real$float$__ceil__ ($Real$float wit, $Integral wit2, $float x) {
-  $Number wit3 = wit2->w$Number$Integral;
-  return wit3->$class->__fromatom__(wit3,to$int((long)ceil(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,to$int((long)ceil(from$float(x))));
 }
   
 $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
@@ -108,76 +128,39 @@ $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
   double p10 = pow(10.0,pval);
   return to$float(round(x->val * p10)/p10);
 }
-    
-
-// $Number$float //////////////////////////////////////////////////////////////////////////////////////
-
-$bool $Number$float$__eq__ ($Number$float wit, $float a, $float b) {
-  return to$bool(a->val == b->val);
-}
-
-$bool $Number$float$__ne__ ($Number$float wit, $float a, $float b) {
-  return to$bool(a->val != b->val);
-}
-
-$float $Number$float$__fromatom__($Number$float wit, $WORD w) {
-  return $float_fromatom(w);
-}
-
-$complex $Number$float$__complx__($Number$float wit, $float a) {
-  return to$complex(a->val);
-}
-
-$float $Number$float$__mul__($Number$float wit,  $float a, $float b) {
-  return to$float(from$float(a) * from$float(b));
-}  
-
-$float $Number$float$__truediv__($Number$float wit,  $float a, $float b) {
-  return to$float(from$float(a) / from$float(b));
-}  
-
-$float $Number$float$__pow__($Number$float wit,  $float a, $float b) {
-  return to$float(exp(from$float(b) * log(from$float(a))));
-  }
-
-$float $Number$float$__neg__($Number$float wit, $float a) {
-  return to$float(-from$float(a));
-}
-
-$float $Number$float$__pos__($Number$float wit, $float a) {
-  return a;
-}
-
-$WORD $Number$float$real($Number$float wit, $Real wit2, $float a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,a);
-}
-
-$WORD $Number$float$imag($Number$float wit, $Real wit2,  $float a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$float(0.0));
-}
-
-$WORD $Number$float$__abs__($Number$float wit, $Real wit2,  $float a) {
-  $Number wit3 = wit2->w$Number$Real;
-  return wit3->$class->__fromatom__(wit3,to$float(fabs(from$float(a))));
-}
-
-$float $Number$float$conjugate($Number$float wit,  $float a) {
-  return a;
-}
-
-// $Plus$float  ////////////////////////////////////////////////////////////////////////////////////////
-
-$float $Plus$float$__add__($Plus$float wit,  $float a, $float b) {
-  return to$float(from$float(a) + from$float(b));
-}  
- 
+     
 // $Minus$float  ////////////////////////////////////////////////////////////////////////////////////////
 
 $float $Minus$float$__sub__($Minus$float wit,  $float a, $float b) {
   return to$float(from$float(a) - from$float(b));
 }  
+
+// $Ord$float  ////////////////////////////////////////////////////////////////////////////////////////
+
+$bool $Ord$float$__eq__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val == b->val);
+}
+
+$bool $Ord$float$__ne__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val != b->val);
+}
+
+$bool $Ord$float$__lt__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val < b->val);
+}
+
+$bool $Ord$float$__le__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val <= b->val);
+}
+
+$bool $Ord$float$__gt__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val > b->val);
+}
+
+$bool $Ord$float$__ge__ ($Ord$float wit, $float a, $float b) {
+  return to$bool(a->val == b->val);
+}
+
 
 // $Hashable$float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,51 +179,39 @@ $int $Hashable$float$__hash__($Hashable$float wit, $float a) {
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Real$float_init($Real$float wit) {
-  wit-> w$Number$Real = $NEW($Number$float,wit);
+  wit-> w$Minus$Real = $NEW($Minus$float,wit);
 };
 
-void $Number$float_init($Number$float wit, $Real$float w$Real$float) {
-  wit->w$Real$float = w$Real$float;
-  wit-> w$Plus$Number = $NEW($Plus$float,wit);
-  wit-> w$Minus$Number = $NEW($Minus$float,wit);
-}
-
-void $Plus$float_init($Plus$float wit, $Number$float w$Number$float) {
-  wit->w$Number$float =  w$Number$float;
-}
-
-void $Minus$float_init($Minus$float wit, $Number$float w$Number$float) {
-  wit->w$Number$float =  w$Number$float;
+void $Minus$float_init($Minus$float wit, $Real$float w$Real$float) {
+  wit->w$Real$float =  w$Real$float;
 }
 
  struct $Real$float $Real$float_instance;
- struct $Number$float $Number$float_instance;
- struct $Plus$float $Plus$float_instance;
  struct $Minus$float $Minus$float_instance;
+ struct $Ord$float $Ord$float_instance;
  struct $Hashable$float $Hashable$float_instance;
 
-struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float_init,$Real$float$__eq__ , $Real$float$__ne__ , $Real$float$__lt__ , $Real$float$__le__ ,
-                                                     $Real$float$__gt__ , $Real$float$__ge__ , $Real$float$__float__ , $Real$float$__trunc__ , $Real$float$__floor__ ,
+struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float_init, $Real$float$__add__, $Real$float$__fromatom__,$Real$float$__complx__,
+                                               $Real$float$__mul__,$Real$float$__truediv__,$Real$float$__pow__,$Real$float$__neg__,
+                                                $Real$float$__pos__,$Real$float$real,$Real$float$imag,$Real$float$__abs__,$Real$float$conjugate,
+                                                $Real$float$__float__ , $Real$float$__trunc__ , $Real$float$__floor__ ,
                                                      $Real$float$__ceil__ , $Real$float$__round__};
- struct $Real$float $Real$float_instance = {&$Real$float$methods};
- $Real$float $Real$float$witness = &$Real$float_instance;
-
-
-struct $Number$float$class $Number$float$methods = {"", UNASSIGNED,NULL, $Number$float_init,$Number$float$__eq__,$Number$float$__ne__,$Number$float$__fromatom__,$Number$float$__complx__,
-                                               $Number$float$__mul__,$Number$float$__truediv__,$Number$float$__pow__,$Number$float$__neg__,
-                                               $Number$float$__pos__,$Number$float$real,$Number$float$imag,$Number$float$__abs__,$Number$float$conjugate};
- struct $Number$float $Number$float_instance = {&$Number$float$methods, &$Real$float_instance, &$Plus$float_instance, &$Minus$float_instance};
- $Number$float $Number$float$witness = &$Number$float_instance;
-
-struct $Plus$float$class $Plus$float$methods = {"", UNASSIGNED,NULL, $Plus$float_init,$Plus$float$__add__};
- struct $Plus$float $Plus$float_instance = {&$Plus$float$methods, &$Number$float_instance};
- $Plus$float $Plus$float$witness = &$Plus$float_instance;
+struct $Real$float $Real$float_instance = {&$Real$float$methods, &$Minus$float_instance};
+$Real$float $Real$float$witness = &$Real$float_instance;
 
 struct $Minus$float$class $Minus$float$methods = {"", UNASSIGNED,NULL, $Minus$float_init,$Minus$float$__sub__};
- struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Number$float_instance};
- $Minus$float $Minus$float$witness = &$Minus$float_instance;
+struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Real$float_instance};
+$Minus$float $Minus$float$witness = &$Minus$float_instance;
+
+
+struct $Ord$float$class $Ord$float$methods = {"", UNASSIGNED,NULL,  (void (*)($Ord$float))$default__init__, $Ord$float$__eq__ , $Ord$float$__ne__ , $Ord$float$__lt__ , $Ord$float$__le__ ,
+                                                     $Ord$float$__gt__ , $Ord$float$__ge__};
+struct $Ord$float $Ord$float_instance = {&$Ord$float$methods};
+$Ord$float $Ord$float$witness = &$Ord$float_instance;
+
+
 
 struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$float))$default__init__,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
- struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
- $Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
+struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
+$Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
  
