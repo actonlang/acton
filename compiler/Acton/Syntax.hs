@@ -601,17 +601,11 @@ isSig _                             = False
 isDecl Decl{}                       = True
 isDecl _                            = False
 
-posParLen PosNIL                    = 0
-posParLen (PosSTAR _ _)             = 0
-posParLen (PosPar _ _ _ r)          = 1 + posParLen r
+singlePosArg (PosArg _ PosNil)      = True
+singlePosArg _                      = False
 
-posArgLen PosNil                    = 0
-posArgLen (PosStar _)               = 0
-posArgLen (PosArg _ r)              = 1 + posArgLen r
-
-posPatLen PosPatNil                 = 0
-posPatLen (PosPatStar _)            = 0
-posPatLen (PosPat _ r)              = 1 + posPatLen r
+singlePosPat (PosPat _ PosPatNil)   = True
+singlePosPat _                      = False
 
 posParHead (PosPar a b c _)         = (a,b,c)
 posArgHead (PosArg a _)             = a

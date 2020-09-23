@@ -420,12 +420,12 @@ funItems posCons posStar posNil positem posstaritem kwdItems kwdNil =
                (do optional comma; return (Left (posNil, kwdNil)))
 -}
 
-tuple_or_single posItems headItems len tup =
+tuple_or_single posItems headItems singleHead tup =
       do pa <- posItems
          mbc <- optional comma
          return (f pa mbc)
     where f pa mbc
-            | len pa == 1 = maybe (headItems pa) (const (tup pa)) mbc
+            | singleHead pa = maybe (headItems pa) (const (tup pa)) mbc
             | otherwise  = tup pa
         
  
@@ -778,7 +778,7 @@ expr =  lambdef
 -- If more than one expr, build a tuple.
 -- if only one, leave as it is unless there is a trailing comma when we build a one-element tuple.
 exprlist :: Parser S.Expr
-exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.posArgLen (\p -> S.Tuple NoLoc p S.KwdNil)
+exprlist = addLoc $ tuple_or_single posarg S.posArgHead S.singlePosArg (\p -> S.Tuple NoLoc p S.KwdNil)
  
 
 expr_nocond = or_expr <|> lambdef_nocond

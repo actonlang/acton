@@ -153,7 +153,7 @@ instance Pretty Expr where
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
-      | posArgLen ps == 1           = pretty ps <> comma
+      | singlePosArg ps             = pretty ps <> comma
     pretty (Tuple _ ps ks)          = pretty (ps,ks)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
@@ -263,7 +263,7 @@ instance Pretty (PosPat,KwdPat) where
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
-      | posPatLen ps == 1           = pretty ps <> comma
+      | singlePosPat ps             = pretty ps <> comma
     pretty (PTuple _ ps ks)         = pretty (ps, ks)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)
