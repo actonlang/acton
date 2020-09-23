@@ -125,7 +125,18 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
-    pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
+    pretty (Call _ e ps ks)
+      | embed e                     = parens (pretty e) <> parens (pretty (ps,ks))
+      | otherwise                   = pretty e <> parens (pretty (ps,ks))
+      where embed Await{}           = True
+            embed Cond{}            = True
+            embed BinOp{}           = True
+            embed CompOp{}          = True
+            embed UnOp{}            = True
+            embed Lambda{}          = True
+            embed Yield{}           = True
+            embed YieldFrom{}       = True
+            embed _                 = False
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
