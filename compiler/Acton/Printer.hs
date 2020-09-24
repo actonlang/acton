@@ -96,23 +96,33 @@ instance Pretty (PosPar,KwdPar) where
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
-    pretty (PosStar e@Var{})        = text "*" <> pretty e
-    pretty (PosStar e@Paren{})      = text "*" <> pretty e
-    pretty (PosStar e)              = text "*" <> parens (pretty e)
+    pretty (PosStar e)
+      | atomic e                    = text "*" <> pretty e
+      | otherwise                   = text "*" <> parens (pretty e)
     pretty PosNil                   = empty
 
 instance Pretty KwdArg where
     pretty (KwdArg n e KwdNil)      = pretty n <+> equals <+> pretty e
     pretty (KwdArg n e k)           = pretty n <+> equals <+> pretty e <> comma <+> pretty k
-    pretty (KwdStar e@Var{})        = text "**" <> pretty e
-    pretty (KwdStar e@Paren{})      = text "**" <> pretty e
-    pretty (KwdStar e)              = text "**" <> parens (pretty e)
+    pretty (KwdStar e)
+      | atomic e                    = text "**" <> pretty e
+      | otherwise                   = text "**" <> parens (pretty e)
     pretty KwdNil                   = empty
 
 instance Pretty (PosArg,KwdArg) where
     pretty (PosNil, ks)             = pretty ks
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
+
+atomic Await{}                      = False
+atomic Cond{}                       = False
+atomic BinOp{}                      = False
+atomic CompOp{}                     = False
+atomic UnOp{}                       = False
+atomic Lambda{}                     = False
+atomic Yield{}                      = False
+atomic YieldFrom{}                  = False
+atomic _                            = True
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
@@ -126,17 +136,8 @@ instance Pretty Expr where
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
     pretty (Call _ e ps ks)
-      | embed e                     = parens (pretty e) <> parens (pretty (ps,ks))
-      | otherwise                   = pretty e <> parens (pretty (ps,ks))
-      where embed Await{}           = True
-            embed Cond{}            = True
-            embed BinOp{}           = True
-            embed CompOp{}          = True
-            embed UnOp{}            = True
-            embed Lambda{}          = True
-            embed Yield{}           = True
-            embed YieldFrom{}       = True
-            embed _                 = False
+      | atomic e                    = pretty e <> parens (pretty (ps,ks))
+      | otherwise                   = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
