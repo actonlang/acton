@@ -460,7 +460,9 @@ instance PreCPS Expr where
     pre env (CompOp l e ops)            = CompOp l <$> pre env e <*> pre env ops
     pre env (UnOp l o e)                = UnOp l o <$> pre env e
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
-    pre env (DotI l e i t)              = DotI l <$> pre env e <*> return i <*> return t
+    pre env (Rest l e n)                = Rest l <$> pre env e <*> return n
+    pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
+    pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
     pre env (Lambda l ps ks e fx)       = do (e1,stmts) <- withPrefixes $ pre env e
                                              case stmts of                                              -- TODO: utilize type of e (+below)
                                                  [] ->

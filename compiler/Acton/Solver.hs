@@ -87,6 +87,8 @@ reduce' env eq c@(Impl w t@(TOpt _ t') p)
                                                  reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
 
 reduce' env eq c@(Impl w t@(TUnion _ us) p)
+  | qmatch env (tcname p) qnPlus,
+    all uniLit us                           = reduce' env eq (Impl w tStr p)
   | qmatch env (tcname p) qnEq              = do let e = eQVar $ if all uniLit us then witEqStr else witEqUnion
                                                  return ((w, impl2type t p, e):eq)
 
@@ -473,6 +475,36 @@ findElem k r0 n r tl                        = do r0' <- msubst r0
 
 
 {-
+
+round : (Real, ?int) -> Real
+----
+w(round)(3.14, None)                                                    w(round)(3.14, None)
+w : ((Real,?int)->Real) -> (float,None)->$1
+----
+w = lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2)))                 = (lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2))))(round)(3.14, None)          | x=round
+wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(x1), **wk(x2)))(3.14, None)                         | x1=(3.14,None), x2=()
+wp : ((float,None)) -> (Real,?int)                                      = wt(round(*wp((3.14,None)), **wk(())))
+wk : (()) -> ()
+----
+wt = lambda x: x                                                        = (lambda x: x)(round(*wp((3.14,None)), **wk(())))                                  | x=round(...)
+wp = lambda x: (w1(x.0), *w2(x.*1))                                     = round(*(lambda x: (w1(x.0), *w2(x.*1)))((3.14,None)), **wk(()))                   | x=(3.14, None)
+wk = lambda y: ()                                                       = round(*(w1(3.14), *w2((None,))), **((lambda y: ())()))                            | y=()
+w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2((None,))), **())
+w2 : ((None,)) -> (?int,)
+----
+w1 = lambda x: PACK(Real$float, x)                                      = round(*((lambda x: PACK(Real$float, x))(3.14), *w2((None,))))                     | x=3.14
+w2 = lambda x: (w21(x.0), *w22(x.*1))                                   = round(*(PACK(Real$float, 3.14), *(lambda x: (w21(x.0), *w22(x.*1)))((None,))))    | x=(None,)
+w21 : (None) -> ?int                                                    = round(*(PACK(Real$float, 3.14), *(w21(None), *w22(()))))
+w22 : (()) -> ()
+----
+w21 = lambda x: x                                                       = round(*(PACK(Real$float, 3.14), *((lambda x: x)(None), *w22(()))))                | x=None
+w22 = lambda y: ()                                                      = round(*(PACK(Real$float, 3.14), *(None, *(lambda y: ())())))                      | y=()
+                                                                        = round(*(PACK(Real$float, 3.14), *(None, *())))
+                                                                        = round(*(PACK(Real$float, 3.14), *(None,)))
+                                                                        = round(*(PACK(Real$float, 3.14), None))
+                                                                        = round(PACK(Real$float, 3.14), None)
+
+
 
 round : (Real, ?int) -> Real
 ----

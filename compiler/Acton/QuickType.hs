@@ -32,6 +32,10 @@ instance SchemaOf Expr where
                                             tSchema q (tFun (fxAct tWild) p k (tCon0 n q))
     schemaOf env (Dot _ e n)        = case typeOf env e of
                                         TCon _ c -> findAttr' env c n
+                                        TTuple _ p k -> f n k
+      where f n (TRow l k x t r)
+              | x == n              = monotype t
+              | otherwise           = f n r
     schemaOf env e                  = monotype $ typeOf env e
 
 instance TypeOf Expr where
@@ -61,16 +65,22 @@ instance TypeOf Expr where
       where t1                      = typeOf env e1
             t2                      = typeOf env e2
     typeOf env (IsInstance _ e c)   = tBool
-    typeOf env (DotI _ e i tl)      = case typeOf env e of
-                                        TTuple _ p k -> f i p k
-      where f 0 (TRow _ _ _ t p) k
-               | not tl             = t
-               | tl                 = TTuple NoLoc p k
-            f 0 p (TRow _ _ _ t k)
-               | not tl             = t
-               | tl                 = TTuple NoLoc p k
-            f i (TRow _ _ _ _ p) k  = f (i-1) p k
-            f i p (TRow _ _ _ _ k)  = f (i-1) p k
+    typeOf env (DotI _ e i)         = case typeOf env e of
+                                        TTuple _ p k -> f i p
+      where f 0 (TRow _ _ _ t p)    = t
+            f i (TRow _ _ _ _ p)    = f (i-1) p
+    typeOf env (RestI _ e i)        = case typeOf env e of
+                                        TTuple _ p k -> TTuple NoLoc (f i p) kwdNil
+      where f i (TRow l k x t r)
+              | i == 0              = r
+              | otherwise           = TRow l k x t (f (i-1) r)
+            f i (TNil l k)          = TNil l k
+    typeOf env (Rest _ e n)         = case typeOf env e of
+                                        TTuple _ p k -> TTuple NoLoc posNil (f n k)
+      where f n (TRow l k x t r)
+              | x == n              = r
+              | otherwise           = TRow l k x t (f n r)
+            f n (TNil l k)          = TNil l k
     typeOf env (Lambda _ p k e fx)  = TFun NoLoc fx (prowOf p) (krowOf k) (typeOf env1 e)
       where env1                    = define (envOf k) $ define (envOf p) $ env
 --  typeOf env (Yield _ e)          = undefined

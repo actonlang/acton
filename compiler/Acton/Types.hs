@@ -1236,12 +1236,19 @@ instance Infer Expr where
                                              return (Sel w t n t0 :
                                                      cs, t0, eCall (eVar w) [e'])
 
-    infer env (DotI l e i False)        = do (ttup,ti,_) <- tupleTemplate i
-                                             (cs,e') <- inferSub env ttup e
-                                             return (cs, ti, DotI l e' i False)
-    infer env (DotI l e i True)         = do (ttup,_,tl) <- tupleTemplate (i-1)
-                                             (cs,e') <- inferSub env ttup e
-                                             return (cs, tl, DotI l e' i True)
+    infer env (Rest l e n)              = do p <- newTVarOfKind PRow
+                                             k <- newTVarOfKind KRow
+                                             t0 <- newTVar
+                                             (cs,e') <- inferSub env (tTuple p (kwdRow n t0 k)) e
+                                             return (cs, tTuple p k, Rest l e' n)
+
+    infer env (DotI l e i)              = do (tup,ti,rest) <- tupleTemplate i
+                                             (cs,e') <- inferSub env tup e
+                                             return (cs, ti, DotI l e' i)
+
+    infer env (RestI l e i)             = do (tup,ti,rest) <- tupleTemplate i
+                                             (cs,e') <- inferSub env tup e
+                                             return (cs, rest, RestI l e' i)
     infer env (Lambda l p k e fx)
       | nodup (p,k)                     = do pushFX fx tNone
                                              (cs0,te0,p') <- infEnv env1 p
@@ -1312,7 +1319,9 @@ instance Infer Expr where
 tupleTemplate i                         = do ts <- mapM (const newTVar) [0..i]
                                              p <- newTVarOfKind PRow
                                              k <- newTVarOfKind KRow
-                                             return (TTuple NoLoc (foldl (flip posRow) p ts) k, head ts, TTuple NoLoc p k)
+                                             let p0 = foldl (flip posRow) p ts
+                                                 p1 = foldl (flip posRow) p (tail ts)
+                                             return (TTuple NoLoc p0 k, head ts, TTuple NoLoc p1 k)
 
 isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
   where dotChain (Var _ (NoQ n))        = Just [n]
@@ -1436,7 +1445,8 @@ instance Infer PosArg where
                                              return (cs1++cs2, posRow t prow, PosArg e' p')
     infer env (PosStar e)               = do (cs,t,e') <- infer env e
                                              prow <- newTVarOfKind PRow
-                                             return (Cast t (tTupleP prow) :
+                                             krow <- newTVarOfKind KRow
+                                             return (Cast t (tTuple prow krow) :
                                                      cs, prow, PosStar e')
     infer env PosNil                    = return ([], posNil, PosNil)
     
@@ -1445,8 +1455,9 @@ instance Infer KwdArg where
                                              (cs2,krow,k') <- infer env k
                                              return (cs1++cs2, kwdRow n t krow, KwdArg n e' k')
     infer env (KwdStar e)               = do (cs,t,e') <- infer env e
+                                             prow <- newTVarOfKind PRow
                                              krow <- newTVarOfKind KRow
-                                             return (Cast t (tTupleK krow) :
+                                             return (Cast t (tTuple prow krow) :
                                                      cs, krow, KwdStar e')
     infer env KwdNil                    = return ([], kwdNil, KwdNil)
 

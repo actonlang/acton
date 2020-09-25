@@ -51,8 +51,8 @@ normPat env (PParen _ p)            = normPat env p
 normPat env (PTuple _ pp kp)        = do v <- newName "tup"  -- *************** nothing done with kp!!!
                                          return (pVar v Nothing,normPP v 0 pp)
   where normPP v n (PosPat p pp)    = s : normPP v (n+1) pp
-          where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n False)
-        normPP v n (PosPatStar p)   = [Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n True)]
+          where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n)
+        normPP v n (PosPatStar p)   = [Assign NoLoc [p] (RestI NoLoc (eQVar (QName (currentmod env) v)) n)]
         normPP _ _ PosPatNil        = []
 normPat env (PList _ ps pt)         = do v <- newName "lst"
                                          return (pVar v Nothing, normList v 0 ps pt)
@@ -187,7 +187,9 @@ instance Norm Expr where
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
     norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
-    norm env (DotI l e i t)         = DotI l <$> norm env e <*> return i <*> return t
+    norm env (Rest l e nm)          = Dot l <$> norm env e <*> norm env nm
+    norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
+    norm env (RestI l e i)          = RestI l <$> norm env e <*> return i
     norm env (Lambda l ps ks e fx)  = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e <*> return fx
       where env1                    = extLocal (bound ps ++ bound ks) env
     norm env (Yield l e)            = Yield l <$> norm env e

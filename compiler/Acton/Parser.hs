@@ -957,15 +957,16 @@ atom_expr = do
                         <|>
                       (do
                          dot
-                         intdot <|> iddot <|> strdot))
+                         try intdot <|> iddot <|> strdot))
                  
-           where iddot  = do 
-                     nm <- name
-                     return (\a -> S.Dot NoLoc a nm)
+           where iddot  = do
+                        mb <- optional (opPref "~")
+                        nm <- name
+                        return (\a -> maybe (S.Dot NoLoc a nm) (const $ S.Rest NoLoc a nm) mb)
                  intdot  = do 
-                        mbt <- optional star
+                        mb <- optional (opPref "~")
                         i <- lexeme L.decimal
-                        return (\a -> S.DotI NoLoc a i (maybe False (const True) mbt))
+                        return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
                  strdot = do
                         (p,str) <- withPos stringP 
                         return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?

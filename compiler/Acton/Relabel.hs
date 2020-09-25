@@ -86,7 +86,9 @@ instance Relabel Expr where
     relabel (CompOp _ e ops) = CompOp <$> newLoc <*> relabel e <*> relabel ops
     relabel (UnOp _ op e) = UnOp <$> newLoc <*> pure op <*> relabel e 
     relabel (Dot _ e nm) = Dot <$> newLoc <*> relabel e <*> relabel nm
-    relabel (DotI _ e i t) = DotI <$> newLoc <*> relabel e <*> return i <*> return t
+    relabel (Rest _ e nm) = Rest <$> newLoc <*> relabel e <*> relabel nm
+    relabel (DotI _ e i) = DotI <$> newLoc <*> relabel e <*> return i
+    relabel (RestI _ e i) = RestI <$> newLoc <*> relabel e <*> return i
     relabel (Lambda _ ps ks e fx) = Lambda <$> newLoc <*> relabel ps <*> relabel ks <*> relabel e <*> relabel fx
     relabel (Yield _ e) = Yield <$> newLoc <*> relabel e
     relabel (YieldFrom _ e) = YieldFrom <$> newLoc <*> relabel e

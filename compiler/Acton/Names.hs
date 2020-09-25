@@ -191,7 +191,9 @@ instance Vars Expr where
     free (CompOp _ e ops)           = free e ++ free ops
     free (UnOp _ o e)               = free e
     free (Dot _ e n)                = free e
-    free (DotI _ e i t)             = free e
+    free (Rest _ e n)               = free e
+    free (DotI _ e i)               = free e
+    free (RestI _ e i)              = free e
     free (Lambda _ ps ks e fx)      = free ps ++ free ks ++ (free e \\ (bound ps ++ bound ks))
     free (Yield _ e)                = free e
     free (YieldFrom _ e)            = free e
