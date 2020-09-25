@@ -42,3 +42,23 @@ def f12(x : Exception):
 
 def f13(x : (int | bool)):
     return x if isinstance(x, int) else -1
+
+a = (1, False, "hello" + "world")
+
+b0 = a.0
+b1 = a.1
+b2 = a.2
+
+c0 = a.~0
+c1 = a.~1
+c2 = a.~2
+
+x = (apa = 1, bepa = False, cepa = "hello" "world")
+
+y0 = x.apa
+y1 = x.bepa
+y2 = x.cepa
+
+z0 = x.~apa
+z1 = x.~bepa
+z2 = x.~cepa

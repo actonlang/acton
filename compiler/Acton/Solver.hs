@@ -926,7 +926,9 @@ allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
 allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
-allAbove env (TUnion _ us)              = map CUnion (uniAbove us) ++ [CNone]
+allAbove env (TUnion _ us)
+  | all uniLit us                       = CCon qnStr : map CUnion (uniAbove [UCon qnStr]) ++ [CNone]
+  | otherwise                           = map CUnion (uniAbove us) ++ [CNone]
 allAbove env _                          = []
 
 
@@ -940,9 +942,7 @@ allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
 allBelow env (TFX _ FXAction)           = [CAction]
-allBelow env (TUnion _ us)              = map CUnion (uniBelow us) ++ (nub $ concat $ map uBelow us)
-  where uBelow (UCon n)                 = map CCon $ n : allDescendants env n
-        uBelow (ULit s)                 = [CCon qnStr]
+allBelow env (TUnion _ us)              = map CUnion (uniBelow us) ++ [ CCon n | UCon n <- us ]
 allBelow env _                          = []
 
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
@@ -968,7 +968,7 @@ constrain env vs (Cast (TVar _ v) (TVar _ v'))
 constrain env vs (Cast (TVar _ v) t)
   | univar v                            = Map.adjust (intersect $ allBelow env t) v vs
 constrain env vs (Cast t (TVar _ v))    = Map.adjust (intersect $ allAbove env t) v vs
-constrain env vs (Sub w (TVar _ v) (TVar _ v'))
+constrain env vs c@(Sub w (TVar _ v) (TVar _ v'))
   | univar v && univar v'               = vs
 constrain env vs (Sub w (TVar _ v) t)
   | univar v                            = Map.adjust (intersect $ allBelow env t) v vs
@@ -1030,7 +1030,7 @@ solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs
         solved                          = [ (v, solution v) | v <- vs ]
         solution v                      = case lookup' v tvmap1 of
                                             [] -> err1 v ("Cannot solve " ++ prstrs cs ++ " for variable")
-                                            c:cs -> trace ("#### Candidates for " ++ prstr v ++ ": " ++ prstrs (c:cs)) $ mkres c        -- opts? unions?
+                                            c:cs -> trace ("#### Candidates for " ++ prstr v ++ ": " ++ prstrs (c:cs)) $ mkres c
         mkres (CProto n)                = Left $ mkcon n
         mkres (CCon n)                  = Right $ tCon $ mkcon n
         mkres (CVar v)                  = Right $ tVar v
