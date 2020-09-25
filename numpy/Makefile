@@ -1,8 +1,8 @@
 all:
-	gcc -c -O3 ndarray.c
-	cd numpytests && $(MAKE)
+	gcc -c -O3 numpy.c
+	cd tests && $(MAKE)
 clean:
-	rm ndarray.o
-	cd numpytests && $(MAKE) clean
+	rm numpy.o
+	cd tests && $(MAKE) clean
 runtests:
-	cd numpytests && $(MAKE) runtests
+	cd tests && $(MAKE) runtests

@@ -1,5 +1,3 @@
-#include "../builtin/builtin.h"
-
 struct $ndarray;
 typedef struct $ndarray *$ndarray;
 
@@ -12,26 +10,19 @@ struct $ndarray$class {
   $ndarray (*__deserialize__)($Serial$state);
   $bool (*__bool__)($ndarray);
   $str (*__str__)($ndarray);
+  $ndarray (*reshape)($ndarray,$list);
+  $ndarray (*transpose)($ndarray,$list);
+  $ndarray (*copy)($ndarray);
+  $ndarray (*__nd_getslice__)($ndarray,$list);
 };
-
-// Generic type for elements in the C array that holds ndarray data).
- 
-union $Bytes8 {
-  long l;
-  double d;
-  $WORD w;
-};
- 
-typedef $WORD (*to$obj_converter) (union $Bytes8);
-typedef union $Bytes8 (*from$obj_converter) ($WORD);
 
 struct $ndarray {
   struct $ndarray$class *$class;
+  enum ElemType elem_type;
   long ndim;
-  long elem_size;
+  long size;         // # of elements; equal to product of elements in shape.
   long offset;
-  to$obj_converter to$obj;
-  from$obj_converter from$obj;
+  long elem_size;
   $list shape;
   $list strides;
   union $Bytes8 *data;
@@ -39,86 +30,50 @@ struct $ndarray {
 
 extern struct $ndarray$class $ndarray$methods;
 
-$ndarray $ndarray_fromatom($Super a);
+// iterating over an ndarray //////////////////////////////////////////
 
-$ndarray $nd_getslice($ndarray a, $list ix);
-$ndarray $ndarray_fromatom($Super a);
+#define MAX_NDIM 16
 
-$ndarray $ndarray_reshape($ndarray a, $list newshape);
+typedef struct $array_iterator {
+  union $Bytes8 *current;
+  long currentstride;
+  long lastshapepos;
+  long lastshapelength;
+  long ndim1;    // ndim-1
+  long shape[MAX_NDIM]; 
+  long strides[MAX_NDIM];
+  long jumps[MAX_NDIM];
+  long index[MAX_NDIM];
+} *$array_iterator;
 
-$ndarray $ndarray_func1(union $Bytes8(*f)(union $Bytes8),$ndarray a);
-$ndarray $ndarray_oper1(union $Bytes8(*f)(union $Bytes8,union $Bytes8),$ndarray a, $ndarray b);
+$array_iterator $mk_iterator($ndarray a);
+union $Bytes8 *iter_next($array_iterator it);
+
+// Intended argument to constructor
+
+$ndarray $ndarray_fromatom($WORD a);
+
+//$ndarray $ndarray_func(union $Bytes8(*f)(union $Bytes8),$ndarray a);
+//$ndarray $ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), $ndarray a, $ndarray b);
+
+// Methods in ndarray class //////////////////////////////////////////////
+
+$ndarray $ndarray_reshape($ndarray,$list);
+$ndarray $ndarray_transpose($ndarray,$list);
+$ndarray $ndarray_copy($ndarray);
+$ndarray $ndarray_getslice($ndarray,$list);
+
+// Functions to create ndarrays /////////////////////////////////////////
 
 $ndarray $ndarray_linspace($float a, $float b, $int n);
-$ndarray $ndarray_arange($int n);
+$ndarray $ndarray_arange($int start, $int stop, $int step);
+$ndarray $ndarray_array($Primitive wit, $list elems);
 
-$float $ndarray_sumf($ndarray a);
+// Various utilities /////////////////////////////////////////////////////
 
-union $Bytes8 mul2(union $Bytes8 x);
-
-// $Plus$ndarray$int  ////////////////////////////////////////////////////////////
-
-struct $Plus$ndarray$int;
-typedef struct $Plus$ndarray$int *$Plus$ndarray$int;
-
-struct $Plus$ndarray$int$class;
-typedef struct $Plus$ndarray$int$class *$Plus$ndarray$int$class;
-
-struct $Plus$ndarray$int {
-  $Plus$ndarray$int$class $class;
-};
-
-struct $Plus$ndarray$int$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Plus$ndarray$int);
-  $ndarray (*__add__)($Plus$ndarray$int, $ndarray, $ndarray);
-};
-
-void $Plus$ndarray$int$__init__ ($Plus$ndarray$int);
-$ndarray $Plus$ndarray$int$__add__ ($Plus$ndarray$int, $ndarray, $ndarray);
-
-extern struct $Plus$ndarray$int *$Plus$ndarray$int$witness;
-
-// $Plus$ndarray$float  ////////////////////////////////////////////////////////////
-
-struct $Plus$ndarray$float;
-typedef struct $Plus$ndarray$float *$Plus$ndarray$float;
-
-struct $Plus$ndarray$float$class;
-typedef struct $Plus$ndarray$float$class *$Plus$ndarray$float$class;
-
-struct $Plus$ndarray$float {
-  $Plus$ndarray$float$class $class;
-};
-
-struct $Plus$ndarray$float$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Plus$ndarray$float);
-  $ndarray (*__add__)($Plus$ndarray$float, $ndarray, $ndarray);
-};
-
-void $Plus$ndarray$float$__init__ ($Plus$ndarray$float);
-$ndarray $Plus$ndarray$float$__add__ ($Plus$ndarray$float, $ndarray, $ndarray);
-
-extern struct $Plus$ndarray$float *$Plus$ndarray$float$witness;
-
-
-
-
-/*
-  extern struct $Real$ndarray$class $Real$ndarray$methods;
-  extern struct $Number$ndarray$class $Number$ndarray$methods;
-  extern struct $Plus$ndarray$class $Plus$ndarray$methods;
-  extern struct $Minus$ndarray$class $Minus$ndarray$methods;
-  extern struct $Hashable$ndarray$class $Hashable$ndarray$methods;
-
-  extern struct $Real$ndarray *$Real$ndarray$witness;
-  extern struct $Number$ndarray *$Number$ndarray$witness;
-  extern struct $Minus$ndarray *$Minus$ndarray$witness;
-
-  $ndarray $ndarray_fromatom($Super a);
-*/
+$ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis);
+$ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k);
+$ndarray $ndarray_sort($Primitive wit, $ndarray a);
+$ndarray $ndarray_clip($Primitive wit, $ndarray a, $WORD low, $WORD high);
+$ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b);
+$ndarray $ndarray_abs($Primitive wit, $ndarray a);
