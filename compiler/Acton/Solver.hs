@@ -87,8 +87,6 @@ reduce' env eq c@(Impl w t@(TOpt _ t') p)
                                                  reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
 
 reduce' env eq c@(Impl w t@(TUnion _ us) p)
-  | qmatch env (tcname p) qnPlus,
-    all uniLit us                           = reduce' env eq (Impl w tStr p)
   | qmatch env (tcname p) qnEq              = do let e = eQVar $ if all uniLit us then witEqStr else witEqUnion
                                                  return ((w, impl2type t p, e):eq)
 
@@ -881,8 +879,9 @@ uClosed env (TNone _)                   = True
 uClosed env (TNil _ _)                  = True
 uClosed env _                           = False
 
+lClosed env (TUnion _ us)
+  | uniMax us                           = True
 lClosed env (TOpt _ _)                  = True
-lClosed env (TUnion _ _)                = True
 lClosed env (TNil _ _)                  = True
 lClosed env _                           = False
 
@@ -897,6 +896,8 @@ data Candidate                          = CProto QName
                                         | CCon QName
                                         | CVar TVar
                                         | CNone
+                                        | COpt
+                                        | CUnion [QName]
                                         | CFun
                                         | CTuple
                                         | CPure
@@ -909,29 +910,29 @@ instance Pretty Candidate where
     pretty (CProto n)                   = pretty n
     pretty (CCon n)                     = pretty n
     pretty (CVar v)                     = pretty v
+    pretty (CUnion ns)                  = pretty (tUnion (map UCon ns))
     pretty c                            = text (show c)
 
 allAbove env (TCon _ c@(TC n _))
---  | n' `elem` uniCons                   = map CCon (uniCons ++ allAncestors env n) ++ [CNone]
+  | n' `elem` uniCons                   = map CCon (n' : allAncestors env n) ++ allAbove env (tUnion [UCon n']) ++ [CNone]
   | otherwise                           = map CCon (n' : allAncestors env n) ++ [CNone]
   where n'                              = unalias env n
 allAbove env (TVar _ v) | not(univar v) = case findTVBound env v of Just c -> [CVar v, CCon (tcname c)]; _ -> [CVar v]
-allAbove env (TOpt _ t)                 = allAbove env t
-allAbove env (TNone _)                  = candidates env KType
+allAbove env (TOpt _ t)                 = [COpt]
+allAbove env (TNone _)                  = [CNone]
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
 allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
 allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
-allAbove env (TUnion _ us)              = (nub $ concat $ map uAbove us) ++ [CNone]
-  where uAbove (UCon n)                 = map CCon $ n : allAncestors env n
-        uAbove (ULit s)                 = map CCon $ qnStr : allAncestors env qnStr
+allAbove env (TUnion _ us)              = map CUnion (uniAbove us) ++ [CNone]
 allAbove env _                          = []
+
 
 allBelow env (TCon _ (TC n _))          = map CCon (unalias env n : allDescendants env n)
 allBelow env (TVar _ v) | not(univar v) = [CVar v]
-allBelow env (TOpt _ t)                 = allBelow env t ++ [CNone]
+allBelow env (TOpt _ t)                 = COpt : allBelow env t ++ [CNone]
 allBelow env (TNone _)                  = [CNone]
 allBelow env (TFun _ _ _ _ _)           = [CFun]
 allBelow env (TTuple _ _ _)             = [CTuple]
@@ -939,7 +940,7 @@ allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
 allBelow env (TFX _ FXAction)           = [CAction]
-allBelow env (TUnion _ us)              = nub $ concat $ map uBelow us
+allBelow env (TUnion _ us)              = map CUnion (uniBelow us) ++ (nub $ concat $ map uBelow us)
   where uBelow (UCon n)                 = map CCon $ n : allDescendants env n
         uBelow (ULit s)                 = [CCon qnStr]
 allBelow env _                          = []
@@ -947,11 +948,14 @@ allBelow env _                          = []
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
 protos env (CVar v)                     = map (tcname . proto) $ allWitnesses env (NoQ $ tvname v)
 protos env CNone                        = [qnIdentity,qnEq]
+protos env COpt                         = [qnIdentity,qnEq]
+protos env (CUnion _)                   = [qnEq]
 protos env _                            = []
 
 attrs env (CProto n)                    = allAttrs env n
 attrs env (CCon n)                      = allAttrs env n
 attrs env (CVar v)                      = maybe [] (allAttrs env . tcname) $ findTVBound env v
+attrs env (CUnion ns)                   = foldr1 intersect $ map (allAttrs env) ns
 attrs env _                             = []
 
 protoattrs env c                        = concat [ allAttrs env n | n <- protos env c ]
@@ -983,7 +987,8 @@ constrain env vs (Seal w t (TVar _ v) _ _)
 constrain env vs _                      = vs
 
 
-candidates env KType                    = map CProto (allProtos env) ++ [CNone,CFun,CTuple] ++ map CCon (allCons env) ++ map CVar (allVars env KType)
+candidates env KType                    = map CProto (allProtos env) ++ [CNone,COpt,CFun,CTuple] ++ 
+                                          map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove [])
 candidates env KFX                      = [CPure,CMut,CAct,CAction] ++ map CVar (allVars env KFX)
 candidates env k                        = map CVar (allVars env k)
 
@@ -1030,6 +1035,8 @@ solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs
         mkres (CCon n)                  = Right $ tCon $ mkcon n
         mkres (CVar v)                  = Right $ tVar v
         mkres CNone                     = Right $ tNone
+        mkres COpt                      = Right $ tOpt tWild
+        mkres (CUnion ns)               = Right $ tUnion (map UCon ns)
         mkres CFun                      = Right $ tFun tWild tWild tWild tWild
         mkres CTuple                    = Right $ tTuple tWild tWild
         mkres CPure                     = Right $ fxPure

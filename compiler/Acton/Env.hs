@@ -347,10 +347,14 @@ uniLit _                    = False
 
 uniCon env (TC n [])
   | qn `elem` uniCons       = Just $ UCon qn
+  | qn `elem` uniCons'      = Just $ UCon qn
   where qn                  = unalias env n
 uniCon env _                = Nothing
 
-uniCons                     = [qnInt, qnFloat, qnBool, qnStr] ++ map NoQ [nInt, nFloat, nBool, nStr]
+uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
+uniCons'                    = map NoQ [nInt, nFloat, nBool, nStr]
+
+uniMax us                   = [ u | UCon u <- us ] == uniCons
 
 uniElem us u@(ULit l)       = u `elem` us || UCon qnStr `elem` us
 uniElem us u                = u `elem` us
@@ -370,6 +374,18 @@ uniNorm env l us
                                 Just u -> u : norm us
                                 _ -> err1 n "Illegal union element:"
 
+uniAbove us                             = [ ns | ns <- nss, length ns > 1 ]
+  where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mbStr ]
+        mb qn | UCon qn `elem` us       = [Just qn]
+              | otherwise               = [Nothing, Just qn]
+        mbStr | not (null lits)         = [Just qnStr]
+              | otherwise               = mb qnStr
+          where lits                    = [ s | ULit s <- us ]
+
+uniBelow us                             = [ ns | ns <- nss, length ns > 1 ]
+  where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mb qnStr ]
+        mb qn | UCon qn `elem` us       = [Nothing, Just qn]
+              | otherwise               = [Nothing]
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
