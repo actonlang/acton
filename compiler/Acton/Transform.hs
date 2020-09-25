@@ -107,8 +107,9 @@ instance Transform Expr where
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)               = Dot l (trans env e) n
     trans env (DotI l e i tl)           = DotI l (trans env e) i tl
-    trans env (Lambda l p k e fx)       = Lambda l (trans env1 p) (trans env1 k) (trans env1 e) fx
+    trans env (Lambda l p k e fx)       = Lambda l (trans env1 p) (trans env1 k) (trans env2 e) fx
       where env1                        = blockscope (bound p ++ bound k) env
+            env2                        = extsubst (psubst p ++ ksubst k) env1
     trans env (Yield l e)               = Yield l (trans env e)
     trans env (YieldFrom l e)           = YieldFrom l (trans env e)
     trans env (Tuple l ps ks)           = Tuple l (trans env ps) (trans env ks)
@@ -151,6 +152,12 @@ instance Transform PosPar where
       | Internal{} <- n,
         TTuple _ TNil{} _ <- t          = PosNIL
     trans env p                         = p
+
+psubst (PosPar _ _ _ p)                 = psubst p
+psubst (PosSTAR n (Just t))
+  | Internal{} <- n,
+    TTuple _ TNil{} _ <- t              = [(n,eTuple [])]
+psubst _                                = []
     
 instance Transform KwdPar where
     trans env (KwdPar n t e k)          = KwdPar n t (trans env e) (trans env k)
@@ -158,7 +165,13 @@ instance Transform KwdPar where
       | Internal{} <- n,
         TTuple _ _ TNil{} <- t          = KwdNIL
     trans env k                         = k
-    
+
+ksubst (KwdPar _ _ _ k)                 = ksubst k
+ksubst (KwdSTAR n (Just t))
+  | Internal{} <- n,
+    TTuple _ _ TNil{} <- t              = [(n,eTuple [])]
+ksubst _                                = []
+
 instance Transform PosArg where
     trans env (PosArg e p)              = PosArg (trans env e) (trans env p)
     trans env (PosStar e)

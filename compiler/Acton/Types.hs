@@ -132,6 +132,11 @@ instance (InfEnv a) => InfEnv [a] where
                                              (cs2,te2,ss2) <- infEnv (define te1' env) ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
 
+targetFX Var{}                          = return []
+targetFX _                              = do st <- newTVar
+                                             fx <- currFX
+                                             return [Cast (fxMut st) fx]
+
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
@@ -143,7 +148,8 @@ instance InfEnv Stmt where
 
     infEnv env (MutAssign l tg e)       = do (cs1,t,w,tg') <- infTarget env tg
                                              (cs2,e') <- inferSub env t e
-                                             return (cs1++cs2, [], assign w tg' e')
+                                             cs3 <- targetFX tg
+                                             return (cs1++cs2++cs3, [], assign w tg' e')
       where assign w (Index _ e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
             assign w (Slice _ e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
             assign _ tg r               = MutAssign l tg r
@@ -151,9 +157,10 @@ instance InfEnv Stmt where
     infEnv env (AugAssign l tg o e)     = do (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
                                              (cs3,e') <- inferSub env t e
+                                             cs4 <- targetFX tg
                                              w' <- newWitness
-                                             return (Impl w' t (protocol o) : 
-                                                     cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
+                                             return ( Impl w' t (protocol o) : 
+                                                      cs1++cs2++cs3++cs4, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
       where assign _ (Var l (NoQ n)) r  = Assign l [PVar NoLoc n Nothing] r
             assign w (Index l e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
             assign w (Slice l e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
@@ -190,8 +197,9 @@ instance InfEnv Stmt where
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
-    infEnv env (Delete l tg)            = do (cs,t,w,tg') <- infTarget env tg
-                                             return (constr tg' t ++ cs, [], delete w tg')
+    infEnv env (Delete l tg)            = do (cs1,t,w,tg') <- infTarget env tg
+                                             cs2 <- targetFX tg
+                                             return (constr tg' t ++ cs1 ++ cs2, [], delete w tg')
       where delete _ (Var _ (NoQ n))    = Assign l [PVar NoLoc n Nothing] eNone
             delete w (Index _ e ix)     = Expr l $ eCall (eDot (eVar w) delitemKW) [e, ix]
             delete w (Slice _ e [sl])   = Expr l $ eCall (eDot (eVar w) delsliceKW) (e : sliz2args sl)
@@ -387,7 +395,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,sigs) <- checkAttributes [] te' te
-                                                 when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature"
+                                                 when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
                                                  when (initKW `elem` sigs) $ err2 (filter (==initKW) sigs) "A protocol cannot define __init__"
                                                  return (cs1, [(n, NProto q ps te)], Protocol l n q us (bindWits eq1 ++ b'))
                                              _ -> illegalRedef n
@@ -407,8 +415,8 @@ instance InfEnv Decl where
                                              (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                              checkNoEscape env (tybound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
-                                             when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols"
-                                             when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation"
+                                             when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
+                                             when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us (bindWits eq1 ++ b'))
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
@@ -419,9 +427,9 @@ instance InfEnv Decl where
 --------------------------------------------------------------------------------------------------------------------------
 
 checkAttributes final te' te
-  | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden"
-  | not $ null props                    = err2 props "Property attributes cannot have class-level definitions"
-  | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden"
+  | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden:"
+  | not $ null props                    = err2 props "Property attributes cannot have class-level definitions:"
+  | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden:"
   | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
   | otherwise                           = return (nterms, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
@@ -654,72 +662,93 @@ instance Check Decl where
     checkEnv' env x                     = do (cs,x') <- checkEnv env x
                                              return (cs, [x'])
 
+pruneStmts xs (Signature l ns t d : ss)
+  | null ns'                            = pruneStmts xs ss
+  | otherwise                           = Signature l ns' t d : pruneStmts xs ss
+  where ns'                             = ns `intersect` xs
+pruneStmts xs (Decl l ds : ss)
+  | null ds'                            = pruneStmts xs ss
+  | otherwise                           = Decl l ds' : pruneStmts xs ss
+  where ds'                             = filter ((`elem`xs) . dname) ds
+pruneStmts xs (s : ss)                  = s : pruneStmts xs ss
+pruneStmts xs []                        = []
+
+pruneDefs env n ss                      = pruneStmts xs ss
+  where xs                              = directAttrs env n
+
 protoClasses env n0 q ps eq wmap b      = mainClass : sibClasses
   where q1                              = Quant tvSelf' [] : noqual env q
         p0                              = TC (NoQ n0) $ map tVar $ tybound q
         t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
-        eq'                             = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
         main                            = [ convProto p | ([],p,_) <- ps ]         -- may be empty!
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
 
         mainClass                       = Class NoLoc n0 q1 main mainClassBody
-          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : map (convStmt eq') b
+          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts eq1 b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
-                mainInitBody            = bindWits eq ++ map (initCall (tcargs $ head main) mainArgs) main ++ mainCopies
+                mainInitBody            = bindWits eq0 ++ map (initCall (tcargs $ head main) mainArgs) main ++ mainCopies
                 mainArgs                = witArgs (map tcname main) wmap ++ [ eVar n | (n,_,True) <- immsibs ]
                 mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
+                eq0                     = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
+                eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
 
-        allsibs                         = [ (ws, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
+        allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
           where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) (tVar tvSelf' : tcargs p)
                 path ws inh             = if inh then tcname (head main) : ws else ws
 
-        sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws p wes inh) | (ws,p,wes,inh) <- allsibs ]
+        sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
 
-        sibClassBody ws p wes inh       = qsigs ++ psigs ++ Decl NoLoc [sibInit] : []
+        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts eq1 b)
           where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
                 sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,t0)]
-                sibInitBody             = bindWits eq ++ [initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p] ++ sibCopies
+                sibInitBody             = bindWits eq0 ++ [initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p] ++ sibCopies
                 sibCopies               = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') w0) (eVar w0) ]
                 sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',p',_) <- ps, truePrefix ws ws' ]
                 sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',p',_) <- ps, truePrefix ws ws' ]
                 sibCtxtArgs             = (if inh then id else init) [ eVar n | (n,t) <- sibCtxt ]
+                eq0                     = (tvarWit tvSelf p0, t0, eVar w0) : eq
+                eq1                     = (tvarWit tvSelf p0, t0, eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         qsigs                           = [ Signature NoLoc [qualAttr p v n0] (monotype $ impl2type (tVar v) p) Property | (v,p) <- quals env q ]
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
+        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
 
 extClasses env n1 n0 q ps eq wmap b     = mainClass : sibClasses
   where q1                              = noqual env q
         tvs                             = map tVar $ tybound q1
         t0                              = tCon (TC n0 (map tVar $ tybound q))
-        w0                              = witAttr (tcname $ head main)
-        eq'                             = (thisKW', tSelf, eVar selfKW') : eq
-        ts                              = tcargs (head main)
-        main                            = [ instProto t0 p | ([],p,_) <- ps ]       -- never empty!
+        w0                              = witAttr (tcname main)
+        ts                              = tcargs main
+        main                            = head [ instProto t0 p | ([],p,_) <- ps ]       -- never empty!
 
-        mainClass                       = Class NoLoc n1 q1 main mainClassBody
-          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : map (convStmt eq') b
+        mainClass                       = Class NoLoc n1 q1 [main] mainClassBody
+          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts eq1 b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
-                mainInitBody            = bindWits eq ++ map (initCall ts (witArgs (map tcname main) wmap ++ sibSubs [])) main ++ qcopies
+                mainInitBody            = bindWits eq0 ++ initCall ts (witArgs [tcname main] wmap ++ sibSubs []) main : qcopies
+                eq0                     = (thisKW', tCon main, eVar selfKW') : eq
+                eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
 
-        sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws p wes inh) | (ws,p,wes,inh) <- allsibs ]
-
-        allsibs                         = [ (ws, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
+        allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
           where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) ts
-                path ws inh             = if inh then tcname (head main) : ws else ws
+                path ws inh             = if inh then tcname main : ws else ws
 
-        sibClassBody ws p wes inh       = qsigs ++ Decl NoLoc [sibInit] : []
+        sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
+
+        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts eq1 b)
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
-                sibCtxt                 = witCtxt ps ws ++ [(w0,tCon $ head main)]
-                sibInitBody             = bindWits eq ++ [initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p] ++ qcopies
+                sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
+                sibInitBody             = bindWits eq0 ++ [initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p] ++ qcopies
+                eq0                     = (thisKW', tCon main, eVar  w0) : eq
+                eq1                     = (thisKW', tCon main, eDot (eVar selfKW') w0) : qcopies' ++ eq
 
         sibSubs ws                      = [ eCall (tApp (eVar $ sibName ws' n1) tvs) (qargs ++ eVar selfKW' : sibArgs ws) | (ws',p',inh) <- ps, truePrefix ws ws' ]
 
@@ -730,6 +759,7 @@ extClasses env n1 n0 q ps eq wmap b     = mainClass : sibClasses
         qpars                           = [ (tvarWit v p, impl2type (tVar v) p) | (v,p) <- quals env q ]
         qargs                           = [ eVar n | (n,p) <- qpars ]
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n1) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
+        qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n1) | (v,p) <- quals env q ]
 
 
 trim ps                                 = nubBy eqWit [ (catMaybes ws, p, head ws == Nothing) | (ws,p) <- ps ]
@@ -780,12 +810,14 @@ thisKW'                                 = Internal Witness "this" 0
 
 convSubst t                             = subst [(tvSelf, tVar tvSelf')] t
 
-convStmt eq (Signature l ns sc Static)  = Signature l ns (convSubst sc) NoDec
-convStmt eq (Signature l ns sc _)       = Signature l ns (convSubst $ convSchema sc) NoDec
-convStmt eq (Decl l ds)                 = Decl l (map (convDecl eq) ds)
-convStmt eq s                           = s
+convStmts eq stmts                      = map conv stmts
+  where conv (Signature l ns sc Static) = Signature l ns (convSubst sc) NoDec
+        conv (Signature l ns sc _)      = Signature l ns (convSubst $ convSchema sc) NoDec
+        conv (Decl l ds)                = Decl l (map (convDecl eq) ds)
+        conv s                          = s
 
-convDecl eq (Def l n q p k t b d x)     = Def l n (convSubst q) (wit2par [(selfKW',tSelf)] $ convSubst p) (convSubst k) (convSubst t) (bindWits eq ++ b) d x
+convDecl eq (Def l n q p k t b d x)     = Def l n (convSubst q) (wit2par [(selfKW',tSelf)] $ convSubst p) (convSubst k) (convSubst t) b' d x
+  where b'                              = bindWits eq ++ b
 convDecl eq d                           = d
 
 convSchema (TSchema l q t)              = TSchema l q (convT t)
@@ -884,6 +916,7 @@ refine env cs te eq
   | otherwise                           = do eq <- msubst eq
                                              traceM ("  #returning vs : " ++ prstrs gen_vs)
                                              traceM ("             cs : " ++ prstrs cs)
+                                             traceM ("             te : " ++ prstr te)
                                              return (gen_vs, cs, te, eq)
   where solve_vs                        = [ headvar c | c <- cs, mustSolve c ]
         collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
@@ -891,7 +924,7 @@ refine env cs te eq
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
-        gen_vs                          = nub (foldr union [] def_vss)
+        gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
         mustSolve c                     = not (canQual c) && not (mustCollapse c)
 

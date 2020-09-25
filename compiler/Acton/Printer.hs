@@ -96,23 +96,33 @@ instance Pretty (PosPar,KwdPar) where
 instance Pretty PosArg where
     pretty (PosArg e PosNil)        = pretty e
     pretty (PosArg e p)             = pretty e <> comma <+> pretty p
-    pretty (PosStar e@Var{})        = text "*" <> pretty e
-    pretty (PosStar e@Paren{})      = text "*" <> pretty e
-    pretty (PosStar e)              = text "*" <> parens (pretty e)
+    pretty (PosStar e)
+      | atomic e                    = text "*" <> pretty e
+      | otherwise                   = text "*" <> parens (pretty e)
     pretty PosNil                   = empty
 
 instance Pretty KwdArg where
     pretty (KwdArg n e KwdNil)      = pretty n <+> equals <+> pretty e
     pretty (KwdArg n e k)           = pretty n <+> equals <+> pretty e <> comma <+> pretty k
-    pretty (KwdStar e@Var{})        = text "**" <> pretty e
-    pretty (KwdStar e@Paren{})      = text "**" <> pretty e
-    pretty (KwdStar e)              = text "**" <> parens (pretty e)
+    pretty (KwdStar e)
+      | atomic e                    = text "**" <> pretty e
+      | otherwise                   = text "**" <> parens (pretty e)
     pretty KwdNil                   = empty
 
 instance Pretty (PosArg,KwdArg) where
     pretty (PosNil, ks)             = pretty ks
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
+
+atomic Await{}                      = False
+atomic Cond{}                       = False
+atomic BinOp{}                      = False
+atomic CompOp{}                     = False
+atomic UnOp{}                       = False
+atomic Lambda{}                     = False
+atomic Yield{}                      = False
+atomic YieldFrom{}                  = False
+atomic _                            = True
 
 instance Pretty Expr where
     pretty (Var _ n)                = pretty n
@@ -125,7 +135,9 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
-    pretty (Call _ e ps ks)         = pretty e <> parens (pretty (ps,ks))
+    pretty (Call _ e ps ks)
+      | atomic e                    = pretty e <> parens (pretty (ps,ks))
+      | otherwise                   = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
@@ -142,7 +154,7 @@ instance Pretty Expr where
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
-      | posArgLen ps == 1           = pretty ps <> comma
+      | singlePosArg ps             = pretty ps <> comma
     pretty (Tuple _ ps ks)          = pretty (ps,ks)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
@@ -252,7 +264,7 @@ instance Pretty (PosPat,KwdPat) where
 instance Pretty Pattern where
     pretty (PVar _ n a)             = pretty n <> prettyAnn a
     pretty (PTuple _ ps KwdPatNil)
-      | posPatLen ps == 1           = pretty ps <> comma
+      | singlePosPat ps             = pretty ps <> comma
     pretty (PTuple _ ps ks)         = pretty (ps, ks)
     pretty (PList _ ps p)           = brackets (prettyPats ps p)
     pretty (PParen _ p)             = parens (pretty p)

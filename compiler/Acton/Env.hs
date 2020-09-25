@@ -87,17 +87,58 @@ type WTCon                  = ([Maybe QName],TCon)
 instance Data.Binary.Binary NameInfo
 
 
-wmatch env (x,a)      (y,b)         = qmatch env x y && match a b
-  where match a@WClass{} b@WClass{} = qmatch env (tcname (proto a)) (tcname (proto b))
-        match a@WInst{}  b@WInst{}  = qmatch env (tcname (proto a)) (tcname (proto b))
-        match a          b          = False
+-- Equality modulo qualified/unqualified type names
 
-qmatch env a b                      = match (unalias env a) (unalias env b)
-  where match a@QName{}  b@QName{}  = mname a == mname b && noq a == noq b
-        match a@NoQ{}    b@NoQ{}    = noq a == noq b
-        match a@NoQ{}    b@QName{}  = defaultmod env == mname b && noq a == noq b
-        match a@QName{}  b@NoQ{}    = mname a == defaultmod env && noq a == noq b
+class QMatch a where
+    qmatch                          :: Env -> a -> a -> Bool
 
+instance QMatch [Type] where
+    qmatch env as bs                = and [ qmatch env a b | (a,b) <- as `zip` bs ]
+
+instance QMatch (QName,Witness) where
+    qmatch env (x,a) (y,b)          = qmatch env x y && m a b
+      where m a@WClass{} b@WClass{} = qmatch env (tcname (proto a)) (tcname (proto b))
+            m a@WInst{}  b@WInst{}  = qmatch env (tcname (proto a)) (tcname (proto b))
+            m a          b          = False
+
+instance QMatch QName where
+    qmatch env a b                  = m (unalias env a) (unalias env b)
+      where m a@QName{}  b@QName{}  = mname a == mname b && noq a == noq b
+            m a@NoQ{}    b@NoQ{}    = noq a == noq b
+            m a@NoQ{}    b@QName{}  = defaultmod env == mname b && noq a == noq b
+            m a@QName{}  b@NoQ{}    = mname a == defaultmod env && noq a == noq b
+
+instance QMatch TCon where
+    qmatch env (TC a ts) (TC b us)  = qmatch env a b && qmatch env ts us
+
+instance QMatch Type where
+    qmatch env (TVar _ v1) (TVar _ v2)                      = univar v1 || univar v2 || v1 == v2
+    qmatch env (TCon _ c1) (TCon _ c2)                      = qmatch env c1 c2
+    qmatch env (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)    = qmatch env e1 e2 && qmatch env p1 p2 && qmatch env r1 r2 && qmatch env t1 t2
+    qmatch env (TTuple _ p1 r1) (TTuple _ p2 r2)            = qmatch env p1 p2 && qmatch env r1 r2
+    qmatch env (TUnion _ u1) (TUnion _ u2)                  = qmatch env u1 u2
+    qmatch env (TOpt _ t1) (TOpt _ t2)                      = qmatch env t1 t2
+    qmatch env (TNone _) (TNone _)                          = True
+    qmatch env (TWild _) (TWild _)                          = True
+    qmatch env (TNil _ s1)  (TNil _ s2)                     = s1 == s2
+    qmatch env (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && qmatch env t1 t2 && qmatch env r1 r2
+    qmatch env (TFX _ fx1) (TFX _ fx2)                      = qmatch env fx1 fx2
+    qmatch env _ _                                          = False
+
+instance QMatch FX where
+    qmatch env FXPure FXPure        = True
+    qmatch env (FXMut a) (FXMut b)  = qmatch env a b
+    qmatch env (FXAct a) (FXAct b)  = qmatch env a b
+    qmatch env FXAction FXAction    = True
+    qmatch env _ _                  = False
+
+instance QMatch [UType] where
+    qmatch env as bs                = and [ any (qmatch env a) bs | a <- as ] && and [ any (qmatch env b) as | b <- bs ]
+
+instance QMatch UType where
+    qmatch env (UCon a) (UCon b)    = qmatch env a b
+    qmatch env (ULit a) (ULit b)    = a == b
+    qmatch env _ _                  = False
 
 instance Pretty (QName,Witness) where
     pretty (n, WClass q p w ws) = text "WClass" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty p) <+>
@@ -437,7 +478,7 @@ addWit                      :: Env -> (QName,Witness) -> Env
 addWit env cwit
   | exists                  = env
   | otherwise               = env{ witnesses = cwit : witnesses env }
-  where exists              = any (wmatch env cwit) (witnesses env)
+  where exists              = any (qmatch env cwit) (witnesses env)
 
 addMod                      :: ModName -> TEnv -> Env -> Env
 addMod m te env             = env{ modules = (m,te) : modules env }
@@ -560,17 +601,23 @@ isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
-findWitness                 :: Env -> QName -> (QName->Bool) -> Maybe Witness
-findWitness env cn f        = listToMaybe $ filter (f . tcname . proto) $ allWitnesses env cn
+findWitness                 :: Env -> QName -> (Witness->Bool) -> Maybe Witness
+findWitness env cn f        = listToMaybe $ filter f $ allWitnesses env cn
 
 allWitnesses                :: Env -> QName -> [Witness]
 allWitnesses env cn         = [ w | (c,w) <- witnesses env, qmatch env c cn ]
 
-hasWitness                  :: Env -> QName -> QName -> Bool
-hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn)
+implProto                   :: Env -> TCon -> Witness -> Bool
+implProto env p w           = case w of
+                                WClass{} -> qmatch env (tcname p) (tcname p')
+                                WInst{}  -> qmatch env p p'
+  where p'                  = proto w
 
-implProto                   :: Env -> TCon -> QName -> Bool
-implProto env p             = qmatch env (tcname p)
+hasAttr                     :: Env -> Name -> Witness -> Bool
+hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
+
+hasWitness                  :: Env -> QName -> QName -> Bool
+hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn . tcname . proto)
 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
@@ -605,6 +652,10 @@ commonAncestors             :: Env -> TCon -> TCon -> [TCon]
 commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
   where ns                  = map (tcname . snd) (findAncestry env c2)
 
+directAncestors             :: Env -> QName -> [QName]
+directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catMaybes ws ]
+  where (q,us,te)           = findConName qn env
+
 allAncestors                :: Env -> QName -> [QName]
 allAncestors env qn         = map (tcname . snd) us
   where (q,us,te)           = findConName qn env
@@ -632,12 +683,11 @@ conAttrs                    :: Env -> QName -> [Name]
 conAttrs env qn             = dom te
   where (_,_,te)            = findConName qn env
 
-hasAttr                     :: Env -> Name -> QName -> Bool
-hasAttr env n qn            = n `elem` conAttrs env qn
+directAttrs                 :: Env -> QName -> [Name]
+directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncestors env qn, let (_,_,te) = findConName qn' env ]
 
 allAttrs                    :: Env -> QName -> [Name]
 allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
-
 
 unfold env te               = map exp te
   where exp (n, NAlias qn)  = (n, findQName qn env)

@@ -110,7 +110,7 @@ reduce' env eq c@(Sel w (TCon _ tc) n _)
         witSearch                           = findWitness env (tcname tc) (hasAttr env n)
 
 reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
-                                            = do let e = eLambda [(x0,t1)] (eDot (eVar x0) n)
+                                            = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
                                                      cs' = [Cast r (kwdRow n t2 tWild)]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs'
 
@@ -137,9 +137,9 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
 reduce' env eq (Seal Nothing (TVar _ v1) (TVar _ v2) t1 t2)
   | v1 == v2                                = reduce env eq [Cast t1 t2]
 reduce' env eq (Seal (Just w) fx@(TVar _ v1) (TVar _ v2) t1 t2)
-  | v1 == v2                                = do let e = eCall (eVar x0) []
+  | v1 == v2                                = do let e = eCall (eVar px0) []
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) [Cast t1 t2]
-  where lambdaFX e                          = Lambda NoLoc (pospar [(x0,t)]) KwdNIL e fx
+  where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx
         t                                   = tFun fx posNil kwdNil t1
 reduce' env eq c@(Seal w TVar{} _ _ _)      = do defer [c]; return eq                               -- Defer until both effects
 reduce' env eq c@(Seal w _ TVar{} _ _)      = do defer [c]; return eq                               -- are instantiated
@@ -152,18 +152,18 @@ reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
                                                  reduce env eq cs
 reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
   | fx1 /= fxAction, fx2 == fxAction        = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
-                                                 let e = eCall (eQVar primASYNC) [eVar x0]          --   Wrap closure into an async message
+                                                 let e = eCall (eQVar primASYNC) [eVar px0]         --   Wrap closure into an async message
                                                      cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
-                                                 let e = eCall (eVar x0) []                         --   Call action closure right away
+                                                 let e = eCall (eVar px0) []                        --   Call action closure right away
                                                      cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   | otherwise                               = do traceM ("  #no sealing " ++ prstr w)               -- No sealing needed:
-                                                 let e = eCall (eVar x0) []                         --   Call closure right away
+                                                 let e = eCall (eVar px0) []                        --   Call closure right away
                                                      cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  where lambdaFX e                          = Lambda NoLoc (pospar [(x0,t)]) KwdNIL e fx1
+  where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx1
         t                                   = tFun fx1 posNil kwdNil t1
 
 reduce' env eq c                            = noRed c
@@ -171,7 +171,7 @@ reduce' env eq c                            = noRed c
 
 solveSelAttr env (wf,sc,_) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env sc
                                                  -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf $ eVar x0) n) tvs) $ witsOf cs1)
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs1)
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
 --                                                 traceM ("### solveSelAttr unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
 --                                                 unify env (subst [(tvSelf,t1)] t) t2
@@ -182,7 +182,7 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
                                                  (cs1,p,we) <- instWitness env ts wit
                                                  let Just (wf,sc,dec) = findAttr env p n
                                                  (cs2,tvs,t) <- instantiate env sc
-                                                 let e = eLambda [(x0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar x0])
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar px0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
 --                                                 traceM ("### solveSelWit unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
 --                                                 unify env (subst [(tvSelf,t1)] t) t2
@@ -366,8 +366,8 @@ sub env eq w t1 t2                          = do t1' <- msubst t1
 
 sub'                                        :: Env -> Equations -> Name -> Type -> Type ->TypeM Equations
 
-sub' env eq w t1@(TWild _) t2               = return (idwit w t1 t2 : eq)
-sub' env eq w t1 t2@(TWild _)               = return (idwit w t1 t2 : eq)
+sub' env eq w t1@TWild{} t2                 = return (idwit w t1 t2 : eq)
+sub' env eq w t1 t2@TWild{}                 = return (idwit w t1 t2 : eq)
 
 --                as declared               as called
 --                existing                  expected
@@ -377,11 +377,11 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  wk <- newWitness
                                                  wt <- newWitness
                                                  tv <- newTVar
-                                                 let e = eLambda [(x0,t1)] e'
-                                                     e' = Lambda l0 (PosSTAR x1 $ Just $ tTupleP p2) (KwdSTAR x2 $ Just $ tTupleK k2) e0 fx2
-                                                     e0 = eCall (eVar wx) [lambda0 fx1 $ eCall (eVar wt) [Call l0 (eVar x0) (PosStar e1) (KwdStar e2)]]
-                                                     e1 = Call l0 (eVar wp) (PosStar $ eVar x1) KwdNil
-                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar x2)
+                                                 let e = eLambda [(px0,t1)] e'
+                                                     e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
+                                                     e0 = eCall (eVar wx) [lambda0 fx1 $ eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]]
+                                                     e1 = Call l0 (eVar wp) (PosStar $ eVar px1) KwdNil
+                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar px2)
                                                      cs = [Seal (Just wx) fx1 fx2 t1' tv, Sub wp p2 p1, Sub wk k2 k1, Sub wt tv t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
@@ -391,9 +391,9 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
 sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                               -- TODO: implement pos/kwd argument shifting
                                             = do wp <- newWitness
                                                  wk <- newWitness
-                                                 let e = eLambda [(x0,t1)] (Paren l0 $ Tuple l0 (PosStar e1) (KwdStar e2))
-                                                     e1 = Call l0 (eVar wp) (PosStar $ eCall (eQVar primPosOf) [eVar x0]) KwdNil
-                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eCall (eQVar primKwdOf) [eVar x0])
+                                                 let e = eLambda [(px0,t1)] (Paren l0 $ Tuple l0 (PosStar e1) (KwdStar e2))
+                                                     e1 = Call l0 (eVar wp) (PosStar $ eCall (eQVar primPosOf) [eVar px0]) KwdNil
+                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eCall (eQVar primKwdOf) [eVar px0])
                                                      cs = [Sub wp p1 p2, Sub wk k1 k2]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
@@ -437,7 +437,7 @@ sub' env eq w t1@TTuple{} (TVar _ tv)
                                                  sub env eq w t1 t2
 
 sub' env eq w t1@(TVar _ tv1) t2@(TVar _ tv2)
-  | tv1 == tv2                              = return (idwit w t1 t2 : eq)
+  | tv1 == tv2                              = do return (idwit w t1 t2 : eq)
 
 sub' env eq w t1@(TVar _ tv) t2
   | univar tv                               = do defer [Sub w t1 t2]; return eq
@@ -858,7 +858,7 @@ findBoundAttrs env attrs bounds         = [ ((v,n),wsc) | (v,ns) <- Map.assocs a
   where bounds' v n                     = [ wsc | TCon _ c <- lookup' v bounds, Just wsc <- [findAttr env c n] ]
 
 findWitAttrs env attrs bounds           = [ ((v,n), WInst p (NoQ w) ws) | (v,ns) <- Map.assocs attrs, n <- ns, (w,p,ws) <- bounds' v n ]
-  where bounds' v n                     = [ (w,p,ws) | (w,p0) <- lookup' v bounds, (ws,p) <- findAncestry env p0, hasAttr env n (tcname p) ]
+  where bounds' v n                     = [ (w,p,ws) | (w,p0) <- lookup' v bounds, (ws,p) <- findAncestry env p0, n `elem` conAttrs env (tcname p) ]
 
 
 data Candidate                          = CProto QName
@@ -1024,7 +1024,7 @@ collapse env eq vs cs                   = col [] eq cs
           where eq' | Just w' <- w      = (w', wFun t t2, e) : eq
                     | otherwise         = eq
                 t                       = tFun fx1 posNil kwdNil t1
-                e                       = Lambda NoLoc (pospar [(x0,t)]) KwdNIL (eCall (eVar x0) []) fx2
+                e                       = Lambda NoLoc (pospar [(px0,t)]) KwdNIL (eCall (eVar px0) []) fx2
         col cs eq (c : cs')             = col (c : cs) eq cs'
 
 
@@ -1104,7 +1104,7 @@ defaultmap                              = Map.fromList [
 
 impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
-x0:x1:x2:_                              = xNames
+px0:px1:px2:_                           = xNames
 
 wit2row ws                              = \p -> foldr f p ws
   where f (w,t)                         = TRow NoLoc PRow w t
@@ -1144,16 +1144,21 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar pNames p, kPar kNames k)
         PosArg pSelf pArgs              = pArg p'                    
 
-idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(x0,t1)] (eVar x0))
+idwit w t1 t2
+  | kindOf t1 == PRow                   = (w, tFun fxPure t1 kwdNil (tTupleP t2), lambdaP)
+  | kindOf t1 == KRow                   = (w, tFun fxPure posNil t1 (tTupleK t2), lambdaK)
+  | otherwise                           = (w, wFun t1 t2, eLambda [(px0,t1)] (eVar px0))
+  where lambdaP                         = Lambda l0 (PosSTAR px0 (Just $ tTupleP t1)) KwdNIL (Paren l0 $ Tuple l0 (PosStar $ eVar px0) KwdNil) fxPure
+        lambdaK                         = Lambda l0 PosNIL (KwdSTAR px0 (Just $ tTupleK t1)) (Paren l0 $ Tuple l0 PosNil (KwdStar $ eVar px0)) fxPure
 
 rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTupleP r2)
 rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tTupleK r2)
 
-rowWit PRow w n t r wt wr               = Lambda l0 (PosPar x1 (Just t) Nothing $ PosSTAR x2 (Just $ tTupleP r)) KwdNIL eTup fxPure
-  where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar x2) KwdNil))) KwdNil
-        e1                              = eCall (eVar wt) [eVar x1]
-rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR x2 (Just $ tTupleK r)) eRec fxPure
-  where eRec                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar x2))))
+rowWit PRow w n t r wt wr               = Lambda l0 (PosPar px1 (Just t) Nothing $ PosSTAR px2 (Just $ tTupleP r)) KwdNIL eTup fxPure
+  where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar px2) KwdNil))) KwdNil
+        e1                              = eCall (eVar wt) [eVar px1]
+rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR px2 (Just $ tTupleK r)) eRec fxPure
+  where eRec                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar px2))))
         e1                              = eCall (eVar wt) [eVar n]
 
 
