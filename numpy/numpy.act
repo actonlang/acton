@@ -1,18 +1,31 @@
-class ndarray[A]:
-    shape   : list[int]
-    strides : list[int]
-    reshape : (list[int]) -> Self
-    ravel   : () -> Self
-    partition : (int,?int) -> Self  # Python version mutates array
+protocol Primitive[A]: pass
 
-nd_slice : (ndarray[A], list[?(int|slice)]) -> ndarray[A]
+class ndarray[A]: 
+    shape           : list[int]
+    strides         : list[int]
+    reshape         : (list[int]) -> Self
+    transpose       : (?list[int]) -> Self
+    flatten         : () -> Self
+#    __nd_getslice__ : (list[?(int|slice)]) -> Self
+    nd_iter         : Iterator[A]
 
-arange   : (?int,int,?int) -> ndarray[int]
-array    : (Sequence[A]) -> ndarray[A] 
-zeros    : [A (Number)] => (list[int]) -> ndarray[A]
-ones     : [A (Number)] => (list[int]) -> ndarray[A]
-linspace : (float, float, int) -> ndarray[float]
-clip     : [A (Ord)] => (ndarray[A],?ndarray[A],?ndarray[A]) -> ndarray[A]
 
-extension ndarray[A (Number)] (Number): pass
 
+partition           : [A (Primitive)]    => (ndarray[A],int,?int)   -> ndarray[A]
+clip                : [A (Primitive)]    => (ndarray[A],?A,?A)      -> ndarray[A]
+dot                 : [A (Primitive)]    => (ndarray[A],ndarray[A]) -> ndarray[A]
+sum                 : [A (Primitive)]    => (ndarray[A],?int)       -> ndarray[A]
+sort                : [A (Primitive)]    => (ndarray[A])            -> ndarray[A]
+abs                 : [A (Primitive)]    => (ndarray[A])            -> ndarray[A]
+    
+
+arange    : (?int,int,?int)-> ndarray[int]       
+linspace  : (float, float, int) -> ndarray[float]
+array     : [A (Primitive)] => (list[A])   -> ndarray[A]            
+
+extension ndarray[A (Primitive)] (Number): pass
+extension ndarray[A (Primitive)] (Real): pass
+extension ndarray[A (Primitive)] (Integral): pass
+
+extension int (Primitive): pass
+extension float (Primitive): pass
