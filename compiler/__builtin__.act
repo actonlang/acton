@@ -2,6 +2,8 @@
 
 class struct:
   __init__ : () -> None
+  __str__ : () -> str
+  __bool__ : () -> bool
 
 class object:
   pass
