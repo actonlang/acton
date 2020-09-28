@@ -160,6 +160,8 @@ data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (S
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
 
+data BasicSlice = BExpr Expr | BSlice Sliz
+
 data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq)
 data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,Generic)
 data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq)

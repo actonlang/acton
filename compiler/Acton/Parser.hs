@@ -941,20 +941,24 @@ atom_expr = do
 
         trailer :: Parser (SrcLoc,S.Expr -> S.Expr)
         trailer = withLoc (
-                      try (do
-                        ixs <- brackets indexlist
-                        let ix | length ixs > 1 = S.eTuple ixs
-                               | otherwise      = head ixs
-                        return (\a -> S.Index NoLoc a ix))
-                        <|>
                       (do
-                        ss <- brackets slicelist
-                        return (\a -> S.Slice NoLoc a ss))
-                        <|>
+                        ss <- brackets bslicelist
+                        return (\a -> splitlist a ss))
+                       
+                      -- try (do
+                      --   ixs <- brackets indexlist
+                      --   let ix | length ixs > 1 = S.eTuple ixs
+                      --          | otherwise      = head ixs
+                      --   return (\a -> S.Index NoLoc a ix))
+                      --   <|>
+                      -- (do
+                      --   ss <- brackets slicelist
+                      --   return (\a -> S.Slice NoLoc a ss))
+                     <|>
                       (do
-                        (ps,ks) <- parens funargs
-                        return (\a -> S.Call NoLoc a ps ks))
-                        <|>
+                         (ps,ks) <- parens funargs
+                         return (\a -> S.Call NoLoc a ps ks))
+                     <|>
                       (do
                          dot
                          intdot <|> iddot <|> strdot))
@@ -969,11 +973,26 @@ atom_expr = do
                  strdot = do
                         (p,str) <- withPos stringP 
                         return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
-                 indexlist = (:) <$> expr <*> commaList expr
-                 slicelist = (:) <$> slice <*> commaList slice
-                 slice = addLoc (do 
-                        mbt <- optional expr
-                        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)))
+
+                 bslicelist = (:) <$> bslice <*> commaList bslice
+                 tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))
+                 bslice :: Parser S.BasicSlice
+                 bslice =  S.BSlice . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
+                       <|> do e <- expr
+                              mbt <- optional tailslice
+                              return (maybe (S.BExpr e) (S.BSlice . uncurry (S.Sliz NoLoc (Just e))) mbt)
+                 splitlist a [S.BExpr e] = S.Index NoLoc a e
+                 splitlist a ss
+                     | all isBExpr ss       = S.Index NoLoc a (S.eTuple [e | S.BExpr e <- ss])
+                     | not (any isBExpr ss) = S.Slice NoLoc a [s | S.BSlice s <- ss]
+                     | otherwise            = error "ndarray basic slicing not yet implemented"
+                 isBExpr (S.BExpr _) =True; isBExpr _ = False
+                 -- indexlist = (:) <$> expr <*> commaList expr
+                 -- slicelist = (:) <$> slice <*> commaList slice
+                 -- slice = addLoc (do 
+                 --        mbt <- optional expr
+                 --        S.Sliz NoLoc mbt <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr)
+                        
                      
  
 comp_iter, comp_for, comp_if :: Parser S.Comp
