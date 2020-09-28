@@ -4,6 +4,8 @@ typedef void *$WORD;
 
 void $default__init__($WORD);
 
+void $printobj(char *mess,$WORD obj);
+
 
 #define $NEW($T, ...)       ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods; \
