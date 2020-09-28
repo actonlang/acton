@@ -380,8 +380,8 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                  let e = eLambda [(px0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
                                                      e0 = eCall (eVar wx) [lambda0 fx1 $ eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]]
-                                                     e1 = Call l0 (eVar wp) (PosStar $ eVar px1) KwdNil
-                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eVar px2)
+                                                     e1 = eCall (eVar wp) [eVar px1]
+                                                     e2 = eCall (eVar wk) [eVar px2]
                                                      cs = [Seal (Just wx) fx1 fx2 t1' tv, Sub wp p2 p1, Sub wk k2 k1, Sub wt tv t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
@@ -392,8 +392,8 @@ sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                           
                                             = do wp <- newWitness
                                                  wk <- newWitness
                                                  let e = eLambda [(px0,t1)] (Paren l0 $ Tuple l0 (PosStar e1) (KwdStar e2))
-                                                     e1 = Call l0 (eVar wp) (PosStar $ eCall (eQVar primPosOf) [eVar px0]) KwdNil
-                                                     e2 = Call l0 (eVar wk) PosNil (KwdStar $ eCall (eQVar primKwdOf) [eVar px0])
+                                                     e1 = eCall (eVar wp) [Paren l0 $ Tuple l0 (PosStar $ eVar px0) KwdNil]
+                                                     e2 = eCall (eVar wk) [Paren l0 $ Tuple l0 PosNil (KwdStar $ eVar px0)]
                                                      cs = [Sub wp p1 p2, Sub wk k1 k2]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
@@ -401,7 +401,7 @@ sub' env eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)                           
 -- (*(R1))->(*(R2)) or (**(R1))->(**(R2)), depending on the row kind
 
 sub' env eq w r1@(TNil _ k1) r2@(TNil _ k2)
-  | k1 == k2                                = return ((w, rowFun k1 r1 r2, eLambda [] (Paren l0 $ eTuple [])) : eq)
+  | k1 == k2                                = return (idwit w tUnit tUnit : eq)
 
 --          existing     expected                Match labels in the order of the expected row
 sub' env eq w r1     r2@(TRow _ k n t2 r2') = do (t1,r1') <- findElem k (tNil k) n r1 (rowTail r2)
@@ -1183,23 +1183,28 @@ app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosA
         (p',k')                         = (pPar pNames p, kPar kNames k)
         PosArg pSelf pArgs              = pArg p'                    
 
-idwit w t1 t2
-  | kindOf t1 == PRow                   = (w, tFun fxPure t1 kwdNil (tTupleP t2), lambdaP)
-  | kindOf t1 == KRow                   = (w, tFun fxPure posNil t1 (tTupleK t2), lambdaK)
-  | otherwise                           = (w, wFun t1 t2, eLambda [(px0,t1)] (eVar px0))
-  where lambdaP                         = Lambda l0 (PosSTAR px0 (Just $ tTupleP t1)) KwdNIL (Paren l0 $ Tuple l0 (PosStar $ eVar px0) KwdNil) fxPure
-        lambdaK                         = Lambda l0 PosNIL (KwdSTAR px0 (Just $ tTupleK t1)) (Paren l0 $ Tuple l0 PosNil (KwdStar $ eVar px0)) fxPure
+idwit w t1 t2                           = (w, wFun t1 t2, eLambda [(px0,t1)] (eVar px0))
 
-rowFun PRow r1 r2                       = tFun fxPure r1 kwdNil (tTupleP r2)
-rowFun KRow r1 r2                       = tFun fxPure posNil r1 (tTupleK r2)
+rowFun PRow r1 r2                       = tFun fxPure (posRow (tTupleP r1) posNil) kwdNil (tTupleP r2)
+rowFun KRow r1 r2                       = tFun fxPure (posRow (tTupleK r1) posNil) kwdNil (tTupleK r2)
 
+rowWit PRow w n t r wt wr               = eLambda [(px0,posRow t r)] eTup
+  where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar e2)) KwdNil
+        e1                              = eCall (eVar wt) [DotI l0 (eVar px0) 0]
+        e2                              = eCall (eVar wr) [RestI l0 (eVar px0) 0]
+rowWit KRow w n t r wt wr               = eLambda [(px0,kwdRow n t r)] eTup
+  where eTup                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar e2))
+        e1                              = eCall (eVar wt) [Dot l0 (eVar px0) n]
+        e2                              = eCall (eVar wr) [Rest l0 (eVar px0) n]
+
+{-
 rowWit PRow w n t r wt wr               = Lambda l0 (PosPar px1 (Just t) Nothing $ PosSTAR px2 (Just $ tTupleP r)) KwdNIL eTup fxPure
   where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar px2) KwdNil))) KwdNil
         e1                              = eCall (eVar wt) [eVar px1]
 rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR px2 (Just $ tTupleK r)) eRec fxPure
   where eRec                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar px2))))
         e1                              = eCall (eVar wt) [eVar n]
-
+-}
 
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
 

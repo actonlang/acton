@@ -262,6 +262,7 @@ tFun fx p k t   = TFun NoLoc fx p k t
 tTuple p k      = TTuple NoLoc p k
 tTupleP p       = TTuple NoLoc p kwdNil
 tTupleK k       = TTuple NoLoc posNil k
+tUnit           = tTuple posNil kwdNil
 tUnion ts       = TUnion NoLoc (sort ts)
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
