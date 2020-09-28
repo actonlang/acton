@@ -148,8 +148,9 @@ instance Pretty Expr where
     pretty (CompOp _ e ops)         = pretty e <+> hsep (map pretty ops)
     pretty (UnOp _ o e)             = pretty o <> pretty e
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
-    pretty (DotI _ e i False)       = pretty e <> dot <> pretty i
-    pretty (DotI _ e i True)        = pretty e <> dot <> pretty i <> text "*"
+    pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
+    pretty (DotI _ e i)             = pretty e <> dot <> pretty i
+    pretty (RestI _ e i)            = pretty e <> dot <> text "~" <> pretty i
     pretty (Lambda _ ps ks e fx)    = prettyFXnoWild fx <+> text "lambda" <+> prettyLambdaPar ps ks <> colon <+> pretty e
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e

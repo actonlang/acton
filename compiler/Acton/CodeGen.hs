@@ -135,8 +135,9 @@ instance Gen Expr where
     gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove
     gen env (UnOp _ o e)            = gen env o <> gen env e                                -- TODO: remove
     gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
-    gen env (DotI _ e i False)      = gen env e <> brackets (pretty i)
-    gen env (DotI _ e i True)       = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
+    gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
+    gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
+    gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (Yield _ e)             = text "yield" <+> gen env e
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)

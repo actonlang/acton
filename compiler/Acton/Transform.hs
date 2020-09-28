@@ -106,7 +106,9 @@ instance Transform Expr where
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)               = Dot l (trans env e) n
-    trans env (DotI l e i tl)           = DotI l (trans env e) i tl
+    trans env (Rest l e n)              = Rest l (trans env e) n
+    trans env (DotI l e i)              = DotI l (trans env e) i
+    trans env (RestI l e i)             = RestI l (trans env e) i
     trans env (Lambda l p k e fx)       = Lambda l (trans env1 p) (trans env1 k) (trans env2 e) fx
       where env1                        = blockscope (bound p ++ bound k) env
             env2                        = extsubst (psubst p ++ ksubst k) env1

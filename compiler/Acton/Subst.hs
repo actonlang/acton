@@ -325,7 +325,9 @@ instance Subst Expr where
     msubst (CompOp l e ops)         = CompOp l <$> msubst e <*> msubst ops
     msubst (UnOp l op e)            = UnOp l op <$> msubst e
     msubst (Dot l e n)              = Dot l <$> msubst e <*> return n
-    msubst (DotI l e i tl)          = DotI l <$> msubst e <*> return i <*> return tl
+    msubst (Rest l e n)             = Rest l <$> msubst e <*> return n
+    msubst (DotI l e i)             = DotI l <$> msubst e <*> return i
+    msubst (RestI l e i)            = RestI l <$> msubst e <*> return i
     msubst (Lambda l p k e fx)      = Lambda l <$> msubst p <*> msubst k <*> msubst e <*> msubst fx
     msubst (Yield l e)              = Yield l <$> msubst e
     msubst (YieldFrom l e)          = YieldFrom l <$> msubst e

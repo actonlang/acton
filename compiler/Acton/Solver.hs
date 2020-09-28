@@ -479,6 +479,36 @@ round : (Real, ?int) -> Real
 w(round)(3.14, None)                                                    w(round)(3.14, None)
 w : ((Real,?int)->Real) -> (float,None)->$1
 ----
+w = lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2)))                 = (lambda x: lambda *x1,**x2: wt(x(*wp(x1), **wk(x2))))(round)(3.14, None)          | x=round
+wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(x1), **wk(x2)))(3.14, None)                         | x1=(3.14,None), x2=()
+wp : ((float,None)) -> (Real,?int)                                      = wt(round(*wp((3.14,None)), **wk(())))
+wk : (()) -> ()
+----
+wt = lambda x: x                                                        = (lambda x: x)(round(*wp((3.14,None)), **wk(())))                                  | x=round(...)
+wp = lambda x: (w1(x.0), *w2(x.*1))                                     = round(*(lambda x: (w1(x.0), *w2(x.*1)))((3.14,None)), **wk(()))                   | x=(3.14, None)
+wk = lambda y: ()                                                       = round(*(w1(3.14), *w2((None,))), **((lambda y: ())()))                            | y=()
+w1 : (float) -> Real                                                    = round(*(w1(3.14), *w2((None,))), **())
+w2 : ((None,)) -> (?int,)
+----
+w1 = lambda x: PACK(Real$float, x)                                      = round(*((lambda x: PACK(Real$float, x))(3.14), *w2((None,))))                     | x=3.14
+w2 = lambda x: (w21(x.0), *w22(x.*1))                                   = round(*(PACK(Real$float, 3.14), *(lambda x: (w21(x.0), *w22(x.*1)))((None,))))    | x=(None,)
+w21 : (None) -> ?int                                                    = round(*(PACK(Real$float, 3.14), *(w21(None), *w22(()))))
+w22 : (()) -> ()
+----
+w21 = lambda x: x                                                       = round(*(PACK(Real$float, 3.14), *((lambda x: x)(None), *w22(()))))                | x=None
+w22 = lambda y: ()                                                      = round(*(PACK(Real$float, 3.14), *(None, *(lambda y: ())())))                      | y=()
+                                                                        = round(*(PACK(Real$float, 3.14), *(None, *())))
+                                                                        = round(*(PACK(Real$float, 3.14), *(None,)))
+                                                                        = round(*(PACK(Real$float, 3.14), None))
+                                                                        = round(PACK(Real$float, 3.14), None)
+
+
+
+round : (Real, ?int) -> Real
+----
+w(round)(3.14, None)                                                    w(round)(3.14, None)
+w : ((Real,?int)->Real) -> (float,None)->$1
+----
 w = lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2)))            = (lambda x0: lambda *x1,**x2: wt(x0(*wp(*x1), **wk(**x2))))(round)(3.14, None)     | x0=round
 wt : (Real) -> $1                                                       = lambda *x1,**x2: wt(round(*wp(*x1), **wk(**x2)))(3.14, None)                      | x1=(3.14,None), x2=()
 wp : (float,None) -> (Real,?int)                                        = wt(round(*wp(3.14,None), **wk()))
@@ -849,8 +879,9 @@ uClosed env (TNone _)                   = True
 uClosed env (TNil _ _)                  = True
 uClosed env _                           = False
 
+lClosed env (TUnion _ us)
+  | uniMax us                           = True
 lClosed env (TOpt _ _)                  = True
-lClosed env (TUnion _ _)                = True
 lClosed env (TNil _ _)                  = True
 lClosed env _                           = False
 
@@ -865,6 +896,8 @@ data Candidate                          = CProto QName
                                         | CCon QName
                                         | CVar TVar
                                         | CNone
+                                        | COpt
+                                        | CUnion [QName]
                                         | CFun
                                         | CTuple
                                         | CPure
@@ -877,29 +910,31 @@ instance Pretty Candidate where
     pretty (CProto n)                   = pretty n
     pretty (CCon n)                     = pretty n
     pretty (CVar v)                     = pretty v
+    pretty (CUnion ns)                  = pretty (tUnion (map UCon ns))
     pretty c                            = text (show c)
 
 allAbove env (TCon _ c@(TC n _))
---  | n' `elem` uniCons                   = map CCon (uniCons ++ allAncestors env n) ++ [CNone]
+  | n' `elem` uniCons                   = map CCon (n' : allAncestors env n) ++ allAbove env (tUnion [UCon n']) ++ [CNone]
   | otherwise                           = map CCon (n' : allAncestors env n) ++ [CNone]
   where n'                              = unalias env n
 allAbove env (TVar _ v) | not(univar v) = case findTVBound env v of Just c -> [CVar v, CCon (tcname c)]; _ -> [CVar v]
-allAbove env (TOpt _ t)                 = allAbove env t
-allAbove env (TNone _)                  = candidates env KType
+allAbove env (TOpt _ t)                 = [COpt]
+allAbove env (TNone _)                  = [CNone]
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
 allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
 allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
-allAbove env (TUnion _ us)              = (nub $ concat $ map uAbove us) ++ [CNone]
-  where uAbove (UCon n)                 = map CCon $ n : allAncestors env n
-        uAbove (ULit s)                 = map CCon $ qnStr : allAncestors env qnStr
+allAbove env (TUnion _ us)
+  | all uniLit us                       = CCon qnStr : map CUnion (uniAbove [UCon qnStr]) ++ [CNone]
+  | otherwise                           = map CUnion (uniAbove us) ++ [CNone]
 allAbove env _                          = []
+
 
 allBelow env (TCon _ (TC n _))          = map CCon (unalias env n : allDescendants env n)
 allBelow env (TVar _ v) | not(univar v) = [CVar v]
-allBelow env (TOpt _ t)                 = allBelow env t ++ [CNone]
+allBelow env (TOpt _ t)                 = COpt : allBelow env t ++ [CNone]
 allBelow env (TNone _)                  = [CNone]
 allBelow env (TFun _ _ _ _ _)           = [CFun]
 allBelow env (TTuple _ _ _)             = [CTuple]
@@ -907,19 +942,20 @@ allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
 allBelow env (TFX _ FXAction)           = [CAction]
-allBelow env (TUnion _ us)              = nub $ concat $ map uBelow us
-  where uBelow (UCon n)                 = map CCon $ n : allDescendants env n
-        uBelow (ULit s)                 = [CCon qnStr]
+allBelow env (TUnion _ us)              = map CUnion (uniBelow us) ++ [ CCon n | UCon n <- us ]
 allBelow env _                          = []
 
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
 protos env (CVar v)                     = map (tcname . proto) $ allWitnesses env (NoQ $ tvname v)
 protos env CNone                        = [qnIdentity,qnEq]
+protos env COpt                         = [qnIdentity,qnEq]
+protos env (CUnion _)                   = [qnEq]
 protos env _                            = []
 
 attrs env (CProto n)                    = allAttrs env n
 attrs env (CCon n)                      = allAttrs env n
 attrs env (CVar v)                      = maybe [] (allAttrs env . tcname) $ findTVBound env v
+attrs env (CUnion ns)                   = foldr1 intersect $ map (allAttrs env) ns
 attrs env _                             = []
 
 protoattrs env c                        = concat [ allAttrs env n | n <- protos env c ]
@@ -932,7 +968,7 @@ constrain env vs (Cast (TVar _ v) (TVar _ v'))
 constrain env vs (Cast (TVar _ v) t)
   | univar v                            = Map.adjust (intersect $ allBelow env t) v vs
 constrain env vs (Cast t (TVar _ v))    = Map.adjust (intersect $ allAbove env t) v vs
-constrain env vs (Sub w (TVar _ v) (TVar _ v'))
+constrain env vs c@(Sub w (TVar _ v) (TVar _ v'))
   | univar v && univar v'               = vs
 constrain env vs (Sub w (TVar _ v) t)
   | univar v                            = Map.adjust (intersect $ allBelow env t) v vs
@@ -951,7 +987,8 @@ constrain env vs (Seal w t (TVar _ v) _ _)
 constrain env vs _                      = vs
 
 
-candidates env KType                    = map CProto (allProtos env) ++ [CNone,CFun,CTuple] ++ map CCon (allCons env) ++ map CVar (allVars env KType)
+candidates env KType                    = map CProto (allProtos env) ++ [CNone,COpt,CFun,CTuple] ++ 
+                                          map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove [])
 candidates env KFX                      = [CPure,CMut,CAct,CAction] ++ map CVar (allVars env KFX)
 candidates env k                        = map CVar (allVars env k)
 
@@ -993,11 +1030,13 @@ solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs
         solved                          = [ (v, solution v) | v <- vs ]
         solution v                      = case lookup' v tvmap1 of
                                             [] -> err1 v ("Cannot solve " ++ prstrs cs ++ " for variable")
-                                            c:cs -> trace ("#### Candidates for " ++ prstr v ++ ": " ++ prstrs (c:cs)) $ mkres c        -- opts? unions?
+                                            c:cs -> trace ("#### Candidates for " ++ prstr v ++ ": " ++ prstrs (c:cs)) $ mkres c
         mkres (CProto n)                = Left $ mkcon n
         mkres (CCon n)                  = Right $ tCon $ mkcon n
         mkres (CVar v)                  = Right $ tVar v
         mkres CNone                     = Right $ tNone
+        mkres COpt                      = Right $ tOpt tWild
+        mkres (CUnion ns)               = Right $ tUnion (map UCon ns)
         mkres CFun                      = Right $ tFun tWild tWild tWild tWild
         mkres CTuple                    = Right $ tTuple tWild tWild
         mkres CPure                     = Right $ fxPure

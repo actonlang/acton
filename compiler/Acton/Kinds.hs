@@ -312,7 +312,9 @@ instance KCheck Expr where
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e 
     kchk env (Dot l e n)            = Dot l <$> kchk env e <*> return n
-    kchk env (DotI l e i tl)        = DotI l <$> kchk env e <*> return i <*> return tl
+    kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
+    kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
+    kchk env (RestI l e i)          = RestI l <$> kchk env e <*> return i
     kchk env (Lambda l p k e x)     = Lambda l <$> (kchk env =<< convTWild p) <*> (kchk env =<< convTWild k) <*> kchk env e <*> kexp KFX env x
     kchk env (Yield l e)            = Yield l <$> kchk env e
     kchk env (YieldFrom l e)        = YieldFrom l <$> kchk env e
@@ -617,7 +619,9 @@ instance KSubst Expr where
     ksubst g (CompOp l e ops)       = CompOp l <$> ksubst g e <*> ksubst g ops
     ksubst g (UnOp l op e)          = UnOp l op <$> ksubst g e 
     ksubst g (Dot l e n)            = Dot l <$> ksubst g e <*> return n
-    ksubst g (DotI l e i t)         = DotI l <$> ksubst g e <*> return i <*> return t
+    ksubst g (Rest l e n)           = Rest l <$> ksubst g e <*> return n
+    ksubst g (DotI l e i)           = DotI l <$> ksubst g e <*> return i
+    ksubst g (RestI l e i)           = RestI l <$> ksubst g e <*> return i
     ksubst g (Lambda l ps ks e fx)  = Lambda l <$> ksubst g ps <*> ksubst g ks <*> ksubst g e <*> ksubst g fx
     ksubst g (Yield l e)            = Yield l <$> ksubst g e
     ksubst g (YieldFrom l e)        = YieldFrom l <$> ksubst g e
