@@ -43,3 +43,6 @@ long from$int($int n);
 
 $int $int_fromatom($Super a);
 
+// only called with e>=0.
+long longpow(long a, long e); // used also for ndarrays
+

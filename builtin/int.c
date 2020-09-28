@@ -1,7 +1,7 @@
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
-static long longpow(long a, long e) {
+long longpow(long a, long e) {
   if (e == 0) return 1;
   if (e == 1) return a;
   if (e%2 == 0) return longpow(a*a,e/2);
@@ -75,7 +75,7 @@ $int $Integral$int$__fromatom__($Integral$int wit,$WORD w) {
 
 $complex $Integral$int$__complx__($Integral$int wit, $int a) {
   return to$complex((double)a->val);
-}
+                                                 }
 
 $int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
   return to$int(a->val * b->val);
