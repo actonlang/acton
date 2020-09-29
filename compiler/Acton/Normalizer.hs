@@ -48,19 +48,23 @@ extLocal vs env                     = env{ local = vs ++ local env }
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
-normPat env (PTuple _ pp kp)        = do v <- newName "tup"  -- *************** nothing done with kp!!!
-                                         return (pVar v Nothing,normPP v 0 pp)
-  where normPP v n (PosPat p pp)    = s : normPP v (n+1) pp
-          where s                   = Assign NoLoc [p] (DotI NoLoc (eQVar (QName (currentmod env) v)) n)
-        normPP v n (PosPatStar p)   = [Assign NoLoc [p] (RestI NoLoc (eQVar (QName (currentmod env) v)) n)]
+normPat env (PTuple _ pp kp)        = do v <- newName "tup"
+                                         ss <- norm env $ normPP v 0 pp ++ normKP v [] kp
+                                         return (pVar v Nothing, ss)
+  where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
+        normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
+        normKP v ns (KwdPat n p kp) = Assign NoLoc [p] (Dot NoLoc (eVar v) n) : normKP v (n:ns) kp
+        normKP v ns (KwdPatStar p)  = [Assign NoLoc [p] (foldl (Rest NoLoc) (eVar v) (reverse ns))]
+        normKP _ _ KwdPatNil        = []
 normPat env (PList _ ps pt)         = do v <- newName "lst"
-                                         return (pVar v Nothing, normList v 0 ps pt)
+                                         ss <- norm env $ normList v 0 ps pt
+                                         return (pVar v Nothing, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
-          where s                   = Assign NoLoc [p] (eCall (eDot (eVar (name "Indexed__??")) getitemKW)
-                                        [eQVar (QName (currentmod env) v), Int NoLoc n (show n)])
-        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eVar (name "Sliceable__??")) getsliceKW)
-                                        [eQVar (QName (currentmod env) v), Int NoLoc n (show n), None NoLoc, None NoLoc])]
+          where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
+                                        [eVar v, Int NoLoc n (show n)])
+        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
+                                        [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
         normList v n [] Nothing     = [] 
 
 normPat' env Nothing                = return (Nothing, [])
@@ -188,7 +192,7 @@ instance Norm Expr where
     norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
     norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
-    norm env (Rest l e nm)          = Dot l <$> norm env e <*> norm env nm
+    norm env (Rest l e nm)          = Rest l <$> norm env e <*> norm env nm
     norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> return i
     norm env (Lambda l ps ks e fx)  = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e <*> return fx
@@ -228,12 +232,7 @@ instance Norm ModName where
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQ n)                = case elem n (local env) of
-                                         True-> return $ NoQ n
-                                         False ->  case lookup n (global env) of
-                                                      Just (NAlias qn) -> return qn
-                                                      Just _  -> return $ QName (currentmod env) n
-                                                      Nothing -> return $ NoQ n
+    norm env (NoQ n)                = NoQ <$> norm env n
 
 instance Norm ModRef where
     norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn
