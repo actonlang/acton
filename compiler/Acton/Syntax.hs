@@ -43,8 +43,8 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show)
 
-data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::(Maybe Type), dbody::Suite, deco::Deco, dfx::TFX }
-                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite }
+data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite, deco::Deco, dfx::TFX }
+                | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, ann::Maybe Type, dbody::Suite }
                 | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite }
                 | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[TCon], dbody::Suite }
@@ -447,7 +447,7 @@ instance Eq Stmt where
 instance Eq Decl where
     Def _ n1 q1 p1 k1 a1 b1 m1 d1   ==  Def _ n2 q2 p2 k2 a2 b2 m2 d2 
                                                                     = n1==n2 && q1==q2 && p1==p2 && k1==k2 && a1==a2 && b1==b2 && d1==d2 && m1==m2
-    Actor _ n1 q1 p1 k1 b1          ==  Actor _ n2 q2 p2 k2 b2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2
+    Actor _ n1 q1 p1 k1 a1 b1       ==  Actor _ n2 q2 p2 k2 a2 b2   = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && a1 == a2 && b1 == b2
     Class _ n1 q1 a1 b1             ==  Class _ n2 q2 a2 b2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Protocol _ n1 q1 a1 b1          ==  Protocol _ n2 q2 a2 b2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2
     Extension _ n1 q1 a1 b1         ==  Extension _ n2 q2 a2 b2     = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2

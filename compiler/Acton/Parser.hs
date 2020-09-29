@@ -649,11 +649,12 @@ optbinds = brackets (do b <- qbind; bs <- many (comma *> qbind); return (b:bs))
 actordef = addLoc $ do 
                 assertTop
                 (s,_) <- withPos (rword "actor")
+                mbt <- optional (brackets $ addLoc $ S.TVar NoLoc <$> tvar)
                 nm <- name <?> "actor name"
                 q <- optbinds
                 (ppar,kpar) <- parens (funpars True)
                 ss <- suite ACTOR s
-                return $ S.Actor NoLoc nm q ppar kpar ss
+                return $ S.Actor NoLoc nm q ppar kpar mbt ss
 
 -- classdef: 'class' NAME ['(' [arglist] ')'] ':' suite
 -- protodef: 'class' NAME ['(' [arglist] ')'] ':' suite

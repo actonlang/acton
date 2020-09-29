@@ -69,7 +69,7 @@ extcons ke env                      = env { tcons = ke ++ tcons env }
 extvars vs env
   | not $ null clash                = Acton.Env.err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
   | not $ null dups                 = Acton.Env.err1 (head dups) "Duplicate type variable in binding:"
-  | otherwise                       = env { tvars = vs ++ tvars env }
+  | otherwise                       = return $ env { tvars = vs ++ tvars env }
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
 
@@ -114,6 +114,7 @@ instance (InstKWild a) => InstKWild [a] where
     instKWild                       = mapM instKWild
     
 instance InstKWild Decl where
+    instKWild d@Actor{}             = do q <- instKWild (qbinds d); a <- instKWild (ann d); return d{ qbinds = q, ann = a }
     instKWild d                     = do q <- instKWild (qbinds d); return d{ qbinds = q }
 
 instance InstKWild QBind where
@@ -125,6 +126,10 @@ instance InstKWild TSchema where
 instance InstKWild TVar where
     instKWild (TV KWild n)          = TV <$> newKVar <*> return n
     instKWild v                     = return v
+
+instance InstKWild (Maybe Type) where
+    instKWild (Just (TVar l v))     = Just <$> TVar l <$> instKWild v
+    instKWild x                     = return x
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -233,7 +238,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _)   = [(n,kind KType q)]
+  where kinds (Actor _ n q _ _ _ _) = [(n,kind KType q)]
         kinds (Class _ n q _ _)     = [(n,kind KType q)]
         kinds (Protocol _ n q _ _)  = [(n,kind KProto q)]
         kinds _                     = []
@@ -273,7 +278,7 @@ instance KCheck Decl where
                                          t <- convPExist env =<< convTWild t
                                          x <- convPExist env =<< convTWild x
                                          q' <- swapXVars tmp
-                                         let env1 = extvars (tybound (q++q')) env
+                                         env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
                                          p <- kchk env1 p
                                          k <- kchk env1 k
@@ -281,15 +286,16 @@ instance KCheck Decl where
                                          x <- kexp KFX env1 x
                                          b <- kchkSuite env1 b
                                          return $ Def l n q p k t b d x
-    kchk env (Actor l n q p k b)    = Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
-      where env1                    = extvars (tybound q) env
-    kchk env (Class l n q us b)     = Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Protocol l n q us b)  = Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
-    kchk env (Extension l n q us b) = do kexp KType env1 (TC n (map tVar $ tybound q))
+    kchk env (Actor l n q p k t b)  = do env0 <- extvars (maybe [] tyfree t) env
+                                         env1 <- extvars (tybound q) env0
+                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b
+    kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : tybound q) env
+                                         Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
+    kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : tybound q) env
+                                         Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+    kchk env (Extension l n q us b) = do env1 <- extvars (tvSelf : tybound q) env
+                                         kexp KType env1 (TC n (map tVar $ tybound q))
                                          Extension l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
-      where env1                    = extvars (tvSelf : tybound q) env
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -407,7 +413,7 @@ instance KCheck TSchema where
                                          q <- convPExist env q
                                          t <- convPExist env t
                                          q' <- swapXVars tmp
-                                         let env1 = extvars (tybound (q++q')) env
+                                         env1 <- extvars (tybound (q++q')) env
                                          q <- kchkQBinds env1 (q++q')
                                          t <- kexp KType env1 t
                                          return $ TSchema l q t
@@ -594,7 +600,7 @@ instance KSubst Stmt where
 
 instance KSubst Decl where
     ksubst g (Def l n q p k a b d x)= Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x
-    ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
+    ksubst g (Actor l n q p k a b)  = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b
     ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Extension l n q as b) = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b

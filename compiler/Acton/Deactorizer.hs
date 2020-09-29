@@ -91,7 +91,7 @@ instance Deact Stmt where
     deact env (Signature l ns t d)  = return $ Signature l ns t d
 
 instance Deact Decl where
-    deact env d@(Actor l n q p k b) = do inits <- deact env1 inits
+    deact env (Actor l n q p k a b) = do inits <- deact env1 inits
                                          decls <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tWild)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
