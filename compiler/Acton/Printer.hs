@@ -2,7 +2,7 @@
 module Acton.Printer (module Acton.Printer, module Pretty) where
 
 import Utils
-import Pretty
+import Pretty hiding (parensIf)
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Prim
@@ -136,17 +136,13 @@ instance Pretty Expr where
     pretty (Strings _ ss)           = hcat (map pretty ss)
     pretty (BStrings _ ss)          = hcat (map pretty ss)
     pretty (Call _ e ps ks)
-      | atomic e                    = pretty e <> parens (pretty (ps,ks))
-      | otherwise                   = parens (pretty e) <> parens (pretty (ps,ks))
+        | atomic e                  = pretty e <> parens (pretty (ps,ks))
+        | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
-    pretty (Cond _ e1 e e2)         = pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
-    pretty (BinOp _ e1 o e2)        = pretty e1 <+> pretty o <+> pretty e2
-    pretty (CompOp _ e ops)         = pretty e <+> hsep (map pretty ops)
-    pretty (UnOp _ o e)             = pretty o <> pretty e
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n
     pretty (Rest _ e n)             = pretty e <> dot <> text "~" <> pretty n
     pretty (DotI _ e i)             = pretty e <> dot <> pretty i
@@ -155,7 +151,7 @@ instance Pretty Expr where
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
-      | singlePosArg ps             = pretty ps <> comma
+        | singlePosArg ps           = pretty ps <> comma
     pretty (Tuple _ ps ks)          = pretty (ps,ks)
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
@@ -165,6 +161,45 @@ instance Pretty Expr where
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
     pretty (Paren _ e)              = parens (pretty e)
+    pretty e                        = prettyPrec 0 e  -- BinOp, CompOp, UnOp and Cond
+
+{-
+We assign precedences to operator expressions according to their main operator as follows.
+Python language reference does not assign numerical precedences, but the precedence order
+implied by the syntax rules is consistent with the values below, with one exception:
+Quote from section 6.5 in The Python Language Reference (v 3.8.6):
+    "The power operator binds more tightly than unary operators on its left; 
+     it binds less tightly than unary operators on its right."
+This design is the reason for the hack '&& n<12' in prettyPrec för UnOp's
+
+12 **
+11 (unary) + - ~
+10 * / // / @
+ 9 + -
+ 8 << >>
+ 7 &
+ 6 ^
+ 5 |
+ 4 < > <= >= == !=, is, is not, in, not in
+ 3 not
+ 2 and
+ 1 or
+ 0 _ if _ else _
+-}
+
+prettyPrec n e@(BinOp _ e1 op e2)   = parensIf (n > prc) ps
+     where prc                      = fromJust (lookup op bps)
+           bps                      = [(Or,1),(And,2),(Plus,9),(Minus,9),(Mult,10),(Pow,12),(Div,10),(Mod,10),
+                                       (EuDiv,10),(BOr,5),(BXor,6),(BAnd,7),(ShiftL,8),(ShiftR,8),(MMult,10)]
+           ps | op == Pow           = prettyPrec (prc+1) e1 <+> pretty op <+> prettyPrec prc e2
+              | otherwise           = prettyPrec prc e1 <+> pretty op <+> prettyPrec (prc+1) e2
+prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ pretty e <+> hsep (map pretty ops)
+prettyPrec n e1@(UnOp _ op e)       = parensIf (n > prc && n < 12) $ pretty op <> prettyPrec prc e
+   where prc                        = if op == Not then 3 else 11
+prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
+prettyPrec _ e                      = pretty e
+
+parensIf b e                        = if b then parens e else e
 
 prettyLambdaPar ps ks
   | annotP ps || annotK ks          = parens (pretty (ps,ks))
