@@ -53,7 +53,7 @@ instance TypeOf Expr where
     typeOf env (Strings _ ss)       = tStr
     typeOf env (BStrings _ ss)      = tBytes
     typeOf env (Call _ e ps ks)     = case typeOf env e of
-                                        TFun _ fx p k t -> t
+                                        TFun _ fx p k t -> if fx == fxAction then tMsg t else t
     typeOf env (TApp _ e ts)        = case schemaOf env e of
                                         TSchema _ q t | length q == length ts ->
                                             subst (tybound q `zip` ts) t
