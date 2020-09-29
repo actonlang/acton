@@ -294,7 +294,7 @@ instance CPS Decl where
     cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env1 b
       where env1                        = emptyCtxt env
 
-    cps env (Actor l n q p k b)         = Actor l n q (addContParam p) k <$> cpsSuite env1 b
+    cps env (Actor l n q p k a b)       = Actor l n q (addContParam p) k a <$> cpsSuite env1 b
       where env1                        = Meth contKW +: env { ctxt = [Act] }
 
     cps env (Def l n q p k a b d m)
@@ -420,7 +420,7 @@ instance PreCPS Stmt where
     pre env s                           = return s
 
 instance PreCPS Decl where
-    pre env (Actor l n q ps ks b)       = Actor l n q <$> pre env ps <*> pre env ks <*> return b
+    pre env (Actor l n q ps ks ann b)   = Actor l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b
     pre env (Def l n q ps ks ann b d m) = Def l n q <$> pre env ps <*> pre env ks <*> return ann <*> return b <*> return d <*> return m
     pre env d                           = return d
     

@@ -34,9 +34,9 @@ instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
 wtrans env (Assign l p@[PVar _ n _] e : ss)
-  | Lambda{} <- e                       = wtrans (extsubst [(n,e)] env) ss
-  | Var{} <- e                          = wtrans (extsubst [(n,e)] env) ss
-  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e)] env) ss
+  | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
+  | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
+  | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e1)] env) ss
   | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
   | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n e1 env) ss
   where hits                            = [ eVar n' | (n',e') <- witscope env, e' == e1 ]
@@ -75,7 +75,7 @@ instance Transform Stmt where
 instance Transform Decl where
     trans env (Def l n q p k t b d fx)  = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx
       where env1                        = blockscope (bound q ++ bound p ++ bound k) env
-    trans env (Actor l n q p k b)       = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b)
+    trans env (Actor l n q p k t b)     = Actor l n q (trans env1 p) (trans env1 k) t (wtrans env1 b)
       where env1                        = blockscope (bound q ++ bound p ++ bound k) env
     trans env (Class l n q us b)        = Class l n q us (wtrans env1 b)
       where env1                        = blockscope (bound q) env
@@ -88,7 +88,7 @@ instance Transform Expr where
     trans env (Var l (NoQ n))
       | Just e <- trfind n env          = trans (blockscope [n] env) e
 
-    trans env (Call l e p k)
+    trans env e0@(Call l e p k)
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
@@ -105,16 +105,43 @@ instance Transform Expr where
     trans env (BinOp l e1 op e2)        = BinOp l (trans env e1) op (trans env e2)
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
-    trans env (Dot l e n)               = Dot l (trans env e) n
-    trans env (Rest l e n)              = Rest l (trans env e) n
-    trans env (DotI l e i)              = DotI l (trans env e) i
-    trans env (RestI l e i)             = RestI l (trans env e) i
+    trans env (Dot l e n)
+      | Tuple{} <- e'                   = trans env (kwdarg n $ kargs e')
+      | otherwise                       = Dot l e' n
+      where e'                          = trans env e
+    trans env (Rest l e n)
+      | Tuple{} <- e'                   = Tuple NoLoc PosNil (kwdrest n $ kargs e')
+      | otherwise                       = Rest l e' n
+      where e'                          = trans env e
+    trans env (DotI l e i)
+      | Tuple{} <- e'                   = trans env (posarg i $ pargs e')
+      | otherwise                       = DotI l e' i
+      where e'                          = trans env e
+    trans env (RestI l e i)
+      | Tuple{} <- e'                   = Tuple NoLoc (posrest i $ pargs e') KwdNil
+      | otherwise                       = RestI l e' i
+      where e'                          = trans env e
     trans env (Lambda l p k e fx)       = Lambda l (trans env1 p) (trans env1 k) (trans env2 e) fx
       where env1                        = blockscope (bound p ++ bound k) env
             env2                        = extsubst (psubst p ++ ksubst k) env1
     trans env (Yield l e)               = Yield l (trans env e)
     trans env (YieldFrom l e)           = YieldFrom l (trans env e)
-    trans env (Tuple l ps ks)           = Tuple l (trans env ps) (trans env ks)
+    trans env e@(Tuple l p k)
+      | PosStar x <- p',
+        KwdStar y <- k',
+        x == y                          = x
+      | PosArg (DotI _ x 0) r <- p',
+        PosStar (RestI _ y 0) <- r,
+        KwdNil <- k',
+        x == y                          = x
+      | KwdArg n (Dot _ x a) r <- k',
+        KwdStar (Rest _ y b) <- r,
+        PosNil <- p',
+        n == a, n == b, x == y          = x
+      | otherwise                       = Tuple l p' k'
+      where p'                          = trans env p
+            k'                          = trans env k
+            e'                          = Tuple l p' k'
     trans env (List l es)               = List l (trans env es)
     trans env (ListComp l e c)          = ListComp l (trans env1 e) (trans env1 c)
       where env1                        = blockscope (bound c) env
@@ -124,7 +151,8 @@ instance Transform Expr where
     trans env (Set l es)                = Set l (trans env es)
     trans env (SetComp l e c)           = SetComp l (trans env1 e) (trans env1 c)
       where env1                        = blockscope (bound c) env
-    trans env (Paren l e)               = Paren l (trans env e)
+--    trans env (Paren l e)               = Paren l (trans env e)
+    trans env (Paren l e)               = trans env e
     trans env e                         = e
 
 pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
@@ -136,6 +164,18 @@ kzip (KwdPar n _ _ k) (KwdArg _ e a)    = do k' <- kzip k a; return $ (n, e) : k
 kzip (KwdSTAR n _) a                    = Just [(n, Tuple NoLoc PosNil a)]
 kzip KwdNIL _                           = Just []
 kzip _ _                                = Nothing
+
+posarg 0 (PosArg e _)                   = e
+posarg i (PosArg _ p)                   = posarg (i-1) p
+
+kwdarg n (KwdArg n' e _) | n == n'      = e
+kwdarg n (KwdArg _ _ k)                 = kwdarg n k
+
+posrest 0 (PosArg _ p)                  = p
+posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)
+
+kwdrest n (KwdArg n' e k) | n == n'     = k
+kwdrest n (KwdArg n' e k)               = KwdArg n' e (kwdrest n k)
 
 
 instance Transform Exception where

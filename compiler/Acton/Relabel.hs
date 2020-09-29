@@ -59,7 +59,8 @@ instance Relabel Stmt where
 instance Relabel Decl where
     relabel (Def _ n q ps ks ann ss dec fx) = Def <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> 
                                             relabel ann <*> relabel ss <*> return dec <*> return fx
-    relabel (Actor _ n q ps ks b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> relabel b
+    relabel (Actor _ n q ps ks ann b) = Actor <$> newLoc <*> relabel n <*> relabel q <*> relabel ps <*> relabel ks <*> 
+                                            relabel ann <*> relabel b
     relabel (Class _ n q as ss) = Class <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Protocol _ n q as ss) = Protocol <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
     relabel (Extension _ n q as ss) = Extension <$> newLoc <*> relabel n <*> relabel q <*> relabel as <*> relabel ss
