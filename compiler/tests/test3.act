@@ -6,6 +6,7 @@ actor Apa():
 #        b.meth()
         b.methods[0]()
 #        b.bepa()
+        return 23
 
 actor Bepa():
     var w = 0
@@ -16,3 +17,6 @@ actor Bepa():
     methods = []
 #    meth : action() -> None
     meth = bepa
+    def cepa():
+        a = Apa()
+        x = await a.m()
