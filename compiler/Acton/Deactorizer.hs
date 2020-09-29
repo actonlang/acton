@@ -29,9 +29,9 @@ withStore m                         = do ss0 <- swapStore []
                                          ss1 <- swapStore ss0
                                          return (r, ss1)
 
-data DeactEnv                       = DeactEnv { main :: Env, actions :: [Name], locals :: [Name] }
+data DeactEnv                       = DeactEnv { main :: Env, actions :: [Name], locals :: [Name], stvar :: Maybe Type }
 
-deactEnv mainenv                    = DeactEnv { main = mainenv, actions = [], locals = [] }
+deactEnv mainenv                    = DeactEnv { main = mainenv, actions = [], locals = [], stvar = Nothing }
 
 extend te env                       = env{ main = define te (main env),
                                            actions = actions env \\ ns,
@@ -40,8 +40,12 @@ extend te env                       = env{ main = define te (main env),
 
 extendTVars q env                   = env{ main = defineTVars q (main env) }
 
-setActor actions locals env         = env{ actions = actions, locals = locals }
+setActor st actions locals env      = env{ actions = actions, locals = locals, stvar = Just st }
 
+setSt (TFX _ (FXAct st)) env        = env{ stvar = Just st }
+setSt _ env                         = env
+
+actorSt env                         = fromJust (stvar env)
 
 class Deact a where
     deact                           :: DeactEnv -> a -> DeactM a
@@ -83,19 +87,21 @@ instance Deact Stmt where
                                     = MutAssign l (selfRef n) <$> deact env e
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
-                                         let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct tWild)
+                                         let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct $ actorSt env)
                                          return $ Expr l $ Call l0 (tApp (eQVar primAFTER) ts) (PosArg e1' $ PosArg lambda PosNil) KwdNil
-      where ts                      = []                                                                                                            -- TODO: supply type args
+      where ts                      = [actorSt env, typeOf (main env) e2]
     deact env (Decl l ds)           = Decl l <$> deact env1 ds
       where env1                    = extend (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
 
 instance Deact Decl where
-    deact env (Actor l n q p k a b) = do inits <- deact env1 inits
+    deact env (Actor l n q p k (Just st) b) 
+                                    = do inits <- deact env1 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tWild)
+                                         let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct st)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
-      where env1                    = setActor actions locals $ extend (envOf p ++ envOf k) $ extendTVars q env
+      where env1                    = setActor st actions locals $ extend (envOf p ++ envOf k) $ extendTVars q env
+            env2                    = extend (envOf decls) env1
 
             (decls,ss)              = partition isDecl b
             meths                   = bound decls
@@ -120,12 +126,11 @@ instance Deact Decl where
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- params ]
 
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
-            deactMeths s            = deact env1 s
 
             deactMeth (Def l n q p k t b d fx)
-                                    = do b <- deact env2 b
+                                    = do b <- deact env' b
                                          return $ Def l n' q (addSelf p) k t b d fx
-              where env2            = extend (envOf p ++ envOf k) env1
+              where env'            = extend (envOf p ++ envOf k) env2
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p k (Just t) b d fx)
@@ -135,12 +140,12 @@ instance Deact Decl where
                     self            = Var l0 (NoQ selfKW)
                     clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (parToArg p) KwdNil) fx
                     ts              = map tVar (tybound q)
-                    ts'             = []                                                                                                        -- TODO: supply type args
+                    ts'             = [st, t]
 
     deact env (Def l n q p k t b d fx)
-                                    = do b <- deact env b
+                                    = do b <- deact env1 b
                                          return $ Def l n q p k t b d fx
-      where env1                    = extend (envOf p ++ envOf k) $ extendTVars q env
+      where env1                    = extend (envOf p ++ envOf k) $ extendTVars q $ setSt fx env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
       where env1                    = extendTVars q env
     deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
@@ -171,7 +176,7 @@ instance Deact Expr where
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (tApp (eQVar primAWAIT) ts) (PosArg e' PosNil) KwdNil
       where TCon _ msg              = typeOf (main env) e
-            ts                      = [] ++ tcargs msg                                                                                          -- TODO: supply the type args
+            ts                      = actorSt env : tcargs msg
     deact env (Int l i s)           = return $ Int l i s
     deact env (Float l f s)         = return $ Float l f s
     deact env (Imaginary l i s)     = return $ Imaginary l i s
