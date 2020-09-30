@@ -8,10 +8,10 @@ import Acton.Builtin
 import Utils
 
 class SchemaOf a where
-    schemaOf                        :: Env -> a -> TSchema
+    schemaOf                        :: EnvF x -> a -> TSchema
 
 class TypeOf a where
-    typeOf                          :: Env -> a -> Type
+    typeOf                          :: EnvF x -> a -> Type
 
 class EnvOf a where
     envOf                           :: a -> TEnv

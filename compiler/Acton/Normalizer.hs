@@ -9,7 +9,7 @@ import Utils
 import Control.Monad.State.Lazy
 import Debug.Trace
 
-normalize                           :: (TEnv,Env) -> Module -> IO Module
+normalize                           :: (TEnv,Env0) -> Module -> IO Module
 normalize (te,env0) m               = return $ evalState (norm env m) 0
   where env                         = normEnv (te,env0)
 
@@ -36,7 +36,7 @@ newName s                           = do n <- get
                                          return $ Internal NormPass s n
 
                                     -- builtin names are last in global; local names are first in local
-data NormEnv                        = NormEnv {global :: TEnv, local :: [Name]} deriving Show
+data NormEnv                        = NormEnv { global :: TEnv, local :: [Name] } deriving Show
 
 normEnv (te,env)                    = NormEnv (te ++ names env) []
 

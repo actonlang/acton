@@ -15,10 +15,11 @@ import Acton.TypeM
 import qualified InterfaceFiles
 import qualified Data.Map
 
-reconstruct                             :: String -> Env -> Module -> IO (TEnv, Module)
-reconstruct fname env (Module m imp ss) = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
-                                             return (map simpSig te, Module m imp ss1)
-  where env1                            = reserve (bound ss) env
+reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module)
+reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
+                                             return (map simpSig te, Module m i ss1)
+  where env                             = setX env0 typeX0
+        env1                            = reserve (bound ss) env
         (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te env
 

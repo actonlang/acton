@@ -12,7 +12,7 @@ import Acton.Printer
 import Acton.Prim
 import Prelude hiding ((<>))
 
-generate                            :: Acton.Env.Env -> Module -> IO String
+generate                            :: Acton.Env.Env0 -> Module -> IO String
 generate env m                      = return $ render $ gen (genEnv env (modname m)) m
 
 class Gen a where
