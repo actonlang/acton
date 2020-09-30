@@ -12,24 +12,23 @@ import Acton.Solver
 import Acton.Subst
 import Acton.Transform
 import Acton.TypeM
+import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module)
 reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
                                              return (map simpSig te, Module m i ss1)
-  where env                             = setX env0 typeX0
-        env1                            = reserve (bound ss) env
+  where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
-        env2                            = define te env
+        env2                            = define te env1
 
 solverError                             = typeError
 
-
 nodup x
-  | not $ null vs                       = err2 vs "Duplicate names:"
-  | otherwise                           = True
-  where vs                              = duplicates (bound x)
+  | not $ null vs               = err2 vs "Duplicate names:"
+  | otherwise                   = True
+  where vs                      = duplicates (bound x)
 
 
 simpSchema (TSchema l q t)      = TSchema l (subst s [ Quant v ps | Quant v ps <- q2, not $ null ps ]) (subst s t)

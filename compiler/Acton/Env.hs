@@ -15,7 +15,6 @@ import Acton.Builtin
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
-import Acton.TypeM
 import Utils
 import Pretty
 import InterfaceFiles
@@ -26,10 +25,6 @@ import Prelude hiding ((<>))
 
 mkEnv                       :: (FilePath,FilePath) -> Env0 -> [Import] -> IO Env0
 mkEnv paths env imports     = getImps paths env imports
-
-typeX0                      = TypeX { actorstate = Nothing,
-                                      context = CtxTop,
-                                      indecl = False }
 
 
 type Schemas                = [(Name, TSchema)]
@@ -50,15 +45,6 @@ setX env x                  = EnvF { names = names env, modules = modules env, w
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
-
-data TypeX                  = TypeX {
-                                actorstate :: Maybe Type,
-                                context    :: EnvCtx,
-                                indecl     :: Bool }
-
-type Env                    = EnvF TypeX
-
-data EnvCtx                 = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
 
 {-  TEnv principles:
     -   A TEnv is an association of NameInfo details to a list of names.
@@ -206,14 +192,6 @@ instance Pretty WTCon where
     pretty (ws,u)               = dotCat prettyW ws <+> colon <+> pretty u
       where prettyW Nothing     = text "_"
             prettyW (Just n)    = pretty n
-
-instance Pretty TypeX where
-    pretty _                    = empty
-
-instance Subst TypeX where
-    msubst x                    = do as <- msubst (actorstate x)
-                                     return x{ actorstate = as }
-    tyfree x                    = tyfree (actorstate x)
 
 instance (Subst x) => Subst (EnvF x) where
     msubst env                  = do ne <- msubst (names env)
@@ -450,7 +428,7 @@ nSchemas ((n,NVar t):te)    = (n, monotype t) : nSchemas te
 nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
 nSchemas (_:te)             = nSchemas te
 
-parentTEnv                  :: Env -> [WTCon] -> TEnv
+parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
 parentTEnv env us           = concatMap (snd . findCon env . snd) us
 
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
@@ -493,22 +471,6 @@ initEnv nobuiltin           = if nobuiltin
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
-
-setActorFX                  :: Type -> Env -> Env
-setActorFX st env           = modX env $ \x -> x{ actorstate = Just st }
-
-
-maybeSetActorFX             :: Type -> Env -> Env
-maybeSetActorFX st env      = maybe (setActorFX st env) (const env) (actorstate $ envX env)       -- Only set if not already present
-
-setInAct                    :: Env -> Env
-setInAct env                = modX env $ \x -> x{ context = CtxAct }
-
-setInClass                  :: Env -> Env
-setInClass env              = modX env $ \x -> x{ context = CtxClass }
-
-setInDecl                   :: Env -> Env
-setInDecl env               = modX env $ \x -> x{ indecl = True }
 
 addWit                      :: EnvF x -> (QName,Witness) -> EnvF x
 addWit env cwit
@@ -560,23 +522,6 @@ defineMod m te env          = define [(n, defmod ns $ te1)] env
 
 inBuiltin                   :: EnvF x -> Bool
 inBuiltin env               = null $ modules env
-
-actorFX                     :: Env -> SrcLoc -> Type
-actorFX env l               = case actorstate (envX env) of
-                                Just st -> fxAct st
-                                Nothing -> err l "Actor scope expected"
-
-onTop                       :: Env -> Bool
-onTop env                   = context (envX env) == CtxTop
-
-inAct                       :: Env -> Bool
-inAct env                   = context (envX env) == CtxAct
-
-inClass                     :: Env -> Bool
-inClass env                 = context (envX env) == CtxClass
-
-inDecl                      :: Env -> Bool
-inDecl env                  = indecl $ envX env
 
 stateScope                  :: EnvF x -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
@@ -761,52 +706,6 @@ tvarWit                     :: TVar -> TCon -> Name
 tvarWit tv p                = Derived (name "w") $ Derived (deriveQ $ tcname p) (tvname tv)
 
 
--- Well-formed tycon applications -------------------------------------------------------------------------------------------------
-
-class WellFormed a where
-    wf                      :: EnvF x -> a -> Constraints
-
-instance (WellFormed a) => WellFormed (Maybe a) where
-    wf env                  = maybe [] (wf env)
-
-instance (WellFormed a) => WellFormed [a] where
-    wf env                  = concatMap (wf env)
-
-instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
-    wf env (a,b)            = wf env a ++ wf env b
-
-instance WellFormed TCon where
-    wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
-      where q               = case findQName n env of
-                                NAct q p k te  -> q
-                                NClass q us te -> q
-                                NProto q us te -> q
-                                NReserved -> nameReserved n
-                                i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
-            s               = tybound q `zip` ts
-            constr u t      = if isProto env (tcname u) then Impl (name "_") t u else Cast t (tCon u)
-
-wfProto                     :: Env -> TCon -> TypeM (Constraints, Constraints)
-wfProto env (TC n ts)       = do cs <- instQuals env q ts
-                                 return (wf env ts, cs)
-  where q                   = case findQName n env of
-                                NProto q us te -> q
-                                NReserved -> nameReserved n
-                                i -> err1 n ("wfProto: Protocol name expected, got " ++ show i)
-            
-instance WellFormed Type where
-    wf env (TCon _ tc)      = wf env tc
-    wf env (TFun _ x p k t) = wf env x ++ wf env p ++ wf env p ++ wf env k ++ wf env t
-    wf env (TTuple _ p k)   = wf env p ++ wf env k
-    wf env (TOpt _ t)       = wf env t
-    wf env (TRow _ _ _ t r) = wf env t ++ wf env r
-    wf env _                = []
-
-
-instance WellFormed QBind where
-    wf env (Quant v us)     = wf env us
-
-
 -- Method resolution order ------------------------------------------------------------------------------------------------------
 
 mro2                                    :: EnvF x -> [TCon] -> ([WTCon],[WTCon])
@@ -845,34 +744,6 @@ mro env us                              = merge [] $ map lin us' ++ [us']
     absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
 
 
-
--- Instantiation -------------------------------------------------------------------------------------------------------------------
-
-instantiate                 :: EnvF x -> TSchema -> TypeM (Constraints, [Type], Type)
-instantiate env (TSchema _ q t)
-                            = do (cs, tvs) <- instQBinds env q
-                                 let s = tybound q `zip` tvs
-                                 return (cs, tvs, subst s t)
-
-instQBinds                  :: EnvF x -> QBinds -> TypeM (Constraints, [Type])
-instQBinds env q            = do ts <- newTVars [ tvkind v | Quant v _ <- q ]
-                                 cs <- instQuals env q ts
-                                 return (cs, ts)
-
-instWitness                 :: EnvF x -> [Type] -> Witness -> TypeM (Constraints,TCon,Expr)        -- witnesses of cs already applied in e!
-instWitness env ts wit      = case wit of
-                                 WClass q p w ws -> do
-                                    cs <- instQuals env q ts
-                                    return (cs, subst (tybound q `zip` ts) p, wexpr ws (eCall (tApp (eQVar w) ts) $ wvars cs))
-                                 WInst p w ws ->
-                                    return ([], p, wexpr ws (eQVar w))
-
-instQuals                   :: EnvF x -> QBinds -> [Type] -> TypeM Constraints
-instQuals env q ts          = do let s = tybound q `zip` ts
-                                 sequence [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
-  where constr t u@(TC n _)
-          | isProto env n   = do w <- newWitness; return $ Impl w t u
-          | otherwise       = return $ Cast t (tCon u)
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
@@ -1025,35 +896,6 @@ importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
   where ws                  = [ (c, WClass q p (QName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
 
-
--- Name generation ------------------------------------------------------------------------------------------------------------------
-
-univar (TV _ (Internal Typevar _ _))    = True          -- Regular type variable generated by the type-checker
-univar (TV _ (Internal Wildvar _ _))    = True          -- Type variable replacing a type wildcard, generated by the kind-checker
-univar _                                = False
-
-
-pNames                                  = map (Internal TypesPass "p") [0..]
-kNames                                  = map (Internal TypesPass "k") [0..]
-xNames                                  = map (Internal TypesPass "x") [0..]
-
-newWitness                              = Internal Witness "" <$> newUnique
-
-newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
-  where str KType                       = ""
-        str KFX                         = "x"
-        str PRow                        = "p"
-        str KRow                        = "k"
-        str _                           = ""
-
-newTVars ks                             = mapM newTVarOfKind ks
-
-newTVar                                 = newTVarOfKind KType
-
-newActVar                               = TVar NoLoc <$> TV KType <$> Internal Actvar "" <$> newUnique
-
-monotypeOf (TSchema _ [] t)             = t
-monotypeOf sc                           = err1 sc "Monomorphic type expected"
 
 
 

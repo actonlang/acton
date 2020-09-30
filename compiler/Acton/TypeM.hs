@@ -64,3 +64,25 @@ getSubstitution                         = state $ \st -> (currsubst st, st)
 setSubstitution                         :: Map TVar Type -> TypeM ()
 setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
 
+
+-- Name generation ------------------------------------------------------------------------------------------------------------------
+
+pNames                                  = map (Internal TypesPass "p") [0..]
+kNames                                  = map (Internal TypesPass "k") [0..]
+xNames                                  = map (Internal TypesPass "x") [0..]
+
+newWitness                              = Internal Witness "" <$> newUnique
+
+newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typevar (str k) <$> newUnique
+  where str KType                       = ""
+        str KFX                         = "x"
+        str PRow                        = "p"
+        str KRow                        = "k"
+        str _                           = ""
+
+newTVars ks                             = mapM newTVarOfKind ks
+
+newTVar                                 = newTVarOfKind KType
+
+newActVar                               = TVar NoLoc <$> TV KType <$> Internal Actvar "" <$> newUnique
+

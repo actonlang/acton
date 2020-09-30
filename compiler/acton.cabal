@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 29d789d77d618b0257956bf94787e70a8b2256bd610a58d277601534e33ad360
+-- hash: 1fc3ecf757ea6332f565b1db3d5d1cc2fbb23f4764b7f74abee262d46dbb80c1
 
 name:           acton
 version:        0.3.0
@@ -36,6 +36,7 @@ executable actonc
       Acton.Subst
       Acton.Syntax
       Acton.Transform
+      Acton.TypeEnv
       Acton.TypeM
       Acton.Types
       InterfaceFiles
