@@ -461,6 +461,7 @@ toSigs te                               = map makeSig te
 --------------------------------------------------------------------------------------------------------------------------
 
 solveAll env te tt cs                   = do (cs,eq) <- simplify env te tt cs
+                                             (_,cs,_,eq) <- refine env cs te eq
                                              loop eq cs
   where loop eq []                      = return eq
         loop eq cs                      = do (cs,eq) <- solve env te tt eq vs cs
