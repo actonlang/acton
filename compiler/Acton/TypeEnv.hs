@@ -126,3 +126,7 @@ instQuals env q ts          = do let s = tybound q `zip` ts
   where constr t u@(TC n _)
           | isProto env n   = do w <- newWitness; return $ Impl w t u
           | otherwise       = return $ Cast t (tCon u)
+
+wvars                       :: Constraints -> [Expr]
+wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
+

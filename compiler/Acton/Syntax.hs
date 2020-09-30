@@ -304,6 +304,14 @@ rowTail (TRow _ _ _ _ r)
                 = rowTail r
 rowTail r       = r
 
+findInRow n (TRow l k n' t r)
+  | n == n'             = Just (t,r)
+  | otherwise           = case findInRow n r of
+                            Nothing -> Nothing
+                            Just (t',r') -> Just (t, TRow l k n' t r')
+findInRow n (TVar _ _)  = Just (tWild,tWild)
+findInRow n (TNil _ _)  = Nothing
+
 
 prowOf (PosPar n a _ p) = posRow (case a of Just t -> t; _ -> tWild) (prowOf p)
 prowOf (PosSTAR n a)    = case a of Just (TTuple _ r _) -> r; _ -> tWild
