@@ -151,8 +151,8 @@ instance Pretty Expr where
     pretty (Yield _ e)              = text "yield" <+> pretty e
     pretty (YieldFrom _ e)          = text "yield" <+> text "from" <+> pretty e
     pretty (Tuple _ ps KwdNil)
-        | singlePosArg ps           = pretty ps <> comma
-    pretty (Tuple _ ps ks)          = pretty (ps,ks)
+        | singlePosArg ps           = parens (pretty ps <> comma)
+    pretty (Tuple _ ps ks)          = parens (pretty (ps,ks))
     pretty (List _ es)              = brackets (commaList es)
     pretty (ListComp _ e co)        = brackets (pretty e <+> pretty co)
     pretty (Dict _ es)              = braces (commaList es)
@@ -160,17 +160,19 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
+    pretty (Paren _ e@Tuple{})      = pretty e
     pretty (Paren _ e)              = parens (pretty e)
     pretty e                        = prettyPrec 0 e  -- BinOp, CompOp, UnOp and Cond
 
 {-
 We assign precedences to operator expressions according to their main operator as follows.
-Python language reference does not assign numerical precedences, but the precedence order
+The Python language reference does not assign numerical precedences, but the precedence order
 implied by the syntax rules is consistent with the values below, with one exception:
 Quote from section 6.5 in The Python Language Reference (v 3.8.6):
     "The power operator binds more tightly than unary operators on its left; 
      it binds less tightly than unary operators on its right."
-This design is the reason for the hack '&& n<12' in prettyPrec för UnOp's
+Printing here does not minimize the use of parentheses; unary operator expressions are 
+put in parenthesis (for clarity) in all operator contexts, also where the parser does not need them.
 
 12 **
 11 (unary) + - ~
@@ -194,7 +196,7 @@ prettyPrec n e@(BinOp _ e1 op e2)   = parensIf (n > prc) ps
            ps | op == Pow           = prettyPrec (prc+1) e1 <+> pretty op <+> prettyPrec prc e2
               | otherwise           = prettyPrec prc e1 <+> pretty op <+> prettyPrec (prc+1) e2
 prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ pretty e <+> hsep (map pretty ops)
-prettyPrec n e1@(UnOp _ op e)       = parensIf (n > prc && n < 12) $ pretty op <> prettyPrec prc e
+prettyPrec n e1@(UnOp _ op e)       = parensIf (n > 0) $ pretty op <> prettyPrec prc e
    where prc                        = if op == Not then 3 else 11
 prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
 prettyPrec _ e                      = pretty e
