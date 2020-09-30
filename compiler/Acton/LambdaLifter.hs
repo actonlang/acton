@@ -11,7 +11,7 @@ import Acton.Printer
 import Pretty
 import Prelude hiding((<>))
 
-liftModule (Module n imp stmts) = return $ Module n imp (reverse lams ++ reverse defs ++ stmts')
+liftModule (Module m imp stmts) = return $ Module m imp (reverse lams ++ reverse defs ++ stmts')
   where (stmts',(lams,defs,_))  = runL (ll env0 stmts)
 
 

@@ -14,6 +14,7 @@ import Acton.Prim
 import Acton.Env
 import Acton.Subst
 import Acton.TypeM
+import Acton.TypeEnv
 
 
 

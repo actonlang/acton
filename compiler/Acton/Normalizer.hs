@@ -9,24 +9,21 @@ import Utils
 import Control.Monad.State.Lazy
 import Debug.Trace
 
-normalize                           :: (TEnv,Env) -> Module -> IO Module
+normalize                           :: (TEnv,Env0) -> Module -> IO Module
 normalize (te,env0) m               = return $ evalState (norm env m) 0
   where env                         = normEnv (te,env0)
 
 --  Normalization:
---  - All imported or built-in names are qualified by module, including those imported by 'from _ import'
---  - All module aliases are replaced by their original module name
+--  X All module aliases are replaced by their original module name
 --  X All parameters are positional
 --  X Parameter defaults are moved inside function definitions
 --  - Comprehensions are translated into loops
 --  X String literals are concatenated and delimited by double quotes
---  - Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
+--  X Tuple (and list) patterns are replaced by a var pattern followed by explicit element assignments
 --  - With statemenmts are replaced by enter/exit prim calls + exception handling
 --  X The assert statement is replaced by a prim call ASSERT
 --  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
---  - The delete statement is replaced by (a sequence of) __delitem__ calls (for PIndex) or None assignments
 --  X Return without argument is replaced by return None
---  - Incremental assignments are replaced by the corresponding __iop__ calls
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
 
 
@@ -39,9 +36,9 @@ newName s                           = do n <- get
                                          return $ Internal NormPass s n
 
                                     -- builtin names are last in global; local names are first in local
-data NormEnv                        = NormEnv {global :: TEnv, local :: [Name], currentmod :: ModName} deriving Show
+data NormEnv                        = NormEnv { global :: TEnv, local :: [Name] } deriving Show
 
-normEnv (te,env)                    = NormEnv (te ++ names env) [] (defaultmod env)
+normEnv (te,env)                    = NormEnv (te ++ names env) []
 
 extLocal vs env                     = env{ local = vs ++ local env }
 
@@ -50,7 +47,7 @@ normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env (PTuple _ pp kp)        = do v <- newName "tup"
                                          ss <- norm env $ normPP v 0 pp ++ normKP v [] kp
-                                         return (pVar v Nothing, ss)
+                                         return (pVar v Nothing, ss)                                    -- TODO: provide a type for v
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
@@ -59,7 +56,7 @@ normPat env (PTuple _ pp kp)        = do v <- newName "tup"
         normKP _ _ KwdPatNil        = []
 normPat env (PList _ ps pt)         = do v <- newName "lst"
                                          ss <- norm env $ normList v 0 ps pt
-                                         return (pVar v Nothing, ss)
+                                         return (pVar v Nothing, ss)                                    -- TODO: provide a type for v
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
@@ -91,7 +88,7 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module qn imps ss)    = Module <$> norm env qn <*> norm env imps <*> norm env ss
+    norm env (Module m imps ss)     = Module m <$> norm env imps <*> norm env ss
 
 instance Norm Import where
     norm env (Import l ms)          = Import l <$> norm env ms

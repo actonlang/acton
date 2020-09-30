@@ -15,8 +15,8 @@ import Acton.Subst
 import qualified Acton.Env
 
 
-check                               :: Acton.Env.Env -> Module -> IO Module
-check ienv (Module l imps ss)       = return (Module l imps ss1)
+check                               :: Acton.Env.Env0 -> Module -> IO Module
+check ienv (Module m imps ss)       = return (Module m imps ss1)
   where env                         = kenv0 ienv
         ss1                         = runKindM (kchkTop env ss)
 
@@ -58,7 +58,7 @@ newKVar                             = KVar <$> (Internal Kindvar "" <$> newUniqu
 newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
 
 
-data KEnv                           = KEnv { impenv :: Acton.Env.Env, tcons :: Kinds, tvars :: [TVar] }
+data KEnv                           = KEnv { impenv :: Acton.Env.Env0, tcons :: Kinds, tvars :: [TVar] }
 
 type Kinds                          = [(Name,Kind)]
 

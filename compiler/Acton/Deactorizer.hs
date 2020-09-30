@@ -10,9 +10,9 @@ import Acton.Env
 import Utils
 import Control.Monad.State.Lazy
 
-deactorize                          :: Env -> Module -> IO Module
-deactorize mainenv m                = return $ evalState (deact env m) []
-  where env                         = deactEnv mainenv
+deactorize                          :: Env0 -> Module -> IO Module
+deactorize env0 m                   = return $ evalState (deact env m) []
+  where env                         = deactEnv env0
 
 -- Deactorizing monad
 type DeactM a                       = State [Stmt] a
@@ -29,20 +29,26 @@ withStore m                         = do ss0 <- swapStore []
                                          ss1 <- swapStore ss0
                                          return (r, ss1)
 
-data DeactEnv                       = DeactEnv { main :: Env, actions :: [Name], locals :: [Name], stvar :: Maybe Type }
+type DeactEnv                       = EnvF DeactX
 
-deactEnv mainenv                    = DeactEnv { main = mainenv, actions = [], locals = [], stvar = Nothing }
+data DeactX                         = DeactEnv { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
 
-extend te env                       = env{ main = define te (main env),
-                                           actions = actions env \\ ns,
-                                           locals = locals env \\ ns }
+deactEnv                            :: Env0 -> DeactEnv
+deactEnv env0                       = setX env0 DeactEnv{ actionsX = [], localsX = [], stvarX = Nothing }
+
+extend                              :: TEnv -> DeactEnv -> DeactEnv
+extend te env                       = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
   where ns                          = dom te
 
-extendTVars q env                   = env{ main = defineTVars q (main env) }
+actions env                         = actionsX $ envX env
 
-setActor st actions locals env      = env{ actions = actions, locals = locals, stvar = Just st }
+locals env                          = localsX $ envX env
 
-setSt (TFX _ (FXAct st)) env        = env{ stvar = Just st }
+stvar env                           = stvarX $ envX env
+
+setActor st actions locals env      = modX env $ \x -> x{ actionsX = actions, localsX = locals, stvarX = Just st }
+
+setSt (TFX _ (FXAct st)) env        = modX env $ \x -> x{ stvarX = Just st }
 setSt _ env                         = env
 
 actorSt env                         = fromJust (stvar env)
@@ -60,7 +66,7 @@ instance Deact a => Deact (Maybe a) where
     deact env (Just a)              = Just <$> deact env a
 
 instance Deact Module where
-    deact env (Module qn imps ss)   = Module qn imps <$> deact env ss
+    deact env (Module m imps ss)    = Module m imps <$> deact env ss
 
 instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e
@@ -89,7 +95,7 @@ instance Deact Stmt where
                                          e2' <- deact env e2
                                          let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct $ actorSt env)
                                          return $ Expr l $ Call l0 (tApp (eQVar primAFTER) ts) (PosArg e1' $ PosArg lambda PosNil) KwdNil
-      where ts                      = [actorSt env, typeOf (main env) e2]
+      where ts                      = [actorSt env, typeOf env e2]
     deact env (Decl l ds)           = Decl l <$> deact env1 ds
       where env1                    = extend (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
@@ -100,7 +106,7 @@ instance Deact Decl where
                                          decls <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct st)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
-      where env1                    = setActor st actions locals $ extend (envOf p ++ envOf k) $ extendTVars q env
+      where env1                    = setActor st actions locals $ extend (envOf p ++ envOf k) $ defineTVars q env
             env2                    = extend (envOf decls) env1
 
             (decls,ss)              = partition isDecl b
@@ -145,13 +151,13 @@ instance Deact Decl where
     deact env (Def l n q p k t b d fx)
                                     = do b <- deact env1 b
                                          return $ Def l n q p k t b d fx
-      where env1                    = extend (envOf p ++ envOf k) $ extendTVars q $ setSt fx env
+      where env1                    = extend (envOf p ++ envOf k) $ defineTVars q $ setSt fx env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
-      where env1                    = extendTVars q env
+      where env1                    = defineTVars q env
     deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
-      where env1                    = extendTVars q env
+      where env1                    = defineTVars q env
     deact env (Extension l n q u b) = Extension l n q u <$> deact env b
-      where env1                    = extendTVars q env
+      where env1                    = defineTVars q env
 
 localName n                         = Derived n (name "local")
 
@@ -175,7 +181,7 @@ instance Deact Expr where
     deact env (Var l n)             = return $ Var l n
     deact env (Await l e)           = do e' <- deact env e
                                          return $ Call l (tApp (eQVar primAWAIT) ts) (PosArg e' PosNil) KwdNil
-      where TCon _ msg              = typeOf (main env) e
+      where TCon _ msg              = typeOf env e
             ts                      = actorSt env : tcargs msg
     deact env (Int l i s)           = return $ Int l i s
     deact env (Float l f s)         = return $ Float l f s
