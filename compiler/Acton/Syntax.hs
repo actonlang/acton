@@ -11,7 +11,7 @@ import Prelude hiding((<>))
 version :: [Int]
 version = [0,1]
 
-data Module     = Module        ModName [Import] Suite deriving (Eq,Show)
+data Module     = Module        { modname::ModName, imps::[Import], mbody::Suite } deriving (Eq,Show)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
                 | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }

@@ -36,9 +36,9 @@ newName s                           = do n <- get
                                          return $ Internal NormPass s n
 
                                     -- builtin names are last in global; local names are first in local
-data NormEnv                        = NormEnv {global :: TEnv, local :: [Name], currentmod :: ModName} deriving Show
+data NormEnv                        = NormEnv {global :: TEnv, local :: [Name]} deriving Show
 
-normEnv (te,env)                    = NormEnv (te ++ names env) [] (defaultmod env)
+normEnv (te,env)                    = NormEnv (te ++ names env) []
 
 extLocal vs env                     = env{ local = vs ++ local env }
 
@@ -88,7 +88,7 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module qn imps ss)    = Module <$> norm env qn <*> norm env imps <*> norm env ss
+    norm env (Module m imps ss)     = Module m <$> norm env imps <*> norm env ss
 
 instance Norm Import where
     norm env (Import l ms)          = Import l <$> norm env ms

@@ -13,7 +13,7 @@ import Acton.Builtin
 import Acton.Prim
 
 convert                                 :: TInfo -> Module -> IO Module
-convert inf (Module qn imps stmts)      = return $ Module qn imps $ runCpsM $ cps (env0 inf) stmts
+convert inf (Module m imps stmts)       = return $ Module m imps $ runCpsM $ cps (env0 inf) stmts
 
 type CpsM a                             = State CpsState a
 

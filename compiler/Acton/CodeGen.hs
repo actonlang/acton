@@ -13,14 +13,14 @@ import Acton.Prim
 import Prelude hiding ((<>))
 
 generate                            :: Acton.Env.Env -> Module -> IO String
-generate env m                      = return $ render $ gen (genEnv env) m
+generate env m                      = return $ render $ gen (genEnv env (modname m)) m
 
 class Gen a where
     gen                             :: Env -> a -> Doc
 
 data Env                            = Env { thismodule :: ModName }
 
-genEnv env                          = Env { thismodule = Acton.Env.defaultmod env }
+genEnv env m                        = Env { thismodule = m }
 
 
 instance (Gen a) => Gen (Maybe a) where

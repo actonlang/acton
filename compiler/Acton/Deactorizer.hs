@@ -60,7 +60,7 @@ instance Deact a => Deact (Maybe a) where
     deact env (Just a)              = Just <$> deact env a
 
 instance Deact Module where
-    deact env (Module qn imps ss)   = Module qn imps <$> deact env ss
+    deact env (Module m imps ss)    = Module m imps <$> deact env ss
 
 instance Deact Stmt where
     deact env (Expr l e)            = Expr l <$> deact env e

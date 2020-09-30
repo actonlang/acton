@@ -24,9 +24,8 @@ import Prelude hiding ((<>))
 
 
 
-mkEnv                       :: (FilePath,FilePath) -> Env -> Module -> IO Env
-mkEnv paths env modul       = getImps paths (setDefaultMod m env) imps
-  where Module m imps _     = modul
+mkEnv                       :: (FilePath,FilePath) -> Env -> [Import] -> IO Env
+mkEnv paths env imports     = getImps paths env imports
 
 
 type Schemas                = [(Name, TSchema)]
@@ -35,9 +34,8 @@ type TEnv                   = [(Name, NameInfo)]
 
 data Env                    = Env {
                                 names      :: TEnv,
-                                witnesses  :: [(QName,Witness)],
                                 modules    :: [(ModName,TEnv)],
-                                defaultmod :: ModName,
+                                witnesses  :: [(QName,Witness)],
                                 actorstate :: Maybe Type,
                                 context    :: EnvCtx,
                                 indecl     :: Bool }
@@ -105,8 +103,8 @@ instance QMatch QName where
     qmatch env a b                  = m (unalias env a) (unalias env b)
       where m a@QName{}  b@QName{}  = mname a == mname b && noq a == noq b
             m a@NoQ{}    b@NoQ{}    = noq a == noq b
-            m a@NoQ{}    b@QName{}  = defaultmod env == mname b && noq a == noq b
-            m a@QName{}  b@NoQ{}    = mname a == defaultmod env && noq a == noq b
+            m a@NoQ{}    b@QName{}  = mname b == mBuiltin && noq a == noq b
+            m a@QName{}  b@NoQ{}    = mname a == mBuiltin && noq a == noq b
 
 instance QMatch TCon where
     qmatch env (TC a ts) (TC b us)  = qmatch env a b && qmatch env ts us
@@ -454,26 +452,24 @@ unSig te                    = map f te
 initEnv                    :: Bool -> IO Env
 initEnv nobuiltin           = if nobuiltin
                                 then return $ Env{names = [],
-                                                  witnesses = [],
                                                   modules = [],
-                                                  defaultmod = mBuiltin,
+                                                  witnesses = [],
                                                   actorstate = Nothing,
                                                   context = CtxTop,
                                                   indecl = False}
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
                                         let env0 = Env{names = [(nBuiltin,NModule envBuiltin)],
-                                                       witnesses = [],
                                                        modules = [(mBuiltin,envBuiltin)],
-                                                       defaultmod = mBuiltin,
+                                                       witnesses = [],
                                                        actorstate = Nothing,
                                                        context = CtxTop,
                                                        indecl = False}
                                             env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
-                                        
-setDefaultMod               :: ModName -> Env -> Env
-setDefaultMod m env         = env{ defaultmod = m }
+
+withModulesFrom             :: Env -> Env -> Env
+env `withModulesFrom` env'  = env{modules = modules env'}
 
 setActorFX                  :: Type -> Env -> Env
 setActorFX st env           = env{ actorstate = Just st }
