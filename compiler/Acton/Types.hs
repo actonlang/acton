@@ -17,12 +17,12 @@ import Acton.TypeEnv
 import qualified InterfaceFiles
 import qualified Data.Map
 
-reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module)
+reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
-                                             return (map simpSig te, Module m i ss1)
+                                             return (map simpSig te, Module m i ss1, convEnvProtos env2)
   where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
-        env2                            = define te env1
+        env2                            = define te env0
 
 solverError                             = typeError
 

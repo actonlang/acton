@@ -176,13 +176,13 @@ convStmts eq stmts                      = map conv stmts
 
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
-convEnv env te                          = concat $ map conv te
+convEnvProtos env                       = mapModules (concat . map conv) env
   where conv (n, NDef sc d)             = [(n, NDef (convS sc) d)]
         conv (n, NSig sc d)             = [(n, NSig (convS sc) d)]
-        conv (n, NAct q p k te)         = [(n, NClass (noqual env q) [([Nothing],TC primActor [])] (convActEnv env q p k tvSelf te))]
+        conv (n, NAct q p k te)         = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map conv te))]
         conv (n, NProto q us te)        = map fromClass $ convProtocol env n q us [] [] (fromSigs env te)
         conv (n, NExt n0 q us te)       = map fromClass $ convExtension env n n0 q us [] [] []
-        conv (n, NClass q us te)        = [(n, NClass (noqual env q) us (convClassEnv env q te))]
+        conv (n, NClass q us te)        = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
         conv ni                         = [ni]
         convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
@@ -208,7 +208,7 @@ fromSigs env ((n, NSig sc dec) : te)    = Signature NoLoc [n] (convS sc) dec : f
 fromSigs env (_ : te)                   = fromSigs env te
 fromSigs env []                         = []
 
-convClassEnv env q0 te                  = [ (n, conv i) | (n,i) <- te ]
+convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
   where conv (NSig sc dec)              = NSig (convS sc) NoDec
         conv (NDef sc dec)              = NDef (convS sc) NoDec
         conv i                          = i
@@ -216,16 +216,21 @@ convClassEnv env q0 te                  = [ (n, conv i) | (n,i) <- te ]
         convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t
         convT q t                       = t
 
-convActEnv env q0 p k st te             = (initKW, NDef t0 NoDec) : [ (n, conv i) | (n,i) <- te ]
+convEnvActors env                       = mapModules (concat . map conv) env
+  where conv (n, NAct q p k te)         = [(n, NClass q [([Nothing],TC primActor [])] (convActTEnv env q p k te))]
+        conv ni                         = [ni]
+
+convActTEnv env q0 p k te               = (initKW, NDef t0 NoDec) : [ (n, conv i) | (n,i) <- te ]
   where conv (NSig sc dec)              = NSig (convS sc) dec
         conv (NDef sc dec)              = NDef (convS sc) dec
         conv i                          = i
-        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
-        convT q (TFun l fx p k t)
-          | fx == fxAction              = TFun l fx0 (qualWRow env (q0++q) p) k t
-        convT q t                       = t
-        t0                              = monotype (TFun NoLoc fx0 (qualWRow env q0 p) k tNone)
-        fx0                             = fxAct (tVar st)
+        convS (TSchema l q t)           = TSchema l q (convT t)
+        convT (TFun l fx p k t)
+          | fx == fxAction              = TFun l fx0 p k t
+        convT t                         = t
+        t0                              = monotype (TFun NoLoc fx0 p k tNone)
+        fx0                             = fxAct tSelf
+
 
 {-
 

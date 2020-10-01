@@ -7,11 +7,12 @@ import Acton.Prim
 import Acton.Builtin
 import Acton.QuickType
 import Acton.Env
+import Acton.Converter
 import Utils
 import Control.Monad.State.Lazy
 
-deactorize                          :: Env0 -> Module -> IO Module
-deactorize env0 m                   = return $ evalState (deact env m) []
+deactorize                          :: Env0 -> Module -> IO (Module, Env0)
+deactorize env0 m                   = return (evalState (deact env m) [], convEnvActors env0)
   where env                         = deactEnv env0
 
 -- Deactorizing monad
@@ -34,7 +35,7 @@ type DeactEnv                       = EnvF DeactX
 data DeactX                         = DeactEnv { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
 
 deactEnv                            :: Env0 -> DeactEnv
-deactEnv env0                       = setX env0 DeactEnv{ actionsX = [], localsX = [], stvarX = Nothing }
+deactEnv env0                       = setX DeactEnv{ actionsX = [], localsX = [], stvarX = Nothing } env0
 
 extend                              :: TEnv -> DeactEnv -> DeactEnv
 extend te env                       = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }

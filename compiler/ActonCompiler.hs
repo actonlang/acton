@@ -174,19 +174,19 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
 
 runRestPasses args paths src env0 original = (do
                           let outbase = outBase paths
-                          env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 (A.imps original)
+                          env1 <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 (A.imps original)
 
-                          kchecked <- Acton.Kinds.check env original
+                          kchecked <- Acton.Kinds.check env1 original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
 
-                          (iface,tchecked) <- Acton.Types.reconstruct outbase env kchecked
+                          (iface,tchecked,env2) <- Acton.Types.reconstruct outbase env1 kchecked
                           iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
 
-                          normalized <- Acton.Normalizer.normalize (iface,env) tchecked
+                          normalized <- Acton.Normalizer.normalize (iface,env2) tchecked
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                          deacted <- Acton.Deactorizer.deactorize env normalized
+                          (deacted,env3) <- Acton.Deactorizer.deactorize env2 normalized
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
 
                           cpstyled <- Acton.CPS.convert [] deacted
@@ -195,10 +195,10 @@ runRestPasses args paths src env0 original = (do
                           lifted <- Acton.LambdaLifter.liftModule cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
 
-                          c <- Acton.CodeGen.generate env lifted
+                          c <- Acton.CodeGen.generate env3 lifted
                           iff (cgen args) $ dump "cgen" c
 
-                          return (env0 `Acton.Env.withModulesFrom` env,iface)
+                          return (env0 `Acton.Env.withModulesFrom` env1,iface)
                         ) 
                           `catch` handle generalError src paths
                           `catch` handle Acton.Kinds.kindError src paths

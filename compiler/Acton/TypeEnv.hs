@@ -19,7 +19,7 @@ type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ actorstate = Nothing, context = CtxTop, indecl = False }
+typeX env0                      = setX TypeX{ actorstate = Nothing, context = CtxTop, indecl = False } env0
 
 instance Pretty TypeX where
     pretty _                    = empty
