@@ -637,7 +637,7 @@ instance Check Decl where
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
                                              b' <- msubst b'
-                                             return (cs1, protoClasses env n q (trim ps) eq1 wmap b')
+                                             return (cs1, convProtocol env n q ps eq1 wmap b')
       where env1                        = define te $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NProto _ ps te              = findName n env
@@ -651,7 +651,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
-                                             return (cs1, extClasses env n' n q (trim ps) eq1 wmap b')
+                                             return (cs1, convExtension env n' n q ps eq1 wmap b')
       where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             n'                          = extensionName (head us) n

@@ -5,6 +5,7 @@ import Utils
 import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
+import Acton.Prim
 import Acton.Env
 import Acton.Subst
 import Acton.TypeM
@@ -24,8 +25,9 @@ pruneStmts xs []                        = []
 pruneDefs env n ss                      = pruneStmts xs ss
   where xs                              = directAttrs env n
 
-protoClasses env n0 q ps eq wmap b      = mainClass : sibClasses
-  where q1                              = Quant tvSelf' [] : noqual env q
+convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
+  where ps                              = trim ps0
+        q1                              = qSelf' : noqual env q
         p0                              = TC (NoQ n0) $ map tVar $ tybound q
         t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
@@ -68,8 +70,9 @@ protoClasses env n0 q ps eq wmap b      = mainClass : sibClasses
         qcopies                         = [ MutAssign NoLoc (eDot (eVar selfKW') $ qualAttr p v n0) (eVar $ tvarWit v p) | (v,p) <- quals env q ]
         qcopies'                        = [ (tvarWit v p, impl2type (tVar v) p, eDot (eVar selfKW') $ qualAttr p v n0) | (v,p) <- quals env q ]
 
-extClasses env n1 n0 q ps eq wmap b     = mainClass : sibClasses
-  where q1                              = noqual env q
+convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
+  where ps                              = trim ps0
+        q1                              = noqual env q
         tvs                             = map tVar $ tybound q1
         t0                              = tCon (TC n0 (map tVar $ tybound q))
         w0                              = witAttr (tcname main)
@@ -153,28 +156,98 @@ convProto (TC n ts)                     = TC n (tVar tvSelf' : ts)
 instProto t (TC n ts)                   = TC n (t : ts)
 
 tvSelf'                                 = TV KType (Internal Typevar "S" 0)
+qSelf'                                  = Quant tvSelf' []
 selfKW'                                 = Internal Witness "self" 0
 thisKW'                                 = Internal Witness "this" 0
 
-convSubst t                             = subst [(tvSelf, tVar tvSelf')] t
+convSelf t                              = subst [(tvSelf, tVar tvSelf')] t
 
 convStmts eq stmts                      = map conv stmts
-  where conv (Signature l ns sc Static) = Signature l ns (convSubst sc) NoDec
-        conv (Signature l ns sc _)      = Signature l ns (convSubst $ convSchema sc) NoDec
-        conv (Decl l ds)                = Decl l (map (convDecl eq) ds)
+  where conv (Signature l ns sc Static) = Signature l ns (convSelf sc) NoDec
+        conv (Signature l ns sc _)      = Signature l ns (convSelf $ convS sc) NoDec
+        conv (Decl l ds)                = Decl l (map convD ds)
         conv s                          = s
-
-convDecl eq (Def l n q p k t b d x)     = Def l n (convSubst q) (wit2par [(selfKW',tSelf)] $ convSubst p) (convSubst k) (convSubst t) b' d x
-  where b'                              = bindWits eq ++ b
-convDecl eq d                           = d
-
-convSchema (TSchema l q t)              = TSchema l q (convT t)
-  where convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
+        convS (TSchema l q t)           = TSchema l (q) (convT t)
+        convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
         convT t                         = t
+        convD (Def l n q p k t b d x)   = Def l n (convSelf q) (wit2par [(selfKW',tSelf)] $ convSelf p) (convSelf k) (convSelf t) b' d x
+          where b'                      = bindWits eq ++ b
+        convD d                         = d
 
-convTEnv te                             = [ (n, conv i) | (n,i) <- te ]
-  where conv (NSig sc Static)           = NSig sc NoDec
-        conv (NSig sc _)                = NSig (convSchema sc) NoDec
-        conv (NDef sc Static)           = NDef sc NoDec
-        conv (NDef sc _)                = NDef (convSchema sc) NoDec
+-- Convert a TEnv -------------------------------------------------------------------------------------------
+
+convEnv env te                          = concat $ map conv te
+  where conv (n, NDef sc d)             = [(n, NDef (convS sc) d)]
+        conv (n, NSig sc d)             = [(n, NSig (convS sc) d)]
+        conv (n, NAct q p k te)         = [(n, NClass (noqual env q) [([Nothing],TC primActor [])] (convActEnv env q p k tvSelf te))]
+        conv (n, NProto q us te)        = map fromClass $ convProtocol env n q us [] [] (fromSigs env te)
+        conv (n, NExt n0 q us te)       = map fromClass $ convExtension env n n0 q us [] [] []
+        conv (n, NClass q us te)        = [(n, NClass (noqual env q) us (convClassEnv env q te))]
+        conv ni                         = [ni]
+        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
+        convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
+        convT q t                       = t
+
+fromClass (Class _ n q us b)            = (n, NClass q [([Nothing],u)|u<-us] (fromStmts b))
+
+fromStmts (Signature _ ns sc dec : ss)  = [ (n, NSig sc dec) | n <- ns ] ++ fromStmts ss
+fromStmts (Decl _ ds : ss)              = fromDefs ds ++ fromStmts ss
+fromStmts (_ : ss)                      = fromStmts ss
+fromStmts []                            = []
+
+fromDefs (Def l n q p k a b d fx : ds)  = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d) : fromDefs ds
+  where prowOf' p Static                = prowOf p
+        prowOf' (PosPar _ _ _ p) _      = prowOf p
+fromDefs (_ : ds)                       = fromDefs ds
+fromDefs []                             = []
+
+fromSigs env ((n, NSig sc dec) : te)    = Signature NoLoc [n] (convS sc) dec : fromSigs env te
+  where convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
+        convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
+        convT q t                       = t
+fromSigs env (_ : te)                   = fromSigs env te
+fromSigs env []                         = []
+
+convClassEnv env q0 te                  = [ (n, conv i) | (n,i) <- te ]
+  where conv (NSig sc dec)              = NSig (convS sc) NoDec
+        conv (NDef sc dec)              = NDef (convS sc) NoDec
         conv i                          = i
+        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
+        convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t
+        convT q t                       = t
+
+convActEnv env q0 p k st te             = (initKW, NDef t0 NoDec) : [ (n, conv i) | (n,i) <- te ]
+  where conv (NSig sc dec)              = NSig (convS sc) dec
+        conv (NDef sc dec)              = NDef (convS sc) dec
+        conv i                          = i
+        convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
+        convT q (TFun l fx p k t)
+          | fx == fxAction              = TFun l fx0 (qualWRow env (q0++q) p) k t
+        convT q t                       = t
+        t0                              = monotype (TFun NoLoc fx0 (qualWRow env q0 p) k tNone)
+        fx0                             = fxAct (tVar st)
+
+{-
+
+f : [A(Eq),B,C(Ord)] => (A,B) -> C                          f : [A,B,C] => (Eq[A],Ord[C],A,B) -> C
+
+class c[A(Eq),B] (b[A]):                                    class c[A,B] (b[A]):
+    f : [C(Ord)] => (A,B) -> C                                  f : [C] => (Eq[A],Ord[C],A,B) -> C
+    @static                                                     @static
+    g : [C(Ord)] => (Self,Self) -> C                            g : [C] => (Eq[A],Ord[C],Self,Self) -> C
+
+protocol p[A(Eq),B] (q[A]):                                 class p[S,A,B] (q[S,A]):
+    f : [C(Ord)] => (A,B) -> C                                  __init__ : (Eq[A]) -> None
+    @static                                                     f : [C] => (S,Ord[C],A,B) -> C
+    g : [C(Ord)] => (Self,Self) -> C                            g : [C] => (Ord[C],S,S) -> C
+
+extension c[A(Eq),B] (p[A,B]):                              class p$c[A,B] (p[c[A,B],A,B]):
+    ...                                                         __init__ : (Eq[A]) -> None
+
+actor[S] a[A(Eq),B] (b[A]):                                 class a[A,B] ($Actor[]):                    (existential S...)
+    f : [C(Ord)] => action(A,B) -> C                            __init__ : (Eq[A],b[A]) -> None
+                                                                f : [C] => act[S](Ord[C],A,B) -> C
+                                                                f$local : [C] => act[S](Ord[C],A,B) -> C
+
+
+-}
