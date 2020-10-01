@@ -114,7 +114,6 @@ instance (InstKWild a) => InstKWild [a] where
     instKWild                       = mapM instKWild
     
 instance InstKWild Decl where
-    instKWild d@Actor{}             = do q <- instKWild (qbinds d); a <- instKWild (ann d); return d{ qbinds = q, ann = a }
     instKWild d                     = do q <- instKWild (qbinds d); return d{ qbinds = q }
 
 instance InstKWild QBind where
@@ -238,7 +237,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
                                          ds <- kchk env1 ds
                                          ss <- kchkSuite env1 ss
                                          return (Decl l ds : ss)
-  where kinds (Actor _ n q _ _ _ _) = [(n,kind KType q)]
+  where kinds (Actor _ n q _ _ _)   = [(n,kind KType q)]
         kinds (Class _ n q _ _)     = [(n,kind KType q)]
         kinds (Protocol _ n q _ _)  = [(n,kind KProto q)]
         kinds _                     = []
@@ -286,9 +285,8 @@ instance KCheck Decl where
                                          x <- kexp KFX env1 x
                                          b <- kchkSuite env1 b
                                          return $ Def l n q p k t b d x
-    kchk env (Actor l n q p k t b)  = do env0 <- extvars (maybe [] tyfree t) env
-                                         env1 <- extvars (tybound q) env0
-                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kexp KType env1 t <*> kchkSuite env1 b
+    kchk env (Actor l n q p k b)    = do env1 <- extvars (tybound q) env
+                                         Actor l n <$> kchkQBinds env1 q <*> kchk env1 p <*> kchk env1 k <*> kchkSuite env1 b
     kchk env (Class l n q us b)     = do env1 <- extvars (tvSelf : tybound q) env
                                          Class l n <$> kchkQBinds env1 q <*> kchkBounds env1 us <*> kchkSuite env1 b
     kchk env (Protocol l n q us b)  = do env1 <- extvars (tvSelf : tybound q) env
@@ -600,7 +598,7 @@ instance KSubst Stmt where
 
 instance KSubst Decl where
     ksubst g (Def l n q p k a b d x)= Def l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b <*> return d <*> ksubst g x
-    ksubst g (Actor l n q p k a b)  = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g a <*> ksubst g b
+    ksubst g (Actor l n q p k b)    = Actor l n <$> ksubst g q <*> ksubst g p <*> ksubst g k <*> ksubst g b
     ksubst g (Class l n q as b)     = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Protocol l n q as b)  = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b
     ksubst g (Extension l n q as b) = Extension l n <$> ksubst g q <*> ksubst g as <*> ksubst g b

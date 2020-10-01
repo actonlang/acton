@@ -173,7 +173,7 @@ instance EnvOf Decl where
     envOf (Class _ n q as ss)       = [(n, NClass q as' (envOf ss))]
       where as'                     = [ ([Nothing],a) | a <- as ]
 
-    envOf (Actor _ n q p k a b)     = [(n, NAct q (prowOf p) (krowOf k) (envOf b))]
+    envOf (Actor _ n q p k b)       = [(n, NAct q (prowOf p) (krowOf k) (envOf b))]
 
 --  The following constructs are translated away during type inference:
 --  envOf (Protocol _ n q as ss)    = undefined

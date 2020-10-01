@@ -355,7 +355,7 @@ instance InfEnv Decl where
                                              _ ->
                                                  illegalRedef n
 
-    infEnv env d@(Actor _ n q p k a b)
+    infEnv env d@(Actor _ n q p k b)
       | nodup (p,k)                     = case findName n env of
                                              NReserved -> do
                                                  te <- infActorEnv env b
@@ -592,8 +592,8 @@ instance Check Decl where
       where env1f st                    = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ maybeSetActorFX st env
             tvs                         = tybound q
 
-    checkEnv env (Actor l n q p k a b)  = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- maybe newActVar return a
+    checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
+                                             st <- newActVar
                                              traceM ("## actor st: " ++ prstr st)
                                              pushFX (fxAct st) tNone
                                              env1 <- return $ setActorFX st env1
@@ -607,7 +607,8 @@ instance Check Decl where
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
                                              when (tvar st `elem` fvs) $ err l "Actor state escapes"
-                                             return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (Just st) (bindWits (eq1++eq0) ++ defsigs ++ b'))
+                                             substitute (tvar st) tSelf
+                                             return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ setInAct env
             tvs                         = tybound q

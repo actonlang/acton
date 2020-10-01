@@ -101,12 +101,12 @@ instance Deact Stmt where
     deact env (Signature l ns t d)  = return $ Signature l ns t d
 
 instance Deact Decl where
-    deact env (Actor l n q p k (Just st) b) 
+    deact env (Actor l n q p k b) 
                                     = do inits <- deact env1 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct st)
+                                         let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
-      where env1                    = setActor st actions locals $ extend (envOf p ++ envOf k) $ defineTVars q env
+      where env1                    = setActor tSelf actions locals $ extend (envOf p ++ envOf k) $ defineTVars q env
             env2                    = extend (envOf decls) env1
 
             (decls,ss)              = partition isDecl b
@@ -140,13 +140,13 @@ instance Deact Decl where
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p k (Just t) b d fx)
-                                    = Decl l0 [Def l0 n q (addSelf p) k (Just t) [Return l0 (Just $ async)] d (fxAct st)]
+                                    = Decl l0 [Def l0 n q (addSelf p) k (Just t) [Return l0 (Just $ async)] d (fxAct tSelf)]
               where n'              = localName n
                     async           = Call l0 (tApp (eQVar primASYNC) ts') (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
                     clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (parToArg p) KwdNil) fx
                     ts              = map tVar (tybound q)
-                    ts'             = [st, t]
+                    ts'             = [tSelf, t]
 
     deact env (Def l n q p k t b d fx)
                                     = do b <- deact env1 b

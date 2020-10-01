@@ -53,7 +53,7 @@ instance Pretty Stmt where
 instance Pretty Decl where
     pretty (Def _ n q p k a b d x)  = (prettyDecFX d x $ text "def" <+> pretty n <> nonEmpty brackets commaList q <+> 
                                       parens (pretty (p,k)) <> nonEmpty (text " -> " <>) pretty a <> colon) $+$ prettySuite b
-    pretty (Actor _ n q p k a b)    = text "actor" <> nonEmpty brackets pretty a <+> pretty n <> nonEmpty brackets commaList q <+> 
+    pretty (Actor _ n q p k b)      = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+> 
                                       parens (pretty (p,k)) <> colon $+$ prettySuite b
     pretty (Class _ n q a b)        = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettySuite b
