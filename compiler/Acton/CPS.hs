@@ -333,7 +333,7 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
 
 
 contCall env (Call l (Var _ n) p k)
-  | n == primAWAIT                      = True
+  | n == primAWAITf                     = True
   | isPrim n                            = False
   | n `elem` ns0                        = False
   where ns0                             = [qnStr,qnInt,qnLen,qnPrint]

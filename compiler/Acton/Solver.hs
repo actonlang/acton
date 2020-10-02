@@ -153,7 +153,7 @@ reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
                                                  reduce env eq cs
 reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
   | fx1 /= fxAction, fx2 == fxAction        = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
-                                                 let e = eCall (eQVar primASYNC) [eVar px0]         --   Wrap closure into an async message
+                                                 let e = eCall (eQVar primASYNCf) [eVar px0]        --   Wrap closure into an async message
                                                      cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:

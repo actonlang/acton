@@ -95,7 +95,7 @@ instance Deact Stmt where
     deact env (After l e1 e2)       = do e1' <- deact env e1
                                          e2' <- deact env e2
                                          let lambda = Lambda l0 PosNIL KwdNIL e2' (fxAct $ actorSt env)
-                                         return $ Expr l $ Call l0 (tApp (eQVar primAFTER) ts) (PosArg e1' $ PosArg lambda PosNil) KwdNil
+                                         return $ Expr l $ Call l0 (tApp (eQVar primAFTERf) ts) (PosArg e1' $ PosArg lambda PosNil) KwdNil
       where ts                      = [actorSt env, typeOf env e2]
     deact env (Decl l ds)           = Decl l <$> deact env1 ds
       where env1                    = extend (envOf ds) env
@@ -143,7 +143,7 @@ instance Deact Decl where
             wrapMeth (Def l n q p k (Just t) b d fx)
                                     = Decl l0 [Def l0 n q (addSelf p) k (Just $ tMsg t) [Return l0 (Just $ async)] d (fxAct tSelf)]
               where n'              = localName n
-                    async           = Call l0 (tApp (eQVar primASYNC) ts') (PosArg self (PosArg clos PosNil)) KwdNil
+                    async           = Call l0 (tApp (eQVar primASYNCf) ts') (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
                     clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (parToArg p) KwdNil) fx
                     ts              = map tVar (tybound q)
@@ -170,9 +170,9 @@ parToArg PosNIL                     = PosNil
 parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQ n)) (parToArg p)
 
 
--- primASYNC : [S,A] => act[S]($Actor, act[S]()->A) -> A
--- primAFTER : [S,A] => act[S](int, act[S]()->A) -> None
--- primAWAIT : [S,A] => act[S](Msg[A]) -> A
+-- $ASYNCf : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
+-- $AFTERf : [S,A] => act[S](int,    act[S]()->A) -> Msg[A]
+-- $AWAITf : [S,A] => act[S](Msg[A])              -> A
 
 
 instance Deact Expr where
@@ -181,7 +181,7 @@ instance Deact Expr where
       | n `elem` locals env         = return $ Dot l (Var l (NoQ selfKW)) n
     deact env (Var l n)             = return $ Var l n
     deact env (Await l e)           = do e' <- deact env e
-                                         return $ Call l (tApp (eQVar primAWAIT) ts) (PosArg e' PosNil) KwdNil
+                                         return $ Call l (tApp (eQVar primAWAITf) ts) (PosArg e' PosNil) KwdNil
       where TCon _ msg              = typeOf env e
             ts                      = actorSt env : tcargs msg
     deact env (Int l i s)           = return $ Int l i s

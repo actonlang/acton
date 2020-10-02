@@ -12,6 +12,7 @@ import Control.Monad
 
 import Acton.Syntax
 import Acton.Builtin
+import Acton.Prim
 import Acton.Printer
 import Acton.Names
 import Acton.Subst
@@ -26,8 +27,6 @@ import Prelude hiding ((<>))
 mkEnv                       :: (FilePath,FilePath) -> Env0 -> [Import] -> IO Env0
 mkEnv paths env imports     = getImps paths env imports
 
-
-type Schemas                = [(Name, TSchema)]
 
 type TEnv                   = [(Name, NameInfo)]
 
@@ -427,12 +426,6 @@ isProp Property _           = True
 isProp NoDec sc             = case sctype sc of TFun{} -> False; _ -> True
 isProp _ _                  = False
 
-nSchemas                    :: TEnv -> Schemas
-nSchemas []                 = []
-nSchemas ((n,NVar t):te)    = (n, monotype t) : nSchemas te
-nSchemas ((n,NDef sc d):te) = (n, sc) : nSchemas te
-nSchemas (_:te)             = nSchemas te
-
 parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
 parentTEnv env us           = concatMap (snd . findCon env . snd) us
 
@@ -467,8 +460,9 @@ initEnv nobuiltin           = if nobuiltin
                                                     envX = () }
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
-                                        let env0 = EnvF{ names = [(nBuiltin,NModule envBuiltin)],
-                                                         modules = [(mBuiltin,envBuiltin)],
+                                        let envPrim = primMkEnv NClass NDef 
+                                            env0 = EnvF{ names = [(nBuiltin,NModule envBuiltin), (nPrim,NModule envPrim)],
+                                                         modules = [(mBuiltin,envBuiltin), (mPrim,envPrim)],
                                                          witnesses = [],
                                                          envX = () }
                                             env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0

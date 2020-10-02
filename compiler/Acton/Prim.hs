@@ -3,38 +3,214 @@ module Acton.Prim where
 import Utils
 import Pretty
 import Acton.Syntax
+import Acton.Builtin
 
-mPrim                               = ModName [name "$"]
+nPrim               = name "$"
+mPrim               = ModName [nPrim]
+qPrim s             = QName mPrim (name s)
 
-qPrim s                             = QName mPrim (name s)
+primActor           = qPrim "Actor"
+primR               = qPrim "R"
+primClos            = qPrim "Clos"
+primCont            = qPrim "Cont"
 
-primActor                           = qPrim "Actor"         -- class $Actor (): pass
-primR                               = qPrim "R"             -- class $R (): pass
-primClos                            = qPrim "Clos"          -- class $Clos[X,P,T] ():
-                                                            --    __init__  : () -> None
-                                                            --    enter     : X(*P) -> T
-primCont                            = qPrim "Cont"          -- class $Cont[X,T] ($Clos[X,(T,),$R]): pass
+primASYNCf          = qPrim "ASYNCf"
+primAFTERf          = qPrim "AFTERf"
+primAWAITf          = qPrim "AWAITf"
 
-primASYNC                           = qPrim "ASYNC"         -- $ASYNC       : [S,T] => act[S]($Actor, act[S]()->T) -> T
-primAFTER                           = qPrim "AFTER"         -- $AFTER       : [S,T] => act[S](int, act[S]()->T) -> None
-primAWAIT                           = qPrim "AWAIT"         -- $AWAIT       : [S,T] => act[S](Msg[T]) -> T
-primPUSH                            = qPrim "PUSH"          -- $PUSH        : [T] => pure ($Cont[T]) -> None
-primPOP                             = qPrim "POP"           -- $POP         : pure () -> None
-primRERAISE                         = qPrim "RERAISE"       -- $RERAISE     : pure () -> None
-primRAISE                           = qPrim "RAISE"         -- $RAISE       : pure (Exception) -> None
-primRAISEFROM                       = qPrim "RAISEFROM"     -- $RAISEFROM   : pure (Exception, Exception) -> None
-primASSERT                          = qPrim "ASSERT"        -- $ASSERT      : pure (bool, ?str) -> None
+primASYNCc          = qPrim "ASYNCc"
+primAFTERc          = qPrim "AFTERc"
+primAWAITc          = qPrim "AWAITc"
 
-primIsInstance                      = qPrim "ISINSTANCE"    -- $ISINSTANCE : pure (struct,_) -> bool
+primASYNC           = qPrim "ASYNC"
+primAFTER           = qPrim "AFTER"
+primAWAIT           = qPrim "AWAIT"
 
-tClos x p t                         = tCon $ TC primClos [x,p,t]
-tCont x t                           = tCon $ TC primCont [x,t]
+primPUSHc           = qPrim "PUSHc"
+primPUSH            = qPrim "PUSH"
 
-{-
-tASYNC                              = tFun fxS (posRow tActor $ posRow tCont1 posNil)
-  where tActor                      = tCon $ TC primActor []
-        s                           = tVar $ TV KType $ name "S"
-        t                           = tVar $ TV KType $ name "T"
-        fxS                         = fxAct s
-        tCont1                      = tCont fxS posNil a
--}
+primPOP             = qPrim "POP"
+primRERAISE         = qPrim "RERAISE"
+primRAISE           = qPrim "RAISE"
+primRAISEFROM       = qPrim "RAISEFROM"
+primASSERT          = qPrim "ASSERT"
+
+primISINSTANCE      = qPrim "ISINSTANCE"
+
+
+tActor              = tCon $ TC primActor []
+tR                  = tCon $ TC primR []
+tClos x p t         = tCon $ TC primClos [x,p,t]
+tCont x t           = tCon $ TC primCont [x,t]
+
+
+primMkEnv cls def   = [ (noq primASYNCf,        def scASYNCf NoDec),
+                        (noq primAFTERf,        def scAFTERf NoDec),
+                        (noq primAWAITf,        def scAWAITf NoDec),
+
+                        (noq primASYNCc,        def scASYNCc NoDec),
+                        (noq primAFTERc,        def scAFTERc NoDec),
+                        (noq primAWAITc,        def scAWAITc NoDec),
+
+                        (noq primASYNC,         def scASYNC NoDec),
+                        (noq primAFTER,         def scAFTER NoDec),
+                        (noq primAWAIT,         def scAWAIT NoDec),
+                        
+                        (noq primPUSHc,         def scPUSHc NoDec),
+                        (noq primPUSH,          def scPUSH NoDec),
+                        
+                        (noq primPOP,           def scPOP NoDec),
+                        (noq primRERAISE,       def scRERAISE NoDec),
+                        (noq primRAISE,         def scRAISE NoDec),
+                        (noq primRAISEFROM,     def scRAISEFROM NoDec),
+                        (noq primASSERT,        def scASSERT NoDec),
+                        (noq primISINSTANCE,    def scISINSTANCE NoDec),
+                        
+                        (noq primActor,         clActor cls def),
+                        (noq primR,             clR cls def),
+                        (noq primClos,          clClos cls def),
+                        (noq primCont,          clCont cls def)
+                      ]
+
+--  class $Actor (): pass
+clActor cls def     = cls [] [] []
+
+--  class $R (): pass
+clR cls def         = cls [] [] []
+
+--  class $Clos[X,P,A] ():
+--      __init__    : () -> None
+--      enter       : X(*P) -> A
+clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
+  where clTEnv      = [ (initKW, def scInit NoDec), (enterKW, def scEnter NoDec) ]
+        scInit      = tSchema [] $ tFun fxPure posNil kwdNil tNone
+        scEnter     = tSchema [] $ tFun (tVar x) (tVar p) kwdNil (tVar a)
+        x           = TV KFX (name "X")
+        p           = TV PRow (name "P")
+        a           = TV KType (name "A")
+
+--  class $Cont[X,T] ($Clos[X,(A,),$R]): pass
+clCont cls def      = cls [quant x, quant a] [([Nothing],TC primClos [tVar x, posRow (tVar a) posNil, tR])] []
+  where x           = TV KFX (name "X")
+        a           = TV KType (name "A")
+
+
+--  $ASYNCf         : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
+scASYNCf            = tSchema [quant s, quant a] tASYNC
+  where tASYNC      = tFun actS (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tFun'       = tFun actS posNil kwdNil (tVar a)
+        actS        = fxAct $ tVar s
+
+--  $AFTERf         : [S,A] => act[S](int, act[S]()->A) -> Msg[A]
+scAFTERf            = tSchema [quant s, quant a] tAFTER
+  where tAFTER      = tFun actS (posRow tInt $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tFun'       = tFun actS posNil kwdNil (tVar a)
+        actS        = fxAct $ tVar s
+
+--  $AWAITf         : [S,A] => act[S](Msg[A]) -> A
+scAWAITf            = tSchema [quant s, quant a] tAWAIT
+  where tAWAIT      = tFun actS (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "T"
+        actS        = fxAct $ tVar s
+
+
+--  $ASYNCc         : [S,A] => mut[S]($Actor, mut[S](mut[S](A)->$R)->$R) -> Msg[A]
+scASYNCc            = tSchema [quant s, quant a] tASYNC
+  where tASYNC      = tFun mutS (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tFun mutS (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun mutS (posRow (tVar a) posNil) kwdNil tR
+        mutS        = fxMut $ tVar s
+
+--  $AFTERc         : [S,A] => mut[S](int, mut[S](mut[S](A)->$R)->$R) -> Msg[A]
+scAFTERc            = tSchema [quant s, quant a] tAFTER
+  where tAFTER      = tFun mutS (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tFun mutS (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun mutS (posRow (tVar a) posNil) kwdNil tR
+        mutS        = fxMut $ tVar s
+
+--  $AWAITc         : [S,A] => mut[S](Msg[A], mut[S](A)->$R) -> $R
+scAWAITc            = tSchema [quant s, quant a] tAWAIT
+  where tAWAIT      = tFun mutS (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tFun mutS (posRow (tVar a) posNil) kwdNil tR
+        mutS        = fxMut $ tVar s
+
+
+--  $ASYNC          : [S,A] => mut[S]($Actor, $Cont[mut[S],$Cont[mut[S],A]]) -> Msg[A]
+scASYNC             = tSchema [quant s, quant a] tASYNC
+  where tASYNC      = tFun mutS (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tCont mutS tCont''
+        tCont''     = tCont mutS (tVar a)
+        mutS        = fxMut $ tVar s
+
+--  $AFTER          : [S,A] => mut[S](int,    $Cont[mut[S],$Cont[mut[S],A]]) -> Msg[A]
+scAFTER             = tSchema [quant s, quant a] tAFTER
+  where tAFTER      = tFun mutS (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tCont mutS tCont''
+        tCont''     = tCont mutS (tVar a)
+        mutS        = fxMut $ tVar s
+
+--  $AWAIT          : [S,A] => mut[S](Msg[A], $Cont[mut[S],A])               -> $R
+scAWAIT             = tSchema [quant s, quant a] tAWAIT
+  where tAWAIT      = tFun mutS (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tCont'      = tCont mutS (tVar a)
+        mutS        = fxMut $ tVar s
+
+
+
+--  $PUSHc          : [X,A] => pure (X(A)->$R) -> None
+scPUSHc             = tSchema [quant x, quant a] tPUSH
+  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        x           = TV KFX $ name "X"
+        a           = TV KType $ name "A"
+        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
+
+--  $PUSH           : [X,A] => pure ($Cont[X,A]) -> None
+scPUSH              = tSchema [quant x, quant a] tPUSH
+  where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
+        x           = TV KFX $ name "X" 
+        a           = TV KType $ name "A"
+        tCont'      = tCont (tVar x) (tVar a)
+
+
+
+--  $POP            : pure () -> None
+scPOP               = tSchema [] tPOP
+  where tPOP        = tFun fxPure posNil kwdNil tNone
+
+--  $RERAISE        : pure () -> None
+scRERAISE           = tSchema [] tRERAISE
+  where tRERAISE    = tFun fxPure posNil kwdNil tNone
+
+--  $RAISE          : pure (Exception) -> None
+scRAISE             = tSchema [] tRAISE
+  where tRAISE      = tFun fxPure (posRow tException posNil) kwdNil tNone
+
+--  $RAISEFROM      : pure (Exception, Exception) -> None
+scRAISEFROM         = tSchema [] tRAISEFROM
+  where tRAISEFROM  = tFun fxPure (posRow tException $ posRow tException posNil) kwdNil tNone
+
+--  $ASSERT         : pure (bool, ?str) -> None
+scASSERT           = tSchema [] tASSERT
+  where tASSERT    = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
+
+--  $ISINSTANCE     : pure (struct,_) -> bool
+scISINSTANCE        = tSchema [] tISINSTANCE
+  where tISINSTANCE = tFun fxPure (posRow tStruct $ posRow tWild posNil) kwdNil tNone
+
