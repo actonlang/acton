@@ -68,7 +68,7 @@ emptyCtxt env                           = env{ ctxt = [] }
 define x env                            = env { defd = bound x ++ defd env }
 
 
-eCallCont c args                        = eCallV primCONT (eVar c : args)
+eCallCont c args                        = eCallV primCont (eVar c : args)               -- TODO: change to c.enter
 
 pushH h                                 = sExpr (eCallV primPUSH [h])
 

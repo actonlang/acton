@@ -272,7 +272,7 @@ kwdToPos KwdNIL                     = PosNIL
 
 defaults (PosPar n t (Just e) p)    = s : defaults p
   where s                           = sIf1 test [set] []
-        test                        = eCall (eQVar primIsNone) [eVar n]
+        test                        = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar n,eNone]
         set                         = sAssign [pVar n Nothing] e
 defaults (PosPar n t Nothing p)     = defaults p
 defaults _                          = []

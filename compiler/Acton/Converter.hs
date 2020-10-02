@@ -226,7 +226,7 @@ convActTEnv env q0 p k te               = (initKW, NDef t0 NoDec) : [ (n, conv i
         conv i                          = i
         convS (TSchema l q t)           = TSchema l q (convT t)
         convT (TFun l fx p k t)
-          | fx == fxAction              = TFun l fx0 p k t
+          | fx == fxAction              = TFun l fx0 p k (tMsg t)
         convT t                         = t
         t0                              = monotype (TFun NoLoc fx0 p k tNone)
         fx0                             = fxAct tSelf

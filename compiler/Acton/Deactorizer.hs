@@ -141,7 +141,7 @@ instance Deact Decl where
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p k (Just t) b d fx)
-                                    = Decl l0 [Def l0 n q (addSelf p) k (Just t) [Return l0 (Just $ async)] d (fxAct tSelf)]
+                                    = Decl l0 [Def l0 n q (addSelf p) k (Just $ tMsg t) [Return l0 (Just $ async)] d (fxAct tSelf)]
               where n'              = localName n
                     async           = Call l0 (tApp (eQVar primASYNC) ts') (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
