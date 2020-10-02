@@ -85,9 +85,6 @@ void $Minus$ndarray_init($Minus$ndarray wit, $Integral$ndarray w$Integral$ndarra
   wit->w$Integral$ndarray =  w$Integral$ndarray;
 };
 
-
-
-
 struct $Integral$ndarray $Integral$ndarray_instance;
 struct $Logical$ndarray $Logical$ndarray_instance;
 struct $Minus$ndarray $Minus$ndarray_instance;
@@ -99,8 +96,6 @@ struct $Integral$ndarray$class $Integral$ndarray$methods = {"",UNASSIGNED,NULL,$
                                                     NULL,NULL,NULL,NULL,
                                                     NULL,NULL,NULL, $Integral$ndarray$__floordiv__ ,
                                                     NULL,NULL,NULL,NULL};
-//struct $Integral$ndarray $Integral$ndarray_instance = {&$Integral$ndarray$methods, &$Logical$ndarray_instance, &$Minus$ndarray_instance};
-//$Integral$ndarray $Integral$ndarray$witness = &$Integral$ndarray_instance;
 
 struct $Logical$ndarray$class $Logical$ndarray$methods =  {"", UNASSIGNED,NULL,$Logical$ndarray_init,NULL,NULL,NULL};
 struct $Logical$ndarray $Logical$ndarray_instance = {&$Logical$ndarray$methods, &$Integral$ndarray_instance};
@@ -110,3 +105,15 @@ struct $Minus$ndarray$class $Minus$ndarray$methods = {"",UNASSIGNED, NULL,$Minus
 struct $Minus$ndarray $Minus$ndarray_instance = {&$Minus$ndarray$methods, &$Integral$ndarray_instance};
 $Minus$ndarray $Minus$ndarray$witness = &$Minus$ndarray_instance;
  
+// $Iterable$ndarray ////////////////////////////////////////////////////////
+
+
+void $Iterable$ndarray$__init__($Iterable$ndarray self, $Primitive pwit) {
+  self->pwit = pwit;
+}
+  
+$Iterator $Iterable$ndarray$__iter__($Iterable$ndarray self, $ndarray a) {
+  return ($Iterator)$NEW($Iterator$ndarray,self->pwit,a);
+}
+
+struct $Iterable$ndarray$class  $Iterable$ndarray$methods =  {"", UNASSIGNED,NULL,$Iterable$ndarray$__init__,$Iterable$ndarray$__iter__};

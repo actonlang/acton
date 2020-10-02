@@ -34,7 +34,7 @@ extern struct $ndarray$class $ndarray$methods;
 
 #define MAX_NDIM 16
 
-typedef struct $array_iterator {
+typedef struct $array_iterator_state {
   union $Bytes8 *current;
   long currentstride;
   long lastshapepos;
@@ -44,10 +44,30 @@ typedef struct $array_iterator {
   long strides[MAX_NDIM];
   long jumps[MAX_NDIM];
   long index[MAX_NDIM];
-} *$array_iterator;
+} *$array_iterator_state;
 
-$array_iterator $mk_iterator($ndarray a);
-union $Bytes8 *iter_next($array_iterator it);
+
+typedef struct $Iterator$ndarray *$Iterator$ndarray; ;
+
+struct $Iterator$ndarray$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterator$ndarray, $Primitive, $ndarray);
+  void (*__serialize__)($Iterator$ndarray,$Serial$state);
+  $Iterator$ndarray (*__deserialize__)($Serial$state);
+  $bool (*__bool__)($Iterator$ndarray);
+  $str (*__str__)($Iterator$ndarray);
+  $WORD (*__next__)($Iterator$ndarray);
+};
+
+struct $Iterator$ndarray {
+  struct $Iterator$ndarray$class *$class;
+  $Primitive pwit;
+  $array_iterator_state it;
+};
+
+extern struct  $Iterator$ndarray$class  $Iterator$ndarray$methods;
 
 // Intended argument to constructor
 
@@ -73,7 +93,7 @@ $ndarray $ndarray_array($Primitive wit, $list elems);
 
 $ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis);
 $ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k);
-$ndarray $ndarray_sort($Primitive wit, $ndarray a);
+$ndarray $ndarray_sort($Primitive wit, $ndarray a, $int axis);
 $ndarray $ndarray_clip($Primitive wit, $ndarray a, $WORD low, $WORD high);
 $ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b);
 $ndarray $ndarray_abs($Primitive wit, $ndarray a);

@@ -17,6 +17,12 @@ typedef struct $Minus$ndarray *$Minus$ndarray;
 struct $Minus$ndarray$class;
 typedef struct $Minus$ndarray$class *$Minus$ndarray$class;
 
+struct $Iterable$ndarray;
+typedef struct $Iterable$ndarray *$Iterable$ndarray;
+
+struct $Iterable$ndarray$class;
+typedef struct $Iterable$ndarray$class *$Iterable$ndarray$class;
+
 // $Integral$ndarray ////////////////////////////////////////////////////////////
 
 struct $Integral$ndarray {
@@ -129,11 +135,31 @@ struct $Minus$ndarray$class {
 void $Minus$ndarray$__init__ ($Minus$ndarray, $Integral$ndarray);
 $ndarray $Minus$ndarray$__sub__ ($Minus$ndarray, $ndarray, $ndarray);
 
-// Witnesses /////////////////////////////////////////////////////////////////
+// $Iterable$ndarray ////////////////////////////////////////////////////////////
+
+struct $Iterable$ndarray {
+  $Iterable$ndarray$class $class;
+  $Primitive pwit;
+};
+
+struct $Iterable$ndarray$class {
+  char *$GCINFO;
+  int $class_id;
+  $Super$class $superclass;
+  void (*__init__)($Iterable$ndarray, $Primitive);
+  $Iterator (*__iter__)($Iterable$ndarray, $ndarray);
+};
+
+//void $Iterable$ndarray$__init__ ($Iterable$ndarray);
+$Iterator $Iterable$ndarray$__iter__ ($Iterable$ndarray, $ndarray);
+
+
+
+// method tables /////////////////////////////////////////////////////////////////
 
 extern struct $Integral$ndarray$class $Integral$ndarray$methods;
 extern struct $Logical$ndarray$class $Logical$ndarray$methods;
 extern struct $Minus$ndarray$class $Minus$ndarray$methods;
+extern struct $Iterable$ndarray$class $Iterable$ndarray$methods;
 
-extern struct $Logical$ndarray *$Logical$ndarray$witness;
-extern struct $Minus$ndarray *$Minus$ndarray$witness;
+
