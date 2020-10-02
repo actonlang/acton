@@ -181,7 +181,7 @@ classBody env ss                = do --traceM ("-- classBody: funfree: " ++ prst
   where funfree                 = defmap env ss
         allfree                 = nub $ concat [ vs | (m,vs) <- funfree ]
         vs                      = bound ss \\ signames ss
-        env1                    = viaSelf allfree $ viaSelf vs env                    -- TODO: exclude classmeths/classattrs
+        env1                    = viaSelf allfree $ viaSelf vs env                      -- TODO: exclude @staticmethods
         relevant Pass{}         = False
         relevant _              = True
         nonnull []              = [Pass l0]
@@ -190,7 +190,7 @@ classBody env ss                = do --traceM ("-- classBody: funfree: " ++ prst
 
 addParams vs ps                 = foldr (\n p -> PosPar n Nothing Nothing p) ps vs
 
-closure n vs                    = eCall (eQVar primCLOS) (map eVar $ n:vs)
+closure n vs                    = eCall (eQVar primClos) (map eVar $ n:vs)              -- TODO: generate custom $Clos subclass for each type combo
 
 signames ss                     = concatMap sigs ss
   where sigs d@Signature{}      = vars d

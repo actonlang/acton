@@ -153,9 +153,9 @@ instance Norm Decl where
                                          b' <- norm env1 b
                                          return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') d x
       where env1                    = extLocal (bound b ++ bound p ++ bound k) env
-    norm env (Actor l n q p k t b)  = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+    norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
                                          b' <- norm env1 b
-                                         return $ Actor l n q (noDefaults p') KwdNIL t (defaults p' ++ b')
+                                         return $ Actor l n q (noDefaults p') KwdNIL (defaults p' ++ b')
       where env1                    = extLocal (bound b ++ bound p ++ bound k) env
     norm env (Class l n q as b)     = Class l n q as <$> norm env b
     norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
@@ -272,7 +272,7 @@ kwdToPos KwdNIL                     = PosNIL
 
 defaults (PosPar n t (Just e) p)    = s : defaults p
   where s                           = sIf1 test [set] []
-        test                        = eCall (eQVar primIsNone) [eVar n]
+        test                        = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar n,eNone]
         set                         = sAssign [pVar n Nothing] e
 defaults (PosPar n t Nothing p)     = defaults p
 defaults _                          = []

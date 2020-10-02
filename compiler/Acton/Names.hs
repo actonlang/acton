@@ -150,13 +150,13 @@ boundTarget _                       = []
 
 instance Vars Decl where
     free (Def _ n q ps ks t b d fx) = (free ps ++ free ks ++ free b ++ free fx) \\ (n : bound q ++ bound ps ++ bound ks ++ bound b)
-    free (Actor _ n q ps ks t b)    = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ bound b)
+    free (Actor _ n q ps ks b)      = (free ps ++ free ks ++ free b) \\ (n : self : bound q ++ bound ps ++ bound ks ++ bound b)
     free (Class _ n q cs b)         = (free cs ++ free b) \\ (n : bound q ++ bound b)
     free (Protocol _ n q cs b)      = (free cs ++ free b) \\ (n : bound q ++ bound b)
     free (Extension _ n q cs b)     = (free n ++ free cs ++ free b) \\ (bound q ++ bound b)
 
     bound (Def _ n _ _ _ _ _ _ _)   = [n]
-    bound (Actor _ n _ _ _ _ _)     = [n]
+    bound (Actor _ n _ _ _ _)       = [n]
     bound (Class _ n _ _ _)         = [n]
     bound (Protocol _ n _ _ _)      = [n]
     bound (Extension _ n _ _ _)     = []

@@ -40,11 +40,16 @@ data EnvF x                 = EnvF {
 type Env0                   = EnvF ()
 
 
-setX                        :: EnvF x -> y -> EnvF y
-setX env x                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, envX = x }
+setX                        :: x -> EnvF y -> EnvF x
+setX x env                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
+
+
+mapModules                  :: (TEnv -> TEnv) -> EnvF x -> Env0
+mapModules f env            = EnvF { names = f (names env), modules = [ (m, f te) | (m,te) <- modules env ], witnesses = [], envX = () }
+
 
 {-  TEnv principles:
     -   A TEnv is an association of NameInfo details to a list of names.

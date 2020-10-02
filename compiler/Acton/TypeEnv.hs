@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances, DeriveGeneric #-}
 module Acton.TypeEnv where
 
+import Pretty
+import Utils
 import Acton.Syntax
 import Acton.Env
 import Acton.TypeM
@@ -17,7 +19,7 @@ type Env                        = EnvF TypeX
 
 data EnvCtx                     = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ actorstate = Nothing, context = CtxTop, indecl = False }
+typeX env0                      = setX TypeX{ actorstate = Nothing, context = CtxTop, indecl = False } env0
 
 instance Pretty TypeX where
     pretty _                    = empty
@@ -129,4 +131,37 @@ instQuals env q ts          = do let s = tybound q `zip` ts
 
 wvars                       :: Constraints -> [Expr]
 wvars cs                    = [ eVar v | Impl v _ _ <- cs ]
+
+
+-- Misc. ---------------------------------------------------------------------------------------------------------------------------
+
+bindWits eqs                            = [ Assign l0 [PVar l0 n (Just t)] e | (n,t,e) <- eqs ]
+
+impl2type t (TC n ts)                   = tCon $ TC n (t:ts)
+
+wit2row ws                              = \p -> foldr f p ws
+  where f (w,t)                         = TRow NoLoc PRow w t
+
+wit2arg ws                              = \p -> foldr f p ws
+  where f (w,t)                         = PosArg (eVar w)
+
+wit2par ws                              = \p -> foldr f p ws
+  where f (w,t)                         = PosPar w (Just t) Nothing
+
+var2arg xs                              = \p -> foldr f p xs
+  where f x                             = PosArg (eVar x)
+
+exp2arg es                              = \p -> foldr PosArg p es
+
+witsOf cs                               = [ eVar w | Impl w t p <- cs ]
+
+qualWPar env q                          = wit2par (qualWits env q)
+
+qualWRow env q                          = wit2row (qualWits env q)
+
+qualWits env q                          = [ (tvarWit tv p, impl2type (tVar tv) p) | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
+
+witSubst env q cs                       = [ (w0,t,eVar w) | ((w,t),w0) <- ws `zip` ws0 ]
+  where ws                              = [ (w, impl2type t p) | Impl w t p <- cs ]
+        ws0                             = [ tvarWit tv p | Quant tv ps <- q, p <- ps, isProto env (tcname p) ]
 

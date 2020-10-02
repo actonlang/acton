@@ -259,7 +259,7 @@ instance Subst KwdPar where
 
 instance Subst Decl where
     msubst (Def l n q p k a ss de fx)   = Def l n <$> msubst q <*> msubst p <*> msubst k <*> msubst a <*> msubst ss <*> return de <*> msubst fx
-    msubst (Actor l n q p k a ss)       = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst a <*> msubst ss
+    msubst (Actor l n q p k ss)         = Actor l n <$> msubst q <*> msubst p <*> msubst k <*> msubst ss
     msubst (Class l n q bs ss)          = Class l n <$> msubst q <*> msubst bs <*> msubst ss
     msubst (Protocol l n q bs ss)       = Protocol l n <$> msubst q <*> msubst bs <*> msubst ss
     msubst (Extension l n q bs ss)      = Extension l n <$> msubst q <*> msubst bs <*> msubst ss
@@ -273,21 +273,21 @@ instance Subst Decl where
     msubst d@(Def l n q p k a ss de fx) = do (s,ren) <- msubstRenaming d
                                              return $ Def l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
                                                               (subst s (subst ren a)) (subst s (subst ren ss)) de (subst s fx)
-    msubst d@(Actor l n q p k a ss)     = do (s,ren) <- msubstRenaming d
+    msubst d@(Actor l n q p k ss)       = do (s,ren) <- msubstRenaming d
                                              return $ Actor l n (subst s (subst ren q)) (subst s (subst ren p)) (subst s (subst ren k))
-                                                                (subst s (subst ren a)) (subst s (subst ren ss))
+                                                                (subst s (subst ren ss))
     -}
     tybound (Protocol l n q ps b)   = tvSelf : tybound q
     tybound (Class l n q ps b)      = tvSelf : tybound q
     tybound (Extension l n q ps b)  = tvSelf : tybound q
     tybound (Def l n q p k t b d x) = tybound q
-    tybound (Actor l n q p k a b)   = tybound a ++ tybound q
+    tybound (Actor l n q p k b)     = tybound q
     
     tyfree (Protocol l n q ps b)   = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
     tyfree (Class l n q ps b)      = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
     tyfree (Extension l n q ps b)  = nub (tyfree q ++ tyfree ps ++ tyfree b) \\ (tvSelf : tybound q)
     tyfree (Def l n q p k t b d x) = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b ++ tyfree t ++ tyfree x) \\ tybound q
-    tyfree (Actor l n q p k a b)   = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ (tybound a ++ tybound q)
+    tyfree (Actor l n q p k b)     = nub (tyfree q ++ tyfree p ++ tyfree k ++ tyfree b) \\ (tybound q)
     
 instance Subst Stmt where
     msubst (Expr l e)               = Expr l <$> msubst e
