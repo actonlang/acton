@@ -11,9 +11,10 @@ import Acton.Printer
 import Acton.Names
 import Acton.Builtin
 import Acton.Prim
+import Acton.Env
 
-convert                                 :: TInfo -> Module -> IO Module
-convert inf (Module m imps stmts)       = return $ Module m imps $ runCpsM $ cps (env0 inf) stmts
+convert                                 :: Env0 -> Module -> IO Module
+convert env0 (Module m imps stmts)       = return $ Module m imps $ runCpsM $ cps (cpsEnv env0) stmts
 
 type CpsM a                             = State CpsState a
 
@@ -54,18 +55,18 @@ data Frame                              = Act
                                         | Pop
                                         deriving (Eq,Show)
 
-data Env                                = Env { ctxt :: [Frame], defd :: [Name], tinfo :: TInfo }
+type CPSEnv                             = EnvF CPSX
 
-type TInfo                              = Substitution
+data CPSX                               = CPSX { ctxtX :: [Frame] }
 
-env0 inf                                = Env { ctxt = [], defd = [], tinfo = inf }
+cpsEnv env0                             = setX CPSX{ ctxtX = [] } env0
+
+ctxt env                                = ctxtX $ envX env
 
 infixr +:
-frame +: env                            = env { ctxt = frame : ctxt env }
+frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
-emptyCtxt env                           = env{ ctxt = [] }
-
-define x env                            = env { defd = bound x ++ defd env }
+setCtxt env ctx                         = modX env $ \x -> x{ ctxtX = ctx }
 
 
 eCallCont c args                        = eCallV primCont (eVar c : args)               -- TODO: change to c.enter
@@ -118,7 +119,7 @@ cpsSuite env ss                         = do (ss',prefixes) <- withPrefixes $ pr
                                              cps env (prefixes ++ ss')
 
 class CPS a where
-    cps :: Env -> a -> CpsM a
+    cps :: CPSEnv -> a -> CpsM a
 
 instance CPS [Stmt] where
     cps env []
@@ -179,10 +180,10 @@ instance CPS [Stmt] where
     cps env (Decl l ds : ss)            = do ds' <- mapM (cps env1) ds
                                              ss' <- cps env1 ss
                                              return $ sDecl ds' : ss'
-      where env1                        = define ds env
+      where env1                        = env -- define'' ds env
     
     cps env (s : ss)
-      | not (needCont env s)            = do ss' <- cps (define s env) ss
+      | not (needCont env s)            = do ss' <- cps (env {- define'' s env -}) ss
                                              return $ s : ss'
     
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
@@ -286,20 +287,20 @@ instance CPS [Stmt] where
 
 instance CPS Decl where
     cps env (Class l n q cs b)          = Class l n q cs <$> cpsSuite env1 b
-      where env1                        = emptyCtxt env
+      where env1                        = setCtxt env []
 
     cps env (Protocol l n q cs b)       = Protocol l n q cs <$> cpsSuite env1 b
-      where env1                        = emptyCtxt env
+      where env1                        = setCtxt env []
 
     cps env (Extension l n q cs b)      = Extension l n q cs <$> cpsSuite env1 b
-      where env1                        = emptyCtxt env
+      where env1                        = setCtxt env []
 
     cps env (Actor l n q p k b)         = Actor l n q (addContParam p) k <$> cpsSuite env1 b
-      where env1                        = Meth contKW +: env { ctxt = [Act] }
+      where env1                        = Meth contKW +: setCtxt env [Act]
 
     cps env (Def l n q p k a b d m)
-      | contDef (tinfo env) l n m       = Def l n q (addContParam p) k a <$> cpsSuite env1 b <*> return d <*> return m
-      where env1                        = Meth contKW +: env { defd = bound p }
+      | contDef env l n m               = Def l n q (addContParam p) k a <$> cpsSuite env1 b <*> return d <*> return m
+      where env1                        = Meth contKW +: env    -- env { defd = bound p }
 
     cps env d                           = return d
     
@@ -355,7 +356,7 @@ inCont env                              = length (ctxt env) > 0
 
 
 class NeedCont a where
-    needCont                            :: Env -> a -> Bool
+    needCont                            :: CPSEnv -> a -> Bool
 
 instance NeedCont a => NeedCont [a] where
     needCont env xs                     = any (needCont env) xs
@@ -386,8 +387,8 @@ instance NeedCont Stmt where
 
 
 class PreCPS a where
-    pre                                 :: Env -> a -> CpsM a
-    preTop                              :: Env -> a -> CpsM a
+    pre                                 :: CPSEnv -> a -> CpsM a
+    preTop                              :: CPSEnv -> a -> CpsM a
     preTop env                          = pre env
 
 instance PreCPS a => PreCPS [a] where

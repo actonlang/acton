@@ -32,10 +32,10 @@ withStore m                         = do ss0 <- swapStore []
 
 type DeactEnv                       = EnvF DeactX
 
-data DeactX                         = DeactEnv { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
+data DeactX                         = DeactX { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
 
 deactEnv                            :: Env0 -> DeactEnv
-deactEnv env0                       = setX DeactEnv{ actionsX = [], localsX = [], stvarX = Nothing } env0
+deactEnv env0                       = setX DeactX{ actionsX = [], localsX = [], stvarX = Nothing } env0
 
 extend                              :: TEnv -> DeactEnv -> DeactEnv
 extend te env                       = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }

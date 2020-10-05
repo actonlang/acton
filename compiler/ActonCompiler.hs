@@ -189,10 +189,10 @@ runRestPasses args paths src env0 original = (do
                           (deacted,env3) <- Acton.Deactorizer.deactorize env2 normalized
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
 
-                          cpstyled <- Acton.CPS.convert [] deacted
+                          cpstyled <- Acton.CPS.convert env3 deacted
                           iff (cps args) $ dump "cps" (Pretty.print cpstyled)
 
-                          lifted <- Acton.LambdaLifter.liftModule cpstyled
+                          lifted <- Acton.LambdaLifter.liftModule env3 cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
 
                           c <- Acton.CodeGen.generate env3 lifted

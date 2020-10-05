@@ -8,11 +8,12 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
+import Acton.Env
 import Pretty
 import Prelude hiding((<>))
 
-liftModule (Module m imp stmts) = return $ Module m imp (reverse lams ++ reverse defs ++ stmts')
-  where (stmts',(lams,defs,_))  = runL (ll env0 stmts)
+liftModule env0 (Module m imp stmts) = return $ Module m imp (reverse lams ++ reverse defs ++ stmts')
+  where (stmts',(lams,defs,_)) = runL (ll (liftEnv env0) stmts)
 
 
 -- A closed function outside a class:
@@ -78,13 +79,15 @@ liftToNext stmt                 = state (\(totop,tonext,supply) -> (Pass l0, (to
 
 -- Environment ---------------------------------------------------------------------------------------------------------
 
-data Env                        = Env { 
-                                    prefix  :: [(Ctx,String)], 
-                                    locals  :: [Name],
-                                    freemap :: [(Name,[Name])],
-                                    namemap :: [(Name,Name)],
-                                    selfpar :: Maybe Name,
-                                    selfref :: [Name] 
+type LiftEnv                    = EnvF LiftX
+
+data LiftX                      = LiftX {
+                                    prefixX  :: [(Ctx,String)],
+                                    localsX  :: [Name],
+                                    freemapX :: [(Name,[Name])],
+                                    namemapX :: [(Name,Name)],
+                                    selfparX :: Maybe Name,
+                                    selfrefX :: [Name]
                                   } 
                                   deriving (Eq,Show)
 
@@ -98,22 +101,29 @@ instance Pretty (Name, [Name]) where
     pretty (n,ns)               = pretty n <+> braces (commaSep pretty ns)
 
 
-env0                            = Env { prefix = [], locals = [], freemap = [], namemap = [], selfpar = Nothing, selfref = [] }
+liftEnv env0                    = setX LiftX{ prefixX = [], localsX = [], freemapX = [], namemapX = [], selfparX = Nothing, selfrefX = [] } env0
 
-extPrefix c n env               = env { prefix = (c,nstr n) : prefix env }
+prefix env                      = prefixX $ envX env
+locals env                      = localsX $ envX env
+freemap env                     = freemapX $ envX env
+namemap env                     = namemapX $ envX env
+selfpar env                     = selfparX $ envX env
+selfref env                     = selfrefX $ envX env
+
+extPrefix c n env               = modX env $ \x -> x{ prefixX = (c,nstr n) : prefix env }
 
 extLocals vs env
-  | any (isSelf env) vs         = env { locals = vs ++ locals env, selfpar = Nothing }
-  | otherwise                   = env { locals = vs ++ locals env }
+  | any (isSelf env) vs         = modX env $ \x -> x{ localsX = vs ++ locals env, selfparX = Nothing }
+  | otherwise                   = modX env $ \x -> x{ localsX = vs ++ locals env }
 
-extFuns m env                   = env { freemap = [ (f, restrict vs) | (f,vs) <- m ] ++ freemap env }
+extFuns m env                   = modX env $ \x -> x{ freemapX = [ (f, restrict vs) | (f,vs) <- m ] ++ freemap env }
   where restrict vs             = intersect vs (locals env)
 
-extMap m env                    = env { namemap = m ++ namemap env }
+extMap m env                    = modX env $ \x -> x{ namemapX = m ++ namemap env }
 
-setSelf n env                   = env{ selfpar = n }
+setSelf n env                   = modX env $ \x -> x{ selfparX = n }
 
-viaSelf vs env                  = env{ selfref = vs ++ selfref env }
+viaSelf vs env                  = modX env $ \x -> x{ selfrefX = vs ++ selfref env }
 
 findFree n env                  = lookup n (freemap env)
 
@@ -199,7 +209,7 @@ signames ss                     = concatMap sigs ss
 ----------------------------------------------------------------------------------------------------------
 
 class Lift e where
-    ll                                  :: Env -> e -> LiftM e
+    ll                                  :: LiftEnv -> e -> LiftM e
 
 instance Lift a => Lift [a] where
     ll env                              = traverse (ll env)
@@ -229,6 +239,8 @@ instance Lift Stmt where
       | onTop env                       = Decl l <$> ll env ds
       | inClass env                     = Decl l <$> ll env ds
       | otherwise                       = Decl l <$> ll env ds >>= liftToNext
+    ll env (Signature l ns sc dec)      = pure $ Signature l ns sc dec                  -- TODO: revisit!
+    ll env s                            = error ("#### ll unexpected stmt: " ++ prstr s)
 
 instance Lift Decl where
     ll env (Def l n q ps _ks ann b d fx)
@@ -286,6 +298,9 @@ instance Lift Expr where
     ll env (CompOp l e ops)             = CompOp l <$> ll env e <*> ll env ops
     ll env (UnOp l o e)                 = UnOp l o <$> ll env e
     ll env (Dot l e n)                  = Dot l <$> ll env e <*> pure n
+    ll env (Rest l e n)                 = Rest l <$> ll env e <*> pure n
+    ll env (DotI l e i)                 = DotI l <$> ll env e <*> pure i
+    ll env (RestI l e i)                = RestI l <$> ll env e <*> pure i
     ll env (Lambda l ps _k e fx)        = do nn <- newName "lambda"
                                              let env1 = extLocals (bound ps) $ extPrefix InDef nn env
                                              --traceM ("## ll Lambda (nested)")
