@@ -13,8 +13,9 @@ import Acton.Builtin
 import Acton.Prim
 import Acton.Env
 
-convert                                 :: Env0 -> Module -> IO Module
-convert env0 (Module m imps stmts)       = return $ Module m imps $ runCpsM $ cps (cpsEnv env0) stmts
+convert                                 :: Env0 -> Module -> IO (Module, Env0)
+convert env0 m                          = return (runCpsM $ cps env m, env0)
+  where env                             = cpsEnv env0
 
 type CpsM a                             = State CpsState a
 
@@ -119,7 +120,10 @@ cpsSuite env ss                         = do (ss',prefixes) <- withPrefixes $ pr
                                              cps env (prefixes ++ ss')
 
 class CPS a where
-    cps :: CPSEnv -> a -> CpsM a
+    cps                                 :: CPSEnv -> a -> CpsM a
+
+instance CPS Module where
+    cps env (Module m imps ss)          = Module m imps <$> cps env ss
 
 instance CPS [Stmt] where
     cps env []

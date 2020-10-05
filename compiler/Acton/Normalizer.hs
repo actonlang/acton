@@ -2,16 +2,18 @@ module Acton.Normalizer where
 
 import Acton.Syntax
 import Acton.Names
-import Acton.Env hiding (newName)
+import Acton.Env
+import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
 import Utils
 import Control.Monad.State.Lazy
 import Debug.Trace
 
-normalize                           :: (TEnv,Env0) -> Module -> IO Module
-normalize (te,env0) m               = return $ evalState (norm env m) 0
-  where env                         = normEnv (te,env0)
+normalize                           :: Env0 -> Module -> IO (Module, Env0)
+normalize env0 m                    = return (evalState (norm env m) 0, env0)
+  where env                         = normEnv env0
+        
 
 --  Normalization:
 --  X All module aliases are replaced by their original module name
@@ -38,7 +40,9 @@ newName s                           = do n <- get
                                     -- builtin names are last in global; local names are first in local
 data NormEnv                        = NormEnv { global :: TEnv, local :: [Name] } deriving Show
 
-normEnv (te,env)                    = NormEnv (te ++ names env) []
+normEnv env                         = NormEnv (names env) []
+
+extGlobal te env                    = env{ global = te ++ global env }
 
 extLocal vs env                     = env{ local = vs ++ local env }
 
@@ -88,7 +92,8 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module m imps ss)     = Module m <$> norm env imps <*> norm env ss
+    norm env (Module m imps ss)     = Module m <$> norm env imps <*> norm env1 ss
+      where env1                    = extGlobal (envOf ss) env
 
 instance Norm Import where
     norm env (Import l ms)          = Import l <$> norm env ms

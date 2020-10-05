@@ -12,7 +12,7 @@ import Acton.Env
 import Pretty
 import Prelude hiding((<>))
 
-liftModule env0 (Module m imp stmts) = return $ Module m imp (reverse lams ++ reverse defs ++ stmts')
+liftModule env0 (Module m imp stmts) = return $ (Module m imp $ reverse lams ++ reverse defs ++ stmts', env0)
   where (stmts',(lams,defs,_)) = runL (ll (liftEnv env0) stmts)
 
 

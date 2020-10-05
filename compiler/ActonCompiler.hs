@@ -174,31 +174,31 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
 
 runRestPasses args paths src env0 original = (do
                           let outbase = outBase paths
-                          env1 <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 (A.imps original)
+                          env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 (A.imps original)
 
-                          kchecked <- Acton.Kinds.check env1 original
+                          kchecked <- Acton.Kinds.check env original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
 
-                          (iface,tchecked,env2) <- Acton.Types.reconstruct outbase env1 kchecked
+                          (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
                           iff (types args) $ dump "types" (Pretty.print tchecked)
                           iff (sigs args) $ dump "sigs" (Pretty.vprint iface)
 
-                          normalized <- Acton.Normalizer.normalize (iface,env2) tchecked
+                          (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
 
-                          (deacted,env3) <- Acton.Deactorizer.deactorize env2 normalized
+                          (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
 
-                          cpstyled <- Acton.CPS.convert env3 deacted
+                          (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
                           iff (cps args) $ dump "cps" (Pretty.print cpstyled)
 
-                          lifted <- Acton.LambdaLifter.liftModule env3 cpstyled
+                          (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
 
-                          c <- Acton.CodeGen.generate env3 lifted
+                          c <- Acton.CodeGen.generate liftEnv lifted
                           iff (cgen args) $ dump "cgen" c
 
-                          return (env0 `Acton.Env.withModulesFrom` env1,iface)
+                          return (env0 `Acton.Env.withModulesFrom` env,iface)
                         ) 
                           `catch` handle generalError src paths
                           `catch` handle Acton.Kinds.kindError src paths
