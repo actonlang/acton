@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 module Acton.Normalizer where
 
 import Acton.Syntax
@@ -11,7 +12,7 @@ import Control.Monad.State.Lazy
 import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
-normalize env0 m                    = return (evalState (norm env m) 0, env0)
+normalize env0 m                    = return (evalState (norm env m) 0, mapModules conv env0)
   where env                         = normEnv env0
         
 
@@ -45,6 +46,8 @@ normEnv env                         = NormEnv (names env) []
 extGlobal te env                    = env{ global = te ++ global env }
 
 extLocal vs env                     = env{ local = vs ++ local env }
+
+-- Normalize terms ---------------------------------------------------------------------------------------
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ p@(PVar _ _ _)            = return (p,[])
@@ -138,7 +141,7 @@ instance Norm Stmt where
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
     norm env (Decl l ds)            = Decl l <$> norm env ds
-    norm env (Signature l ns t d)   = return $ Signature l ns t d
+    norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected: " ++ prstr s)    
 
     norm' env (Assign l ts e)       = do e' <- norm env e
@@ -328,35 +331,49 @@ instance Norm Assoc where
   
 instance Norm Sliz where
     norm env (Sliz l e1 e2 e3)      = Sliz l <$> norm env e1 <*> norm env e2 <*> norm env e3
-{-
-instance Norm TSchema where
-    norm env (TSchema l q t d)      = TSchema l <$> norm env q <*> norm env t <*> return d
 
-instance Norm TVar where
-    norm env (TV n)                 = TV <$> norm env n
 
-instance Norm TCon where
-    norm env (TC n ts)              = TC n <$> norm env ts
+-- Convert function types ---------------------------------------------------------------------------------
 
-instance Norm QBind where
-    norm env (Quant v cs)           = Quant <$> norm env v <*> norm env cs
+class Conv a where
+    conv                            :: a -> a
 
-instance Norm Constraint where
-    norm env (Cast t t')            = Cast <$> norm env t <*> norm env t'
-    norm env (Sub w t t')           = Sub w <$> norm env t <*> norm env t'
-    norm env (Impl w t p)           = Impl w <$> norm env t <*> norm env p
-    norm env (Sel w t n t')         = Sel w <$> norm env t <*> return n <*> norm env t'
-    norm env (Mut t n t')           = Mut <$> norm env t <*> return n <*> norm env t'
+instance (Conv a) => Conv [a] where
+    conv                            = map conv
 
-instance Norm Type where
-    norm env (TVar l v)             = TVar l <$> norm env v
-    norm env (TFun l es p k t)      = TFun l <$> norm env es <*> norm env p <*> norm env k <*> norm env t
-    norm env (TTuple l p k)         = TTuple l <$> norm env p <*> norm env k
-    norm env (TOpt l t)             = TOpt l <$> norm env t
-    norm env (TUnion l as)          = TUnion l <$> return as
-    norm env (TCon  l c)            = TCon l <$> norm env c
-    norm env (TNone l)              = return $ TNone l
-    norm env (TWild l)              = return $ TWild l
-    norm env (TNil l)               = return $ TNil l
-    norm env (TRow l n t r)         = TRow l n <$> norm env t <*> norm env r
--}
+instance (Conv a) => Conv (Name, a) where
+    conv (n, x)                     = (n, conv x)
+
+instance Conv NameInfo where
+    conv (NAct q p k te)            = NAct q (joinRow p k) kwdNil (conv te)
+    conv (NClass q ps te)           = NClass q (conv ps) (conv te)
+    conv (NSig sc dec)              = NSig (conv sc) dec
+    conv (NDef sc dec)              = NDef (conv sc) dec
+    conv (NVar t)                   = NVar (conv t)
+    conv (NSVar t)                  = NSVar (conv t)
+    conv ni                         = ni
+
+instance Conv WTCon where
+    conv (w,c)                      = (w, conv c)
+
+instance Conv TSchema where
+    conv (TSchema l q t)            = TSchema l q (conv t)
+
+instance Conv Type where
+    conv (TFun l fx p k t)          = TFun l fx (joinRow p k) kwdNil (conv t)
+    conv (TCon l c)                 = TCon l (conv c)
+    conv (TTuple l p k)             = TTuple l (conv p) (conv k)
+    conv (TOpt l t)                 = TOpt l (conv t)
+    conv (TRow l k n t r)           = TRow l k n (conv t) (conv r)
+    conv t                          = t
+
+instance Conv TCon where
+    conv (TC c ts)                  = TC c (conv ts)
+
+joinRow (TRow l k n t p) r          = TRow l k n (conv t) (joinRow p r)
+joinRow (TNil l k) r                = toPosRow r
+joinRow t r                         = TRow (loc t) PRow (name "_") (conv t) (toPosRow r)
+
+toPosRow (TRow l k n t r)           = TRow l k (name "_") t (toPosRow r)
+toPosRow (TNil l k)                 = TNil l PRow
+toPosRow t                          = TRow (loc t) PRow (name "_") (conv t) posNil

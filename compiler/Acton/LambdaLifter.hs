@@ -12,7 +12,7 @@ import Acton.Env
 import Pretty
 import Prelude hiding((<>))
 
-liftModule env0 (Module m imp stmts) = return $ (Module m imp $ reverse lams ++ reverse defs ++ stmts', env0)
+liftModule env0 (Module m imp stmts) = return $ (Module m imp $ reverse lams ++ reverse defs ++ stmts', mapModules convEnv env0)
   where (stmts',(lams,defs,_)) = runL (ll (liftEnv env0) stmts)
 
 
@@ -352,3 +352,8 @@ instance Lift Comp where
 instance Lift Pattern where
     ll env (PVar l n a)                 = return (PVar l n a)
     ll env (PParen l p)                 = PParen l <$> ll env p
+
+
+-- Convert environment types -----------------------------------------------------------------------------------------
+
+convEnv te                              = te

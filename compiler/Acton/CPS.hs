@@ -14,7 +14,7 @@ import Acton.Prim
 import Acton.Env
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
-convert env0 m                          = return (runCpsM $ cps env m, env0)
+convert env0 m                          = return (runCpsM $ cps env m, mapModules convEnv env0)
   where env                             = cpsEnv env0
 
 type CpsM a                             = State CpsState a
@@ -513,3 +513,8 @@ instance PreCPS Pattern where
     pre env (PList l ps p)              = PList l <$> pre env ps <*> pre env p
     pre env (PParen l p)                = PParen l <$> pre env p
     pre env (PData l n ixs)             = PData l n <$> pre env ixs
+
+
+-- Convert environment types ------------------------------------------------------------------------------------
+
+convEnv te                              = te

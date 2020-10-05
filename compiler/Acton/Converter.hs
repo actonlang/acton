@@ -216,21 +216,6 @@ convClassTEnv env q0 te                 = [ (n, conv i) | (n,i) <- te ]
         convT q (TFun l x p k t)        = TFun l x (qualWRow env (q0++q) p) k t
         convT q t                       = t
 
-convEnvActors env                       = mapModules (concat . map conv) env
-  where conv (n, NAct q p k te)         = [(n, NClass q [([Nothing],TC primActor [])] (convActTEnv env q p k te))]
-        conv ni                         = [ni]
-
-convActTEnv env q0 p k te               = (initKW, NDef t0 NoDec) : [ (n, conv i) | (n,i) <- te ]
-  where conv (NSig sc dec)              = NSig (convS sc) dec
-        conv (NDef sc dec)              = NDef (convS sc) dec
-        conv i                          = i
-        convS (TSchema l q t)           = TSchema l q (convT t)
-        convT (TFun l fx p k t)
-          | fx == fxAction              = TFun l fx0 p k (tMsg t)
-        convT t                         = t
-        t0                              = monotype (TFun NoLoc fx0 p k tNone)
-        fx0                             = fxAct tSelf
-
 
 {-
 

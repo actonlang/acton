@@ -12,7 +12,7 @@ import Utils
 import Control.Monad.State.Lazy
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
-deactorize env0 m                   = return (evalState (deact env m) [], convEnvActors env0)
+deactorize env0 m                   = return (evalState (deact env m) [], mapModules convEnv env0)
   where env                         = deactEnv env0
 
 -- Deactorizing monad
@@ -53,6 +53,9 @@ setSt (TFX _ (FXAct st)) env        = modX env $ \x -> x{ stvarX = Just st }
 setSt _ env                         = env
 
 actorSt env                         = fromJust (stvar env)
+
+
+-- Deactorize actor declarations -----------------------------------------------------------------------
 
 class Deact a where
     deact                           :: DeactEnv -> a -> DeactM a
@@ -254,3 +257,26 @@ instance Deact Assoc where
   
 instance Deact Sliz where
     deact env (Sliz l e1 e2 e3)     = Sliz l <$> deact env e1 <*> deact env e2 <*> deact env e3
+
+
+-- Convert environments -----------------------------------------------------------------------------------------
+
+convEnv te                          = map conv te
+  where conv (n, NAct q p k te')    = (n, NClass q [([Nothing],TC primActor [])] (convActorEnv q p k te'))
+        conv ni                     = ni
+
+        convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : [ (n, convI i) | (n,i) <- te' ]
+          where t0                  = tSchema q0 (TFun NoLoc fx0 p k tNone)
+
+        convI (NSig sc dec)         = NSig (convS sc) dec
+        convI (NDef sc dec)         = NDef (convS sc) dec
+        convI i                     = i
+
+        convS (TSchema l q t)       = TSchema l q (convT t)
+
+        convT (TFun l fx p k t)
+          | fx == fxAction          = TFun l fx0 p k (tMsg t)
+        convT t                     = t
+
+        fx0                         = fxAct tSelf
+
