@@ -155,7 +155,7 @@ instance Deact Decl where
                                     = do b <- deact env1 b
                                          return $ Def l n q p KwdNIL t b d fx
       where env1                    = extend (envOf p) $ defineTVars q $ setSt fx env
-    deact env (Class l n q u b)     = Class l n q u <$> deact env b
+    deact env (Class l n q u b)     = Class l n q u <$> deact env1 b
       where env1                    = defineTVars q env
     deact env d                     = error ("deact unexpected: " ++ prstr d)
 

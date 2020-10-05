@@ -38,14 +38,12 @@ newName s                           = do n <- get
                                          put (n+1)
                                          return $ Internal NormPass s n
 
-                                    -- builtin names are last in global; local names are first in local
-data NormEnv                        = NormEnv { global :: TEnv, local :: [Name] } deriving Show
+type NormEnv                        = EnvF NormX
 
-normEnv env                         = NormEnv (names env) []
+type NormX                          = ()
 
-extGlobal te env                    = env{ global = te ++ global env }
+normEnv env0                        = env0
 
-extLocal vs env                     = env{ local = vs ++ local env }
 
 -- Normalize terms ---------------------------------------------------------------------------------------
 
@@ -78,7 +76,7 @@ normPat' env (Just p)               = do (p',ss) <- normPat env p
 normItems env []                    = return ([], [])
 normItems env (WithItem e p : is)   = do e' <- norm env e
                                          (p',ss) <- normPat' env p
-                                         (is',ss') <- normItems (extLocal (bound p) env) is
+                                         (is',ss') <- normItems (define (envOf p) env) is
                                          return (WithItem e' p' : is', ss++ss')
 
 
@@ -87,20 +85,23 @@ class Norm a where
     norm'                           :: NormEnv -> a -> NormM [a]
     norm' env x                     = (:[]) <$> norm env x
 
-instance Norm a => Norm [a] where
-    norm env xs                     = concat <$> mapM (norm' env) xs
+instance (Norm a, EnvOf a) => Norm [a] where
+    norm env []                     = return []
+    norm env (a:as)                 = do as1 <- norm' env a
+                                         as2 <- norm env1 as
+                                         return (as1++as2)
+      where env1                    = define (envOf a) env
 
 instance Norm a => Norm (Maybe a) where
     norm env Nothing                = return Nothing
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module m imps ss)     = Module m <$> norm env imps <*> norm env1 ss
-      where env1                    = extGlobal (envOf ss) env
+    norm env (Module m imps ss)     = Module m <$> mapM (norm env) imps <*> norm env ss
 
 instance Norm Import where
-    norm env (Import l ms)          = Import l <$> norm env ms
-    norm env (FromImport l m ns)    = FromImport l <$> norm env m <*> norm env ns
+    norm env (Import l ms)          = Import l <$> mapM (norm env) ms
+    norm env (FromImport l m ns)    = FromImport l <$> norm env m <*> mapM (norm env) ns
     norm env (FromImportAll l m)    = FromImportAll l <$> norm env m
 
 instance Norm Stmt where
@@ -132,17 +133,18 @@ instance Norm Stmt where
                                          b' <- norm env1 (ss ++ b)
                                          els' <- norm env els
                                          return $ For l v e' b' els'
-      where env1                    = extLocal (bound p) env
+      where env1                    = define (envOf p) env
     norm env (With l is b)          = do (is',ss) <- normItems env is
                                          b' <- norm env1 (ss ++ b)
                                          return $ With l is' b'
-      where env1                    = extLocal (bound is) env
+      where env1                    = define (envOf is) env
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
-    norm env (Decl l ds)            = Decl l <$> norm env ds
+    norm env (Decl l ds)            = Decl l <$> norm env1 ds
+      where env1                    = define (envOf ds) env
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
-    norm env s                      = error ("norm unexpected: " ++ prstr s)    
+    norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
 
     norm' env (Assign l ts e)       = do e' <- norm env e
                                          ps <- mapM (normPat env) ts
@@ -154,15 +156,18 @@ instance Norm Stmt where
 
 
 instance Norm Decl where
-    norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+    norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
                                          return $ Def l n q (noDefaults p') KwdNIL t (defaults p' ++ b') d x
-      where env1                    = extLocal (bound b ++ bound p ++ bound k) env
-    norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+      where env1                    = define (envOf p ++ envOf k) env0
+            env0                    = defineTVars q env
+    norm env (Actor l n q p k b)    = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- norm env1 b
                                          return $ Actor l n q (noDefaults p') KwdNIL (defaults p' ++ b')
-      where env1                    = extLocal (bound b ++ bound p ++ bound k) env
-    norm env (Class l n q as b)     = Class l n q as <$> norm env b
+      where env1                    = define (envOf p ++ envOf k) env0
+            env0                    = defineTVars q env
+    norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
+      where env1                    = defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
@@ -199,15 +204,15 @@ instance Norm Expr where
     norm env (Rest l e nm)          = Rest l <$> norm env e <*> norm env nm
     norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> return i
-    norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+    norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
                                          Lambda l (noDefaults p') KwdNIL <$> norm env1 e <*> return fx      -- TODO: replace defaulted params with Conds
-      where env1                    = extLocal (bound p ++ bound k) env
+      where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
+      where env1                    = define (envOf c) env
     norm env (Paren l e)            = Paren l <$> norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
@@ -224,10 +229,10 @@ instance Norm Name where
     norm env n                      = return n
 
 instance Norm ModName where
-    norm env m@(ModName [n])        = case lookup n (global env) of
-                                          Just (NMAlias m') -> return m'
+    norm env m@(ModName [n])        = case findName n env of
+                                          NMAlias m' -> return m'
                                           _ -> return m
-    norm env (ModName ns)           = ModName <$> norm env ns
+    norm env (ModName ns)           = ModName <$> mapM (norm env) ns
 
 instance Norm QName where
     norm env (QName m n)            = QName <$> norm env m <*> norm env n
@@ -247,7 +252,7 @@ instance Norm Branch where
 
 instance Norm Handler where
     norm env (Handler ex b)         = Handler <$> norm env ex <*> norm env1 b
-      where env1                    = extLocal (bound ex) env
+      where env1                    = define (envOf ex) env
 
 instance Norm Except where
     norm env (ExceptAll l)          = return $ ExceptAll l
@@ -255,12 +260,12 @@ instance Norm Except where
     norm env (ExceptAs l x n)       = ExceptAs l <$> norm env x <*> norm env n
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm (extLocal [n] env) p
+    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
     norm env (PosSTAR n t)          = return $ PosSTAR n t
     norm env PosNIL                 = return PosNIL
     
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm (extLocal [n] env) k
+    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
     norm env (KwdSTAR n t)          = return $ KwdSTAR n t
     norm env KwdNIL                 = return KwdNIL
 
@@ -314,7 +319,7 @@ instance Norm OpArg where
     norm env (OpArg op e)           = OpArg op <$> norm env e
 
 instance Norm Comp where
-    norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (extLocal (bound p) env) c
+    norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (define (envOf p) env) c
     norm env (CompIf l e c)         = CompIf l <$> norm env e <*> norm env c
     norm env NoComp                 = return NoComp
 

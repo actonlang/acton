@@ -1,9 +1,11 @@
 2020-10-05:
 
     X Convert NameInfo envs to format of later passes
-    X Make CPSEnv and LiftEnv instances if Env
+    X Make CPSEnv and LiftEnv instances of Env
     X Update CPS and Lifter passes to latest syntax
-    - Convert NameInfo envs in Normalize, CPS and Lifter as well            2h      8h
+    X Convert NameInfo envs in Normalize
+    - Convert NameInfo envs in CPS and Lifter as well                       2h      8h
+    X Make NormEnv an instance of Env                                       1h      1h
     - Let CPS make decisions based on true type                             1d      2d
     - Ensure new vars in Normalize, CPS and Lifter are fully typed          2d      3d
     - Revisit Lifter on classes (now restricted to top level)               1d      2d
@@ -18,8 +20,8 @@
     - Implement pos/kwd and opt relaxation in Solver                        3d      5d
     - Implement Rest/RestI in rts                                           1d      2d
                                                                            18d     34d
-                                                                            3,5w    6,5w
-    
+                                                                            3.5w    6.5w
+
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w
     - Documentation/tutorial                                                1w      1w
@@ -32,12 +34,7 @@
     - Implement raise and try in the rts                                    3d      4d
     - Define Acton Environment type and implement IO loop in rts            1w      2w
                                                                             2w      4w
-    
 
-x = ('a',apa='b',bepa='c')
-y = x.2
-y = x.~2    y = ('a','b')
-y = x.~apa  y = ('a',bepa='c')
 
 Acton II
 --------
