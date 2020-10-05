@@ -59,6 +59,9 @@ instance TypeOf Expr where
                                             subst (tybound q `zip` ts) t
     typeOf env (Await _ e)          = case typeOf env e of
                                         TCon _ (TC c [t]) | qmatch env c qnMsg -> t
+    typeOf env (BinOp _ l Or r)     = tBool
+    typeOf env (BinOp _ l And r)    = tBool
+    typeOf env (UnOp _ Not e)       = tBool
     typeOf env (Cond _ e1 e e2)
       | castable env t1 t2          = t2
       | otherwise                   = t1
@@ -100,9 +103,7 @@ instance TypeOf Expr where
 --  The following constructs are translated away during type inference:
 --  typeOf env (Index _ e is)       = undefined
 --  typeOf env (Slice _ e sl)       = undefined
---  typeOf env (BinOp _ l op r)     = undefined
 --  typeOf env (CompOp _ e ops)     = undefined
---  typeOf env (UnOp _ op e)        = undefined
 --  typeOf env (Dict _ as)          = undefined
 --  typeOf env (DictComp _ a c)     = undefined
 --  typeOf env (Set _ es)           = undefined

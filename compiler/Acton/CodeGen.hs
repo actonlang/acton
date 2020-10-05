@@ -74,11 +74,9 @@ instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
     gen env (MutAssign _ t e)       = gen env t <+> equals <+> gen env e <> semi
-    gen env (AugAssign _ t op e)    = gen env t <+> gen env op <+> gen env e <> semi                    -- TODO: remove
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi
-    gen env (Raise _ e)             = text "raise" <+> gen env e                                        -- TODO: remove
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
@@ -131,9 +129,9 @@ instance Gen Expr where
     gen env (TApp _ e ts)           = gen env e
     gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
-    gen env (BinOp _ e1 o e2)       = gen env e1 <+> gen env o <+> gen env e2               -- TODO: remove
-    gen env (CompOp _ e ops)        = gen env e <+> hsep (map (gen env) ops)                -- TODO: remove
-    gen env (UnOp _ o e)            = gen env o <> gen env e                                -- TODO: remove
+    gen env (BinOp _ e1 Or e2)      = gen env e1 <+> text "||" <+> gen env e2
+    gen env (BinOp _ e1 And e2)     = gen env e1 <+> text "&&" <+> gen env e2
+    gen env (UnOp _ Not e)          = text "!" <> gen env e
     gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
     gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
@@ -142,9 +140,6 @@ instance Gen Expr where
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
-    gen env (Dict _ es)             = braces (commaList es)
-    gen env (Set _ [])              = text "set" <> parens empty
-    gen env (Set _ es)              = braces (commaList es)
     gen env (Paren _ e)             = gen env e
 
 instance Gen OpArg where

@@ -75,9 +75,7 @@ instance Deact Stmt where
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deact env e
     deact env (Assign l ps e)       = Assign l ps <$> deact env e
     deact env (MutAssign l t e)     = MutAssign l <$> deact env t <*> deact env e
-    deact env (AugAssign l t op e)  = AugAssign l <$> deact env t <*> return op <*> deact env e
     deact env (Pass l)              = return $ Pass l
-    deact env (Delete l t)          = Delete l <$> deact env t
     deact env (Return l mbe)        = Return l <$> deact env mbe
     deact env (Raise l mbex)        = Raise l <$> deact env mbex
     deact env (Break l)             = return $ Break l
@@ -100,6 +98,7 @@ instance Deact Stmt where
     deact env (Decl l ds)           = Decl l <$> deact env1 ds
       where env1                    = extend (envOf ds) env
     deact env (Signature l ns t d)  = return $ Signature l ns t d
+    deact env s                     = error ("deact unexpected: " ++ prstr s)
 
 instance Deact Decl where
     deact env (Actor l n q p k b) 
@@ -149,16 +148,13 @@ instance Deact Decl where
                     ts              = map tVar (tybound q)
                     ts'             = [tSelf, t]
 
-    deact env (Def l n q p k t b d fx)
+    deact env (Def l n q p KwdNIL t b d fx)
                                     = do b <- deact env1 b
-                                         return $ Def l n q p k t b d fx
-      where env1                    = extend (envOf p ++ envOf k) $ defineTVars q $ setSt fx env
+                                         return $ Def l n q p KwdNIL t b d fx
+      where env1                    = extend (envOf p) $ defineTVars q $ setSt fx env
     deact env (Class l n q u b)     = Class l n q u <$> deact env b
       where env1                    = defineTVars q env
-    deact env (Protocol l n q u b)  = Protocol l n q u <$> deact env b
-      where env1                    = defineTVars q env
-    deact env (Extension l n q u b) = Extension l n q u <$> deact env b
-      where env1                    = defineTVars q env
+    deact env d                     = error ("deact unexpected: " ++ prstr d)
 
 localName n                         = Derived n (name "local")
 
@@ -195,32 +191,26 @@ instance Deact Expr where
     deact env (BStrings l s)        = return $ BStrings l s
     deact env (Call l e ps _)       = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
-    deact env (Index l e is)        = Index l <$> deact env e <*> deact env is
-    deact env (Slice l e sl)        = Slice l <$> deact env e <*> deact env sl
     deact env (Cond l e1 e2 e3)     = Cond l <$> deact env e1 <*> deact env e2 <*> deact env e3
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c
-    deact env (BinOp l e1 op e2)    = BinOp l <$> deact env e1 <*> return op <*> deact env e2
-    deact env (CompOp l e ops)      = CompOp l <$> deact env e <*> deact env ops
-    deact env (UnOp l op e)         = UnOp l op <$> deact env e 
+    deact env (BinOp l e1 Or e2)    = BinOp l <$> deact env e1 <*> pure Or <*> deact env e2
+    deact env (BinOp l e1 And e2)   = BinOp l <$> deact env e1 <*> pure And <*> deact env e2
+    deact env (UnOp l Not e)        = UnOp l Not <$> deact env e
     deact env (Dot l e nm)          = Dot l <$> deact env e <*> return nm
     deact env (Rest l e nm)         = Rest l <$> deact env e <*> return nm
     deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
-    deact env (Lambda l p k e fx)   = Lambda l p k <$> deact env1 e <*> return fx
-      where env1                    = extend (envOf p ++ envOf k) env
+    deact env (Lambda l p KwdNIL e fx)
+                                    = Lambda l p KwdNIL <$> deact env1 e <*> return fx
+      where env1                    = extend (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es ks)       = Tuple l <$> deact env es <*> deact env ks
     deact env (List l es)           = List l <$> deact env es
     deact env (ListComp l e c)      = ListComp l <$> deact env1 e <*> deact env c
       where env1                    = extend (envOf c) env
-    deact env (Dict l as)           = Dict l <$> deact env as
-    deact env (DictComp l a c)      = DictComp l <$> deact env1 a <*> deact env c
-      where env1                    = extend (envOf c) env
-    deact env (Set l es)            = Set l <$> deact env es
-    deact env (SetComp l e c)       = SetComp l <$> deact env1 e <*> deact env c
-      where env1                    = extend (envOf c) env
     deact env (Paren l e)           = Paren l <$> deact env e
+    deact env e                     = error ("deact unexpected: " ++ prstr e)
 
 instance Deact Exception where
     deact env (Exception e mbe)     = Exception <$> deact env e <*> deact env mbe

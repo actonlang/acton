@@ -222,12 +222,10 @@ instance Lift Stmt where
     ll env (Expr l e)                   = Expr l <$> ll env e
     ll env (Assign l pats e)            = Assign l <$> ll env pats <*> ll env e
     ll env (MutAssign l t e)            = MutAssign l <$> ll env t <*> ll env e
-    ll env (AugAssign l t op e)         = AugAssign l <$> ll env t <*> pure op <*> ll env e
     ll env (Assert l e mbe)             = Assert l <$> ll env e <*> ll env mbe
     ll env s@(Pass _)                   = pure s
     ll env (Delete l t)                 = Delete l <$> ll env t
     ll env (Return l e)                 = Return l <$> ll env e
-    ll env (Raise l e)                  = Raise l <$> ll env e
     ll env s@(Break _)                  = pure s
     ll env s@(Continue _)               = pure s
     ll env (If l branches els)          = If l <$> ll env branches <*> ll env els
@@ -240,7 +238,7 @@ instance Lift Stmt where
       | inClass env                     = Decl l <$> ll env ds
       | otherwise                       = Decl l <$> ll env ds >>= liftToNext
     ll env (Signature l ns sc dec)      = pure $ Signature l ns sc dec                  -- TODO: revisit!
-    ll env s                            = error ("#### ll unexpected stmt: " ++ prstr s)
+    ll env s                            = error ("ll unexpected: " ++ prstr s)
 
 instance Lift Decl where
     ll env (Def l n q ps _ks ann b d fx)
@@ -267,7 +265,7 @@ instance Lift Decl where
                                              return $ Class l n q cs (b' ++ reverse lifted)
       where bvs                         = bound b
             env1                        = extPrefix InClass n env
-    ll env d                            = return d
+    ll env d                            = error ("ll unexpected: " ++ prstr d)
     
 
 instance Lift Expr where
@@ -290,13 +288,11 @@ instance Lift Expr where
       where extras vs p                 = foldr (PosArg . eVar) p vs
     ll env (Call l e p _k)              = Call l <$> ll env e <*> ll env p <*> return _k
     ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure ts
-    ll env (Index l e ix)               = Index l <$> ll env e <*> ll env ix
-    ll env (Slice l e sl)               = Slice l <$> ll env e <*> ll env sl
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2
     ll env (IsInstance l e c)           = IsInstance l <$> ll env e <*> pure c
-    ll env (BinOp l e1 o e2)            = BinOp l <$> ll env e1 <*> pure o <*> ll env e2
-    ll env (CompOp l e ops)             = CompOp l <$> ll env e <*> ll env ops
-    ll env (UnOp l o e)                 = UnOp l o <$> ll env e
+    ll env (BinOp l e1 Or e2)           = BinOp l <$> ll env e1 <*> pure Or <*> ll env e2
+    ll env (BinOp l e1 And e2)          = BinOp l <$> ll env e1 <*> pure And <*> ll env e2
+    ll env (UnOp l Not e)               = UnOp l Not <$> ll env e
     ll env (Dot l e n)                  = Dot l <$> ll env e <*> pure n
     ll env (Rest l e n)                 = Rest l <$> ll env e <*> pure n
     ll env (DotI l e i)                 = DotI l <$> ll env e <*> pure i
@@ -316,13 +312,8 @@ instance Lift Expr where
     ll env (List l es)                  = List l <$> ll env es
     ll env (ListComp l e co)            = ListComp l <$> ll env1 e <*> ll env co
       where env1                        = extLocals (bound co) env
-    ll env (Dict l es)                  = Dict l <$> ll env es
-    ll env (DictComp l e co)            = DictComp l <$> ll env1 e <*> ll env co
-      where env1                        = extLocals (bound co) env
-    ll env (Set l es)                   = Set l <$> ll env es
-    ll env (SetComp l e co)             = SetComp l <$> ll env1 e <*> ll env co
-      where env1                        = extLocals (bound co) env
     ll env (Paren l e)                  = Paren l <$> ll env e
+    ll env e                            = error ("ll unexpected: " ++ prstr e)
 
 instance Lift Exception where
     ll env (Exception e1 e2)            = Exception <$> ll env e1 <*> ll env e2
@@ -344,9 +335,6 @@ instance Lift Assoc where
 instance Lift WithItem where
     ll env (WithItem e n)               = WithItem <$> ll env e <*> ll env n
     
-instance Lift OpArg where
-    ll env (OpArg o e)                  = OpArg o <$> ll env e
-
 instance Lift PosArg where
     ll env (PosArg e p)                 = PosArg <$> ll env e <*> ll env p
     ll env PosNil                       = pure PosNil
@@ -354,9 +342,6 @@ instance Lift PosArg where
 instance Lift KwdArg where
     ll env (KwdArg n e k)               = KwdArg n <$> ll env e <*> ll env k
     ll env KwdNil                       = pure KwdNil
-
-instance Lift Sliz where
-    ll env (Sliz l e1 e2 e3)            = Sliz l <$> ll env e1 <*> ll env e2 <*> ll env e3
 
 instance Lift Comp where
     ll env (CompFor l target e c)       = CompFor l <$> ll env1 target <*> ll env e <*> ll env1 c

@@ -98,7 +98,6 @@ instance Norm Import where
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
     norm env (MutAssign l t e)      = MutAssign l <$> norm env t <*> norm env e
-    norm env (AugAssign l t op e)   = AugAssign l <$> norm env t <*> pure op <*> norm env e
     norm env (Assert l e mbe)       = do e' <- norm env e
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
@@ -135,8 +134,7 @@ instance Norm Stmt where
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
     norm env (Decl l ds)            = Decl l <$> norm env ds
     norm env (Signature l ns t d)   = return $ Signature l ns t d
-
---    norm' env (Delete l t)          =
+    norm env s                      = error ("norm unexpected: " ++ prstr s)    
 
     norm' env (Assign l ts e)       = do e' <- norm env e
                                          ps <- mapM (normPat env) ts
@@ -145,9 +143,8 @@ instance Norm Stmt where
                                          return $ Assign l vs e' : ss'
     norm' env s                     = do s' <- norm env s
                                          return [s']
-                                         
-                                         
-                                       
+
+
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
                                          b' <- norm env1 b
@@ -158,8 +155,9 @@ instance Norm Decl where
                                          return $ Actor l n q (noDefaults p') KwdNIL (defaults p' ++ b')
       where env1                    = extLocal (bound b ++ bound p ++ bound k) env
     norm env (Class l n q as b)     = Class l n q as <$> norm env b
-    norm env (Protocol l n q as b)  = Protocol l n q as <$> norm env b
-    norm env (Extension l n q as b) = Extension l n q as <$> norm env b
+    norm env d                      = error ("norm unexpected: " ++ prstr d)
+
+
 
 catStrings ['"':s]                  = '"' : s
 catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes ss)) ++ ['"']
@@ -181,33 +179,29 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l [catStrings ss]
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
-    norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env ps <*> norm env ks
+    norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env (joinArg ps ks) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> norm env e <*> pure ts
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
-    norm env (BinOp l e1 op e2)     = BinOp l <$> norm env e1 <*> pure op <*> norm env e2   -- only Or,And
-    norm env (UnOp l op e)          = UnOp l op <$> norm env e                              -- only Not
+    norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
+    norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
+    norm env (UnOp l Not e)         = UnOp l Not <$> norm env e
     norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
     norm env (Rest l e nm)          = Rest l <$> norm env e <*> norm env nm
     norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> return i
-    norm env (Lambda l ps ks e fx)  = Lambda l <$> norm env ps <*> norm (extLocal (bound ps) env) ks <*> norm env1 e <*> return fx
-      where env1                    = extLocal (bound ps ++ bound ks) env
+    norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (extLocal (bound p) env) k
+                                         Lambda l (noDefaults p') KwdNIL <$> norm env1 e <*> return fx      -- TODO: replace defaulted params with Conds
+      where env1                    = extLocal (bound p ++ bound k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
     norm env (List l es)            = List l <$> norm env es
     norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
       where env1                    = extLocal (bound c) env
-    norm env (Dict l as)            = Dict l <$> norm env as
-    norm env (DictComp l a c)       = DictComp l <$> norm env1 a <*> norm env c
-      where env1                    = extLocal (bound c) env
-    norm env (Set l es)             = Set l <$> norm env es
-    norm env (SetComp l e c)        = SetComp l <$> norm env1 e <*> norm env c
-      where env1                    = extLocal (bound c) env
     norm env (Paren l e)            = Paren l <$> norm env e
-    norm env e                      = error ("trying to normalize " ++ show e)
+    norm env e                      = error ("norm unexpected: " ++ prstr e)
 
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
@@ -263,12 +257,20 @@ instance Norm KwdPar where
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
-joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPos k)
-joinPar PosNIL k                    = kwdToPos k
+joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPosPar k)
+joinPar PosNIL k                    = kwdToPosPar k
 
-kwdToPos (KwdPar n t e k)           = PosPar n t e (kwdToPos k)
-kwdToPos (KwdSTAR n t)              = PosPar n t Nothing PosNIL
-kwdToPos KwdNIL                     = PosNIL
+kwdToPosPar (KwdPar n t e k)        = PosPar n t e (kwdToPosPar k)
+kwdToPosPar (KwdSTAR n t)           = PosPar n t Nothing PosNIL
+kwdToPosPar KwdNIL                  = PosNIL
+
+joinArg (PosArg e p) k              = PosArg e (joinArg p k)
+joinArg (PosStar e) k               = PosArg e (kwdToPosArg k)
+joinArg PosNil k                    = kwdToPosArg k
+
+kwdToPosArg (KwdArg n e k)          = PosArg e (kwdToPosArg k)
+kwdToPosArg (KwdStar e)             = PosArg e PosNil
+kwdToPosArg KwdNil                  = PosNil
 
 defaults (PosPar n t (Just e) p)    = s : defaults p
   where s                           = sIf1 test [set] []
