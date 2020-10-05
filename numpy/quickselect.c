@@ -65,7 +65,7 @@ void quicksort(union $Bytes8 *a, int left, int right, bool (*lt)(union $Bytes8,u
         break;
     }
     $SWAP(a[i], a[right-1]) 
-      quicksort(a,left,i-1,lt);  
+    quicksort(a,left,i-1,lt);  
     quicksort(a,i+1,right,lt); 
   } else
     insertionsort(a,left,right,lt);

@@ -2,6 +2,10 @@
 //Select element #n in lst which is a list[int].
 #define $LONGELEM(lst,n)   ((($int)lst->data[n])->val)
 
+$array_iterator_state $mk_iterator($ndarray a);
+union $Bytes8 *iter_next($array_iterator_state it);
+
+
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
 
 // method for creating ndarray structs.
@@ -76,7 +80,9 @@ $str $ndarray__str__($ndarray a) {
       $ndarray b = $ndarray_getslice(a,ix);
       $list_append(strs,$ndarray__str__(b));
     }
-    return  $str_join_par('[',strs,']');
+    $str s = $str_join_par('[',strs,']');
+    $Plus wit = ($Plus)$Plus$str$witness;
+    return wit->$class->__add__(wit,s,to$str("\n"));
   }
 }
 
@@ -131,7 +137,7 @@ $ndarray $ndarray_reshape($ndarray a, $list newshape) {
     res->data = malloc(size * sizeof(union $Bytes8));
     union $Bytes8 *ixres = res->data;
     union $Bytes8 *ixa;
-    $array_iterator ita = $mk_iterator(a);
+    $array_iterator_state ita = $mk_iterator(a);
     while ((ixa = iter_next(ita))) {
       *ixres = *ixa;
       ixres++;
@@ -142,26 +148,50 @@ $ndarray $ndarray_reshape($ndarray a, $list newshape) {
 
 // permutes axes in a to the order given by axes.
 // If second argument is NULL, reverse order of axes.
-// does not copy data; returns a new view.
+// Does not copy data; returns a new view.
 $ndarray $ndarray_transpose($ndarray a, $list axes) {
+  $list newshape, newstrides;
   if (!axes) {
-    $list newshape = $list_copy(a->shape);
+    newshape = $list_copy(a->shape);
     $list_reverse(newshape);
-    $list newstrides = $list_copy(a->strides);
+    newstrides = $list_copy(a->strides);
     $list_reverse(newstrides);
-    $ndarray res = $newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
-    return res;
   } else {
-    fprintf(stderr,"transpose with axes arguments not yet implemented\n");
-    exit(-1);
+    bool is_perm = true;
+    if (axes->length != a->shape->length) is_perm = false;
+    long i = axes->length-1;
+    while (is_perm && i >= 0) {
+      if (!$list_contains(($Eq)$Ord$int$witness,axes,to$int(i))) is_perm = false;
+      i--;
+    }
+    if (!is_perm)
+      RAISE(($BaseException)$NEW($ValueError,to$str("transpose: axes argument must be permutation of [0..a.ndim-1]")));
+    newshape = $list_new(axes->length);
+    newstrides = $list_new(axes->length);
+    newshape->length = axes->length;
+    newstrides->length = axes->length;
+    for (long i = 0; i<axes->length; i++) {
+      long n = (($int)axes->data[i])->val;
+      newshape->data[i] = a->shape->data[n];
+      newstrides->data[i] = a->strides->data[n];
+    }
   }
+  $ndarray res = $newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
+  res->data = a->data;
+  return res;
 }
-  
+
+$ndarray $ndarray_flatten($ndarray a) {
+  $list newshape = $NEW($list,NULL,NULL);
+  $list_append(newshape,to$int(a->size));
+  return $ndarray_reshape(a,newshape);
+}
+
 // Makes a contiguous deep copy of its argument with stride of last dimension == 1.
 
 $ndarray $ndarray_copy($ndarray a) {
   $ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
-  $array_iterator it = $mk_iterator(a);
+  $array_iterator_state it = $mk_iterator(a);
   union $Bytes8 *ixres, *ixa;
   ixres = res->data;
   while ((ixa = iter_next(it))) {
@@ -245,8 +275,8 @@ struct $ndarray$class $ndarray$methods = {"",UNASSIGNED,($Super$class)&$struct$m
 // Iterating over an ndarray //////////////////////////////////////////////////////////////////////////////
 
 // Aims to be as fast as possible; used in many methods below and in protocol implementations 
-$array_iterator $mk_iterator($ndarray a) {
-  $array_iterator res = malloc(sizeof(struct $array_iterator));
+$array_iterator_state $mk_iterator($ndarray a) {
+  $array_iterator_state res = malloc(sizeof(struct $array_iterator_state));
   if (a->ndim==0)
     RAISE(($BaseException)$NEW($ValueError,to$str("cannot make iterator for 0-dim array")));
   res->ndim1 = a->ndim-1;
@@ -265,7 +295,7 @@ $array_iterator $mk_iterator($ndarray a) {
   return res;
 }
 
-union $Bytes8 *iter_next($array_iterator it) {
+union $Bytes8 *iter_next($array_iterator_state it) {
   it->current += it->currentstride;
   if (++it->lastshapepos == it->lastshapelength) { 
     it->lastshapepos = 0;
@@ -299,7 +329,7 @@ $ndarray $ndarray_func(union $Bytes8(*f)(union $Bytes8),$ndarray a) {
   $ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true); 
   union $Bytes8 *ixres = res->data;
   union $Bytes8 *ixa;
-  $array_iterator it = $mk_iterator(a);
+  $array_iterator_state it = $mk_iterator(a);
   while ((ixa = iter_next(it))) {
     *ixres = f(*ixa);
     ixres++;
@@ -311,7 +341,7 @@ $ndarray $ndarray_func(union $Bytes8(*f)(union $Bytes8),$ndarray a) {
 
 // returns the common extended shape and, as outparams, iterators for the two extended operands
 
-$ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator *it1, $array_iterator *it2) {
+$ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator_state *it1, $array_iterator_state *it2) {
   int len;
   $list resshape, shape1, shape2, strides1, strides2;
   shape1 = $list_copy(a1->shape);
@@ -360,7 +390,7 @@ $ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator *it1, $arr
 $ndarray $ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),$ndarray a, $ndarray b) {
   union $Bytes8 *ix1, *ix2, *ixres;
   long stride1, stride2, len;
-  $array_iterator it1, it2;
+  $array_iterator_state it1, it2;
   $ndarray res = $ndarray_broadcast(a,b,&it1,&it2);
   ixres = res->data;
   while ((ix1 = iter_next(it1))) {
@@ -455,7 +485,7 @@ $ndarray $ndarray_array($Primitive wit, $list elems) {
 $ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k) {
   $ndarray res = $ndarray_copy(a);
   res->ndim--;
-  $array_iterator it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+  $array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
   res->ndim++;
   for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
     union $Bytes8 *start =iter_next(it);
@@ -464,22 +494,33 @@ $ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k) {
   return res;
 }
 
-$ndarray $ndarray_sort($Primitive wit, $ndarray a) {
+$ndarray $ndarray_sort($Primitive wit, $ndarray a, $int axis) {
   $ndarray res = $ndarray_copy(a);
-  res->ndim--;
-  $array_iterator it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
-  res->ndim++;
-  for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
-    union $Bytes8 *start =iter_next(it);
-    quicksort(start,0,$LONGELEM(res->shape,res->ndim-1)-1,wit->$class->$lt);
-  }
+  if (!axis) {
+    quicksort(res->data,0,res->size-1,wit->$class->$lt);
+    $list newshape = $list_new(1);
+    $list_append(newshape,to$int(a->size));
+    $list newstrides = $list_new(1);
+    $list_append(newstrides,to$int(1));
+    res->shape = newshape;
+    res->strides = newstrides;
+    res->ndim = 1;
+  } else if (axis->val == -1 || axis->val == a->ndim-1) {
+    res->ndim--;
+    $array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+    res->ndim++;
+    union $Bytes8 *start;
+    while ((start = iter_next(it))) 
+      quicksort(start,0,$LONGELEM(res->shape,res->ndim-1)-1,wit->$class->$lt);
+  } else
+    RAISE(($BaseException)$NEW($ValueError,to$str("sorting only implemented for complete array or along last axis")));
   return res;
 }
-  
+
 
 $ndarray $ndarray_clip($Primitive wit, $ndarray a, $WORD low, $WORD high) {
   $ndarray res = $ndarray_copy(a);
-  $array_iterator it = $mk_iterator(res);
+  $array_iterator_state it = $mk_iterator(res);
   union $Bytes8 lo, hi, x, *ix, *ixres = res->data;
   if (low) lo = wit->$class->from$obj(low);
   if (high) hi = wit->$class->from$obj(high);
@@ -512,33 +553,35 @@ union $Bytes8 $dot1dim($Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long 
 }
  
 $ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b) {
-  if (a->ndim==0 || b->ndim==0)
-    RAISE(($BaseException)$NEW($ValueError,to$str("cannot dot for 0-dim array")));
-  //return  wit->$class->__mul__(wit,a,b); 
-  if (b->ndim==1) {
+  $ndarray res;
+  if (a->ndim==0 || b->ndim==0) {
+    // following  Python's numpy, we multiply elementwise...
+    $Integral$ndarray wit2 = $NEW($Integral$ndarray,wit);
+    res = wit2->$class->__mul__(wit2,a,b);
+  } else if (b->ndim==1) {
     long len = $LONGELEM(b->shape,0);
-    long stridea = $LONGELEM(a->strides,a->ndim-1);
-    long strideb = $LONGELEM(b->strides,0);
     if  ($LONGELEM(a->shape,a->ndim-1) != len)
       RAISE(($BaseException)$NEW($ValueError,to$str("array sizes in numpy.dot do not match")));
+    long stridea = $LONGELEM(a->strides,a->ndim-1);
+    long strideb = $LONGELEM(b->strides,0);
     $list newshape = $list_getslice(a->shape,$NEW($Slice,NULL,to$int(-1),NULL));
-    $ndarray res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
+    res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
     if (a->ndim==1) {
       res->data[0] = $dot1dim(wit, &a->data[a->offset],&b->data[b->offset],len,stridea,strideb);
     } else {
       union $Bytes8 *ixres = res->data, *ixa;
       a->ndim--;
-      $array_iterator ita = $mk_iterator(a);
+      $array_iterator_state ita = $mk_iterator(a);
       a->ndim++;
       while ((ixa = iter_next(ita))) {
         *ixres = $dot1dim(wit,ixa,b->data,len,stridea,strideb);
         ixres++;
       }
     }
-    return res;
-  } else {
-    return NULL; //remains to define.
-  }
+  } else { //b->ndim > 1. Following Python we should do a sum product over last axis of a and 2nd to last axis of b ??????
+    RAISE(($BaseException)$NEW($ValueError,to$str("numpy.dot not implemented for ndim of second arg > 1")));    
+  } 
+  return res; 
 }
 
 union $Bytes8 $sum1dim($Primitive wit, union $Bytes8 *a, long size, long stridea) { 
@@ -555,23 +598,24 @@ union $Bytes8 $sum1dim($Primitive wit, union $Bytes8 *a, long size, long stridea
 
 
 $ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis) {
-   if(!axis) {
-     union $Bytes8 resd = (union $Bytes8) 0L;
-   $array_iterator it = $mk_iterator(a);
+  $ndarray res;
+  if(!axis) {
+    union $Bytes8 resd = (union $Bytes8) 0L;
+   $array_iterator_state it = $mk_iterator(a);
    union $Bytes8 *ixa;
    while ((ixa = iter_next(it)))
      wit->$class->$iadd(&resd,*ixa); 
-   $ndarray res = $newarray(a->elem_type,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+   res = $newarray(a->elem_type,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
    res->data[0] = resd;
    return res;
-  } else {
+   } else if (axis->val == -1 || axis->val == a->ndim-1) {
     // for now, assume summing along last axis
     long len = $LONGELEM(a->shape,a->ndim-1);
     long stridea = $LONGELEM(a->strides,a->ndim-1);
     $list newshape = $list_getslice(a->shape,$NEW($Slice,NULL,to$int(-1),NULL));
-    $ndarray res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
+    res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
     a->ndim--;
-    $array_iterator ita = $mk_iterator(a);
+    $array_iterator_state ita = $mk_iterator(a);
     a->ndim++;
     union $Bytes8 *ixa;
     union $Bytes8 *ixres = res->data;
@@ -579,10 +623,53 @@ $ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis) {
       *ixres = $sum1dim(wit,ixa,len,stridea);
       ixres++;
     }
+  } else
+     RAISE(($BaseException)$NEW($ValueError,to$str("summing only implemented for complete array or along last axis")));
     return res;
-  }
 }         
 
 $ndarray $ndarray_abs($Primitive wit, $ndarray a) {
   return $ndarray_func(wit->$class->$abs,a);
 }
+
+$WORD $ndarray_scalar ($Primitive wit, $ndarray a) {
+  if (a->ndim > 0)
+     RAISE(($BaseException)$NEW($ValueError,to$str("scalar only for zero-dim arrays")));
+  return wit->$class->to$obj(a->data[0]);
+}
+
+
+// Iterator over ndarrays ////////////////////////////////////////////////////////////////////////
+
+void $Iterator$ndarray_init($Iterator$ndarray self, $Primitive pwit, $ndarray a) {
+  self->pwit = pwit;
+  self->it = $mk_iterator(a);
+}
+
+$bool $Iterator$ndarray_bool($Iterator$ndarray self) {
+  return $True;
+}
+
+$str $Iterator$ndarray_str($Iterator$ndarray self) {
+  char *s;
+  asprintf(&s,"<ndarray iterator object at %p>",self);
+  return to$str(s);
+}
+
+$WORD $Iterator$ndarray$__next__($Iterator$ndarray self) {
+  union $Bytes8 *n = iter_next(self->it);
+  return n ? self->pwit->$class->to$obj(*n) : NULL;
+}
+
+void $Iterator$ndarray_serialize($Iterator$ndarray self,$Serial$state state) {
+  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
+}
+
+$Iterator$ndarray $Iterator$ndarray$_deserialize($Serial$state state) {
+  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
+   return NULL;
+}
+
+struct $Iterator$ndarray$class $Iterator$ndarray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$ndarray_init,
+                                                      $Iterator$ndarray_serialize, $Iterator$ndarray$_deserialize,$Iterator$ndarray_bool,$Iterator$ndarray_str,$Iterator$ndarray$__next__};
+
