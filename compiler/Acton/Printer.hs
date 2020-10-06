@@ -429,10 +429,11 @@ instance Pretty Type where
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
+    pretty (TRow _ PRow _ t TNil{}) = parens $ pretty t <> comma
     pretty r@TRow{rkind=PRow}       = parens $ prettyPosRow r
     pretty r@TRow{rkind=KRow}       = parens $ prettyKwdRow r
-    pretty r@TNil{rkind=PRow}       = parens $ prettyPosRow r
-    pretty r@TNil{rkind=KRow}       = parens $ prettyKwdRow r
+    pretty r@TNil{rkind=PRow}       = parens empty
+    pretty r@TNil{rkind=KRow}       = parens empty
     pretty (TFX _ fx)               = pretty fx
 
 prettyFXnoPure (TFX _ FXPure)       = empty
