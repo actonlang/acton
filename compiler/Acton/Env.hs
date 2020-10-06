@@ -47,7 +47,9 @@ modX env f                  = env{ envX = f (envX env) }
 
 
 mapModules                  :: (TEnv -> TEnv) -> EnvF x -> Env0
-mapModules f env            = EnvF { names = f (names env), modules = [ (m, f te) | (m,te) <- modules env ], witnesses = [], envX = () }
+mapModules f env            = EnvF { names = f $ map pre (names env), modules = [ (m, f $ map pre te) | (m,te) <- modules env ], witnesses = [], envX = () }
+  where pre (m, NModule te) = (m, NModule (f te))
+        pre ni              = ni
 
 
 {-  TEnv principles:
