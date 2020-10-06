@@ -60,7 +60,7 @@ type CPSEnv                             = EnvF CPSX
 
 data CPSX                               = CPSX { ctxtX :: [Frame] }
 
-cpsEnv env0                             = setX CPSX{ ctxtX = [] } env0
+cpsEnv env0                             = setX env0 CPSX{ ctxtX = [] }
 
 ctxt env                                = ctxtX $ envX env
 

@@ -169,12 +169,15 @@ commonEnvOf suites
   where liveSuites                  = filter fallsthru suites
 
 instance EnvOf Decl where
+    envOf (Def _ n q p k Nothing b dec fx)
+                                    = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) tWild) dec)]     -- TODO: remove once CPS complies!
     envOf (Def _ n q p k (Just t) b dec fx)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
     envOf (Class _ n q as ss)       = [(n, NClass q as' (envOf ss))]
       where as'                     = [ ([Nothing],a) | a <- as ]
 
     envOf (Actor _ n q p k b)       = [(n, NAct q (prowOf p) (krowOf k) (envOf b))]
+    
 
 --  The following constructs are translated away during type inference:
 --  envOf (Protocol _ n q as ss)    = undefined

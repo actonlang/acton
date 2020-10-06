@@ -6,6 +6,7 @@
     X Convert NameInfo envs in Normalize
     - Convert NameInfo envs in CPS and Lifter as well                       2h      8h
     X Make NormEnv an instance of Env                                       1h      1h
+    X Make GenEnv an instance of Env                                        1h      1h
     - Let CPS make decisions based on true type                             1d      2d
     - Ensure new vars in Normalize, CPS and Lifter are fully typed          2d      3d
     - Revisit Lifter on classes (now restricted to top level)               1d      2d

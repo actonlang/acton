@@ -10,17 +10,23 @@ import Acton.Syntax
 import Acton.Builtin
 import Acton.Printer
 import Acton.Prim
+import Acton.Env
+import Acton.QuickType
 import Prelude hiding ((<>))
 
 generate                            :: Acton.Env.Env0 -> Module -> IO String
 generate env m                      = return $ render $ gen (genEnv env (modname m)) m
 
 class Gen a where
-    gen                             :: Env -> a -> Doc
+    gen                             :: GenEnv -> a -> Doc
 
-data Env                            = Env { thismodule :: ModName }
+type GenEnv                         = EnvF GenX
 
-genEnv env m                        = Env { thismodule = m }
+data GenX                           = GenX { thismoduleX :: ModName }
+
+thismodule env                      = thismoduleX $ envX env
+
+genEnv env0 m                       = setX env0 GenX{ thismoduleX = m }
 
 
 instance (Gen a) => Gen (Maybe a) where
@@ -67,8 +73,10 @@ instance Gen Name where
 genQName env n                      = gen env (thismodule env) <> char '$' <> gen env n
 
 word                                = text "$WORD"
-
-genSuite env ss                     = nest 4 $ vcat $ map (gen env) ss
+        
+genSuite env ss                     = nest 4 $ genS env ss
+  where genS env []                 = empty
+        genS env (s:ss)             = gen env s $+$ genS (define (envOf s) env) ss
 
 instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
@@ -81,8 +89,13 @@ instance Gen Stmt where
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
     gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
-    gen env (Try _ b hs _ _)        = text "try" <> colon $+$ genSuite env b $+$ vmap (gen env) hs      -- TODO: remove
-    gen env (Decl _ ds)             = vcat $ map (gen env) ds
+    gen env (Try _ b hs _ _)        = text "<remove>" <> colon $+$ genSuite env b $+$ vmap (gen env) hs
+    gen env (For _ p e b [])        = (text "for" <> parens (text "???")  <+> char '{') $+$ genSuite env1 b $+$ char '}'
+      where env1                    = define (envOf p) env
+    gen env (With _ is b)           = (text "<remove>" <+> char '{') $+$ genSuite env1 b $+$ char '}'
+      where env1                    = define (envOf is) env
+    gen env (Decl _ ds)             = vcat $ map (gen env1) ds
+      where env1                    = define (envOf ds) env
     gen env (Signature _ vs sc d)   = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
@@ -91,11 +104,13 @@ genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ genSuite env b $+$ char '}'
 
 instance Gen Decl where
-    gen env (Def _ n q ps ks a b d m)
-                                    = (gen env a <+> genQName env n <+> parens (gen env ps) <+> char '{')
-                                      $+$ genSuite env b $+$ char '}'
-    gen env (Class _ n q a b)       = text "class" <+> genQName env n <+> nonEmpty brackets commaList q <+>
-                                      nonEmpty parens commaList a <> colon $+$ genSuite env b
+    gen env (Def _ n q p KwdNIL a b d m)
+                                    = (gen env a <+> genQName env n <+> parens (gen env p) <+> char '{')
+                                      $+$ genSuite env1 b $+$ char '}'
+      where env1                    = define (envOf p) $ defineTVars q env
+    gen env (Class _ n q a b)       = (text "struct" <+> genQName env n <+> nonEmpty parens commaList a <+> char '{') $+$ 
+                                      genSuite env b $+$ char '}'
+      where env1                    = defineTVars q env
 
 
 
@@ -140,6 +155,7 @@ instance Gen Expr where
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
+    gen env (ListComp _ e c)        = text "<listcomp>" <+> parens (gen env e)
     gen env (Paren _ e)             = gen env e
 
 instance Gen OpArg where
@@ -158,7 +174,8 @@ instance Gen Exception where
     gen env (Exception e1 e2)       = gen env e1 <+> nonEmpty (text "from" <+>) (gen env) e2
 
 instance Gen Handler where
-    gen env (Handler ex b)          = gen env ex <> colon $+$ genSuite env b
+    gen env (Handler ex b)          = gen env ex <> colon $+$ genSuite env1 b
+      where env1                    = define (envOf ex) env
     
 instance Gen Except where
     gen env (ExceptAll _)           = text "except"

@@ -101,7 +101,7 @@ instance Pretty (Name, [Name]) where
     pretty (n,ns)               = pretty n <+> braces (commaSep pretty ns)
 
 
-liftEnv env0                    = setX LiftX{ prefixX = [], localsX = [], freemapX = [], namemapX = [], selfparX = Nothing, selfrefX = [] } env0
+liftEnv env0                    = setX env0 LiftX{ prefixX = [], localsX = [], freemapX = [], namemapX = [], selfparX = Nothing, selfrefX = [] }
 
 prefix env                      = prefixX $ envX env
 locals env                      = localsX $ envX env

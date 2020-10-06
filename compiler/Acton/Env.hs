@@ -39,8 +39,8 @@ data EnvF x                 = EnvF {
 type Env0                   = EnvF ()
 
 
-setX                        :: x -> EnvF y -> EnvF x
-setX x env                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, envX = x }
+setX                        :: EnvF y -> x -> EnvF x
+setX env x                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }

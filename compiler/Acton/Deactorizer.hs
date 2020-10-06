@@ -35,7 +35,7 @@ type DeactEnv                       = EnvF DeactX
 data DeactX                         = DeactX { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
 
 deactEnv                            :: Env0 -> DeactEnv
-deactEnv env0                       = setX DeactX{ actionsX = [], localsX = [], stvarX = Nothing } env0
+deactEnv env0                       = setX env0 DeactX{ actionsX = [], localsX = [], stvarX = Nothing }
 
 extend                              :: TEnv -> DeactEnv -> DeactEnv
 extend te env                       = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
