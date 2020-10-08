@@ -138,8 +138,6 @@ noqual env q                            = [ Quant v (filter (not . isProto env .
 
 quals env q                             = [ (v, p) | Quant v ps <- q, p <- ps, isProto env (tcname p) ]
 
-witAttr qn                              = Derived (name "w") (deriveQ qn)
-
 qualAttr p v n                          = Derived (tvarWit v p) n
 
 sibName ws n                            = Derived (baseName ws) n
@@ -188,6 +186,7 @@ convEnvProtos env                       = mapModules (concat . map conv) env
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
 
+fromClass env (Class _ n q _ b) = (n, NClass q [] (fromStmts b))
 fromClass env (Class _ n q [] b)        = (n, NClass q [] (fromStmts b))
 fromClass env (Class _ n q [u] b)       = (n, NClass q (findAncestry env u) (fromStmts b))
 
@@ -235,10 +234,9 @@ protocol p[A(Eq),B] (q[A]):                                 class p[S,A,B] (q[S,
 extension c[A(Eq),B] (p[A,B]):                              class p$c[A,B] (p[c[A,B],A,B]):
     ...                                                         __init__ : (Eq[A]) -> None
 
-actor[S] a[A(Eq),B] (b[A]):                                 class a[A,B] ($Actor[]):                    (existential S...)
+actor[ a[A(Eq),B] (b[A]):                                   class a[A,B] ($Actor[]):
     f : [C(Ord)] => action(A,B) -> C                            __init__ : (Eq[A],b[A]) -> None
-                                                                f : [C] => act[S](Ord[C],A,B) -> C
-                                                                f$local : [C] => act[S](Ord[C],A,B) -> C
-
+                                                                f : [C] => act[Self](Ord[C],A,B) -> C           (Self as state id)
+                                                                f$local : [C] => act[Self](Ord[C],A,B) -> C     (Self as state id)
 
 -}

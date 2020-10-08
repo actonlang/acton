@@ -24,15 +24,25 @@ instance SchemaOf Expr where
                                             monotype t
                                         NDef sc _ ->
                                             sc
+                                        NSig sc _ ->
+                                            sc
                                         NClass q _ _ ->
-                                            let c = TC n (map tVar $ tybound q)
-                                                TSchema _ q' t = findAttr' env c initKW
-                                            in tSchema (q++q') $ subst [(tvSelf,tCon c)] t{ restype = tSelf }
+                                            let tc = TC n (map tVar $ tybound q)
+                                                TSchema _ q' t = findAttr' env tc initKW
+                                            in tSchema (q++q') $ subst [(tvSelf,tCon tc)] t{ restype = tSelf }
                                         NAct q p k _ ->
                                             tSchema q (tFun (fxAct tWild) p k (tCon0 n q))
-    schemaOf env (Dot _ e n)        = case typeOf env e of
+                                        i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
+    schemaOf env (Dot _ (Var _ x) n)
+      | NClass q _ _ <- info        = let tc = TC x (map tVar $ tybound q)
+                                          Just (_, TSchema _ q' t, dec) = findAttr env tc n
+                                      in tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t dec){ restype = tSelf }
+      where info                    = findQName x env
+    schemaOf env e0@(Dot _ e n)     = case typeOf env e of
                                         TCon _ c -> findAttr' env c n
                                         TTuple _ p k -> f n k
+                                        TVar _ v | v == tvSelf -> findAttr' env (findSelf env) n
+                                        t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ " : " ++ prstr t)
       where f n (TRow l k x t r)
               | x == n              = monotype t
               | otherwise           = f n r
@@ -41,8 +51,10 @@ instance SchemaOf Expr where
 instance TypeOf Expr where
     typeOf env e@Var{}              = case schemaOf env e of
                                          TSchema _ [] t -> t
+                                         sc -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
     typeOf env e@Dot{}              = case schemaOf env e of
                                          TSchema _ [] t -> t
+                                         sc -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
     typeOf env (Int _ i s)          = tInt
     typeOf env (Float _ f s)        = tFloat
 --  typeOf env (Imaginary _ i s)    = undefined
@@ -54,6 +66,7 @@ instance TypeOf Expr where
     typeOf env (BStrings _ ss)      = tBytes
     typeOf env (Call _ e ps ks)     = case typeOf env e of
                                         TFun _ fx p k t -> if fx == fxAction then tMsg t else t
+                                        t -> error ("###### typeOf Fun " ++ prstr e ++ " : " ++ prstr t)
     typeOf env (TApp _ e ts)        = case schemaOf env e of
                                         TSchema _ q t | length q == length ts ->
                                             subst (tybound q `zip` ts) t
@@ -114,6 +127,23 @@ instance TypeOf Elem where
     typeOf env (Elem e)             = typeOf env e
     typeOf env (Star e)             = case typeOf env e of
                                         TCon _ (TC c [t]) | qmatch env c qnList -> t
+
+instance TypeOf Pattern where
+    typeOf env (PVar _ n (Just t))  = t
+    typeOf env (PVar _ n Nothing)   = tWild                         -- TODO: prove this never happens
+    typeOf env (PTuple _ ps ks)     = tTuple (typeOf env ps) (typeOf env ks)
+    typeOf env (PList _ ps p)       = tList (typeOf env $ head ps)
+    typeOf env (PParen _ p)         = typeOf env p
+
+instance TypeOf PosPat where
+    typeOf env (PosPat p ps)        = posRow (typeOf env p) (typeOf env ps)
+    typeOf env (PosPatStar p)       = typeOf env p
+    typeOf env PosPatNil            = posNil
+
+instance TypeOf KwdPat where
+    typeOf env (KwdPat n p ps)      = kwdRow n (typeOf env p) (typeOf env ps)
+    typeOf env (KwdPatStar p)       = typeOf env p
+    typeOf env KwdPatNil            = kwdNil
 
 instance (EnvOf a) => EnvOf [a] where
     envOf                           = concat . map envOf
@@ -176,7 +206,7 @@ instance EnvOf Decl where
     envOf (Class _ n q as ss)       = [(n, NClass q as' (envOf ss))]
       where as'                     = [ ([Nothing],a) | a <- as ]
 
-    envOf (Actor _ n q p k b)       = [(n, NAct q (prowOf p) (krowOf k) (envOf b))]
+    envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (envOf ss))]
     
 
 --  The following constructs are translated away during type inference:

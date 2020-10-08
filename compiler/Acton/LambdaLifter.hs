@@ -230,9 +230,7 @@ instance Lift Stmt where
     ll env s@(Continue _)               = pure s
     ll env (If l branches els)          = If l <$> ll env branches <*> ll env els
     ll env (While l e b els)            = While l <$> ll env e <*> ll env b <*> ll env els
-    ll env (For l target e b els)       = For l <$> ll env target <*> ll env e <*> ll env b <*> ll env els
     ll env (Try l b hs els fin)         = Try l <$> ll env b <*> ll env hs <*> ll env els <*> ll env fin
-    ll env (With l items b)             = With l <$> ll env items <*> ll env b
     ll env (Decl l ds)
       | onTop env                       = Decl l <$> ll env ds
       | inClass env                     = Decl l <$> ll env ds
@@ -264,7 +262,7 @@ instance Lift Decl where
                                              lifted <- swapLifted prev
                                              return $ Class l n q cs (b' ++ reverse lifted)
       where bvs                         = bound b
-            env1                        = extPrefix InClass n env
+            env1                        = extPrefix InClass n env           -- defineSelf (NoQ n) q $ defineTVars q env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
     
 
@@ -310,8 +308,6 @@ instance Lift Expr where
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
     ll env (Tuple l es ks)              = Tuple l <$> ll env es <*> ll env ks
     ll env (List l es)                  = List l <$> ll env es
-    ll env (ListComp l e co)            = ListComp l <$> ll env1 e <*> ll env co
-      where env1                        = extLocals (bound co) env
     ll env (Paren l e)                  = Paren l <$> ll env e
     ll env e                            = error ("ll unexpected: " ++ prstr e)
 
@@ -356,4 +352,4 @@ instance Lift Pattern where
 
 -- Convert environment types -----------------------------------------------------------------------------------------
 
-convEnv te                              = te
+convEnv te                              = te                        -- TODO: implement!

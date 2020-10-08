@@ -85,12 +85,7 @@ instance Deact Stmt where
     deact env (Continue l)          = return $ Continue l
     deact env (If l bs els)         = If l <$> deact env bs <*> deact env els
     deact env (While l e b els)     = While l <$> deact env e <*> deact env b <*> deact env els
-    deact env (For l p e b els)     = For l p <$> deact env e <*> deact env1 b <*> deact env els
-      where env1                    = extend (envOf p) env
     deact env (Try l b hs els fin)  = Try l <$> deact env b <*> deact env hs <*> deact env els <*> deact env fin
-    deact env (With l is b)         = With l <$> deact env is <*> deact env1 b
-      where env1                    = extend (envOf is) env
-    deact env (Data l mbp ss)       = Data l mbp <$> deact env ss
     deact env (VarAssign l [PVar _ n _] e)
                                     = MutAssign l (selfRef n) <$> deact env e
     deact env (After l e1 e2)       = do e1' <- deact env e1
@@ -107,7 +102,7 @@ instance Deact Decl where
     deact env (Actor l n q p k b) 
                                     = do inits <- deact env1 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelf p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
+                                         let _init_ = Def l0 initKW [] (addSelfPar p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
       where env1                    = setActor tSelf actions locals $ extend (envOf p ++ envOf k) $ defineTVars q env
             env2                    = extend (envOf decls) env1
@@ -138,12 +133,12 @@ instance Deact Decl where
 
             deactMeth (Def l n q p k t b d fx)
                                     = do b <- deact env' b
-                                         return $ Def l n' q (addSelf p) k t b d fx
+                                         return $ Def l n' q (addSelfPar p) k t b d fx
               where env'            = extend (envOf p ++ envOf k) env2
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p k (Just t) b d fx)
-                                    = Decl l0 [Def l0 n q (addSelf p) k (Just $ tMsg t) [Return l0 (Just $ async)] d (fxAct tSelf)]
+                                    = Decl l0 [Def l0 n q (addSelfPar p) k (Just $ tMsg t) [Return l0 (Just $ async)] d (fxAct tSelf)]
               where n'              = localName n
                     async           = Call l0 (tApp (eQVar primASYNCf) ts') (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
@@ -156,12 +151,12 @@ instance Deact Decl where
                                          return $ Def l n q p KwdNIL t b d fx
       where env1                    = extend (envOf p) $ defineTVars q $ setSt fx env
     deact env (Class l n q u b)     = Class l n q u <$> deact env1 b
-      where env1                    = defineTVars q env
+      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     deact env d                     = error ("deact unexpected: " ++ prstr d)
 
 localName n                         = Derived n (name "local")
 
-addSelf p                           = PosPar selfKW (Just tSelf) Nothing p
+addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 

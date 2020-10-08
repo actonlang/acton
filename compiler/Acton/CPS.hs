@@ -12,6 +12,7 @@ import Acton.Names
 import Acton.Builtin
 import Acton.Prim
 import Acton.Env
+import Acton.QuickType
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
 convert env0 m                          = return (runCpsM $ cps env m, mapModules convEnv env0)
@@ -37,15 +38,12 @@ prefix ss                               = state (\(supply, stmts) -> ((), (suppl
 swapPrefixes                            :: [Stmt] -> CpsM [Stmt]
 swapPrefixes ss                         = state (\(supply, stmts) -> (stmts, (supply, ss)))
 
-withPrefixes                            :: CpsM a -> CpsM (a,[Stmt])
+withPrefixes                            :: CpsM a -> CpsM ([Stmt],a)
 withPrefixes m                          = do ss0 <- swapPrefixes []
                                              r <- m
                                              ss1 <- swapPrefixes ss0
-                                             return (r, reverse ss1)
+                                             return (reverse ss1, r)
 
-
-nType                                   = name "type"                       -- TODO: de-pythonize these references
-nTraceback                              = name "__traceback__"
 
 data Frame                              = Act
                                         | Meth   Name                       -- contParam
@@ -67,32 +65,34 @@ ctxt env                                = ctxtX $ envX env
 infixr +:
 frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
-setCtxt env ctx                         = modX env $ \x -> x{ ctxtX = ctx }
+setCtxt ctx env                         = modX env $ \x -> x{ ctxtX = ctx }
 
 
-eCallCont c args                        = eCallV primCont (eVar c : args)               -- TODO: change to c.enter
+eCallCont c arg                         = eCall (eQVar primRContc) [eVar c, arg]
+
+eCallCont2 c args                       = eCall (eVar c) args
 
 pushH h                                 = sExpr (eCallV primPUSH [h])
 
 format (Int _ 0 _, cont)                = [sReturn cont]
 format (lvl, cont)                      = [sExpr (eCallV primPOP [lvl]), sReturn cont]
 
-wrapC c f env                           = eCallCont c [level, eLambda' [] cont]
+wrapC c f env                           = eCallCont2 c [level, eLambda' [] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
 unwrapL n lvl                           = eBinOp (eInt n) Plus (unwrapL 0 lvl)
 
 seqcont n (Pop : env)                   = seqcont (n+1) env
-seqcont n (Seq c : _)                   = (eInt n, eCallCont c [eNone])
-seqcont n (Loop c : _)                  = (eInt n, eCallCont c [eNone])
-seqcont n (Meth c : _)                  = (eInt n, eCallCont c [eNone])
+seqcont n (Seq c : _)                   = (eInt n, eCallCont c eNone)
+seqcont n (Loop c : _)                  = (eInt n, eCallCont c eNone)
+seqcont n (Meth c : _)                  = (eInt n, eCallCont c eNone)
 seqcont n (Wrap c : env)                = (eInt n, wrapC c seqcont env)
-seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont cnt [])
+seqcont n (Unwrap lvl cnt : _)          = (unwrapL n lvl, eCallCont2 cnt [])
 
 cntcont n (Pop : env)                   = cntcont (n+1) env
 cntcont n (Seq c : env)                 = cntcont n env
-cntcont n (Loop c : _)                  = (eInt n, eCallCont c [eNone])
+cntcont n (Loop c : _)                  = (eInt n, eCallCont c eNone)
 cntcont n (Wrap c : env)                = (eInt n, wrapC c cntcont env)
 cntcont n (Unwrap lvl cnt : env)        = cntcont n env
 
@@ -105,7 +105,7 @@ brkcont n (Unwrap lvl cnt : env)        = brkcont n env
 retcont e n (Pop : env)                 = retcont e (n+1) env
 retcont e n (Seq c : env)               = retcont e n env
 retcont e n (Loop c : env)              = retcont e n env
-retcont e n (Meth c : _)                = (eInt n, eCallCont c [e])
+retcont e n (Meth c : _)                = (eInt n, eCallCont c e)
 retcont e n (Wrap c : env)              = (eInt n, wrapC c (retcont e) env)
 retcont e n (Unwrap lvl cnt : env)      = retcont e n env
 
@@ -116,8 +116,13 @@ quicknext (Wrap c : env)                = Just (wrapC c seqcont env)
 quicknext _                             = Nothing
 
 
-cpsSuite env ss                         = do (ss',prefixes) <- withPrefixes $ pre env ss
-                                             cps env (prefixes ++ ss')
+preSuite env []                         = return []
+preSuite env (s : ss)                   = do (prefixes,s') <- withPrefixes $ pre env s
+                                             ss' <- preSuite (define (envOf s) env) ss
+                                             return (prefixes ++ s' : ss')
+
+cpsSuite env ss                         = do ss' <- preSuite env ss
+                                             cps env ss'
 
 class CPS a where
     cps                                 :: CPSEnv -> a -> CpsM a
@@ -152,36 +157,35 @@ instance CPS [Stmt] where
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env ss
-                                             return $ sDef k (pospar' [x]) ss' :
+                                             return $ kDef k (pospar [(x,t)]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
+      where t                           = typeOf env e
 
     cps env (Assign _ [PVar _ x _] e : ss)
       | contCall env e                  = do k <- newName "cont"
-                                             ss' <- cps env ss
-                                             return $ sDef k (pospar' [x]) ss' :
+                                             ss' <- cps env1 ss
+                                             return $ kDef k (pospar [(x,t)]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
-    cps env (Assign _ ps e : ss)
-      | contCall env e                  = do ns <- newNames ["cont","res"]
-                                             let [k,x] = ns
-                                             ss' <- cps env (sAssign ps (eVar x) : ss)
-                                             return $ sDef k (pospar' [x]) ss' :
-                                                      sReturn (addContArg e (eVar k)) : []
+      where t                           = typeOf env e
+            env1                        = define [(x,NVar t)] env
 
-    cps env (MutAssign _ t e : ss)
+    cps env (MutAssign _ tg e : ss)
       | contCall env e                  = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
-                                             ss' <- cps env (sMutAssign t (eVar x) : ss)
-                                             return $ sDef k (pospar' [x]) ss' :
+                                             ss' <- cps env (sMutAssign tg (eVar x) : ss)
+                                             return $ kDef k (pospar [(x,t)]) ss' :
                                                       sReturn (addContArg e (eVar k)) : []
+      where t                           = typeOf env e
 
     cps env (Decl l ds : ss)            = do ds' <- mapM (cps env1) ds
                                              ss' <- cps env1 ss
                                              return $ sDecl ds' : ss'
-      where env1                        = env -- define'' ds env
+      where env1                        = define (envOf ds) env
     
     cps env (s : ss)
-      | not (needCont env s)            = do ss' <- cps (env {- define'' s env -}) ss
+      | not (needCont env s)            = do ss' <- cps env1 ss
                                              return $ s : ss'
+      where env1                        = define (envOf s) env
     
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
                                              els' <- cpsSuite env els
@@ -192,24 +196,14 @@ instance CPS [Stmt] where
                                              b' <- cpsSuite (Loop k +: env) b
                                              els' <- cpsSuite env els
                                              let body = sIf1 e b' els' : []
-                                             return $ sDef k (pospar' [x]) body : 
-                                                      jump k
-
-    cps env [For _ p e b els]           = do ns <- newNames ["loop","res","iter"]
-                                             let [k,x,ivar] = ns
-                                             b' <- cpsSuite (Loop k +: env) b
-                                             els' <- cpsSuite env els
-                                             let advance = sAssign [p] (eCall (eDot (eVar ivar) nextKW) [])
-                                                 body = sTry (advance : b') [handler qnStopIteration els'] [] [] : []
-                                             return $ sAssign [pVar ivar Nothing] e :
-                                                      sDef k (pospar' [x]) body :
+                                             return $ kDef k (pospar [(x,tNone)]) body : 
                                                       jump k
 
     cps env [Try _ b [] [] fin]         = do ns <- newNames ["finalizer","x","level","cont"]
                                              let [fcnt,x,lvl,cnt] = ns
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
+                                             return $ kDef fcnt (pospar' [lvl, cnt]) fin' :
                                                       pushH (finalH x fcnt) :
                                                       b'
 
@@ -217,7 +211,7 @@ instance CPS [Stmt] where
                                              let [hcnt,x] = ns
                                              body <- hbody env x hs
                                              b' <- cpsSuite (Pop +: env) b
-                                             return $ sDef hcnt (pospar' [x]) body :
+                                             return $ kDef hcnt (pospar' [x]) body :
                                                       pushH (eVar hcnt) :
                                                       b'
 
@@ -226,8 +220,8 @@ instance CPS [Stmt] where
                                              body <- hbody env x hs
                                              els' <- cpsSuite env els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: env) b
-                                             return $ sDef hcnt (pospar' [x]) body :
-                                                      sDef ecnt (pospar' [x]) els' :
+                                             return $ kDef hcnt (pospar' [x]) body :
+                                                      kDef ecnt (pospar' [x]) els' :
                                                       pushH (eVar hcnt) :
                                                       b'
 
@@ -236,8 +230,8 @@ instance CPS [Stmt] where
                                              fin' <- cpsSuite (Unwrap lvl cnt +: env) fin
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              b' <- cpsSuite (Pop +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
-                                                      sDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
+                                             return $ kDef fcnt (pospar' [lvl, cnt]) fin' :
+                                                      kDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
                                                       pushH (eVar hcnt) :
                                                       b'
                                           
@@ -247,48 +241,28 @@ instance CPS [Stmt] where
                                              body <- hbody (Pop +: Wrap fcnt +: env) x hs
                                              els' <- cpsSuite (Pop +: Wrap fcnt +: env) els
                                              b' <- cpsSuite (Pop +: Seq ecnt +: Wrap fcnt +: env) b
-                                             return $ sDef fcnt (pospar' [lvl, cnt]) fin' :
-                                                      sDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
-                                                      sDef ecnt (pospar' [x]) (pushH (finalH x fcnt) : els') :
+                                             return $ kDef fcnt (pospar' [lvl, cnt]) fin' :
+                                                      kDef hcnt (pospar' [x]) (pushH (finalH x fcnt) : body) :
+                                                      kDef ecnt (pospar' [x]) (pushH (finalH x fcnt) : els') :
                                                       pushH (eVar hcnt) :
                                                       b'
 
-    cps env [With _ [] b]               = cpsSuite env b
-    
-    cps env [With l (item:items) b]     = do ns <- newNames ["mgr","finalizer","handler","x","level","cont"]
-                                             let [m,fcnt,hcnt,x,lvl,cnt] = ns
-                                             b' <- cpsSuite (Pop +: Wrap fcnt +: env) [With l items b]
-                                             return $ enter m item ++
-                                                      sDef fcnt (pospar' [lvl, cnt]) (exit m) :
-                                                      sDef hcnt (pospar' [x]) (hbody m x) :
-                                                      pushH (eVar hcnt) :
-                                                      b'
-      where hbody m x                   = sIf1 (ifexit m x) [sReturn (eBool True)] [] : []
-            enter m (WithItem e mbp)
-              | Just p <- mbp           = [sAssign [pVar m Nothing] e, sAssign [p] (eCall (eDot (eVar m) enterKW) [])]
-              | otherwise               = [sAssign [pVar m Nothing] e]
-            ifexit m x                  = eCall (eDot (eVar m) exitKW) [type_x,val_x,tb_x]      -- TODO: de-pythonize this test
-              where type_x              = eCall (eVar nType) [val_x]
-                    val_x               = eVar x
-                    tb_x                = eDot val_x nTraceback
-            exit m                      = [sExpr (eCall (eDot (eVar m) exitKW) [eNone,eNone,eNone])]
-            
     cps env (s : ss)                    = do ns <- newNames ["cont","res"]
                                              let [k,x] = ns
                                              ss' <- cps env ss
                                              ss1 <- cps (Seq k +: env) [s]
-                                             return $ sDef k (pospar' [x]) ss' :
+                                             return $ kDef k (pospar' [x]) ss' :
                                                       ss1
 
     cps env []                          = return []
 
 instance CPS Decl where
     cps env (Class l n q cs b)          = Class l n q cs <$> cpsSuite env1 b
-      where env1                        = setCtxt env []
+      where env1                        = setCtxt [] $ defineSelf (NoQ n) q $ defineTVars q env
 
     cps env (Def l n q p KwdNIL a b d m)
       | contDef env l n m               = Def l n q (addContParam p) KwdNIL a <$> cpsSuite env1 b <*> return d <*> return m
-      where env1                        = Meth contKW +: env    -- env { defd = bound p }
+      where env1                        = Meth contKW +: define (envOf p) env
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
     
@@ -320,6 +294,7 @@ hbody env x hs                          = do hs' <- mapM (cps env) hs
                                              return $ sTry [sRaise (eVar x)] hs' [] [] :
                                                       []
 
+kDef k p b                              = sDef k p tR b
 
 contCall env (Call l (Var _ n) p KwdNil)
   | n == primAWAITf                     = True
@@ -378,8 +353,10 @@ class PreCPS a where
     preTop                              :: CPSEnv -> a -> CpsM a
     preTop env                          = pre env
 
-instance PreCPS a => PreCPS [a] where
-    pre env                             = mapM (pre env)
+instance (PreCPS a, EnvOf a) => PreCPS [a] where
+    pre env []                          = return []
+    pre env (a:as)                      = (:) <$> pre env a <*> pre env1 as
+      where env1                        = define (envOf a) env
 
 instance PreCPS a => PreCPS (Maybe a) where
     pre env Nothing                     = return Nothing
@@ -390,18 +367,14 @@ instance PreCPS a => PreCPS (Maybe a) where
 
 instance PreCPS Stmt where
     pre env (Expr l e)                  = Expr l <$> preTop env e
-    pre env (Assign l ps e)             = Assign l <$> pre env ps <*> preTop env e
+    pre env (Assign l ps e)             = Assign l ps <$> preTop env e
     pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
     pre env (Assert l e mbe)            = Assert l <$> pre env e <*> pre env mbe
     pre env (Delete l t)                = Delete l <$> pre env t
     pre env (Return l e)                = Return l <$> preTop env e
     pre env (If l bs els)               = If l <$> pre env bs <*> return els
     pre env (While l e b els)           = While l <$> pre env e <*> return b <*> return els
-    pre env (For l p e b els)           = For l <$> pre env p <*> pre env e <*> return b <*> return els
     pre env (Try l b hs els fin)        = return $ Try l b hs els fin
-    pre env (With l [item] b)           = With l <$> pre env [item] <*> return b
-    pre env (With l (item:items) b)     = pre env (With l [item] [With l items b])
-    pre env (Data l p b)                = Data l <$> pre env p <*> pre env b
     pre env s                           = return s
 
 instance PreCPS Branch where
@@ -411,7 +384,7 @@ instance PreCPS Exception where
     pre env (Exception e1 e2)           = Exception <$> pre env e1 <*> pre env e2
 
 instance PreCPS WithItem where
-    pre env (WithItem e p)              = WithItem <$> pre env e <*> pre env p
+    pre env (WithItem e p)              = WithItem <$> pre env e <*> pure p
 
 instance PreCPS PosArg where
     pre env (PosArg e p)                = PosArg <$> pre env e <*> pre env p
@@ -427,7 +400,7 @@ instance PreCPS Expr where
     pre env e0@(Call l e ps KwdNil)
       | contCall env e0                 = do ps1 <- pre env ps                                          -- TODO: utilize type of e
                                              v <- newName "sync"
-                                             prefix [sAssign [pVar v Nothing] (Call l e ps1 KwdNil)]
+                                             prefix [sAssign (pVar' v) (Call l e ps1 KwdNil)]
                                              return (eVar v)
     pre env (Call l e ps KwdNil)        = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
@@ -440,26 +413,18 @@ instance PreCPS Expr where
     pre env (Rest l e n)                = Rest l <$> pre env e <*> return n
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
-    pre env (Lambda l ps KwdNIL e fx)   = do (e1,stmts) <- withPrefixes $ pre env e
-                                             case stmts of                                              -- TODO: utilize type of e (+below)
+    pre env (Lambda l ps KwdNIL e fx)   = do (prefixes,e1) <- withPrefixes $ pre env e
+                                             case prefixes of                                              -- TODO: utilize type of e (+below)
                                                  [] ->
-                                                    Lambda l <$> pre env ps <*> pure KwdNIL <*> return e1 <*> return fx
+                                                    return $ Lambda l ps KwdNIL e1 fx
                                                  _  -> do 
-                                                    ps1 <- pre env ps
                                                     f <- newName "lambda"
-                                                    prefix [sDecl [Def l f [] ps1 KwdNIL Nothing (stmts ++ [sReturn e1]) NoDec fx]]
+                                                    prefix [sDecl [Def l f [] ps KwdNIL Nothing (prefixes ++ [sReturn e1]) NoDec fx]]
                                                     return (Var l0 (NoQ f))
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
     pre env (Tuple l es ks)             = Tuple l <$> pre env es <*> pre env ks
     pre env (List l es)                 = List l <$> pre env es
-    pre env (ListComp l (Elem e) c)     = do (e1,stmts) <- withPrefixes $ ListComp l <$> (Elem <$> pre env e) <*> pre env c
-                                             case stmts of
-                                                 [] -> return e1
-                                                 _  -> do acc <- newName "acc"
-                                                          preComp env (s0 acc) (s1 acc) c >> return (eVar acc)
-      where s0 acc                      = sAssign [pVar acc Nothing] (eCallV qnList [])
-            s1 acc                      = sExpr (eCall (eDot (eVar acc) (name "append")) [e])
     pre env (Paren l e)                 = Paren l <$> pre env e
     pre env e                           = return e
 
@@ -468,51 +433,9 @@ instance PreCPS Expr where
     preTop env e                        = pre env e
 
 
-preComp env s0 s1 c                     = pre env (s0 : mkLoop c) >>= prefix
-  where mkLoop NoComp                   = [s1]
-        mkLoop (CompIf l e c)           = [If l [Branch e (mkLoop c)] []]
-        mkLoop (CompFor l t e c)        = [For l t e (mkLoop c) []]
-
-instance PreCPS OpArg where
-    pre env (OpArg op e)                = OpArg op <$> pre env e
-
 instance PreCPS Elem where
     pre env (Elem e)                    = Elem <$> pre env e
     pre env (Star e)                    = Star <$> pre env e
-
-instance PreCPS Assoc where
-    pre env (Assoc k v)                 = Assoc <$> pre env k <*> pre env v
-    pre env (StarStar e)                = StarStar <$> pre env e
-
-instance PreCPS PosPar where
-    pre env (PosPar n t e p)            = do (e1,stmts) <- withPrefixes $ pre env e
-                                             case stmts of
-                                                 [] -> PosPar n t e1 <$> pre env p
-                                                 _  -> notYet (loc e) "Continuations inside a default value"
-    pre env (PosSTAR n t)               = return $ PosSTAR n t
-    pre env PosNIL                      = return PosNIL
-
-instance PreCPS PosPat where
-    pre env (PosPat p ps)               = PosPat <$> pre env p <*> pre env ps
-    pre env (PosPatStar p)              = PosPatStar <$> pre env p
-    pre env PosPatNil                   = return PosPatNil
-    
-instance PreCPS Comp where
-    pre env (CompFor l t e c)           = CompFor l <$> pre env t <*> pre env e <*> pre env c
-    pre env (CompIf l e c)              = CompIf l <$> pre env e <*> pre env c
-    pre env NoComp                      = return NoComp
-
-instance PreCPS KwdPat where
-    pre env (KwdPat n p ps)             = KwdPat n <$> pre env p <*> pre env ps
-    pre env (KwdPatStar p)              = KwdPatStar <$> pre env p
-    pre env KwdPatNil                   = return KwdPatNil
-
-instance PreCPS Pattern where
-    pre env (PVar l n a)                = return (PVar l n a)
-    pre env (PTuple l ps ks)            = PTuple l <$> pre env ps <*> pre env ks
-    pre env (PList l ps p)              = PList l <$> pre env ps <*> pre env p
-    pre env (PParen l p)                = PParen l <$> pre env p
-    pre env (PData l n ixs)             = PData l n <$> pre env ixs
 
 
 -- Convert environment types ------------------------------------------------------------------------------------

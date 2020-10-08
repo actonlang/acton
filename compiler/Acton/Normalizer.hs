@@ -52,7 +52,7 @@ normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env (PTuple _ pp kp)        = do v <- newName "tup"
                                          ss <- norm env $ normPP v 0 pp ++ normKP v [] kp
-                                         return (pVar v Nothing, ss)                                    -- TODO: provide a type for v
+                                         return (pVar' v, ss)                                    -- TODO: provide a type for v
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
@@ -61,7 +61,7 @@ normPat env (PTuple _ pp kp)        = do v <- newName "tup"
         normKP _ _ KwdPatNil        = []
 normPat env (PList _ ps pt)         = do v <- newName "lst"
                                          ss <- norm env $ normList v 0 ps pt
-                                         return (pVar v Nothing, ss)                                    -- TODO: provide a type for v
+                                         return (pVar' v, ss)                                    -- TODO: provide a type for v
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
@@ -69,15 +69,6 @@ normPat env (PList _ ps pt)         = do v <- newName "lst"
                                         [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
         normList v n [] Nothing     = [] 
 
-normPat' env Nothing                = return (Nothing, [])
-normPat' env (Just p)               = do (p',ss) <- normPat env p
-                                         return (Just p', ss)
-
-normItems env []                    = return ([], [])
-normItems env (WithItem e p : is)   = do e' <- norm env e
-                                         (p',ss) <- normPat' env p
-                                         (is',ss') <- normItems (define (envOf p) env) is
-                                         return (WithItem e' p' : is', ss++ss')
 
 
 class Norm a where
@@ -128,16 +119,6 @@ instance Norm Stmt where
     norm env (If l bs els)          = If l <$> norm env bs <*> norm env els
     norm env (While l e b els)      = While l <$> norm env e <*> norm env b <*> norm env els
     norm env (Try l b hs els fin)   = Try l <$> norm env b <*> norm env hs <*> norm env els <*> norm env fin
-    norm env (For l p e b els)      = do (v,ss) <- normPat env p
-                                         e' <- norm env e
-                                         b' <- norm env1 (ss ++ b)
-                                         els' <- norm env els
-                                         return $ For l v e' b' els'
-      where env1                    = define (envOf p) env
-    norm env (With l is b)          = do (is',ss) <- normItems env is
-                                         b' <- norm env1 (ss ++ b)
-                                         return $ With l is' b'
-      where env1                    = define (envOf is) env
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
@@ -146,13 +127,55 @@ instance Norm Stmt where
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
 
-    norm' env (Assign l ts e)       = do e' <- norm env e
-                                         ps <- mapM (normPat env) ts
+    norm' env (Assign l tgs e)      = do e' <- norm env e
+                                         ps <- mapM (normPat env) tgs
                                          let (vs,sss) = unzip ps
                                          ss' <- norm env (concat sss)
                                          return $ Assign l vs e' : ss'
+      where t                       = typeOf env e
+    norm' env (For l p e b els)     = do i <- newName "iter"
+                                         v <- newName "val"
+                                         norm env [sAssign (pVar i t) e,
+                                                   sAssign (pVar v $ tOpt $ head ts) (next i),
+                                                   While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
+      where t@(TCon _ (TC c ts))    = typeOf env e
+            test v                  = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar v,eNone]
+            next i                  = eCall (eDot (eVar i) nextKW) []
+    {-
+    with EXPRESSION as PATTERN:
+        SUITE
+    ===>
+    $mgr = EXPRESSION
+    $val = $mgr.__enter__()
+    $exc = False
+    try:
+        PATTERN = $val
+        SUITE
+    except Exception as ex:
+        $exc = True
+        if not $mgr.__exit__(ex):
+            raise
+    finally:
+        if not $exc:
+            $mgr.__exit__(None)
+    -}
+    norm' env s@(With l (i:is) b)   = do notYet l s                     -- TODO: remove
+                                         m <- newName "mgr"
+                                         v <- newName "val"
+                                         x <- newName "exc"
+                                         (e,mbp,ss) <- normItem env i
+                                         b' <- norm env1 (ss ++ b)
+                                         return undefined
+      where env1                    = define (envOf i) env
+    norm' env (With l [] b)         = norm env b
     norm' env s                     = do s' <- norm env s
                                          return [s']
+
+normItem env (WithItem e Nothing)   = do e' <- norm env e
+                                         return (e', Nothing, [])
+normItem env (WithItem e (Just p))  = do e' <- norm env e
+                                         (p',ss) <- normPat env p
+                                         return (e', Just p', ss)
 
 
 instance Norm Decl where
@@ -167,7 +190,7 @@ instance Norm Decl where
       where env1                    = define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env
     norm env (Class l n q as b)     = Class l n q as <$> norm env1 b
-      where env1                    = defineTVars q env
+      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
@@ -211,16 +234,16 @@ instance Norm Expr where
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
     norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
     norm env (List l es)            = List l <$> norm env es
-    norm env (ListComp l e c)       = ListComp l <$> norm env1 e <*> norm env c
+    norm env e0@(ListComp l e c)    = notYet l e0                                   -- TODO: eliminate here
       where env1                    = define (envOf c) env
-    norm env (Paren l e)            = Paren l <$> norm env e
+    norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
 instance Norm Pattern where
     norm env (PVar l n a)           = return $ PVar l n a
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
-    norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p
-    norm env (PParen l p)           = PParen l <$> norm env p
+    norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here
+    norm env (PParen l p)           = norm env p
 
 instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
@@ -235,7 +258,10 @@ instance Norm ModName where
     norm env (ModName ns)           = ModName <$> mapM (norm env) ns
 
 instance Norm QName where
-    norm env (QName m n)            = QName <$> norm env m <*> norm env n
+    norm env (QName m n)
+      | inBuiltin env, 
+        m == mBuiltin               = NoQ <$> norm env n
+      | otherwise                   = QName <$> norm env m <*> norm env n
     norm env (NoQ n)                = NoQ <$> norm env n
 
 instance Norm ModRef where
@@ -288,7 +314,7 @@ kwdToPosArg KwdNil                  = PosNil
 defaults (PosPar n t (Just e) p)    = s : defaults p
   where s                           = sIf1 test [set] []
         test                        = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar n,eNone]
-        set                         = sAssign [pVar n Nothing] e
+        set                         = sAssign (pVar' n) e
 defaults (PosPar n t Nothing p)     = defaults p
 defaults _                          = []
 
@@ -315,27 +341,14 @@ instance Norm KwdPat where
     norm env (KwdPatStar p)         = KwdPatStar <$> norm env p
     norm env KwdPatNil              = return KwdPatNil
     
-instance Norm OpArg where
-    norm env (OpArg op e)           = OpArg op <$> norm env e
-
 instance Norm Comp where
     norm env (CompFor l p e c)      = CompFor l <$> norm env p <*> norm env e <*> norm (define (envOf p) env) c
     norm env (CompIf l e c)         = CompIf l <$> norm env e <*> norm env c
     norm env NoComp                 = return NoComp
 
-instance Norm WithItem where
-    norm env (WithItem e p)         = WithItem <$> norm env e <*> norm env p
-
 instance Norm Elem where
     norm env (Elem e)               = Elem <$> norm env e
-    norm env (Star e)               = Star <$> norm env e
-
-instance Norm Assoc where
-    norm env (Assoc e1 e2)          = Assoc <$> norm env e1 <*> norm env e2
-    norm env (StarStar e)           = StarStar <$> norm env e
-  
-instance Norm Sliz where
-    norm env (Sliz l e1 e2 e3)      = Sliz l <$> norm env e1 <*> norm env e2 <*> norm env e3
+    norm env (Star e)               = Star <$> norm env e               -- TODO: eliminate here
 
 
 -- Convert function types ---------------------------------------------------------------------------------

@@ -14,6 +14,10 @@ deriveQ (QName (ModName m) n)       = deriveMod n m
 deriveMod n0 []                     = n0
 deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 
+witAttr qn                          = Derived (name "w") (deriveQ qn)
+
+extensionName p c                   = Derived (deriveQ $ tcname p) (deriveQ c)
+
 
 -- Mutually recursive groups -------
 

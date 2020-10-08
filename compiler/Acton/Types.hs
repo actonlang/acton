@@ -19,10 +19,13 @@ import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
-                                             return (map simpSig te, Module m i ss1, convEnvProtos env2)
+--                                             traceM ("#################### converted env0:")
+--                                             traceM (render (vcat (map pretty (names env0'))))
+                                             return (map simpSig te, Module m i ss1, env0')
   where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te env0
+        env0'                           = convEnvProtos env0
 
 solverError                             = typeError
 
@@ -443,9 +446,6 @@ checkAttributes final te' te
         -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
 
 
-extensionName                           :: TCon -> QName -> Name
-extensionName p c                       = Derived (deriveQ $ tcname p) (deriveQ c)
-
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 toSigs te                               = map makeSig te
@@ -484,9 +484,6 @@ checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
                                                  env1 <- msubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err2 escaped "Escaping type variable"
-
-addSelf (TFun l x p k t) NoDec          = TFun l x (posRow tSelf p) k t
-addSelf t _                             = t
 
 openAction env (TFun l fx p k t)
   | fx == fxAction                      = TFun l tWild p k t
@@ -1056,7 +1053,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSequence t0) :
-                                                     cs, t1, eCall (eDot (eVar w) fromiterKW) [List l es'])
+                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l es'])
     infer env (ListComp l e1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
@@ -1065,13 +1062,13 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSequence t0) :
-                                                     cs1++cs2, t1, eCall (eDot (eVar w) fromiterKW) [ListComp l e1' co'])
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l e1' co'])
     infer env (Set l es)                = do t0 <- newTVar
                                              (cs,es')  <- infElems env es t0
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSet t0) :
-                                                     cs, t1, eCall (eDot (eVar w) fromiterKW) [List l es'])
+                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l es'])
     infer env (SetComp l e1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
@@ -1080,7 +1077,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSet t0) :
-                                                     cs1++cs2, t1, eCall (eDot (eVar w) fromiterKW) [ListComp l e1' co'])
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l e1' co'])
                                              
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
@@ -1088,7 +1085,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pMapping tk tv) :
-                                                     cs, t1, eCall (eDot (eVar w) fromiterKW) [List l as'])
+                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l as'])
     infer env (DictComp l a1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              tk <- newTVar
@@ -1098,7 +1095,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pMapping tk tv) :
-                                                     cs1++cs2, t1, eCall (eDot (eVar w) fromiterKW) [ListComp l a1' co'])
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l a1' co'])
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 

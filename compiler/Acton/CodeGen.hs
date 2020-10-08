@@ -89,11 +89,6 @@ instance Gen Stmt where
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
     gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
-    gen env (Try _ b hs _ _)        = text "<remove>" <> colon $+$ genSuite env b $+$ vmap (gen env) hs
-    gen env (For _ p e b [])        = (text "for" <> parens (text "???")  <+> char '{') $+$ genSuite env1 b $+$ char '}'
-      where env1                    = define (envOf p) env
-    gen env (With _ is b)           = (text "<remove>" <+> char '{') $+$ genSuite env1 b $+$ char '}'
-      where env1                    = define (envOf is) env
     gen env (Decl _ ds)             = vcat $ map (gen env1) ds
       where env1                    = define (envOf ds) env
     gen env (Signature _ vs sc d)   = empty
@@ -110,7 +105,7 @@ instance Gen Decl where
       where env1                    = define (envOf p) $ defineTVars q env
     gen env (Class _ n q a b)       = (text "struct" <+> genQName env n <+> nonEmpty parens commaList a <+> char '{') $+$ 
                                       genSuite env b $+$ char '}'
-      where env1                    = defineTVars q env
+      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
 
 
 
@@ -155,7 +150,6 @@ instance Gen Expr where
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
-    gen env (ListComp _ e c)        = text "<listcomp>" <+> parens (gen env e)
     gen env (Paren _ e)             = gen env e
 
 instance Gen OpArg where
@@ -170,51 +164,12 @@ instance Gen Integer where
 instance Gen String where
     gen env s                       = text s
 
-instance Gen Exception where
-    gen env (Exception e1 e2)       = gen env e1 <+> nonEmpty (text "from" <+>) (gen env) e2
-
-instance Gen Handler where
-    gen env (Handler ex b)          = gen env ex <> colon $+$ genSuite env1 b
-      where env1                    = define (envOf ex) env
-    
-instance Gen Except where
-    gen env (ExceptAll _)           = text "except"
-    gen env (Except _ x)            = text "except" <+> gen env x
-    gen env (ExceptAs _ x n)        = text "except" <+> gen env x <+> text "as" <+> gen env n
-
-genAnn env Nothing                  = empty
-genAnn env (Just a)                 = colon <+> gen env a
-
 instance Gen Elem where
     gen env (Elem e)                = gen env e
-    gen env (Star e)                = text "*" <> gen env e
-
-instance Gen Assoc where
-    gen env (Assoc k v)             = gen env k <> colon <+> gen env v
-    gen env (StarStar e)            = text "**" <> gen env e
-
-instance Gen WithItem where
-    gen env (WithItem e p)          = gen env e <+> nonEmpty (text "as" <+>) (gen env) p
-
-instance Gen Sliz where
-    gen env (Sliz _ a b c)          = gen env a <> colon <> gen env b <> gen env c
-
-instance Gen Comp where
-    gen env (CompFor _ p e c)       = text "for" <+> gen env p <+> text "in" <+> gen env e <+> gen env c
-    gen env (CompIf _ e c)          = text "if" <+> gen env e <+> gen env c
-    gen env NoComp                  = empty
-
-
-instance Gen PosPat where
-    gen env (PosPat p PosPatNil)    = gen env p
-    gen env (PosPat p ps)           = gen env p <> comma <+> gen env ps
-    gen env (PosPatStar p)          = text "*" <> gen env p
-    gen env PosPatNil               = empty
 
 instance Gen Pattern where
     gen env (PVar _ n Nothing)      = gen env n
     gen env (PVar _ n (Just t))     = gen env t <+> gen env n
-    gen env (PParen _ p)            = gen env p
 
 instance Gen Unary where
     gen env Not                     = text "not "

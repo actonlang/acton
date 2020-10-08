@@ -220,13 +220,12 @@ data Constraint = Cast  Type Type
 
 type Constraints = [Constraint]
 
-dDef n p b      = Def NoLoc n [] p KwdNIL Nothing b NoDec fxWild
+dDef n p t b    = Def NoLoc n [] p KwdNIL (Just t) b NoDec fxWild
 
-sDef n p b      = sDecl [dDef n p b]
+sDef n p t b    = sDecl [dDef n p t b]
 sReturn e       = Return NoLoc (Just e)
-sAssign ps e    = Assign NoLoc ps e
+sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
-sAugAssign t o e = AugAssign NoLoc t o e
 sRaise e        = Raise NoLoc (Just (Exception e Nothing))
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
@@ -256,7 +255,8 @@ eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
-pVar n t        = PVar NoLoc n t
+pVar n t        = PVar NoLoc n (Just t)
+pVar' n         = PVar NoLoc n Nothing
 
 monotype t      = TSchema NoLoc [] t
 tSchema q t     = TSchema NoLoc q t

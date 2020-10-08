@@ -37,6 +37,10 @@ primASSERT          = qPrim "ASSERT"
 
 primISINSTANCE      = qPrim "ISINSTANCE"
 
+primRContc          = qPrim "R_CONTc"
+primRCont           = qPrim "R_CONT"
+
+
 
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
@@ -69,7 +73,10 @@ primMkEnv cls def   = [ (noq primASYNCf,        def scASYNCf NoDec),
                         (noq primActor,         clActor cls def),
                         (noq primR,             clR cls def),
                         (noq primClos,          clClos cls def),
-                        (noq primCont,          clCont cls def)
+                        (noq primCont,          clCont cls def),
+
+                        (noq primRContc,        def scRContc NoDec),
+                        (noq primRCont,         def scRCont NoDec)
                       ]
 
 --  class $Actor (): pass
@@ -93,7 +100,6 @@ clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
 clCont cls def      = cls [quant x, quant a] [([Nothing],TC primClos [tVar x, posRow (tVar a) posNil, tR])] []
   where x           = TV KFX (name "X")
         a           = TV KType (name "A")
-
 
 --  $ASYNCf         : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
 scASYNCf            = tSchema [quant s, quant a] tASYNC
@@ -214,3 +220,16 @@ scASSERT           = tSchema [] tASSERT
 scISINSTANCE        = tSchema [] tISINSTANCE
   where tISINSTANCE = tFun fxPure (posRow tStruct $ posRow tWild posNil) kwdNil tNone
 
+--  $R_CONTc        : [X,A] => X(X(A)->$R, A) -> $R
+scRContc            = tSchema [quant x, quant a] tRCont
+  where tRCont      = tFun (tVar x) (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
+        x           = TV KFX $ name "X" 
+        a           = TV KType $ name "A"
+
+--  $R_CONT         : [X,A] => X($Cont[X,A], A) -> $R
+scRCont             = tSchema [quant x, quant a] tRCont
+  where tRCont      = tFun (tVar x) (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tCont (tVar x) (tVar a)
+        x           = TV KFX $ name "X" 
+        a           = TV KType $ name "A"

@@ -46,9 +46,9 @@ modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
 
 
-mapModules                  :: (TEnv -> TEnv) -> EnvF x -> Env0
-mapModules f env            = EnvF { names = f $ map pre (names env), modules = [ (m, f $ map pre te) | (m,te) <- modules env ], witnesses = [], envX = () }
-  where pre (m, NModule te) = (m, NModule (f te))
+mapModules                  :: (TEnv -> TEnv) -> Env0 -> Env0
+mapModules f env            = env{ names = f $ map pre (names env) }
+  where pre (m, NModule te) = (m, NModule (f $ map pre te))
         pre ni              = ni
 
 
@@ -168,29 +168,28 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NSVar t)         = text "var" <+> pretty n <+> colon <+> pretty t
     pretty (n, NDef t d)        = prettyDec d $ pretty n <+> colon <+> pretty t
     pretty (n, NSig t d)        = prettyDec d $ pretty n <+> text ":::" <+> pretty t
-    pretty (n, NAct q p k [])   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  parens (prettyFunRow p k) <> colon <+> text "pass"
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  parens (prettyFunRow p k) <> colon $+$ (nest 4 $ pretty te)
-    pretty (n, NClass q us [])  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon <+> text "pass"
+                                  parens (prettyFunRow p k) <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NClass q us te)  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty $ prioSig te)
-    pretty (n, NProto q us [])  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon <+> text "pass"
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ prioSig te)
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ pretty $ prioSig te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ prioSig te)
     pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
-                                  colon $+$ (nest 4 $ pretty te) <> colon <+> text "pass"
+                                  colon $+$ (nest 4 $ prettyOrPass te)
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
                                   brackets (commaList $ tybound q) <+> parens (commaList ps) <>
-                                  colon $+$ (nest 4 $ pretty te)
+                                  colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NTVar k mba)     = pretty n <> maybe empty (parens . pretty) mba
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
     pretty (n, NBlocked)        = pretty n <+> text "(blocked)"
+
+prettyOrPass te
+  | isEmpty doc                 = text "pass"
+  | otherwise                   = doc
+  where doc                     = pretty te
 
 instance Pretty WTCon where
 --    pretty (ws,u)               = pretty u
@@ -338,15 +337,17 @@ instance Unalias NameInfo where
     unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
     unalias env (NTVar k mba)       = NTVar k (unalias env mba)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
+    unalias env (NMAlias m)         = NMAlias (unalias env m)
     unalias env (NModule te)        = NModule (unalias env te)
     unalias env NReserved           = NReserved
     unalias env NBlocked            = NBlocked
 
+instance Unalias (Name,NameInfo) where
+    unalias env (n,i)               = (n, unalias env i)
+
 instance Unalias WTCon where
     unalias env (w,u)               = (unalias env w, unalias env u)
 
-instance Unalias (Name,NameInfo) where
-    unalias env (n,i)               = (n, unalias env i)
 
 -- Union type handling -------------------------------------------------------------------------------------------------
 
@@ -532,7 +533,7 @@ tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
-findQName                   :: QName -> EnvF x -> NameInfo 
+findQName                   :: QName -> EnvF x -> NameInfo
 findQName (QName m n) env   = case maybeFindMod (unalias env m) env of
                                 Just te -> case lookup n te of
                                     Just (NAlias qn) -> findQName qn env
@@ -605,8 +606,8 @@ hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn . 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Deco)
-findAttr env tc n           = findIn [ (w,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
-  where findIn ((w,te):tes) = case lookup n te of
+findAttr env tc n           = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
+  where findIn ((w,u,te):tes) = case lookup n te of
                                 Just (NSig sc d) -> Just (wexpr w, sc, d)
                                 Just (NDef sc d) -> Just (wexpr w, sc, d)
                                 Just (NVar t)    -> Just (wexpr w, monotype t, NoDec)
@@ -614,8 +615,9 @@ findAttr env tc n           = findIn [ (w,te') | (w,u) <- findAncestry env tc, l
         findIn []           = Nothing
 
 findAttr'                   :: EnvF x -> TCon -> Name -> TSchema
-findAttr' env tc n          = sc
-  where Just (_, sc, _)     = findAttr env tc n
+findAttr' env tc n          = case findAttr env tc n of
+                                  Just (_, sc, _) -> sc
+                                  Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
@@ -694,10 +696,14 @@ allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
 wexpr (Nothing : w)         = wexpr w
-wexpr (Just n : w)          = wexpr w . (\e -> eDot e (noq n))
+wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
+
+findSelf                    :: EnvF x -> TCon
+findSelf env                = case findName (tvname tvSelf) env of
+                                NTVar _ (Just a) -> a
 
 findTVBound                 :: EnvF x -> TVar -> Maybe TCon
 findTVBound env tv          = case findName (tvname tv) env of
