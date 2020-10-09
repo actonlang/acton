@@ -137,11 +137,11 @@ instance Gen Expr where
     gen env (BStrings _ [s])        = text s
     gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
     gen env (TApp _ e ts)           = gen env e
-    gen env (Cond _ e1 e e2)        = gen env e1 <+> text "if" <+> gen env e <+> text "else" <+> gen env e2
+--    gen env (Cond _ e1 e e2)        = gen env e <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
-    gen env (BinOp _ e1 Or e2)      = gen env e1 <+> text "||" <+> gen env e2
-    gen env (BinOp _ e1 And e2)     = gen env e1 <+> text "&&" <+> gen env e2
-    gen env (UnOp _ Not e)          = text "!" <> gen env e
+--    gen env (BinOp _ e1 Or e2)      = gen env e1 <+> text "||" <+> gen env e2
+--    gen env (BinOp _ e1 And e2)     = gen env e1 <+> text "&&" <+> gen env e2
+--    gen env (UnOp _ Not e)          = text "!" <> gen env e
     gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
     gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
@@ -151,6 +151,29 @@ instance Gen Expr where
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
     gen env (List _ es)             = brackets (commaList es)
     gen env (Paren _ e)             = gen env e
+    gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
+
+{-
+We assign precedences and associativity to remaining operators as follows
+
+   Not   4  ---
+   And   3  left
+   Or    2  left
+   ?:    1  right
+
+Note that the expression between ? and : in the ternary conditional operator is parsed as if it was parenthesized, 
+so we never print parentheses around it. The remaining binary operator _ ?: _ has lower precedence than the other 
+boolean operators and associates to the right.
+
+We never need to put unary negated expressions in parentheses, since all higher precedence operators have been 
+eliminated in previous passes.
+-}
+
+genPrec env _ (UnOp _ Not e)            = text "!" <> genPrec env 4 e
+genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&" <+> genPrec env 4 e2)
+genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+> text "||" <+> genPrec env 3 e2)
+genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (genPrec env 2 e1 <+> text "?" <+> gen env e <+> text ":" <+> genPrec env 1 e2)
+genPrec env _ e                         = gen env e
 
 instance Gen OpArg where
     gen env (OpArg op e)            = gen env op <+> gen env e
