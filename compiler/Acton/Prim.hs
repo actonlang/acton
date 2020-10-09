@@ -36,6 +36,7 @@ primRAISEFROM       = qPrim "RAISEFROM"
 primASSERT          = qPrim "ASSERT"
 
 primISINSTANCE      = qPrim "ISINSTANCE"
+primCAST            = qPrim "CAST"
 
 primRContc          = qPrim "R_CONTc"
 primRCont           = qPrim "R_CONT"
@@ -69,6 +70,7 @@ primMkEnv cls def   = [ (noq primASYNCf,        def scASYNCf NoDec),
                         (noq primRAISEFROM,     def scRAISEFROM NoDec),
                         (noq primASSERT,        def scASSERT NoDec),
                         (noq primISINSTANCE,    def scISINSTANCE NoDec),
+                        (noq primCAST,          def scCAST NoDec),
                         
                         (noq primActor,         clActor cls def),
                         (noq primR,             clR cls def),
@@ -219,6 +221,12 @@ scASSERT           = tSchema [] tASSERT
 --  $ISINSTANCE     : pure (struct,_) -> bool
 scISINSTANCE        = tSchema [] tISINSTANCE
   where tISINSTANCE = tFun fxPure (posRow tStruct $ posRow tWild posNil) kwdNil tNone
+
+--  $CAST           : [A,B] => (A) -> B
+scCAST              = tSchema [quant a, quant b] tCAST
+  where tCAST       = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar b)
+        a           = TV KType $ name "A"
+        b           = TV KType $ name "B"
 
 --  $R_CONTc        : [X,A] => X(X(A)->$R, A) -> $R
 scRContc            = tSchema [quant x, quant a] tRCont

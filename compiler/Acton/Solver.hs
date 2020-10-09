@@ -87,6 +87,10 @@ reduce' env eq c@(Impl w t@(TOpt _ t') p)
                                                  let e = eCall (eQVar witEqOpt) [eVar w']
                                                  reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
 
+reduce' env eq c@(Impl w t@(TNone _) p)
+  | qmatch env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar witIdentityNone):eq)
+  | qmatch env (tcname p) qnEq              = return ((w, impl2type t p, eQVar witEqNone):eq)
+
 reduce' env eq c@(Impl w t@(TUnion _ us) p)
   | qmatch env (tcname p) qnEq              = do let e = eQVar $ if all uniLit us then witEqStr else witEqUnion
                                                  return ((w, impl2type t p, e):eq)

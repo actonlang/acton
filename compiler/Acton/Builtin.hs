@@ -228,6 +228,8 @@ tCollection a                       = tCon (pCollection a)
 
 witIdentityOpt                      = qBuiltin $ name "Identity$opt"
 witEqOpt                            = qBuiltin $ name "Eq$opt"
+witIdentityNone                     = qBuiltin $ name "Identity$None"
+witEqNone                           = qBuiltin $ name "Eq$None"
 witEqUnion                          = qBuiltin $ name "Eq$union"
 witOrdStr                           = qBuiltin $ name "Ord$str"
 witEqStr                            = witOrdStr
