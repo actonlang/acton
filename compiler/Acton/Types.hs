@@ -19,8 +19,8 @@ import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
---                                             traceM ("#################### converted env0:")
---                                             traceM (render (vcat (map pretty (names env0'))))
+                                             traceM ("#################### converted env0:")
+                                             traceM (render (pretty env0'))
                                              return (map simpSig te, Module m i ss1, env0')
   where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
@@ -1053,7 +1053,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSequence t0) :
-                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l es'])
+                                                     cs, t1, eCall (tApp (eDot (eDot (eVar w) (witAttr qnCollection)) fromiterKW) [t1]) [List l es'])
     infer env (ListComp l e1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
@@ -1062,7 +1062,7 @@ instance Infer Expr where
                                              t1 <- newTVar
                                              w <- newWitness
                                              return (Impl w t1 (pSequence t0) :
-                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l e1' co'])
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eDot (eVar w) (witAttr qnCollection)) fromiterKW) [t1]) [ListComp l e1' co'])
     infer env (Set l es)                = do t0 <- newTVar
                                              (cs,es')  <- infElems env es t0
                                              t1 <- newTVar

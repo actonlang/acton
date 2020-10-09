@@ -3,12 +3,15 @@ module Acton.Names where
 
 import Utils
 import Acton.Syntax
+import Acton.Builtin
 import Debug.Trace
 
 
 self                                = Name NoLoc "self"
 
 deriveQ (NoQ n)                     = n
+deriveQ (QName m n)
+  | m == mBuiltin                   = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
 
 deriveMod n0 []                     = n0
