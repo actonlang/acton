@@ -2,7 +2,7 @@
 module Acton.Printer (module Acton.Printer, module Pretty) where
 
 import Utils
-import Pretty hiding (parensIf)
+import Pretty
 import Acton.Syntax
 import Acton.Builtin
 import Acton.Prim
@@ -200,8 +200,6 @@ prettyPrec n e1@(UnOp _ op e)       = parensIf (n > 0) $ pretty op <> prettyPrec
    where prc                        = if op == Not then 3 else 11
 prettyPrec n (Cond _ e1 e e2)       = parensIf (n > 1) $ pretty e1 <+> text "if" <+> pretty e <+> text "else" <+> pretty e2
 prettyPrec _ e                      = pretty e
-
-parensIf b e                        = if b then parens e else e
 
 prettyLambdaPar ps ks
   | annotP ps || annotK ks          = parens (pretty (ps,ks))
