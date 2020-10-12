@@ -47,6 +47,7 @@ primIdentityOpt     = qPrim $ name "IdentityOpt"
 primWEqNone         = qPrim $ name "wEqNone"
 primWIdentityNone   = qPrim $ name "wIdentityNone"
 primWEqUnion        = qPrim $ name "wEqUnion"
+primWPlusInt        = qPrim $ name "wPlusInt"
 
 primISNOTNONE       = qPrim $ name "ISNOTNONE"
 
@@ -94,6 +95,7 @@ primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primWEqNone,       var tEqNone),
                             (noq primWIdentityNone, var tIdentityNone),
                             (noq primWEqUnion,      var tEqUnion),
+                            (noq primWPlusInt,      var tPlusInt),
 
                             (noq primISNOTNONE,     def scISNOTNONE NoDec)
                             
@@ -199,19 +201,18 @@ scAWAIT             = tSchema [quant s, quant a] tAWAIT
 
 
 
---  $PUSHc          : [X,A] => pure (X(A)->$R) -> None
-scPUSHc             = tSchema [quant x, quant a] tPUSH
+--  $PUSHc          : [X] => pure (X(Exception)->$R) -> None
+scPUSHc             = tSchema [quant x] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         x           = TV KFX $ name "X"
-        a           = TV KType $ name "A"
-        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
+        tCont'      = tFun (tVar x) (posRow tException posNil) kwdNil tR
 
---  $PUSH           : [X,A] => pure ($Cont[X,A]) -> None
-scPUSH              = tSchema [quant x, quant a] tPUSH
+--  $PUSH           : [X] => pure ($Cont[X,Exception]) -> None
+scPUSH              = tSchema [quant x] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         x           = TV KFX $ name "X" 
         a           = TV KType $ name "A"
-        tCont'      = tCont (tVar x) (tVar a)
+        tCont'      = tCont (tVar x) tException
 
 
 
@@ -276,8 +277,11 @@ tEqNone             = tCon $ TC qnEq [tNone]
 --  w$IdentityNone  : Identity[None]
 tIdentityNone       = tCon $ TC qnIdentity [tNone]
 
---  wEqUnion        : Eq[(int|float|bool|str)]
+--  $wEqUnion       : Eq[(int|float|bool|str)]
 tEqUnion            = tCon $ TC qnEq [tUnion $ map UCon [qnInt,qnFloat,qnBool,qnStr]]
+
+--  $wPlusInt       : Plus[int]
+tPlusInt            = tCon $ TC qnPlus [tInt]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool
