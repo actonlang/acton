@@ -1,0 +1,36 @@
+class SocketEnv:
+  exit      : (int) -> None
+  argv      : list[str]
+  stdin     : RFile
+  stdout    : WFile
+  openR     : (str) -> ?RFile
+  openW     : (str) -> ?WFile
+  inet      : Internet
+
+class Closable:
+  close     : () -> None
+
+class RFile(Closable):
+  read      : () -> str
+  installR  : (action (str) -> None) -> None
+
+class WFile(Closable):
+  write     : (str) -> int
+  installW  : (action () -> None) -> None
+
+class Internet:
+  tcp : Sockets
+
+class Socket (Closable):
+  remoteHost : str
+  remotePort : int
+  inFile     : RFile
+  outFile    : WFile
+
+class Connection (Closable):
+  established : action () -> None
+  neterror    : (str) -> action () -> None
+
+class Sockets:
+  connect : (str,int,action (Socket) -> Connection) -> None
+  listen  : (int,action (Socket) -> Connection) -> Closable
