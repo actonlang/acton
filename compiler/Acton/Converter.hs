@@ -174,19 +174,20 @@ convStmts eq stmts                      = map conv stmts
 
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
-convEnvProtos env                       = mapModules (concat . map conv) env
-  where conv (n, NDef sc d)             = [(n, NDef (convS sc) d)]
-        conv (n, NSig sc d)             = [(n, NSig (convS sc) d)]
-        conv (n, NAct q p k te)         = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map conv te))]
-        conv (n, NProto q us te)        = map (fromClass env) $ convProtocol env n q us [] [] (fromSigs env te)
-        conv (n, NExt n0 q us te)       = map (fromClass env) $ convExtension env n n0 q us [] [] []
-        conv (n, NClass q us te)        = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
-        conv ni                         = [ni]
+convEnvProtos env                       = mapModules (convert env) env
+  where convert env1 []                 = []
+        convert env1 (ni:te)            = let te1 = conv env1 ni in te1 ++ convert (define te1 env1) te
+        conv env1 (n, NDef sc d)        = [(n, NDef (convS sc) d)]
+        conv env1 (n, NSig sc d)        = [(n, NSig (convS sc) d)]
+        conv env1 (n, NAct q p k te)    = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1) te))]
+        conv env1 (n, NProto q us te)   = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)
+        conv env1 (n, NExt n0 q us te)  = map (fromClass env1) $ convExtension env n n0 q us [] [] []
+        conv env1 (n, NClass q us te)   = [(n, NClass (noqual env q) us (convClassTEnv env q te))]
+        conv env1 ni                    = [ni]
         convS (TSchema l q t)           = TSchema l (noqual env q) (convT q t)
         convT q (TFun l x p k t)        = TFun l x (qualWRow env q p) k t
         convT q t                       = t
 
-fromClass env (Class _ n q _ b) = (n, NClass q [] (fromStmts b))
 fromClass env (Class _ n q [] b)        = (n, NClass q [] (fromStmts b))
 fromClass env (Class _ n q [u] b)       = (n, NClass q (findAncestry env u) (fromStmts b))
 

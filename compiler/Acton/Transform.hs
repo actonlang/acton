@@ -11,6 +11,7 @@ termred                                 :: Suite -> Suite
 termred b                               = wtrans env0 b
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
+termsubst [] x                          = x
 termsubst s x                           = trans (extsubst s env0) x
 
 class Transform a where
@@ -173,6 +174,7 @@ kwdarg n (KwdArg _ _ k)                 = kwdarg n k
 
 posrest 0 (PosArg _ p)                  = p
 posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)
+--posrest i p                             = PosStar $ RestI l0 (Tuple l0 p KwdNil) i
 
 kwdrest n (KwdArg n' e k) | n == n'     = k
 kwdrest n (KwdArg n' e k)               = KwdArg n' e (kwdrest n k)

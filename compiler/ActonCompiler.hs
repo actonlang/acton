@@ -174,7 +174,7 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
 
 runRestPasses args paths src env0 original = (do
                           let outbase = outBase paths
-                          env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 (A.imps original)
+                          env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 original
 
                           kchecked <- Acton.Kinds.check env original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
