@@ -44,9 +44,9 @@ primRCont           = qPrim $ name "R_CONT"
 primEqOpt           = qPrim $ name "EqOpt"
 primIdentityOpt     = qPrim $ name "IdentityOpt"
 
-primWEqNone         = qPrim $ name "EqNone"
-primWIdentityNone   = qPrim $ name "IdentityNone"
-primWEqUnion        = qPrim $ name "EqUnion"
+primWEqNone         = qPrim $ name "wEqNone"
+primWIdentityNone   = qPrim $ name "wIdentityNone"
+primWEqUnion        = qPrim $ name "wEqUnion"
 
 primISNOTNONE       = qPrim $ name "ISNOTNONE"
 
