@@ -82,17 +82,18 @@ reduce' env eq c@(Impl w t@(TCon _ tc) p)
   where witSearch                           = findWitness env (tcname tc) (implProto env p)
 
 reduce' env eq c@(Impl w t@(TOpt _ t') p)
-  | qmatch env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar witIdentityOpt):eq)
+  | qmatch env (tcname p) qnIdentity        = do let e = eCall (tApp (eQVar primIdentityOpt) [t']) []
+                                                 return ((w, impl2type t p, e):eq)
   | qmatch env (tcname p) qnEq              = do w' <- newWitness
-                                                 let e = eCall (eQVar witEqOpt) [eVar w']
+                                                 let e = eCall (tApp (eQVar primEqOpt) [t']) [eVar w']
                                                  reduce env ((w, impl2type t p, e):eq) [Impl w' t' p]
 
 reduce' env eq c@(Impl w t@(TNone _) p)
-  | qmatch env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar witIdentityNone):eq)
-  | qmatch env (tcname p) qnEq              = return ((w, impl2type t p, eQVar witEqNone):eq)
+  | qmatch env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar primWIdentityNone):eq)
+  | qmatch env (tcname p) qnEq              = return ((w, impl2type t p, eQVar primWEqNone):eq)
 
 reduce' env eq c@(Impl w t@(TUnion _ us) p)
-  | qmatch env (tcname p) qnEq              = do let e = eQVar $ if all uniLit us then witEqStr else witEqUnion
+  | qmatch env (tcname p) qnEq              = do let e = eQVar primWEqUnion
                                                  return ((w, impl2type t p, e):eq)
 
 reduce' env eq c@(Sel w (TVar _ tv) n _)

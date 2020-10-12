@@ -139,7 +139,7 @@ instance Norm Stmt where
                                                    sAssign (pVar v $ tOpt $ head ts) (next i),
                                                    While l (test v) (sAssign p (eVar v) : b ++ [sAssign (pVar' v) (next i)]) els]
       where t@(TCon _ (TC c ts))    = typeOf env e
-            test v                  = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar v,eNone]
+            test v                  = eCall (tApp (eQVar primISNOTNONE) [head ts]) [eVar v]
             next i                  = eCall (eDot (eVar i) nextKW) []
     {-
     with EXPRESSION as PATTERN:
@@ -311,11 +311,12 @@ kwdToPosArg (KwdArg n e k)          = PosArg e (kwdToPosArg k)
 kwdToPosArg (KwdStar e)             = PosArg e PosNil
 kwdToPosArg KwdNil                  = PosNil
 
-defaults (PosPar n t (Just e) p)    = s : defaults p
+defaults (PosPar n (Just t) (Just e) p)
+                                    = s : defaults p
   where s                           = sIf1 test [set] []
-        test                        = eCall (eDot (eQVar witIdentityOpt) isnotKW) [eVar n,eNone]
+        test                        = eCall (tApp (eQVar primISNOTNONE) [t]) [eVar n]
         set                         = sAssign (pVar' n) e
-defaults (PosPar n t Nothing p)     = defaults p
+defaults (PosPar n _ Nothing p)     = defaults p
 defaults _                          = []
 
 noDefaults (PosPar n t _ p)         = PosPar n t Nothing (noDefaults p)

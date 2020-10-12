@@ -467,21 +467,22 @@ unSig te                    = map f te
 
 initEnv                    :: Bool -> IO Env0
 initEnv nobuiltin           = if nobuiltin
-                                then return $ EnvF{ names = [],
-                                                    modules = [],
+                                then return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
+                                                    modules = [(nPrim,NModule envPrim)],
                                                     witnesses = [],
                                                     thismod = ModName [],
                                                     envX = () }
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
-                                        let envPrim = primMkEnv NClass NDef 
-                                            env0 = EnvF{ names = [(nBuiltin,NMAlias mBuiltin), (nPrim,NMAlias mPrim)],
+                                        let env0 = EnvF{ names = [(nBuiltin,NMAlias mBuiltin), (nPrim,NMAlias mPrim)],
                                                          modules = [(nBuiltin,NModule envBuiltin), (nPrim,NModule envPrim)],
                                                          thismod = ModName [],
                                                          witnesses = [],
                                                          envX = () }
                                             env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
+
+envPrim                     = primMkEnv NClass NDef NVar
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
@@ -536,7 +537,7 @@ addMod m newte env          = env{ modules = addM ns (modules env) }
 -- General Env queries -----------------------------------------------------------------------------------------------------------
 
 inBuiltin                   :: EnvF x -> Bool
-inBuiltin env               = null $ modules env
+inBuiltin env               = length (modules env) == 1     -- mPrim only
 
 stateScope                  :: EnvF x -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]

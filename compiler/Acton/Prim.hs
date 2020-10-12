@@ -7,40 +7,48 @@ import Acton.Builtin
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
-qPrim s             = QName mPrim (name s)
+qPrim n             = QName mPrim n
 
-primActor           = qPrim "Actor"
-primR               = qPrim "R"
-primClos            = qPrim "Clos"
-primCont            = qPrim "Cont"
+primActor           = qPrim $ name "Actor"
+primR               = qPrim $ name "R"
+primClos            = qPrim $ name "Clos"
+primCont            = qPrim $ name "Cont"
 
-primASYNCf          = qPrim "ASYNCf"
-primAFTERf          = qPrim "AFTERf"
-primAWAITf          = qPrim "AWAITf"
+primASYNCf          = qPrim $ name "ASYNCf"
+primAFTERf          = qPrim $ name "AFTERf"
+primAWAITf          = qPrim $ name "AWAITf"
 
-primASYNCc          = qPrim "ASYNCc"
-primAFTERc          = qPrim "AFTERc"
-primAWAITc          = qPrim "AWAITc"
+primASYNCc          = qPrim $ name "ASYNCc"
+primAFTERc          = qPrim $ name "AFTERc"
+primAWAITc          = qPrim $ name "AWAITc"
 
-primASYNC           = qPrim "ASYNC"
-primAFTER           = qPrim "AFTER"
-primAWAIT           = qPrim "AWAIT"
+primASYNC           = qPrim $ name "ASYNC"
+primAFTER           = qPrim $ name "AFTER"
+primAWAIT           = qPrim $ name "AWAIT"
 
-primPUSHc           = qPrim "PUSHc"
-primPUSH            = qPrim "PUSH"
+primPUSHc           = qPrim $ name "PUSHc"
+primPUSH            = qPrim $ name "PUSH"
 
-primPOP             = qPrim "POP"
-primRERAISE         = qPrim "RERAISE"
-primRAISE           = qPrim "RAISE"
-primRAISEFROM       = qPrim "RAISEFROM"
-primASSERT          = qPrim "ASSERT"
+primPOP             = qPrim $ name "POP"
+primRERAISE         = qPrim $ name "RERAISE"
+primRAISE           = qPrim $ name "RAISE"
+primRAISEFROM       = qPrim $ name "RAISEFROM"
+primASSERT          = qPrim $ name "ASSERT"
 
-primISINSTANCE      = qPrim "ISINSTANCE"
-primCAST            = qPrim "CAST"
+primISINSTANCE      = qPrim $ name "ISINSTANCE"
+primCAST            = qPrim $ name "CAST"
 
-primRContc          = qPrim "R_CONTc"
-primRCont           = qPrim "R_CONT"
+primRContc          = qPrim $ name "R_CONTc"
+primRCont           = qPrim $ name "R_CONT"
 
+primEqOpt           = qPrim $ name "EqOpt"
+primIdentityOpt     = qPrim $ name "IdentityOpt"
+
+primWEqNone         = qPrim $ name "EqNone"
+primWIdentityNone   = qPrim $ name "IdentityNone"
+primWEqUnion        = qPrim $ name "EqUnion"
+
+primISNOTNONE       = qPrim $ name "ISNOTNONE"
 
 
 tActor              = tCon $ TC primActor []
@@ -49,38 +57,47 @@ tClos x p t         = tCon $ TC primClos [x,p,t]
 tCont x t           = tCon $ TC primCont [x,t]
 
 
-primMkEnv cls def   = [ (noq primASYNCf,        def scASYNCf NoDec),
-                        (noq primAFTERf,        def scAFTERf NoDec),
-                        (noq primAWAITf,        def scAWAITf NoDec),
+primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
+                            (noq primAFTERf,        def scAFTERf NoDec),
+                            (noq primAWAITf,        def scAWAITf NoDec),
 
-                        (noq primASYNCc,        def scASYNCc NoDec),
-                        (noq primAFTERc,        def scAFTERc NoDec),
-                        (noq primAWAITc,        def scAWAITc NoDec),
+                            (noq primASYNCc,        def scASYNCc NoDec),
+                            (noq primAFTERc,        def scAFTERc NoDec),
+                            (noq primAWAITc,        def scAWAITc NoDec),
 
-                        (noq primASYNC,         def scASYNC NoDec),
-                        (noq primAFTER,         def scAFTER NoDec),
-                        (noq primAWAIT,         def scAWAIT NoDec),
+                            (noq primASYNC,         def scASYNC NoDec),
+                            (noq primAFTER,         def scAFTER NoDec),
+                            (noq primAWAIT,         def scAWAIT NoDec),
                         
-                        (noq primPUSHc,         def scPUSHc NoDec),
-                        (noq primPUSH,          def scPUSH NoDec),
+                            (noq primPUSHc,         def scPUSHc NoDec),
+                            (noq primPUSH,          def scPUSH NoDec),
                         
-                        (noq primPOP,           def scPOP NoDec),
-                        (noq primRERAISE,       def scRERAISE NoDec),
-                        (noq primRAISE,         def scRAISE NoDec),
-                        (noq primRAISEFROM,     def scRAISEFROM NoDec),
-                        (noq primASSERT,        def scASSERT NoDec),
-                        (noq primISINSTANCE,    def scISINSTANCE NoDec),
-                        (noq primCAST,          def scCAST NoDec),
+                            (noq primPOP,           def scPOP NoDec),
+                            (noq primRERAISE,       def scRERAISE NoDec),
+                            (noq primRAISE,         def scRAISE NoDec),
+                            (noq primRAISEFROM,     def scRAISEFROM NoDec),
+                            (noq primASSERT,        def scASSERT NoDec),
+                            (noq primISINSTANCE,    def scISINSTANCE NoDec),
+                            (noq primCAST,          def scCAST NoDec),
                         
-                        (noq primActor,         clActor cls def),
-                        (noq primR,             clR cls def),
-                        (noq primClos,          clClos cls def),
-                        (noq primCont,          clCont cls def),
+                            (noq primActor,         clActor cls def),
+                            (noq primR,             clR cls def),
+                            (noq primClos,          clClos cls def),
+                            (noq primCont,          clCont cls def),
 
-                        (noq primRContc,        def scRContc NoDec),
-                        (noq primRCont,         def scRCont NoDec)
+                            (noq primRContc,        def scRContc NoDec),
+                            (noq primRCont,         def scRCont NoDec),
+
+                            (noq primEqOpt,         clEqOpt cls def),
+                            (noq primIdentityOpt,   clIdentityOpt cls def),
+
+                            (noq primWEqNone,       var tEqNone),
+                            (noq primWIdentityNone, var tIdentityNone),
+                            (noq primWEqUnion,      var tEqUnion),
+
+                            (noq primISNOTNONE,     def scISNOTNONE NoDec)
+                            
                       ]
-
 --  class $Actor (): pass
 clActor cls def     = cls [] [] []
 
@@ -98,7 +115,7 @@ clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
         p           = TV PRow (name "P")
         a           = TV KType (name "A")
 
---  class $Cont[X,T] ($Clos[X,(A,),$R]): pass
+--  class $Cont[X,A] ($Clos[X,(A,),$R]): pass
 clCont cls def      = cls [quant x, quant a] [([Nothing],TC primClos [tVar x, posRow (tVar a) posNil, tR])] []
   where x           = TV KFX (name "X")
         a           = TV KType (name "A")
@@ -241,3 +258,29 @@ scRCont             = tSchema [quant x, quant a] tRCont
         tCont'      = tCont (tVar x) (tVar a)
         x           = TV KFX $ name "X" 
         a           = TV KType $ name "A"
+
+
+--  class $EqOpt[A] (Eq[?A]): pass
+clEqOpt cls def     = cls [quant a] [([Nothing],TC qnEq [tOpt $ tVar a])] clTEnv
+  where clTEnv      = [ (initKW, def scInit NoDec) ]
+        scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
+        a           = TV KType (name "A")
+
+--  class $EqOpt[A] (Eq[?A]): pass
+clIdentityOpt cls def = cls [quant a] [([Nothing],TC qnIdentity [tOpt $ tVar a])] []
+  where a           = TV KType (name "A")
+
+--  w$EqNone        : Eq[None]
+tEqNone             = tCon $ TC qnEq [tNone]
+
+--  w$IdentityNone  : Identity[None]
+tIdentityNone       = tCon $ TC qnIdentity [tNone]
+
+--  wEqUnion        : Eq[(int|float|bool|str)]
+tEqUnion            = tCon $ TC qnEq [tUnion $ map UCon [qnInt,qnFloat,qnBool,qnStr]]
+
+
+--  $ISNOTNONE      : [A] => pure (?A) -> bool
+scISNOTNONE         = tSchema [quant a] tISNOTNONE
+  where tISNOTNONE  = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
+        a           = TV KType (name "A")
