@@ -20,8 +20,8 @@ import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
 reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
-                                             traceM ("#################### converted env0:")
-                                             traceM (render (pretty env0'))
+                                             --traceM ("#################### converted env0:")
+                                             --traceM (render (pretty env0'))
                                              return (map simpSig te, Module m i ss1, env0')
   where env1                            = reserve (bound ss) (typeX env0)
         (te,ss1)                        = runTypeM $ infTop env1 ss
@@ -374,17 +374,19 @@ instance InfEnv Decl where
                                              NReserved -> do
                                                  traceM ("\n## infEnv class " ++ prstr n)
                                                  pushFX fxPure tNone
+                                                 te0 <- infProperties env as' b
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as' te)], Class l n q us (bindWits eq1 ++ b'))
+                                                 return (cs1, [(n, NClass q as' (te0++te))], Class l n q (map snd as') (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude [initKW] $ toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
             te'                         = parentTEnv env as'
+            props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property) <- te0 ]
             
     infEnv env (Protocol l n q us b)    = case findName n env of
                                              NReserved -> do
@@ -564,12 +566,53 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
         check1 (n, i)                   = return ([], [])
 
 
-infDefBody env n b
-  | inClass env && n == initKW          = infInitEnv env b
-  | otherwise                           = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+infProperties env as b
+  | Just (self,ss) <- inits             = infProps self ss
+  | otherwise                           = return []
+  where inherited                       = concat $ map (conAttrs env . tcname . snd) as
+        explicit                        = concat [ ns | Signature _ ns _ Property <- b ]
+        inits                           = listToMaybe [ (x, dbody d) | Decl _ ds <- b, d@Def{pos=PosPar x _ _ _} <- ds, dname d == initKW ]
+        infProps self (MutAssign _ (Dot _ (Var _ (NoQ x)) n) _ : b)
+          | x /= self                   = return []
+          | n `notElem` inherited,
+            n `notElem` explicit        = do t <- newTVar
+                                             te <- infProps self b
+                                             return ((n,NSig (monotype t) Property) : te)
+          | otherwise                   = infProps self b 
+        infProps self (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : b)
+          | isClass env c, n == initKW  = infProps self b
+        infProps self _                 = return []
 
---infInitEnv env (MutAssign l tg e : b)   = 
-infInitEnv env b                        = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+infDefBody env n (PosPar x _ _ _) b
+  | inClass env && n == initKW          = infInitEnv env x b
+infDefBody env _ _ b                    = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+
+infInitEnv env self (MutAssign l (Dot l' e1@(Var _ (NoQ x)) n) e2 : b)
+  | x == self                           = do (cs1,t1,e1') <- infer env e1
+                                             t2 <- newTVar
+                                             (cs2,e2') <- inferSub env t2 e2
+                                             (cs3,b') <- infInitEnv env self b
+                                             return (Mut t1 n t2 : 
+                                                     cs1++cs2++cs3, MutAssign l (Dot l' e1' n) e2' : b')
+infInitEnv env self (Expr l e : b)
+  | Call{fun=Dot _ (Var _ c) n} <- e,
+    isClass env c, n == initKW          = do (cs1,_,e') <- infer env e
+                                             (cs2,b') <- infInitEnv env self b
+                                             return (cs1++cs2, Expr l e' : b')
+infInitEnv env self b                   = do (cs,_,b') <- infSuiteEnv env b
+                                             return (cs, b')
+
+abstractDefs env q eq b                 = map absDef b
+  where absDef (Decl l ds)              = Decl l (map absDef' ds)
+        absDef (If l bs els)            = If l [ Branch e (map absDef ss) | Branch e ss <- bs ] (map absDef els)
+        absDef stmt                     = stmt
+        absDef' d@Def{}                 = d{ pos = pos1, dbody = bindWits eq ++ dbody d }
+          where pos1
+                  | deco d /= Static    = case pos d of
+                                            PosPar nSelf t' e' pos' -> PosPar nSelf t' e' $ qualWPar env q pos'
+                                            _ -> err1 (dname d) "Missing self parameter"
+                  | otherwise           = qualWPar env q (pos d)
+
 
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
@@ -582,7 +625,7 @@ instance Check Decl where
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
-                                             (csb,b') <- infDefBody (define te1 (define te0 env1)) n b
+                                             (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                                  csx = [Cast fxPure fx]
@@ -626,7 +669,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone csb
                                              checkNoEscape env tvs
-                                             return (cs1, [Class l n (noqual env q) us b'])        -- TODO: add wits(q) and eq1 to each def in b'
+                                             return (cs1, [Class l n (noqual env q) us (abstractDefs env q eq1 b')])
       where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             NClass _ _ te               = findName n env
@@ -776,7 +819,7 @@ genEnv env cs te ds0
     abstract q ds ws eq d@Actor{}       = d{ dbody = bindWits eq ++ wsubst ds q ws (dbody d) }
     abstract q ds ws eq d               = d{ dbody = map bindInDef (wsubst ds q ws (dbody d)) }
       where bindInDef (Decl l ds')      = Decl l (map bindInDef' ds')
-            bindInDef (If l bs els)     = If l [ Branch l (map bindInDef ss) | Branch l ss <- bs ] (map bindInDef els)
+            bindInDef (If l bs els)     = If l [ Branch e (map bindInDef ss) | Branch e ss <- bs ] (map bindInDef els)
             bindInDef stmt              = stmt
             bindInDef' d@Def{}          = d{ dbody = bindWits eq ++ dbody d }
             bindInDef' d                = d{ dbody = map bindInDef (dbody d) }

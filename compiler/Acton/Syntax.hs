@@ -60,8 +60,8 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Ellipsis      { eloc::SrcLoc }
                 | Strings       { eloc::SrcLoc, sval::[String] }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
-                | Call          { eloc::SrcLoc, function::Expr, pargs::PosArg, kargs::KwdArg }
-                | TApp          { eloc::SrcLoc, function::Expr, targs::[Type] }
+                | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
+                | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
@@ -477,8 +477,8 @@ instance Eq Expr where
     x@Ellipsis{}        ==  y@Ellipsis{}        = True
     x@Strings{}         ==  y@Strings{}         = sval x == sval y
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
-    x@Call{}            ==  y@Call{}            = function x == function y && pargs x == pargs y && kargs x == kargs y
-    x@TApp{}            ==  y@TApp{}            = function x == function y && targs x == targs y
+    x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
+    x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y

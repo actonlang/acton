@@ -692,10 +692,6 @@ directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncest
 allAttrs                    :: EnvF x -> QName -> [Name]
 allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
 
-unfold env te               = map exp te
-  where exp (n, NAlias qn)  = (n, findQName qn env)
-        exp (n, i)          = (n, i)
-
 allCons                     :: EnvF x -> [QName]
 allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
   where con NClass{}        = True
