@@ -163,7 +163,7 @@ instance Transform Expr where
     trans env e                         = e
 
 eta (Lambda _ p k (Call _ e p' k') fx)
-  | fx==fxPure, eq1 p p', eq2 k k'      = e
+  | eq1 p p' && eq2 k k'                = e
   where
     eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
     eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
