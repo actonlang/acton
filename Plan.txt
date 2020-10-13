@@ -33,6 +33,7 @@
     - Type-convert plain classes as well                                    3h      6h
     - Translate list comprehensions                                         2d      3d
     - Handle the with statements                                            2d      3d
+    - Sort out conversion from star params/args to tuples                   2d      4d
     - Implement raise and try in the rts                                    3d      4d
     - Define Acton Environment type and implement IO loop in rts            1w      2w
                                                                             2w      4w

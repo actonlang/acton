@@ -180,6 +180,11 @@ instance CPS [Stmt] where
                                              return $ sDecl ds' : ss'
       where env1                        = define (envOf ds) env
     
+    cps env (Signature l ns sc d : ss)  = do ss' <- cps env1 ss
+                                             return $ s : ss'
+      where s                           = Signature l ns (conv sc) d
+            env1                        = define (envOf s) env
+
     cps env (s : ss)
       | not (needCont env s)            = do ss' <- cps env1 ss
                                              return $ s : ss'
@@ -272,7 +277,9 @@ instance CPS Decl where
       | contDef env l n fx              = Def l n q (addContParam p t) KwdNIL (Just t) <$> cpsSuite env1 b <*> return d <*> return fx
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW +: env
 
-    cps env d                           = return d
+    cps env d@Def{}                     = return d
+
+    cps env d                           = error ("cps unexpected: " ++ prstr d)
     
 
 instance CPS Branch where
@@ -446,6 +453,54 @@ instance PreCPS Elem where
     pre env (Star e)                    = Star <$> pre env e
 
 
--- Convert environment types ------------------------------------------------------------------------------------
+-- Convert types ----------------------------------------------------------------------------------------
 
-convEnv te                              = te
+convEnv te                              = conv te
+
+class Conv a where
+    conv                                :: a -> a
+
+instance (Conv a) => Conv [a] where
+    conv                                = map conv
+
+instance (Conv a) => Conv (Name, a) where
+    conv (n, x)                         = (n, conv x)
+
+instance Conv NameInfo where
+    conv (NClass q ps te)               = NClass q (conv ps) (conv te)
+    conv (NSig sc dec)                  = NSig (conv sc) dec
+    conv (NDef sc dec)                  = NDef (conv sc) dec
+    conv (NVar t)                       = NVar (conv t)
+    conv (NSVar t)                      = NSVar (conv t)
+    conv ni                             = ni
+
+instance Conv WTCon where
+    conv (w,c)                          = (w, conv c)
+
+instance Conv TSchema where
+    conv (TSchema l q t)                = TSchema l q (conv t)
+
+instance Conv Type where
+    conv (TFun l fx p TNil{} t)
+       | contFX fx                      = TFun l fx' (addCont (conv p) (conv t)) kwdNil tR
+       | otherwise                      = TFun l fx' (conv p) kwdNil (conv t)
+       where contFX (TFX _(FXAct _))    = True                                              -- TODO: refine this test!
+             contFX fx                  = False
+             fx'                        = conv fx
+             addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
+             addCont p c                = posRow (tFun fx' (posRow c posNil) kwdNil tR) p
+    conv (TCon l c)                     = TCon l (conv c)
+    conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
+    conv (TOpt l t)                     = TOpt l (conv t)
+    conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
+    conv (TFX l x)                      = TFX l (conv x)
+    conv t                              = t
+
+instance Conv FX where
+    conv (FXAct t)                      = FXMut (conv t)
+    conv (FXMut t)                      = FXMut (conv t)
+    conv FXAction                       = FXAction
+    conv FXPure                         = FXPure
+
+instance Conv TCon where
+    conv (TC c ts)                      = TC c (conv ts)
