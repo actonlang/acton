@@ -309,10 +309,8 @@ infTarget env (Slice l e [sl])          = do (cs1,sl') <- inferSlice env sl
 infTarget env (Slice l e slz)           = notYet l "Multidimensional slicing"
 infTarget env (Dot l e n)               = do (cs,t1,e') <- infer env e
                                              t2 <- newTVar
-                                             fx <- currFX
-                                             st <- newTVar
                                              return (Mut t1 n t2 :
-                                                     Cast (fxMut st) fx :
+                                                     Cast t1 tObject :
                                                      cs, t2, name "_", Dot l e' n)
 
 sliz2args (Sliz _ e1 e2 e3)             = map (maybe eNone id) [e1,e2,e3]
@@ -566,6 +564,13 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
         check1 (n, i)                   = return ([], [])
 
 
+infDefBody env n b
+  | inClass env && n == initKW          = infInitEnv env b
+  | otherwise                           = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+
+--infInitEnv env (MutAssign l tg e : b)   = 
+infInitEnv env b                        = do (cs,_,b') <- infSuiteEnv env b; return (cs, b')
+
 instance Check Decl where
     checkEnv env (Def l n q p k a b dec fx)
                                         = do traceM ("## checkEnv def " ++ prstr n ++ " (q = [" ++ prstrs q ++ "])")
@@ -577,7 +582,7 @@ instance Check Decl where
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
-                                             (csb,_,b') <- infSuiteEnv (define te1 (define te0 env1)) b
+                                             (csb,b') <- infDefBody (define te1 (define te0 env1)) n b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
                                                  csx = [Cast fxPure fx]

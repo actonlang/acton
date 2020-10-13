@@ -197,7 +197,7 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
 
 solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec/=Property) (noMut n)
                                                  let TSchema _ [] t = sc
-                                                     cs = [Cast t1 tObject, Cast t2 (subst [(tvSelf,t1)] t)]
+                                                     cs = [Cast t2 (subst [(tvSelf,t1)] t)]
                                                  return cs
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -860,7 +860,7 @@ improve env te tt eq cs
         lowerBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (lbounds vi), v `notElem` embedded vi ]
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
-        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t ]
+        negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
         closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), lClosed env t ]
         closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), uClosed env t ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
@@ -1078,6 +1078,8 @@ implAll env ps (TCon _ c)               = and [ hasWitness env (tcname c) (tcnam
 implAll env ps (TOpt _ _)               = all (\(_,p) -> any (qmatch env $ tcname p) [qnIdentity,qnEq]) ps
 implAll env ps TUnion{}                 = all (qmatch env qnEq . tcname . snd) ps
 implAll env ps t                        = False
+
+noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
 
 
 replace ub lb c@(Cast TVar{} TVar{})    = c
