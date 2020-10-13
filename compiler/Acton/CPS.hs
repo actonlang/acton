@@ -180,9 +180,9 @@ instance CPS [Stmt] where
                                              return $ sDecl ds' : ss'
       where env1                        = define (envOf ds) env
     
-    cps env (Signature l ns sc d : ss)  = do ss' <- cps env1 ss
-                                             return $ s : ss'
-      where s                           = Signature l ns (conv sc) d
+    cps env (s@Signature{} : ss)        = do ss' <- cps env1 ss
+                                             return $ s' : ss'
+      where s'                          = s{ typ = conv (typ s) }
             env1                        = define (envOf s) env
 
     cps env (s : ss)
