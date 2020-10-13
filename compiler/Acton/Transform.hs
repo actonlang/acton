@@ -122,9 +122,15 @@ instance Transform Expr where
       | Tuple{} <- e'                   = Tuple NoLoc (posrest i $ pargs e') KwdNil
       | otherwise                       = RestI l e' i
       where e'                          = trans env e
-    trans env (Lambda l p k e fx)       = Lambda l (trans env1 p) (trans env1 k) (trans env2 e) fx
-      where env1                        = blockscope (bound p ++ bound k) env
-            env2                        = extsubst (psubst p ++ ksubst k) env1
+    trans env e0@(Lambda l p k e fx)
+      | null clash                      = eta $ Lambda l (trans env1 p) (trans env1 k) (trans env1 e) fx
+      | otherwise                       = eta $ Lambda l (trans env1 $ prename s p) (trans env1 $ krename s k) (trans env1 $ erename s e) fx
+      where env1                        = extsubst (psubst p ++ ksubst k) env
+            fvs                         = free e
+            bvs                         = bound p ++ bound k
+            clash                       = bvs `intersect` free (rng $ restrict fvs $ trsubst env)
+            s                           = clash `zip` (yNames \\ (fvs++bvs))
+            e1                          = Lambda l (prename s p) (krename s k) (erename s e) fx
     trans env (Yield l e)               = Yield l (trans env e)
     trans env (YieldFrom l e)           = YieldFrom l (trans env e)
     trans env e@(Tuple l p k)
@@ -156,6 +162,19 @@ instance Transform Expr where
     trans env (Paren l e)               = trans env e
     trans env e                         = e
 
+eta (Lambda _ p k (Call _ e p' k') fx)
+  | fx==fxPure, eq1 p p', eq2 k k'      = e
+  where
+    eq1 (PosPar n _ _ p) (PosArg e p')  = eVar n == e && eq1 p p'
+    eq1 (PosSTAR n _) (PosStar e)       = eVar n == e
+    eq1 PosNIL PosNil                   = True
+    eq1 _ _                             = False
+    eq2 (KwdPar n _ _ k) (KwdArg _ e k')= eVar n == e && eq2 k k'                       -- Requires perfectly sorted args, which the type-checker produces
+    eq2 (KwdSTAR n _) (KwdStar e)       = eVar n == e
+    eq2 KwdNIL KwdNil                   = True
+    eq2 _ _                             = False
+eta e                                   = e
+
 pzip (PosPar n _ _ p) (PosArg e a)      = do p' <- pzip p a; return $ (n, e) : p'
 pzip (PosSTAR n _) a                    = Just [(n, Tuple NoLoc a KwdNil)]
 pzip PosNIL _                           = Just []
@@ -178,6 +197,23 @@ posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)
 
 kwdrest n (KwdArg n' e k) | n == n'     = k
 kwdrest n (KwdArg n' e k)               = KwdArg n' e (kwdrest n k)
+
+
+prename s (PosPar n t e p)              = PosPar (rename s n) t e (prename s p)
+prename s (PosSTAR n t)                 = PosSTAR (rename s n) t
+prename s p                             = p
+
+krename s (KwdPar n t e k)              = KwdPar (rename s n) t e (krename s k)
+krename s (KwdSTAR n t)                 = KwdSTAR (rename s n) t
+krename s k                             = k
+
+rename s n                              = case lookup n s of
+                                            Just n' -> n'
+                                            _ -> n
+
+erename s e                             = termsubst [ (n, eVar n') | (n,n') <- s ] e
+
+yNames                                  = map (Internal TypesPass "y") [0..]
 
 
 instance Transform Exception where

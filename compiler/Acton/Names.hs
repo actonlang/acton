@@ -236,8 +236,8 @@ instance Vars Except where
     bound (ExceptAs _ x n)          = [n]
 
 instance Vars PosPar where
-    free (PosPar n t e p)           = free e ++ free p
-    free (PosSTAR n t)              = []
+    free (PosPar n t e p)           = free t ++ free e ++ free p
+    free (PosSTAR n t)              = free t
     free PosNIL                     = []
     
     bound (PosPar n t e p)          = n : bound p
@@ -245,8 +245,8 @@ instance Vars PosPar where
     bound PosNIL                    = []
 
 instance Vars KwdPar where
-    free (KwdPar n t e k)           = free e ++ free k
-    free (KwdSTAR n t)              = []
+    free (KwdPar n t e k)           = free t ++ free e ++ free k
+    free (KwdSTAR n t)              = free t
     free KwdNIL                     = []
     
     bound (KwdPar n t e k)          = n : bound k
