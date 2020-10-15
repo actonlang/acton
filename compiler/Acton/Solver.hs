@@ -186,7 +186,7 @@ solveSelAttr env (wf,sc,_) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env 
 
 solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c -> tcargs c; _ -> []
                                                  (cs1,p,we) <- instWitness env ts wit
-                                                 let Just (wf,sc,dec) = findAttr env p n
+                                                 let Just (wf,sc,_) = findAttr env p n
                                                  (cs2,tvs,t) <- instantiate env sc
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar px0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
@@ -195,7 +195,7 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
 --                                                 return ([(w, wFun t1 t2, e)], cs1++cs2)
                                                  return ([(w, wFun t1 t2, e)], cs)
 
-solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec/=Property) (noMut n)
+solveMutAttr env (wf,sc,dec) (Mut t1 n t2)  = do when (dec /= Just Property) (noMut n)
                                                  let TSchema _ [] t = sc
                                                      cs = [Cast t2 (subst [(tvSelf,t1)] t)]
                                                  return cs
@@ -1156,7 +1156,9 @@ app tx e es                             = Lambda NoLoc p' k' (Call NoLoc e (exp2
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!
         (p',k')                         = (pPar pNames p, kPar kNames k)
 
-app2nd Static tx e es                   = app tx e es
+app2nd (Just Static) tx e es            = app tx e es
+app2nd (Just Property) tx e es          = app tx e es
+app2nd Nothing tx e es                  = app tx e es
 app2nd _ tx e []                        = e
 app2nd _ tx e es                        = Lambda NoLoc p' k' (Call NoLoc e (PosArg pSelf (exp2arg es pArgs)) (kArg k')) fx
   where TFun _ fx p k _                 = tx                    -- If it takes arguments, it must be a function!

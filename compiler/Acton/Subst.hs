@@ -11,9 +11,9 @@ import Acton.TypeM
 import Utils
 
 
-addSelf                             :: Type -> Deco -> Type
-addSelf (TFun l x p k t) NoDec      = TFun l x (posRow tSelf p) k t
-addSelf t _                         = t
+addSelf                                 :: Type -> Maybe Deco -> Type
+addSelf (TFun l x p k t) (Just NoDec)   = TFun l x (posRow tSelf p) k t
+addSelf t _                             = t
 
 
 closeDepVars vs cs

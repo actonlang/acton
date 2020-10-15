@@ -432,7 +432,7 @@ sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
 
 propSigs                    :: TEnv -> TEnv
-propSigs te                 = [ (n,i) | (n, i@(NSig sc dec)) <- te, isProp dec sc ]
+propSigs te                 = [ (n,i) | (n, i@(NSig sc Property)) <- te ]
 
 isProp                      :: Deco -> TSchema -> Bool
 isProp Property _           = True
@@ -624,12 +624,12 @@ hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn . 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Deco)
+findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Maybe Deco)
 findAttr env tc n           = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
   where findIn ((w,u,te):tes) = case lookup n te of
-                                Just (NSig sc d) -> Just (wexpr w, sc, d)
-                                Just (NDef sc d) -> Just (wexpr w, sc, d)
-                                Just (NVar t)    -> Just (wexpr w, monotype t, NoDec)
+                                Just (NSig sc d) -> Just (wexpr w, sc, Just d)
+                                Just (NDef sc d) -> Just (wexpr w, sc, Just d)
+                                Just (NVar t)    -> Just (wexpr w, monotype t, Nothing)
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
@@ -725,7 +725,7 @@ findTVBound env tv          = case findName (tvname tv) env of
                                 NTVar _ mba -> mba
                                 _ -> err1 tv "Unknown type variable"
 
-findTVAttr                  :: EnvF x -> TVar -> Name -> Maybe (Expr->Expr,TSchema,Deco)
+findTVAttr                  :: EnvF x -> TVar -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findTVAttr env tv n         = case findTVBound env tv of
                                 Just a -> findAttr env a n
                                 Nothing -> Nothing

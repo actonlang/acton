@@ -263,10 +263,11 @@ instance InfEnv Stmt where
                                              return (Cast (actorFX env l) fx :
                                                      cs1++cs2, [], After l e1' e2')
     
-    infEnv env d@(Signature _ ns sc@(TSchema l q t) dec)
+    infEnv env (Signature l ns sc dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], d)
+      | otherwise                       = return ([], [(n, NSig sc dec') | n <- ns], Signature l ns sc dec')
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
+            dec'                        = case (sctype sc, dec) of (TFun{}, _) -> dec; (_, NoDec) -> Property; _ -> dec
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 
@@ -328,7 +329,7 @@ matchDefAssumption env cs def           = do traceM ("## matchDefAssumption " ++
                                                  s = tybound q1 `zip` tvs           -- This cannot just be memoized in the global TypeM substitution,
                                              def <- msubstWith s def{ qbinds = [] } -- since the variables in (tybound q1) aren't necessarily unique
                                              let t1 = tFun (dfx def) (prowOf $ pos def) (krowOf $ kwd def) (fromJust $ ann def)
-                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 dec else t0) : cs++cs1)
+                                             (cs2,eq1) <- solveScoped env0 (tybound q0) [] t1 (Cast t1 (if inClass env then addSelf t0 (Just dec) else t0) : cs++cs1)
                                              checkNoEscape env (tybound q0)
                                              return (cs2, def{ qbinds = noqual env q0, pos = pos0 def, dbody = bindWits (eq0++eq1) ++ dbody def })
   where NDef (TSchema _ q0 t0) dec      = findName (dname def) env
@@ -1034,7 +1035,7 @@ instance Infer Expr where
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
                                                 Just (_wf,sc,dec)
-                                                  | isProp dec sc -> err l "Property attribute not selectable by class"
+                                                  | dec == Just Property -> err l "Property attribute not selectable by class"
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
                                                       let t0 = tCon $ TC c ts
