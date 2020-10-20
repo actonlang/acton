@@ -949,7 +949,7 @@ instance Infer Expr where
                                              return (cs1++cs2, tBool, BinOp l e1' op (termsubst s1 e2'))
       | otherwise                       = do t <- newTVar
                                              (cs1,e1') <- inferSub env t e1
-                                             (cs2,e2') <- inferSub env t e2
+                                             (cs2,e2') <- inferSub env (rtype op t) e2
                                              w <- newWitness
                                              return (Impl w t (protocol op) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) (method op)) [e1',e2'])
@@ -979,6 +979,9 @@ instance Infer Expr where
             method BXor                 = xorKW
             method BAnd                 = andKW
             method MMult                = matmulKW
+            rtype ShiftL t              = tInt
+            rtype ShiftR t              = tInt
+            rtype _ t                   = t
     infer env (UnOp l op e)
       | op == Not                       = do (cs,_,_,e') <- inferBool env e
                                              return (cs, tBool, UnOp l op e')
