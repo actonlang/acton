@@ -157,11 +157,11 @@ reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
                                                  let cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
                                                  reduce env eq cs
 reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
-  | fx1 /= fxAction, fx2 == fxAction        = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
-                                                 let e = eCall (eQVar primASYNCf) [eVar px0]        --   Wrap closure into an async message
+  | Just s <- isAct fx1, fx2 == fxAction    = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
+                                                 let e = eCall (primAsync s) [eVar px0]             --   Wrap closure into an async message
                                                      cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
+  | fx1 == fxAction, Just s <- isAct fx1    = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
                                                  let e = eCall (eVar px0) []                        --   Call action closure right away
                                                      cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
@@ -171,6 +171,9 @@ reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx1
         t                                   = tFun fx1 posNil kwdNil t1
+        isAct (TFX _ (FXAct s))             = Just s
+        isAct _                             = Nothing
+        primAsync s                         = tApp (eQVar primASYNCf) [s,t1]
 
 reduce' env eq c                            = noRed c
 
@@ -283,12 +286,15 @@ cast' env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = return ()
 
 cast' env t1@(TVar _ tv) t2
-  | univar tv                               = trace ("   deferring " ++ prstr (Cast t1 t2)) $ defer [Cast t1 t2]
-  | Just tc <- findTVBound env tv           = cast' env (tCon tc) t2
+  | univar tv                               = defer [Cast t1 t2]
 
 cast' env t1 t2@(TVar _ tv)
   | univar tv                               = defer [Cast t1 t2]
-  | otherwise                               = noRed (Cast t1 t2)
+
+cast' env t1@(TVar _ tv) t2                 = cast' env (tCon tc) t2
+  where tc                                  = findTVBound env tv
+
+cast' env t1 t2@(TVar _ tv)                 = noRed (Cast t1 t2)
 
 cast' env (TUnion _ us1) t2
   | all uniLit us1                          = cast env tStr t2              -- Only matches when t2 is NOT a variable
@@ -923,7 +929,8 @@ allAbove env (TCon _ c@(TC n _))
   | n' `elem` uniCons                   = map CCon (n' : allAncestors env n) ++ allAbove env (tUnion [UCon n']) ++ [CNone]
   | otherwise                           = map CCon (n' : allAncestors env n) ++ [CNone]
   where n'                              = unalias env n
-allAbove env (TVar _ v) | not(univar v) = case findTVBound env v of Just c -> [CVar v, CCon (tcname c)]; _ -> [CVar v]
+allAbove env (TVar _ v) | not(univar v) = [CVar v, CCon (tcname c)]
+  where c                               = findTVBound env v
 allAbove env (TOpt _ t)                 = [COpt]
 allAbove env (TNone _)                  = [CNone]
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
@@ -960,7 +967,8 @@ protos env _                            = []
 
 attrs env (CProto n)                    = allAttrs env n
 attrs env (CCon n)                      = allAttrs env n
-attrs env (CVar v)                      = maybe [] (allAttrs env . tcname) $ findTVBound env v
+attrs env (CVar v)                      = allAttrs env $ tcname c
+  where c                               = findTVBound env v
 attrs env (CUnion ns)                   = foldr1 intersect $ map (allAttrs env) ns
 attrs env _                             = []
 

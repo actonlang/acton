@@ -181,13 +181,39 @@ protocol Logical:
   @staticmethod
   __xor__     : (Self,Self) -> Self
 
+  @staticmethod
+  __iand__    : (Self,Self) -> Self
+  @staticmethod
+  __ior__     : (Self,Self) -> Self
+  @staticmethod
+  __ixor__    : (Self,Self) -> Self
+  
+  def __iand__(a,b):
+      return a & b
+  def __ior__(a,b):
+      return a | b
+  def __ixor__(a,b):
+      return a ^ b
+
 protocol Plus:
   @staticmethod
   __add__      : (Self,Self) -> Self
 
+  @staticmethod
+  __iadd__     : (Self,Self) -> Self
+  
+  def __iadd__(a,b):
+      return a + b
+
 protocol Minus:
   @staticmethod
   __sub__      : (Self,Self) -> Self
+
+  @staticmethod
+  __isub__     : (Self,Self) -> Self
+  
+  def __isub__(a,b):
+      return a - b
 
 protocol Hashable (Eq):
   __hash__     : () -> int
@@ -227,6 +253,20 @@ protocol Number (Plus,Minus):
   @staticmethod
   __pow__      : (Self,Self) -> Self
 
+  @staticmethod
+  __imul__     : (Self,Self) -> Self
+  @staticmethod
+  __itruediv__ : (Self,Self) -> Self
+  @staticmethod
+  __ipow__     : (Self,Self) -> Self
+  
+  def __imul__(a,b):
+      return a * b
+  def __itruediv__(a,b):
+      return a / a
+  def __ipow__(a,b):
+      return a ** b
+
   __neg__      : () -> Self
   __pos__      : () -> Self
   
@@ -262,9 +302,29 @@ protocol Integral (Rational,Logical):
   __mod__      : (Self,Self) -> Self
 
   @staticmethod
+  __ifloordiv__ : (Self,Self) -> Self
+  @staticmethod
+  __imod__     : (Self,Self) -> Self
+  
+  @staticmethod
   __lshift__   : (Self,int) -> Self
   @staticmethod
   __rshift__   : (Self,int) -> Self
+
+  @staticmethod
+  __ilshift__  : (Self,int) -> Self
+  @staticmethod
+  __irshift__  : (Self,int) -> Self
+
+  def __ifloordiv__(a,b):
+    return a // b
+  def __imod__(a,b):
+    return a % b
+  def __ilshift__(a,b):
+    return a << b
+  def __irshift__(a,b):
+    return a >> b
+
 
   __invert__   : () -> Self
 

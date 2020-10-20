@@ -120,7 +120,7 @@ instance Deact Decl where
 
             props (VarAssign _ p _) = [ (n, fromJust a) | PVar _ n a <- p ]
             props (Assign _ p _)    = [ (n, fromJust a) | PVar _ n a <- p ]
-            props (If _ bs els)     = restrict (foldr1 intersect $ map bound bs) (concat $ map props els)
+            props (If _ bs els)     = restrict (concat $ map props els) (foldr1 intersect $ map bound bs)
             props _                 = []
 
             props' (PosPar n a _ p) = (n, fromJust a) : props' p
@@ -142,7 +142,7 @@ instance Deact Decl where
               where n'              = localName n
                     async           = Call l0 (tApp (eQVar primASYNCf) ts') (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
-                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (parToArg p) KwdNil) fx
+                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (par2arg p) KwdNil) fx
                     ts              = map tVar (tybound q)
                     ts'             = [tSelf, t]
 
@@ -159,9 +159,6 @@ localName n                         = Derived n (name "local")
 addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
-
-parToArg PosNIL                     = PosNil
-parToArg (PosPar n _ _ p)           = PosArg (Var l0 (NoQ n)) (parToArg p)
 
 
 -- $ASYNCf : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]

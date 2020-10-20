@@ -102,7 +102,6 @@ instance Norm Stmt where
                                          mbe' <- norm env mbe
                                          return $ Expr l $ eCall (eQVar primASSERT) [e', maybe eNone id mbe']
     norm env (Pass l)               = return $ Pass l
-    norm env (Delete l t)           = Delete l <$> norm env t
     norm env (Return l Nothing)     = return $ Return l $ Just $ None l0
     norm env (Return l (Just e))    = do e' <- norm env e
                                          return $ Return l $ Just e'

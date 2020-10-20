@@ -220,9 +220,7 @@ data Constraint = Cast  Type Type
 
 type Constraints = [Constraint]
 
-dDef n p t b    = Def NoLoc n [] p KwdNIL (Just t) b NoDec fxWild
-
-sDef n p t b    = sDecl [dDef n p t b]
+sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
 sMutAssign t e  = MutAssign NoLoc t e
@@ -238,10 +236,10 @@ handler qn b    = Handler (Except NoLoc qn) b
 tApp e []       = e
 tApp e ts       = TApp NoLoc e ts
 
-eCall e es      = Call NoLoc e (foldr PosArg PosNil es) KwdNil
+eCall e es      = Call NoLoc e (posarg es) KwdNil
 eCallVar c es   = eCall (eVar c) es
 eCallV c es     = eCall (Var NoLoc c) es
-eTuple es       = Tuple NoLoc (foldr PosArg PosNil es) KwdNil
+eTuple es       = Tuple NoLoc (posarg es) KwdNil
 eQVar n         = Var NoLoc n
 eVar n          = Var NoLoc (NoQ n)
 eDot e n        = Dot NoLoc e n
@@ -254,6 +252,12 @@ eLambda' ns e   = Lambda NoLoc (pospar' ns) KwdNIL e fxWild
 
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
+
+posarg es       = foldr PosArg PosNil es
+
+par2arg (PosPar n _ _ p)    = PosArg (eVar n) (par2arg p)
+par2arg (PosSTAR n _)       = PosStar (eVar n)
+par2arg PosNIL              = PosNil
 
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing

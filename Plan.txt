@@ -4,21 +4,22 @@
     X Make CPSEnv and LiftEnv instances of Env
     X Update CPS and Lifter passes to latest syntax
     X Convert NameInfo envs in Normalize
-    * Convert NameInfo envs in CPS and Lifter as well                       2h      8h
+    X Convert NameInfo envs in CPS and Lifter as well                       2h      8h
     X Make NormEnv an instance of Env                                       1h      1h
     X Make GenEnv an instance of Env                                        1h      1h
     / Let CPS make decisions based on true type                             1d      2d
-    * Ensure new vars in Normalize, CPS and Lifter are fully typed          2d      3d
-    - Revisit Lifter on classes (now restricted to top level)               1d      2d
+    X Ensure new vars in Normalize, CPS and Lifter are fully typed          2d      3d
+    X Revisit Lifter on classes (now restricted to top level)               1d      2d
+    X Generate custom $Clos subclasses in Lifter                            1d      2d
     / Fill out gaps in CodeGen                                              2d      5d
     - Apply typeinfo in CodeGen to insert correct casts                     2d      4d
     X Print generated C code with precedences                               2d      3d
-    - Introduce special constructor GName for unaliased names               4h      8h
+!   - Sort out conversion from star params/args to tuples                   2d      4d
     - Make global __builtin__ witnesses available to Solver                 2h      5h
-    - Generate custom $Clos subclasses in Lifter                            1d      2d
     - Integrate DB sources in build                                         1d      2d
     - Set up dedicated rts thread for DB protocol daemon                    1d      2d
     - Add serialization calls to rts                                        3h      8h
+!   - Sort out the pos/kwd parameter parsing ambiguity                      4h      8h
     - Implement pos/kwd and opt relaxation in Solver                        3d      5d
     - Implement Rest/RestI in rts                                           1d      2d
                                                                            18d     35d
@@ -29,13 +30,13 @@
     - Documentation/tutorial                                                1w      1w
                                                                             4w      6w
 
-    - Infer @property signatures based on __init__ assignments              2d      4d
-    - Type-convert plain classes as well                                    3h      6h
+!   X Infer @property signatures based on __init__ assignments              2d      4d
+    X Type-convert plain classes as well                                    3h      6h
+!   - Introduce special constructor GName for unaliased names               4h      8h
     - Translate list comprehensions                                         2d      3d
-    - Handle the with statements                                            2d      3d
-    - Sort out conversion from star params/args to tuples                   2d      4d
+    / Handle the with statements                                            2d      3d
     - Implement raise and try in the rts                                    3d      4d
-    - Define Acton Environment type and implement IO loop in rts            1w      2w
+    / Define Acton Environment type and implement IO loop in rts            1w      2w
                                                                             2w      4w
 
 
