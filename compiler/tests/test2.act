@@ -4,6 +4,18 @@ def fff (a, b, c):
 def abs(x : Number) -> Real:
     return x.__abs__()
 
+def all(it : Iterable[A]) -> bool:
+    for x in it:
+        if not x:
+            return False
+    return True
+
+def any(it : Iterable[A]) -> bool:
+    for x in it:
+        if x:
+            return True
+    return False
+
 def pow1 [A(Number)] (a: A, b: A) -> A:
   return Number.__pow__(a,b)
 

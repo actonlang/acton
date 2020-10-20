@@ -107,7 +107,7 @@ instance Transform Expr where
     trans env (CompOp l e ops)          = CompOp l (trans env e) (trans env ops)
     trans env (UnOp l op e)             = UnOp l op (trans env e)
     trans env (Dot l e n)
-      | Tuple{} <- e'                   = trans env (kwdarg n $ kargs e')
+      | Tuple{} <- e'                   = trans env (kwditem n $ kargs e')
       | otherwise                       = Dot l e' n
       where e'                          = trans env e
     trans env (Rest l e n)
@@ -115,7 +115,7 @@ instance Transform Expr where
       | otherwise                       = Rest l e' n
       where e'                          = trans env e
     trans env (DotI l e i)
-      | Tuple{} <- e'                   = trans env (posarg i $ pargs e')
+      | Tuple{} <- e'                   = trans env (positem i $ pargs e')
       | otherwise                       = DotI l e' i
       where e'                          = trans env e
     trans env (RestI l e i)
@@ -128,7 +128,7 @@ instance Transform Expr where
       where env1                        = extsubst (psubst p ++ ksubst k) env
             fvs                         = free e
             bvs                         = bound p ++ bound k
-            clash                       = bvs `intersect` free (rng $ restrict fvs $ trsubst env)
+            clash                       = bvs `intersect` free (rng $ restrict (trsubst env) fvs)
             s                           = clash `zip` (yNames \\ (fvs++bvs))
             e1                          = Lambda l (prename s p) (krename s k) (erename s e) fx
     trans env (Yield l e)               = Yield l (trans env e)
@@ -185,11 +185,11 @@ kzip (KwdSTAR n _) a                    = Just [(n, Tuple NoLoc PosNil a)]
 kzip KwdNIL _                           = Just []
 kzip _ _                                = Nothing
 
-posarg 0 (PosArg e _)                   = e
-posarg i (PosArg _ p)                   = posarg (i-1) p
+positem 0 (PosArg e _)                  = e
+positem i (PosArg _ p)                  = positem (i-1) p
 
-kwdarg n (KwdArg n' e _) | n == n'      = e
-kwdarg n (KwdArg _ _ k)                 = kwdarg n k
+kwditem n (KwdArg n' e _) | n == n'     = e
+kwditem n (KwdArg _ _ k)                = kwditem n k
 
 posrest 0 (PosArg _ p)                  = p
 posrest i (PosArg e p)                  = PosArg e (posrest (i-1) p)

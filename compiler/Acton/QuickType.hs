@@ -8,7 +8,7 @@ import Acton.Builtin
 import Utils
 
 class SchemaOf a where
-    schemaOf                        :: EnvF x -> a -> TSchema
+    schemaOf                        :: EnvF x -> a -> (TSchema, Bool)       -- Snd result indicates that function type means closure
 
 class TypeOf a where
     typeOf                          :: EnvF x -> a -> Type
@@ -19,42 +19,53 @@ class EnvOf a where
 instance SchemaOf Expr where
     schemaOf env (Var _ n)          = case findQName n env of
                                         NVar t ->
-                                            monotype t
+                                            (monotype t, True)
                                         NSVar t ->
-                                            monotype t
-                                        NDef sc _ ->
-                                            sc
-                                        NSig sc _ ->
-                                            sc
+                                            (monotype t, True)
+                                        NDef sc dec ->
+                                            (sc, funAsClos (Just dec))
+                                        NSig sc dec ->
+                                            (sc, funAsClos (Just dec))
                                         NClass q _ _ ->
                                             let tc = TC n (map tVar $ tybound q)
-                                                TSchema _ q' t = findAttr' env tc initKW
-                                            in tSchema (q++q') $ subst [(tvSelf,tCon tc)] t{ restype = tSelf }
+                                                (TSchema _ q' t, _) = findAttr' env tc initKW
+                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t{ restype = tSelf }, False)
                                         NAct q p k _ ->
-                                            tSchema q (tFun (fxAct tWild) p k (tCon0 n q))
+                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), False)
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
     schemaOf env (Dot _ (Var _ x) n)
       | NClass q _ _ <- info        = let tc = TC x (map tVar $ tybound q)
-                                          Just (_, TSchema _ q' t, dec) = findAttr env tc n
-                                      in tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t dec){ restype = tSelf }
+                                          Just (_, TSchema _ q' t, mbdec) = findAttr env tc n
+                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec){ restype = tSelf }, funAsClos mbdec)
       where info                    = findQName x env
     schemaOf env e0@(Dot _ e n)     = case typeOf env e of
                                         TCon _ c -> findAttr' env c n
-                                        TTuple _ p k -> f n k
-                                        TVar _ v | v == tvSelf -> findAttr' env (findSelf env) n
+                                        TTuple _ p k -> (f n k, True)
+                                        TVar _ v  -> findAttr' env (findTVBound env v) n
                                         t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ " : " ++ prstr t)
       where f n (TRow l k x t r)
               | x == n              = monotype t
               | otherwise           = f n r
-    schemaOf env e                  = monotype $ typeOf env e
+    schemaOf env e                  = (monotype $ typeOf env e, True)
+
+
+typeOf2                             :: EnvF x -> Expr -> (Type, Bool)           -- Snd result indicates that function type means closure
+typeOf2 env e@Var{}                 = case schemaOf env e of
+                                         (TSchema _ [] t, cl) -> (t, cl)
+                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
+typeOf2 env e@Dot{}                 = case schemaOf env e of
+                                         (TSchema _ [] t, cl) -> (t, cl)
+                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
+typeOf2 env (TApp _ e ts)           = case schemaOf env e of
+                                         (TSchema _ q t, cl) | length q == length ts ->
+                                             (subst (tybound q `zip` ts) t, cl)
+typeOf2 env e                       = (typeOf env e, True)
+
 
 instance TypeOf Expr where
-    typeOf env e@Var{}              = case schemaOf env e of
-                                         TSchema _ [] t -> t
-                                         sc -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
-    typeOf env e@Dot{}              = case schemaOf env e of
-                                         TSchema _ [] t -> t
-                                         sc -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf env e@Var{}              = fst $ typeOf2 env e
+    typeOf env e@Dot{}              = fst $ typeOf2 env e
+    typeOf env e@TApp{}             = fst $ typeOf2 env e
     typeOf env (Int _ i s)          = tInt
     typeOf env (Float _ f s)        = tFloat
 --  typeOf env (Imaginary _ i s)    = undefined
@@ -67,9 +78,6 @@ instance TypeOf Expr where
     typeOf env (Call _ e ps ks)     = case typeOf env e of
                                         TFun _ fx p k t -> if fx == fxAction then tMsg t else t
                                         t -> error ("###### typeOf Fun " ++ prstr e ++ " : " ++ prstr t)
-    typeOf env (TApp _ e ts)        = case schemaOf env e of
-                                        TSchema _ q t | length q == length ts ->
-                                            subst (tybound q `zip` ts) t
     typeOf env (Await _ e)          = case typeOf env e of
                                         TCon _ (TC c [t]) | qmatch env c qnMsg -> t
     typeOf env (BinOp _ l Or r)     = tBool
@@ -195,7 +203,7 @@ instance EnvOf Stmt where
 
 commonEnvOf suites
   | null liveSuites                 = []
-  | otherwise                       = restrict (foldr1 intersect $ map bound $ tail liveSuites) (envOf $ head liveSuites)
+  | otherwise                       = restrict (envOf $ head liveSuites) (foldr1 intersect $ map bound $ tail liveSuites)
   where liveSuites                  = filter fallsthru suites
 
 instance EnvOf Decl where
@@ -289,9 +297,8 @@ castable env (TRow _ k n t1 r1) r2
 castable env (TVar _ tv1) (TVar _ tv2)
   | tv1 == tv2                              = True
 
-castable env t1@(TVar _ tv) t2
-  | Just tc <- findTVBound env tv           = castable env (tCon tc) t2
-  | otherwise                               = False
+castable env t1@(TVar _ tv) t2              = castable env (tCon c) t2
+  where c                                   = findTVBound env tv
 
 castable env t1 t2@(TVar _ tv)              = False
 

@@ -80,7 +80,7 @@ data NameInfo               = NVar      Type
                             | NClass    QBinds [WTCon] TEnv
                             | NProto    QBinds [WTCon] TEnv
                             | NExt      QName QBinds [WTCon] TEnv
-                            | NTVar     Kind (Maybe TCon)
+                            | NTVar     Kind TCon
                             | NAlias    QName
                             | NMAlias   ModName
                             | NModule   TEnv
@@ -189,7 +189,7 @@ instance Pretty (Name,NameInfo) where
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
                                   brackets (commaList $ tybound q) <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ prettyOrPass te)
-    pretty (n, NTVar k mba)     = pretty n <> maybe empty (parens . pretty) mba
+    pretty (n, NTVar k c)       = pretty n <> parens (pretty c)
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NModule te)      = text "module" <+> pretty n <> colon $+$ nest 4 (pretty te)
@@ -224,7 +224,7 @@ instance Subst NameInfo where
     msubst (NClass q us te)     = NClass <$> msubst q <*> msubst us <*> msubst te
     msubst (NProto q us te)     = NProto <$> msubst q <*> msubst us <*> msubst te
     msubst (NExt n q ps te)     = NExt n <$> msubst q <*> msubst ps <*> msubst te
-    msubst (NTVar k mba)        = NTVar k <$> msubst mba
+    msubst (NTVar k c)          = NTVar k <$> msubst c
     msubst (NAlias qn)          = NAlias <$> return qn
     msubst (NMAlias m)          = NMAlias <$> return m
     msubst (NModule te)         = NModule <$> return te     -- actually msubst te, but te has no free variables (top-level)
@@ -239,7 +239,7 @@ instance Subst NameInfo where
     tyfree (NClass q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NProto q us te)     = (tyfree q ++ tyfree us ++ tyfree te) \\ (tvSelf : tybound q)
     tyfree (NExt n q ps te)     = (tyfree q ++ tyfree ps ++ tyfree te) \\ (tvSelf : tybound q)
-    tyfree (NTVar k mba)        = tyfree mba
+    tyfree (NTVar k c)          = tyfree c
     tyfree (NAlias qn)          = []
     tyfree (NMAlias qn)         = []
     tyfree (NModule te)         = []        -- actually tyfree te, but a module has no free variables on the top level
@@ -269,7 +269,7 @@ instance Polarity NameInfo where
     polvars (NClass q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
     polvars (NProto q us te)        = (polvars q `polcat` polvars us `polcat` polvars te) `polminus` (tvSelf : tybound q)
     polvars (NExt n q ps te)        = (polvars q `polcat` polvars ps `polcat` polvars te) `polminus` (tvSelf : tybound q)
-    polvars (NTVar k mba)           = polvars mba
+    polvars (NTVar k c)             = polvars c
     polvars _                       = ([],[])
 
 instance Polarity WTCon where
@@ -345,7 +345,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te)    = NClass (unalias env q) (unalias env us) (unalias env te)
     unalias env (NProto q us te)    = NProto (unalias env q) (unalias env us) (unalias env te)
     unalias env (NExt n q ps te)    = NExt (unalias env n) (unalias env q) (unalias env ps) (unalias env te)
-    unalias env (NTVar k mba)       = NTVar k (unalias env mba)
+    unalias env (NTVar k c)         = NTVar k (unalias env c)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env (NMAlias m)         = NMAlias (unalias env m)
     unalias env (NModule te)        = NModule (unalias env te)
@@ -506,8 +506,8 @@ define te env               = foldl addWit env1 ws
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env q
-  where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) mbc) : names env } wits
-          where (mbc,ps)    = case mro2 env us of ([],_) -> (Nothing, us); _ -> (Just $ head us, tail us)   -- Just check that the mro exists, don't store it
+  where f (Quant tv us) env = foldl addWit env{ names = (tvname tv, NTVar (tvkind tv) c) : names env } wits
+          where (c,ps)      = case mro2 env us of ([],_) -> (cStruct, us); _ -> (head us, tail us)   -- Just check that the mro exists, don't store it
                 wits        = [ (NoQ (tvname tv), WInst p (NoQ $ tvarWit tv p0) wchain) | p0 <- ps, (wchain,p) <- findAncestry env p0 ]
 
 defineSelfOpaque            :: EnvF x -> EnvF x
@@ -544,6 +544,9 @@ stateScope env              = [ z | (z, NSVar _) <- names env ]
 
 tvarScope                   :: EnvF x -> [TVar]
 tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
+
+quantScope                  :: EnvF x -> QBinds
+quantScope env              = [ Quant (TV k n) [c] | (n, NTVar k c) <- names env ]
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 
@@ -633,10 +636,15 @@ findAttr env tc n           = findIn [ (w,u,te') | (w,u) <- findAncestry env tc,
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
-findAttr'                   :: EnvF x -> TCon -> Name -> TSchema
+findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Bool)
 findAttr' env tc n          = case findAttr env tc n of
-                                  Just (_, sc, _) -> sc
+                                  Just (_, sc, mbdec) -> (sc, funAsClos mbdec)
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
+
+funAsClos                   :: Maybe Deco -> Bool
+funAsClos Nothing           = True
+funAsClos (Just Property)   = True
+funAsClos _                 = False
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
@@ -718,17 +726,16 @@ wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
 
 findSelf                    :: EnvF x -> TCon
 findSelf env                = case findName (tvname tvSelf) env of
-                                NTVar _ (Just a) -> a
+                                NTVar _ c -> c
 
-findTVBound                 :: EnvF x -> TVar -> Maybe TCon
+findTVBound                 :: EnvF x -> TVar -> TCon
 findTVBound env tv          = case findName (tvname tv) env of
-                                NTVar _ mba -> mba
+                                NTVar _ c -> c
                                 _ -> err1 tv "Unknown type variable"
 
 findTVAttr                  :: EnvF x -> TVar -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findTVAttr env tv n         = case findTVBound env tv of
-                                Just a -> findAttr env a n
-                                Nothing -> Nothing
+findTVAttr env tv n         = findAttr env c n
+  where c                   = findTVBound env tv
 
 tvarWit                     :: TVar -> TCon -> Name
 tvarWit tv p                = Derived (name "w") $ Derived (deriveQ $ tcname p) (tvname tv)

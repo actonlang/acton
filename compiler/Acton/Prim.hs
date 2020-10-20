@@ -12,7 +12,6 @@ qPrim n             = QName mPrim n
 primActor           = qPrim $ name "Actor"
 primR               = qPrim $ name "R"
 primClos            = qPrim $ name "Clos"
-primCont            = qPrim $ name "Cont"
 
 primASYNCf          = qPrim $ name "ASYNCf"
 primAFTERf          = qPrim $ name "AFTERf"
@@ -55,7 +54,7 @@ primISNOTNONE       = qPrim $ name "ISNOTNONE"
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
 tClos x p t         = tCon $ TC primClos [x,p,t]
-tCont x t           = tCon $ TC primCont [x,t]
+tCont x t           = tClos x (posRow t posNil) tR
 
 
 primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
@@ -84,7 +83,6 @@ primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primActor,         clActor cls def),
                             (noq primR,             clR cls def),
                             (noq primClos,          clClos cls def),
-                            (noq primCont,          clCont cls def),
 
                             (noq primRContc,        def scRContc NoDec),
                             (noq primRCont,         def scRCont NoDec),
@@ -117,10 +115,7 @@ clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
         p           = TV PRow (name "P")
         a           = TV KType (name "A")
 
---  class $Cont[X,A] ($Clos[X,(A,),$R]): pass
-clCont cls def      = cls [quant x, quant a] [([Nothing],TC primClos [tVar x, posRow (tVar a) posNil, tR])] []
-  where x           = TV KFX (name "X")
-        a           = TV KType (name "A")
+--  $Cont[X,A]      = $Clos[X,(A,),$R]
 
 --  $ASYNCf         : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
 scASYNCf            = tSchema [quant s, quant a] tASYNC

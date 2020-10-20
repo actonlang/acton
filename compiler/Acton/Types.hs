@@ -83,7 +83,7 @@ class InfEnvT a where
 
 commonTEnv                              :: Env -> [TEnv] -> TypeM (Constraints,TEnv)
 commonTEnv env []                       = return ([], [])
-commonTEnv env (te:tes)                 = unifEnv tes (restrict vs te)
+commonTEnv env (te:tes)                 = unifEnv tes (restrict te vs)
   where vs                              = foldr intersect (dom te) $ map dom tes
         l                               = length tes
         unifEnv tes []                  = return ([], [])
