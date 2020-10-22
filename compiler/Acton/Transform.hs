@@ -17,7 +17,7 @@ termsubst s x                           = trans (extsubst s env0) x
 class Transform a where
     trans                               :: TransEnv -> a -> a
 
-data TransEnv                           = TransEnv { trsubst :: [(Name,Maybe Expr)], witscope :: [(Name,Expr)] }
+data TransEnv                           = TransEnv { trsubst :: [(Name,Maybe Expr)], witscope :: [(Name,Type,Expr)] }
 
 env0                                    = TransEnv{ trsubst = [], witscope = [] }
 
@@ -25,7 +25,7 @@ blockscope ns env                       = env{ trsubst = (ns `zip` repeat Nothin
 
 extsubst ns env                         = env{ trsubst = [ (n,Just e) | (n,e) <- ns ] ++ trsubst env }
 
-extscope n e env                        = env{ witscope = (n,e) : witscope env }
+extscope n t e env                      = env{ witscope = (n,t,e) : witscope env }
 
 trfind n env                            = case lookup n (trsubst env) of
                                             Just (Just e) -> Just e
@@ -34,13 +34,13 @@ trfind n env                            = case lookup n (trsubst env) of
 instance Pretty (Name,Expr) where
     pretty (n,e)                        = pretty n <+> text "~" <+> pretty e
 
-wtrans env (Assign l p@[PVar _ n _] e : ss)
+wtrans env (Assign l p@[PVar _ n (Just t)] e : ss)
   | Lambda{} <- e                       = wtrans (extsubst [(n,e1)] env) ss
   | Var{} <- e                          = wtrans (extsubst [(n,e1)] env) ss
   | Dot _ Var{} _ <- e                  = wtrans (extsubst [(n,e1)] env) ss
   | not $ null hits                     = wtrans (extsubst [(n,head hits)] env) ss
-  | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n e1 env) ss
-  where hits                            = [ eVar n' | (n',e') <- witscope env, e' == e1 ]
+  | Internal Witness _ _ <- n           = Assign l p e1 : wtrans (extscope n t e1 env) ss
+  where hits                            = [ eVar n' | (n',t',e') <- witscope env, e' == e1, t' == t ]
         e1                              = trans env e
 wtrans env ss                           = trans env ss
                                 
