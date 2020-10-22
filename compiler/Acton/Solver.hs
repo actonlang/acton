@@ -157,11 +157,11 @@ reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
                                                  let cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
                                                  reduce env eq cs
 reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
-  | Just s <- isAct fx1, fx2 == fxAction    = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
+  | Just s <- isFXAct fx1, fx2 == fxAction  = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
                                                  let e = eCall (primAsync s) [eVar px0]             --   Wrap closure into an async message
                                                      cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  | fx1 == fxAction, Just s <- isAct fx1    = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
+  | fx1 == fxAction, Just s <- isFXAct fx1  = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
                                                  let e = eCall (eVar px0) []                        --   Call action closure right away
                                                      cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
@@ -171,8 +171,6 @@ reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx1
         t                                   = tFun fx1 posNil kwdNil t1
-        isAct (TFX _ (FXAct s))             = Just s
-        isAct _                             = Nothing
         primAsync s                         = tApp (eQVar primASYNCf) [s,t1]
 
 reduce' env eq c                            = noRed c

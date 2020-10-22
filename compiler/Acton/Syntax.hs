@@ -227,7 +227,6 @@ sMutAssign t e  = MutAssign NoLoc t e
 sRaise e        = Raise NoLoc (Just (Exception e Nothing))
 sExpr e         = Expr NoLoc e
 sDecl ds        = Decl NoLoc ds
-sTry b hs els f = Try NoLoc b hs els f
 sIf bs els      = If NoLoc bs els
 sIf1 e b els    = sIf [Branch e b] els
 
@@ -295,6 +294,10 @@ fxAct t         = tTFX (FXAct t)
 fxMut t         = tTFX (FXMut t)
 fxPure          = tTFX FXPure
 fxWild          = tWild
+
+isFXAct (TFX _ (FXAct s))
+                = Just s
+isFXAct _       = Nothing
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
