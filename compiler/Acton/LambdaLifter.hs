@@ -79,7 +79,7 @@ liftedToTop                     = state (\(totop,supply) -> (totop, ([],supply))
 type LiftEnv                    = EnvF LiftX
 
 data LiftX                      = LiftX {
-                                    inDefX    :: Bool,
+                                    ctxtX     :: LiftCtxt,
                                     localsX   :: [(Name,Type)],
                                     freemapX  :: [(Name,[Name])],
                                     quantmapX :: [(Name,[TVar])],
@@ -87,14 +87,17 @@ data LiftX                      = LiftX {
                                   } 
                                   deriving (Eq,Show)
 
+data LiftCtxt                   = OnTop | InDef | InClass deriving (Eq,Show)
+
 instance Pretty (Name, [Name]) where
     pretty (n,ns)               = pretty n <+> braces (commaSep pretty ns)
 
 
-liftEnv env0                    = setX env0 LiftX{ inDefX = False, localsX = [], freemapX = [], quantmapX = [], namemapX = [] }
+liftEnv env0                    = setX env0 LiftX{ ctxtX = OnTop, localsX = [], freemapX = [], quantmapX = [], namemapX = [] }
 
-inDef env                       = inDefX $ envX env
-setInDef env                    = modX env $ \x -> x{ inDefX = True }
+ctxt env                        = ctxtX $ envX env
+
+setCtxt c env                   = modX env $ \x -> x{ ctxtX = c }
 
 locals env                      = localsX $ envX env
 freemap env                     = freemapX $ envX env
@@ -138,7 +141,7 @@ iterexpand funfree
   where funfree'                = expand funfree funfree
         len                     = map (length . snd)
 
-addParams vts ps                = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) ps vts      -- Needs typeOf vs
+addParams vts ps                = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) ps vts
 
 addArgs vts p                   = foldr (PosArg . eVar) p (dom vts)
 
@@ -152,7 +155,7 @@ instance (Lift a, EnvOf a, Vars a) => Lift [a] where
     ll env []                           = return []
     ll env (a:as)                       = (:) <$> ll env a <*> ll env1 as
       where env'                        = define (envOf a) env
-            env1                        = if inDef env then extLocals a env' else env'
+            env1                        = if ctxt env == InDef then extLocals a env' else env'
 
 instance Lift a => Lift (Maybe a) where
     ll env                              = traverse (ll env)
@@ -168,7 +171,8 @@ instance Lift Stmt where
     ll env s@(Continue _)               = pure s
     ll env (If l branches els)          = If l <$> ll env branches <*> ll env els
     ll env (While l e b els)            = While l <$> ll env e <*> ll env b <*> ll env els
-    ll env (Decl l ds) | inDef env      = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
+    ll env (Decl l ds)
+      | ctxt env == InDef               = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
                                              ds1 <- ll (extNames ns env1) ds
                                              liftToTop ds1
                                              return (Pass NoLoc)
@@ -176,7 +180,11 @@ instance Lift Stmt where
             funfree                     = expand (freemap env) $ iterexpand funfree0
             funfree0                    = [ (dname d, free d) | d@Def{} <- ds ]
             fs                          = dom funfree0
-    ll env (Decl l ds)                  = do ds1 <- ll (setInDef env1) ds
+    ll env (Decl l ds)
+      | ctxt env == InClass             = Decl l <$> ll env1 ds
+      where env1                        = define (envOf ds) env
+    ll env (Decl l ds)
+      | ctxt env == OnTop               = do ds1 <- ll env1 ds
                                              ds2 <- liftedToTop
                                              return $ Decl l (ds2++ds1)
       where env1                        = define (envOf ds) env
@@ -186,17 +194,15 @@ instance Lift Stmt where
 
 instance Lift Decl where
     ll env (Def l n q p KwdNIL a b d fx)
-                                        = do --traceM ("## ll Def (nested) " ++ prstr n)
-                                             b' <- ll env1 b
+                                        = do b' <- ll env1 b
                                              return $ Def l n' (quantScope env ++ q) p' KwdNIL a b' d fx
-      where env1                        = extLocals p $ define (envOf p) $ defineTVars q env
+      where env1                        = setCtxt InDef $ extLocals p $ define (envOf p) $ defineTVars q env
             p'                          = addParams vts p
             n'                          = liftedName env n
             vts                         = extraArgs env n
-    ll env (Class l n q cs b)           = do --traceM ("## ll Class (on top) " ++ prstr n)
-                                             b' <- ll env1 b
+    ll env (Class l n q cs b)           = do b' <- ll env1 b
                                              return $ Class l n q cs b'
-      where env1                        = defineSelf (NoQ n) q $ defineTVars q env
+      where env1                        = setCtxt InClass $ defineSelf (NoQ n) q $ defineTVars q env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
 
 
