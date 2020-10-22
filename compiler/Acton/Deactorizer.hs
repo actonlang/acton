@@ -102,10 +102,10 @@ instance Deact Decl where
     deact env (Actor l n q p k b) 
                                     = do inits <- deact env1 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p) k Nothing (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
+                                         let _init_ = Def l0 initKW [] (addSelfPar p) k (Just tNone) (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
                                          return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
       where env1                    = setActor tSelf actions locals $ extend (envOf p ++ envOf k) $ defineTVars q env
-            env2                    = extend (envOf decls) env1
+            env2                    = define (envOf decls) env1
 
             (decls,ss)              = partition isDecl b
             meths                   = bound decls
