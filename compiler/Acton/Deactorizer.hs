@@ -21,15 +21,6 @@ type DeactM a                       = State [Stmt] a
 store                               :: [Stmt] -> DeactM ()
 store ss                            = state (\stmts -> ((), reverse ss ++ stmts))
 
-swapStore                           :: [Stmt] -> DeactM [Stmt]
-swapStore ss                        = state (\stmts -> (stmts, ss))
-
-withStore                           :: DeactM a -> DeactM (a,[Stmt])
-withStore m                         = do ss0 <- swapStore []
-                                         r <- m
-                                         ss1 <- swapStore ss0
-                                         return (r, ss1)
-
 type DeactEnv                       = EnvF DeactX
 
 data DeactX                         = DeactX { actionsX :: [Name], localsX :: [Name], stvarX :: Maybe Type }
@@ -184,7 +175,10 @@ instance Deact Expr where
     deact env (Ellipsis l)          = return $ Ellipsis l
     deact env (Strings l s)         = return $ Strings l s
     deact env (BStrings l s)        = return $ BStrings l s
-    deact env (Call l e ps _)       = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
+    deact env (Call l e ps _)
+      | TApp _ (Var _ n) ts <- e,
+        n == primASYNCw             = Call l (tApp (eQVar primASYNCf) ts) <$> (PosArg (eVar selfKW) <$> deact env ps) <*> pure KwdNil
+      | otherwise                   = Call l <$> deact env e <*> deact env ps <*> pure KwdNil
     deact env (TApp l e ts)         = TApp l <$> deact env e <*> pure ts
     deact env (Cond l e1 e2 e3)     = Cond l <$> deact env e1 <*> deact env e2 <*> deact env e3
     deact env (IsInstance l e c)    = IsInstance l <$> deact env e <*> return c

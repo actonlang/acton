@@ -295,7 +295,7 @@ instance Norm KwdPar where
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
-joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPosPar k)
+joinPar (PosSTAR n t) k             = PosPar n t Nothing (kwdToPosPar k)        -- TODO: sort this out...
 joinPar PosNIL k                    = kwdToPosPar k
 
 kwdToPosPar (KwdPar n t e k)        = PosPar n t e (kwdToPosPar k)
@@ -303,7 +303,7 @@ kwdToPosPar (KwdSTAR n t)           = PosPar n t Nothing PosNIL
 kwdToPosPar KwdNIL                  = PosNIL
 
 joinArg (PosArg e p) k              = PosArg e (joinArg p k)
-joinArg (PosStar e) k               = PosArg e (kwdToPosArg k)
+joinArg (PosStar e) k               = PosArg e (kwdToPosArg k)                  -- TODO: sort this out...
 joinArg PosNil k                    = kwdToPosArg k
 
 kwdToPosArg (KwdArg n e k)          = PosArg e (kwdToPosArg k)

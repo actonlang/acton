@@ -171,7 +171,7 @@ reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
                                                  reduce env ((w, wFun t t2, lambdaFX e):eq) cs
   where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx1
         t                                   = tFun fx1 posNil kwdNil t1
-        primAsync s                         = tApp (eQVar primASYNCf) [s,t1]
+        primAsync s                         = tApp (eQVar primASYNCw) [s,t1]
 
 reduce' env eq c                            = noRed c
 

@@ -13,6 +13,8 @@ primActor           = qPrim $ name "Actor"
 primR               = qPrim $ name "R"
 primClos            = qPrim $ name "Clos"
 
+primASYNCw          = qPrim $ name "ASYNCw"
+
 primASYNCf          = qPrim $ name "ASYNCf"
 primAFTERf          = qPrim $ name "AFTERf"
 primAWAITf          = qPrim $ name "AWAITf"
@@ -60,7 +62,9 @@ tClos x p t         = tCon $ TC primClos [x,p,t]
 tCont x t           = tClos x (posRow t posNil) tR
 
 
-primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
+primMkEnv cls def var   = [ (noq primASYNCw,        def scASYNCw NoDec),
+
+                            (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primAFTERf,        def scAFTERf NoDec),
                             (noq primAWAITf,        def scAWAITf NoDec),
 
@@ -122,6 +126,14 @@ clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
         a           = TV KType (name "A")
 
 --  $Cont[X,A]      = $Clos[X,(A,),$R]
+
+--  $ASYNCw         : [S,A] => act[S](act[S]()->A) -> Msg[A]
+scASYNCw            = tSchema [quant s, quant a] tASYNC
+  where tASYNC      = tFun actS (posRow tFun' posNil) kwdNil (tMsg $ tVar a)
+        s           = TV KType $ name "S"
+        a           = TV KType $ name "A"
+        tFun'       = tFun actS posNil kwdNil (tVar a)
+        actS        = fxAct $ tVar s
 
 --  $ASYNCf         : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
 scASYNCf            = tSchema [quant s, quant a] tASYNC
