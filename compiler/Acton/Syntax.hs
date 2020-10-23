@@ -515,8 +515,7 @@ instance Eq Expr where
 instance Eq Name where
     Name _ s1           == Name _ s2            = s1 == s2
     Derived n1 s1       == Derived n2 s2        = n1 == n2 && s1 == s2
-    Internal p1 s1 0    == Internal p2 s2 0     = p1 == p2 && s1 == s2
-    Internal p1 _ i1    == Internal p2 _ i2     = p1 == p2 && i1 == i2
+    Internal p1 s1 i1   == Internal p2 s2 i2    = p1 == p2 && s1 == s2 && i1 == i2
     _                   == _                    = False
 
 instance Ord Name where

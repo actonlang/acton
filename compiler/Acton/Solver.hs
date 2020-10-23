@@ -1185,15 +1185,6 @@ rowWit KRow w n t r wt wr               = eLambda [(px0,kwdRow n t r)] eTup
         e1                              = eCall (eVar wt) [Dot l0 (eVar px0) n]
         e2                              = eCall (eVar wr) [Rest l0 (eVar px0) n]
 
-{-
-rowWit PRow w n t r wt wr               = Lambda l0 (PosPar px1 (Just t) Nothing $ PosSTAR px2 (Just $ tTupleP r)) KwdNIL eTup fxPure
-  where eTup                            = Paren l0 $ Tuple l0 (PosArg e1 (PosStar (Call l0 (eVar wr) (PosStar $ eVar px2) KwdNil))) KwdNil
-        e1                              = eCall (eVar wt) [eVar px1]
-rowWit KRow w n t r wt wr               = Lambda l0 PosNIL (KwdPar n (Just t) Nothing $ KwdSTAR px2 (Just $ tTupleK r)) eRec fxPure
-  where eRec                            = Paren l0 $ Tuple l0 PosNil (KwdArg n e1 (KwdStar (Call l0 (eVar wr) PosNil (KwdStar $ eVar px2))))
-        e1                              = eCall (eVar wt) [eVar n]
--}
-
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
 
 lambda0 fx e                            = Lambda NoLoc PosNIL KwdNIL e fx

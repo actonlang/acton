@@ -215,6 +215,8 @@ erename s e                             = termsubst [ (n, eVar n') | (n,n') <- s
 
 yNames                                  = map (Internal TypesPass "y") [0..]
 
+pNames                                  = map (Internal TypesPass "p") [0..]
+kNames                                  = map (Internal TypesPass "k") [0..]
 
 instance Transform Exception where
     trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)
@@ -230,26 +232,26 @@ instance Transform PosPar where
     trans env (PosPar n t e p)          = PosPar n t (trans env e) (trans env p)
     trans env (PosSTAR n (Just t))
       | Internal{} <- n,
-        TTuple _ TNil{} _ <- t          = PosNIL
+        TTuple _ p _ <- t               = pPar pNames p
     trans env p                         = p
 
 psubst (PosPar _ _ _ p)                 = psubst p
 psubst (PosSTAR n (Just t))
   | Internal{} <- n,
-    TTuple _ TNil{} _ <- t              = [(n,eTuple [])]
+    TTuple _ p _ <- t                   = [(n,Tuple l0 (pArg $ pPar pNames p) KwdNil)]
 psubst _                                = []
     
 instance Transform KwdPar where
     trans env (KwdPar n t e k)          = KwdPar n t (trans env e) (trans env k)
     trans env (KwdSTAR n (Just t))
       | Internal{} <- n,
-        TTuple _ _ TNil{} <- t          = KwdNIL
+        TTuple _ _ k <- t               = kPar kNames k
     trans env k                         = k
 
 ksubst (KwdPar _ _ _ k)                 = ksubst k
 ksubst (KwdSTAR n (Just t))
   | Internal{} <- n,
-    TTuple _ _ TNil{} <- t              = [(n,eTuple [])]
+    TTuple _ _ k <- t                   = [(n,Tuple l0 PosNil (kArg $ kPar kNames k))]
 ksubst _                                = []
 
 instance Transform PosArg where
