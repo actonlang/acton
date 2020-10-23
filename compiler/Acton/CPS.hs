@@ -159,7 +159,9 @@ instance CPS [Stmt] where
 
     cps env [Expr _ e]
       | contCall env e,
-        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg (conv e) c) : []
+        Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg (conv e) (cont c)) : []
+      where t                           = typeOf env e
+            cont c                      = if t == tNone then c else eCall (eQVar primSKIPRESc) [c]
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -425,11 +427,16 @@ instance PreCPS Expr where
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
     pre env (Lambda l p KwdNIL e fx)
       | contFX env fx                   = do (prefixes,e') <- withPrefixes $ preTop env1 e
-                                             f <- newName "lambda"
-                                             prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
-                                             return (Var l0 (NoQ f))
+                                             case contCall env e && null prefixes of
+                                                True -> do
+                                                    let p' = conv p; t' = conv t; fx' = conv fx
+                                                    return $ Lambda l (addContPar p' fx' t') KwdNIL (addContArg e (eVar contKW)) fx'
+                                                False -> do
+                                                    f <- newName "lambda"
+                                                    prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
+                                                    return (Var l0 (NoQ f))
       | otherwise                       = do e' <- pre env1 e
-                                             return $ Lambda l (conv p) KwdNIL e' (conv fx)
+                                             return $ Lambda l p KwdNIL e' fx
       where env1                        = define (envOf p) env
             t                           = typeOf env1 e
     pre env (Yield l e)                 = Yield l <$> pre env e

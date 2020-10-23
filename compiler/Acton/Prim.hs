@@ -50,6 +50,9 @@ primWPlusInt        = qPrim $ name "wPlusInt"
 
 primISNOTNONE       = qPrim $ name "ISNOTNONE"
 
+primSKIPRESc        = qPrim $ name "SKIPRESc"
+primSKIPRES         = qPrim $ name "SKIPRES"
+
 
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
@@ -95,7 +98,10 @@ primMkEnv cls def var   = [ (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primWEqUnion,      var tEqUnion),
                             (noq primWPlusInt,      var tPlusInt),
 
-                            (noq primISNOTNONE,     def scISNOTNONE NoDec)
+                            (noq primISNOTNONE,     def scISNOTNONE NoDec),
+
+                            (noq primSKIPRESc,      def scSKIPRESc NoDec),
+                            (noq primSKIPRES,       def scSKIPRES NoDec)
                             
                       ]
 --  class $Actor (): pass
@@ -283,3 +289,19 @@ tPlusInt            = tCon $ TC qnPlus [tInt]
 scISNOTNONE         = tSchema [quant a] tISNOTNONE
   where tISNOTNONE  = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
+
+--  $SKIPRESc       : [X,A] => X(X(A)->$R) -> X(None)->$R
+scSKIPRESc          = tSchema [] tSKIPRES
+  where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
+        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
+        tCont''     = tFun (tVar x) (posRow tNone posNil) kwdNil tR
+        x           = TV KFX $ name "X"
+        a           = TV KType $ name "A"
+
+--  $SKIPRES        : [X,A] => X($Cont[X,A]) -> $Cont[X,None]
+scSKIPRES           = tSchema [] tSKIPRES
+  where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
+        tCont'      = tCont (tVar x) (tVar a)
+        tCont''     = tCont (tVar x) tNone
+        x           = TV KFX $ name "X"
+        a           = TV KType $ name "A"
