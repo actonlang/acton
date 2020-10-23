@@ -546,7 +546,7 @@ tvarScope                   :: EnvF x -> [TVar]
 tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
 
 quantScope                  :: EnvF x -> QBinds
-quantScope env              = [ Quant (TV k n) [c] | (n, NTVar k c) <- names env ]
+quantScope env              = [ Quant (TV k n) (if c==cStruct then [] else [c]) | (n, NTVar k c) <- names env ]
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 

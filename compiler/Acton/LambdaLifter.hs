@@ -14,7 +14,7 @@ import Pretty
 import Prelude hiding((<>))
 
 liftModule env0 (Module m imp stmts) = return $ (Module m imp stmts', mapModules convEnv env0)
-  where stmts' = runL (ll (liftEnv env0) stmts)
+  where stmts' = runL (llSuite (liftEnv env0) stmts)
 
 
 -- L :: list of all local variables and parameters in scope, initially empty (locals)
@@ -105,9 +105,9 @@ quantmap env                    = quantmapX $ envX env
 namemap env                     = namemapX $ envX env
 
 extLocals e env                 = modX env $ \x -> x{ localsX = vts ++ locals env }
-  where vts                     = [ (v,t) | (v,NVar t) <- envOf e ]
+  where vts                     = [ (v, conv t) | (v,NVar t) <- envOf e ]
 
-extFree m env                   = modX env $ \x -> x{ freemapX = [ (f, intersect vs (dom $ locals env)) | (f,vs) <- m ] ++ freemap env,
+extFree m env                   = modX env $ \x -> x{ freemapX = m ++ freemap env,
                                                       quantmapX = [ (f, tvarScope env) | f <- dom m ] ++ quantmap env }
 
 extNames m env                  = modX env $ \x -> x{ namemapX = m ++ namemap env }
@@ -118,8 +118,8 @@ findFree n env                  = case lookup n (freemap env) of
     
 
 liftedName env n                = case lookup n (namemap env) of
-                                    Just n -> n
-                                    _      -> n
+                                    Just n' -> n'
+                                    _       -> n
 
 extraArgs env n                 = case findFree n env of
                                     Just vts -> vts
@@ -151,14 +151,39 @@ addArgs vts p                   = foldr (PosArg . eVar) p (dom vts)
 class Lift e where
     ll                                  :: LiftEnv -> e -> LiftM e
 
-instance (Lift a, EnvOf a, Vars a) => Lift [a] where
-    ll env []                           = return []
-    ll env (a:as)                       = (:) <$> ll env a <*> ll env1 as
-      where env'                        = define (envOf a) env
-            env1                        = if ctxt env == InDef then extLocals a env' else env'
-
 instance Lift a => Lift (Maybe a) where
     ll env                              = traverse (ll env)
+
+instance (Lift a, EnvOf a, Vars a) => Lift [a] where
+    ll env []                           = return []
+    ll env (a:as)
+      | ctxt env == InDef               = (:) <$> ll env a <*> ll (extLocals a env1) as
+      | otherwise                       = (:) <$> ll env a <*> ll env1 as
+      where env1                        = define (envOf a) env
+
+llSuite env []                          = return []
+llSuite env (Decl l ds : ss)
+  | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
+                                             let env1 = extNames ns env'
+                                             ds1 <- ll env1 ds
+                                             liftToTop ds1
+                                             llSuite env1 ss
+  | ctxt env == InClass                 = do ds' <- ll env1 ds
+                                             ss' <- llSuite env1 ss
+                                             return $ Decl l ds' : ss'
+  | ctxt env == OnTop                   = do ds1 <- ll env1 ds
+                                             ds2 <- liftedToTop
+                                             ss' <- llSuite env1 ss
+                                             return $ Decl l (ds2++ds1) : ss'
+  where env'                            = extFree funfree $ define (envOf ds) env
+        funfree                         = expand (freemap env) $ iterexpand funfree0
+        funfree0                        = [ (dname d, free d) | d@Def{} <- ds ]
+        fs                              = dom funfree0
+        env1                            = define (envOf ds) env
+llSuite env (s : ss)
+  | ctxt env == InDef                   = (:) <$> ll env s <*> llSuite (extLocals s env1) ss
+  | otherwise                           = (:) <$> ll env s <*> llSuite env1 ss
+  where env1                            = define (envOf s) env
 
 
 instance Lift Stmt where
@@ -169,41 +194,28 @@ instance Lift Stmt where
     ll env s@(Pass _)                   = pure s
     ll env s@(Break _)                  = pure s
     ll env s@(Continue _)               = pure s
-    ll env (If l branches els)          = If l <$> ll env branches <*> ll env els
-    ll env (While l e b els)            = While l <$> ll env e <*> ll env b <*> ll env els
-    ll env (Decl l ds)
-      | ctxt env == InDef               = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
-                                             ds1 <- ll (extNames ns env1) ds
-                                             liftToTop ds1
-                                             return (Pass NoLoc)
-      where env1                        = extFree funfree $ define (envOf ds) env
-            funfree                     = expand (freemap env) $ iterexpand funfree0
-            funfree0                    = [ (dname d, free d) | d@Def{} <- ds ]
-            fs                          = dom funfree0
-    ll env (Decl l ds)
-      | ctxt env == InClass             = Decl l <$> ll env1 ds
-      where env1                        = define (envOf ds) env
-    ll env (Decl l ds)
-      | ctxt env == OnTop               = do ds1 <- ll env1 ds
-                                             ds2 <- liftedToTop
-                                             return $ Decl l (ds2++ds1)
-      where env1                        = define (envOf ds) env
+    ll env (If l branches els)          = If l <$> ll env branches <*> llSuite env els
+    ll env (While l e b els)            = While l <$> ll env e <*> llSuite env b <*> llSuite env els
     ll env (Signature l ns sc Property) = pure $ Signature l ns (conv sc) Property
     ll env (Signature l ns sc dec)      = pure $ Signature l ns (convTop sc) dec
     ll env s                            = error ("ll unexpected: " ++ prstr s)
 
 instance Lift Decl where
     ll env (Def l n q p KwdNIL a b d fx)
-                                        = do b' <- ll env1 b
-                                             return $ Def l n' (quantScope env ++ q) p' KwdNIL a b' d fx
-      where env1                        = setCtxt InDef $ extLocals p $ define (envOf p) $ defineTVars q env
-            p'                          = addParams vts p
+                                        = do b' <- llSuite (setCtxt InDef env1) b
+                                             return $ Def l n' (quantScope env ++ q) p' KwdNIL (conv a) b' d fx
+      where env1                        = extLocals p $ define (envOf p) $ defineTVars q env
+            p'                          = addParams vts (conv p)
             n'                          = liftedName env n
             vts                         = extraArgs env n
-    ll env (Class l n q cs b)           = do b' <- ll env1 b
+    ll env (Class l n q cs b)           = do b' <- llSuite (setCtxt InClass env1) b
                                              return $ Class l n q cs b'
-      where env1                        = setCtxt InClass $ defineSelf (NoQ n) q $ defineTVars q env
+      where env1                        = defineSelf (NoQ n) q $ defineTVars q env
     ll env d                            = error ("ll unexpected: " ++ prstr d)
+
+instance Lift Branch where
+    ll env (Branch e ss)                = Branch <$> ll env e <*> llSuite env ss
+
 
 
 freefun env (Var l (NoQ n))
@@ -217,23 +229,23 @@ freefun env e                           = Nothing
 closureConvert env (Lambda _ p _ e fx) t vts
                                         = do n <- newName "lambda"
                                              liftToTop [Class l0 n q [TC primClos [fx,prowOf p,t]] te]
-                                             return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) [ eVar v | (v,t) <- vts ]
+                                             return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) [ eVar v | (v,_) <- vts ]
   where q                               = quantScope env
         te                              = props ++ [Decl l0 [initDef], Decl l0 [enterDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) initBody NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        enterDef                        = Def l0 enterKW [] enterPars KwdNIL (Just t) enterBody NoDec fxPure
+        enterDef                        = Def l0 enterKW [] enterPars KwdNIL (Just t) enterBody NoDec fx
         enterPars                       = PosPar llSelf (Just tSelf) Nothing p
         enterBody                       = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
 
 instance Lift Expr where
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts
-      where par                         = pPar paramNames p
+      where par                         = pPar paramNames (conv p)
             call e' vts                 = Call l0 e' (addArgs vts $ par2arg par) KwdNil
-            TFun _ p _ t fx             = typeOf env e
+            TFun _ fx p _ t             = typeOf env e
 
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
@@ -246,12 +258,20 @@ instance Lift Expr where
                                              return $ Call l e' p' KwdNil
 
     ll env (Lambda l p KwdNIL e fx)     = do e' <- ll env1 e
-                                             closureConvert env (Lambda l p KwdNIL e' fx) t vts
+                                             closureConvert env (Lambda l (conv p) KwdNIL e' fx) t vts
       where env1                        = extLocals p $ define (envOf p) env
             vts                         = restrict (locals env) (free e \\ bound p)
             t                           = typeOf env1 e
 
-    ll env e@Var{}                      = pure e
+    ll env (Var l n)
+      | n == primASYNCc                 = return $ Var l primASYNC
+      | n == primAFTERc                 = return $ Var l primAFTER
+      | n == primAWAITc                 = return $ Var l primAWAIT
+      | n == primPUSHc                  = return $ Var l primPUSH
+      | n == primRContc                 = return $ Var l primRCont
+      | n == primSKIPRESc               = return $ Var l primSKIPRES
+      | otherwise                       = return $ Var l n
+
     ll env e@Int{}                      = pure e
     ll env e@Float{}                    = pure e
     ll env e@Imaginary{}                = pure e
@@ -261,7 +281,7 @@ instance Lift Expr where
     ll env e@Ellipsis{}                 = pure e
     ll env e@Strings{}                  = pure e
     ll env e@BStrings{}                 = pure e
-    ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure ts
+    ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure (conv ts)
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2
     ll env (IsInstance l e c)           = IsInstance l <$> ll env e <*> pure c
     ll env (BinOp l e1 Or e2)           = BinOp l <$> ll env e1 <*> pure Or <*> ll env e2
@@ -275,13 +295,7 @@ instance Lift Expr where
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
     ll env (Tuple l es ks)              = Tuple l <$> ll env es <*> ll env ks
     ll env (List l es)                  = List l <$> ll env es
-    ll env (Paren l e)                  = Paren l <$> ll env e
     ll env e                            = error ("ll unexpected: " ++ prstr e)
-
-
-
-instance Lift Branch where
-    ll env (Branch e ss)                = Branch <$> ll env e <*> ll env ss
 
 instance Lift Elem where
     ll env (Elem e)                     = Elem <$> ll env e
@@ -296,8 +310,7 @@ instance Lift KwdArg where
     ll env KwdNil                       = pure KwdNil
 
 instance Lift Pattern where
-    ll env (PVar l n a)                 = return (PVar l n a)
-    ll env (PParen l p)                 = PParen l <$> ll env p
+    ll env (PVar l n t)                 = return (PVar l n (conv t))
 
 
 -- Convert environment types -----------------------------------------------------------------------------------------
@@ -306,6 +319,9 @@ convEnv te                              = conv te
 
 class Conv a where
     conv                                :: a -> a
+
+instance (Conv a) => Conv (Maybe a) where
+    conv                                = fmap conv
 
 instance (Conv a) => Conv [a] where
     conv                                = map conv
@@ -336,7 +352,7 @@ instance Conv TSchema where
     conv (TSchema l q t)                = TSchema l (conv q) (conv t)
 
 instance Conv Type where
-    conv (TFun l fx p TNil{} t)         = TCon l (TC primClos [fx,p,t])
+    conv (TFun l fx p TNil{} t)         = TCon l (TC primClos [conv fx, conv p, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
@@ -352,3 +368,7 @@ instance Conv FX where
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)
+
+instance Conv PosPar where
+    conv (PosPar n t Nothing p)         = PosPar n (conv t) Nothing (conv p)
+    conv PosNIL                         = PosNIL
