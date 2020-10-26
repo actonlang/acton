@@ -657,7 +657,7 @@ instance Check Decl where
                                              substitute (tvar st) tSelf
                                              return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
-                                          define [(selfKW, NVar tRef)] $ reserve (statedefs b) $ setInAct env
+                                          define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
             tvs                         = tybound q
             defsigs                     = [ Signature NoLoc [n] sc dec | (n,NDef sc dec) <- te0 ]
             NAct _ _ _ te0              = findName n env

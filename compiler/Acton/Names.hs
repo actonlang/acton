@@ -94,7 +94,7 @@ instance DataVars Pattern where
 
 -- State variables -----------------
 
-statedefs b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
+statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
 -- Free and bound names ------------
@@ -378,11 +378,3 @@ instance Vars Constraint where
     free (Sel w t1 n t2)            = free t1 ++ free t2
     free (Mut t1 n t2)              = free t1 ++ free t2
     free (Seal w fx1 fx2 t1 t2)     = free fx1 ++ free fx2 ++ free t1 ++ free t2
-
------------------
-
--- Names free in embedded lambda
--- Called during translation to ensure that lambdas contain no state variables
--- Will become defunct once lambda-lifting works directly on Acton code
-
-lambdafree s                        = undefined

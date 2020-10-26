@@ -428,6 +428,12 @@ noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
         isDef NAct{}        = True
         isDef _             = False
 
+noAliases                   :: TEnv -> TEnv
+noAliases te                = [ (n,i) | (n,i) <- te, not $ isAlias i ]
+  where isAlias NAlias{}    = True
+        isAlias NMAlias{}   = True
+        isAlias _           = False
+
 sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
 
