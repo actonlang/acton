@@ -3,26 +3,11 @@ import stdenv
 actor client(env):
 
     def session(conn):
-
-        def forward(str):
-            conn.write(str)
-
-        def receive(str):
-            env.stdout.write(str)
-
-        def neterror(str):
-            env.stdout.write(str)
-            conn.close()
-            env.exit(0)
-
-        if conn is None:
+        if conn is not None:
+            conn.on_receipt(input = env.stdout.write,error = env.stdout.write)
+            env.stdin.on_input(conn.write)
+        else:
             env.stdout.write("Connection failed")
             env.exit(-1)
-        else:
-            conn.on_receipt(input = receive,error = neterror)
-            env.stdin.on_input(forward)
 
     env.connect("localhost",12345,session)
-
-#  how do we handle case when server closes the connection?
-#  (this is reported by kqueue when reading).

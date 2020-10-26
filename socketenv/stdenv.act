@@ -8,19 +8,21 @@ class Env (object):
     exit        : action(int) -> None
     openR       : action(str) -> ?RFile
     openW       : action(str) -> ?WFile
-    connect     : action(str, int, action(?Connection)->None) -> None
+    connect     : action(str, int, action(Connection)->None) -> None
     listen      : action(int, action(Connection)->None) -> None
 
-class Connection:
+class Closable:
+    close       : action() -> None
+
+class Connection(Closable):
     remoteHost  : str
     write       : action(str) -> None
-    close       : action() -> None
     on_receipt  : action(input: action(str)->None, error: action(str)->None) -> None 
 
-class RFile:
+class RFile(Closable):
     on_input    : action(action(str)->None) -> None  
 
-class WFile:
+class WFile(Closable):
     write       : action(str) -> None
     
 # Hidden:

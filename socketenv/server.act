@@ -1,20 +1,4 @@
 import stdenv
 
-def log(s):
-    print("<",s,">")
-
 actor server(env):
-
-    def session(conn):
-  
-        def echo(s):
-            conn.write(s)
-    
-        def neterror(s):
-            log("Net error: " + s)
-            conn.close()
-    
-        log("Connected from " + conn.remoteHost)
-        conn.on_receipt(input = echo,error = neterror)
-
-    env.listen(12345,session)   # for now, port number hardwired
+    env.listen(12345,lambda conn:conn.on_receipt(input = conn.write,error = env.stdout.write))
