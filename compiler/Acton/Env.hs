@@ -213,7 +213,7 @@ instance (Subst x) => Subst (EnvF x) where
                                      we <- msubst (witnesses env)
                                      ex <- msubst (envX env)
                                      return env{ names = ne, witnesses = we, envX = ex }
-    tyfree env                  = tvarScope env ++ tyfree (names env) ++ tyfree (witnesses env) ++ tyfree (envX env)
+    tyfree env                  = tvarScope0 env ++ tyfree (names env) ++ tyfree (witnesses env) ++ tyfree (envX env)
 
 instance Subst NameInfo where
     msubst (NVar t)             = NVar <$> msubst t
@@ -548,11 +548,18 @@ inBuiltin env               = length (modules env) == 1     -- mPrim only
 stateScope                  :: EnvF x -> [Name]
 stateScope env              = [ z | (z, NSVar _) <- names env ]
 
+tvarScope0                  :: EnvF x -> [TVar]
+tvarScope0 env              = [ TV k n | (n, NTVar k _) <- names env ]
+
 tvarScope                   :: EnvF x -> [TVar]
-tvarScope env               = [ TV k n | (n, NTVar k _) <- names env ]
+tvarScope env               = tvarScope0 env \\ [tvSelf]
 
 quantScope                  :: EnvF x -> QBinds
-quantScope env              = [ Quant (TV k n) (if c==cStruct then [] else [c]) | (n, NTVar k c) <- names env ]
+quantScope env              = [ Quant (TV k n) (if c==cStruct then [] else [c]) | (n, NTVar k c) <- names env, n /= nSelf ]
+
+selfSubst                   :: EnvF x -> Substitution
+selfSubst env               = [ (TV k n, tCon c) | (n, NTVar k c) <- names env, n == nSelf ]
+
 
 -- Name queries -------------------------------------------------------------------------------------------------------------------
 

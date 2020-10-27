@@ -125,7 +125,7 @@ instance Deact Decl where
 
             (decls,ss)              = partition isDecl b
             meths                   = bound decls
-            inits                   = filter (not . isSig) ss
+            inits                   = copies ++ filter (not . isSig) ss
             stvars                  = statevars b
             locals                  = nub $ bound p ++ bound b
             wrapped                 = [ wrapMeth def | Decl _ ds <- decls, def <- ds, dname def `elem` actions ]
