@@ -10,6 +10,7 @@ import Acton.Prim
 import Acton.Printer
 import Acton.Env
 import Acton.QuickType
+import Acton.Subst
 import Pretty
 import Prelude hiding((<>))
 
@@ -166,7 +167,7 @@ llSuite env (Decl l ds : ss)
   | ctxt env == InDef                   = do ns <- zip fs <$> mapM (newName . nstr) (bound ds)
                                              let env1 = extNames ns env'
                                              ds1 <- ll env1 ds
-                                             liftToTop ds1
+                                             liftToTop (subst (selfSubst env) ds1)
                                              llSuite env1 ss
   | ctxt env == InClass                 = do ds' <- ll env1 ds
                                              ss' <- llSuite env1 ss
@@ -226,13 +227,17 @@ freefun env (TApp l (Var l' (NoQ n)) ts)
   where Just tvs                        = lookup n (quantmap env)
 freefun env e                           = Nothing
 
-closureConvert env (Lambda _ p _ e fx) t vts
+closureConvert env lambda t0 vts0
                                         = do n <- newName "lambda"
                                              liftToTop [Class l0 n q [TC primClos [fx,prowOf p,t]] te]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) [ eVar v | (v,_) <- vts ]
   where q                               = quantScope env
+        s                               = selfSubst env
+        Lambda _ p _ e fx               = subst s lambda
+        t                               = subst s t0
+        vts                             = subst s vts0
         te                              = props ++ [Decl l0 [initDef], Decl l0 [enterDef]]
-        props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- vts ]
+        props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) initBody NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]

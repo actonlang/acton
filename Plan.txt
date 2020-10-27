@@ -32,6 +32,8 @@
 
     X Infer @property signatures based on __init__ assignments              2d      4d
     X Type-convert plain classes as well                                    3h      6h
+!   X Create copies of state variables referenced inside actor lambdas      1d      1d
+!   - Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
     - Introduce special constructor GName for unaliased names               4h      8h
     - Translate list comprehensions                                         2d      3d
     / Handle the with statements                                            2d      3d
