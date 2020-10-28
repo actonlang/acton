@@ -235,7 +235,8 @@ instance Pretty QName where
 --      | m == mBuiltin               = text "$" <> pretty n
       | m == mBuiltin               = pretty n
       | otherwise                   = pretty m <> dot <> pretty n
-    pretty (NoQ n)                  = pretty n
+--    pretty (NoQ n)                  = pretty n
+    pretty (NoQ n)                  = text "~" <> pretty n
 
 instance Pretty ModRef where
     pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n

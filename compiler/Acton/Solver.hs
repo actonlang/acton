@@ -231,9 +231,9 @@ cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                                  cast env k1 k2
 
 cast' env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem us2) us1                   = return ()
+  | all (uniElem env us2) us1               = return ()
 cast' env (TCon _ c1) (TUnion _ us2)
-  | uniConElem env us2 c1                   = return ()
+  | uniConElem env c1 us2                   = return ()
 
 cast' env (TOpt _ t1@TOpt{}) t2             = cast env t1 t2
 cast' env t1 (TOpt _ t2@TOpt{})             = cast env t1 t2
@@ -332,8 +332,8 @@ unify' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                                  unify env k1 k2
 
 unify' env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem us2) us1,
-    all (uniElem us1) us2                   = return ()
+  | all (uniElem env us2) us1,
+    all (uniElem env us1) us2               = return ()
 
 unify' env (TOpt _ t1) (TOpt _ t2)          = unify env t1 t2
 unify' env (TNone _) (TNone _)              = return ()
@@ -682,12 +682,12 @@ glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
 glb env (TUnion _ us1) (TUnion _ us2)
   | [UCon qn] <- us                     = tCon (TC qn [])
   | not $ null us                       = tUnion us
-  where us                              = us1 `intersect` us2
+  where us                              = uniIntersect env us1 us2
 glb env t1@(TUnion _ us) t2@(TCon _ c)
-  | uniConElem env us c                 = t2
+  | uniConElem env c us                 = t2
   | all uniLit us && isStr env t2       = t1
 glb env t1@(TCon _ c) t2@(TUnion _ us)
-  | uniConElem env us c                 = t1
+  | uniConElem env c us                 = t1
   | all uniLit us && isStr env t1       = t2
   
 glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
@@ -738,8 +738,7 @@ lub env _ TVar{}                        = tWild        -- (Might occur in recurs
 
 lub env (TCon _ c1) (TCon _ c2)
   | qmatch env (tcname c1) (tcname c2)  = tCon c1
-  | Just u1 <- uniCon env c1,
-    Just u2 <- uniCon env c2            = tUnion [u1, u2]
+  | uniCon env c1 && uniCon env c2      = tUnion [UCon $ tcname c1, UCon $ tcname c2]
   | hasAncestor env c1 c2               = tCon c2
   | hasAncestor env c2 c1               = tCon c1
   | not $ null common                   = tCon $ head common
@@ -750,13 +749,13 @@ lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
 lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple (lub env p1 p2) (lub env k1 k2)
 
-lub env (TUnion _ us1) (TUnion _ us2)   = tUnion $ us1 `union` us2
+lub env (TUnion _ us1) (TUnion _ us2)   = tUnion $ uniUnion env us1 us2
 lub env t1@(TUnion _ us) t2@(TCon _ c)
   | all uniLit us && t2 == tStr         = t2
-  | Just u <- uniCon env c              = tUnion $ us `union` [u]
+  | uniCon env c                        = tUnion $ uniUnion env us [UCon $ tcname c]
 lub env t1@(TCon _ c) t2@(TUnion _ us)
   | all uniLit us && t1 == tStr         = t1
-  | Just u <- uniCon env c              = tUnion $ us `union` [u]
+  | uniCon env c                        = tUnion $ uniUnion env us [UCon $ tcname c]
   
 lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
 lub env (TNone _) t2@TOpt{}             = t2
@@ -865,8 +864,8 @@ improve env te tt eq cs
         upperBnd                        = [ (v,t) | (v,[t]) <- Map.assocs (ubounds vi), v `notElem` embedded vi ]
         posLBnd                         = [ (v,t) | (v,t) <- lowerBnd, v `notElem` negvars, implAll env (lookup' v $ pbounds vi) t ]
         negUBnd                         = [ (v,t) | (v,t) <- upperBnd, v `notElem` posvars, implAll env (lookup' v $ pbounds vi) t, noDots env vi v ]
-        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), lClosed env t ]
-        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), uClosed env t ]
+        closLBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (lbounds vi), upClosed env t ]
+        closUBnd                        = [ (v,t) | (v, [t]) <- Map.assocs (ubounds vi), dnClosed env t ]
         (redEq,redUni)                  = ctxtReduce env vi multiPBnd
         mutC                            = findBoundAttrs env (mutattrs vi) (ubounds vi)
         selC                            = findBoundAttrs env (selattrs vi) (ubounds vi)
@@ -883,17 +882,17 @@ improve env te tt eq cs
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
         cyclic                          = if null (boundvars\\boundprot) then [ c | c <- cs, headvar c `elem` boundvars ] else []
 
-uClosed env (TCon _ c)                  = isActor env (tcname c)
-uClosed env (TFX _ FXPure)              = True
-uClosed env (TNone _)                   = True
-uClosed env (TNil _ _)                  = True
-uClosed env _                           = False
+dnClosed env (TCon _ c)                 = isActor env (tcname c)
+dnClosed env (TFX _ FXPure)             = True
+dnClosed env (TNone _)                  = True
+dnClosed env (TNil _ _)                 = True
+dnClosed env _                          = False
 
-lClosed env (TUnion _ us)
-  | uniMax us                           = True
-lClosed env (TOpt _ _)                  = True
-lClosed env (TNil _ _)                  = True
-lClosed env _                           = False
+--upClosed env (TUnion _ us)                                    -- TODO: sort this out
+--  | uniMax env us                       = True
+upClosed env (TOpt _ _)                 = True
+upClosed env (TNil _ _)                 = True
+upClosed env _                          = False
 
 findBoundAttrs env attrs bounds         = [ ((v,n),wsc) | (v,ns) <- Map.assocs attrs, n <- ns, wsc <- bounds' v n ]
   where bounds' v n                     = [ wsc | TCon _ c <- lookup' v bounds, Just wsc <- [findAttr env c n] ]
@@ -938,8 +937,8 @@ allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
 allAbove env (TUnion _ us)
-  | all uniLit us                       = CCon qnStr : map CUnion (uniAbove [UCon qnStr]) ++ [CNone]
-  | otherwise                           = map CUnion (uniAbove us) ++ [CNone]
+  | all uniLit us                       = CCon qnStr : map CUnion (uniAbove env [UCon qnStr]) ++ [CNone]
+  | otherwise                           = map CUnion (uniAbove env us) ++ [CNone]
 allAbove env _                          = []
 
 
@@ -953,7 +952,7 @@ allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
 allBelow env (TFX _ FXAction)           = [CAction]
-allBelow env (TUnion _ us)              = map CUnion (uniBelow us) ++ [ CCon n | UCon n <- us ]
+allBelow env (TUnion _ us)              = map CUnion (uniBelow env us) ++ [ CCon n | UCon n <- us ]
 allBelow env _                          = []
 
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
@@ -1000,7 +999,7 @@ constrain env vs _                      = vs
 
 
 candidates env KType                    = map CProto (allProtos env) ++ [CNone,COpt,CFun,CTuple] ++ 
-                                          map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove [])
+                                          map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove env [])
 candidates env KFX                      = [CPure,CMut,CAct,CAction] ++ map CVar (allVars env KFX)
 candidates env k                        = map CVar (allVars env k)
 

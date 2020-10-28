@@ -317,7 +317,7 @@ instance Unalias QName where
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
-                                        _ -> NoQ n                                      -- <<<<<<<<<<<<<<<<< TODO: qualify!!
+                                        _ -> NoQ n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -334,7 +334,12 @@ instance Unalias Type where
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
     unalias env (TRow l k n t r)    = TRow l k n (unalias env t) (unalias env r)
+    unalias env (TUnion l us)       = TUnion l (sort $ nub $ unalias env us)
     unalias env t                   = t
+
+instance Unalias UType where
+    unalias env (ULit l)            = ULit l
+    unalias env (UCon c)            = UCon (unalias env c)
 
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
@@ -364,47 +369,45 @@ instance Unalias WTCon where
 uniLit (ULit l)             = True
 uniLit _                    = False
 
-uniCon env (TC n [])
-  | qn `elem` uniCons       = Just $ UCon qn
-  | qn `elem` uniCons'      = Just $ UCon qn
-  where qn                  = unalias env n
-uniCon env _                = Nothing
+uniCon env (TC c ts)        = null ts && unalias env c `elem` uniCons
 
 uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
-uniCons'                    = map NoQ [nInt, nFloat, nBool, nStr]
+                              ++ map NoQ [ nInt, nFloat, nBool, nStr]       -- TODO: remove once global unaliased names are in place
 
-uniMax us                   = [ u | UCon u <- us ] == uniCons
+uniElem env us u            = unalias env u `elem` us1 || uniLit u && uStr `elem` us1
+  where us1                 = unalias env us
 
-uniElem us u@(ULit l)       = u `elem` us || UCon qnStr `elem` us
-uniElem us u                = u `elem` us
+uniConElem env (TC c ts) us = null ts && uniElem env us (UCon c)
 
-uniConElem env us c
-  | Just u <- uniCon env c  = uniElem us u
-  | otherwise               = False
+uniNub env []               = []
+uniNub env (u:us)
+  | uniElem env us u        = uniNub env us
+  | otherwise               = u : uniNub env us
 
-uniNorm env l us
-  | not $ null dups         = err l ("Duplicate union element: " ++ prstr (head dups))
-  | otherwise               = us1
-  where us1                 = sort $ norm us
-        dups                = duplicates us1
-        norm []             = []
-        norm (ULit l : us)  = ULit l : norm us
-        norm (UCon n : us)  = case uniCon env (TC n []) of
-                                Just u -> u : norm us
-                                _ -> err1 n "Illegal union element:"
+uniIntersect env us1 us2
+  | uniElem env us1 uStr    = [ u | u <- us2, uniElem env us1 u ]
+  | otherwise               = [ u | u <- us1, uniElem env us2 u ]
 
-uniAbove us                             = [ ns | ns <- nss, length ns > 1 ]
+uniUnion env us1 us2        = sort $ uniNub env $ us1++us2
+
+uniChk env us
+  | not $ null bad          = err2 bad "Illegal union element:"
+  | otherwise               = us
+  where bad                 = [ c | UCon c <- us, unalias env c `notElem` uniCons ]
+
+
+uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
   where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mbStr ]
-        mb qn | UCon qn `elem` us       = [Just qn]
-              | otherwise               = [Nothing, Just qn]
-        mbStr | not (null lits)         = [Just qnStr]
+        mb c | uniElem env us (UCon c)  = [Just c]
+             | otherwise                = [Nothing, Just c]
+        mbStr | not $ null lits         = [Just qnStr]
               | otherwise               = mb qnStr
-          where lits                    = [ s | ULit s <- us ]
+          where lits                    = filter uniLit us
 
-uniBelow us                             = [ ns | ns <- nss, length ns > 1 ]
+uniBelow env us                         = [ ns | ns <- nss, length ns > 1 ]
   where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mb qnStr ]
-        mb qn | UCon qn `elem` us       = [Nothing, Just qn]
-              | otherwise               = [Nothing]
+        mb c | uniElem env us (UCon c)  = [Nothing, Just c]
+             | otherwise                = [Nothing]
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
@@ -876,7 +879,7 @@ impNames m te               = mapMaybe imp te
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ (c, WClass q p (QName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
+  where ws                  = [ (c, trace ("### importing WClass for " ++ prstr (n, NExt c q ps te')) $ WClass q p (QName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 
 
