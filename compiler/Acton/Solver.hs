@@ -1132,23 +1132,6 @@ remove ws (Impl w t p : cs)
   | w `elem` ws                         = remove ws cs
 remove ws (c : cs)                      = c : remove ws cs
 
-applyDefaults env ps                    = foldr1 intersect (map findDefault ps)
-  where findDefault (w,p)               = lookup' (unalias env $ tcname p) defaultmap
-
-defaultmap                              = Map.fromList [ 
-                                            (qnSequence, [tList tWild]),
-                                            (qnMapping, [tDict tWild tWild]),
-                                            (qnSetP, [tSet tWild]),
-                                            (qnIndexed, [tList tWild, tStr, tDict tWild tWild]),
-                                            (qnSliceable, [tList tWild, tStr]),
-                                            (qnPlus, [tInt, tFloat, tStr, tList tWild]),
-                                            (qnMinus, [tInt, tFloat, tSet tWild]),
-                                            (qnNumber, [tInt, tFloat]),
-                                            (qnReal, [tFloat, tInt]),
-                                            (qnRational, [tFloat]),
-                                            (qnIntegral, [tInt]),
-                                            (qnLogical, [tInt, tSet tWild]) ]
-
 
 ----------------------------------------------------------------------------------------------------------------------
 -- Misc.

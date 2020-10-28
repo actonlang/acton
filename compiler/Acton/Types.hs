@@ -855,13 +855,13 @@ instance InfEnv Handler where
 
 instance InfEnv Except where
     infEnv env (ExceptAll l)            = return ([], [], ExceptAll l)
-    infEnv env (Except l x)             = return ([Cast t tException], [], Except l (unalias env x))
+    infEnv env (Except l x)             = return ([Cast t tException], [], Except l x)
       where t                           = tCon (TC x [])
-    infEnv env (ExceptAs l x n)         = return ([Cast t tException], [(n, NVar t)], ExceptAs l (unalias env x) n)
+    infEnv env (ExceptAs l x n)         = return ([Cast t tException], [(n, NVar t)], ExceptAs l x n)
       where t                           = tCon (TC x [])
 
 instance Infer Expr where
-    infer env (Var l n)                 = case findQName n env of
+    infer env x@(Var l n)               = case findQName n env of
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
@@ -886,7 +886,6 @@ instance Infer Expr where
                                             NReserved -> nameReserved n
                                             NBlocked -> nameBlocked n
                                             _ -> nameUnexpected n
-      where x                           = Var l (unalias env n)
     infer env e@(Int _ val s)           = do t <- newTVar
                                              w <- newWitness
                                              return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
@@ -939,7 +938,7 @@ instance Infer Expr where
                                                 (cs,t,e') <- infer env e
                                                 ts <- newTVars [ tvkind v | v <- tybound q ]
                                                 return (Cast (tCon (TC c ts)) t :
-                                                        cs, tBool, IsInstance l e' (unalias env c))
+                                                        cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
     infer env (BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs1,env1,s1,e1') <- inferBool env e1
