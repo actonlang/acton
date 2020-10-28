@@ -198,7 +198,7 @@ instance EnvOf Stmt where
     envOf (Signature _ ns sc dec)   = [ (n, NSig sc dec) | n <- ns ]
     envOf (If _ bs els)             = commonEnvOf $ [ ss | Branch _ ss <- bs ] ++ [els]
     envOf (Try _ b hs els fin)      = commonEnvOf $ [ ss | Handler _ ss <- hs ] ++ [b++els]
-    envOf (With _ items b)          = exclude (bound items) (envOf b)
+    envOf (With _ items b)          = exclude (envOf b) (bound items)
     envOf s                         = []
 
 commonEnvOf suites

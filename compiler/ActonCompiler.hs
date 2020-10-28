@@ -34,9 +34,9 @@ import System.FilePath.Posix
 import qualified System.Exit
 
 data Args       = Args {
-                    tokens  :: Bool,
+--                    tokens  :: Bool,
                     parse   :: Bool,
-                    imports :: Bool,
+--                    imports :: Bool,
                     kinds   :: Bool,
                     types   :: Bool,
                     sigs    :: Bool,
@@ -44,6 +44,7 @@ data Args       = Args {
                     deact   :: Bool,
                     cps     :: Bool,
                     llift   :: Bool,
+                    hgen    :: Bool,
                     cgen    :: Bool,
 --                    tracef  :: Bool,
 --                    expand  :: Bool,
@@ -56,17 +57,18 @@ data Args       = Args {
                 deriving Show
 
 getArgs         = Args
-                    <$> switch (long "tokens"  <> help "Show the result of lexing (Yang files only)")
-                    <*> switch (long "parse"   <> help "Show the result of parsing")
-                    <*> switch (long "imports" <> help "Show the contents of imported modules")
-                    <*> switch (long "kinds"   <> help "Show all the result after kind-checking (Acton files only)")
-                    <*> switch (long "types"   <> help "Show all inferred expression types (Acton files only)")
-                    <*> switch (long "sigs"    <> help "Show the inferred type signatures (Acton files only)")
+--                    <$> switch (long "tokens"  <> help "Show the result of lexing (Yang files only)")
+                    <$> switch (long "parse"   <> help "Show the result of parsing")
+--                    <*> switch (long "imports" <> help "Show the contents of imported modules")
+                    <*> switch (long "kinds"   <> help "Show all the result after kind-checking")
+                    <*> switch (long "types"   <> help "Show all inferred expression types")
+                    <*> switch (long "sigs"    <> help "Show the inferred type signatures")
                     <*> switch (long "norm"    <> help "Show the result after syntactic normalization")
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
-                    <*> switch (long "cps"     <> help "Show the result after CPS conversion (Acton files only)")
-                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting (Acton files only)")
-                    <*> switch (long "cgen"    <> help "Show the generated C code (Acton files only)")
+                    <*> switch (long "cps"     <> help "Show the result after CPS conversion")
+                    <*> switch (long "llift"   <> help "Show the result of lambda-lifting")
+                    <*> switch (long "hgen"    <> help "Show the generated .h file")
+                    <*> switch (long "cgen"    <> help "Show the generated .c file")
 --                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
 --                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
                     <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
@@ -195,8 +197,9 @@ runRestPasses args paths src env0 original = (do
                           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
 
-                          c <- Acton.CodeGen.generate liftEnv lifted
-                          iff (cgen args) $ dump "cgen" c
+                          (h,c) <- Acton.CodeGen.generate liftEnv lifted
+                          iff (hgen args) $ dump "hgen (.h)" h
+                          iff (cgen args) $ dump "cgen (.c)" c
 
                           return (env0 `Acton.Env.withModulesFrom` env,iface)
                         ) 

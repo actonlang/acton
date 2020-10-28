@@ -17,6 +17,11 @@ import Text.PrettyPrint as TextPP
 
 --------------------------------------------------------------------------------
 
+infixl 5 $++$
+
+a $++$ b    = a $+$ blank $+$ b
+
+
 print x     = render $ pretty x
 
 vprint x    = render $ vpretty x

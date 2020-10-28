@@ -14,11 +14,16 @@ import Acton.Env
 import Acton.QuickType
 import Prelude hiding ((<>))
 
-generate                            :: Acton.Env.Env0 -> Module -> IO String
-generate env m                      = return $ render $ gen (genEnv env (modname m)) m
+generate                            :: Acton.Env.Env0 -> Module -> IO (String,String)
+generate env m                      = do return (h,c)
+  where h                           = render $ hModule env0 m
+        c                           = render $ cModule env0 m
+        env0                        = genEnv env (modname m)
 
-class Gen a where
-    gen                             :: GenEnv -> a -> Doc
+
+-- Environment --------------------------------------------------------------------------------------
+
+genEnv env0 m                       = setX env0 GenX{ thismoduleX = m }
 
 type GenEnv                         = EnvF GenX
 
@@ -26,14 +31,92 @@ data GenX                           = GenX { thismoduleX :: ModName }
 
 thismodule env                      = thismoduleX $ envX env
 
-genEnv env0 m                       = setX env0 GenX{ thismoduleX = m }
+
+-- Header -------------------------------------------------------------------------------------------
+
+hModule env (Module qn imps stmts)  = vcat (map (gen env) imps) $+$
+                                      hSuite env stmts
+
+hSuite env []                       = empty
+hSuite env (s:ss)                   = hStmt env s $+$ hSuite (define (envOf s) env) ss
+
+hStmt env (Assign _ [PVar _ n (Just t)] _)
+                                    = text "extern" <+> gen env t <+> gen env n <> semi
+hStmt env (Decl _ ds)               = vmap (stub env1) ds $+$
+                                      vmap (typedef env1) ds $+$
+                                      vmap (decl env1) ds $+$
+                                      vmap (methstub env1) ds
+  where env1                        = define (envOf ds) env
+hStmt env _                         = empty
+
+stub env (Class _ n q a b)          = text "struct" <+> gen env n <> semi
+stub env Def{}                      = empty
+
+typedef env (Class _ n q a b)       = text "typedef" <+> text "struct" <+> gen env n <+> char '*' <> gen env n <> semi
+typedef env Def{}                   = empty
+
+decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
+                                      nest 4 (fields env tc) $+$ 
+                                      char '}' <> semi $+$
+                                      (text "struct" <+> gen env n <+> char '{') $+$ 
+                                      nest 4 (properties env tc) $+$ 
+                                      char '}' <> semi
+  where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
+decl env (Def _ n q p _ a b _ _)    = empty
+
+methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodsname env n <> semi
+methstub env Def{}                  = empty
+
+fields env c                        = vmap field te
+  where te                          = fullAttrEnv env c
+        field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
+        field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi
+        field (n, NVar t)           = varsig env n t <> semi
+        field (n, NSig sc Property) = empty
+        field (n, NSig sc _)        = parens (text "signature" <+> gen env n)
+
+funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
+
+methsig env c n (TFun _ _ r _ t)    = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
+
+params env (TNil _ _)               = empty
+params env (TRow _ _ _ t TNil{})    = gen env t
+params env (TRow _ _ _ t r)         = gen env t <> comma <+> params env r
+params env t                        = error ("codegen unexpected row: " ++ prstr t)
+
+varsig env n t                      = gen env t <+> gen env n
+
+properties env c                    = vmap prop te
+  where te                          = fullAttrEnv env c
+        prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
+        prop _                      = empty
+
+classname env n                     = gen env n <> text "$class"
+
+methodsname env n                   = gen env n <> text "$methods"
+
+-- Implementation -----------------------------------------------------------------------------------
+
+cModule env (Module qn imps stmts)  = text "#include" <+> doubleQuotes (gen env qn <> text ".h") $+$
+                                      cSuite env stmts
+
+cSuite env []                       = empty
+cSuite env (s:ss)                   = cStmt env s $+$ cSuite (define (envOf s) env) ss
+
+cStmt env (Assign _ [PVar _ n (Just t)] _)
+                                    = gen env t <+> gen env n <> semi
+cStmt env (Decl _ ds)               = vcat $ map (gen env1) ds
+  where env1                        = define (envOf ds) env
+cStmt env _                         = empty
+
+
+class Gen a where
+    gen                             :: GenEnv -> a -> Doc
 
 
 instance (Gen a) => Gen (Maybe a) where
     gen env x                       = maybe empty (gen env) x
 
-instance Gen Module where
-    gen env (Module qn imps stmts)  = vcat (map (gen env) imps) $+$ blank $+$ vcat (map (gen env) stmts)
 
 instance Gen Import where
     gen env (Import _ ms)           = vcat [ text "#include" <+> doubleQuotes (gen env m <> text ".h") | m <- ms ]
@@ -54,7 +137,7 @@ instance Gen QName where
 instance Gen Name where
     gen env nm
       | isCident str                = text str
-      | otherwise                   = text "_$" <> text str'
+      | otherwise                   = trace ("### Not a Cident: " ++ str) $ text "_$" <> text str'
       where str                     = nstr nm
             str'                    = show (Data.Hashable.hash str) ++ filter isAlpha str
             isCident s@(c:cs)       = isAlpha c && all isAlphaNum cs && not (isCkeyword s)
@@ -73,7 +156,7 @@ instance Gen Name where
 genQName env n                      = gen env (thismodule env) <> char '$' <> gen env n
 
 word                                = text "$WORD"
-        
+
 genSuite env ss                     = nest 4 $ genS env ss
   where genS env []                 = empty
         genS env (s:ss)             = gen env s $+$ genS (define (envOf s) env) ss
@@ -89,9 +172,7 @@ instance Gen Stmt where
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
     gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
-    gen env (Decl _ ds)             = vcat $ map (gen env1) ds
-      where env1                    = define (envOf ds) env
-    gen env (Signature _ vs sc d)   = empty
+    gen env _                       = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
 
@@ -252,25 +333,18 @@ instance Gen TVar where
     gen env (TV k n)                = word
 
 instance Gen TCon where
-    gen env (TC n _)                = gen env n
-
-instance Gen UType where
-    gen env (UCon n)                = gen env n
-    gen env (ULit str)              = text str
-
-genRow env (TRow _ _ _ t (TNil _ _))    = gen env t
-genRow env (TRow _ _ _ t p)         = gen env t <> comma <+> genRow env p
-genRow env (TNil _ _)               = empty
+    gen env (TC n ts)               = gen env n
     
 instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
-    gen env (TFun _ _ p _ t)        = parens (genRow env p) <+> text "->" <+> gen env t
-    gen env (TTuple _ pos _)        = parens (genRow env pos)
-    gen env (TUnion _ as)           = parens (vbarSep (gen env) as)
-      where vbarSep f               = hsep . punctuate (space <> char '|') . map f
+    gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
+    gen env (TTuple _ pos _)        = parens (gen env pos)                                      -- TODO: replace!
+    gen env (TUnion _ as)           = word
     gen env (TOpt _ t)              = gen env t
-    gen env (TNone _)               = text "0"
+    gen env (TNone _)               = text "void*"
     gen env (TWild _)               = word
-    gen env row                     = genRow env row
+    gen env (TRow _ _ _ t TNil{})   = gen env t
+    gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
+    gen env (TNil _ _)              = empty
 

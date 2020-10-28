@@ -65,7 +65,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tWild) | tv <- tyfree te ]
                                                  te1 = subst s te
-                                                 te2 = if inBuiltin env then unSig te1 else prioSig te1
+                                                 te2 = normTEnv $ if inBuiltin env then unSig te1 else te1
                                              return (te2, ss2)
 
 
@@ -250,7 +250,7 @@ instance InfEnv Stmt where
     infEnv env (With l items b)
       | nodup items                     = do (cs1,te,items') <- infEnv env items
                                              (cs2,te1,b') <- infSuiteEnv (define te env) b
-                                             return $ (cs1++cs2, exclude (dom te) te1, With l items' b')
+                                             return $ (cs1++cs2, exclude te1 (dom te), With l items' b')
 
     infEnv env (VarAssign l pats e)
       | nodup pats                      = do (cs1,te,t,pats') <- infEnvT env pats
@@ -383,7 +383,7 @@ instance InfEnv Decl where
                                                  (nterms,_,_) <- checkAttributes [] te' te
                                                  return (cs1, [(n, NClass q as' (te0++te))], Class l n q (map snd as') (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
-      where env1                        = define (exclude [initKW] $ toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
+      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nStruct) then [([Nothing],cStruct)] else as
             te'                         = parentTEnv env as'
@@ -438,23 +438,20 @@ checkAttributes final te' te
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
-        nterms                          = exclude (dom allsigs) terms
+        nterms                          = exclude terms (dom allsigs)
         abssigs                         = dom allsigs \\ (dom allterms ++ final)
         osigs                           = (dom sigs `intersect` dom sigs') \\ [initKW]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
         nself                           = negself te
 
-        -- TODO: add Property sigs according to the 'self' assignments in method __init__ (if present)
-
-
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 toSigs te                               = map makeSig te
   where sigs                            = [ n | (n,NSig{}) <- te ]
         makeSig (n, i) | n `elem` sigs  = (n,i)
-        makeSig (n, NDef sc dec)        = trace ("### makeSig " ++ prstr (n, NSig sc dec)) $ (n, NSig sc dec)
-        makeSig (n, NVar t)             = trace ("### makeSig " ++ prstr (n, NSig (monotype t) Static)) $ (n, NSig (monotype t) Static)
+        makeSig (n, NDef sc dec)        = (n, NSig sc dec)
+        makeSig (n, NVar t)             = (n, NSig (monotype t) Static)
         makeSig (n, i)                  = (n,i)
 
 
@@ -854,7 +851,7 @@ instance InfEnv WithItem where
 instance InfEnv Handler where
     infEnv env (Handler ex b)           = do (cs1,te,ex') <- infEnv env ex
                                              (cs2,te1,b') <- infEnv (define te env) b
-                                             return (cs1++cs2, exclude (dom te) te1, Handler ex' b')
+                                             return (cs1++cs2, exclude te1 (dom te), Handler ex' b')
 
 instance InfEnv Except where
     infEnv env ex@(ExceptAll l)         = return ([], [], ex)

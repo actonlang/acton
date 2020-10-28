@@ -181,9 +181,9 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NAct q p k te)   = text "actor" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   parens (prettyFunRow p k) <> colon $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NClass q us te)  = text "class" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ prioSig te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
     pretty (n, NProto q us te)  = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
-                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ prioSig te)
+                                  nonEmpty parens commaList us <> colon $+$ (nest 4 $ prettyOrPass $ normTEnv te)
     pretty (w, NExt n [] ps te) = pretty w  <+> colon <+> text "extension" <+> pretty n <+> parens (commaList ps) <>
                                   colon $+$ (nest 4 $ prettyOrPass te)
     pretty (w, NExt n q ps te)  = pretty w  <+> colon <+> pretty q <+> text "=>" <+> text "extension" <+> pretty n <> 
@@ -451,14 +451,13 @@ parentTEnv env us           = concatMap (snd . findCon env . snd) us
 splitTEnv                   :: [Name] -> TEnv -> (TEnv, TEnv)
 splitTEnv vs te             = partition ((`elem` vs) . fst) te
 
-prioSig                     :: TEnv -> TEnv
-prioSig te                  = f [] te
+normTEnv                    :: TEnv -> TEnv
+normTEnv te                 = f [] te
   where
     f ns []                 = []
-    f ns ((n,i@NSig{}):te)  = (n,i) : f (n:ns) te
     f ns ((n,i):te)
       | n `elem` ns         = f ns te
-      | otherwise           = (n,i) : f ns te
+      | otherwise           = (n,i) : f (n:ns) te
 
 unSig                       :: TEnv -> TEnv
 unSig te                    = map f te
@@ -507,7 +506,7 @@ block xs env                = env{ names = [ (x, NBlocked) | x <- nub xs ] ++ na
 
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env               = foldl addWit env1 ws
-  where env1                = env{ names = reverse te ++ exclude (dom te) (names env) }
+  where env1                = env{ names = reverse te ++ exclude (names env) (dom te) }
         ws                  = [ (c, WClass q p (NoQ w) ws) | (w, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
@@ -712,6 +711,15 @@ directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncest
 
 allAttrs                    :: EnvF x -> QName -> [Name]
 allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
+
+attrEnv                     :: EnvF x -> TCon -> TEnv
+attrEnv env c               = snd $ findCon env c
+
+fullAttrEnv                 :: EnvF x -> TCon -> TEnv
+fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)
+  where tes                 = [ attrEnv env c | (_,c) <- findAncestry env tc ]
+        init                = take 1 $ filter ((==initKW) . fst) $ concat tes
+
 
 allCons                     :: EnvF x -> [QName]
 allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]

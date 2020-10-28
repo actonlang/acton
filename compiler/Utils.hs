@@ -46,9 +46,9 @@ dom                             = map fst
 
 rng                             = map snd
 
-exclude xs                      = filter ((`notElem` xs) . fst)
+kvs `exclude` ks                = filter ((`notElem` ks) . fst) kvs
 
-restrict kvs ks                 = filter ((`elem` ks) . fst) kvs
+kvs `restrict` ks               = filter ((`elem` ks) . fst) kvs
 
 mapFst f xs                     = [ (f a, b) | (a,b) <- xs ]
 
