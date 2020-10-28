@@ -209,11 +209,14 @@ commonEnvOf suites
 instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec)]
-    envOf (Class _ n q as ss)       = [(n, NClass q as' (envOf ss))]
+    envOf (Class _ n q as ss)       = [(n, NClass q as' (map dropSelf $ envOf ss))]
       where as'                     = [ ([Nothing],a) | a <- as ]
 
     envOf (Actor _ n q p k ss)      = [(n, NAct q (prowOf p) (krowOf k) (envOf ss))]
-    
+
+dropSelf (n, NDef (TSchema l q (TFun l' fx (TRow _ _ _ _ p) k t)) dec)
+  | dec /= Static                   = (n, NDef (TSchema l q (TFun l' fx p k t)) dec)
+dropSelf (n, i)                     = (n, i)
 
 --  The following constructs are translated away during type inference:
 --  envOf (Protocol _ n q as ss)    = undefined
@@ -266,11 +269,11 @@ castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = castable env p1 p2 && castable env k1 k2
 
 castable env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem us2) us1                   = True
+  | all (uniElem env us2) us1               = True
 castable env (TUnion _ us1) t2
   | all uniLit us1                          = t2 == tStr
 castable env (TCon _ c1) (TUnion _ us2)
-  | uniConElem env us2 c1                   = True
+  | uniConElem env c1 us2                   = True
 
 castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
 castable env (TNone _) (TOpt _ t)           = True
