@@ -147,6 +147,7 @@ baseName (w : ws)                       = Derived (baseName ws) (deriveQ w)
 
 modOf (NoQ _)                           = NoQ
 modOf (QName m _)                       = QName m
+modOf (GName m _)                       = GName m
 
 
 convProto (TC n ts)                     = TC n (tVar tvSelf' : ts)
@@ -174,10 +175,8 @@ convStmts eq stmts                      = map conv stmts
 
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
-convEnvProtos env                       = mapModules (convert env) env
-  where convert env1 []                 = []
-        convert env1 (ni:te)            = let te1 = conv env1 ni in te1 ++ convert (define te1 env1) te
-        conv env1 (n, NDef sc d)        = [(n, NDef (convS sc) d)]
+convEnvProtos env                       = mapModules conv env
+  where conv env1 (n, NDef sc d)        = [(n, NDef (convS sc) d)]
         conv env1 (n, NSig sc d)        = [(n, NSig (convS sc) d)]
         conv env1 (n, NAct q p k te)    = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env1) te))]
         conv env1 (n, NProto q us te)   = map (fromClass env1) $ convProtocol env n q us [] [] (fromSigs env te)

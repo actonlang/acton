@@ -15,7 +15,7 @@ import Acton.Env
 import Acton.QuickType
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
-convert env0 m                          = return (runCpsM $ cps env m, mapModules convEnv env0)
+convert env0 m                          = return (runCpsM $ cps env m, mapModules1 conv env0)
   where env                             = cpsEnv env0
 
 type CpsM a                             = State CpsState a
@@ -455,8 +455,6 @@ instance PreCPS Elem where
 
 
 -- Convert types ----------------------------------------------------------------------------------------
-
-convEnv te                              = conv te
 
 class Conv a where
     conv                                :: a -> a

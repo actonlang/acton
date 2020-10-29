@@ -12,7 +12,7 @@ import Control.Monad.State.Lazy
 import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
-normalize env0 m                    = return (evalState (norm env m) 0, mapModules conv env0)
+normalize env0 m                    = return (evalState (norm env m) 0, mapModules1 conv env0)
   where env                         = normEnv env0
         
 
@@ -257,11 +257,9 @@ instance Norm ModName where
     norm env (ModName ns)           = ModName <$> mapM (norm env) ns
 
 instance Norm QName where
-    norm env (QName m n)
-      | inBuiltin env, 
-        m == mBuiltin               = NoQ <$> norm env n
-      | otherwise                   = QName <$> norm env m <*> norm env n
+    norm env (QName m n)            = QName <$> norm env m <*> norm env n
     norm env (NoQ n)                = NoQ <$> norm env n
+    norm env (GName m n)            = GName <$> norm env m <*> norm env n
 
 instance Norm ModRef where
     norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn

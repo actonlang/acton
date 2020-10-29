@@ -2,7 +2,6 @@
 module Acton.CodeGen where
 
 import qualified Data.Set
-import qualified Data.Hashable
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -128,23 +127,29 @@ instance Gen ModName where
     gen env (ModName ns)            = hcat $ punctuate (char '$') $ map (gen env) ns
 
 instance Gen QName where
-    gen env (QName m n)
+    gen env (GName m n)
       | m == mPrim                  = char '$' <> text (nstr n)
       | m == mBuiltin               = char '$' <> text (nstr n)
-      | otherwise                   = gen env m <> text "$$" <> gen env n
+      | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
+    gen env (QName m n)             = error ("Unexpected QName in CodeGen: " ++ prstr (QName m n))
 
 instance Gen Name where
-    gen env nm
-      | isCident str                = text str
-      | otherwise                   = trace ("### Not a Cident: " ++ str) $ text "_$" <> text str'
-      where str                     = nstr nm
-            str'                    = show (Data.Hashable.hash str) ++ filter isAlpha str
-            isCident s@(c:cs)       = isAlpha c && all isAlphaNum cs && not (isCkeyword s)
-            isAlpha c               = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
-            isAlphaNum c            = isAlpha c || c `elem` ['0'..'9']
-            isCkeyword x            = x `Data.Set.member` rws
-            rws                     = Data.Set.fromDistinctAscList [
+    gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
+
+mkCident str
+  | isCident str                    = str
+  | otherwise                       = preEscape $ concat $ map esc str
+  where isCident s@(c:cs)           = isAlpha c && all isAlphaNum cs
+        isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c `elem` ['_','$']
+        isAlphaNum c                = isAlpha c || c `elem` ['0'..'9']
+        esc c | isAlphaNum c        = [c]
+              | otherwise           = '_' : show (fromEnum c) ++ "_"
+
+unCkeyword str
+  | str `Data.Set.member` rws       = preEscape str
+  | otherwise                       = str
+  where rws                         = Data.Set.fromDistinctAscList [
                                         "auto",     "break",    "case",     "char",     "continue", "default",
                                         "default",  "do",       "double",   "else",     "enum",     "extern",
                                         "float",    "for",      "goto",     "if",       "int",      "long",
@@ -153,7 +158,10 @@ instance Gen Name where
                                         "volatile", "while"
                                       ]
 
-genQName env n                      = gen env (thismodule env) <> char '$' <> gen env n
+preEscape str                       = "_$" ++ str
+
+
+mkGName env n                       = gen env (thismodule env) <> char '$' <> gen env n
 
 word                                = text "$WORD"
 
@@ -181,10 +189,10 @@ genElse env b                       = (text "else" <+> char '{') $+$ genSuite en
 
 instance Gen Decl where
     gen env (Def _ n q p KwdNIL a b d m)
-                                    = (gen env a <+> genQName env n <+> parens (gen env p) <+> char '{')
+                                    = (gen env a <+> mkGName env n <+> parens (gen env p) <+> char '{')
                                       $+$ genSuite env1 b $+$ char '}'
       where env1                    = define (envOf p) $ defineTVars q env
-    gen env (Class _ n q a b)       = (text "struct" <+> genQName env n <+> nonEmpty parens commaList a <+> char '{') $+$ 
+    gen env (Class _ n q a b)       = (text "struct" <+> mkGName env n <+> nonEmpty parens commaList a <+> char '{') $+$
                                       genSuite env b $+$ char '}'
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
 

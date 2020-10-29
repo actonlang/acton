@@ -10,9 +10,10 @@ import Debug.Trace
 self                                = Name NoLoc "self"
 
 deriveQ (NoQ n)                     = n
-deriveQ (QName m n)
-  | m == mBuiltin                   = n
 deriveQ (QName (ModName m) n)       = deriveMod n m
+deriveQ (GName m n)
+  | m == mBuiltin                   = n
+deriveQ (GName (ModName m) n)       = deriveMod n m
 
 deriveMod n0 []                     = n0
 deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
@@ -222,6 +223,7 @@ instance Vars ModName where
 instance Vars QName where
     free (QName m n)                = free m
     free (NoQ n)                    = free n
+    free (GName m n)                = free m
 
 instance Vars Exception where
     free (Exception e1 e2)          = free e1 ++ free e2

@@ -132,7 +132,7 @@ modPath (ModName ns) = map nstr ns
 instance Ord ModName where
     compare a b = compare (modPath a) (modPath b)
 
-data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } deriving (Show,Read,Eq,Ord,Generic)
+data QName      = QName { mname::ModName, noq::Name } | NoQ { noq::Name } | GName { mname::ModName, noq::Name } deriving (Show,Read,Eq,Ord,Generic)
 
 qName ss s      = QName (modName ss) (name s)
 
@@ -398,6 +398,7 @@ instance HasLoc ModName where
 instance HasLoc QName where
     loc (QName m n)     = loc m `upto` loc n
     loc (NoQ n)         = loc n
+    loc (GName m n)     = loc m `upto` loc n
     
 instance HasLoc Elem where
     loc (Elem e)        = loc e

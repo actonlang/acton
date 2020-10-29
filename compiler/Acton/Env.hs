@@ -48,11 +48,26 @@ modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
 
 
-mapModules                  :: (TEnv -> TEnv) -> Env0 -> Env0
-mapModules f env            = env{ modules = map pre $ modules env }
-  where pre (n, NModule te)
-          | n /= nPrim      = (n, NModule (f $ map pre te))
-        pre ni              = ni
+mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
+mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
+
+mapModules                  :: (Env0 -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
+mapModules f env            = walk env0 [] mods
+  where env0                = env{ modules = [prim] }
+        prim : mods         = modules env
+
+        walk env ns []      = env
+        walk env ns ((n,NModule te1):te)
+                            = walk env2 ns te
+          where env1        = env{ modules = app ns (modules env) [(n, NModule [])] }
+                env2        = walk env1 (ns++[n]) te1
+        walk env ns (ni:te) = walk env1 ns te
+          where env1        = env{ modules = app ns (modules env) (f env ni) }
+
+        app (n:ns) ((m,NModule te1):te) te'
+          | n == m          = (m, NModule $ app ns te1 te') : te
+        app ns (ni:te) te'  = ni : app ns te te'
+        app ns [] te'       = te'
 
 
 {-  TEnv principles:
@@ -113,10 +128,7 @@ instance QMatch (QName,Witness) where
 
 instance QMatch QName where
     qmatch env a b                  = m (unalias env a) (unalias env b)
-      where m a@QName{}  b@QName{}  = mname a == mname b && noq a == noq b
-            m a@NoQ{}    b@NoQ{}    = noq a == noq b
-            m a@NoQ{}    b@QName{}  = mname b == mBuiltin && noq a == noq b
-            m a@QName{}  b@NoQ{}    = mname a == mBuiltin && noq a == noq b
+      where m a@GName{}  b@GName{}  = mname a == mname b && noq a == noq b
 
 instance QMatch TCon where
     qmatch env (TC a ts) (TC b us)  = qmatch env a b && qmatch env ts us
@@ -310,14 +322,14 @@ instance Unalias QName where
     unalias env (QName m n)         = case lookupMod m env of
                                         Just te -> case lookup n te of
                                                       Just (NAlias qn) -> qn
-                                                      Just _ -> QName m' n
+                                                      Just _ -> GName m' n
                                                       _ -> noItem m n
-                                        Nothing | inBuiltin env -> QName m' n
-                                                | otherwise -> trace ("#### unalias fails for " ++ prstr (QName m n)) $ QName m n
+                                        Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
-                                        _ -> NoQ n
+                                        _ -> GName (thismod env) n
+    unalias env (GName m n)         = GName m n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -482,8 +494,8 @@ initEnv nobuiltin           = if nobuiltin
                                                     envX = () }
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
-                                        let env0 = EnvF{ names = [(nBuiltin,NMAlias mBuiltin), (nPrim,NMAlias mPrim)],
-                                                         modules = [(nBuiltin,NModule envBuiltin), (nPrim,NModule envPrim)],
+                                        let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+                                                         modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
                                                          thismod = ModName [],
                                                          witnesses = [],
                                                          envX = () }
@@ -576,6 +588,14 @@ findQName (NoQ n) env       = case lookup n (names env) of
                                 Just (NAlias qn) -> findQName qn env
                                 Just info -> info
                                 Nothing -> nameNotFound n
+findQName (GName m n) env
+  | m == thismod env        = findQName (NoQ n) env
+  | otherwise               = case lookupMod m env of
+                                Just te -> case lookup n te of
+                                    Just i -> i
+                                    Nothing -> error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
+                                Nothing -> error ("## Failed lookup of module " ++ prstr m)
+
 
 findName n env              = findQName (NoQ n) env
 
@@ -725,18 +745,18 @@ fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)
 
 
 allCons                     :: EnvF x -> [QName]
-allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+allCons env                 = [ gname env n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
   where con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ QName m n | (n,i) <- te, con i ]
+        cons m (Just te)    = [ GName m n | (n,i) <- te, con i ]
 
 allProtos                   :: EnvF x -> [QName]
-allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+allProtos env               = [ gname env n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ QName m n | (n,i) <- te, proto i ]
-        
+        protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ]
+
 allVars                     :: EnvF x -> Kind -> [TVar]
 allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
 
@@ -744,6 +764,8 @@ wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id
 wexpr (Nothing : w)         = wexpr w
 wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
+
+gname env n                 = GName (thismod env) n
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
@@ -829,7 +851,7 @@ impModule ps env (FromImportAll _ (ModRef (0,Just m)))
 impModule _ _ i                 = illegalImport (loc i)
 
 
-moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (QName m _)) <- te ]
+moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (GName m _)) <- te ]
 
 
 subImp paths env []             = return env
@@ -868,18 +890,18 @@ importAll m te env          = define (impNames m te) env
 impNames                    :: ModName -> TEnv -> TEnv
 impNames m te               = mapMaybe imp te
   where 
-    imp (n, NAct _ _ _ _)   = Just (n, NAlias (QName m n))
-    imp (n, NClass _ _ _)   = Just (n, NAlias (QName m n))
-    imp (n, NProto _ _ _)   = Just (n, NAlias (QName m n))
+    imp (n, NAct _ _ _ _)   = Just (n, NAlias (GName m n))
+    imp (n, NClass _ _ _)   = Just (n, NAlias (GName m n))
+    imp (n, NProto _ _ _)   = Just (n, NAlias (GName m n))
     imp (n, NExt _ _ _ _)   = Nothing
-    imp (n, NAlias _)       = Just (n, NAlias (QName m n))
-    imp (n, NVar t)         = Just (n, NAlias (QName m n))
-    imp (n, NDef t d)       = Just (n, NAlias (QName m n))
+    imp (n, NAlias _)       = Just (n, NAlias (GName m n))
+    imp (n, NVar t)         = Just (n, NAlias (GName m n))
+    imp (n, NDef t d)       = Just (n, NAlias (GName m n))
     imp _                   = Nothing                               -- cannot happen
 
 importWits                  :: ModName -> TEnv -> EnvF x -> EnvF x
 importWits m te env         = foldl addWit env ws
-  where ws                  = [ (c, trace ("### importing WClass for " ++ prstr (n, NExt c q ps te')) $ WClass q p (QName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
+  where ws                  = [ (c, WClass q p (GName m n) ws) | (n, NExt c q ps te') <- te, (ws,p) <- ps ]
 
 
 

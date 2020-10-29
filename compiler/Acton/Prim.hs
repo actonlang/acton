@@ -7,53 +7,53 @@ import Acton.Builtin
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
-qPrim n             = QName mPrim n
+gPrim n             = GName mPrim n
 
-primActor           = qPrim $ name "Actor"
-primR               = qPrim $ name "R"
-primClos            = qPrim $ name "Clos"
+primActor           = gPrim $ name "Actor"
+primR               = gPrim $ name "R"
+primClos            = gPrim $ name "Clos"
 
-primASYNCw          = qPrim $ name "ASYNCw"
+primASYNCw          = gPrim $ name "ASYNCw"
 
-primASYNCf          = qPrim $ name "ASYNCf"
-primAFTERf          = qPrim $ name "AFTERf"
-primAWAITf          = qPrim $ name "AWAITf"
+primASYNCf          = gPrim $ name "ASYNCf"
+primAFTERf          = gPrim $ name "AFTERf"
+primAWAITf          = gPrim $ name "AWAITf"
 
-primASYNCc          = qPrim $ name "ASYNCc"
-primAFTERc          = qPrim $ name "AFTERc"
-primAWAITc          = qPrim $ name "AWAITc"
+primASYNCc          = gPrim $ name "ASYNCc"
+primAFTERc          = gPrim $ name "AFTERc"
+primAWAITc          = gPrim $ name "AWAITc"
 
-primASYNC           = qPrim $ name "ASYNC"
-primAFTER           = qPrim $ name "AFTER"
-primAWAIT           = qPrim $ name "AWAIT"
+primASYNC           = gPrim $ name "ASYNC"
+primAFTER           = gPrim $ name "AFTER"
+primAWAIT           = gPrim $ name "AWAIT"
 
-primPUSHc           = qPrim $ name "PUSHc"
-primPUSH            = qPrim $ name "PUSH"
+primPUSHc           = gPrim $ name "PUSHc"
+primPUSH            = gPrim $ name "PUSH"
 
-primPOP             = qPrim $ name "POP"
-primRERAISE         = qPrim $ name "RERAISE"
-primRAISE           = qPrim $ name "RAISE"
-primRAISEFROM       = qPrim $ name "RAISEFROM"
-primASSERT          = qPrim $ name "ASSERT"
+primPOP             = gPrim $ name "POP"
+primRERAISE         = gPrim $ name "RERAISE"
+primRAISE           = gPrim $ name "RAISE"
+primRAISEFROM       = gPrim $ name "RAISEFROM"
+primASSERT          = gPrim $ name "ASSERT"
 
-primISINSTANCE      = qPrim $ name "ISINSTANCE"
-primCAST            = qPrim $ name "CAST"
+primISINSTANCE      = gPrim $ name "ISINSTANCE"
+primCAST            = gPrim $ name "CAST"
 
-primRContc          = qPrim $ name "R_CONTc"
-primRCont           = qPrim $ name "R_CONT"
+primRContc          = gPrim $ name "R_CONTc"
+primRCont           = gPrim $ name "R_CONT"
 
-primEqOpt           = qPrim $ name "EqOpt"
-primIdentityOpt     = qPrim $ name "IdentityOpt"
+primEqOpt           = gPrim $ name "EqOpt"
+primIdentityOpt     = gPrim $ name "IdentityOpt"
 
-primWEqNone         = qPrim $ name "wEqNone"
-primWIdentityNone   = qPrim $ name "wIdentityNone"
-primWEqUnion        = qPrim $ name "wEqUnion"
-primWPlusInt        = qPrim $ name "wPlusInt"
+primWEqNone         = gPrim $ name "wEqNone"
+primWIdentityNone   = gPrim $ name "wIdentityNone"
+primWEqUnion        = gPrim $ name "wEqUnion"
+primWPlusInt        = gPrim $ name "wPlusInt"
 
-primISNOTNONE       = qPrim $ name "ISNOTNONE"
+primISNOTNONE       = gPrim $ name "ISNOTNONE"
 
-primSKIPRESc        = qPrim $ name "SKIPRESc"
-primSKIPRES         = qPrim $ name "SKIPRES"
+primSKIPRESc        = gPrim $ name "SKIPRESc"
+primSKIPRES         = gPrim $ name "SKIPRES"
 
 
 tActor              = tCon $ TC primActor []
