@@ -65,9 +65,6 @@ instance (WellFormed a) => WellFormed (Maybe a) where
 instance (WellFormed a) => WellFormed [a] where
     wf env                  = concatMap (wf env)
 
-instance (WellFormed a, WellFormed b) => WellFormed (a,b) where
-    wf env (a,b)            = wf env a ++ wf env b
-
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
       where q               = case findQName n env of
