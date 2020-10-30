@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Kinds(check, kindError) where
+module Acton.Kinds(check) where
 
 import qualified Control.Exception
 import qualified Data.Map.Strict as Map
@@ -12,16 +12,14 @@ import Acton.Syntax
 import Acton.Names
 import Acton.Builtin
 import Acton.Subst
-import qualified Acton.Env
+import Acton.Env
 
 
 check                               :: Acton.Env.Env0 -> Module -> IO Module
-check ienv (Module m imps ss)       = return (Module m imps ss1)
-  where env                         = kenv0 ienv
+check env0 (Module m imps ss)       = return (Module m imps ss1)
+  where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
 
-
-type KVar                           = Name
 
 data KindState                      = KindState {
                                         nextint     :: Int,
@@ -57,29 +55,32 @@ newKVar                             = KVar <$> (Internal Kindvar "" <$> newUniqu
 
 newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
 
+type KindEnv                        = EnvF KindEnvX
 
-data KEnv                           = KEnv { impenv :: Acton.Env.Env0, tcons :: Kinds, tvars :: [TVar] }
+data KindEnvX                       = KindEnvX { tconsX :: [(Name,Kind)], tvarsX :: [TVar] }
 
-type Kinds                          = [(Name,Kind)]
+kindEnv env0                        = setX env0 $ KindEnvX{ tconsX = [], tvarsX = [] }
 
-kenv0 ienv                          = KEnv { impenv = ienv, tcons = [], tvars = [] }
+tcons env                           = tconsX $ envX env
 
-extcons ke env                      = env { tcons = ke ++ tcons env }
+tvars env                           = tvarsX $ envX env
+
+extcons ke env                      = modX env $ \x -> x{ tconsX = ke ++ tcons env }
 
 extvars vs env
-  | not $ null clash                = Acton.Env.err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
-  | not $ null dups                 = Acton.Env.err1 (head dups) "Duplicate type variable in binding:"
-  | otherwise                       = return $ env { tvars = vs ++ tvars env }
+  | not $ null clash                = err1 (head clash) "Type variable already in scope:"    -- No type variable shadowing
+  | not $ null dups                 = err1 (head dups) "Duplicate type variable in binding:"
+  | otherwise                       = return $ modX env $ \x -> x{ tvarsX = vs ++ tvars env }
   where clash                       = vs `intersect` tvars env
         dups                        = duplicates vs
 
-tconKind (NoQ n) env                = case lookup n (tcons env) of
+tcKind (NoQ n) env                  = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQ n) (impenv env)
-tconKind qn env                     = Acton.Env.tconKind qn (impenv env)
+                                        Nothing -> Acton.Env.tconKind (NoQ n) env
+tcKind qn env                       = Acton.Env.tconKind qn env
 
-tvarKind v env                      = case filter (==v) (tvars env) of
-                                        [] -> Acton.Env.err1 v "Unbound type variable:"
+tvKind v env                        = case filter (==v) (tvars env) of
+                                        [] -> err1 v "Unbound type variable:"
                                         TV k _ : _ -> k
 
 instance Pretty (Name,Kind) where
@@ -175,11 +176,11 @@ instance ConvTWild KwdPar where
 ----------------------------------------------------------------------------------------------------------------------
 
 class ConvPExist a where
-    convPExist                      :: KEnv -> a -> KindM a
+    convPExist                      :: KindEnv -> a -> KindM a
 
 instance ConvPExist Type where
     convPExist env (TCon l c)       = do c <- convPExist env c
-                                         case khead $ tconKind (tcname c) env of
+                                         case khead $ tcKind (tcname c) env of
                                              KProto -> do
                                                  xv <- newXVar
                                                  storeXVar xv c
@@ -223,7 +224,7 @@ kchkTop env ss                      = do ss <- kchkSuite env ss
                                          ksubst True ss
 
 class KCheck a where
-    kchk                            :: KEnv -> a -> KindM a
+    kchk                            :: KindEnv -> a -> KindM a
 
 instance KCheck a => KCheck [a] where
     kchk env                        = mapM (kchk env)
@@ -407,7 +408,7 @@ instance KCheck Sliz where
 
 instance KCheck TSchema where
     kchk env (TSchema l q t)
-      | not $ null ambig            = Acton.Env.err2 ambig "Ambiguous type variable in schema:"
+      | not $ null ambig            = err2 ambig "Ambiguous type variable in schema:"
       | otherwise                   = do tmp <- swapXVars []
                                          q <- convPExist env q
                                          t <- convPExist env t
@@ -437,7 +438,7 @@ kchkPBounds env us                  = mapM (kexp KProto env) us
 ----------------------------------------------------------------------------------------------------------------------
 
 class KInfer t where
-    kinfer                          :: KEnv -> t -> KindM (Kind,t)
+    kinfer                          :: KindEnv -> t -> KindM (Kind,t)
 
 
 instance (KInfer t) => KInfer (Maybe t) where
@@ -449,8 +450,8 @@ instance KInfer TVar where
                                          return (tvkind tv, tv)
 
 instance KInfer TCon where
-    kinfer env (TC n [])            = return (tconKind n env, TC n [])
-    kinfer env (TC n ts)            = do let kn = tconKind n env
+    kinfer env (TC n [])            = return (tcKind n env, TC n [])
+    kinfer env (TC n ts)            = do let kn = tcKind n env
                                          (ks,ts) <- fmap unzip $ mapM (kinfer env) ts
                                          k <- newKVar
                                          kunify (loc n) kn (KFun ks k)
@@ -461,9 +462,9 @@ envBound (TV k (Internal p _ _))    = p == Xistvar
 envBound _                          = True
 
 instance KInfer Type where
-    kinfer env (TWild l)            = Acton.Env.err1 l "Illegal wildcard type"
+    kinfer env (TWild l)            = err1 l "Illegal wildcard type"
     kinfer env (TVar l v)           = do (k,v) <- kinfer env v
-                                         when (envBound v) $ kunify l k (tvarKind v env)     -- Wildvars are not int the environment
+                                         when (envBound v) $ kunify l k (tvKind v env)     -- Wildvars are not int the environment
                                          return (k, TVar l v)
     kinfer env (TCon l c)           = do c <- kexp KType env c
                                          return (KType, TCon l c)
@@ -475,7 +476,7 @@ instance KInfer Type where
     kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
-    kinfer env (TUnion l us)        = return (KType, TUnion l $ Acton.Env.uniChk (impenv env) us)
+    kinfer env (TUnion l us)        = return (KType, TUnion l $ Acton.Env.uniChk env us)
     kinfer env (TOpt _ t@TOpt{})    = kinfer env t
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)
@@ -514,7 +515,7 @@ kunify' l (KFun ks1 k1) (KFun ks2 k2)
                                          kunify l k1 k2
 kunify' l k1 k2
   | k1 == k2                        = return ()
-  | otherwise                       = noUnify l k1 k2
+  | otherwise                       = noKUnify l k1 k2
 
 
 kfree (KVar v)                      = []
@@ -709,16 +710,3 @@ instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
 
 
---------------------------------------------------------------------------------------------------------------
-
-data KindError                      = KindError SrcLoc Kind Kind
-                                    | InfiniteKind SrcLoc KVar Kind
-                                    deriving (Show)
-
-instance Control.Exception.Exception KindError
-
-noUnify l k1 k2                     = Control.Exception.throw $ KindError l k1 k2
-infiniteKind l v k                  = Control.Exception.throw $ InfiniteKind l v k
-
-kindError (KindError l k1 k2)       = (l, " Expected a " ++ prstr k2 ++ ", actual kind is " ++ prstr k1)
-kindError (InfiniteKind l v k)      = (l, " Infinite kind inferred: " ++ prstr  v ++ " = " ++ prstr k)

@@ -1,5 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct,solverError) where
+module Acton.Types(reconstruct) where
 
 import Control.Monad
 import Pretty
@@ -27,8 +27,6 @@ reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ 
         (te,ss1)                        = runTypeM $ infTop env1 ss
         env2                            = define te env0
         env0'                           = convEnvProtos env0
-
-solverError                             = typeError
 
 nodup x
   | not $ null vs               = err2 vs "Duplicate names:"
@@ -381,7 +379,7 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q as' (te0++te))], Class l n q (map snd as') (bindWits eq1 ++ props te0 ++ b'))
+                                                 return (cs1, [(n, NClass q as' (te0++te))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env us
@@ -667,10 +665,10 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone csb
                                              checkNoEscape env tvs
-                                             return (cs1, [Class l n (noqual env q) us (abstractDefs env q eq1 b')])
+                                             return (cs1, [Class l n (noqual env q) (map snd as) (abstractDefs env q eq1 b')])
       where env1                        = define (subst s te) $ defineSelf (NoQ n) q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
-            NClass _ _ te               = findName n env
+            NClass _ as te              = findName n env
             s                           = [(tvSelf, tCon (TC (NoQ n) (map tVar $ tybound q)))]
 
     checkEnv' env (Protocol l n q us b) = do traceM ("## checkEnv protocol " ++ prstr n)

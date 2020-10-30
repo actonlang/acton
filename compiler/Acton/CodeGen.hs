@@ -67,7 +67,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
                                       nest 4 (properties env tc) $+$ 
                                       char '}' <> semi
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
-decl env (Def _ n q p _ a b _ fx)   = funsig env (gname env n) (TFun l0 fx (prowOf p) kwdNil (fromJust a))
+decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodsname env n <> semi
 methstub env Def{}                  = empty

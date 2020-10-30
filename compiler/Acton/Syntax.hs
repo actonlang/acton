@@ -193,6 +193,8 @@ data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
 type QBinds     = [QBind]
 
+type KVar       = Name
+
 data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
@@ -652,3 +654,4 @@ kindOf TWild{}                      = KWild
 kindOf (TNil _ k)                   = k
 kindOf (TRow _ k _ _ _)             = k
 kindOf TFX{}                        = KFX
+

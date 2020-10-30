@@ -174,11 +174,11 @@ findPaths args          = do absfile <- canonicalizePath (head (files args))
                                               return $ (pre, dirs, concat $ map splitPath $ lines $ contents)
                    where path    = joinPath [pre, ".acton"]
 
-runRestPasses args paths src env0 original = (do
-                          let outbase = outBase paths
-                          env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 original
+runRestPasses args paths src env0 original = do
+                      let outbase = outBase paths
+                      env <- Acton.Env.mkEnv (projSysRoot paths,syspath args) env0 original
 
-                          kchecked <- Acton.Kinds.check env original
+                      (do kchecked <- Acton.Kinds.check env original
                           iff (kinds args) $ dump "kinds" (Pretty.print kchecked)
 
                           (iface,tchecked,typeEnv) <- Acton.Types.reconstruct outbase env kchecked
@@ -204,9 +204,7 @@ runRestPasses args paths src env0 original = (do
                           return (env0 `Acton.Env.withModulesFrom` env,iface)
                         ) 
                           `catch` handle generalError src paths
-                          `catch` handle Acton.Kinds.kindError src paths
-                          `catch` handle Acton.Env.checkerError src paths
-                          `catch` handle Acton.Types.solverError src paths
+                          `catch` handle (Acton.Env.compilationError env) src paths
 
 
 handle f src paths ex = do putStrLn "\n********************"

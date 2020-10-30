@@ -919,9 +919,12 @@ headvar (Seal w (TVar _ v) _ _ _)   = v
 headvar (Seal w _ (TVar _ v) _ _)   = v     -- ?
 
 
--- Error handling ------------------------------------------------------------------------
+-- Error handling ----------------------------------------------------------------------------------------------------
 
-data CheckerError                   = FileNotFound ModName
+data CompilationError               = KindError SrcLoc Kind Kind
+                                    | InfiniteKind SrcLoc KVar Kind
+
+                                    | FileNotFound ModName
                                     | NameNotFound Name
                                     | NameReserved QName
                                     | NameBlocked QName
@@ -936,9 +939,7 @@ data CheckerError                   = FileNotFound ModName
                                     | NoModule ModName
                                     | NoClassOrProto QName
                                     | OtherError SrcLoc String
-                                    deriving (Show)
 
-data TypeError                      = TypeErrHmm            -- ...
                                     | RigidVariable TVar
                                     | InfiniteType TVar
                                     | ConflictingRow TVar
@@ -956,11 +957,12 @@ data TypeError                      = TypeErrHmm            -- ...
                                     | NoUnify Type Type
                                     deriving (Show)
 
-instance Control.Exception.Exception TypeError
-instance Control.Exception.Exception CheckerError
+instance Control.Exception.Exception CompilationError
 
+instance HasLoc CompilationError where
+    loc (KindError l _ _)           = l
+    loc (InfiniteKind l _ _)        = l
 
-instance HasLoc TypeError where
     loc (RigidVariable tv)          = loc tv
     loc (InfiniteType tv)           = loc tv
     loc (ConflictingRow tv)         = loc tv
@@ -977,14 +979,34 @@ instance HasLoc TypeError where
     loc (NoSolve cs)                = loc cs
     loc (NoUnify t1 t2)             = loc t1
 
-typeError err                       = (loc err,render (expl err))
+    loc (FileNotFound n)            = loc n
+    loc (NameNotFound n)            = loc n
+    loc (NameReserved n)            = loc n
+    loc (NameBlocked n)             = loc n
+    loc (NameUnexpected n)          = loc n
+    loc (TypedReassign p)           = loc p
+    loc (IllegalRedef n)            = loc n
+    loc (IllegalExtension n)        = loc n
+    loc (MissingSelf n)             = loc n
+    loc (IllegalImport l)           = l
+    loc (DuplicateImport n)         = loc n
+    loc (NoModule m)                = loc m
+    loc (NoItem m n)                = loc n
+    loc (NoClassOrProto n)          = loc n
+    loc (OtherError l str)          = l
+
+compilationError                    :: EnvF x -> CompilationError -> (SrcLoc, String)
+compilationError env err            = (loc err, render (expl err))
   where
+    expl (KindError l k1 k2)        = text "Expected a" <+> pretty k2 <> comma <+> text "actual kind is" <+> pretty k1
+    expl (InfiniteKind l v k)       = text "Infinite kind inferred:" <+> pretty v <+> equals <+> pretty k
+
     expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
     expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
     expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
     expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
     expl (PosElemNotFound)          = text "Positional element is not found"
-    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty (n,NSig t d)
+    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty d
     expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
                                       pretty (head tvs) <+> text "escapes"
     expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
@@ -996,22 +1018,25 @@ typeError err                       = (loc err,render (expl err))
     expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
     expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
+    expl (FileNotFound n)           = text "Type interface file not found for" <+> pretty n
+    expl (NameNotFound n)           = text "Name" <+> pretty n <+> text "is not in scope"
+    expl (NameReserved n)           = text "Name" <+> pretty n <+> text "is reserved but not yet defined"
+    expl (NameBlocked n)            = text "Name" <+> pretty n <+> text "is currently not accessible"
+    expl (NameUnexpected n)         = text "Unexpected variable name:" <+> pretty n
+    expl (TypedReassign p)          = text "Type annotation on reassignment:" <+> pretty p
+    expl (IllegalRedef n)           = text "Illegal redefinition of" <+> pretty n
+    expl (IllegalExtension n)       = text "Illegal extension of" <+> pretty n
+    expl (MissingSelf n)            = text "Missing 'self' parameter in definition of"
+    expl (IllegalImport l)          = text "Relative import not yet supported"
+    expl (DuplicateImport n)        = text "Duplicate import of name" <+> pretty n
+    expl (NoModule m)               = text "Module" <+> pretty m <+> text "does not exist"
+    expl (NoItem m n)               = text "Module" <+> pretty m <+> text "does not export" <+> pretty n
+    expl (NoClassOrProto n)         = text "Class or protocol name expected, got" <+> pretty n
+    expl (OtherError l str)         = text str
 
-checkerError (FileNotFound n)       = (loc n, "Type interface file not found for " ++ prstr n)
-checkerError (NameNotFound n)       = (loc n, "Name " ++ prstr n ++ " is not in scope")
-checkerError (NameReserved n)       = (loc n, "Name " ++ prstr n ++ " is reserved but not yet defined")
-checkerError (NameBlocked n)        = (loc n, "Name " ++ prstr n ++ " is currently not accessible")
-checkerError (NameUnexpected n)     = (loc n, "Unexpected variable name: " ++ prstr n)
-checkerError (TypedReassign p)      = (loc p, "Type annotation on reassignment: " ++ prstr p)
-checkerError (IllegalRedef n)       = (loc n, "Illegal redefinition of " ++ prstr n)
-checkerError (IllegalExtension n)   = (loc n, "Illegal extension of " ++ prstr n)
-checkerError (MissingSelf n)        = (loc n, "Missing 'self' parameter in definition of")
-checkerError (IllegalImport l)      = (l,     "Relative import not yet supported")
-checkerError (DuplicateImport n)    = (loc n, "Duplicate import of name " ++ prstr n)
-checkerError (NoModule m)           = (loc m, "Module " ++ prstr m ++ " does not exist")
-checkerError (NoItem m n)           = (loc n, "Module " ++ prstr m ++ " does not export " ++ nstr n)
-checkerError (NoClassOrProto n)     = (loc n, "Class or protocol name expected, got " ++ prstr n)
-checkerError (OtherError l str)     = (l,str)
+
+noKUnify l k1 k2                    = Control.Exception.throw $ KindError l k1 k2
+infiniteKind l v k                  = Control.Exception.throw $ InfiniteKind l v k
 
 nameNotFound n                      = Control.Exception.throw $ NameNotFound n
 nameReserved n                      = Control.Exception.throw $ NameReserved n
@@ -1027,6 +1052,7 @@ duplicateImport n                   = Control.Exception.throw $ DuplicateImport 
 noItem m n                          = Control.Exception.throw $ NoItem m n
 noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
+
 err l s                             = Control.Exception.throw $ OtherError l s
 
 err0 xs s                           = err (loc $ head xs) s
@@ -1051,4 +1077,3 @@ lackDef ns                          = Control.Exception.throw $ LackDef (head ns
 noRed c                             = Control.Exception.throw $ NoRed c
 noSolve cs                          = Control.Exception.throw $ NoSolve cs
 noUnify t1 t2                       = Control.Exception.throw $ NoUnify t1 t2
-

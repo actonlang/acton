@@ -230,10 +230,10 @@ instance Pretty ModName where
     pretty (ModName ns)             = dotCat pretty ns
 
 instance Pretty QName where
---    pretty (QName m n)              = char '~' <> pretty m <> dot <> pretty n
-    pretty (QName m n)              = pretty m <> dot <> pretty n
---    pretty (NoQ n)                  = char '~' <> pretty n
-    pretty (NoQ n)                  = pretty n
+    pretty (QName m n)              = char '~' <> pretty m <> dot <> pretty n
+--    pretty (QName m n)              = pretty m <> dot <> pretty n
+    pretty (NoQ n)                  = char '~' <> pretty n
+--    pretty (NoQ n)                  = pretty n
     pretty (GName m n)
       | m == mPrim                  = text "$" <> pretty n
 --      | m == mBuiltin               = text "$" <> pretty n
