@@ -88,12 +88,7 @@ instance Norm a => Norm (Maybe a) where
     norm env (Just a)               = Just <$> norm env a
 
 instance Norm Module where
-    norm env (Module m imps ss)     = Module m <$> mapM (norm env) imps <*> norm env ss
-
-instance Norm Import where
-    norm env (Import l ms)          = Import l <$> mapM (norm env) ms
-    norm env (FromImport l m ns)    = FromImport l <$> norm env m <*> mapM (norm env) ns
-    norm env (FromImportAll l m)    = FromImportAll l <$> norm env m
+    norm env (Module m imps ss)     = Module m imps <$> norm env ss
 
 instance Norm Stmt where
     norm env (Expr l e)             = Expr l <$> norm env e
@@ -204,7 +199,7 @@ catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes s
         stripQuotes s               = init $ tail s
 
 instance Norm Expr where
-    norm env (Var l nm)             = Var l <$> norm env nm
+    norm env (Var l nm)             = return $ Var l nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
     norm env (Float l f s)          = Float l <$> return f <*> return s
     norm env (Imaginary l i s)      = Imaginary l <$> return i <*> return s
@@ -222,10 +217,10 @@ instance Norm Expr where
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
     norm env (UnOp l Not e)         = UnOp l Not <$> norm env e
-    norm env (Dot l e nm)           = Dot l <$> norm env e <*> norm env nm
-    norm env (Rest l e nm)          = Rest l <$> norm env e <*> norm env nm
-    norm env (DotI l e i)           = DotI l <$> norm env e <*> return i
-    norm env (RestI l e i)          = RestI l <$> norm env e <*> return i
+    norm env (Dot l e nm)           = Dot l <$> norm env e <*> pure nm
+    norm env (Rest l e nm)          = Rest l <$> norm env e <*> pure nm
+    norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
+    norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
                                          Lambda l (noDefaults p') KwdNIL <$> norm env1 e <*> return fx      -- TODO: replace defaulted params with Conds
       where env1                    = define (envOf p ++ envOf k) env
@@ -247,40 +242,12 @@ instance Norm Pattern where
 instance Norm Exception where
     norm env (Exception e mbe)      = Exception <$> norm env e <*> norm env mbe
 
-instance Norm Name where
-    norm env n                      = return n
-
-instance Norm ModName where
-    norm env m@(ModName [n])        = case findName n env of
-                                          NMAlias m' -> return m'
-                                          _ -> return m
-    norm env (ModName ns)           = ModName <$> mapM (norm env) ns
-
-instance Norm QName where
-    norm env (QName m n)            = QName <$> norm env m <*> norm env n
-    norm env (NoQ n)                = NoQ <$> norm env n
-    norm env (GName m n)            = GName <$> norm env m <*> norm env n
-
-instance Norm ModRef where
-    norm env (ModRef (n,mbqn))      = (\m -> ModRef (n,m)) <$> norm env mbqn
-
-instance Norm ModuleItem where
-    norm env (ModuleItem qn mbn)    = ModuleItem <$> norm env qn <*> norm env mbn
-
-instance Norm ImportItem where
-    norm env (ImportItem nm mbn)    = ImportItem <$> norm env nm <*> norm env mbn
-
 instance Norm Branch where
     norm env (Branch e ss)          = Branch <$> norm env e <*> norm env ss
 
 instance Norm Handler where
-    norm env (Handler ex b)         = Handler <$> norm env ex <*> norm env1 b
+    norm env (Handler ex b)         = Handler ex <$> norm env1 b
       where env1                    = define (envOf ex) env
-
-instance Norm Except where
-    norm env (ExceptAll l)          = return $ ExceptAll l
-    norm env (Except l x)           = Except l <$> norm env x
-    norm env (ExceptAs l x n)       = ExceptAs l <$> norm env x <*> norm env n
 
 instance Norm PosPar where
     norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p

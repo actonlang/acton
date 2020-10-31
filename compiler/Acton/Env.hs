@@ -402,11 +402,6 @@ uniIntersect env us1 us2
 
 uniUnion env us1 us2        = sort $ uniNub env $ us1++us2
 
-uniChk env us
-  | not $ null bad          = err2 bad "Illegal union element:"
-  | otherwise               = us
-  where bad                 = [ c | UCon c <- us, unalias env c `notElem` uniCons ]
-
 
 uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
   where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mbStr ]
@@ -659,6 +654,8 @@ hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
 hasWitness                  :: EnvF x -> QName -> QName -> Bool
 hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn . tcname . proto)
 
+getWitness                  :: EnvF x -> QName -> TCon -> Witness
+getWitness env cn p         = fromJust $ findWitness env cn (qmatch env (tcname p) . tcname . proto)
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 

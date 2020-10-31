@@ -88,7 +88,7 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
                 eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) ts
+          where sibBase ws p inh        = TC (modOf (tcname main) $ baseName (path ws inh)) ts
                 path ws inh             = if inh then tcname main : ws else ws
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]

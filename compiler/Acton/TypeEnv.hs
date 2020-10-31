@@ -67,7 +67,7 @@ instance (WellFormed a) => WellFormed [a] where
 
 instance WellFormed TCon where
     wf env (TC n ts)        = wf env ts ++ subst s [ constr u (tVar v) | Quant v us <- q, u <- us ]
-      where q               = case findQName n env of
+      where q               = case findQName  n env of
                                 NAct q p k te  -> q
                                 NClass q us te -> q
                                 NProto q us te -> q
@@ -90,6 +90,10 @@ instance WellFormed Type where
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
     wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env (TUnion _ us)
+      | not $ null bad      = err2 bad "Illegal union element:"
+      | otherwise           = []
+      where bad             = [ c | UCon c <- us, not $ uniCon env (TC c []) ]
     wf env _                = []
 
 

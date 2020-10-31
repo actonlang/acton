@@ -5,6 +5,7 @@ import Utils
 import Acton.Syntax
 import Acton.Builtin
 import Debug.Trace
+import Acton.Printer
 
 
 self                                = Name NoLoc "self"

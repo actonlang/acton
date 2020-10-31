@@ -15,7 +15,7 @@ import Acton.Subst
 import Acton.Env
 
 
-check                               :: Acton.Env.Env0 -> Module -> IO Module
+check                               :: Env0 -> Module -> IO Module
 check env0 (Module m imps ss)       = return (Module m imps ss1)
   where env                         = kindEnv env0
         ss1                         = runKindM (kchkTop env ss)
@@ -76,8 +76,8 @@ extvars vs env
 
 tcKind (NoQ n) env                  = case lookup n (tcons env) of
                                         Just k  -> k
-                                        Nothing -> Acton.Env.tconKind (NoQ n) env
-tcKind qn env                       = Acton.Env.tconKind qn env
+                                        Nothing -> tconKind (NoQ n) env
+tcKind qn env                       = tconKind qn env
 
 tvKind v env                        = case filter (==v) (tvars env) of
                                         [] -> err1 v "Unbound type variable:"
@@ -294,7 +294,7 @@ instance KCheck Decl where
                                          Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
     kchk env (Extension l n q us b) = do env1 <- extvars (tvSelf : tybound q) env
                                          kexp KType env1 (TC n (map tVar $ tybound q))
-                                         Extension l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
+                                         Extension l (unalias env n) <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b
 
 instance KCheck Expr where
     kchk env (Var l n)              = return $ Var l n
@@ -450,13 +450,13 @@ instance KInfer TVar where
                                          return (tvkind tv, tv)
 
 instance KInfer TCon where
-    kinfer env (TC n [])            = return (tcKind n env, TC n [])
+    kinfer env (TC n [])            = return (tcKind n env, TC (unalias env n) [])
     kinfer env (TC n ts)            = do let kn = tcKind n env
                                          (ks,ts) <- fmap unzip $ mapM (kinfer env) ts
                                          k <- newKVar
                                          kunify (loc n) kn (KFun ks k)
                                          k <- ksubst False k
-                                         return (k, TC n ts)
+                                         return (k, TC (unalias env n) ts)
 
 envBound (TV k (Internal p _ _))    = p == Xistvar
 envBound _                          = True
@@ -476,7 +476,7 @@ instance KInfer Type where
     kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
-    kinfer env (TUnion l us)        = return (KType, TUnion l $ Acton.Env.uniChk env us)
+    kinfer env (TUnion l us)        = return (KType, TUnion l (unalias env us))
     kinfer env (TOpt _ t@TOpt{})    = kinfer env t
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)

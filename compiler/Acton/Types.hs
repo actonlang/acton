@@ -419,6 +419,7 @@ instance InfEnv Decl where
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
+                                             -- w <- newWitness
                                              return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us (bindWits eq1 ++ b'))
       where env1                        = define (toSigs te') $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             ps                          = mro1 env us
@@ -698,6 +699,7 @@ instance Check Decl where
       where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             n'                          = extensionName (head us) n
+--            n'                          = noq $ wname $ getWitness env n (head us)
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ tybound q))]
 
