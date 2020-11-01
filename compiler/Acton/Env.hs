@@ -25,8 +25,7 @@ import Prelude hiding ((<>))
 
 
 mkEnv                       :: (FilePath,FilePath) -> Env0 -> Module -> IO Env0
-mkEnv paths env m           = getImps paths env' (imps m)
-  where env'                = env{ thismod = modname m }
+mkEnv paths env m           = getImps paths env (imps m)
 
 
 type TEnv                   = [(Name, NameInfo)]
@@ -35,7 +34,7 @@ data EnvF x                 = EnvF {
                                 names      :: TEnv,
                                 modules    :: TEnv,
                                 witnesses  :: [(QName,Witness)],
-                                thismod    :: ModName,
+                                thismod    :: Maybe ModName,
                                 envX       :: x }
 
 type Env0                   = EnvF ()
@@ -127,8 +126,7 @@ instance QMatch (QName,Witness) where
             m a          b          = False
 
 instance QMatch QName where
-    qmatch env a b                  = m (unalias env a) (unalias env b)
-      where m a@GName{}  b@GName{}  = mname a == mname b && noq a == noq b
+    qmatch env a b                  = unalias env a == unalias env b
 
 instance QMatch TCon where
     qmatch env (TC a ts) (TC b us)  = qmatch env a b && qmatch env ts us
@@ -328,8 +326,10 @@ instance Unalias QName where
       where m'                      = unalias env m
     unalias env (NoQ n)             = case lookup n (names env) of
                                         Just (NAlias qn) -> qn
-                                        _ -> GName (thismod env) n
-    unalias env (GName m n)         = GName m n
+                                        _ -> case thismod env of Just m -> GName m n; _ -> NoQ n
+    unalias env (GName m n)
+      | inBuiltin env, m==mBuiltin  = NoQ n
+      | otherwise                   = GName m n
                                     
 instance Unalias TSchema where
     unalias env (TSchema l q t)     = TSchema l (unalias env q) (unalias env t)
@@ -374,6 +374,8 @@ instance Unalias (Name,NameInfo) where
 
 instance Unalias WTCon where
     unalias env (w,u)               = (unalias env w, unalias env u)
+
+globalize env m x                   = unalias (setMod m env) x
 
 
 -- Union type handling -------------------------------------------------------------------------------------------------
@@ -485,13 +487,13 @@ initEnv nobuiltin           = if nobuiltin
                                 then return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                                     modules = [(nPrim,NModule envPrim)],
                                                     witnesses = [],
-                                                    thismod = ModName [],
+                                                    thismod = Nothing,
                                                     envX = () }
                                 else do path <- getExecutablePath
                                         envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
                                         let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                          modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
-                                                         thismod = ModName [],
+                                                         thismod = Nothing,
                                                          witnesses = [],
                                                          envX = () }
                                             env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
@@ -535,6 +537,9 @@ defineSelf qn q env         = defineTVars [Quant tvSelf [tc]] env
 defineInst                  :: QName -> [WTCon] -> Name -> EnvF x -> EnvF x
 defineInst n ps w env       = foldl addWit env wits
   where wits                = [ (n, WInst p (NoQ w) ws) | (ws,p) <- ps ]
+
+setMod                      :: ModName -> EnvF x -> EnvF x
+setMod m env                = env{ thismod = Just m }
 
 addMod                     :: ModName -> TEnv -> EnvF x -> EnvF x
 addMod m newte env          = env{ modules = addM ns (modules env) }
@@ -584,7 +589,7 @@ findQName (NoQ n) env       = case lookup n (names env) of
                                 Just info -> info
                                 Nothing -> nameNotFound n
 findQName (GName m n) env
-  | m == thismod env        = findQName (NoQ n) env
+  | Just m == thismod env   = findQName (NoQ n) env
   | otherwise               = case lookupMod m env of
                                 Just te -> case lookup n te of
                                     Just i -> i
@@ -601,6 +606,8 @@ findMod (ModName (n:ns)) env = case lookup n (names env) of
                                 _ -> Nothing
 
 lookupMod                   :: ModName -> EnvF x -> Maybe TEnv
+lookupMod m env | inBuiltin env, m==mBuiltin
+                            = Just (names env)
 lookupMod (ModName ns) env  = f ns (modules env)
   where f [] te             = Just te
         f (n:ns) te         = case lookup n te of
@@ -742,14 +749,14 @@ fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)
 
 
 allCons                     :: EnvF x -> [QName]
-allCons env                 = [ gname env n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
   where con NClass{}        = True
         con NAct{}          = True
         con _               = False
         cons m (Just te)    = [ GName m n | (n,i) <- te, con i ]
 
 allProtos                   :: EnvF x -> [QName]
-allProtos env               = [ gname env n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where proto NProto{}      = True
         proto _             = False
         protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ]
@@ -762,7 +769,7 @@ wexpr []                    = id
 wexpr (Nothing : w)         = wexpr w
 wexpr (Just n : w)          = wexpr w . (\e -> eDot e (witAttr n))
 
-gname env n                 = GName (thismod env) n
+gname env n                 = unalias env (NoQ n)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------

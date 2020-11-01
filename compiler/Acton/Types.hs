@@ -19,7 +19,7 @@ import qualified InterfaceFiles
 import qualified Data.Map
 
 reconstruct                             :: String -> Env0 -> Module -> IO (TEnv, Module, Env0)
-reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (unalias env2 te)
+reconstruct fname env0 (Module m i ss)  = do InterfaceFiles.writeFile (fname ++ ".ty") (globalize env2 m te)
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
                                              return (map simpSig te, Module m i ss1, env0')

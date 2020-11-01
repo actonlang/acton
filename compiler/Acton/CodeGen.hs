@@ -17,12 +17,12 @@ generate                            :: Acton.Env.Env0 -> Module -> IO (String,St
 generate env m                      = do return (h,c)
   where h                           = render $ hModule env0 m
         c                           = render $ cModule env0 m
-        env0                        = genEnv env (modname m)
+        env0                        = genEnv $ setMod (modname m) env
 
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0 m                       = setX env0 GenX{ globalX = [] }
+genEnv env0                         = setX env0 GenX{ globalX = [] }
 
 type GenEnv                         = EnvF GenX
 
