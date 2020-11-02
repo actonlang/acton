@@ -61,24 +61,26 @@ typedef env (Class _ n q a b)       = text "typedef" <+> text "struct" <+> genTo
 typedef env Def{}                   = empty
 
 decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
-                                      nest 4 (fields env tc) $+$ 
+                                      nest 4 (vcat $ gcinfo env : superlink env : initdef : serialize env tc : deserialize env tc : meths) $+$ 
                                       char '}' <> semi $+$
                                       (text "struct" <+> genTopName env n <+> char '{') $+$ 
-                                      nest 4 (properties env tc) $+$ 
+                                      nest 4 (classlink env n $+$ properties env tc) $+$ 
                                       char '}' <> semi
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
+        initdef : meths             = fields env tc
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodsname env n <> semi
 methstub env Def{}                  = empty
 
-fields env c                        = vmap field te
+fields env c                        = map field te
   where te                          = fullAttrEnv env c
         field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
         field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi
         field (n, NVar t)           = varsig env n t <> semi
+        field (n, NSig sc Static)   = funsig env n (sctype sc) <> semi <+> text "// abstract!!!"
+        field (n, NSig sc NoDec)    = methsig env c n (sctype sc) <> semi <+> text "// abstract!!!"
         field (n, NSig sc Property) = empty
-        field (n, NSig sc _)        = parens (text "signature" <+> gen env n)
 
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
 
@@ -95,6 +97,20 @@ properties env c                    = vmap prop te
   where te                          = fullAttrEnv env c
         prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
         prop _                      = empty
+
+gcinfo env                          = text "char" <+> text "*" <> gen env (primKW "GCINFO") <> semi
+
+superlink env                       = gen env tSuperclass <+> gen env (primKW "superclass") <> semi
+  where tSuperclass                 = tCon $ TC (GName mPrim (Derived (name "Super") (name "class"))) []
+
+serialize env c                     = methsig env c (name "__serialize__") (TFun l0 fxPure serialstate kwdNil tNone) <> semi
+
+deserialize env c                   = funsig env (name "__deserialize__") (TFun l0 fxPure serialstate kwdNil (tCon c)) <> semi
+
+serialstate                         = posRow tSerialstate posNil
+  where tSerialstate                = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
+
+classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env (primKW "class") <> semi
 
 classname env n                     = genTopName env (Derived n $ name "class")
 
