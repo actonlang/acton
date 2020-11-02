@@ -111,7 +111,7 @@ type WTCon                  = ([Maybe QName],TCon)
 instance Data.Binary.Binary NameInfo
 
 
--- Equality modulo qualified/unqualified type names
+-- Equality modulo qualified/unqualified type names and unifiable type variables
 
 class QMatch a where
     qmatch                          :: EnvF x -> a -> a -> Bool
@@ -499,7 +499,7 @@ initEnv nobuiltin           = if nobuiltin
                                             env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
                                         return env
 
-envPrim                     = primMkEnv NClass NDef NVar
+envPrim                     = primMkEnv NClass NDef NVar NSig
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}

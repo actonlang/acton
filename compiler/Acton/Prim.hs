@@ -7,53 +7,55 @@ import Acton.Builtin
 
 nPrim               = name "$"
 mPrim               = ModName [nPrim]
-gPrim n             = GName mPrim n
+gPrim s             = GName mPrim (name s)
 
-primActor           = gPrim $ name "Actor"
-primR               = gPrim $ name "R"
-primClos            = gPrim $ name "Clos"
+primKW s            = name ("$" ++ s)
 
-primASYNCw          = gPrim $ name "ASYNCw"
+primActor           = gPrim "Actor"
+primR               = gPrim "R"
+primClos            = gPrim "Clos"
 
-primASYNCf          = gPrim $ name "ASYNCf"
-primAFTERf          = gPrim $ name "AFTERf"
-primAWAITf          = gPrim $ name "AWAITf"
+primASYNCw          = gPrim "ASYNCw"
 
-primASYNCc          = gPrim $ name "ASYNCc"
-primAFTERc          = gPrim $ name "AFTERc"
-primAWAITc          = gPrim $ name "AWAITc"
+primASYNCf          = gPrim "ASYNCf"
+primAFTERf          = gPrim "AFTERf"
+primAWAITf          = gPrim "AWAITf"
 
-primASYNC           = gPrim $ name "ASYNC"
-primAFTER           = gPrim $ name "AFTER"
-primAWAIT           = gPrim $ name "AWAIT"
+primASYNCc          = gPrim "ASYNCc"
+primAFTERc          = gPrim "AFTERc"
+primAWAITc          = gPrim "AWAITc"
 
-primPUSHc           = gPrim $ name "PUSHc"
-primPUSH            = gPrim $ name "PUSH"
+primASYNC           = gPrim "ASYNC"
+primAFTER           = gPrim "AFTER"
+primAWAIT           = gPrim "AWAIT"
 
-primPOP             = gPrim $ name "POP"
-primRERAISE         = gPrim $ name "RERAISE"
-primRAISE           = gPrim $ name "RAISE"
-primRAISEFROM       = gPrim $ name "RAISEFROM"
-primASSERT          = gPrim $ name "ASSERT"
+primPUSHc           = gPrim "PUSHc"
+primPUSH            = gPrim "PUSH"
 
-primISINSTANCE      = gPrim $ name "ISINSTANCE"
-primCAST            = gPrim $ name "CAST"
+primPOP             = gPrim "POP"
+primRERAISE         = gPrim "RERAISE"
+primRAISE           = gPrim "RAISE"
+primRAISEFROM       = gPrim "RAISEFROM"
+primASSERT          = gPrim "ASSERT"
 
-primRContc          = gPrim $ name "R_CONTc"
-primRCont           = gPrim $ name "R_CONT"
+primISINSTANCE      = gPrim "ISINSTANCE"
+primCAST            = gPrim "CAST"
 
-primEqOpt           = gPrim $ name "EqOpt"
-primIdentityOpt     = gPrim $ name "IdentityOpt"
+primRContc          = gPrim "R_CONTc"
+primRCont           = gPrim "R_CONT"
 
-primWEqNone         = gPrim $ name "wEqNone"
-primWIdentityNone   = gPrim $ name "wIdentityNone"
-primWEqUnion        = gPrim $ name "wEqUnion"
-primWPlusInt        = gPrim $ name "wPlusInt"
+primEqOpt           = gPrim "EqOpt"
+primIdentityOpt     = gPrim "IdentityOpt"
 
-primISNOTNONE       = gPrim $ name "ISNOTNONE"
+primWEqNone         = gPrim "wEqNone"
+primWIdentityNone   = gPrim "wIdentityNone"
+primWEqUnion        = gPrim "wEqUnion"
+primWPlusInt        = gPrim "wPlusInt"
 
-primSKIPRESc        = gPrim $ name "SKIPRESc"
-primSKIPRES         = gPrim $ name "SKIPRES"
+primISNOTNONE       = gPrim "ISNOTNONE"
+
+primSKIPRESc        = gPrim "SKIPRESc"
+primSKIPRES         = gPrim "SKIPRES"
 
 
 tActor              = tCon $ TC primActor []
@@ -62,7 +64,8 @@ tClos x p t         = tCon $ TC primClos [x,p,t]
 tCont x t           = tClos x (posRow t posNil) tR
 
 
-primMkEnv cls def var   = [ (noq primASYNCw,        def scASYNCw NoDec),
+primMkEnv cls def var sig = 
+                        [   (noq primASYNCw,        def scASYNCw NoDec),
 
                             (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primAFTERf,        def scAFTERf NoDec),
@@ -87,7 +90,7 @@ primMkEnv cls def var   = [ (noq primASYNCw,        def scASYNCw NoDec),
                             (noq primISINSTANCE,    def scISINSTANCE NoDec),
                             (noq primCAST,          def scCAST NoDec),
                         
-                            (noq primActor,         clActor cls def),
+                            (noq primActor,         clActor cls def sig),
                             (noq primR,             clR cls def),
                             (noq primClos,          clClos cls def),
 
@@ -108,8 +111,15 @@ primMkEnv cls def var   = [ (noq primASYNCw,        def scASYNCw NoDec),
                             (noq primSKIPRES,       def scSKIPRES NoDec)
                             
                       ]
+
 --  class $Actor (): pass
-clActor cls def     = cls [] [] []
+clActor cls def sig = cls [] [] te
+  where te          = [ (primKW "next",     sig (monotype tActor) Property),
+                        (primKW "msg",      sig (monotype (tMsg tWild)) Property),
+                        (primKW "outgoing", sig (monotype (tMsg tWild)) Property),
+                        (primKW "catcher",  sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
+                        (primKW "lock",     sig (monotype $ tCon $ TC (gPrim "Lock") []) Property) ]
+        
 
 --  class $R (): pass
 clR cls def         = cls [] [] []

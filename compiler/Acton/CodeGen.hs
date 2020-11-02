@@ -96,9 +96,9 @@ properties env c                    = vmap prop te
         prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
         prop _                      = empty
 
-classname env n                     = genTopName env n <> text "$class"
+classname env n                     = genTopName env (Derived n $ name "class")
 
-methodsname env n                   = genTopName env n <> text "$methods"
+methodsname env n                   = genTopName env (Derived n $ name "methods")
 
 
 -- Implementation -----------------------------------------------------------------------------------
