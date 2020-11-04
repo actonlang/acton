@@ -11,6 +11,7 @@ import Acton.Printer
 import Acton.Prim
 import Acton.Env
 import Acton.QuickType
+import Acton.Subst
 import Prelude hiding ((<>))
 
 generate                            :: Acton.Env.Env0 -> Module -> IO (String,String)
@@ -22,37 +23,52 @@ generate env m                      = do return (h,c)
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [] }
+genEnv env0                         = setX env0 GenX{ globalX = [], localX = [] }
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name] }
+data GenX                           = GenX { globalX :: [Name], localX :: [Name] }
 
-global env                          = globalX $ envX env
-
-gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ global env }
+gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
   where env1                        = define te env
 
-ldefine te env                      = modX env1 $ \x -> x{ globalX = global env \\ dom te }
+ldefine te env                      = modX env1 $ \x -> x{ localX = dom te ++ localX x }
   where env1                        = define te env
+
+global env                          = globalX (envX env) \\ localX (envX env)
+
+defined env                         = globalX (envX env) ++ localX (envX env)
+
+
+-- Helpers ------------------------------------------------------------------------------------------
+
+include env m                       = text "#include" <+> doubleQuotes (gen env m <> text ".h")
+
+modNames (Import _ ms : is)         = [ m | ModuleItem m _ <- ms ] ++ modNames is
+modNames (FromImport _ (ModRef (0,Just m)) _ : is)
+                                    = m : modNames is
+modNames (FromImportAll _ (ModRef (0,Just m)) : is)
+                                    = m : modNames is
+modNames []                         = []
 
 
 -- Header -------------------------------------------------------------------------------------------
 
-hModule env (Module qn imps stmts)  = vcat (map (gen env) imps) $+$
-                                      hSuite env stmts
+hModule env (Module m imps stmts)   = text "#ifndef" <+> gen env m $+$
+                                      text "#define" <+> gen env m $+$
+                                      vcat (map (include env) $ modNames imps) $+$
+                                      hSuite env stmts $+$
+                                      text "#endif"
 
 hSuite env []                       = empty
 hSuite env (s:ss)                   = hStmt env s $+$ hSuite (gdefine (envOf s) env) ss
 
-hStmt env (Assign _ [PVar _ n (Just t)] _)
-                                    = text "extern" <+> gen env t <+> genTopName env n <> semi
 hStmt env (Decl _ ds)               = vmap (stub env1) ds $+$
                                       vmap (typedef env1) ds $+$
                                       vmap (decl env1) ds $+$
                                       vmap (methstub env1) ds
   where env1                        = gdefine (envOf ds) env
-hStmt env _                         = empty
+hStmt env s                         = vcat [ text "extern" <+> gen env t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
 
 stub env (Class _ n q a b)          = text "struct" <+> genTopName env n <> semi
 stub env Def{}                      = empty
@@ -70,7 +86,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
         initdef : meths             = fields env tc
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
-methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodsname env n <> semi
+methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi
 methstub env Def{}                  = empty
 
 fields env c                        = map field te
@@ -114,22 +130,77 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 
 classname env n                     = genTopName env (Derived n $ name "class")
 
-methodsname env n                   = genTopName env (Derived n $ name "methods")
+methodtable env n                   = genTopName env (Derived n $ name "methods")
 
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env (Module qn imps stmts)  = text "#include" <+> doubleQuotes (gen env qn <> text ".h") $+$
-                                      cSuite env stmts
+cModule env (Module m imps stmts)   = include env m $+$
+                                      declModule env stmts $+$
+                                      text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
+                                      (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
+                                      nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
+                                              genTopName env initFlag <+> equals <+> text "1" <> semi $+$
+                                              initImports $+$
+                                              initModule env stmts) $+$
+                                      char '}'
+  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
 
-cSuite env []                       = empty
-cSuite env (s:ss)                   = cStmt env s $+$ cSuite (gdefine (envOf s) env) ss
 
-cStmt env (Assign _ [PVar _ n (Just t)] _)
-                                    = gen env t <+> genTopName env n <> semi
-cStmt env (Decl _ ds)               = vcat $ map (gen env1) ds
+declModule env []                   = empty
+declModule env (Decl _ ds : ss)     = vcat [ declDecl env d | d <- ds ] $+$
+                                      declModule env1 ss
   where env1                        = gdefine (envOf ds) env
-cStmt env _                         = empty
+declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
+                                      declModule env1 ss
+  where te                          = envOf s `exclude` defined env
+        env1                        = gdefine te env
+
+declDecl env (Def _ n q p KwdNIL a b d m)
+                                    = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+                                      nest 4 (genSuite env1 b) $+$
+                                      char '}'
+  where env1                        = ldefine (envOf p) env
+declDecl env (Class _ n q as b)     = vcat [ declDecl env d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+  where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
+
+
+
+initModule env []                   = empty
+initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n as $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
+                                      initModule env1 ss
+  where env1                        = gdefine (envOf ds) env
+initModule env (Signature{} : ss)   = initModule env ss
+initModule env (s : ss)             = genStmt env s $+$
+                                      vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
+                                      initModule env1 ss
+  where te                          = envOf s `exclude` defined env
+        env1                        = gdefine te env
+
+
+initClassBase env c as              = methodtable env c <> dot <> gen env (primKW "GCINFO") <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+                                      methodtable env c <> dot <> gen env (primKW "superclass") <+> equals <+> super <> semi $+$
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
+  where super                       = if null as then text "NULL" else text "&" <> gen env (globalize env $ tcname $ head as)
+        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> gen env (globalize env c') <> dot <> gen env n <> semi
+
+initClass env c []                  = empty
+initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> gen env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
+                                      initClass env1 c ss
+  where env1                        = gdefine (envOf ds) env
+initClass env c (Signature{} : ss)  = initClass env c ss
+initClass env c (s : ss)            = genStmt env s $+$
+                                      vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
+                                      initClass env1 c ss
+  where te                          = envOf s `exclude` defined env
+        env1                        = ldefine te env
+
+
+initFlag                            = name "done$"
+
+methodname c n                      = Derived c n
+
 
 
 class Gen a where
@@ -140,12 +211,6 @@ instance (Gen a) => Gen (Maybe a) where
     gen env x                       = maybe empty (gen env) x
 
 
-instance Gen Import where
-    gen env (Import _ ms)           = vcat [ text "#include" <+> doubleQuotes (gen env m <> text ".h") | m <- ms ]
-
-instance Gen ModuleItem where
-    gen env (ModuleItem m Nothing)  = gen env m
-
 instance Gen ModName where
     gen env (ModName ns)            = hcat $ punctuate (char '$') $ map (gen env) ns
 
@@ -154,9 +219,7 @@ instance Gen QName where
       | m == mPrim                  = char '$' <> text (nstr n)
       | m == mBuiltin               = char '$' <> text (nstr n)
       | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
-    gen env (NoQ n)
-      | n `elem` global env         = gen env (gname env n)
-      | otherwise                   = gen env n
+    gen env (NoQ n)                 = gen env n
     gen env (QName m n)             = error ("Unexpected QName in CodeGen: " ++ prstr (QName m n))
 
 instance Gen Name where
@@ -190,9 +253,17 @@ genTopName env n                    = gen env (gname env n)
 
 word                                = text "$WORD"
 
-genSuite env ss                     = nest 4 $ genS env ss
-  where genS env []                 = empty
-        genS env (s:ss)             = gen env s $+$ genS (ldefine (envOf s) env) ss
+genSuite env []                     = empty
+genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf s) env) ss
+  where te                          = envOf s `exclude` defined env
+        env1                        = ldefine te env
+
+genStmt env (Decl _ ds)             = empty
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> gen env e <> semi
+genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
+                                      gen env s
+  where te                          = envOf s `exclude` defined env
 
 instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
@@ -204,24 +275,13 @@ instance Gen Stmt where
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
+    gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ genSuite env b $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genElse env []                      = empty
-genElse env b                       = (text "else" <+> char '{') $+$ genSuite env b $+$ char '}'
-
-instance Gen Decl where
-    gen env (Def _ n q p KwdNIL a b d m)
-                                    = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{')
-                                      $+$ genSuite env1 b $+$ char '}'
-      where env1                    = ldefine (envOf p) $ defineTVars q env
-    gen env (Class _ n q a b)       = (text "struct" <+> genTopName env n <+> nonEmpty parens commaList a <+> char '{') $+$
-                                      genSuite env b $+$ char '}'
-      where env1                    = defineSelf (NoQ n) q $ defineTVars q env
-
-
+genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 instance Gen PosPar where
     gen env (PosPar n t e PosNIL)   = gen env t <+> gen env n
@@ -239,6 +299,8 @@ instance Gen KwdArg where
     gen env KwdNil                  = empty
 
 instance Gen Expr where
+    gen env (Var _ (NoQ n))
+      | n `elem` global env         = genTopName env n
     gen env (Var _ n)               = gen env n
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
@@ -252,10 +314,12 @@ instance Gen Expr where
     gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
     gen env (TApp _ e ts)           = gen env e
 --    gen env (Cond _ e1 e e2)        = gen env e <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2
-    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env c)
+    gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
 --    gen env (BinOp _ e1 Or e2)      = gen env e1 <+> text "||" <+> gen env e2
 --    gen env (BinOp _ e1 And e2)     = gen env e1 <+> text "&&" <+> gen env e2
 --    gen env (UnOp _ Not e)          = text "!" <> gen env e
+    gen env (Dot _ e@(Var _ (NoQ x)) n)
+      | x `elem` global env         = gen env e <> text "." <> gen env n
     gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
     gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
@@ -263,7 +327,7 @@ instance Gen Expr where
     gen env (Yield _ e)             = text "yield" <+> gen env e
     gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
-    gen env (List _ es)             = brackets (commaList es)
+    gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env (Paren _ e)             = gen env e
     gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
 
@@ -305,8 +369,7 @@ instance Gen Elem where
     gen env (Elem e)                = gen env e
 
 instance Gen Pattern where
-    gen env (PVar _ n Nothing)      = gen env n
-    gen env (PVar _ n (Just t))     = gen env t <+> gen env n
+    gen env (PVar _ n _)            = gen env n
 
 instance Gen Unary where
     gen env Not                     = text "not "
@@ -366,7 +429,7 @@ instance Gen TVar where
     gen env (TV k n)                = word
 
 instance Gen TCon where
-    gen env (TC n ts)               = gen env n
+    gen env (TC n ts)               = gen env (globalize env n)
     
 instance Gen Type where
     gen env (TVar _ v)              = gen env v

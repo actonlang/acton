@@ -375,7 +375,8 @@ instance Unalias (Name,NameInfo) where
 instance Unalias WTCon where
     unalias env (w,u)               = (unalias env w, unalias env u)
 
-globalize env m x                   = unalias (setMod m env) x
+
+globalize env                       = unalias env
 
 
 -- Union type handling -------------------------------------------------------------------------------------------------
@@ -747,6 +748,14 @@ fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)
   where tes                 = [ attrEnv env c | (_,c) <- findAncestry env tc ]
         init                = take 1 $ filter ((==initKW) . fst) $ concat tes
 
+inheritedAttrs              :: EnvF x -> QName -> [(QName,Name)]
+inheritedAttrs env n        = inh (dom te) us
+  where (_,us,te)           = findConName n env
+        inh ns0 []          = []
+        inh ns0 (u:us)      = [ (c',n) | n <- ns \\ ns0 ] ++ inh (ns++ns0) us
+          where c'          = tcname (snd u)
+                (_,_,te)    = findConName c' env
+                ns          = dom (snd $ splitSigs te)
 
 allCons                     :: EnvF x -> [QName]
 allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
