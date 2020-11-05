@@ -82,19 +82,19 @@ extern $R $ROOT($Env, $Cont);
 $Actor root_actor = NULL;
 
 $Actor readyQ = NULL;
-volatile atomic_flag readyQ_lock;
+$Lock readyQ_lock;
 
 $Msg timerQ = NULL;
-volatile atomic_flag timerQ_lock;
+$Lock timerQ_lock;
 
 pthread_key_t self_key;
 
-static inline void spinlock_lock(volatile atomic_flag *f) {
+static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
     }
 }
-static inline void spinlock_unlock(volatile atomic_flag *f) {
+static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
 }
 
