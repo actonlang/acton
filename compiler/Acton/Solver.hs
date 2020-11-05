@@ -249,7 +249,6 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX (FXMut t1) (FXMut t2)        = Just $ unify env t1 t2
         castFX (FXMut t1) (FXAct t2)        = Just $ unify env t1 t2
         castFX (FXAct t1) (FXAct t2)        = Just $ unify env t1 t2
-        castFX FXPure FXAction              = Just $ return ()
         castFX FXAction FXAction            = Just $ return ()
         castFX FXAction (FXAct _)           = Just $ return ()
         castFX fx1 fx2                      = Nothing
@@ -935,7 +934,7 @@ allAbove env (TOpt _ t)                 = [COpt]
 allAbove env (TNone _)                  = [CNone]
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
-allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct,CAction]
+allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
 allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
 allAbove env (TFX _ (FXAct _))          = [CAct]
 allAbove env (TFX _ FXAction)           = [CAction,CAct]
@@ -954,7 +953,7 @@ allBelow env (TTuple _ _ _)             = [CTuple]
 allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
-allBelow env (TFX _ FXAction)           = [CAction,CPure]
+allBelow env (TFX _ FXAction)           = [CAction]
 allBelow env (TUnion _ us)              = map CUnion (uniBelow env us) ++ [ CCon n | UCon n <- us ]
 allBelow env _                          = []
 

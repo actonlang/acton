@@ -10,7 +10,7 @@ y = m2(4)
 
 actor Apa():
     m3 : [A(Eq)] => (A) -> A
-    def m3(a):
+    pure def m3(a):
         return a
     def m4(a):
         return a

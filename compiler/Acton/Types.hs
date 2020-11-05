@@ -617,7 +617,7 @@ instance Check Decl where
                                              t <- maybe newTVar return a
                                              pushFX fx t
                                              st <- newTVar
-                                             let env1 = env1f st
+                                             env1 <- pure $ maybeSetActorFX st env1
                                              wellformed env1 q
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
@@ -625,21 +625,23 @@ instance Check Decl where
                                              (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                                 csx = [Cast fxPure fx]
+                                                 csx = case fx of
+                                                         TVar _ v | univar v, inAct env1 -> [Cast (actorFX env1 l) fx]
+                                                         _ -> [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
                                              (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst++csx)
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchDefAssumption env cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
-      where env1f st                    = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ maybeSetActorFX st env
+      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
             tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newActVar
                                              traceM ("## actor st: " ++ prstr st)
                                              pushFX (fxAct st) tNone
-                                             env1 <- return $ setActorFX st env1
+                                             env1 <- pure $ setActorFX st env1
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
