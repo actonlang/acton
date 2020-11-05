@@ -131,9 +131,6 @@ witArgs ws wmap                         = case lookup (head ws) wmap of
                                             Just es -> es
                                             -- Nothing -> trace ("##### wmap empty for " ++ prstrs ws) []
 
-mkBody []                               = [Pass NoLoc]
-mkBody b                                = b
-
 noqual env q                            = [ Quant v (filter (not . isProto env . tcname) us) | Quant v us <- q ]
 
 quals env q                             = [ (v, p) | Quant v ps <- q, p <- ps, isProto env (tcname p) ]
