@@ -148,7 +148,7 @@ cModule env (Module m imps stmts)   = include env m $+$
 
 
 declModule env []                   = empty
-declModule env (Decl _ ds : ss)     = vcat [ declDecl env d | d <- ds ] $+$
+declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
                                       declModule env1 ss
   where env1                        = gdefine (envOf ds) env
 declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
@@ -186,7 +186,7 @@ initClassBase env c as              = methodtable env c <> dot <> gen env (primK
         inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> gen env (globalize env c') <> dot <> gen env n <> semi
 
 initClass env c []                  = empty
-initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> gen env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
+initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
                                       initClass env1 c ss
   where env1                        = gdefine (envOf ds) env
 initClass env c (Signature{} : ss)  = initClass env c ss
@@ -313,11 +313,7 @@ instance Gen Expr where
     gen env (BStrings _ [s])        = text s
     gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
     gen env (TApp _ e ts)           = gen env e
---    gen env (Cond _ e1 e e2)        = gen env e <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
---    gen env (BinOp _ e1 Or e2)      = gen env e1 <+> text "||" <+> gen env e2
---    gen env (BinOp _ e1 And e2)     = gen env e1 <+> text "&&" <+> gen env e2
---    gen env (UnOp _ Not e)          = text "!" <> gen env e
     gen env (Dot _ e@(Var _ (NoQ x)) n)
       | x `elem` global env         = gen env e <> text "." <> gen env n
     gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
