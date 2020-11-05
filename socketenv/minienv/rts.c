@@ -280,9 +280,9 @@ $RetNew $RetNew$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R $RetNew$enter($RetNew $this, $WORD _ignore) {
+$R $RetNew$__enter__($RetNew $this, $WORD _ignore) {
   $Cont cont = $this->cont;
-  return cont->$class->enter(cont, $this->act);
+  return cont->$class->__enter__(cont, $this->act);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -353,7 +353,7 @@ struct $RetNew$class $RetNew$methods = {
   $RetNew$__deserialize__,
   $RetNew$__bool__,
   $RetNew$__str__,
-  $RetNew$enter
+  $RetNew$__enter__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -527,7 +527,7 @@ char *RTAG_name($RTAG tag) {
   }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$enter($Cont $this, $WORD val) {
+$R $DONE$__enter__($Cont $this, $WORD val) {
   return $R_DONE(val);
 }
 
@@ -560,13 +560,13 @@ struct $Cont$class $Done$methods = {
   $Done__deserialize__,
   $Done$__bool__,
   $Done$__str__,
-  $DONE$enter
+  $DONE$__enter__
 };
 struct $Cont $Done$instance = {
   &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$enter ($Cont $this, $WORD val) {
+$R $NewRoot$__enter__ ($Cont $this, $WORD val) {
   $Cont then = ($Cont)val;
   $_EnvActor actual = NULL;
   // We must create an _EnvActor, probably using $NEWCC?
@@ -583,13 +583,13 @@ struct $Cont$class $NewRoot$methods = {
   NULL,
   NULL,
   NULL,
-  $NewRoot$enter
+  $NewRoot$__enter__
 };
 struct $Cont $NewRoot$instance = {
   &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $WriteRoot$enter($Cont $this, $WORD val) {
+$R $WriteRoot$__enter__($Cont $this, $WORD val) {
   root_actor = ($Actor)val;
   return $R_DONE(val);
 }
@@ -603,7 +603,7 @@ struct $Cont$class $WriteRoot$methods = {
   NULL,
   NULL,
   NULL,
-  $WriteRoot$enter
+  $WriteRoot$__enter__
 };
 struct $Cont $WriteRoot$instance = {
   &$WriteRoot$methods
@@ -687,7 +687,7 @@ void *main_loop(void *arg) {
       $Cont cont = m->cont;
       $WORD val = m->value;
             
-      $R r = cont->$class->enter(cont, val);
+      $R r = cont->$class->__enter__(cont, val);
       switch (r.tag) {
       case $RDONE: {
         FLUSH_outgoing(current);
@@ -767,7 +767,7 @@ void *main_loop(void *arg) {
             if (kev.flags & EV_EOF) {
               printf("Discovered EV_EOF\n");
               if (fd_data[fd].errhandler)
-                fd_data[fd].errhandler->$class ->enter(fd_data[fd].errhandler,to$str("Remote host closed connection"));
+                fd_data[fd].errhandler->$class ->__enter__(fd_data[fd].errhandler,to$str("Remote host closed connection"));
               else {
                 perror("Remote host closed connection");
                 exit(-1);
@@ -799,7 +799,7 @@ void *main_loop(void *arg) {
                 count = read(fd,&fd_data[fd].buffer,BUF_SIZE);
                 if (count < BUF_SIZE)
                   fd_data[fd].buffer[count] = 0;
-                fd_data[fd].rhandler->$class->enter(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
+                fd_data[fd].rhandler->$class->__enter__(fd_data[fd].rhandler,to$str(fd_data[fd].buffer));
               } else {
                 fprintf(stderr,"internal error: readhandler/event filter mismatch on descriptor %d\n",fd);
                 exit(-1);

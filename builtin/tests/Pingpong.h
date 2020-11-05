@@ -16,7 +16,7 @@ struct lambda$1$class {
     void (*__init__)(lambda$1, Pingpong, $int);
     void (*__serialize__)(lambda$1, $Serial$state);
     lambda$1 (*__deserialize__)($Serial$state);
-    $R (*enter)(lambda$1, $Cont);
+    $R (*__enter__)(lambda$1, $Cont);
 };
 struct lambda$1 {
     union {
@@ -33,7 +33,7 @@ struct lambda$2$class {
     void (*__init__)(lambda$2, Pingpong);
     void (*__serialize__)(lambda$2, $Serial$state);
     lambda$2 (*__deserialize__)($Serial$state);
-    $R (*enter)(lambda$2, $Cont);
+    $R (*__enter__)(lambda$2, $Cont);
 };
 struct lambda$2 {
     union {

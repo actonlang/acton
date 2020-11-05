@@ -117,7 +117,7 @@ struct $Clos$class {
     $Clos (*__deserialize__)($Serial$state);
     $bool (*__bool__)($Clos);
     $str (*__str__)($Clos);
-    $WORD (*enter)($Clos, $WORD);
+    $WORD (*__enter__)($Clos, $WORD);
 };
 struct $Clos {
     struct $Clos$class *$class;
@@ -132,7 +132,7 @@ struct $Cont$class {
     $Cont (*__deserialize__)($Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
-    $R (*enter)($Cont, $WORD);
+    $R (*__enter__)($Cont, $WORD);
 };
 struct $Cont {
     union {
@@ -150,7 +150,7 @@ struct $RetNew$class {
     $RetNew (*__deserialize__)($Serial$state);
     $bool (*__bool__)($RetNew);
     $str (*__str__)($RetNew);
-    $R (*enter)($RetNew, $WORD);
+    $R (*__enter__)($RetNew, $WORD);
 };
 struct $RetNew {
     struct $RetNew$class *$class;

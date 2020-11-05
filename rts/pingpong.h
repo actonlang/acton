@@ -19,13 +19,10 @@ struct lambda$1$class {
     lambda$1 (*__deserialize__)($Serial$state);
     $bool (*__bool__)(lambda$1);
     $str (*__str__)(lambda$1);
-    $R (*enter)(lambda$1, $Cont);
+    $R (*__enter__)(lambda$1, $Cont);
 };
 struct lambda$1 {
-    union {
-        struct lambda$1$class *$class;
-        struct $Cont super;
-    };
+    struct lambda$1$class *$class;
     Pingpong self;
     $int count;
     $int q;
@@ -40,13 +37,10 @@ struct lambda$2$class {
     lambda$2 (*__deserialize__)($Serial$state);
     $bool (*__bool__)(lambda$2);
     $str (*__str__)(lambda$2);
-    $R (*enter)(lambda$2, $Cont);
+    $R (*__enter__)(lambda$2, $Cont);
 };
 struct lambda$2 {
-    union {
-        struct lambda$2$class *$class;
-        struct $Cont super;
-    };
+    struct lambda$2$class *$class;
     Pingpong self;
     $int q;
 };
@@ -64,10 +58,12 @@ struct Pingpong$class {
     $R (*pong)(Pingpong, $int, $int, $Cont);
 };
 struct Pingpong {
-    union {
-        struct Pingpong$class *$class;
-        struct $Actor super;
-    };
+    struct Pingpong$class *$class;
+    $Actor next;
+    $Msg msg;
+    $Msg outgoing;
+    $Catcher catcher;
+    $Lock msg_lock;
     $int i;
     $int count;
 };

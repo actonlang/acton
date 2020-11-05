@@ -29,13 +29,13 @@ $str $client$$l$1lambda$__str__($client$$l$1lambda self) {
   return to$str(s);
 }
 
-$WORD $client$$l$1lambda$enter($client$$l$1lambda l$self) {
+$WORD $client$$l$1lambda$__enter__($client$$l$1lambda l$self) {
   return l$self->__self__->$class->session$local( l$self->__self__, l$self->conn);
 }
 
 struct $client$$l$1lambda$class $client$$l$1lambda$methods = {"",UNASSIGNED, NULL, $client$$l$1lambda$__init__, $client$$l$1lambda$__serialize__,
                                                               $client$$l$1lambda$__deserialize__, $client$$l$1lambda$__bool__,
-                                                              $client$$l$1lambda$__str__, $client$$l$1lambda$enter};
+                                                              $client$$l$1lambda$__str__, $client$$l$1lambda$__enter__};
 
 $R $client$__init__($client self, $Env env, $Cont c$cont) {
   self->env = env;

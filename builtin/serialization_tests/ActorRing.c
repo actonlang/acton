@@ -26,8 +26,8 @@ lambda$1 lambda$1$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$1$enter(lambda$1 $this, $Msg _ignore) {
-    return $this->cont$0->$class->enter($this->cont$0, $None);
+$R lambda$1$__enter__(lambda$1 $this, $Msg _ignore) {
+    return $this->cont$0->$class->__enter__($this->cont$0, $None);
 }
 
 struct lambda$1$class lambda$1$methods = {
@@ -39,7 +39,7 @@ struct lambda$1$class lambda$1$methods = {
     lambda$1$__deserialize__,
     lambda$1$__bool__,
     lambda$1$__str__,
-    lambda$1$enter
+    lambda$1$__enter__
 };
 
 /// lambda$2
@@ -75,7 +75,7 @@ lambda$2 lambda$2$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$2$enter(lambda$2 $this, $Cont c$1) {
+$R lambda$2$__enter__(lambda$2 $this, $Cont c$1) {
     return $this->self->$class->act$local($this->self, $this->from, $this->table, c$1);
 }
 
@@ -88,7 +88,7 @@ struct lambda$2$class lambda$2$methods = {
     lambda$2$__deserialize__,
     lambda$2$__bool__,
     lambda$2$__str__,
-    lambda$2$enter
+    lambda$2$__enter__
 };
 
 /// Act
@@ -190,7 +190,7 @@ lambda$3 lambda$3$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$3$enter(lambda$3 $this, Act $res) {
+$R lambda$3$__enter__(lambda$3 $this, Act $res) {
     return cont$1($this->self, $this->iter$1, $this->cont$0, $res);
 }
 
@@ -203,7 +203,7 @@ struct lambda$3$class lambda$3$methods = {
     lambda$3$__deserialize__,
     lambda$3$__bool__,
     lambda$3$__str__,
-    lambda$3$enter
+    lambda$3$__enter__
 };
 
 /// lambda$4
@@ -232,8 +232,8 @@ lambda$4 lambda$4$__deserialize__($Serial$state state) {
   return res;
 }
 
-$R lambda$4$enter(lambda$4 $this, $WORD _ignore) {
-    return $this->cont$0->$class->enter($this->cont$0, $None);
+$R lambda$4$__enter__(lambda$4 $this, $WORD _ignore) {
+    return $this->cont$0->$class->__enter__($this->cont$0, $None);
 }
 
 struct lambda$4$class lambda$4$methods = {
@@ -245,7 +245,7 @@ struct lambda$4$class lambda$4$methods = {
     lambda$4$__deserialize__,
     lambda$4$__bool__,
     lambda$4$__str__,
-    lambda$4$enter
+    lambda$4$__enter__
 };
 
 

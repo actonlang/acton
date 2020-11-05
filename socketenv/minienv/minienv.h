@@ -141,7 +141,7 @@ struct l$1lambda$class {
   l$1lambda (*__deserialize__)($Serial$state);
   $bool (*__bool__)(l$1lambda);
   $str (*__str__)(l$1lambda);
-  $WORD (*enter)(l$1lambda,$WORD);
+  $WORD (*__enter__)(l$1lambda,$WORD);
 };
 
 struct l$1lambda {
@@ -165,7 +165,7 @@ struct l$2lambda$class {
   l$2lambda (*__deserialize__)($Serial$state);
   $bool (*__bool__)(l$2lambda);
   $str (*__str__)(l$2lambda);
-  $WORD (*enter)(l$2lambda,$WORD);
+  $WORD (*__enter__)(l$2lambda,$WORD);
 };
 
 struct l$2lambda {
@@ -189,7 +189,7 @@ struct l$3lambda$class {
   l$3lambda (*__deserialize__)($Serial$state);
   $bool (*__bool__)(l$3lambda);
   $str (*__str__)(l$3lambda);
-  $WORD (*enter)(l$3lambda,$WORD);
+  $WORD (*__enter__)(l$3lambda,$WORD);
 };
 
 struct l$3lambda {
@@ -215,7 +215,7 @@ struct l$4lambda$class {
   l$4lambda (*__deserialize__)($Serial$state);
   $bool (*__bool__)(l$4lambda);
   $str (*__str__)(l$4lambda);
-  $WORD (*enter)(l$4lambda,$WORD);
+  $WORD (*__enter__)(l$4lambda,$WORD);
 };
 
 struct l$4lambda {

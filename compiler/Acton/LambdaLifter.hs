@@ -229,12 +229,14 @@ freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0
                                         = do n <- newName "lambda"
-                                             liftToTop [Class l0 n q [TC primClos [fx,prowOf p,t]] te]
+                                             liftToTop [Class l0 n q [base] te]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) [ eVar v | (v,_) <- vts ]
   where q                               = quantScope env
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
         t                               = subst s t0
+        base | t == tR                  = TC primCont [fx,prowOf p]
+             | otherwise                = TC primClos [fx,prowOf p,t]
         vts                             = subst s vts0
         te                              = props ++ [Decl l0 [initDef], Decl l0 [enterDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
@@ -355,7 +357,9 @@ instance Conv TSchema where
     conv (TSchema l q t)                = TSchema l (conv q) (conv t)
 
 instance Conv Type where
-    conv (TFun l fx p TNil{} t)         = TCon l (TC primClos [conv fx, conv p, conv t])
+    conv (TFun l fx p TNil{} t)
+      | t == tR                         = TCon l (TC primCont [conv fx, conv p])
+      | otherwise                       = TCon l (TC primClos [conv fx, conv p, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)

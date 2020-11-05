@@ -82,19 +82,19 @@ extern $R $ROOT($Env, $Cont);
 $Actor root_actor = NULL;
 
 $Actor readyQ = NULL;
-volatile atomic_flag readyQ_lock;
+$Lock readyQ_lock;
 
 $Msg timerQ = NULL;
-volatile atomic_flag timerQ_lock;
+$Lock timerQ_lock;
 
 pthread_key_t self_key;
 
-static inline void spinlock_lock(volatile atomic_flag *f) {
+static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
     }
 }
-static inline void spinlock_unlock(volatile atomic_flag *f) {
+static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
 }
 
@@ -279,9 +279,9 @@ $RetNew $RetNew$__deserialize__($Serial$state state) {
     return res;
 }
 
-$R $RetNew$enter($RetNew $this, $WORD _ignore) {
+$R $RetNew$__enter__($RetNew $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->enter(cont, $this->act);
+    return cont->$class->__enter__(cont, $this->act);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -352,7 +352,7 @@ struct $RetNew$class $RetNew$methods = {
     $RetNew$__deserialize__,
     $RetNew$__bool__,
     $RetNew$__str__,
-    $RetNew$enter
+    $RetNew$__enter__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -526,7 +526,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$enter($Cont $this, $WORD val) {
+$R $DONE$__enter__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -559,13 +559,13 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
-    $DONE$enter
+    $DONE$__enter__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$enter ($Cont $this, $WORD val) {
+$R $NewRoot$__enter__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
     return $ROOT($ENV, then);
 }
@@ -579,13 +579,13 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $NewRoot$enter
+    $NewRoot$__enter__
 };
 struct $Cont $NewRoot$instance = {
     &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $WriteRoot$enter($Cont $this, $WORD val) {
+$R $WriteRoot$__enter__($Cont $this, $WORD val) {
     root_actor = ($Actor)val;
     return $R_DONE(val);
 }
@@ -599,7 +599,7 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $WriteRoot$enter
+    $WriteRoot$__enter__
 };
 struct $Cont $WriteRoot$instance = {
     &$WriteRoot$methods
@@ -678,7 +678,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->cont;
             $WORD val = m->value;
             
-            $R r = cont->$class->enter(cont, val);
+            $R r = cont->$class->__enter__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
