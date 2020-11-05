@@ -14,6 +14,7 @@ primKW s            = name ("$" ++ s)
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primClos            = gPrim "Clos"
+primCont            = gPrim "Cont"
 
 primASYNCw          = gPrim "ASYNCw"
 
@@ -61,7 +62,7 @@ primSKIPRES         = gPrim "SKIPRES"
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
 tClos x p t         = tCon $ TC primClos [x,p,t]
-tCont x t           = tClos x (posRow t posNil) tR
+tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 
 
 primMkEnv cls def var sig = 
@@ -93,6 +94,7 @@ primMkEnv cls def var sig =
                             (noq primActor,         clActor cls def sig),
                             (noq primR,             clR cls def),
                             (noq primClos,          clClos cls def),
+                            (noq primCont,          clCont cls def),
 
                             (noq primRContc,        def scRContc NoDec),
                             (noq primRCont,         def scRCont NoDec),
@@ -118,7 +120,7 @@ clActor cls def sig = cls [] [] te
                         (primKW "msg",      sig (monotype (tMsg tWild)) Property),
                         (primKW "outgoing", sig (monotype (tMsg tWild)) Property),
                         (primKW "catcher",  sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
-                        (primKW "lock",     sig (monotype $ tCon $ TC (gPrim "Lock") []) Property) ]
+                        (primKW "msg_lock", sig (monotype $ tCon $ TC (gPrim "Lock") []) Property) ]
         
 
 --  class $R (): pass
@@ -135,7 +137,12 @@ clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
         p           = TV PRow (name "P")
         a           = TV KType (name "A")
 
---  $Cont[X,A]      = $Clos[X,(A,),$R]
+--  class $Clos[X,P] ($Clos[X,P,$R]):
+--      pass
+clCont cls def      = cls [quant x, quant p] [([Nothing],TC primClos [tVar x, tVar p, tR])] []
+  where x           = TV KFX (name "X")
+        p           = TV PRow (name "P")
+
 
 --  $ASYNCw         : [S,A] => act[S](act[S]()->A) -> Msg[A]
 scASYNCw            = tSchema [quant s, quant a] tASYNC
