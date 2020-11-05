@@ -16,7 +16,7 @@ int new_socket ($Clos handler) {
 
 void setupConnection (int fd, $str remoteHost) {
   $Connection conn = $NEW($Connection,to$int(fd),remoteHost);
-  fd_data[fd].chandler->$class->enter(fd_data[fd].chandler, conn); // ???????
+  fd_data[fd].chandler->$class->__enter__(fd_data[fd].chandler, conn); // ???????
 }
 
 // $Connection /////////////////////////////////////////////////////////////////////////////////
@@ -108,13 +108,13 @@ $str l$1lambda$__str__(l$1lambda self) {
   return to$str(s);
 }
 
-$WORD l$1lambda$enter (l$1lambda l$self, $WORD val) {
+$WORD l$1lambda$__enter__ (l$1lambda l$self, $WORD val) {
   $_EnvActor __self__ = l$self->__self__;
   return __self__->$class->do_stdout_write$local(__self__,l$self->str);
 }
 
 struct l$1lambda$class l$1lambda$methods = {"",UNASSIGNED,NULL,l$1lambda$__init__,l$1lambda$__serialize__,l$1lambda$__deserialize__,
-                                            l$1lambda$__bool__,l$1lambda$__str__,l$1lambda$enter};
+                                            l$1lambda$__bool__,l$1lambda$__str__,l$1lambda$__enter__};
   
 // l$2lambda ///////////////////////////////////////////////////////////////////////////////////
 
@@ -147,13 +147,13 @@ $str l$2lambda$__str__(l$2lambda self) {
   return to$str(s);
 }
 
-$WORD l$2lambda$enter (l$2lambda l$self, $WORD val) {
+$WORD l$2lambda$__enter__ (l$2lambda l$self, $WORD val) {
   $_EnvActor __self__ = l$self->__self__;
   return __self__->$class->do_stdin_install$local(__self__,l$self->callback);
 }
 
 struct l$2lambda$class l$2lambda$methods = {"",UNASSIGNED,NULL,l$2lambda$__init__,l$2lambda$__serialize__,l$2lambda$__deserialize__,
-                                            l$2lambda$__bool__,l$2lambda$__str__,l$2lambda$enter};
+                                            l$2lambda$__bool__,l$2lambda$__str__,l$2lambda$__enter__};
   
 // l$3lambda ///////////////////////////////////////////////////////////////////////////////////
 
@@ -192,7 +192,7 @@ $str l$3lambda$__str__(l$3lambda self) {
   return to$str(s);
 }
 
-$WORD l$3lambda$enter (l$3lambda l$self, $WORD val) {
+$WORD l$3lambda$__enter__ (l$3lambda l$self, $WORD val) {
   $_EnvActor __self__ = l$self->__self__;
   $str address = l$self->address;
   $int port = l$self->port;
@@ -201,7 +201,7 @@ $WORD l$3lambda$enter (l$3lambda l$self, $WORD val) {
 }
 
 struct l$3lambda$class l$3lambda$methods = {"",UNASSIGNED,NULL,l$3lambda$__init__,l$3lambda$__serialize__,l$3lambda$__deserialize__,
-                                            l$3lambda$__bool__,l$3lambda$__str__,l$3lambda$enter};
+                                            l$3lambda$__bool__,l$3lambda$__str__,l$3lambda$__enter__};
   
 // l$4lambda ///////////////////////////////////////////////////////////////////////////////////
 
@@ -237,7 +237,7 @@ $str l$4lambda$__str__(l$4lambda self) {
   return to$str(s);
 }
 
-$WORD l$4lambda$enter (l$4lambda l$self, $WORD val) {
+$WORD l$4lambda$__enter__ (l$4lambda l$self, $WORD val) {
   $_EnvActor __self__ = l$self->__self__;
   $int port = l$self->port;
   $Clos on_success = l$self->on_success;
@@ -245,7 +245,7 @@ $WORD l$4lambda$enter (l$4lambda l$self, $WORD val) {
 }
 
 struct l$4lambda$class l$4lambda$methods = {"",UNASSIGNED,NULL,l$4lambda$__init__,l$4lambda$__serialize__,l$4lambda$__deserialize__,
-                                            l$4lambda$__bool__,l$4lambda$__str__,l$4lambda$enter};
+                                            l$4lambda$__bool__,l$4lambda$__str__,l$4lambda$__enter__};
   
  
 // $_EnvActor //////////////////////////////////////////////////////////////////////////////////////////
