@@ -151,6 +151,7 @@ declModule env []                   = empty
 declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
                                       declModule env1 ss
   where env1                        = gdefine (envOf ds) env
+        te                          = envOf ds
 declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
   where te                          = envOf s `exclude` defined env
@@ -311,7 +312,12 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
+    gen env e@(Call _ (Var _ n) p _)
+      | NClass{} <- findQName n env = gen env new <> parens (gen env $ PosArg (eQVar n) p')
+      where (new,p') | t == tR      = (primKW "NEWCC", rotate p)
+                     | otherwise    = (primKW "NEW", p)
+            t                       = typeOf env e
+    gen env (Call _ e p _)          = gen env e <> parens (gen env p)
     gen env (TApp _ e ts)           = gen env e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e@(Var _ (NoQ x)) n)
@@ -326,6 +332,11 @@ instance Gen Expr where
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env (Paren _ e)             = gen env e
     gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
+
+rotate p                            = rot [] p
+ where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
+       rot es (PosArg e p)          = rot (e:es) p
+       rot es p                     = foldl (flip PosArg) p es
 
 {-
 We assign precedences and associativity to remaining operators as follows

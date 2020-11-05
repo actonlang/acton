@@ -144,7 +144,7 @@ struct $RetNew$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($RetNew, $Cont, $Actor);
+    void (*__init__)($RetNew, $Cont, $WORD);
     void (*__serialize__)($RetNew, $Serial$state);
     $RetNew (*__deserialize__)($Serial$state);
     $bool (*__bool__)($RetNew);
@@ -154,7 +154,7 @@ struct $RetNew$class {
 struct $RetNew {
     struct $RetNew$class *$class;
     $Cont cont;
-    $Actor act;
+    $WORD obj;
 };
 
 $Msg $ASYNC($Actor, $Cont);
