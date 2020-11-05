@@ -1,0 +1,7 @@
+
+actor Env():
+  write : action(str) -> None
+  def write(s) : pass
+
+actor Root(env):
+  env.write("Hi!")
