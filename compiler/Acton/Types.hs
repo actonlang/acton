@@ -58,7 +58,7 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              (cs,te,ss1) <- (if inBuiltin env then infEnv else infSuiteEnv) env ss
                                              popFX
                                              traceM ("### solveAll " ++ prstrs cs)
-                                             eq <- solveAll env te tNone cs
+                                             eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,tWild) | tv <- tyfree te ]
