@@ -50,24 +50,26 @@ normEnv env0                        = env0
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
 normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
-normPat env (PTuple _ pp kp)        = do v <- newName "tup"
+normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
                                          ss <- norm env $ normPP v 0 pp ++ normKP v [] kp
-                                         return (pVar' v, ss)                                    -- TODO: provide a type for v
+                                         return (pVar v t, ss)
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
         normKP v ns (KwdPat n p kp) = Assign NoLoc [p] (Dot NoLoc (eVar v) n) : normKP v (n:ns) kp
         normKP v ns (KwdPatStar p)  = [Assign NoLoc [p] (foldl (Rest NoLoc) (eVar v) (reverse ns))]
         normKP _ _ KwdPatNil        = []
-normPat env (PList _ ps pt)         = do v <- newName "lst"
+        t                           = typeOf env p
+normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          ss <- norm env $ normList v 0 ps pt
-                                         return (pVar' v, ss)                                    -- TODO: provide a type for v
+                                         return (pVar v t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
         normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
                                         [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
         normList v n [] Nothing     = [] 
+        t                           = typeOf env p
 
 
 

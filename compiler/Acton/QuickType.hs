@@ -140,7 +140,7 @@ instance TypeOf Elem where
 
 instance TypeOf Pattern where
     typeOf env (PVar _ n (Just t))  = t
-    typeOf env (PVar _ n Nothing)   = tWild                         -- TODO: prove this never happens
+    typeOf env (PVar _ n Nothing)   = typeOf env (eVar n)
     typeOf env (PTuple _ ps ks)     = tTuple (typeOf env ps) (typeOf env ks)
     typeOf env (PList _ ps p)       = tList (typeOf env $ head ps)
     typeOf env (PParen _ p)         = typeOf env p
