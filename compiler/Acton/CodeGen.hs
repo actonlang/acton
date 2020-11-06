@@ -117,7 +117,9 @@ properties env c                    = vmap prop te
 gcinfo env                          = text "char" <+> text "*" <> gen env (primKW "GCINFO") <> semi
 
 superlink env                       = gen env tSuperclass <+> gen env (primKW "superclass") <> semi
-  where tSuperclass                 = tCon $ TC (GName mPrim (Derived (name "Super") (name "class"))) []
+  where tSuperclass                 = tCon $ TC qnSuperClass []
+
+qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
 
 serialize env c                     = methsig env c (name "__serialize__") (TFun l0 fxPure serialstate kwdNil tNone) <> semi
 
@@ -131,6 +133,9 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 classname env n                     = genTopName env (Derived n $ name "class")
 
 methodtable env n                   = genTopName env (Derived n $ name "methods")
+
+methodtable' env (NoQ n)            = methodtable env n
+methodtable' env (GName m n)        = gen env $ GName m (Derived n $ name "methods")
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -183,8 +188,8 @@ initModule env (s : ss)             = genStmt env s $+$
 initClassBase env c as              = methodtable env c <> dot <> gen env (primKW "GCINFO") <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env (primKW "superclass") <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
-  where super                       = if null as then text "NULL" else text "&" <> gen env (globalize env $ tcname $ head as)
-        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> gen env (globalize env c') <> dot <> gen env n <> semi
+  where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
+        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> methodtable' env c' <> dot <> gen env n <> semi
 
 initClass env c []                  = empty
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
