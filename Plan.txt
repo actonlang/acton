@@ -1,4 +1,4 @@
-2020-10-29:
+2020-11-05:
 
     X Convert NameInfo envs to format of later passes
     X Make CPSEnv and LiftEnv instances of Env
@@ -13,14 +13,15 @@
     X Generate custom $Clos subclasses in Lifter                            1d      2d
     X Infer @property signatures based on __init__ assignments              2d      4d
     X Type-convert plain classes as well                                    3h      6h
-!   X Sample actor state ref'd within lambdas before closure conversion     1d      1d
+    X Sample actor state ref'd within lambdas before closure conversion     1d      1d
     X Introduce special constructor GName for unaliased names               4h      8h
-    / Fill out gaps in CodeGen                                              2d      5d
+    X Fill out gaps in CodeGen                                              2d      5d
     - Apply typeinfo in CodeGen to insert correct casts                     2d      4d
     X Print generated C code with precedences                               2d      3d
     - Integrate DB sources in build                                         1d      2d
     - Set up dedicated rts thread for DB protocol daemon                    1d      2d
     - Add serialization calls to rts                                        3h      8h
+!   - Typecheck and convert formatted string literals                       1d      2d
 
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w
@@ -33,7 +34,7 @@
     - Implement pos/kwd and opt relaxation in Solver                        3d      5d
     - Implement Rest/RestI in rts                                           1d      2d
     - Make global __builtin__ witnesses available to Solver                 2h      5h
-!   - Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
+    - Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
     - Translate list comprehensions                                         2d      3d
     / Handle the with statements                                            2d      3d
     - Implement raise and try in the rts                                    3d      4d
