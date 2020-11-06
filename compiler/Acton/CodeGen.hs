@@ -6,6 +6,7 @@ import qualified Acton.Env
 import Utils
 import Pretty
 import Acton.Syntax
+import Acton.Names
 import Acton.Builtin
 import Acton.Printer
 import Acton.Prim
@@ -164,9 +165,11 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
 
 declDecl env (Def _ n q p KwdNIL a b d m)
                                     = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
-                                      nest 4 (genSuite env1 b) $+$
+                                      nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
   where env1                        = ldefine (envOf p) env
+        ret | fallsthru b           = text "return" <+> text "NULL" <> semi
+            | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
