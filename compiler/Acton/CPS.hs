@@ -280,7 +280,7 @@ instance CPS Decl where
       where env1                        = defineSelf (NoQ n) q $ defineTVars q $ setCtxt [] env
 
     cps env (Def l n q p KwdNIL (Just t) b d fx)
-      | contFX env fx                   = do b' <- cpsSuite env1 b
+      | contFX fx                       = do b' <- cpsSuite env1 b
                                              return $ Def l n q' (addContPar p' fx' t') KwdNIL (Just tR) b' d fx'
       | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx'
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t fx +: env
@@ -325,17 +325,25 @@ hbody env x hs                          = do bs <- mapM h hs
 
 kDef env k p b                          = sDef k (conv p) tR b (conv $ methFX $ ctxt env)
 
-contCall env (Call _ (TApp _ (Var _ n) _) p k)
+fxCall env test (Call _ (TApp _ (Var _ n) _) p k)
   | n `elem` primNoCont                 = False
-contCall env (Call _ e p k)             = contFX env fx
+fxCall env test (Call _ e p k)          = test fx
   where TFun _ fx _ _ _                 = typeOf env e
-contCall env e                          = False
+fxCall env test e                       = False
+
+contCall env e                          = fxCall env contFX e
+
+mutCall env e                           = fxCall env mutFX e
 
 primNoCont                              = [primASYNCf, primAFTERf]
 
-contFX env fx
-  | Just _ <- isFXAct fx                = True                              -- TODO: refine this test using finer-grained effects
-  | otherwise                           = False
+contFX (TFX _ (FXAct _))                = True                              -- TODO: refine this test using finer-grained effects
+contFX _                                = False
+
+mutFX (TFX _ (FXMut _))                 = True
+mutFX (TFX _ (FXAct _))                 = True
+mutFX (TFX _ FXAction)                  = True
+mutFX _                                 = False
 
 inCont env                              = length (ctxt env) > 0
 
@@ -428,12 +436,13 @@ instance PreCPS KwdArg where
 
 instance PreCPS Expr where
     pre env e0@(Call l e ps KwdNil)
-      | contCall env e0                 = do e1 <- pre env e
+      | mutCall env e0                  = do e1 <- pre env e
                                              ps1 <- pre env ps
                                              v <- newName "pre"
-                                             prefix [sAssign (pVar' v) (Call l e1 ps1 KwdNil)]
+                                             prefix [sAssign (pVar v t) (Call l e1 ps1 KwdNil)]
                                              return (eVar v)
       | otherwise                       = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
+      where t                           = typeOf env e0
     pre env (TApp l e ts)               = TApp l <$> pre env e <*> pure ts
     pre env (Cond l e1 e e2)            = Cond l <$> pre env e1 <*> pre env e <*> pre env e2
     pre env (IsInstance l e c)          = IsInstance l <$> pre env e <*> return c
@@ -445,7 +454,7 @@ instance PreCPS Expr where
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
     pre env (Lambda l p KwdNIL e fx)
-      | contFX env fx                   = do (prefixes,e') <- withPrefixes $ preTop env1 e
+      | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case contCall env e && null prefixes of
                                                 True -> do
                                                     let p' = conv p; t' = conv t; fx' = conv fx
@@ -465,7 +474,7 @@ instance PreCPS Expr where
     pre env e                           = return e
 
     preTop env e0@(Call l e ps KwdNil)
-      | contCall env e0                 = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
+      | mutCall env e0                  = Call l <$> pre env e <*> pre env ps <*> pure KwdNil
     preTop env e                        = pre env e
 
 
@@ -508,9 +517,7 @@ instance Conv Type where
     conv (TFun l fx p TNil{} t)
        | contFX fx                      = TFun l fx' (addCont (conv p) (conv t)) kwdNil tR
        | otherwise                      = TFun l fx' (conv p) kwdNil (conv t)
-       where contFX (TFX _(FXAct _))    = True
-             contFX fx                  = False
-             fx'                        = conv fx
+       where fx'                        = conv fx
              addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
              addCont p c                = posRow (tFun fx' (posRow c posNil) kwdNil tR) p
     conv (TCon l c)                     = TCon l (conv c)
