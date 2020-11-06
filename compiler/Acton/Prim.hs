@@ -203,7 +203,7 @@ scAWAITc            = tSchema [quant s, quant a] tAWAIT
         mutS        = fxMut $ tVar s
 
 
---  $ASYNC          : [S,A] => mut[S]($Actor, $Cont[mut[S],$Cont[mut[S],A]]) -> Msg[A]
+--  $ASYNC          : [S,A] => mut[S]($Actor, $Cont[mut[S],($Cont[mut[S],A],)]) -> Msg[A]
 scASYNC             = tSchema [quant s, quant a] tASYNC
   where tASYNC      = tFun mutS (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         s           = TV KType $ name "S"
@@ -212,7 +212,7 @@ scASYNC             = tSchema [quant s, quant a] tASYNC
         tCont''     = tCont mutS (tVar a)
         mutS        = fxMut $ tVar s
 
---  $AFTER          : [S,A] => mut[S](int,    $Cont[mut[S],$Cont[mut[S],A]]) -> Msg[A]
+--  $AFTER          : [S,A] => mut[S](int, $Cont[mut[S],($Cont[mut[S],A],)]) -> Msg[A]
 scAFTER             = tSchema [quant s, quant a] tAFTER
   where tAFTER      = tFun mutS (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         s           = TV KType $ name "S"
@@ -221,7 +221,7 @@ scAFTER             = tSchema [quant s, quant a] tAFTER
         tCont''     = tCont mutS (tVar a)
         mutS        = fxMut $ tVar s
 
---  $AWAIT          : [S,A] => mut[S](Msg[A], $Cont[mut[S],A])               -> $R
+--  $AWAIT          : [S,A] => mut[S](Msg[A], $Cont[mut[S],(A,)]) -> $R
 scAWAIT             = tSchema [quant s, quant a] tAWAIT
   where tAWAIT      = tFun mutS (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
         s           = TV KType $ name "S"
@@ -237,7 +237,7 @@ scPUSHc             = tSchema [quant x] tPUSH
         x           = TV KFX $ name "X"
         tCont'      = tFun (tVar x) (posRow tException posNil) kwdNil tR
 
---  $PUSH           : [X] => pure ($Cont[X,Exception]) -> None
+--  $PUSH           : [X] => pure ($Cont[X,(Exception,)]) -> None
 scPUSH              = tSchema [quant x] tPUSH
   where tPUSH       = tFun fxPure (posRow tCont' posNil) kwdNil tNone
         x           = TV KFX $ name "X" 
@@ -283,7 +283,7 @@ scRContc            = tSchema [quant x, quant a] tRCont
         x           = TV KFX $ name "X" 
         a           = TV KType $ name "A"
 
---  $R_CONT         : [X,A] => X($Cont[X,A], A) -> $R
+--  $R_CONT         : [X,A] => X($Cont[X,(A,)], A) -> $R
 scRCont             = tSchema [quant x, quant a] tRCont
   where tRCont      = tFun (tVar x) (posRow tCont' $ posRow (tVar a) posNil) kwdNil tR
         tCont'      = tCont (tVar x) (tVar a)
@@ -319,18 +319,18 @@ scISNOTNONE         = tSchema [quant a] tISNOTNONE
   where tISNOTNONE  = tFun fxPure (posRow (tOpt $ tVar a) posNil) kwdNil tBool
         a           = TV KType (name "A")
 
---  $SKIPRESc       : [X,A] => X(X(A)->$R) -> X(None)->$R
+--  $SKIPRESc       : [X,A] => X(X(None)->$R) -> X(A)->$R
 scSKIPRESc          = tSchema [] tSKIPRES
   where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
-        tCont'      = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
-        tCont''     = tFun (tVar x) (posRow tNone posNil) kwdNil tR
+        tCont'      = tFun (tVar x) (posRow tNone posNil) kwdNil tR
+        tCont''     = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
 
---  $SKIPRES        : [X,A] => X($Cont[X,A]) -> $Cont[X,None]
+--  $SKIPRES        : [X,A] => X($Cont[X,(None,)]) -> $Cont[X,(A,)]
 scSKIPRES           = tSchema [] tSKIPRES
   where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
-        tCont'      = tCont (tVar x) (tVar a)
-        tCont''     = tCont (tVar x) tNone
+        tCont'      = tCont (tVar x) tNone
+        tCont''     = tCont (tVar x) (tVar a)
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"

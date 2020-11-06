@@ -317,12 +317,14 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env e@(Call _ (Var _ n) p _)
+    gen env (Call _ (Var _ n) (PosArg e PosNil) KwdNil)
+      | n == primSKIPRES            = gen env e
+    gen env e@(Call _ (Var _ n) p KwdNil)
       | NClass{} <- findQName n env = gen env new <> parens (gen env $ PosArg (eQVar n) p')
       where (new,p') | t == tR      = (primKW "NEWCC", rotate p)
                      | otherwise    = (primKW "NEW", p)
             t                       = typeOf env e
-    gen env (Call _ e p _)          = gen env e <> parens (gen env p)
+    gen env (Call _ e p KwdNil)     = gen env e <> parens (gen env p)
     gen env (TApp _ e ts)           = gen env e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e@(Var _ (NoQ x)) n)
