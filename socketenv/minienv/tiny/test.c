@@ -21,12 +21,13 @@ $R test$$Env$write$local (test$$Env __self__, $str s, $Clos c$cont) {
     return $R_CONT(($Cont)c$cont, $None);
 }
 $R test$$Env$write (test$$Env __self__, $str s, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__, ($Cont)$NEW(test$$l$1lambda,__self__, s)));
+  test$$l$1lambda lam = $NEW(test$$l$1lambda,__self__, s);
+  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__, ($Cont)lam));
 }
 struct test$$Env$class test$$Env$methods;
 $R test$$Root$__init__ (test$$Root __self__, test$$Env env, $Cont c$cont) {
     __self__->env = env;
-    return __self__->env->$class->write(__self__->env,to$str("Hi!"), ($Clos)$SKIPRES(c$cont));
+    return __self__->env->$class->write(__self__->env,to$str("Hi!\n"), ($Clos)$SKIPRES(c$cont));
 }
 struct test$$Root$class test$$Root$methods;
 int test$$done$ = 0;

@@ -83,19 +83,19 @@ extern $R $ROOT(test$$Env, $Cont);
 $Actor root_actor = NULL;
 
 $Actor readyQ = NULL;
-volatile atomic_flag readyQ_lock;
+$Lock readyQ_lock;
 
 $Msg timerQ = NULL;
-volatile atomic_flag timerQ_lock;
+$Lock timerQ_lock;
 
 pthread_key_t self_key;
 
-static inline void spinlock_lock(volatile atomic_flag *f) {
+static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
     }
 }
-static inline void spinlock_unlock(volatile atomic_flag *f) {
+static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
 }
 
@@ -569,11 +569,8 @@ struct $Cont $Done$instance = {
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $NewRoot$__enter__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    //$NEW(test$$Env,then);  $NEW expanded here for help in lldb debugging
-    test$$Env $ENV = malloc(sizeof(struct test$$Env));
-    $ENV->$class = &test$$Env$methods;
     test$$__init__(); // Should have been done already in some initialization code
-    // result of __init__ is ignored
+    test$$Env $ENV = $NEW(test$$Env,NULL);  //second argument used only in building return value uín __init__, which is ignored.
     return $ROOT($ENV, then);
 }
 
@@ -790,7 +787,7 @@ int main(int argc, char **argv) {
 #ifdef EXPERIMENT
     long num_cores = 1;    
 #else
-    long num_cores = 1; //sysconf(_SC_NPROCESSORS_ONLN);
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
     printf("%ld worker threads\n", num_cores);
     pthread_key_create(&self_key, NULL);

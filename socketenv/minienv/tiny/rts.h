@@ -52,6 +52,8 @@ typedef struct $R $R;
 #define CLOS_HEADER             "Clos"
 #define CONT_HEADER             "Cont"
 
+#define $Lock                   volatile atomic_flag
+
 struct $Msg$class {
     char *$GCINFO;
     int $class_id;
@@ -69,7 +71,7 @@ struct $Msg {
     $Cont cont;
     $Actor waiting;
     time_t baseline;
-    volatile atomic_flag wait_lock;
+    $Lock wait_lock;
     $WORD value;
 };
 
@@ -89,7 +91,7 @@ struct $Actor {
     $Msg msg;
     $Msg outgoing;
     $Catcher catcher;
-    volatile atomic_flag msg_lock;
+    $Lock msg_lock;
 };
 
 struct $Catcher$class {
@@ -135,10 +137,7 @@ struct $Cont$class {
     $R (*__enter__)($Cont, $WORD);
 };
 struct $Cont {
-    union {
-        struct $Cont$class *$class;
-        struct $Clos super;
-    };
+    struct $Cont$class *$class;
 };
 
 struct $RetNew$class {
@@ -165,7 +164,7 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-//typedef int $Env;
+// typedef int $Env;
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

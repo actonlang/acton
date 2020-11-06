@@ -10,10 +10,13 @@ typedef struct test$$l$1lambda *test$$l$1lambda;
 typedef struct test$$Env *test$$Env;
 struct test$$l$1lambda$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     void* (*__init__) (test$$l$1lambda, test$$Env, $str);
     void* (*__serialize__) (test$$l$1lambda, $Serial$state);
     test$$l$1lambda (*__deserialize__) ($Serial$state);
+    $bool (*__bool__)($Msg);
+    $str (*__str__)($Msg);
     $R (*__enter__) (test$$l$1lambda,$Clos);
 };
 struct test$$l$1lambda {
@@ -23,10 +26,13 @@ struct test$$l$1lambda {
 };
 struct test$$Env$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     $R (*__init__) (test$$Env, $Cont);  //snd param changed from $Clos!!
     void* (*__serialize__) (test$$Env, $Serial$state);
     test$$Env (*__deserialize__) ($Serial$state);
+    $bool (*__bool__)($Msg);
+    $str (*__str__)($Msg);
     $R (*write$local) (test$$Env, $str,$Clos);
     $R (*write) (test$$Env, $str, $Clos);
 };
@@ -45,10 +51,13 @@ struct test$$Root;
 typedef struct test$$Root *test$$Root;
 struct test$$Root$class {
     char *$GCINFO;
+    int $class_id;
     $Super$class $superclass;
     $R (*__init__) (test$$Root, test$$Env, $Cont);//last param changed from $Clos!!
     void* (*__serialize__) (test$$Root, $Serial$state);
     test$$Root (*__deserialize__) ($Serial$state);
+    $bool (*__bool__)($Msg);
+    $str (*__str__)($Msg);
 };
 struct test$$Root {
     struct test$$Root$class *$class;
