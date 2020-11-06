@@ -5,6 +5,7 @@ import Acton.Names
 import Acton.Subst
 import Acton.Env
 import Acton.Builtin
+import Acton.Prim
 import Utils
 
 class SchemaOf a where
@@ -29,7 +30,8 @@ instance SchemaOf Expr where
                                         NClass q _ _ ->
                                             let tc = TC n (map tVar $ tybound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
-                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t{ restype = tSelf }, False)
+                                                t' = if restype t == tR then t else t{ restype = tSelf }
+                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', False)
                                         NAct q p k _ ->
                                             (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), False)
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))

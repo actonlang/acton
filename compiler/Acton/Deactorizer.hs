@@ -32,7 +32,10 @@ deactEnv                            :: Env0 -> DeactEnv
 deactEnv env0                       = setX env0 DeactX{ actionsX = [], stvarsX = [], localsX = [], sampledX = [], actidX = Nothing }
 
 extend                              :: TEnv -> DeactEnv -> DeactEnv
-extend te env                       = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
+extend te env                       = define te env
+
+extendAndShadow                     :: TEnv -> DeactEnv -> DeactEnv
+extendAndShadow te env              = modX (define te env) $ \x -> x{ actionsX = actions env \\ ns, localsX = locals env \\ ns }
   where ns                          = dom te
 
 newName                             :: String -> DeactM Name
@@ -118,29 +121,32 @@ instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
                                     = do inits <- deactSuite env1 inits
                                          decls <- mapM deactMeths decls
-                                         let _init_ = Def l0 initKW [] (addSelfPar p) KwdNIL (Just tNone) (if null inits then [Pass l0] else inits) NoDec (fxAct tSelf)
-                                         return $ Class l n q [TC primActor []] (properties ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
+                                         let _init_ = Def l0 initKW [] (addSelfPar p) KwdNIL (Just tNone) (mkBody $ copies++inits) NoDec (fxAct tSelf)
+                                         return $ Class l n q [TC primActor []] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
       where env1                    = setActor tSelf actions stvars locals $ extend (envOf p) $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 
             (decls,ss)              = partition isDecl b
             meths                   = bound decls
-            inits                   = copies ++ filter (not . isSig) ss
+            inits                   = filter (not . isSig) ss
             stvars                  = statevars b
-            locals                  = nub $ bound p ++ bound b
+            locals                  = nub $ (bound p ++ bound b) `intersect` free decls
             wrapped                 = [ wrapMeth def | Decl _ ds <- decls, def <- ds, dname def `elem` actions ]
             actions                 = [ n | Signature _ ns (TSchema _ _ (TFun _ fx _ _ _)) _ <- b, fx == fxAction, n <- ns ]
 
-            properties              = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' p : map props inits ]
+            propsigs                = [ Signature l0 [n] (monotype t) Property | (n,t) <- concat $ props' p : map props inits ]
 
-            props (VarAssign _ p _) = [ (n, fromJust a) | PVar _ n a <- p ]
-            props (Assign _ p _)    = [ (n, fromJust a) | PVar _ n a <- p ]
+            props (VarAssign _ p _) = [ (n, t) | PVar _ n (Just t) <- p ]
+            props (Assign _ p _)    = [ (n, t) | PVar _ n (Just t) <- p, n `elem` locals ]
             props (If _ bs els)     = restrict (concat $ map props els) (foldr1 intersect $ map bound bs)
             props _                 = []
 
-            props' (PosPar n a _ p) = (n, fromJust a) : props' p
-            props' (PosSTAR n a)    = [(n, fromJust a)]
-            props' PosNIL           = []
+            props' (PosPar n a _ p)
+              | n `elem` locals     = (n, fromJust a) : props' p
+              | otherwise           = props' p
+            props' (PosSTAR n a)
+              | n `elem` locals     = [(n, fromJust a)]
+            props' _                = []
 
             copies                  = [ MutAssign l0 (selfRef n) (Var l0 (NoQ n)) | n <- bound p ]
 
@@ -149,7 +155,7 @@ instance Deact Decl where
             deactMeth (Def l n q p KwdNIL t b d fx)
                                     = do b <- deactSuite env' b
                                          return $ Def l n' q (addSelfPar p) KwdNIL t b d fx
-              where env'            = extend (envOf p) env2
+              where env'            = extendAndShadow (envOf p) env2
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p KwdNIL (Just t) b d fx)
@@ -164,7 +170,7 @@ instance Deact Decl where
     deact env (Def l n q p KwdNIL t b d fx)
                                     = do b <- deactSuite env1 b
                                          return $ Def l n q p KwdNIL t b d fx
-      where env1                    = extend (envOf p) $ defineTVars q $ setId fx env
+      where env1                    = extendAndShadow (envOf p) $ defineTVars q $ setId fx env
     deact env (Class l n q u b)     = Class l n q u <$> deactSuite env1 b
       where env1                    = defineSelf (NoQ n) q $ defineTVars q env
     deact env d                     = error ("deact unexpected: " ++ prstr d)
@@ -217,7 +223,7 @@ instance Deact Expr where
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
                                     = Lambda l p KwdNIL <$> deact env1 e <*> return fx
-      where env1                    = extend (envOf p) env
+      where env1                    = extendAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
     deact env (Tuple l es ks)       = Tuple l <$> deact env es <*> deact env ks
@@ -230,7 +236,7 @@ instance Deact Branch where
 
 instance Deact Handler where
     deact env (Handler ex b)        = Handler ex <$> deactSuite env1 b
-      where env1                    = extend (envOf ex) env
+      where env1                    = extendAndShadow (envOf ex) env
 
 instance Deact PosArg where
     deact env (PosArg e p)          = PosArg <$> deact env e <*> deact env p

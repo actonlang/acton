@@ -252,9 +252,9 @@ $Cont $Cont$__deserialize__($Serial$state state) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void $RetNew$__init__($RetNew $this, $Cont cont, $Actor act) {
+void $RetNew$__init__($RetNew $this, $Cont cont, $WORD obj) {
     $this->cont = cont;
-    $this->act = act;
+    $this->obj = obj;
 }
 
 $bool $RetNew$__bool__($RetNew self) {
@@ -269,19 +269,19 @@ $str $RetNew$__str__($RetNew self) {
 
 void $RetNew$__serialize__($RetNew self, $Serial$state state) {
       $step_serialize(self->cont,state);
-      $step_serialize(self->act,state);
+      $step_serialize(self->obj,state);
 }
 
 $RetNew $RetNew$__deserialize__($Serial$state state) {
     $RetNew res = $DNEW($RetNew,state);
     res->cont = $step_deserialize(state);
-    res->act = $step_deserialize(state);
+    res->obj = $step_deserialize(state);
     return res;
 }
 
 $R $RetNew$__enter__($RetNew $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->__enter__(cont, $this->act);
+    return cont->$class->__enter__(cont, $this->obj);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////

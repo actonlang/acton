@@ -6,6 +6,7 @@ import qualified Acton.Env
 import Utils
 import Pretty
 import Acton.Syntax
+import Acton.Names
 import Acton.Builtin
 import Acton.Printer
 import Acton.Prim
@@ -117,7 +118,9 @@ properties env c                    = vmap prop te
 gcinfo env                          = text "char" <+> text "*" <> gen env (primKW "GCINFO") <> semi
 
 superlink env                       = gen env tSuperclass <+> gen env (primKW "superclass") <> semi
-  where tSuperclass                 = tCon $ TC (GName mPrim (Derived (name "Super") (name "class"))) []
+  where tSuperclass                 = tCon $ TC qnSuperClass []
+
+qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
 
 serialize env c                     = methsig env c (name "__serialize__") (TFun l0 fxPure serialstate kwdNil tNone) <> semi
 
@@ -131,6 +134,9 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 classname env n                     = genTopName env (Derived n $ name "class")
 
 methodtable env n                   = genTopName env (Derived n $ name "methods")
+
+methodtable' env (NoQ n)            = methodtable env n
+methodtable' env (GName m n)        = gen env $ GName m (Derived n $ name "methods")
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -151,6 +157,7 @@ declModule env []                   = empty
 declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
                                       declModule env1 ss
   where env1                        = gdefine (envOf ds) env
+        te                          = envOf ds
 declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
                                       declModule env1 ss
   where te                          = envOf s `exclude` defined env
@@ -158,9 +165,11 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
 
 declDecl env (Def _ n q p KwdNIL a b d m)
                                     = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
-                                      nest 4 (genSuite env1 b) $+$
+                                      nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
   where env1                        = ldefine (envOf p) env
+        ret | fallsthru b           = text "return" <+> text "NULL" <> semi
+            | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
@@ -182,8 +191,8 @@ initModule env (s : ss)             = genStmt env s $+$
 initClassBase env c as              = methodtable env c <> dot <> gen env (primKW "GCINFO") <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env (primKW "superclass") <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
-  where super                       = if null as then text "NULL" else text "&" <> gen env (globalize env $ tcname $ head as)
-        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> gen env (globalize env c') <> dot <> gen env n <> semi
+  where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
+        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> methodtable' env c' <> dot <> gen env n <> semi
 
 initClass env c []                  = empty
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
@@ -311,7 +320,14 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env (Call _ e ps _)         = gen env e <> parens (gen env ps)
+    gen env (Call _ (Var _ n) (PosArg e PosNil) KwdNil)
+      | n == primSKIPRES            = gen env e
+    gen env e@(Call _ (Var _ n) p KwdNil)
+      | NClass{} <- findQName n env = gen env new <> parens (gen env $ PosArg (eQVar n) p')
+      where (new,p') | t == tR      = (primKW "NEWCC", rotate p)
+                     | otherwise    = (primKW "NEW", p)
+            t                       = typeOf env e
+    gen env (Call _ e p KwdNil)     = gen env e <> parens (gen env p)
     gen env (TApp _ e ts)           = gen env e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e@(Var _ (NoQ x)) n)
@@ -326,6 +342,11 @@ instance Gen Expr where
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env (Paren _ e)             = gen env e
     gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
+
+rotate p                            = rot [] p
+ where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
+       rot es (PosArg e p)          = rot (e:es) p
+       rot es p                     = foldl (flip PosArg) p es
 
 {-
 We assign precedences and associativity to remaining operators as follows

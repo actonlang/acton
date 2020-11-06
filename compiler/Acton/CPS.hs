@@ -15,8 +15,11 @@ import Acton.Env
 import Acton.QuickType
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
-convert env0 m                          = return (runCpsM $ cps env m, mapModules1 conv env0)
+convert env0 m                          = return (runCpsM (convMod m), mapModules1 conv env0)
   where env                             = cpsEnv env0
+        convMod (Module m imps ss)      = do ss' <- pre env ss
+                                             --traceM ("######## preCPS:\n" ++ render (vcat $ map pretty ss') ++ "\n########")
+                                             Module m imps <$> cps env ss'
 
 type CpsM a                             = State CpsState a
 
@@ -124,19 +127,14 @@ quicknext (Wrap c : ctx)                = Just (wrapC c seqcont ctx)
 quicknext _                             = Nothing
 
 
-preSuite env []                         = return []
-preSuite env (s : ss)                   = do (prefixes,s') <- withPrefixes $ pre env s
-                                             ss' <- preSuite (define (envOf s) env) ss
-                                             return (prefixes ++ s' : ss')
-
-cpsSuite env ss                         = do ss' <- preSuite env ss
-                                             cps env ss'
+cpsSuite env ss                         = cps env ss
 
 class CPS a where
     cps                                 :: CPSEnv -> a -> CpsM a
 
 instance CPS Module where
-    cps env (Module m imps ss)          = Module m imps <$> cpsSuite env ss
+    cps env (Module m imps ss)          = do ss' <- preSuite env ss
+                                             Module m imps <$> cpsSuite env ss'
 
 instance CPS [Stmt] where
     cps env []
@@ -372,6 +370,14 @@ class PreCPS a where
     preTop                              :: CPSEnv -> a -> CpsM a
     preTop env                          = pre env
 
+instance PreCPS Module where
+    pre env (Module m imps ss)          = Module m imps <$> preSuite env ss
+
+preSuite env []                         = return []
+preSuite env (s : ss)                   = do (prefixes,s') <- withPrefixes $ pre env s
+                                             ss' <- preSuite (define (envOf s) env) ss
+                                             return (prefixes ++ s' : ss')
+
 instance (PreCPS a, EnvOf a) => PreCPS [a] where
     pre env []                          = return []
     pre env (a:as)                      = (:) <$> pre env a <*> pre env1 as
@@ -389,12 +395,25 @@ instance PreCPS Stmt where
     pre env (Assign l ps e)             = Assign l ps <$> preTop env e
     pre env (MutAssign l t e)           = MutAssign l <$> pre env t <*> preTop env e
     pre env (Return l e)                = Return l <$> preTop env e
-    pre env (If l bs els)               = If l <$> pre env bs <*> return els
-    pre env (While l e b els)           = While l <$> pre env e <*> return b <*> return els
+    pre env (If l bs els)               = If l <$> pre env bs <*> preSuite env els
+    pre env (While l e b els)           = While l <$> pre env e <*> preSuite env b <*> preSuite env els
+    pre env (Try l b hs els fin)        = Try l <$> preSuite env b <*> pre env hs <*> preSuite env els <*> preSuite env fin
+    pre env (Decl l ds)                 = Decl l <$> pre env1 ds
+      where env1                        = define (envOf ds) env
     pre env s                           = return s
 
+instance PreCPS Decl where
+    pre env (Class l n q cs b)          = Class l n q cs <$> pre env1 b
+      where env1                        = defineSelf (NoQ n) q $ defineTVars q env
+    pre env (Def l n q p _k a b d fx)   = Def l n q p _k a <$> preSuite env1 b <*> pure d <*> pure fx
+      where env1                        = define (envOf p) $ defineTVars q env
+
 instance PreCPS Branch where
-    pre env (Branch e ss)               = Branch  <$> pre env e <*> return ss
+    pre env (Branch e ss)               = Branch  <$> pre env e <*> preSuite env ss
+
+instance PreCPS Handler where
+    pre env (Handler ex ss)             = Handler ex <$> preSuite env1 ss
+      where env1                        = define (envOf ex) env
 
 instance PreCPS Exception where
     pre env (Exception e1 e2)           = Exception <$> pre env e1 <*> pre env e2

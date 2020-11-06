@@ -223,6 +223,10 @@ data Constraint = Cast  Type Type
 
 type Constraints = [Constraint]
 
+mkBody []       = [Pass NoLoc]
+mkBody b        = b
+
+
 sDef n p t b fx = sDecl [Def NoLoc n [] p KwdNIL (Just t) b NoDec fx]
 sReturn e       = Return NoLoc (Just e)
 sAssign p e     = Assign NoLoc [p] e
