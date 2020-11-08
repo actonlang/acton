@@ -204,8 +204,9 @@ instance Lift Stmt where
 instance Lift Decl where
     ll env (Def l n q p KwdNIL a b d fx)
                                         = do b' <- llSuite (setCtxt InDef env1) b
-                                             return $ Def l n' (quantScope env ++ q) p' KwdNIL (conv a) b' d fx
+                                             return $ Def l n' q' p' KwdNIL (conv a) b' d fx
       where env1                        = extLocals p $ define (envOf p) $ defineTVars q env
+            q'                          = if ctxt env == InDef then quantScope env ++ q else q
             p'                          = addParams vts (conv p)
             n'                          = liftedName env n
             vts                         = extraArgs env n

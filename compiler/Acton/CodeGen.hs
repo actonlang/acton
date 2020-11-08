@@ -176,12 +176,13 @@ declDecl env (Def _ n q p KwdNIL a b d m)
                                     = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
-  where env1                        = ldefine (envOf p) env
+  where env1                        = ldefine (envOf p) $ defineTVars q env
         ret | fallsthru b           = text "return" <+> text "NULL" <> semi
             | otherwise             = empty
-declDecl env (Class _ n q as b)     = vcat [ declDecl env d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
+        env1                        = defineTVars q env
 
 
 
