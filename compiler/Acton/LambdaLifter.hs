@@ -294,6 +294,11 @@ instance Lift Expr where
     ll env (BinOp l e1 Or e2)           = BinOp l <$> ll env e1 <*> pure Or <*> ll env e2
     ll env (BinOp l e1 And e2)          = BinOp l <$> ll env e1 <*> pure And <*> ll env e2
     ll env (UnOp l Not e)               = UnOp l Not <$> ll env e
+--    ll env e0@(Dot l e n)
+--      | Just _ <- snd $ schemaOf env e0 = do e' <- ll env e
+--                                             closureConvert env (Lambda l0 par KwdNIL e' fx) t []
+--      where par                         = pPar paramNames (conv p)
+--            TFun _ fx p _ t             = typeOf env e0
     ll env (Dot l e n)                  = Dot l <$> ll env e <*> pure n
     ll env (Rest l e n)                 = Rest l <$> ll env e <*> pure n
     ll env (DotI l e i)                 = DotI l <$> ll env e <*> pure i

@@ -320,7 +320,7 @@ scISNOTNONE         = tSchema [quant a] tISNOTNONE
         a           = TV KType (name "A")
 
 --  $SKIPRESc       : [X,A] => X(X(None)->$R) -> X(A)->$R
-scSKIPRESc          = tSchema [] tSKIPRES
+scSKIPRESc          = tSchema [quant x, quant a] tSKIPRES
   where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
         tCont'      = tFun (tVar x) (posRow tNone posNil) kwdNil tR
         tCont''     = tFun (tVar x) (posRow (tVar a) posNil) kwdNil tR
@@ -328,7 +328,7 @@ scSKIPRESc          = tSchema [] tSKIPRES
         a           = TV KType $ name "A"
 
 --  $SKIPRES        : [X,A] => X($Cont[X,(None,)]) -> $Cont[X,(A,)]
-scSKIPRES           = tSchema [] tSKIPRES
+scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
   where tSKIPRES    = tFun (tVar x) (posRow tCont' posNil) kwdNil tCont''
         tCont'      = tCont (tVar x) tNone
         tCont''     = tCont (tVar x) (tVar a)

@@ -676,15 +676,10 @@ findAttr env tc n           = findIn [ (w,u,te') | (w,u) <- findAncestry env tc,
                                 Nothing          -> findIn tes
         findIn []           = Nothing
 
-findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Bool)
+findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Maybe Deco)
 findAttr' env tc n          = case findAttr env tc n of
-                                  Just (_, sc, mbdec) -> (sc, funAsClos mbdec)
+                                  Just (_, sc, mbdec) -> (sc, mbdec)
                                   Nothing -> error ("#### findAttr' fails for " ++ prstr tc ++ " . " ++ prstr n)
-
-funAsClos                   :: Maybe Deco -> Bool
-funAsClos Nothing           = True
-funAsClos (Just Property)   = True
-funAsClos _                 = False
 
 findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)

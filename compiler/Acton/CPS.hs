@@ -159,7 +159,7 @@ instance CPS [Stmt] where
       | contCall env e,
         Just c <- quicknext (ctxt env)  = return $ sReturn (addContArg (conv e) (cont c)) : []
       where t                           = typeOf env e
-            cont c                      = if t == tNone then c else eCall (eQVar primSKIPRESc) [c]
+            cont c                      = if t == tNone then c else eCall (tApp (eQVar primSKIPRESc) [methFX $ ctxt env, t]) [c]
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"

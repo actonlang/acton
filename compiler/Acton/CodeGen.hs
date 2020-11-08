@@ -115,9 +115,9 @@ properties env c                    = vmap prop te
         prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
         prop _                      = empty
 
-gcinfo env                          = text "char" <+> text "*" <> gen env (primKW "GCINFO") <> semi
+gcinfo env                          = text "char" <+> text "*" <> gen env gcinfoKW <> semi
 
-superlink env                       = gen env tSuperclass <+> gen env (primKW "superclass") <> semi
+superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
 
 qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
@@ -129,7 +129,7 @@ deserialize env c                   = funsig env (name "__deserialize__") (TFun 
 serialstate                         = posRow tSerialstate posNil
   where tSerialstate                = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
 
-classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env (primKW "class") <> semi
+classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env classKW <> semi
 
 classname env n                     = genTopName env (Derived n $ name "class")
 
@@ -137,6 +137,15 @@ methodtable env n                   = genTopName env (Derived n $ name "methods"
 
 methodtable' env (NoQ n)            = methodtable env n
 methodtable' env (GName m n)        = gen env $ GName m (Derived n $ name "methods")
+
+
+classKW                             = primKW "class"
+gcinfoKW                            = primKW "GCINFO"
+superclassKW                        = primKW "superclass"
+appKW                               = primKW "APP"
+entKW                               = primKW "ENT"
+newKW                               = primKW "NEW"
+newccKW                             = primKW "NEWCC"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -188,8 +197,8 @@ initModule env (s : ss)             = genStmt env s $+$
         env1                        = gdefine te env
 
 
-initClassBase env c as              = methodtable env c <> dot <> gen env (primKW "GCINFO") <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
-                                      methodtable env c <> dot <> gen env (primKW "superclass") <+> equals <+> super <> semi $+$
+initClassBase env c as              = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+                                      methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> methodtable' env c' <> dot <> gen env n <> semi
@@ -307,6 +316,35 @@ instance Gen KwdArg where
     gen env (KwdArg n e k)          = gen env n <+> equals <+> gen env e <> comma <+> gen env k
     gen env KwdNil                  = empty
 
+genCall env t0 (TApp _ e _) p       = genCall env t0 e p
+genCall env t0 e@(Var _ n) p
+  | NDef{} <- info                  = gen env e <> parens (gen env p)
+  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
+  where info                        = findQName n env
+        (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
+genCall env t0 e0@(Dot _ e n) p     = genDotCall env (snd $ schemaOf env e0) e n p
+genCall env t0 e p                  = apply env (typeOf env e) e enterKW p
+
+genDotCall env dec (TApp _ e _) n p = genDotCall env dec e n p
+genDotCall env dec e@(Var _ x) n p
+  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
+  | NClass{} <- info                = apply env (typeOf env e) (eDot e n) enterKW p
+  where info                        = findQName x env
+genDotCall env dec e n p
+  | Just NoDec <- dec               = apply env (typeOf env e) e n p
+  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
+genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) enterKW p
+
+
+genDot env (TApp _ e _) n           = genDot env e n
+genDot env e@(Var _ x) n
+  | NClass{} <- findQName x env     = gen env e <> text "." <> gen env n
+genDot env e n                      = gen env e <> text "->" <> gen env n
+
+
+apply env t e n p                   = gen env appKW <> parens (gen env t <> comma <+> gen env e <> comma <+> 
+                                                               gen env n <> comma <+> gen env p)
+
 instance Gen Expr where
     gen env (Var _ (NoQ n))
       | n `elem` global env         = genTopName env n
@@ -320,19 +358,10 @@ instance Gen Expr where
     gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = text s
     gen env (BStrings _ [s])        = text s
-    gen env (Call _ (Var _ n) (PosArg e PosNil) KwdNil)
-      | n == primSKIPRES            = gen env e
-    gen env e@(Call _ (Var _ n) p KwdNil)
-      | NClass{} <- findQName n env = gen env new <> parens (gen env $ PosArg (eQVar n) p')
-      where (new,p') | t == tR      = (primKW "NEWCC", rotate p)
-                     | otherwise    = (primKW "NEW", p)
-            t                       = typeOf env e
-    gen env (Call _ e p KwdNil)     = gen env e <> parens (gen env p)
+    gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) e p
     gen env (TApp _ e ts)           = gen env e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
-    gen env (Dot _ e@(Var _ (NoQ x)) n)
-      | x `elem` global env         = gen env e <> text "." <> gen env n
-    gen env (Dot _ e n)             = gen env e <> text "->" <> gen env n
+    gen env (Dot _ e n)             = genDot env e n
     gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
     gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)

@@ -25,3 +25,6 @@ void $printobj(char *mess,$WORD obj);
                                  while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
                                  $c == ($Super$class)&$T ## $methods; })
 
+#define $APP($T, $E, $n, ...) ({ $T $x = $E; $x->$class->$n($x, ##__VA_ARGS__); })
+
+#define $SKIPRES(cont)        (cont)

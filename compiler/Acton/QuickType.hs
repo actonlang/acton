@@ -8,8 +8,6 @@ import Acton.Builtin
 import Acton.Prim
 import Utils
 
-class SchemaOf a where
-    schemaOf                        :: EnvF x -> a -> (TSchema, Bool)       -- Snd result indicates that function type means closure
 
 class TypeOf a where
     typeOf                          :: EnvF x -> a -> Type
@@ -17,50 +15,53 @@ class TypeOf a where
 class EnvOf a where
     envOf                           :: a -> TEnv
 
-instance SchemaOf Expr where
-    schemaOf env (Var _ n)          = case findQName n env of
+schemaOf                            :: EnvF x -> Expr -> (TSchema, Maybe Deco)
+schemaOf env (Var _ n)              = case findQName n env of
                                         NVar t ->
-                                            (monotype t, True)
+                                            (monotype t, Nothing)
                                         NSVar t ->
-                                            (monotype t, True)
+                                            (monotype t, Nothing)
                                         NDef sc dec ->
-                                            (sc, funAsClos (Just dec))
+                                            (sc, Just dec)
                                         NSig sc dec ->
-                                            (sc, funAsClos (Just dec))
+                                            (sc, Just dec)
                                         NClass q _ _ ->
                                             let tc = TC n (map tVar $ tybound q)
                                                 (TSchema _ q' t, _) = findAttr' env tc initKW
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
-                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', False)
+                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec)
                                         NAct q p k _ ->
-                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), False)
+                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), Just NoDec)
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
-    schemaOf env (Dot _ (Var _ x) n)
-      | NClass q _ _ <- info        = let tc = TC x (map tVar $ tybound q)
+schemaOf env (Dot _ (Var _ x) n)
+  | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
                                           Just (_, TSchema _ q' t, mbdec) = findAttr env tc n
-                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec){ restype = tSelf }, funAsClos mbdec)
-      where info                    = findQName x env
-    schemaOf env e0@(Dot _ e n)     = case typeOf env e of
+                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec){ restype = tSelf }, mbdec)
+  where info                        = findQName x env
+schemaOf env e0@(Dot _ e n)         = case typeOf env e of
                                         TCon _ c -> findAttr' env c n
-                                        TTuple _ p k -> (f n k, True)
+                                        TTuple _ p k -> (f n k, Nothing)
                                         TVar _ v  -> findAttr' env (findTVBound env v) n
                                         t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ " : " ++ prstr t)
-      where f n (TRow l k x t r)
-              | x == n              = monotype t
-              | otherwise           = f n r
-    schemaOf env e                  = (monotype $ typeOf env e, True)
+  where f n (TRow l k x t r)        = if x == n then monotype t else f n r
+schemaOf env e                      = (monotype $ typeOf env e, Nothing)
 
+
+funAsClos                   :: Maybe Deco -> Bool
+funAsClos Nothing           = True
+funAsClos (Just Property)   = True
+funAsClos _                 = False
 
 typeOf2                             :: EnvF x -> Expr -> (Type, Bool)           -- Snd result indicates that function type means closure
 typeOf2 env e@Var{}                 = case schemaOf env e of
-                                         (TSchema _ [] t, cl) -> (t, cl)
+                                         (TSchema _ [] t, mbdec) -> (t, funAsClos mbdec)
                                          (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
 typeOf2 env e@Dot{}                 = case schemaOf env e of
-                                         (TSchema _ [] t, cl) -> (t, cl)
+                                         (TSchema _ [] t, mbdec) -> (t, funAsClos mbdec)
                                          (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
 typeOf2 env (TApp _ e ts)           = case schemaOf env e of
-                                         (TSchema _ q t, cl) | length q == length ts ->
-                                             (subst (tybound q `zip` ts) t, cl)
+                                         (TSchema _ q t, mbdec) | length q == length ts ->
+                                             (subst (tybound q `zip` ts) t, funAsClos mbdec)
 typeOf2 env e                       = (typeOf env e, True)
 
 
