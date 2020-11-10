@@ -628,7 +628,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                       ]
 
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
-isHidden _                          = False
+isHidden _                          = True
 
 isSig Signature{}                   = True
 isSig _                             = False
