@@ -122,7 +122,7 @@ instance Deact Decl where
                                     = do inits <- deactSuite env1 inits
                                          decls <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelfPar p) KwdNIL (Just tNone) (mkBody $ copies++inits) NoDec (fxAct tSelf)
-                                         return $ Class l n q [TC primActor []] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
+                                         return $ Class l n q [TC primActor [], cStruct] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
       where env1                    = setActor tSelf actions stvars locals $ extend (envOf p) $ defineTVars q env
             env2                    = define (envOf decls ++ envOf inits) env1
 

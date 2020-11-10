@@ -112,12 +112,15 @@ primMkEnv cls def var sig =
                       ]
 
 --  class $Actor (): pass
-clActor cls def sig = cls [] [] te
+clActor cls def sig = cls [] [([Nothing],cStruct)] te
   where te          = [ (primKW "next",     sig (monotype tActor) Property),
                         (primKW "msg",      sig (monotype (tMsg tWild)) Property),
                         (primKW "outgoing", sig (monotype (tMsg tWild)) Property),
                         (primKW "catcher",  sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
-                        (primKW "msg_lock", sig (monotype $ tCon $ TC (gPrim "Lock") []) Property) ]
+                        (primKW "msg_lock", sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
+                        (boolKW,            def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
+                        (strKW,             def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec)
+                      ]
         
 
 --  class $R (): pass
@@ -125,7 +128,7 @@ clR cls def         = cls [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction[tVar x, tVar p, kwdNil, tR])] []
+clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR])] []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 

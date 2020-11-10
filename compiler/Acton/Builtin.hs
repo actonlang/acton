@@ -22,6 +22,7 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
 boolKW                              = name "__bool__"
+strKW                               = name "__str__"
 callKW                              = name "__call__"
 
 iaddKW                              = name "__iadd__"

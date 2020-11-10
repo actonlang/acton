@@ -78,7 +78,7 @@ typedef env (Class _ n q a b)       = text "typedef" <+> text "struct" <+> genTo
 typedef env Def{}                   = empty
 
 decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> char '{') $+$ 
-                                      nest 4 (vcat $ gcinfo env : superlink env : initdef : serialize env tc : deserialize env tc : meths) $+$ 
+                                      nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
                                       (text "struct" <+> genTopName env n <+> char '{') $+$ 
                                       nest 4 (classlink env n $+$ properties env tc) $+$ 
@@ -115,7 +115,11 @@ properties env c                    = vmap prop te
         prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
         prop _                      = empty
 
+stdprefix env                       = [gcinfo env, classid env, superlink env]
+
 gcinfo env                          = text "char" <+> text "*" <> gen env gcinfoKW <> semi
+
+classid env                         = gen env tInt <+> gen env classidKW <> semi
 
 superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
@@ -141,11 +145,13 @@ methodtable' env (GName m n)        = gen env $ GName m (Derived n $ name "metho
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
+classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
 appKW                               = primKW "APP"
 entKW                               = primKW "ENT"
 newKW                               = primKW "NEW"
 newccKW                             = primKW "NEWCC"
+registerKW                          = primKW "register"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -204,7 +210,7 @@ initClassBase env c as              = methodtable env c <> dot <> gen env gcinfo
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> methodtable' env c' <> dot <> gen env n <> semi
 
-initClass env c []                  = empty
+initClass env c []                  = gen env registerKW <> parens (char '&' <> methodtable env c) <> semi
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
                                       initClass env1 c ss
   where env1                        = gdefine (envOf ds) env
