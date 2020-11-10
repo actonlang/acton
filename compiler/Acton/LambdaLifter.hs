@@ -220,12 +220,18 @@ instance Lift Branch where
 
 
 
-freefun env (Var l (NoQ n))
+freefun env e@(Var l (NoQ n))
   | Just vts <- findFree n env          = Just (tApp (Var l (NoQ $ liftedName env n)) (map tVar tvs), vts)
+  | isAlias n env                       = Just (e, [])
+  | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
-freefun env (TApp l (Var l' (NoQ n)) ts)
-  | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ ts), vts)
+freefun env e@(Var _ _)                 = Just (e, [])
+freefun env (TApp l e@(Var l' (NoQ n)) ts)
+  | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ conv ts), vts)
+  | isAlias n env                       = Just (TApp l e (conv ts), [])
+  | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
+freefun env (TApp l e@(Var _ _) ts)     = Just (TApp l e (conv ts), [])
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"

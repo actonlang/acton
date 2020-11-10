@@ -430,22 +430,22 @@ splitSigs te                = partition isSig te
         isSig _             = False
 
 nTerms                      :: TEnv -> TEnv
-nTerms te                   = [ (n,i) | (n,i) <- te, isTerm i ]
-  where isTerm NDef{}       = True
-        isTerm NVar{}       = True
-        isTerm _            = False
+nTerms te                   = [ (n,i) | (n,i) <- te, keep i ]
+  where keep NDef{}         = True
+        keep NVar{}         = True
+        keep _              = False
 
 noDefs                      :: TEnv -> TEnv
-noDefs te                   = [ (n,i) | (n,i) <- te, not $ isDef i ]
-  where isDef NDef{}        = True
-        isDef NAct{}        = True
-        isDef _             = False
+noDefs te                   = [ (n,i) | (n,i) <- te, keep i ]
+  where keep NDef{}         = False
+        keep NAct{}         = False
+        keep _              = True
 
 noAliases                   :: TEnv -> TEnv
-noAliases te                = [ (n,i) | (n,i) <- te, not $ isAlias i ]
-  where isAlias NAlias{}    = True
-        isAlias NMAlias{}   = True
-        isAlias _           = False
+noAliases te                = [ (n,i) | (n,i) <- te, keep i ]
+  where keep NAlias{}       = False
+        keep NMAlias{}      = False
+        keep _              = True
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)
 sigTerms te                 = (nSigs te, nTerms te)
@@ -619,6 +619,10 @@ lookupMod (ModName ns) env  = f ns (modules env)
 isMod                       :: EnvF x -> [Name] -> Bool
 isMod env ns                = maybe False (const True) (findMod (ModName ns) env)
 
+isAlias                     :: Name -> EnvF x -> Bool
+isAlias n env               = case lookup n (names env) of
+                                Just NAlias{} -> True
+                                _ -> False
 
 tconKind                    :: QName -> EnvF x -> Kind
 tconKind n env              = case findQName n env of
