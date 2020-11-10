@@ -48,11 +48,11 @@ liftModule env0 (Module m imp stmts) = return $ (Module m imp stmts', mapModules
 -- For each successive (non-def) statement s in any lambda-lifted statement list:
 --   Replace any lambda ws: e in s by Lam(vs),
 --     where Lam is a new class name defined as
---        class Lam ($Closure[p,t]):
+--        class Lam (function[x,p,(),t]):
 --            def __init__(self,vs'): self.vs' = vs'
---            def __enter__(self,ws): vs' = self.vs'; return e
---     and p, t and vs' are the parameter row, return type and free variables (restricted to L) of the lambda expression
---   Replace any call e(es) in s, where e has a closure type (not a known function or method), by e.__enter__(es)
+--            def __call__(self,ws): vs' = self.vs'; return e
+--     and x, p, t and vs' are the parameter row, return type and free variables (restricted to L) of the lambda expression
+--   Replace any call e(es) in s, where e has a closure type (not a known function or method), by e.__call__(es)
 --   Extend L with vs (the variables bound by s)
 
 
@@ -242,16 +242,16 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         Lambda _ p _ e fx               = subst s lambda
         t                               = subst s t0
         base | t == tR                  = TC primCont [fx,prowOf p]
-             | otherwise                = TC primClos [fx,prowOf p,t]
+             | otherwise                = TC qnFunction [fx,prowOf p,kwdNil,t]
         vts                             = subst s vts0
-        te                              = props ++ [Decl l0 [initDef], Decl l0 [enterDef]]
+        te                              = props ++ [Decl l0 [initDef], Decl l0 [callDef]]
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) initBody NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
         initBody                        = [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
-        enterDef                        = Def l0 enterKW [] enterPars KwdNIL (Just t) enterBody NoDec fx
-        enterPars                       = PosPar llSelf (Just tSelf) Nothing p
-        enterBody                       = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
+        callDef                         = Def l0 callKW [] callPars KwdNIL (Just t) callBody NoDec fx
+        callPars                        = PosPar llSelf (Just tSelf) Nothing p
+        callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
 
 instance Lift Expr where
     ll env e
@@ -265,7 +265,7 @@ instance Lift Expr where
                                              return $ Call l e' (addArgs vts p') KwdNil
       | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
-                                             return $ Call l (eDot e' enterKW) p' KwdNil
+                                             return $ Call l (eDot e' callKW) p' KwdNil
       | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
@@ -388,7 +388,7 @@ instance Conv TSchema where
 instance Conv Type where
     conv (TFun l fx p TNil{} t)
       | t == tR                         = TCon l (TC primCont [conv fx, conv p])
-      | otherwise                       = TCon l (TC primClos [conv fx, conv p, conv t])
+      | otherwise                       = TCon l (TC qnFunction [conv fx, conv p, kwdNil, conv t])
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)

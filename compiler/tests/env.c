@@ -15,7 +15,7 @@ struct Connection$__class__ {
     char *$GCINFO;
     $Msg (*deliver)(Connection$__class__, $WORD, $str);
     $Msg (*close)(Connection$__class__, $WORD);
-    $Msg (*receive_on)(Connection$__class__, $WORD, $Clos, $Clos);
+    $Msg (*receive_on)(Connection$__class__, $WORD, $function, $function);
 };
 
 Connection Connection$__pack__(Connection$__class__ __class__, $WORD __impl__) {
@@ -38,7 +38,7 @@ struct Env {
 };
 struct Env$__class__ {
     char *$GCINFO;
-    $Msg (*open)(Env$__class__, $WORD, $str, $int, $Clos);
+    $Msg (*open)(Env$__class__, $WORD, $str, $int, $function);
 };
 
 Env Env$__pack__(Env$__class__ __class__, $WORD __impl__) {
@@ -55,8 +55,8 @@ typedef struct TrueConnection *TrueConnection;
 
 struct TrueConnection {
     int socket;
-    $Clos input_callback;
-    $Clos error_callback;
+    $function input_callback;
+    $function error_callback;
     // more...
 };
 
@@ -70,7 +70,7 @@ $Msg TrueConnection$close (Connection$__class__ cls, $WORD __impl__) {
     return NULL;
 }
 
-$Msg TrueConnection$receive_on (Connection$__class__ cls, $WORD __impl__, $Clos input, $Clos error) {
+$Msg TrueConnection$receive_on (Connection$__class__ cls, $WORD __impl__, $function input, $function error) {
     TrueConnection trueSelf = (TrueConnection)__impl__;
     return NULL;
 }
@@ -87,7 +87,7 @@ struct Connection$__class__ Connection___TrueConnection = {
 struct TrueEnv;
 typedef struct TrueEnv *TrueEnv;
 
-$Msg TrueEnv$open(Env$__class__ cls, $WORD __impl__, $str address, $int port, $Clos callback) {
+$Msg TrueEnv$open(Env$__class__ cls, $WORD __impl__, $str address, $int port, $function callback) {
     TrueEnv self = (TrueEnv)__impl__;
     
     TrueConnection trueConn = /* create socket, etc, ... */ NULL;

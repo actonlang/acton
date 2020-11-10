@@ -22,8 +22,7 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
 boolKW                              = name "__bool__"
-
-methKWs                             = [initKW,enterKW,exitKW,iterKW,nextKW,containsKW,containsnotKW,getitemKW,setitemKW,getsliceKW,setsliceKW,boolKW]
+callKW                              = name "__call__"
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"
@@ -39,8 +38,6 @@ ixorKW                              = name "__ixor__"
 iandKW                              = name "__iand__"
 imatmulKW                           = name "__imatmul__"
 
-iopKWs                              = [iaddKW,isubKW,imulKW,ipowKW,itruedivKW,imodKW,ifloordivKW,ilshiftKW,irshiftKW,iorKW,ixorKW,iandKW,imatmulKW]
-
 addKW                               = name "__add__"
 subKW                               = name "__sub__"
 mulKW                               = name "__mul__"
@@ -55,13 +52,9 @@ xorKW                               = name "__xor__"
 andKW                               = name "__and__"
 matmulKW                            = name "__matmul__"
 
-binopKWs                            = [addKW,subKW,mulKW,powKW,truedivKW,modKW,floordivKW,lshiftKW,rshiftKW,orKW,xorKW,andKW,matmulKW]
-
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"
 invertKW                            = name "__invert__"
-
-unopKWs                             = [posKW,negKW,invertKW]
 
 eqKW                                = name "__eq__"
 neKW                                = name "__ne__"
@@ -71,10 +64,6 @@ gtKW                                = name "__gt__"
 geKW                                = name "__ge__"
 isKW                                = name "__is__"
 isnotKW                             = name "__isnot__"
-
-compopKWs                           = [eqKW,neKW,ltKW,leKW,gtKW,geKW,isKW,isnotKW]
-
-attrKWs                             = methKWs ++ iopKWs ++ binopKWs ++ unopKWs ++ compopKWs
 
 nBuiltin                            = name "__builtin__"
 mBuiltin                            = ModName [nBuiltin]
@@ -92,6 +81,7 @@ nMsg                                = name "Msg"
 nException                          = name "Exception"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
+nFunction                           = name "function"
 ---
 nRange                              = name "range"
 nLen                                = name "len"
@@ -135,7 +125,7 @@ qnMsg                               = gBuiltin nMsg
 qnException                         = gBuiltin nException
 qnStopIteration                     = gBuiltin nStopIteration
 qnValueError                        = gBuiltin nValueError
-qnLen                               = gBuiltin nLen
+qnFunction                          = gBuiltin nFunction
 ---
 qnRange                             = gBuiltin nRange
 qnPrint                             = gBuiltin nPrint
@@ -181,6 +171,7 @@ cSet a                              = TC qnSetT [a]
 cException                          = TC qnException []
 cStopIteration                      = TC qnStopIteration []
 cValueError                         = TC qnValueError []
+cFunction x p k a                   = TC qnFunction [x,p,k,a]
 ---
 pSequence a                         = TC qnSequence [a]
 pMapping a b                        = TC qnMapping [a,b]
@@ -220,6 +211,7 @@ tSet a                              = tCon (cSet a)
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
+tFunction x p k a                   = tCon (cFunction x p k a)
 ---
 tSequence a                         = tCon (pSequence a)
 tMapping a b                        = tCon (pMapping a b)

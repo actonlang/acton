@@ -13,7 +13,6 @@ primKW s            = name ("$" ++ s)
 
 primActor           = gPrim "Actor"
 primR               = gPrim "R"
-primClos            = gPrim "Clos"
 primCont            = gPrim "Cont"
 
 primASYNCw          = gPrim "ASYNCw"
@@ -61,7 +60,6 @@ primSKIPRES         = gPrim "SKIPRES"
 
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
-tClos x p t         = tCon $ TC primClos [x,p,t]
 tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 
 
@@ -93,7 +91,6 @@ primMkEnv cls def var sig =
                         
                             (noq primActor,         clActor cls def sig),
                             (noq primR,             clR cls def),
-                            (noq primClos,          clClos cls def),
                             (noq primCont,          clCont cls def),
 
                             (noq primRContc,        def scRContc NoDec),
@@ -126,20 +123,9 @@ clActor cls def sig = cls [] [] te
 --  class $R (): pass
 clR cls def         = cls [] [] []
 
---  class $Clos[X,P,A] ():
---      __init__    : () -> None
---      enter       : X(*P) -> A
-clClos cls def      = cls [quant x, quant p, quant a] [] clTEnv
-  where clTEnv      = [ (initKW, def scInit NoDec), (enterKW, def scEnter NoDec) ]
-        scInit      = tSchema [] $ tFun fxPure posNil kwdNil tNone
-        scEnter     = tSchema [] $ tFun (tVar x) (tVar p) kwdNil (tVar a)
-        x           = TV KFX (name "X")
-        p           = TV PRow (name "P")
-        a           = TV KType (name "A")
-
---  class $Clos[X,P] ($Clos[X,P,$R]):
+--  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] [([Nothing],TC primClos [tVar x, tVar p, tR])] []
+clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction[tVar x, tVar p, kwdNil, tR])] []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 

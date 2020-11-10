@@ -47,11 +47,6 @@ schemaOf env e0@(Dot _ e n)         = case typeOf env e of
 schemaOf env e                      = (monotype $ typeOf env e, Nothing)
 
 
-funAsClos                   :: Maybe Deco -> Bool
-funAsClos Nothing           = True
-funAsClos (Just Property)   = True
-funAsClos _                 = False
-
 isClosed                            :: NameInfo -> Bool
 isClosed (NVar _)                   = True
 isClosed (NSVar _)                  = True

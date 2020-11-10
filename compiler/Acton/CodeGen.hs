@@ -324,17 +324,17 @@ genCall env t0 e@(Var _ n) p
   where info                        = findQName n env
         (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
 genCall env t0 e0@(Dot _ e n) p     = genDotCall env (snd $ schemaOf env e0) e n p
-genCall env t0 e p                  = apply env (typeOf env e) e enterKW p
+genCall env t0 e p                  = apply env (typeOf env e) e callKW p
 
 genDotCall env dec (TApp _ e _) n p = genDotCall env dec e n p
 genDotCall env dec e@(Var _ x) n p
   | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
-  | NClass{} <- info                = apply env (typeOf env e) (eDot e n) enterKW p
+  | NClass{} <- info                = apply env (typeOf env e) (eDot e n) callKW p
   where info                        = findQName x env
 genDotCall env dec e n p
   | Just NoDec <- dec               = apply env (typeOf env e) e n p
   | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
-genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) enterKW p
+genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) callKW p
 
 
 genDot env (TApp _ e _) n           = genDot env e n

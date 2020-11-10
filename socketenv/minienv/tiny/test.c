@@ -1,7 +1,5 @@
 #include "test.h"
 
-#define $SKIPRES(x) x
-
 void* test$$l$1lambda$__init__ (test$$l$1lambda l$self, test$$Env __self__, $str s) {
     l$self->__self__ = __self__;
     l$self->s = s;

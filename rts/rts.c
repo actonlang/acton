@@ -207,23 +207,23 @@ $Catcher $Catcher$__deserialize__($Serial$state state) {
 }
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void $Clos$__init__($Clos $this) { }
+void $function$__init__($function $this) { }
 
-$bool $Clos$__bool__($Clos self) {
+$bool $function$__bool__($function self) {
   return $True;
 }
 
-$str $Clos$__str__($Clos self) {
+$str $function$__str__($function self) {
   char *s;
-  asprintf(&s,"<$Clos object at %p>",self);
+  asprintf(&s,"<function object at %p>",self);
   return to$str(s);
 }
 
-void $Clos$__serialize__($Clos self, $Serial$state state) {
+void $function$__serialize__($function self, $Serial$state state) {
     // TBD
 }
 
-$Clos $Clos$__deserialize__($Serial$state state) {
+$function $function$__deserialize__($Serial$state state) {
     // TBD
     return NULL;
 }
@@ -279,9 +279,9 @@ $RetNew $RetNew$__deserialize__($Serial$state state) {
     return res;
 }
 
-$R $RetNew$__enter__($RetNew $this, $WORD _ignore) {
+$R $RetNew$__call__($RetNew $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->__enter__(cont, $this->obj);
+    return cont->$class->__call__(cont, $this->obj);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -319,15 +319,15 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__str__
 };
 
-struct $Clos$class $Clos$methods = {
+struct $function$class $function$methods = {
     CLOS_HEADER,
     UNASSIGNED,
     NULL,
-    $Clos$__init__,
-    $Clos$__serialize__,
-    $Clos$__deserialize__,
-    $Clos$__bool__,
-    $Clos$__str__,
+    $function$__init__,
+    $function$__serialize__,
+    $function$__deserialize__,
+    $function$__bool__,
+    $function$__str__,
     NULL
 };
 
@@ -352,7 +352,7 @@ struct $RetNew$class $RetNew$methods = {
     $RetNew$__deserialize__,
     $RetNew$__bool__,
     $RetNew$__str__,
-    $RetNew$__enter__
+    $RetNew$__call__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -526,7 +526,7 @@ char *RTAG_name($RTAG tag) {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $DONE$__enter__($Cont $this, $WORD val) {
+$R $DONE$__call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
@@ -559,13 +559,13 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
-    $DONE$__enter__
+    $DONE$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $NewRoot$__enter__ ($Cont $this, $WORD val) {
+$R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
     return $ROOT($ENV, then);
 }
@@ -579,13 +579,13 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $NewRoot$__enter__
+    $NewRoot$__call__
 };
 struct $Cont $NewRoot$instance = {
     &$NewRoot$methods
 };
 ////////////////////////////////////////////////////////////////////////////////////////
-$R $WriteRoot$__enter__($Cont $this, $WORD val) {
+$R $WriteRoot$__call__($Cont $this, $WORD val) {
     root_actor = ($Actor)val;
     return $R_DONE(val);
 }
@@ -599,7 +599,7 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $WriteRoot$__enter__
+    $WriteRoot$__call__
 };
 struct $Cont $WriteRoot$instance = {
     &$WriteRoot$methods
@@ -678,7 +678,7 @@ void *main_loop(void *arg) {
             $Cont cont = m->cont;
             $WORD val = m->value;
             
-            $R r = cont->$class->__enter__(cont, val);
+            $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
@@ -771,7 +771,7 @@ void $register_rts () {
   $register_force(MSG_ID,&$Msg$methods);
   $register_force(ACTOR_ID,&$Actor$methods);
   $register_force(CATCHER_ID,&$Catcher$methods);
-  $register_force(CLOS_ID,&$Clos$methods);
+  $register_force(CLOS_ID,&$function$methods);
   $register_force(CONT_ID,&$Cont$methods);
   $register_force(DONE_ID,&$Done$methods);
   $register_force(RETNEW_ID,&$RetNew$methods);

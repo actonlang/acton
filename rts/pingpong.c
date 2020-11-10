@@ -31,7 +31,7 @@ lambda$1 lambda$1$__deserialize__($Serial$state state) {
     return res;
 }
 
-$R lambda$1$__enter__(lambda$1 $this, $Cont then) {
+$R lambda$1$__call__(lambda$1 $this, $Cont then) {
     Pingpong self = $this->self;
     $int count = $this->count;
     $int q = $this->q;
@@ -69,7 +69,7 @@ lambda$2 lambda$2$__deserialize__($Serial$state state) {
 }
 
 
-$R lambda$2$__enter__ (lambda$2 $this, $Cont then) {
+$R lambda$2$__call__ (lambda$2 $this, $Cont then) {
     Pingpong self = $this->self;
     $int q = $this->q;
     return self->$class->ping(self, q, then);
@@ -130,7 +130,7 @@ struct lambda$1$class lambda$1$methods = {
     lambda$1$__deserialize__,
     lambda$1$__bool__,
     lambda$1$__str__,
-    lambda$1$__enter__
+    lambda$1$__call__
 };
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
@@ -141,7 +141,7 @@ struct lambda$2$class lambda$2$methods = {
     lambda$2$__deserialize__,
     lambda$2$__bool__,
     lambda$2$__str__,
-    lambda$2$__enter__
+    lambda$2$__call__
 };
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",
