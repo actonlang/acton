@@ -228,10 +228,9 @@ freefun env (TApp l (Var l' (NoQ n)) ts)
   where Just tvs                        = lookup n (quantmap env)
 freefun env e                           = Nothing
 
-closureConvert env lambda t0 vts0
-                                        = do n <- newName "lambda"
+closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
                                              liftToTop [Class l0 n q [base] te]
-                                             return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) [ eVar v | (v,_) <- vts ]
+                                             return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
         s                               = selfSubst env
         Lambda _ p _ e fx               = subst s lambda
@@ -250,35 +249,28 @@ closureConvert env lambda t0 vts0
 
 instance Lift Expr where
     ll env e
-      | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts
+      | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
       where par                         = pPar paramNames (conv p)
             call e' vts                 = Call l0 e' (addArgs vts $ par2arg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
     ll env (Call l e p KwdNil)
       | Just (e',vts) <- freefun env e  = do p' <- ll env p
-                                             return $ Call l e' (addArgs vts p) KwdNil
-      | (_,True) <- typeOf2 env e       = do e' <- ll env e
+                                             return $ Call l e' (addArgs vts p') KwdNil
+      | closedType env e                = do e' <- llSub env e
                                              p' <- ll env p
-                                             return $ Call l (eDot e' enterKW) p KwdNil
-      | otherwise                       = do e' <- ll env e
+                                             return $ Call l (eDot e' enterKW) p' KwdNil
+      | otherwise                       = do e' <- llSub env e
                                              p' <- ll env p
                                              return $ Call l e' p' KwdNil
 
-    ll env (Lambda l p KwdNIL e fx)     = do e' <- ll env1 e
-                                             closureConvert env (Lambda l (conv p) KwdNIL e' fx) t vts
+    ll env e0@(Lambda l p KwdNIL e fx)  = do e' <- ll env1 e
+                                             closureConvert env (Lambda l (conv p) KwdNIL e' fx) t vts (map (eVar . fst) vts)
       where env1                        = extLocals p $ define (envOf p) env
             vts                         = restrict (locals env) (free e \\ bound p)
             t                           = typeOf env1 e
 
-    ll env (Var l n)
-      | n == primASYNCc                 = return $ Var l primASYNC
-      | n == primAFTERc                 = return $ Var l primAFTER
-      | n == primAWAITc                 = return $ Var l primAWAIT
-      | n == primPUSHc                  = return $ Var l primPUSH
-      | n == primRContc                 = return $ Var l primRCont
-      | n == primSKIPRESc               = return $ Var l primSKIPRES
-      | otherwise                       = return $ Var l n
+    ll env (Var l n)                    = pure $ Var l (primSubst n)
 
     ll env e@Int{}                      = pure e
     ll env e@Float{}                    = pure e
@@ -289,26 +281,51 @@ instance Lift Expr where
     ll env e@Ellipsis{}                 = pure e
     ll env e@Strings{}                  = pure e
     ll env e@BStrings{}                 = pure e
-    ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure (conv ts)
     ll env (Cond l e1 e e2)             = Cond l <$> ll env e1 <*> ll env e <*> ll env e2
     ll env (IsInstance l e c)           = IsInstance l <$> ll env e <*> pure c
     ll env (BinOp l e1 Or e2)           = BinOp l <$> ll env e1 <*> pure Or <*> ll env e2
     ll env (BinOp l e1 And e2)          = BinOp l <$> ll env e1 <*> pure And <*> ll env e2
     ll env (UnOp l Not e)               = UnOp l Not <$> ll env e
---    ll env e0@(Dot l e n)
---      | Just _ <- snd $ schemaOf env e0 = do e' <- ll env e
---                                             closureConvert env (Lambda l0 par KwdNIL e' fx) t []
---      where par                         = pPar paramNames (conv p)
---            TFun _ fx p _ t             = typeOf env e0
-    ll env (Dot l e n)                  = Dot l <$> ll env e <*> pure n
-    ll env (Rest l e n)                 = Rest l <$> ll env e <*> pure n
-    ll env (DotI l e i)                 = DotI l <$> ll env e <*> pure i
-    ll env (RestI l e i)                = RestI l <$> ll env e <*> pure i
+    ll env (TApp _ (Dot l e n) ts)      = llDot env l e n ts
+    ll env (Dot l e n)                  = llDot env l e n []
+    ll env (TApp l e ts)                = TApp l <$> ll env e <*> pure (conv ts)
+    ll env (Rest l e n)                 = Rest l <$> llSub env e <*> pure n
+    ll env (DotI l e i)                 = DotI l <$> llSub env e <*> pure i
+    ll env (RestI l e i)                = RestI l <$> llSub env e <*> pure i
     ll env (Yield l e)                  = Yield l <$> ll env e
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
     ll env (Tuple l es ks)              = Tuple l <$> ll env es <*> ll env ks
     ll env (List l es)                  = List l <$> ll env es
     ll env e                            = error ("ll unexpected: " ++ prstr e)
+
+llDot env l e n ts
+  | closedType env e0                   = Dot l <$> llSub env e <*> pure n
+  | Var _ x <- e,
+    NClass{} <- findQName x env         = closureConvert env (Lambda l0 par KwdNIL (call' x) fx) t [] []
+  | otherwise                           = do e' <- llSub env e
+                                             n' <- newName "self"
+                                             closureConvert env (Lambda l0 par KwdNIL (call n') fx) t [(n',t')] [e']
+  where par                             = pPar paramNames (conv p)
+        TFun _ fx p _ t                 = typeOf env e0
+        call n'                         = Call l0 (eDot (eVar n') n) (par2arg par) KwdNil
+        call' x                         = Call l0 (eDot (eQVar x) n) (par2arg par) KwdNil
+        t'                              = typeOf env e
+        e0                              = tApp (Dot l e n) (conv ts)
+
+llSub                                   :: LiftEnv -> Expr -> LiftM Expr
+llSub env (Var l n)                     = pure $ Var l (primSubst n)
+llSub env (Dot l e n)                   = Dot l <$> llSub env e <*> pure n
+llSub env (TApp l e ts)                 = TApp l <$> llSub env e <*> pure (conv ts)
+llSub env e                             = ll env e
+
+primSubst n
+  | n == primASYNCc                     = primASYNC
+  | n == primAFTERc                     = primAFTER
+  | n == primAWAITc                     = primAWAIT
+  | n == primPUSHc                      = primPUSH
+  | n == primRContc                     = primRCont
+  | n == primSKIPRESc                   = primSKIPRES
+  | otherwise                           = n
 
 instance Lift Elem where
     ll env (Elem e)                     = Elem <$> ll env e

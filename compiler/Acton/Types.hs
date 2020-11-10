@@ -875,7 +875,7 @@ instance Infer Expr where
                                                 (cs0,ts) <- instQBinds env q
                                                 traceM ("## Instantiating " ++ prstr n)
                                                 case findAttr env (TC n ts) initKW of
-                                                    Just (_wf,sc,_dec) -> do
+                                                    Just (_,sc,_) -> do
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC n ts
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
@@ -1036,7 +1036,7 @@ instance Infer Expr where
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
                                              case findAttr env (TC c ts) n of
-                                                Just (_wf,sc,dec)
+                                                Just (_,sc,dec)
                                                   | dec == Just Property -> err l "Property attribute not selectable by class"
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc

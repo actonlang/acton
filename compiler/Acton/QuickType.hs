@@ -35,15 +35,15 @@ schemaOf env (Var _ n)              = case findQName n env of
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
 schemaOf env (Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
-                                          Just (_, TSchema _ q' t, mbdec) = findAttr env tc n
-                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec){ restype = tSelf }, mbdec)
+                                          (TSchema _ q' t, mbdec) = findAttr' env tc n
+                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), mbdec)
   where info                        = findQName x env
 schemaOf env e0@(Dot _ e n)         = case typeOf env e of
                                         TCon _ c -> findAttr' env c n
-                                        TTuple _ p k -> (f n k, Nothing)
+                                        TTuple _ p k -> (monotype $ f n k, Nothing)
                                         TVar _ v  -> findAttr' env (findTVBound env v) n
-                                        t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ " : " ++ prstr t)
-  where f n (TRow l k x t r)        = if x == n then monotype t else f n r
+                                        t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
+  where f n (TRow l k x t r)        = if x == n then t else f n r
 schemaOf env e                      = (monotype $ typeOf env e, Nothing)
 
 
@@ -52,23 +52,35 @@ funAsClos Nothing           = True
 funAsClos (Just Property)   = True
 funAsClos _                 = False
 
-typeOf2                             :: EnvF x -> Expr -> (Type, Bool)           -- Snd result indicates that function type means closure
-typeOf2 env e@Var{}                 = case schemaOf env e of
-                                         (TSchema _ [] t, mbdec) -> (t, funAsClos mbdec)
-                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
-typeOf2 env e@Dot{}                 = case schemaOf env e of
-                                         (TSchema _ [] t, mbdec) -> (t, funAsClos mbdec)
-                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
-typeOf2 env (TApp _ e ts)           = case schemaOf env e of
-                                         (TSchema _ q t, mbdec) | length q == length ts ->
-                                             (subst (tybound q `zip` ts) t, funAsClos mbdec)
-typeOf2 env e                       = (typeOf env e, True)
+isClosed                            :: NameInfo -> Bool
+isClosed (NVar _)                   = True
+isClosed (NSVar _)                  = True
+isClosed (NSig _ Property)          = True
+isClosed _                          = False
+
+closedType                          :: EnvF x -> Expr -> Bool
+closedType env (Var _ n)            = isClosed $ findQName n env
+closedType env (Dot _ (Var _ x) n)
+  | NClass q _ _ <- findQName x env = case findAttrInfo env (TC x (map tVar $ tybound q)) n of
+                                        Just (w,i) -> isClosed i
+closedType env (Dot _ e n)          = case typeOf env e of
+                                        TCon _ c -> case findAttrInfo env c n of Just (w,i) -> isClosed i
+                                        TVar _ v  -> case findAttrInfo env (findTVBound env v) n of Just (w,i) -> isClosed i
+                                        TTuple _ p k -> True
+closedType env (TApp _ e _)         = closedType env e
+closedType env _                    = True
 
 
 instance TypeOf Expr where
-    typeOf env e@Var{}              = fst $ typeOf2 env e
-    typeOf env e@Dot{}              = fst $ typeOf2 env e
-    typeOf env e@TApp{}             = fst $ typeOf2 env e
+    typeOf env e@Var{}              = case schemaOf env e of
+                                         (TSchema _ [] t, mbdec) -> t
+                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf env e@Dot{}              = case schemaOf env e of
+                                         (TSchema _ [] t, mbdec) -> t
+                                         (sc, _) -> error ("###### 1 typeOf " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf env (TApp _ e ts)        = case schemaOf env e of
+                                         (TSchema _ q t, mbdec) | length q == length ts -> subst (tybound q `zip` ts) t
+                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
     typeOf env (Int _ i s)          = tInt
     typeOf env (Float _ f s)        = tFloat
 --  typeOf env (Imaginary _ i s)    = undefined

@@ -667,14 +667,20 @@ getWitness env cn p         = fromJust $ findWitness env cn (qmatch env (tcname 
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
-findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr,TSchema,Maybe Deco)
-findAttr env tc n           = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
+findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
+findAttr env tc n           = fmap f $ findAttrInfo env tc n
+  where f (w, NSig sc d)    = (w, sc, Just d)
+        f (w, NDef sc d)    = (w, sc, Just d)
+        f (w, NVar t)       = (w, monotype t, Nothing)
+        f (w, NSVar t)      = (w, monotype t, Nothing)
+
+findAttrInfo                :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, NameInfo)
+findAttrInfo env tc n       = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
   where findIn ((w,u,te):tes) = case lookup n te of
-                                Just (NSig sc d) -> Just (wexpr w, sc, Just d)
-                                Just (NDef sc d) -> Just (wexpr w, sc, Just d)
-                                Just (NVar t)    -> Just (wexpr w, monotype t, Nothing)
-                                Nothing          -> findIn tes
+                                Just ni -> Just (wexpr w, ni)
+                                Nothing -> findIn tes
         findIn []           = Nothing
+
 
 findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Maybe Deco)
 findAttr' env tc n          = case findAttr env tc n of
