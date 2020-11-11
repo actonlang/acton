@@ -152,7 +152,8 @@ entKW                               = primKW "ENT"
 newKW                               = primKW "NEW"
 newccKW                             = primKW "NEWCC"
 registerKW                          = primKW "register"
-
+noneKW                              = primKW "None"
+nonetypeKW                          = primKW "NoneType"
 
 -- Implementation -----------------------------------------------------------------------------------
 
@@ -323,6 +324,8 @@ instance Gen KwdArg where
     gen env (KwdArg n e k)          = gen env n <+> equals <+> gen env e <> comma <+> gen env k
     gen env KwdNil                  = empty
 
+genCall env t0 (TApp _ (Var _ n) [_,t]) (PosArg e PosNil)
+  | n == primCAST                   = parens (gen env t) <> gen env e
 genCall env t0 (TApp _ e _) p       = genCall env t0 e p
 genCall env t0 e@(Var _ n) p
   | NDef{} <- info                  = gen env e <> parens (gen env p)
@@ -359,24 +362,24 @@ instance Gen Expr where
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
     gen env (Imaginary _ _ str)     = text str
-    gen env (Bool _ v)              = gen env v
-    gen env (None _)                = text "None"
-    gen env (NotImplemented _)      = text "NotImplemented"
-    gen env (Ellipsis _)            = text "..."
-    gen env (Strings _ [s])         = text s
-    gen env (BStrings _ [s])        = text s
+    gen env (Bool _ True)           = text "1"
+    gen env (Bool _ False)          = text "0"
+    gen env (None _)                = gen env noneKW
+--    gen env (NotImplemented _)      = text "NotImplemented"
+--    gen env (Ellipsis _)            = text "..."
+    gen env (Strings _ [s])         = doubleQuotes $ text $ tail $ init s
+    gen env (BStrings _ [s])        = doubleQuotes $ text $ tail $ init s
     gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) e p
     gen env (TApp _ e ts)           = gen env e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env e n
-    gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
+    gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented"
     gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
-    gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented" --gen env e <> brackets (pretty i)
-    gen env (Yield _ e)             = text "yield" <+> gen env e
-    gen env (YieldFrom _ e)         = text "yield" <+> text "from" <+> gen env e
+    gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
+--    gen env (Yield _ e)             = 
+--    gen env (YieldFrom _ e)         = 
     gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
     gen env (List _ es)             = brackets (commaSep (gen env) es)
-    gen env (Paren _ e)             = gen env e
     gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
 
 rotate p                            = rot [] p
@@ -403,7 +406,7 @@ eliminated in previous passes.
 genPrec env _ (UnOp _ Not e)            = text "!" <> genPrec env 4 e
 genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&" <+> genPrec env 4 e2)
 genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+> text "||" <+> genPrec env 3 e2)
-genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (genPrec env 2 e1 <+> text "?" <+> gen env e <+> text ":" <+> genPrec env 1 e2)
+genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (genPrec env 2 e <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
 genPrec env _ e                         = gen env e
 
 instance Gen OpArg where

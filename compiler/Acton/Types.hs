@@ -942,6 +942,8 @@ instance Infer Expr where
                                                 return (Cast (tCon (TC c ts)) t :
                                                         cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
+    infer env (BinOp l e1@Strings{} Mod e2)
+                                        = notYet l "String formatting"
     infer env (BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs1,env1,s1,e1') <- inferBool env e1
                                              (cs2,env2,s2,e2') <- inferBool env1 e2
