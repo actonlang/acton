@@ -228,7 +228,7 @@ instance Norm Expr where
       where env1                    = define (envOf p ++ envOf k) env
     norm env (Yield l e)            = Yield l <$> norm env e
     norm env (YieldFrom l e)        = YieldFrom l <$> norm env e
-    norm env (Tuple l es ks)        = Tuple l <$> norm env es <*> norm env ks
+    norm env (Tuple l ps ks)        = Tuple l <$> norm env (joinArg ps ks) <*> pure KwdNil
     norm env (List l es)            = List l <$> norm env es
     norm env e0@(ListComp l e c)    = notYet l e0                                   -- TODO: eliminate here
       where env1                    = define (envOf c) env

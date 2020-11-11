@@ -154,6 +154,8 @@ newccKW                             = primKW "NEWCC"
 registerKW                          = primKW "register"
 noneKW                              = primKW "None"
 nonetypeKW                          = primKW "NoneType"
+trueKW                              = primKW "True"
+falseKW                             = primKW "False"
 
 -- Implementation -----------------------------------------------------------------------------------
 
@@ -297,7 +299,9 @@ genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (
 instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
-    gen env (MutAssign _ t e)       = gen env t <+> equals <+> gen env e <> semi
+      where t                       = typeOf env p
+    gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> gen env e <> semi
+      where t                       = typeOf env tg
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
     gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi
@@ -322,10 +326,6 @@ instance Gen PosArg where
     gen env (PosArg e p)            = gen env e <> comma <+> gen env p
     gen env PosNil                  = empty
 
-instance Gen KwdArg where
-    gen env (KwdArg n e KwdNil)     = gen env n <+> equals <+> gen env e
-    gen env (KwdArg n e k)          = gen env n <+> equals <+> gen env e <> comma <+> gen env k
-    gen env KwdNil                  = empty
 
 genCall env t0 (TApp _ (Var _ n) [_,t]) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
@@ -365,8 +365,8 @@ instance Gen Expr where
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
 --    gen env (Imaginary _ _ str)     = text str
-    gen env (Bool _ True)           = text "1"
-    gen env (Bool _ False)          = text "0"
+    gen env (Bool _ True)           = gen env trueKW
+    gen env (Bool _ False)          = gen env falseKW
     gen env (None _)                = gen env noneKW
 --    gen env (NotImplemented _)      = text "NotImplemented"
 --    gen env (Ellipsis _)            = text "..."
@@ -381,7 +381,7 @@ instance Gen Expr where
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
 --    gen env (Yield _ e)             = 
 --    gen env (YieldFrom _ e)         = 
-    gen env (Tuple _ pargs kargs)   = parens (gen env pargs <+> gen env kargs)
+    gen env (Tuple _ pargs KwdNil)  = parens (gen env pargs)
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
 

@@ -300,7 +300,7 @@ instance Lift Expr where
     ll env (RestI l e i)                = RestI l <$> llSub env e <*> pure i
     ll env (Yield l e)                  = Yield l <$> ll env e
     ll env (YieldFrom l e)              = YieldFrom l <$> ll env e
-    ll env (Tuple l es ks)              = Tuple l <$> ll env es <*> ll env ks
+    ll env (Tuple l es KwdNil)          = Tuple l <$> ll env es <*> pure KwdNil
     ll env (List l es)                  = List l <$> ll env es
     ll env e                            = error ("ll unexpected: " ++ prstr e)
 
@@ -340,10 +340,6 @@ instance Lift Elem where
 instance Lift PosArg where
     ll env (PosArg e p)                 = PosArg <$> ll env e <*> ll env p
     ll env PosNil                       = pure PosNil
-
-instance Lift KwdArg where
-    ll env (KwdArg n e k)               = KwdArg n <$> ll env e <*> ll env k
-    ll env KwdNil                       = pure KwdNil
 
 instance Lift Pattern where
     ll env (PVar l n t)                 = return (PVar l n (conv t))

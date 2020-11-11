@@ -430,10 +430,6 @@ instance PreCPS PosArg where
     pre env (PosArg e p)                = PosArg <$> pre env e <*> pre env p
     pre env PosNil                      = return PosNil
 
-instance PreCPS KwdArg where
-    pre env (KwdArg n e p)              = KwdArg n <$> pre env e <*>pre env p
-    pre env KwdNil                      = return KwdNil
-
 instance PreCPS Expr where
     pre env e0@(Call l e ps KwdNil)
       | mutCall env e0                  = do e1 <- pre env e
@@ -469,7 +465,7 @@ instance PreCPS Expr where
             t                           = typeOf env1 e
     pre env (Yield l e)                 = Yield l <$> pre env e
     pre env (YieldFrom l e)             = YieldFrom l <$> pre env e
-    pre env (Tuple l es ks)             = Tuple l <$> pre env es <*> pre env ks
+    pre env (Tuple l es KwdNil)         = Tuple l <$> pre env es <*> pure KwdNil
     pre env (List l es)                 = List l <$> pre env es
     pre env e                           = return e
 

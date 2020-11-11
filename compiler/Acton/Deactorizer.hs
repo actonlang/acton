@@ -227,7 +227,7 @@ instance Deact Expr where
       where env1                    = extendAndShadow (envOf p) env
     deact env (Yield l e)           = Yield l <$> deact env e
     deact env (YieldFrom l e)       = YieldFrom l <$> deact env e
-    deact env (Tuple l es ks)       = Tuple l <$> deact env es <*> deact env ks
+    deact env (Tuple l es KwdNil)   = Tuple l <$> deact env es <*> pure KwdNil
     deact env (List l es)           = List l <$> deact env es
     deact env e                     = error ("deact unexpected: " ++ prstr e)
 
@@ -242,10 +242,6 @@ instance Deact Handler where
 instance Deact PosArg where
     deact env (PosArg e p)          = PosArg <$> deact env e <*> deact env p
     deact env PosNil                = return PosNil
-
-instance Deact KwdArg where
-    deact env (KwdArg n e k)        = KwdArg n <$> deact env e <*> deact env k
-    deact env KwdNil                = return KwdNil
 
 instance Deact Elem where
     deact env (Elem e)              = Elem <$> deact env e
