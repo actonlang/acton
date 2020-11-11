@@ -24,11 +24,11 @@ generate env m                      = do return (h,c)
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = [], localX = [] }
+genEnv env0                         = setX env0 GenX{ globalX = [], localX = [], retX = tNone }
 
 type GenEnv                         = EnvF GenX
 
-data GenX                           = GenX { globalX :: [Name], localX :: [Name] }
+data GenX                           = GenX { globalX :: [Name], localX :: [Name], retX :: Type }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ globalX x }
   where env1                        = define te env
@@ -36,9 +36,13 @@ gdefine te env                      = modX env1 $ \x -> x{ globalX = dom te ++ g
 ldefine te env                      = modX env1 $ \x -> x{ localX = dom te ++ localX x }
   where env1                        = define te env
 
+setRet t env                        = modX env $ \x -> x{ retX = t }
+
 global env                          = globalX (envX env) \\ localX (envX env)
 
 defined env                         = globalX (envX env) ++ localX (envX env)
+
+ret env                             = retX $ envX env
 
 
 -- Helpers ------------------------------------------------------------------------------------------
@@ -156,6 +160,9 @@ noneKW                              = primKW "None"
 nonetypeKW                          = primKW "NoneType"
 trueKW                              = primKW "True"
 falseKW                             = primKW "False"
+tupleKW                             = primKW "tuple"
+componentsKW                        = name "components"
+
 
 -- Implementation -----------------------------------------------------------------------------------
 
@@ -181,11 +188,11 @@ declModule env (s : ss)             = vcat [ gen env t <+> genTopName env n <> s
   where te                          = envOf s `exclude` defined env
         env1                        = gdefine te env
 
-declDecl env (Def _ n q p KwdNIL a b d m)
-                                    = (gen env a <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
+declDecl env (Def _ n q p KwdNIL (Just t) b d m)
+                                    = (gen env t <+> genTopName env n <+> parens (gen env p) <+> char '{') $+$
                                       nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
-  where env1                        = ldefine (envOf p) $ defineTVars q env
+  where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
         ret | fallsthru b           = text "return" <+> gen env noneKW <> semi
             | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
@@ -291,20 +298,20 @@ genSuite env (s:ss)                 = genStmt env s $+$ genSuite (ldefine (envOf
 
 genStmt env (Decl _ ds)             = empty
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> gen env e <> semi
+  | n `notElem` defined env         = gen env t <+> gen env n <+> equals <+> genExp env t e <> semi
 genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (n,NVar t) <- te ] $+$
                                       gen env s
   where te                          = envOf s `exclude` defined env
 
 instance Gen Stmt where
     gen env (Expr _ e)              = gen env e <> semi
-    gen env (Assign _ [p] e)        = gen env p <+> equals <+> gen env e <> semi
+    gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p
-    gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> gen env e <> semi
+    gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env tg
     gen env (Pass _)                = empty
     gen env (Return _ Nothing)      = text "return" <+> gen env eNone <> semi
-    gen env (Return _ (Just e))     = text "return" <+> gen env e <> semi
+    gen env (Return _ (Just e))     = text "return" <+> genExp env (ret env) e <> semi
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
@@ -317,8 +324,8 @@ genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 instance Gen PosPar where
-    gen env (PosPar n t e PosNIL)   = gen env t <+> gen env n
-    gen env (PosPar n t e p)        = gen env t <+> gen env n <> comma <+> gen env p
+    gen env (PosPar n t _ PosNIL)   = gen env t <+> gen env n
+    gen env (PosPar n t _ p)        = gen env t <+> gen env n <> comma <+> gen env p
     gen env PosNIL                  = empty
 
 instance Gen PosArg where
@@ -331,8 +338,8 @@ genCall env t0 (TApp _ (Var _ n) [_,t]) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
 genCall env t0 (TApp _ e _) p       = genCall env t0 e p
 genCall env t0 e@(Var _ n) p
-  | NDef{} <- info                  = gen env e <> parens (gen env p)
-  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
+  | NDef{} <- info                  = gen env e <> parens (gen env p)                                                           -- arg
+  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')                                             -- arg
   where info                        = findQName n env
         (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
 genCall env t0 e0@(Dot _ e n) p     = genDotCall env (snd $ schemaOf env e0) e n p
@@ -340,12 +347,12 @@ genCall env t0 e p                  = apply env (typeOf env e) e callKW p
 
 genDotCall env dec (TApp _ e _) n p = genDotCall env dec e n p
 genDotCall env dec e@(Var _ x) n p
-  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
+  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)                                  -- arg
   | NClass{} <- info                = apply env (typeOf env e) (eDot e n) callKW p
   where info                        = findQName x env
 genDotCall env dec e n p
   | Just NoDec <- dec               = apply env (typeOf env e) e n p
-  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
+  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p) -- arg
 genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) callKW p
 
 
@@ -356,7 +363,9 @@ genDot env e n                      = gen env e <> text "->" <> gen env n
 
 
 apply env t e n p                   = gen env appKW <> parens (gen env t <> comma <+> gen env e <> comma <+> 
-                                                               gen env n <> comma <+> gen env p)
+                                                               gen env n <> comma <+> gen env p)                                -- arg
+
+genExp env t e                      = gen env e
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
@@ -364,12 +373,9 @@ instance Gen Expr where
     gen env (Var _ n)               = gen env n
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
---    gen env (Imaginary _ _ str)     = text str
     gen env (Bool _ True)           = gen env trueKW
     gen env (Bool _ False)          = gen env falseKW
     gen env (None _)                = gen env noneKW
---    gen env (NotImplemented _)      = text "NotImplemented"
---    gen env (Ellipsis _)            = text "..."
     gen env (Strings _ [s])         = doubleQuotes $ text $ tail $ init s
     gen env (BStrings _ [s])        = doubleQuotes $ text $ tail $ init s
     gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) e p
@@ -377,13 +383,13 @@ instance Gen Expr where
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env e n
     gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented"
-    gen env (DotI _ e i)            = gen env e <> brackets (pretty i)
+    gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
---    gen env (Yield _ e)             = 
---    gen env (YieldFrom _ e)         = 
-    gen env (Tuple _ pargs KwdNil)  = parens (gen env pargs)
+    gen env (Tuple _ p KwdNil)      = gen env tupleKW <> parens (gen env p)                                                     -- arg
     gen env (List _ es)             = brackets (commaSep (gen env) es)
-    gen env e                       = genPrec env 0 e -- BinOp, UnOp  and Cond
+    gen env e@BinOp{}               = genPrec env 0 e
+    gen env e@UnOp{}                = genPrec env 0 e
+    gen env e@Cond{}                = genPrec env 0 e
 
 rotate p                            = rot [] p
  where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
@@ -412,74 +418,11 @@ genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+>
 genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (genPrec env 2 e <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
 genPrec env _ e                         = gen env e
 
-instance Gen OpArg where
-    gen env (OpArg op e)            = gen env op <+> gen env e
-
-instance Gen Bool where
-    gen env b                       = text (show b)
-
-instance Gen Integer where
-    gen env i                       = text (show i)
-
-instance Gen String where
-    gen env s                       = text s
-
 instance Gen Elem where
     gen env (Elem e)                = gen env e
 
 instance Gen Pattern where
     gen env (PVar _ n _)            = gen env n
-
-instance Gen Unary where
-    gen env Not                     = text "not "
-    gen env BNot                    = text "~"
-    gen env UMinus                  = text "-"
-    gen env UPlus                   = text "+"
-
-instance Gen Binary where
-    gen env Or                      = text "or"
-    gen env And                     = text "and"
-    gen env BOr                     = text "|"
-    gen env BXor                    = text "^"
-    gen env BAnd                    = text "&"
-    gen env ShiftL                  = text "<<"
-    gen env ShiftR                  = text ">>"
-    gen env Plus                    = text "+"
-    gen env Minus                   = text "-"
-    gen env Mult                    = text "*"
-    gen env MMult                   = text "@"
-    gen env Div                     = text "/"
-    gen env Mod                     = text "%"
-    gen env EuDiv                   = text "//"
-    gen env Pow                     = text "**"
-
-instance Gen Comparison where
-    gen env Lt                      = text "<"
-    gen env Gt                      = text ">"
-    gen env Eq                      = text "=="
-    gen env GE                      = text ">="
-    gen env LE                      = text "<="
-    gen env NEq                     = text "!="
-    gen env In                      = text "in"
-    gen env NotIn                   = text "not in"
-    gen env Is                      = text "is"
-    gen env IsNot                   = text "is not"
-
-
-instance Gen Aug where
-    gen env PlusA                   = text "+="
-    gen env MinusA                  = text "-="
-    gen env MultA                   = text "*="
-    gen env MMultA                  = text "@="
-    gen env DivA                    = text "/="
-    gen env ModA                    = text "%="
-    gen env PowA                    = text "**="
-    gen env BAndA                   = text "&="
-    gen env BOrA                    = text "|="
-    gen env BXorA                   = text "^="
-    gen env ShiftLA                 = text "<<="
-    gen env ShiftRA                 = text ">>="
-    gen env EuDivA                  = text "//="
 
 instance Gen TSchema where
     gen env (TSchema _ _ t)         = gen env t
@@ -494,7 +437,7 @@ instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
     gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
-    gen env (TTuple _ pos _)        = parens (gen env pos)                                      -- TODO: replace!
+    gen env (TTuple _ pos _)        = gen env tupleKW
     gen env (TUnion _ as)           = word
     gen env (TOpt _ t)              = gen env t
     gen env (TNone _)               = text "void*"
