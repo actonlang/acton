@@ -12,21 +12,21 @@
 struct $Msg;
 struct $Actor;
 struct $Catcher;
-struct $Clos;
+struct $function;
 struct $Cont;
 struct $RetNew;
 
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
-typedef struct $Clos *$Clos;
+typedef struct $function *$function;
 typedef struct $Cont *$Cont;
 typedef struct $RetNew *$RetNew;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
 extern struct $Catcher$class $Catcher$methods;
-extern struct $Clos$class $Clos$methods;
+extern struct $function$class $function$methods;
 extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
 extern struct $RetNew$class $RetNew$methods;
@@ -52,6 +52,8 @@ typedef struct $R $R;
 #define CLOS_HEADER             "Clos"
 #define CONT_HEADER             "Cont"
 
+#define $Lock                   volatile atomic_flag
+
 struct $Msg$class {
     char *$GCINFO;
     int $class_id;
@@ -69,7 +71,7 @@ struct $Msg {
     $Cont cont;
     $Actor waiting;
     time_t baseline;
-    volatile atomic_flag wait_lock;
+    $Lock wait_lock;
     $WORD value;
 };
 
@@ -89,7 +91,7 @@ struct $Actor {
     $Msg msg;
     $Msg outgoing;
     $Catcher catcher;
-    volatile atomic_flag msg_lock;
+    $Lock msg_lock;
 };
 
 struct $Catcher$class {
@@ -108,19 +110,19 @@ struct $Catcher {
     $Cont cont;
 };
 
-struct $Clos$class {
+struct $function$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Clos);
-    void (*__serialize__)($Clos, $Serial$state);
-    $Clos (*__deserialize__)($Serial$state);
-    $bool (*__bool__)($Clos);
-    $str (*__str__)($Clos);
-    $WORD (*__enter__)($Clos, $WORD);
+    void (*__init__)($function);
+    void (*__serialize__)($function, $Serial$state);
+    $function (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($function);
+    $str (*__str__)($function);
+    $WORD (*__call__)($function, $WORD);
 };
-struct $Clos {
-    struct $Clos$class *$class;
+struct $function {
+    struct $function$class *$class;
 };
 
 struct $Cont$class {
@@ -132,30 +134,27 @@ struct $Cont$class {
     $Cont (*__deserialize__)($Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
-    $R (*__enter__)($Cont, $WORD);
+    $R (*__call__)($Cont, $WORD);
 };
 struct $Cont {
-    union {
-        struct $Cont$class *$class;
-        struct $Clos super;
-    };
+    struct $Cont$class *$class;
 };
 
 struct $RetNew$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($RetNew, $Cont, $Actor);
+    void (*__init__)($RetNew, $Cont, $WORD);
     void (*__serialize__)($RetNew, $Serial$state);
     $RetNew (*__deserialize__)($Serial$state);
     $bool (*__bool__)($RetNew);
     $str (*__str__)($RetNew);
-    $R (*__enter__)($RetNew, $WORD);
+    $R (*__call__)($RetNew, $WORD);
 };
 struct $RetNew {
     struct $RetNew$class *$class;
     $Cont cont;
-    $Actor act;
+    $WORD obj;
 };
 
 $Msg $ASYNC($Actor, $Cont);
@@ -165,7 +164,7 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-//typedef int $Env;
+// typedef int $Env;
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

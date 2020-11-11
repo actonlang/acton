@@ -1,12 +1,13 @@
 #include "minienv.h"
 
 
+
 static void $init_FileDescriptorData(int fd) {
   fd_data[fd].kind = nohandler;
   bzero(fd_data[fd].buffer,BUF_SIZE);
 }
 
-int new_socket ($Clos handler) {
+int new_socket ($function handler) {
   int fd = socket(PF_INET,SOCK_STREAM,0);
   fcntl(fd,F_SETFL,O_NONBLOCK);
   fd_data[fd].kind = connecthandler;
@@ -15,351 +16,281 @@ int new_socket ($Clos handler) {
 }
 
 void setupConnection (int fd, $str remoteHost) {
-  $Connection conn = $NEW($Connection,to$int(fd),remoteHost);
-  fd_data[fd].chandler->$class->__enter__(fd_data[fd].chandler, conn); // ???????
-}
-
-// $Connection /////////////////////////////////////////////////////////////////////////////////
-
-
-$WORD $Connection$__init__($Connection self,$int descriptor,$str remoteHost) {
-  self->descriptor = descriptor;
-  self->remoteHost = remoteHost;
-  return $None;
-}
-
-$WORD $Connection$__serialize__($Connection self, $Serial$state state) {
-  $step_serialize(self->descriptor,state);
-  $step_serialize(self->remoteHost,state);
-  return $None;
-}
-
-$Connection $Connection$__deserialize__($Serial$state state) {
-  $Connection res = $DNEW($Connection,state);
-  res->descriptor = $step_deserialize(state);
-  res->remoteHost = $step_deserialize(state);
-  return res;
-}
-
-$bool $Connection$__bool__($Connection self) {
-  return $True;
-}
-
-$str $Connection$__str__($Connection self) {
-  char *s;
-  asprintf(&s,"<$Connection object at %p>",self);
-  return to$str(s);
-}
-
-$WORD $Connection$close($Connection self){
-  close(self->descriptor->val); 
-  $init_FileDescriptorData(self->descriptor->val);
-  return $None;
-}
-
-$WORD $Connection$write($Connection self, $str str) {
-  memcpy(fd_data[self->descriptor->val].buffer,str->str,str->nbytes+1);
-  int chunk_size = str->nbytes > BUF_SIZE ? BUF_SIZE : str->nbytes; 
-  int r = write(self->descriptor->val,fd_data[self->descriptor->val].buffer,chunk_size);
-  //  for now, assume str->nbytes < BUF_SIZE
-  return $None;
+  printf("setting up connection\n");
+  minienv$$Connection conn = $NEW(minienv$$Connection,fd,NULL);
+  fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn); // ???????
 }
 
 
-$WORD $Connection$on_receipt($Connection self,$Clos on_input,$Clos on_error) {
-  fd_data[self->descriptor->val].kind = readhandler;
-  fd_data[self->descriptor->val].rhandler = on_input;
-  fd_data[self->descriptor->val].errhandler = on_error;
-  return $None;
+void* minienv$$l$1lambda$__init__ (minienv$$l$1lambda l$self, minienv$$Env __self__, $str s) {
+    l$self->__self__ = __self__;
+    l$self->s = s;
+    return NULL;
 }
-
-struct $Connection$class $Connection$methods = {"",UNASSIGNED,NULL,$Connection$__init__,$Connection$__serialize__,$Connection$__deserialize__,
-                                                $Connection$__bool__,$Connection$__str__,$Connection$close,$Connection$write,$Connection$on_receipt};
-
-
-// l$1lambda ///////////////////////////////////////////////////////////////////////////////////
-
-$WORD l$1lambda$__init__ (l$1lambda l$self, $_EnvActor __self__, $str str) {
-  l$self->__self__ = __self__;
-  l$self->str = str;
-  return $None;
+$R minienv$$l$1lambda$__call__ (minienv$$l$1lambda l$self, $Cont c$cont) {
+    minienv$$Env __self__ = l$self->__self__;
+    $str s = l$self->s;
+    return $APP(minienv$$Env, __self__, stdout_write$local, s, c$cont);
 }
-
-$WORD l$1lambda$__serialize__(l$1lambda l$self, $Serial$state state) {
-  $step_serialize(l$self->__self__,state);
-  $step_serialize(l$self->str,state);
-  return $None;
+struct minienv$$l$1lambda$class minienv$$l$1lambda$methods;
+void* minienv$$l$2lambda$__init__ (minienv$$l$2lambda l$self, minienv$$Env __self__, $function cb) {
+    l$self->__self__ = __self__;
+    l$self->cb = cb;
+    return NULL;
 }
- 
-l$1lambda l$1lambda$__deserialize__($Serial$state state) {
-  l$1lambda res = $DNEW(l$1lambda,state);
-  res->__self__ = $step_deserialize(state);
-  res->str = $step_deserialize(state);
-  return res;
+$R minienv$$l$2lambda$__call__ (minienv$$l$2lambda l$self, $Cont c$cont) {
+    minienv$$Env __self__ = l$self->__self__;
+    $function cb = l$self->cb;
+    return $APP(minienv$$Env, __self__, stdin_install$local, cb, c$cont);
 }
-
-$bool l$1lambda$__bool__(l$1lambda self) {
-  return $True;
+struct minienv$$l$2lambda$class minienv$$l$2lambda$methods;
+void* minienv$$l$3lambda$__init__ (minienv$$l$3lambda l$self, minienv$$Env __self__, $str host, $int port, $function cb) {
+    l$self->__self__ = __self__;
+    l$self->host = host;
+    l$self->port = port;
+    l$self->cb = cb;
+    return NULL;
 }
-
-$str l$1lambda$__str__(l$1lambda self) {
-  char *s;
-  asprintf(&s,"<l$1lambda object at %p>",self);
-  return to$str(s);
+$R minienv$$l$3lambda$__call__ (minienv$$l$3lambda l$self, $Cont c$cont) {
+    minienv$$Env __self__ = l$self->__self__;
+    $str host = l$self->host;
+    $int port = l$self->port;
+    $function cb = l$self->cb;
+    return $APP(minienv$$Env, __self__, connect$local, host, port, cb, c$cont);
 }
-
-$WORD l$1lambda$__enter__ (l$1lambda l$self, $WORD val) {
-  $_EnvActor __self__ = l$self->__self__;
-  return __self__->$class->do_stdout_write$local(__self__,l$self->str);
+struct minienv$$l$3lambda$class minienv$$l$3lambda$methods;
+void* minienv$$l$4lambda$__init__ (minienv$$l$4lambda l$self, minienv$$Env __self__, $int port, $function cb) {
+    l$self->__self__ = __self__;
+    l$self->port = port;
+    l$self->cb = cb;
+    return NULL;
 }
-
-struct l$1lambda$class l$1lambda$methods = {"",UNASSIGNED,NULL,l$1lambda$__init__,l$1lambda$__serialize__,l$1lambda$__deserialize__,
-                                            l$1lambda$__bool__,l$1lambda$__str__,l$1lambda$__enter__};
+$R minienv$$l$4lambda$__call__ (minienv$$l$4lambda l$self, $Cont c$cont) {
+    minienv$$Env __self__ = l$self->__self__;
+    $int port = l$self->port;
+    $function cb = l$self->cb;
+    return $APP(minienv$$Env, __self__, listen$local, port, cb, c$cont);
+}
+struct minienv$$l$4lambda$class minienv$$l$4lambda$methods;
+void* minienv$$l$5lambda$__init__ (minienv$$l$5lambda l$self, minienv$$Connection __self__, $str s) {
+    l$self->__self__ = __self__;
+    l$self->s = s;
+    return NULL;
+}
+$R minienv$$l$5lambda$__call__ (minienv$$l$5lambda l$self, $Cont c$cont) {
+    minienv$$Connection __self__ = l$self->__self__;
+    $str s = l$self->s;
+    return $APP(minienv$$Connection, __self__, write$local, s, c$cont);
+}
+struct minienv$$l$5lambda$class minienv$$l$5lambda$methods;
+void* minienv$$l$6lambda$__init__ (minienv$$l$6lambda l$self, minienv$$Connection __self__) {
+    l$self->__self__ = __self__;
+    return NULL;
+}
+$R minienv$$l$6lambda$__call__ (minienv$$l$6lambda l$self, $Cont c$cont) {
+       minienv$$Connection __self__ = l$self->__self__;
+    return $APP(minienv$$Connection, __self__, close$local, c$cont);
+}
+struct minienv$$l$6lambda$class minienv$$l$6lambda$methods;
+void* minienv$$l$7lambda$__init__ (minienv$$l$7lambda l$self, minienv$$Connection __self__, $function cb1, $function cb2) {
+    l$self->__self__ = __self__;
+    l$self->cb1 = cb1;
+    l$self->cb2 = cb2;
+    return NULL;
+}
+$R minienv$$l$7lambda$__call__ (minienv$$l$7lambda l$self, $Cont c$cont) {
+    minienv$$Connection __self__ = l$self->__self__;
+    $function cb1 = l$self->cb1;
+    $function cb2 = l$self->cb2;
+    return $APP(minienv$$Connection, __self__, on_receipt$local, cb1, cb2, c$cont);
+}
+struct minienv$$l$7lambda$class minienv$$l$7lambda$methods;
+$R minienv$$Env$__init__ (minienv$$Env __self__, $Cont c$cont) {
+    return $R_CONT(c$cont, $None);
+}
+$R minienv$$Env$stdout_write$local (minienv$$Env __self__, $str s, $Cont c$cont) {
+    printf("%s",s->str);
+    return $R_CONT(c$cont, $None);
+}
+$R minienv$$Env$stdin_install$local (minienv$$Env __self__, $function cb, $Cont c$cont) {
+    fd_data[STDIN_FILENO].kind = readhandler;
+    fd_data[STDIN_FILENO].rhandler = cb;
+    EV_SET(&fd_data[STDIN_FILENO].event_spec,STDIN_FILENO,EVFILT_READ,EV_ADD,0,0,NULL);
+    kevent(kq,&fd_data[STDIN_FILENO].event_spec,1,NULL,0,NULL);
+    return $R_CONT(c$cont, $None);
+}
+$R minienv$$Env$connect$local (minienv$$Env __self__, $str host, $int port, $function cb, $Cont c$cont) {
+    struct sockaddr_in addr;
+    struct in_addr iaddr;
+    struct hostent *ent;
+    int hostid;
+    int fd = new_socket(cb);
   
-// l$2lambda ///////////////////////////////////////////////////////////////////////////////////
-
-$WORD l$2lambda$__init__ (l$2lambda l$self, $_EnvActor __self__, $Clos callback) {
-  l$self->__self__ = __self__;
-  l$self->callback = callback;
-  return $None;
+    ent = gethostbyname((char *)host->str); //this should be replaced by calling getaddrinfo
+    if(ent==NULL) {
+      fprintf(stderr,"Name lookup error");  // should connect have one more param prescribing what do with errors before connection is established?
+      exit(-1);
+      //netError(fd,"Name lookup error");
+    }
+    else {
+      memcpy(&hostid, ent->h_addr_list[0], sizeof hostid);
+      iaddr.s_addr = hostid;
+      fd_data[fd].sock_addr.sin_addr = iaddr;
+      fd_data[fd].sock_addr.sin_port = htons(port->val);
+      fd_data[fd].sock_addr.sin_family = AF_INET;
+      if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) {// couldn't connect immediately, 
+        if (errno!=EINPROGRESS)  {                                                            // so check if attempt continues asynchronously.
+          fprintf(stderr,"Connect failed");
+          exit(-1);
+          //netError(fd,"Connect failed");
+        } else {
+          printf("connect returned EINPROGRESS error on fd %d\n",fd);
+          EV_SET(&fd_data[fd].event_spec,fd,EVFILT_WRITE,EV_ADD | EV_ONESHOT,0,0,NULL);
+          kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+        }
+      } else
+        setupConnection(fd,host);
+    }
+    return $R_CONT(c$cont, $None);
 }
-
-$WORD l$2lambda$__serialize__(l$2lambda l$self, $Serial$state state) {
-  $step_serialize(l$self->__self__,state);
-  $step_serialize(l$self->callback,state);
-  return $None;
+$R minienv$$Env$listen$local (minienv$$Env __self__, $int port, $function cb, $Cont c$cont) {
+    struct sockaddr_in addr;
+    int fd = new_socket(cb);
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port->val);
+    addr.sin_family = AF_INET;
+    if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
+      perror("bind failed");
+    listen(fd,5);
+    return $R_CONT(c$cont, $None);
 }
- 
-l$2lambda l$2lambda$__deserialize__($Serial$state state) {
-  l$2lambda res = $DNEW(l$2lambda,state);
-  res->__self__ = $step_deserialize(state);
-  res->callback = $step_deserialize(state);
-  return res;
+$Msg minienv$$Env$stdout_write (minienv$$Env __self__, $str s) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$1lambda, __self__, s));
 }
-
-$bool l$2lambda$__bool__(l$2lambda self) {
-  return $True;
+$Msg minienv$$Env$stdin_install (minienv$$Env __self__, $function cb) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$2lambda, __self__, cb));
 }
-
-$str l$2lambda$__str__(l$2lambda self) {
-    char *s;
-  asprintf(&s,"<l$2lambda object at %p>",self);
-  return to$str(s);
+$Msg minienv$$Env$connect (minienv$$Env __self__, $str host, $int port, $function cb) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$3lambda, __self__, host, port, cb));
 }
-
-$WORD l$2lambda$__enter__ (l$2lambda l$self, $WORD val) {
-  $_EnvActor __self__ = l$self->__self__;
-  return __self__->$class->do_stdin_install$local(__self__,l$self->callback);
+$Msg minienv$$Env$listen (minienv$$Env __self__, $int port, $function cb) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$4lambda, __self__, port, cb));
 }
-
-struct l$2lambda$class l$2lambda$methods = {"",UNASSIGNED,NULL,l$2lambda$__init__,l$2lambda$__serialize__,l$2lambda$__deserialize__,
-                                            l$2lambda$__bool__,l$2lambda$__str__,l$2lambda$__enter__};
-  
-// l$3lambda ///////////////////////////////////////////////////////////////////////////////////
-
-$WORD l$3lambda$__init__ (l$3lambda l$self, $_EnvActor __self__, $str address, $int port, $Clos on_success) {
-  l$self->__self__ = __self__;
-  l$self->address = address;
-  l$self->port = port;
-  l$self->on_success = on_success;
-  return $None;
-};
-
-$WORD l$3lambda$__serialize__(l$3lambda l$self, $Serial$state state) {
-  $step_serialize(l$self->__self__,state);
-  $step_serialize(l$self->address,state);
-  $step_serialize(l$self->port,state);
-  $step_serialize(l$self->on_success,state);
-  return $None;
+struct minienv$$Env$class minienv$$Env$methods;
+$R minienv$$Connection$__init__ (minienv$$Connection __self__, int descriptor, $Cont c$cont) {
+    __self__->descriptor = descriptor;
+    return $R_CONT(c$cont, $None);
 }
- 
-l$3lambda l$3lambda$__deserialize__($Serial$state state) {
-    l$3lambda res = $DNEW(l$3lambda,state);
-    res->__self__ = $step_deserialize(state);
-    res->address = $step_deserialize(state);
-    res->port = $step_deserialize(state);
-    res->on_success = $step_deserialize(state);
-    return res;
+$R minienv$$Connection$write$local (minienv$$Connection __self__, $str s, $Cont c$cont) {
+    memcpy(fd_data[__self__->descriptor].buffer,s->str,s->nbytes+1);
+    int chunk_size = s->nbytes > BUF_SIZE ? BUF_SIZE : s->nbytes; 
+    int r = write(__self__->descriptor,fd_data[__self__->descriptor].buffer,chunk_size);
+    //  for now, assume str->nbytes < BUF_SIZE
+    return $R_CONT(c$cont, $None);
 }
-
-$bool l$3lambda$__bool__(l$3lambda self) {
-  return $True;
+$R minienv$$Connection$close$local (minienv$$Connection __self__, $Cont c$cont) {
+    close(__self__->descriptor); 
+    $init_FileDescriptorData(__self__->descriptor);
+    return $R_CONT(c$cont, $None);
 }
-
-$str l$3lambda$__str__(l$3lambda self) {
-    char *s;
-  asprintf(&s,"<l$3lambda object at %p>",self);
-  return to$str(s);
+$R minienv$$Connection$on_receipt$local (minienv$$Connection __self__, $function on_input, $function on_error, $Cont c$cont) {
+    fd_data[__self__->descriptor].kind = readhandler;
+    fd_data[__self__->descriptor].rhandler = on_input;
+    fd_data[__self__->descriptor].errhandler = on_error;
+    return $R_CONT(c$cont, $None);
 }
-
-$WORD l$3lambda$__enter__ (l$3lambda l$self, $WORD val) {
-  $_EnvActor __self__ = l$self->__self__;
-  $str address = l$self->address;
-  $int port = l$self->port;
-  $Clos on_success = l$self->on_success;
-  return __self__->$class->do_connect$local(__self__,address, port, on_success);
+$Msg minienv$$Connection$write (minienv$$Connection __self__, $str s) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$5lambda, __self__, s));
 }
-
-struct l$3lambda$class l$3lambda$methods = {"",UNASSIGNED,NULL,l$3lambda$__init__,l$3lambda$__serialize__,l$3lambda$__deserialize__,
-                                            l$3lambda$__bool__,l$3lambda$__str__,l$3lambda$__enter__};
-  
-// l$4lambda ///////////////////////////////////////////////////////////////////////////////////
-
-$WORD l$4lambda$__init__ (l$4lambda l$self, $_EnvActor __self__, $int port, $Clos on_success) {
-  l$self->__self__ = __self__;
-  l$self->port = port;
-  l$self->on_success = on_success;
-  return $None;
+$Msg minienv$$Connection$close (minienv$$Connection __self__) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$6lambda, __self__));
 }
-
-$WORD l$4lambda$__serialize__(l$4lambda l$self, $Serial$state state) {
-  $step_serialize(l$self->__self__,state);
-  $step_serialize(l$self->port,state);
-  $step_serialize(l$self->on_success,state);
-  return $None;
+$Msg minienv$$Connection$on_receipt (minienv$$Connection __self__, $function cb1, $function cb2) {
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(minienv$$l$7lambda, __self__, cb1, cb2));
 }
- 
-l$4lambda l$4lambda$__deserialize__($Serial$state state) {
-  l$4lambda res = $DNEW(l$4lambda,state);
-  res->__self__ = $step_deserialize(state);
-  res->port = $step_deserialize(state);
-  res->on_success = $step_deserialize(state);
-  return res;
+struct minienv$$Connection$class minienv$$Connection$methods;
+int minienv$$done$ = 0;
+void minienv$$__init__ () {
+    if (minienv$$done$) return;
+    minienv$$done$ = 1;
+    
+    {
+        minienv$$l$1lambda$methods.$GCINFO = "minienv$$l$1lambda";
+        minienv$$l$1lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$1lambda$methods.__init__ = minienv$$l$1lambda$__init__;
+        minienv$$l$1lambda$methods.__call__ = minienv$$l$1lambda$__call__;
+        $register(&minienv$$l$1lambda$methods);
+    }
+    {
+        minienv$$l$2lambda$methods.$GCINFO = "minienv$$l$2lambda";
+        minienv$$l$2lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$2lambda$methods.__init__ = minienv$$l$2lambda$__init__;
+        minienv$$l$2lambda$methods.__call__ = minienv$$l$2lambda$__call__;
+        $register(&minienv$$l$2lambda$methods);
+    }
+    {
+        minienv$$l$3lambda$methods.$GCINFO = "minienv$$l$3lambda";
+        minienv$$l$3lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$3lambda$methods.__init__ = minienv$$l$3lambda$__init__;
+        minienv$$l$3lambda$methods.__call__ = minienv$$l$3lambda$__call__;
+        $register(&minienv$$l$3lambda$methods);
+    }
+    {
+        minienv$$l$4lambda$methods.$GCINFO = "minienv$$l$4lambda";
+        minienv$$l$4lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$4lambda$methods.__init__ = minienv$$l$4lambda$__init__;
+        minienv$$l$4lambda$methods.__call__ = minienv$$l$4lambda$__call__;
+        $register(&minienv$$l$4lambda$methods);
+    }
+    {
+        minienv$$l$5lambda$methods.$GCINFO = "minienv$$l$5lambda";
+        minienv$$l$5lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$5lambda$methods.__init__ = minienv$$l$5lambda$__init__;
+        minienv$$l$5lambda$methods.__call__ = minienv$$l$5lambda$__call__;
+        $register(&minienv$$l$5lambda$methods);
+    }
+    {
+        minienv$$l$6lambda$methods.$GCINFO = "minienv$$l$6lambda";
+        minienv$$l$6lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$6lambda$methods.__init__ = minienv$$l$6lambda$__init__;
+        minienv$$l$6lambda$methods.__call__ = minienv$$l$6lambda$__call__;
+        $register(&minienv$$l$6lambda$methods);
+    }
+    {
+        minienv$$l$7lambda$methods.$GCINFO = "minienv$$l$7lambda";
+        minienv$$l$7lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$7lambda$methods.__init__ = minienv$$l$7lambda$__init__;
+        minienv$$l$7lambda$methods.__call__ = minienv$$l$7lambda$__call__;
+        $register(&minienv$$l$7lambda$methods);
+    }
+    {
+        minienv$$Env$methods.$GCINFO = "minienv$$Env";
+        minienv$$Env$methods.$superclass = ($Super$class)&$Actor$methods;
+        minienv$$Env$methods.__bool__ = ($bool (*)(minienv$$Env))$Actor$methods.__bool__;
+        minienv$$Env$methods.__str__ = ($str (*)(minienv$$Env))$Actor$methods.__str__;
+        minienv$$Env$methods.__init__ = minienv$$Env$__init__;
+        minienv$$Env$methods.stdout_write$local = minienv$$Env$stdout_write$local;
+        minienv$$Env$methods.stdin_install$local = minienv$$Env$stdin_install$local;
+        minienv$$Env$methods.connect$local = minienv$$Env$connect$local;
+        minienv$$Env$methods.listen$local = minienv$$Env$listen$local;
+        minienv$$Env$methods.stdout_write = minienv$$Env$stdout_write;
+        minienv$$Env$methods.stdin_install = minienv$$Env$stdin_install;
+        minienv$$Env$methods.connect = minienv$$Env$connect;
+        minienv$$Env$methods.listen = minienv$$Env$listen;
+        $register(&minienv$$Env$methods);
+    }
+    {
+        minienv$$Connection$methods.$GCINFO = "minienv$$Connection";
+        minienv$$Connection$methods.$superclass = ($Super$class)&$Actor$methods;
+        minienv$$Connection$methods.__bool__ = ($bool (*)(minienv$$Connection))$Actor$methods.__bool__;
+        minienv$$Connection$methods.__str__ =  ($str (*)(minienv$$Connection))$Actor$methods.__str__;
+        minienv$$Connection$methods.__init__ = minienv$$Connection$__init__;
+        minienv$$Connection$methods.write$local = minienv$$Connection$write$local;
+        minienv$$Connection$methods.close$local = minienv$$Connection$close$local;
+        minienv$$Connection$methods.on_receipt$local = minienv$$Connection$on_receipt$local;
+        minienv$$Connection$methods.write = minienv$$Connection$write;
+        minienv$$Connection$methods.close = minienv$$Connection$close;
+        minienv$$Connection$methods.on_receipt = minienv$$Connection$on_receipt;
+        $register(&minienv$$Connection$methods);
+    }
 }
-
-$bool l$4lambda$__bool__(l$4lambda self) {
-  return $True;
-}
-
-$str l$4lambda$__str__(l$4lambda self) {
-    char *s;
-  asprintf(&s,"<l$4lambda object at %p>",self);
-  return to$str(s);
-}
-
-$WORD l$4lambda$__enter__ (l$4lambda l$self, $WORD val) {
-  $_EnvActor __self__ = l$self->__self__;
-  $int port = l$self->port;
-  $Clos on_success = l$self->on_success;
-  return __self__->$class->do_listen$local(__self__,port, on_success);
-}
-
-struct l$4lambda$class l$4lambda$methods = {"",UNASSIGNED,NULL,l$4lambda$__init__,l$4lambda$__serialize__,l$4lambda$__deserialize__,
-                                            l$4lambda$__bool__,l$4lambda$__str__,l$4lambda$__enter__};
-  
- 
-// $_EnvActor //////////////////////////////////////////////////////////////////////////////////////////
-
-$R $_EnvActor$__init__ ($_EnvActor __self__, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $None);
-};
-
-$WORD $_EnvActor$do_stdout_write$local($_EnvActor __self__, $str str) {
-  printf("%s",str->str);
-  return $None;
-}
-
-$WORD $_EnvActor$do_stdin_install$local($_EnvActor __self__, $Clos callback) {
-  fd_data[STDIN_FILENO].kind = readhandler;
-  fd_data[STDIN_FILENO].rhandler = callback;
-  return $None;
-}
-  
-$WORD $_EnvActor$do_connect$local ($_EnvActor __self__, $str address, $int port, $Clos on_success) {
-  struct sockaddr_in addr;
-  struct in_addr iaddr;
-  struct hostent *ent;
-  int hostid;
-  int fd = new_socket(on_success);
-  
-  ent = gethostbyname((char *)address->str); //this should be replaced by calling getaddrinfo
-  if(ent==NULL) {
-    fprintf(stderr,"Name lookup error");  // should connect have one more param prescribing what do with errors before connection is established?
-    exit(-1);
-    //netError(fd,"Name lookup error");
-  }
-  else {
-    memcpy(&hostid, ent->h_addr_list[0], sizeof hostid);
-    iaddr.s_addr = hostid;
-    fd_data[fd].sock_addr.sin_addr = iaddr;
-    fd_data[fd].sock_addr.sin_port = htons(port->val);
-    fd_data[fd].sock_addr.sin_family = AF_INET;
-    if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) {// couldn't connect immediately, 
-      if (errno!=EINPROGRESS)  {                                                            // so check if attempt continues asynchronously.
-        fprintf(stderr,"Connect failed");
-        exit(-1);
-        //netError(fd,"Connect failed");
-      }                                            
-    } else 
-      setupConnection(fd,address);
-  }
-  return $None;
-};
-
-$WORD $_EnvActor$do_listen$local ($_EnvActor __self__, $int port, $Clos on_success) {
-  struct sockaddr_in addr;
-  int fd = new_socket(on_success);
-  addr.sin_addr.s_addr = INADDR_ANY;
-  addr.sin_port = htons(port->val);
-  addr.sin_family = AF_INET;
-  if (bind(fd,(struct sockaddr *)&addr,sizeof(struct sockaddr)) < 0)
-    perror("bind failed");
-  listen(fd,5);
-  return $None;
-  //  return $NEW($Closable,fd);
-};
-
-
-$R $_EnvActor$do_stdout_write ($_EnvActor __self__, $str str, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__, ($Cont)$NEW(l$1lambda,__self__, str)));
-};
-
-$R $_EnvActor$do_stdin_install ($_EnvActor __self__, $Clos callback, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__, ($Cont)$NEW(l$2lambda,__self__, callback)));
-};
-
-$R $_EnvActor$do_connect ($_EnvActor __self__, $str address, $int port, $Clos on_success, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__, ($Cont)$NEW(l$3lambda,__self__, address, port, on_success)));
-};
-
-$R $_EnvActor$do_listen ($_EnvActor __self__, $int port, $Clos on_success, $Clos c$cont) {
-  return $R_CONT(($Cont)c$cont, $ASYNC(($Actor)__self__,  ($Cont)$NEW(l$4lambda,__self__, port, on_success)));
-};
-
-struct $_EnvActor$class $_EnvActor$methods = {"",UNASSIGNED,NULL,$_EnvActor$__init__,NULL,NULL,NULL,NULL,
-                                              $_EnvActor$do_stdout_write$local,$_EnvActor$do_stdin_install$local,
-                                              $_EnvActor$do_connect$local,$_EnvActor$do_listen$local,
-                                              $_EnvActor$do_stdout_write,$_EnvActor$do_stdin_install,
-                                              $_EnvActor$do_connect,$_EnvActor$do_listen};
-
-
-// $_Env //////////////////////////////////////////////////////////////////////////////////////////
-
-$WORD $_Env$__init__ ($_Env self, $_EnvActor actual) {
-  self->actual = actual;
-  return $None;
-};
-
-#define $SKIPRES(x)  x   //!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-$R $_Env$stdout_write ($_Env self, $str str, $Clos c$cont) {
-  return self->actual->$class->do_stdout_write(self->actual,str, $SKIPRES(c$cont));
-};
-
-$R $_Env$stdin_install ($_Env self, $Clos callback, $Clos c$cont) {
-  return self->actual->$class->do_stdin_install(self->actual,callback, $SKIPRES(c$cont));
-};
-
-$R $_Env$connect ($_Env self, $str address, $int port, $Clos on_success, $Clos c$cont) {
-  return self->actual->$class->do_connect(self->actual,address, port, on_success, $SKIPRES(c$cont));
-};
-
-$R $_Env$listen ($_Env self, $int port, $Clos on_success, $Clos c$cont) {
-  return self->actual->$class->do_listen(self->actual,port, on_success, $SKIPRES(c$cont));
-};
-
-struct $_Env$class $_Env$methods = {"",UNASSIGNED,NULL,$_Env$__init__,NULL,NULL,NULL,NULL,
-                                    $_Env$stdout_write,$_Env$stdin_install,
-                                    $_Env$connect,$_Env$listen};
-

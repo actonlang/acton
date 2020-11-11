@@ -1,2 +1,2 @@
 all:
-	gcc ../../builtin/builtin.o minienv.c client.c rts.c -l utf8proc
+	gcc ../../builtin/builtin.o -g minienv.c client.c rts.c -l utf8proc
