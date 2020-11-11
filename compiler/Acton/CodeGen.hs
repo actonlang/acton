@@ -184,7 +184,7 @@ declDecl env (Def _ n q p KwdNIL a b d m)
                                       nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
   where env1                        = ldefine (envOf p) $ defineTVars q env
-        ret | fallsthru b           = text "return" <+> text "NULL" <> semi
+        ret | fallsthru b           = text "return" <+> gen env noneKW <> semi
             | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
@@ -207,9 +207,12 @@ initModule env (s : ss)             = genStmt env s $+$
 
 initClassBase env c as              = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
+                                      vcat [ inherit c' n i | (c',te) <- inheritedAttrs env (NoQ c), (n,i) <- te ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> methodtable' env c' <> dot <> gen env n <> semi
+        selfsubst                   = subst [(tvSelf, tCon $ TC (NoQ c) [])]
+        inherit c' n i              = methodtable env c <> dot <> gen env n <+> equals <+> cast i <> methodtable' env c' <> dot <> gen env n <> semi
+          where cast (NVar t)       = parens (gen env $ selfsubst t)
+                cast (NDef sc dec)  = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
 
 initClass env c []                  = gen env registerKW <> parens (char '&' <> methodtable env c) <> semi
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
@@ -361,7 +364,7 @@ instance Gen Expr where
     gen env (Var _ n)               = gen env n
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
-    gen env (Imaginary _ _ str)     = text str
+--    gen env (Imaginary _ _ str)     = text str
     gen env (Bool _ True)           = text "1"
     gen env (Bool _ False)          = text "0"
     gen env (None _)                = gen env noneKW
