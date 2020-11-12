@@ -167,6 +167,9 @@ falseKW                             = primKW "False"
 tupleKW                             = primKW "tuple"
 componentsKW                        = name "components"
 
+tostrKW                             = name "to$str"
+tobytearrayKW                       = name "to$bytearray"
+
 
 -- Implementation -----------------------------------------------------------------------------------
 
@@ -392,8 +395,8 @@ instance Gen Expr where
     gen env (Bool _ True)           = gen env trueKW
     gen env (Bool _ False)          = gen env falseKW
     gen env (None _)                = gen env noneKW
-    gen env (Strings _ [s])         = doubleQuotes $ text $ tail $ init s
-    gen env (BStrings _ [s])        = doubleQuotes $ text $ tail $ init s
+    gen env (Strings _ [s])         = gen env tostrKW <> parens (doubleQuotes $ text $ tail $ init s)
+    gen env (BStrings _ [s])        = gen env tobytearrayKW <> parens (doubleQuotes $ text $ tail $ init s)
     gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
