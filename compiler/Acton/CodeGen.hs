@@ -155,6 +155,7 @@ appKW                               = primKW "APP"
 entKW                               = primKW "ENT"
 newKW                               = primKW "NEW"
 newccKW                             = primKW "NEWCC"
+newtupleKW                          = primKW "NEWTUPLE"
 registerKW                          = primKW "register"
 noneKW                              = primKW "None"
 nonetypeKW                          = primKW "NoneType"
@@ -334,18 +335,17 @@ instance Gen PosArg where
     gen env PosNil                  = empty
 
 
-genCall env t0 (TApp _ (Var _ n) [_,t]) (PosArg e PosNil)
+genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
+genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
-genCall env t0 (TApp _ e _) p       = genCall env t0 e p
-genCall env t0 e@(Var _ n) p
+genCall env t0 ts e@(Var _ n) p
   | NDef{} <- info                  = gen env e <> parens (gen env p)
   | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
   where info                        = findQName n env
         (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
-genCall env t0 e0@(Dot _ e n) p     = genDotCall env (snd $ schemaOf env e0) e n p
-genCall env t0 e p                  = apply env (typeOf env e) e callKW p
+genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
+genCall env t0 ts e p               = apply env (typeInstOf env ts e) e callKW p
 
-genDotCall env dec (TApp _ e _) n p = genDotCall env dec e n p
 genDotCall env dec e@(Var _ x) n p
   | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
   | NClass{} <- info                = apply env (typeOf env e) (eDot e n) callKW p
@@ -356,14 +356,17 @@ genDotCall env dec e n p
 genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) callKW p
 
 
-genDot env (TApp _ e _) n           = genDot env e n
-genDot env e@(Var _ x) n
+genDot env ts e@(Var _ x) n
   | NClass{} <- findQName x env     = gen env e <> text "." <> gen env n
-genDot env e n                      = gen env e <> text "->" <> gen env n
+genDot env [] e n                   = gen env e <> text "->" <> gen env n
+genDot env ts e n                   = gen env e <> text "->" <> gen env n
 
 
 apply env t e n p                   = gen env appKW <> parens (gen env t <> comma <+> gen env e <> comma <+> 
                                                                gen env n <> comma <+> gen env p)
+
+genInst env ts e@Var{}              = gen env e
+genInst env ts (Dot _ e n)          = genDot env ts e n
 
 adjustC TVar{} TVar{} e             = e
 adjustC TNone{} t' e                = e
@@ -373,7 +376,7 @@ adjustC (TOpt _ t) t' e             = adjustC t t' e
 adjustC t (TOpt _ t') e             = adjustC t t' e
 adjustC t t' e                      = adjust t t' e
 
-genExp env t' e                     = gen env (adjustC t t' e)
+genExp env t' e                     = gen env (adjustC t t' e')
   where (t, e')                     = typeOf' env e
 
 instance Gen Expr where
@@ -388,14 +391,16 @@ instance Gen Expr where
     gen env (None _)                = gen env noneKW
     gen env (Strings _ [s])         = doubleQuotes $ text $ tail $ init s
     gen env (BStrings _ [s])        = doubleQuotes $ text $ tail $ init s
-    gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) e p
-    gen env (TApp _ e ts)           = gen env e
+    gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) [] e p
+    gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
-    gen env (Dot _ e n)             = genDot env e n
-    gen env (Rest _ e n)            = text "CodeGen for tuple tail not implemented"
+    gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
-    gen env (Tuple _ p KwdNil)      = gen env tupleKW <> parens (gen env p)                                                     -- arg
+    gen env (Tuple _ PosNil KwdNil) = gen env newtupleKW <> parens (text (show 0))
+    gen env (Tuple _ p KwdNil)      = gen env newtupleKW <> parens (text (show $ nargs p) <> comma <+> gen env p)
+      where nargs PosNil            = 0
+            nargs (PosArg _ p)      = 1 + nargs p
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env e@BinOp{}               = genPrec env 0 e
     gen env e@UnOp{}                = genPrec env 0 e

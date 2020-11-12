@@ -21,7 +21,7 @@
     - Integrate DB sources in build                                         1d      2d
     - Set up dedicated rts thread for DB protocol daemon                    1d      2d
     - Add serialization calls to rts                                        3h      8h
-!   / Typecheck and convert formatted string literals                       1d      2d
+    / Typecheck and convert formatted string literals                       1d      2d
 
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w

@@ -219,7 +219,6 @@ instance Deact Expr where
     deact env (BinOp l e1 And e2)   = BinOp l <$> deact env e1 <*> pure And <*> deact env e2
     deact env (UnOp l Not e)        = UnOp l Not <$> deact env e
     deact env (Dot l e nm)          = Dot l <$> deact env e <*> return nm
-    deact env (Rest l e nm)         = Rest l <$> deact env e <*> return nm
     deact env (DotI l e i)          = DotI l <$> deact env e <*> return i
     deact env (RestI l e i)         = RestI l <$> deact env e <*> return i
     deact env (Lambda l p KwdNIL e fx)
@@ -280,7 +279,6 @@ instance LambdaFree Expr where
     lamfree (BinOp _ e1 And e2)     = lamfree e1 ++ lamfree e2
     lamfree (UnOp _ Not e)          = lamfree e
     lamfree (Dot _ e n)             = lamfree e
-    lamfree (Rest _ e n)            = lamfree e
     lamfree (DotI _ e i)            = lamfree e
     lamfree (RestI _ e i)           = lamfree e
     lamfree (Yield _ e)             = lamfree e

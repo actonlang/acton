@@ -17,6 +17,11 @@ struct $tuple {
 
 extern struct $tuple$class $tuple$methods;
 
+#define $NEWTUPLE($len, ...)  ({ $tuple $t = malloc(sizeof(struct $tuple)+$len*sizeof($WORD)); \
+                                 $t->$class = &$tuple$methods; \
+                                 $t->$class->__init__($t, $len, ##__VA_ARGS__); \
+                                 $t; })
+
 extern struct $Iterable$tuple$class $Iterable$tuple$methods; 
 extern struct $Sliceable$tuple$class $Sliceable$tuple$methods;
 extern struct $Hashable$tuple$class $Hashable$tuple$methods; 

@@ -106,16 +106,21 @@ closedType env (TApp _ e _)         = closedType env e
 closedType env _                    = True
 
 
+typeInstOf                          :: EnvF x -> [Type] -> Expr -> Type
+typeInstOf env ts e                 = case schemaOf env e of
+                                        (TSchema _ q t, mbdec) | length q == length ts -> subst (tybound q `zip` ts) t
+                                        (sc, _) -> error ("###### typeInstOf [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
+
+typeInstOf'                         :: EnvF x -> [Type] -> Expr -> (Type, Expr)
+typeInstOf' env ts e                = case schemaOf' env e of
+                                        (TSchema _ q t, _, e') | length q == length ts -> (t', adjust t t' (tApp e' ts))
+                                           where t' = subst (tybound q `zip` ts) t
+                                        (sc, _, _) -> error ("###### typeInstOf' [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
+
 instance TypeOf Expr where
-    typeOf env e@Var{}              = case schemaOf env e of
-                                         (TSchema _ [] t, mbdec) -> t
-                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
-    typeOf env e@Dot{}              = case schemaOf env e of
-                                         (TSchema _ [] t, mbdec) -> t
-                                         (sc, _) -> error ("###### 1 typeOf " ++ prstr e ++ " is " ++ prstr sc)
-    typeOf env (TApp _ e ts)        = case schemaOf env e of
-                                         (TSchema _ q t, mbdec) | length q == length ts -> subst (tybound q `zip` ts) t
-                                         (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf env e@Var{}              = typeInstOf env [] e
+    typeOf env e@Dot{}              = typeInstOf env [] e
+    typeOf env (TApp _ e ts)        = typeInstOf env ts e
     typeOf env (Int _ i s)          = tInt
     typeOf env (Float _ f s)        = tFloat
     typeOf env (Bool _ b)           = tBool
@@ -168,16 +173,9 @@ instance TypeOf Expr where
 --  typeOf env (SetComp _ e c)      = undefined
 
 
-    typeOf' env e@Var{}             = case schemaOf' env e of
-                                         (TSchema _ [] t, mbdec, e') -> (t, e')
-                                         (sc, _, _) -> error ("###### typeOf' " ++ prstr e ++ " is " ++ prstr sc)
-    typeOf' env e@Dot{}             = case schemaOf' env e of
-                                         (TSchema _ [] t, mbdec, e') -> (t, e')
-                                         (sc, _, _) -> error ("###### 1 typeOf' " ++ prstr e ++ " is " ++ prstr sc)
-    typeOf' env (TApp _ e ts)       = case schemaOf' env e of
-                                         (TSchema _ q t, mbdec, e') | length q == length ts -> (t', adjust t t' e')
-                                           where t' = subst (tybound q `zip` ts) t
-                                         (sc, _, _) -> error ("###### typeOf' " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf' env e@Var{}             = typeInstOf' env [] e
+    typeOf' env e@Dot{}             = typeInstOf' env [] e
+    typeOf' env (TApp _ e ts)       = typeInstOf' env ts e
     typeOf' env e@(Int _ i s)       = (tInt, e)
     typeOf' env e@(Float _ f s)     = (tFloat, e)
     typeOf' env e@(Bool _ b)        = (tBool, e)
@@ -211,9 +209,9 @@ instance TypeOf Expr where
     typeOf' env (IsInstance l e c)  = (tBool, IsInstance l e' c)
       where (t, e')                 = typeOf' env e
     typeOf' env (DotI l e i)        = case t of
-                                        TTuple _ p _ -> (f i p, DotI l e' i)
+                                        TTuple _ p _ -> (f i p, adjust tWild (f i p) $ DotI l e' i)
       where (t, e')                 = typeOf' env e
-            f i (TRow _ _ _ t p)    = if i == 0 then t else f (i-1) p
+            f i (TRow _ _ _ t' p)   = if i == 0 then t' else f (i-1) p
     typeOf' env (RestI l e i)       = case t of
                                         TTuple _ p _ -> (TTuple NoLoc (f i p) kwdNil, RestI l e' i)
       where (t, e')                 = typeOf' env e
@@ -466,4 +464,4 @@ maxtype env (t:ts)                          = maxt t ts
           | castable env t top              = maxt top ts
           | otherwise                       = maxt t ts
         maxt top []                         = top
-
+maxtype env []                              = tWild

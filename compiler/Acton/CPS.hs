@@ -446,7 +446,6 @@ instance PreCPS Expr where
     pre env (BinOp l e1 And e2)         = BinOp l <$> pre env e1 <*> pure And <*> pre env e2
     pre env (UnOp l Not e)              = UnOp l Not <$> pre env e
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
-    pre env (Rest l e n)                = Rest l <$> pre env e <*> return n
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
     pre env (Lambda l p KwdNIL e fx)
@@ -567,7 +566,6 @@ instance Conv Expr where
     conv (BinOp l e1 And e2)            = BinOp l (conv e1) And (conv e2)
     conv (UnOp l Not e)                 = UnOp l Not (conv e)
     conv (Dot l e n)                    = Dot l (conv e) n
-    conv (Rest l e n)                   = Rest l (conv e) n
     conv (DotI l e i)                   = DotI l (conv e) i
     conv (RestI l e i)                  = RestI l (conv e) i
     conv (Lambda l p KwdNIL e fx)       = Lambda l (conv p) KwdNIL (conv e) (conv fx)

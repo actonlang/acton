@@ -51,7 +51,7 @@ normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suit
 normPat _ p@(PVar _ _ _)            = return (p,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
-                                         ss <- norm env $ normPP v 0 pp ++ normKP v [] kp
+                                         ss <- norm (define (envOf (pVar v t)) env) $ normPP v 0 pp ++ normKP v [] kp
                                          return (pVar v t, ss)
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
@@ -123,11 +123,11 @@ instance Norm Stmt where
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
 
-    norm' env (Assign l tgs e)      = do e' <- norm env e
-                                         ps <- mapM (normPat env) tgs
-                                         let (vs,sss) = unzip ps
-                                         ss' <- norm env (concat sss)
-                                         return $ Assign l vs e' : ss'
+    norm' env (Assign l ps e)       = do e' <- norm env e
+                                         (ps1,stmts) <- unzip <$> mapM (normPat env) ps
+                                         ps2 <- norm env ps1
+                                         let p'@(PVar _ n _) : ps' = ps2
+                                         return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
       where t                       = typeOf env e
     norm' env (For l p e b els)     = do i <- newName "iter"
                                          v <- newName "val"
@@ -200,6 +200,9 @@ catStrings ss                       = '"' : (escape '"' (concatMap stripQuotes s
           | otherwise               = x : escape c xs
         stripQuotes s               = init $ tail s
 
+
+normInst env ts e                   = norm env e
+
 instance Norm Expr where
     norm env (Var l nm)             = return $ Var l nm
     norm env (Int l i s)            = Int l <$> return i <*> return s
@@ -212,15 +215,21 @@ instance Norm Expr where
     norm env (Strings l ss)         = return $ Strings l [catStrings ss]
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
     norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env (joinArg ps ks) <*> pure KwdNil
-    norm env (TApp l e ts)          = TApp l <$> norm env e <*> pure ts
+    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
+    norm env (Dot l (Var l' x) n)
+      | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
+    norm env (Dot l e n)
+      | TTuple _ p k <- t           = DotI l <$> norm env e <*> pure (nargs p + narg n k)
+      | otherwise                   = Dot l <$> norm env e <*> pure n
+      where t                       = typeOf env e
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c
     norm env (BinOp l e1 Or e2)     = BinOp l <$> norm env e1 <*> pure Or <*> norm env e2
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
     norm env (UnOp l Not e)         = UnOp l Not <$> norm env e
-    norm env (Dot l e nm)           = Dot l <$> norm env e <*> pure nm
-    norm env (Rest l e nm)          = Rest l <$> norm env e <*> pure nm
+    norm env (Rest l e n)           = RestI l <$> norm env e <*> pure (nargs p + narg n k)
+      where TTuple _ p k            = typeOf env e
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
@@ -235,8 +244,13 @@ instance Norm Expr where
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
+nargs TNil{}                        = 0
+nargs p@TRow{}                      = 1 + nargs (rtail p)
+
+narg n k@TRow{}                     = if n == label k then 0 else 1 + narg n (rtail k)
+
 instance Norm Pattern where
-    norm env (PVar l n a)           = return $ PVar l n a
+    norm env (PVar l n a)           = return $ PVar l n (conv a)
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here
     norm env (PParen l p)           = norm env p
@@ -252,13 +266,13 @@ instance Norm Handler where
       where env1                    = define (envOf ex) env
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar n t <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
-    norm env (PosSTAR n t)          = return $ PosSTAR n t
+    norm env (PosPar n t e p)       = PosPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
+    norm env (PosSTAR n t)          = return $ PosSTAR n (conv t)
     norm env PosNIL                 = return PosNIL
     
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar n t <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
-    norm env (KwdSTAR n t)          = return $ KwdSTAR n t
+    norm env (KwdPar n t e k)       = KwdPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
+    norm env (KwdSTAR n t)          = return $ KwdSTAR n (conv t)
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
@@ -326,6 +340,9 @@ class Conv a where
 instance (Conv a) => Conv [a] where
     conv                            = map conv
 
+instance (Conv a) => Conv (Maybe a) where
+    conv                            = fmap conv
+
 instance (Conv a) => Conv (Name, a) where
     conv (n, x)                     = (n, conv x)
 
@@ -347,7 +364,7 @@ instance Conv TSchema where
 instance Conv Type where
     conv (TFun l fx p k t)          = TFun l fx (joinRow p k) kwdNil (conv t)
     conv (TCon l c)                 = TCon l (conv c)
-    conv (TTuple l p k)             = TTuple l (conv p) (conv k)
+    conv (TTuple l p k)             = TTuple l (joinRow p k) kwdNil
     conv (TOpt l t)                 = TOpt l (conv t)
     conv (TRow l k n t r)           = TRow l k n (conv t) (conv r)
     conv t                          = t
