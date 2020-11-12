@@ -61,8 +61,11 @@ modNames []                         = []
 
 hModule env (Module m imps stmts)   = text "#ifndef" <+> gen env m $+$
                                       text "#define" <+> gen env m $+$
+                                      include env (name "builtin") $+$
+                                      include env (name "rts") $+$
                                       vcat (map (include env) $ modNames imps) $+$
                                       hSuite env stmts $+$
+                                      text "void" <+> genTopName env initKW <+> parens empty <> semi $+$
                                       text "#endif"
 
 hSuite env []                       = empty
@@ -99,8 +102,8 @@ fields env c                        = map field te
         field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
         field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi
         field (n, NVar t)           = varsig env n t <> semi
-        field (n, NSig sc Static)   = funsig env n (sctype sc) <> semi <+> text "// abstract!!!"
-        field (n, NSig sc NoDec)    = methsig env c n (sctype sc) <> semi <+> text "// abstract!!!"
+        field (n, NSig sc Static)   = funsig env n (sctype sc) <> semi
+        field (n, NSig sc NoDec)    = methsig env c n (sctype sc) <> semi
         field (n, NSig sc Property) = empty
 
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
