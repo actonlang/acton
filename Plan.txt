@@ -16,12 +16,12 @@
     X Sample actor state ref'd within lambdas before closure conversion     1d      1d
     X Introduce special constructor GName for unaliased names               4h      8h
     X Fill out gaps in CodeGen                                              2d      5d
-    - Apply typeinfo in CodeGen to insert correct casts                     2d      4d
+    X Apply typeinfo in CodeGen to insert correct casts                     2d      4d
     X Print generated C code with precedences                               2d      3d
     - Integrate DB sources in build                                         1d      2d
     - Set up dedicated rts thread for DB protocol daemon                    1d      2d
     - Add serialization calls to rts                                        3h      8h
-!   - Typecheck and convert formatted string literals                       1d      2d
+!   / Typecheck and convert formatted string literals                       1d      2d
 
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w

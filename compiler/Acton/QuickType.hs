@@ -11,6 +11,11 @@ import Utils
 
 class TypeOf a where
     typeOf                          :: EnvF x -> a -> Type
+    typeOf'                         :: EnvF x -> a -> (Type, a)
+    adjust                          :: Type -> Type -> a -> a
+
+    typeOf' env e                   = (typeOf env e, e)
+    adjust _ _ e                    = e
 
 class EnvOf a where
     envOf                           :: a -> TEnv
@@ -47,6 +52,41 @@ schemaOf env e0@(Dot _ e n)         = case typeOf env e of
 schemaOf env e                      = (monotype $ typeOf env e, Nothing)
 
 
+schemaOf'                           :: EnvF x -> Expr -> (TSchema, Maybe Deco, Expr)
+schemaOf' env e@(Var _ n)           = case findQName n env of
+                                        NVar t ->
+                                            (monotype t, Nothing, e)
+                                        NSVar t ->
+                                            (monotype t, Nothing, e)
+                                        NDef sc dec ->
+                                            (sc, Just dec, e)
+                                        NSig sc dec ->
+                                            (sc, Just dec, e)
+                                        NClass q _ _ ->
+                                            let tc = TC n (map tVar $ tybound q)
+                                                (TSchema _ q' t, _) = findAttr' env tc initKW
+                                                t' = if restype t == tR then t else t{ restype = tSelf }
+                                            in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
+                                        NAct q p k _ ->
+                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), Just NoDec, e)
+                                        i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
+schemaOf' env e@(Dot _ (Var _ x) n)
+  | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
+                                          (TSchema _ q' t, mbdec) = findAttr' env tc n
+                                      in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), mbdec, e)
+  where info                        = findQName x env
+schemaOf' env e0@(Dot l e n)        = case t of
+                                        TCon _ c -> addE $ findAttr' env c n
+                                        TTuple _ p k -> addE $ (monotype $ f n k, Nothing)
+                                        TVar _ v  -> addE $ findAttr' env (findTVBound env v) n
+                                        t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
+  where (t, e')                     = typeOf' env e
+        addE (sc, dec)              = (sc, dec, Dot l e' n)
+        f n (TRow l k x t r)        = if x == n then t else f n r
+schemaOf' env e                     = (monotype t, Nothing, e')
+  where (t, e')                     = typeOf' env e
+
+
 isClosed                            :: NameInfo -> Bool
 isClosed (NVar _)                   = True
 isClosed (NSVar _)                  = True
@@ -78,13 +118,13 @@ instance TypeOf Expr where
                                          (sc, _) -> error ("###### typeOf " ++ prstr e ++ " is " ++ prstr sc)
     typeOf env (Int _ i s)          = tInt
     typeOf env (Float _ f s)        = tFloat
---  typeOf env (Imaginary _ i s)    = undefined
     typeOf env (Bool _ b)           = tBool
     typeOf env (None _)             = tNone
---  typeOf env (NotImplemented _)   = undefined
---  typeOf env (Ellipsis _)         = undefined
     typeOf env (Strings _ ss)       = tStr
     typeOf env (BStrings _ ss)      = tBytes
+--  typeOf env (Imaginary _ i s)    = undefined
+--  typeOf env (NotImplemented _)   = undefined
+--  typeOf env (Ellipsis _)         = undefined
     typeOf env (Call _ e ps ks)     = case typeOf env e of
                                         TFun _ fx p k t -> if fx == fxAction then tMsg t else t
                                         t -> error ("###### typeOf Fun " ++ prstr e ++ " : " ++ prstr t)
@@ -93,43 +133,30 @@ instance TypeOf Expr where
     typeOf env (BinOp _ l Or r)     = tBool
     typeOf env (BinOp _ l And r)    = tBool
     typeOf env (UnOp _ Not e)       = tBool
-    typeOf env (Cond _ e1 e e2)
-      | castable env t1 t2          = t2
-      | otherwise                   = t1
+    typeOf env (Cond _ e1 e e2)     = maxtype env [t1,t2]
       where t1                      = typeOf env e1
             t2                      = typeOf env e2
     typeOf env (IsInstance _ e c)   = tBool
     typeOf env (DotI _ e i)         = case typeOf env e of
                                         TTuple _ p k -> f i p
-      where f 0 (TRow _ _ _ t p)    = t
-            f i (TRow _ _ _ _ p)    = f (i-1) p
+      where f i (TRow _ _ _ t p)    = if i == 0 then t else f (i-1) p
     typeOf env (RestI _ e i)        = case typeOf env e of
                                         TTuple _ p k -> TTuple NoLoc (f i p) kwdNil
-      where f i (TRow l k x t r)
-              | i == 0              = r
-              | otherwise           = TRow l k x t (f (i-1) r)
+      where f i (TRow l k x t r)    = if i == 0 then r else TRow l k x t (f (i-1) r)
             f i (TNil l k)          = TNil l k
     typeOf env (Rest _ e n)         = case typeOf env e of
                                         TTuple _ p k -> TTuple NoLoc posNil (f n k)
-      where f n (TRow l k x t r)
-              | x == n              = r
-              | otherwise           = TRow l k x t (f n r)
+      where f n (TRow l k x t r)    = if x == n then r else TRow l k x t (f n r)
             f n (TNil l k)          = TNil l k
     typeOf env (Lambda _ p k e fx)  = TFun NoLoc fx (prowOf p) (krowOf k) (typeOf env1 e)
       where env1                    = define (envOf k) $ define (envOf p) $ env
---  typeOf env (Yield _ e)          = undefined
---  typeOf env (YieldFrom _ e)      = undefined
-    typeOf env (Tuple _ p k)        = TTuple NoLoc (f p) (g k)
-      where f (PosArg e p)          = posRow (typeOf env e) (f p)
-            f (PosStar e)           = case typeOf env e of TTuple _ p _ -> p
-            f PosNil                = posNil
-            g (KwdArg n e k)        = kwdRow n (typeOf env e) (g k)
-            g (KwdStar e)           = case typeOf env e of TTuple _ _ k -> k
-            g KwdNil                = kwdNil
+    typeOf env (Tuple _ p k)        = TTuple NoLoc (typeOf env p) (typeOf env k)
     typeOf env (List _ es)          = tList (maxtype env $ map (typeOf env) es)
     typeOf env (ListComp _ e c)     = tList (typeOf env1 e)
       where env1                    = define (envOf c) env
     typeOf env (Paren _ e)          = typeOf env e
+--  typeOf env (Yield _ e)          = undefined
+--  typeOf env (YieldFrom _ e)      = undefined
 
 --  The following constructs are translated away during type inference:
 --  typeOf env (Index _ e is)       = undefined
@@ -141,10 +168,111 @@ instance TypeOf Expr where
 --  typeOf env (SetComp _ e c)      = undefined
 
 
+    typeOf' env e@Var{}             = case schemaOf' env e of
+                                         (TSchema _ [] t, mbdec, e') -> (t, e')
+                                         (sc, _, _) -> error ("###### typeOf' " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf' env e@Dot{}             = case schemaOf' env e of
+                                         (TSchema _ [] t, mbdec, e') -> (t, e')
+                                         (sc, _, _) -> error ("###### 1 typeOf' " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf' env (TApp _ e ts)       = case schemaOf' env e of
+                                         (TSchema _ q t, mbdec, e') | length q == length ts -> (t', adjust t t' e')
+                                           where t' = subst (tybound q `zip` ts) t
+                                         (sc, _, _) -> error ("###### typeOf' " ++ prstr e ++ " is " ++ prstr sc)
+    typeOf' env e@(Int _ i s)       = (tInt, e)
+    typeOf' env e@(Float _ f s)     = (tFloat, e)
+    typeOf' env e@(Bool _ b)        = (tBool, e)
+    typeOf' env e@(None _)          = (tNone, e)
+    typeOf' env e@(Strings _ ss)    = (tStr, e)
+    typeOf' env e@(BStrings _ ss)   = (tBytes, e)
+--  typeOf' env (Imaginary _ i s)   = undefined
+--  typeOf' env (NotImplemented _)  = undefined
+--  typeOf' env (Ellipsis _)        = undefined
+    typeOf' env (Call l e p KwdNil) = case t of
+                                        TFun _ fx r' k t' -> (if fx == fxAction then tMsg t' else t', Call l e' (adjust r r' p) KwdNil)
+                                        t -> error ("###### typeOf' Fun " ++ prstr e ++ " : " ++ prstr t)
+      where (t, e')                 = typeOf' env e
+            (r, p')                 = typeOf' env p
+    typeOf' env (Await l e)         = case t of
+                                        TCon _ (TC c [t]) | qmatch env c qnMsg -> (t, Await l e')
+      where (t, e')                 = typeOf' env e
+    typeOf' env (BinOp l e1 Or e2)  = (tBool, BinOp l (adjust t1 tBool e1) Or (adjust t2 tBool e2'))
+      where (t1, e1')               = typeOf' env e1
+            (t2, e2')               = typeOf' env e2
+    typeOf' env (BinOp l e1 And e2) = (tBool, BinOp l (adjust t1 tBool e1) And (adjust t2 tBool e2'))
+      where (t1, e1')               = typeOf' env e1
+            (t2, e2')               = typeOf' env e2
+    typeOf' env (UnOp l Not e)      = (tBool, UnOp l Not (adjust t tBool e'))
+      where (t, e')                 = typeOf' env e
+    typeOf' env (Cond l e1 e e2)    = (t', Cond l (adjust t1 t' e1') (adjust t tBool e') (adjust t2 t' e2'))
+      where (t1, e1')               = typeOf' env e1
+            (t, e')                 = typeOf' env e
+            (t2, e2')               = typeOf' env e2
+            t'                      = maxtype env [t1,t2]
+    typeOf' env (IsInstance l e c)  = (tBool, IsInstance l e' c)
+      where (t, e')                 = typeOf' env e
+    typeOf' env (DotI l e i)        = case t of
+                                        TTuple _ p _ -> (f i p, DotI l e' i)
+      where (t, e')                 = typeOf' env e
+            f i (TRow _ _ _ t p)    = if i == 0 then t else f (i-1) p
+    typeOf' env (RestI l e i)       = case t of
+                                        TTuple _ p _ -> (TTuple NoLoc (f i p) kwdNil, RestI l e' i)
+      where (t, e')                 = typeOf' env e
+            f i (TRow l k x t r)    = if i == 0 then r else TRow l k x t (f (i-1) r)
+            f i (TNil l k)          = TNil l k
+    typeOf' env (Rest l e n)        = case t of
+                                        TTuple _ p k -> (TTuple NoLoc posNil (f n k), Rest l e' n)
+      where (t, e')                 = typeOf' env e
+            f n (TRow l k x t r)    = if x == n then r else TRow l k x t (f n r)
+            f n (TNil l k)          = TNil l k
+    typeOf' env (Lambda l p k e fx) = (TFun NoLoc fx (prowOf p) (krowOf k) t, Lambda l p k e' fx)
+      where (t, e')                 = typeOf' env1 e
+            env1                    = define (envOf k) $ define (envOf p) env
+    typeOf' env (Tuple l p KwdNil)  = (TTuple NoLoc r kwdNil, Tuple l p' KwdNil)
+      where (r, p')                 = typeOf' env p
+    typeOf' env (List l es)         = (tList (maxtype env ts), List l es')
+      where (ts, es')               = unzip $ map (typeOf' env) es
+    typeOf' env (ListComp l e c)    = (tList t, ListComp l e' c')
+      where (_, c')                 = typeOf' env c
+            (t, e')                 = typeOf' env1 e
+            env1                    = define (envOf c) env
+    typeOf' env (Paren l e)         = (t, Paren l e')
+      where (t, e')                 = typeOf' env e
+
+    adjust t t' e | t == t'         = e
+                  | otherwise       = eCall (tApp (eQVar primCAST) [t,t']) [e]
+
+
 instance TypeOf Elem where
     typeOf env (Elem e)             = typeOf env e
     typeOf env (Star e)             = case typeOf env e of
                                         TCon _ (TC c [t]) | qmatch env c qnList -> t
+
+    typeOf' env (Elem e)            = (t, Elem e')
+      where (t, e')                 = typeOf' env e
+
+    adjust t t' (Elem e)            = Elem (adjust t t' e)
+
+
+instance TypeOf PosArg where
+    typeOf env (PosArg e p)         = posRow (typeOf env e) (typeOf env p)
+    typeOf env (PosStar e)          = case typeOf env e of TTuple _ p _ -> p
+    typeOf env PosNil               = posNil
+
+    typeOf' env (PosArg e p)        = (posRow t r, PosArg e' p')
+      where (t, e')                 = typeOf' env e
+            (r, p')                 = typeOf' env p
+    typeOf' env (PosStar e)         = case t of TTuple _ p _ -> (p, PosStar e')
+      where (t, e')                 = typeOf' env e
+    typeOf' env PosNil              = (posNil, PosNil)
+
+    adjust r r' (PosArg e p)        = PosArg (adjust (rtype r) (rtype r') e) (adjust (rtail r) (rtail r') p)
+    adjust _ _ PosNil               = PosNil
+
+instance TypeOf KwdArg where
+    typeOf env (KwdArg n e k)       = kwdRow n (typeOf env e) (typeOf env k)
+    typeOf env (KwdStar e)          = case typeOf env e of TTuple _ _ k -> k
+    typeOf env KwdNil               = kwdNil
+
 
 instance TypeOf Pattern where
     typeOf env (PVar _ n (Just t))  = t
@@ -162,6 +290,21 @@ instance TypeOf KwdPat where
     typeOf env (KwdPat n p ps)      = kwdRow n (typeOf env p) (typeOf env ps)
     typeOf env (KwdPatStar p)       = typeOf env p
     typeOf env KwdPatNil            = kwdNil
+
+instance TypeOf Comp where
+    typeOf env (CompFor _ p e c)    = typeOf env c
+    typeOf env (CompIf _ e c)       = typeOf env c
+    typeOf env NoComp               = tNone
+
+    typeOf' env (CompFor l p e c)   = (tNone, CompFor l p (adjust t (typeOf env p) e') c')
+      where (t, e')                 = typeOf' env e
+            (_, c')                 = typeOf' env1 c
+            env1                    = define (envOf p) env
+    typeOf' env (CompIf l e c)      = (tNone, CompIf l (adjust t tBool e') c')
+      where (t, e')                 = typeOf' env e
+            (_, c')                 = typeOf' env c
+    typeOf' env NoComp              = (tNone, NoComp)
+
 
 instance (EnvOf a) => EnvOf [a] where
     envOf                           = concat . map envOf

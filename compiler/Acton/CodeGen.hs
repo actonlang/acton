@@ -338,8 +338,8 @@ genCall env t0 (TApp _ (Var _ n) [_,t]) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
 genCall env t0 (TApp _ e _) p       = genCall env t0 e p
 genCall env t0 e@(Var _ n) p
-  | NDef{} <- info                  = gen env e <> parens (gen env p)                                                           -- arg
-  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')                                             -- arg
+  | NDef{} <- info                  = gen env e <> parens (gen env p)
+  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
   where info                        = findQName n env
         (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
 genCall env t0 e0@(Dot _ e n) p     = genDotCall env (snd $ schemaOf env e0) e n p
@@ -347,12 +347,12 @@ genCall env t0 e p                  = apply env (typeOf env e) e callKW p
 
 genDotCall env dec (TApp _ e _) n p = genDotCall env dec e n p
 genDotCall env dec e@(Var _ x) n p
-  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)                                  -- arg
+  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
   | NClass{} <- info                = apply env (typeOf env e) (eDot e n) callKW p
   where info                        = findQName x env
 genDotCall env dec e n p
   | Just NoDec <- dec               = apply env (typeOf env e) e n p
-  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p) -- arg
+  | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
 genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) callKW p
 
 
@@ -363,13 +363,23 @@ genDot env e n                      = gen env e <> text "->" <> gen env n
 
 
 apply env t e n p                   = gen env appKW <> parens (gen env t <> comma <+> gen env e <> comma <+> 
-                                                               gen env n <> comma <+> gen env p)                                -- arg
+                                                               gen env n <> comma <+> gen env p)
 
-genExp env t e                      = gen env e
+adjustC TVar{} TVar{} e             = e
+adjustC TNone{} t' e                = e
+adjustC (TCon _ c) (TCon _ c') e
+  | tcname c == tcname c'           = e
+adjustC (TOpt _ t) t' e             = adjustC t t' e
+adjustC t (TOpt _ t') e             = adjustC t t' e
+adjustC t t' e                      = adjust t t' e
+
+genExp env t' e                     = gen env (adjustC t t' e)
+  where (t, e')                     = typeOf' env e
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
       | n `elem` global env         = genTopName env n
+      | isAlias n env               = genTopName env n
     gen env (Var _ n)               = gen env n
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
