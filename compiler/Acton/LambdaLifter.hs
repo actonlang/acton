@@ -225,13 +225,13 @@ freefun env e@(Var l (NoQ n))
   | isAlias n env                       = Just (e, [])
   | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
-freefun env e@(Var _ _)                 = Just (e, [])
+freefun env (Var l n)                   = Just (Var l (primSubst n), [])
 freefun env (TApp l e@(Var l' (NoQ n)) ts)
   | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ conv ts), vts)
   | isAlias n env                       = Just (TApp l e (conv ts), [])
   | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
-freefun env (TApp l e@(Var _ _) ts)     = Just (TApp l e (conv ts), [])
+freefun env (TApp l (Var l' n) ts)      = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"

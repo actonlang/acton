@@ -237,6 +237,8 @@ instance TypeOf Expr where
       where (t, e')                 = typeOf' env e
 
     adjust t t' e | t == t'         = e
+                  | TFun{} <- t     = e
+                  | TFun{} <- t'    = e
                   | otherwise       = eCall (tApp (eQVar primCAST) [t,t']) [e]
 
 
