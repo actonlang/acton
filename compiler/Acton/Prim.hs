@@ -128,7 +128,7 @@ clR cls def         = cls [] [] []
 
 --  class $Cont[X,P] (function[X,P,(),$R]):
 --      pass
-clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR])] []
+clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, tVar p, kwdNil, tR]), ([Nothing,Nothing],cStruct)] []
   where x           = TV KFX (name "X")
         p           = TV PRow (name "P")
 
