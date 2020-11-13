@@ -154,18 +154,18 @@ classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
 classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
-appKW                               = primKW "APP"
-entKW                               = primKW "ENT"
-newKW                               = primKW "NEW"
-newccKW                             = primKW "NEWCC"
-newtupleKW                          = primKW "NEWTUPLE"
-registerKW                          = primKW "register"
-noneKW                              = primKW "None"
-nonetypeKW                          = primKW "NoneType"
-trueKW                              = primKW "True"
-falseKW                             = primKW "False"
-tupleKW                             = primKW "tuple"
 componentsKW                        = name "components"
+
+primTuple                           = gPrim "tuple"
+primNoneType                        = gPrim "NoneType"
+primNone                            = gPrim "None"
+primTrue                            = gPrim "True"
+primFalse                           = gPrim "False"
+
+primAPP                             = gPrim "APP"
+primNEW                             = gPrim "NEW"
+primNEWCC                           = gPrim "NEWCC"
+primRegister                        = gPrim "register"
 
 tostrKW                             = name "to$str"
 tobytearrayKW                       = name "to$bytearray"
@@ -200,7 +200,7 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d m)
                                       nest 4 (genSuite env1 b $+$ ret) $+$
                                       char '}'
   where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
-        ret | fallsthru b           = text "return" <+> gen env noneKW <> semi
+        ret | fallsthru b           = text "return" <+> gen env primNone <> semi
             | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
@@ -230,7 +230,7 @@ initClassBase env c as              = methodtable env c <> dot <> gen env gcinfo
           where cast (NVar t)       = parens (gen env $ selfsubst t)
                 cast (NDef sc dec)  = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
 
-initClass env c []                  = gen env registerKW <> parens (char '&' <> methodtable env c) <> semi
+initClass env c []                  = gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
                                       initClass env1 c ss
   where env1                        = gdefine (envOf ds) env
@@ -344,11 +344,20 @@ instance Gen PosArg where
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
+genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
+  | n == primFORMAT                 = gen env n <> parens (genStr env s <> unbox row (flatten tup))
+  where unbox (TNil _ _) p          = empty
+        unbox (TRow _  _ _ t r) (PosArg e p)
+          | t == tStr               = comma <+> expr <> text "->str" <> unbox r p
+          | otherwise               = comma <+> expr <> text "->val" <> unbox r p
+          where expr                = parens (parens (gen env t) <> gen env e)
+        flatten (Tuple _ p KwdNil)  = p
+        flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env t0 ts e@(Var _ n) p
   | NDef{} <- info                  = gen env e <> parens (gen env p)
   | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
   where info                        = findQName n env
-        (new,p')                    = if t0 == tR then (newccKW, rotate p) else (newKW, p)
+        (new,p')                    = if t0 == tR then (primNEWCC, rotate p) else (primNEW, p)
 genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
 genCall env t0 ts e p               = apply env (typeInstOf env ts e) e callKW p
 
@@ -368,8 +377,8 @@ genDot env [] e n                   = gen env e <> text "->" <> gen env n
 genDot env ts e n                   = gen env e <> text "->" <> gen env n
 
 
-apply env t e n p                   = gen env appKW <> parens (gen env t <> comma <+> gen env e <> comma <+> 
-                                                               gen env n <> comma <+> gen env p)
+apply env t e n p                   = gen env primAPP <> parens (gen env t <> comma <+> gen env e <> comma <+> 
+                                                                 gen env n <> comma <+> gen env p)
 
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
@@ -392,25 +401,28 @@ instance Gen Expr where
     gen env (Var _ n)               = gen env n
     gen env (Int _ _ str)           = text str
     gen env (Float _ _ str)         = text str
-    gen env (Bool _ True)           = gen env trueKW
-    gen env (Bool _ False)          = gen env falseKW
-    gen env (None _)                = gen env noneKW
-    gen env (Strings _ [s])         = gen env tostrKW <> parens (doubleQuotes $ text $ tail $ init s)
-    gen env (BStrings _ [s])        = gen env tobytearrayKW <> parens (doubleQuotes $ text $ tail $ init s)
+    gen env (Bool _ True)           = gen env primTrue
+    gen env (Bool _ False)          = gen env primFalse
+    gen env (None _)                = gen env primNone
+    gen env e@Strings{}             = gen env tostrKW <> parens (genStr env e)
+    gen env e@BStrings{}            = gen env tobytearrayKW <> parens (genStr env e)
     gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
-    gen env (Tuple _ PosNil KwdNil) = gen env newtupleKW <> parens (text (show 0))
-    gen env (Tuple _ p KwdNil)      = gen env newtupleKW <> parens (text (show $ nargs p) <> comma <+> gen env p)
+    gen env (Tuple _ p KwdNil)
+      | PosNil <- p                 = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show 0))
+      | otherwise                   = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show $ nargs p) <> comma <+> gen env p)
       where nargs PosNil            = 0
             nargs (PosArg _ p)      = 1 + nargs p
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env e@BinOp{}               = genPrec env 0 e
     gen env e@UnOp{}                = genPrec env 0 e
     gen env e@Cond{}                = genPrec env 0 e
+
+genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s
 
 rotate p                            = rot [] p
  where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
@@ -458,10 +470,10 @@ instance Gen Type where
     gen env (TVar _ v)              = gen env v
     gen env (TCon  _ c)             = gen env c
     gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
-    gen env (TTuple _ pos _)        = gen env tupleKW
+    gen env (TTuple _ pos _)        = gen env primTuple
     gen env (TUnion _ as)           = word
     gen env (TOpt _ t)              = gen env t
-    gen env (TNone _)               = text "void*"
+    gen env (TNone _)               = gen env primNoneType
     gen env (TWild _)               = word
     gen env (TRow _ _ _ t TNil{})   = gen env t
     gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
