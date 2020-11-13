@@ -15,17 +15,17 @@ int main() {
   for (long i=0; i<100; i++)
     wit->$class->append(wit,lst,to$int(i));
   $list lst2 = wit->$class->__getslice__(wit,lst,&slc);
-  $print($NEW($tuple,2,to$str("lst2 = "),lst2));
+  $print(2,to$str("lst2 = "),lst2);
   $list lst3 =  $NEW($list,NULL,NULL);
   for (long i=100; i<110; i++)
     wit->$class->append(wit,lst3,to$int(i));
-  $print($NEW($tuple,2,to$str("lst3 = "),lst3));
+  $print(2,to$str("lst3 = "),lst3);
   /*
   start = 10;
   stop = 30;
   step = 2;
   wit->$class->__setslice__(wit,($Iterable)wit,lst2,&slc,lst3);
-  $print($NEW($tuple,2,to$str("lst2 = "),lst2));
+  $print(2,to$str("lst2 = "),lst2);
   $range r = $NEW($range,NULL,to$int(100000),NULL);
   $list lst4 = $NEW($list,($Sequence)$Sequence$range$witness,r);
   start = 0;
@@ -36,6 +36,6 @@ int main() {
     step = i->val;
     $list_delslice(lst4,&slc);
   }
-  $print($NEW($tuple,2,to$str("lst4 = "),lst4));
+  $print(2,to$str("lst4 = "),lst4);
   */
 }

@@ -347,6 +347,10 @@ instance Gen PosArg where
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (gen env t) <> gen env e
+genCall env t0 [row] (Var _ n) p
+  | qn == qnPrint                   = gen env qn <> parens (pretty i <> if i > 0 then comma <+> gen env p else empty)
+  where i                           = nargs p
+        qn                          = unalias env n
 genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
   | n == primFORMAT                 = gen env n <> parens (genStr env s <> unbox row (flatten tup))
   where unbox (TNil _ _) p          = empty
@@ -418,8 +422,6 @@ instance Gen Expr where
     gen env (Tuple _ p KwdNil)
       | PosNil <- p                 = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show 0))
       | otherwise                   = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show $ nargs p) <> comma <+> gen env p)
-      where nargs PosNil            = 0
-            nargs (PosArg _ p)      = 1 + nargs p
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env e@BinOp{}               = genPrec env 0 e
     gen env e@UnOp{}                = genPrec env 0 e
@@ -431,6 +433,10 @@ rotate p                            = rot [] p
  where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
        rot es (PosArg e p)          = rot (e:es) p
        rot es p                     = foldl (flip PosArg) p es
+
+nargs                               :: PosArg -> Int
+nargs PosNil                        = 0
+nargs (PosArg _ p)                  = 1 + nargs p
 
 {-
 We assign precedences and associativity to remaining operators as follows

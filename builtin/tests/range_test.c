@@ -14,11 +14,11 @@ int main() {
   $serialize_file(($Serializable)r2,"range.bin");
   $range r3 = ($range)$deserialize_file("range.bin");
   $list lst = $list_fromiter(wit->$class->__iter__(wit,r3));
-  $print($NEW($tuple,2,to$str("lst = "),lst));
+  $print(2,to$str("lst = "),lst);
   $set s = $set_fromiter(($Hashable)$Hashable$int$witness,wit->$class->__iter__(wit,r2));
   $Set$set wit2 = $NEW($Set$set,($Hashable)$Hashable$int$witness);
   $list lst2 = $list_fromiter(wit2->$class->__iter__(wit2,s));
-  $print($NEW($tuple,2,to$str("lst2 = "),lst2));
+  $print(2,to$str("lst2 = "),lst2);
   int start = 2;
   int stop = 13;
   int step = 3;
@@ -26,7 +26,7 @@ int main() {
   slc.start = &start;
   slc.stop = &stop;
   slc.step = &step;
-  $print($NEW($tuple,1,$Sequence$range$__getslice__($Sequence$range$witness,r2,&slc)));
+  $print(1,$Sequence$range$__getslice__($Sequence$range$witness,r2,&slc));
   $list lst3 = $NEW($list,($Sequence)$Sequence$range$witness,r2);
-  $print($NEW($tuple,1,lst3));
+  $print(1,lst3);
 }

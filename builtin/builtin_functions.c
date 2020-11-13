@@ -1,4 +1,5 @@
 #include "builtin.h"
+#include <stdarg.h>
 
 // print //////////////////////////////////////////////////////////////////////////////
 
@@ -7,9 +8,19 @@ static $WORD mkstr($WORD w) {
   return w1->$class->__str__(w);
 }
 
-void $print($tuple t) {
-  $str s = $str_join(to$str(""),($Iterable)$Iterable$Iterator$witness,$map(($Iterable)$Iterable$tuple$witness,mkstr,t));
-  printf("%s\n",s->str);
+void $print(int size, ...) {
+    va_list args;
+    va_start(args,size);
+    if (size > 0) {
+        $struct elem = va_arg(args,$struct);
+        puts((const char*)elem->$class->__str__(elem)->str);
+    }
+    for (int i=1; i<size; i++) {
+        putchar(' ');
+        $struct elem = va_arg(args,$struct);
+        puts((const char*)elem->$class->__str__(elem)->str);
+    }
+    va_end(args);
 }
 
 // enumerate //////////////////////////////////////////////////////////////////////////

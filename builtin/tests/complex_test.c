@@ -7,6 +7,6 @@ int main() {
   $Number$complex wit = $Number$complex$witness;
   $complex c = wit->$class->__mul__(wit,a,b);
   $complex c2 = wit->$class->__pow__(wit,a,b);
-  $print($NEW($tuple,2,to$str("(7+2i)*(5+3i) = "),c));
-  $print($NEW($tuple,2,to$str("(7+2i)**(5+3i) = "),c2));
+  $print(2,to$str("(7+2i)*(5+3i) = "),c);
+  $print(2,to$str("(7+2i)**(5+3i) = "),c2);
 }
