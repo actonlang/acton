@@ -749,7 +749,7 @@ attrEnv                     :: EnvF x -> TCon -> TEnv
 attrEnv env c               = snd $ findCon env c
 
 fullAttrEnv                 :: EnvF x -> TCon -> TEnv
-fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)
+fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)   -- reverse guarantees inherited methods are listed in original order
   where tes                 = [ attrEnv env c | (_,c) <- findAncestry env tc ]
         init                = take 1 $ filter ((==initKW) . fst) $ concat tes
 

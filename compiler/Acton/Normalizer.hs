@@ -7,13 +7,15 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
+import Pretty
 import Utils
 import Control.Monad.State.Lazy
 import Debug.Trace
 
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
-normalize env0 m                    = return (evalState (norm env m) 0, mapModules1 conv env0)
+normalize env0 m                    = return (evalState (norm env m) 0, env0')
   where env                         = normEnv env0
+        env0'                       = mapModules1 conv env0
         
 
 --  Normalization:
@@ -373,9 +375,7 @@ instance Conv TCon where
     conv (TC c ts)                  = TC c (conv ts)
 
 joinRow (TRow l k n t p) r          = TRow l k n (conv t) (joinRow p r)
-joinRow (TNil l k) r                = toPosRow r
-joinRow t r                         = TRow (loc t) PRow (name "_") (conv t) (toPosRow r)
+joinRow p r                         = toPosRow r p
 
-toPosRow (TRow l k n t r)           = TRow l k (name "_") t (toPosRow r)
-toPosRow (TNil l k)                 = TNil l PRow
-toPosRow t                          = TRow (loc t) PRow (name "_") (conv t) posNil
+toPosRow (TRow l k n t r) p         = TRow l k (name "_") t (toPosRow r p)
+toPosRow _ p                        = p

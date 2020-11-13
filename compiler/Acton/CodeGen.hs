@@ -111,8 +111,9 @@ funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env 
 methsig env c n (TFun _ _ r _ t)    = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
 
 params env (TNil _ _)               = empty
+params env (TRow _ _ _ t r@TRow{})  = gen env t <> comma <+> params env r
 params env (TRow _ _ _ t TNil{})    = gen env t
-params env (TRow _ _ _ t r)         = gen env t <> comma <+> params env r
+params env (TRow _ _ _ t TVar{})    = gen env t                                         -- Ignore param tails for now...
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
 
 varsig env n t                      = gen env t <+> gen env n
