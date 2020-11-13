@@ -28,3 +28,5 @@ void $printobj(char *mess,$WORD obj);
 #define $APP($T, $E, $n, ...) ({ $T $x = $E; $x->$class->$n($x, ##__VA_ARGS__); })
 
 #define $SKIPRES(cont)        (cont)
+
+#define $FORMAT($s, ...)      ({ char * $b; asprintf(&$b, $s, ##__VA_ARGS__); to$str($b); })

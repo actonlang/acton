@@ -942,8 +942,42 @@ instance Infer Expr where
                                                 return (Cast (tCon (TC c ts)) t :
                                                         cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
-    infer env (BinOp l e1@Strings{} Mod e2)
-                                        = notYet l "String formatting"
+    infer env (BinOp l s@Strings{} Mod e)
+      | TRow _ _ _ t TNil{} <- prow     = do (cs,e') <- inferSub env t e
+                                             return (cs, tStr, eCall formatF [s,eTuple [e']])
+      | otherwise                       = do (cs,e') <- inferSub env tup e
+                                             return (cs, tStr, eCall formatF [s,e'])
+      where formatF                     = tApp (eQVar primFORMAT) [prow]
+            tup                         = tTuple prow kwdNil
+            prow                        = format $ concat $ sval s
+            format []                   = posNil
+            format ('%':s)              = nokey s
+            format (c:s)                = format s
+            nokey ('(':s)               = err l ("Mapping keys not supported in format strings")
+            nokey s                     = flags s
+            flags (f:s)
+              | f `elem` "#0- +"        = flags s
+            flags s                     = width s
+            width ('*':s)               = posRow tInt (dot s)
+            width (n:s)
+              | n `elem` "123456789"    = dot (dropWhile (`elem` "0123456789") s)
+            width s                     = dot s
+            dot ('.':s)                 = prec s
+            dot s                       = len s
+            prec ('*':s)                = posRow tInt (len s)
+            prec (n:s)
+              | n `elem` "0123456789"   = len (dropWhile (`elem` "0123456789") s)
+            prec s                      = len s
+            len (l:s)
+              | l `elem` "hlL"          = conv s
+            len s                       = conv s
+            conv (t:s)
+              | t `elem` "diouxXc"      = posRow tInt (format s)
+              | t `elem` "eEfFgG"       = posRow tFloat (format s)
+              | t `elem` "rsa"          = posRow tStr (format s)
+              | t == '%'                = format s
+            conv (c:s)                  = err l ("Bad conversion character: " ++ [c])
+            conv []                     = err l ("Bad conversion string")
     infer env (BinOp l e1 op e2)
       | op `elem` [Or,And]              = do (cs1,env1,s1,e1') <- inferBool env e1
                                              (cs2,env2,s2,e2') <- inferBool env1 e2

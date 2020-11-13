@@ -66,3 +66,12 @@ def f14():
 
     (p0,p1,p2) = a
     (apa=q0,bepa=q1,cepa=q2) = x
+
+def f15(x):
+    return "%d %%" % x
+
+def f16(x,y,z):
+    return "%*f %s" % (x,y,z)
+
+def f17(x):
+    return "%s %f" % x
