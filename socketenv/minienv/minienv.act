@@ -1,37 +1,18 @@
-class Connection:
-    remoteHost  : str
-    write       : action(str) -> None
-    close       : action() -> None
-    on_receipt  : action(input: action(str)->None, error: action(str)->None) -> None 
-
-class Env (object):
+actor Env ():
     stdout_write : action(str) -> None
+    def stdout_write(s): pass
     stdin_install: action(action(str)->None) -> None
+    def stdin_install(cb): pass
     connect      : action(str, int, action(Connection)->None) -> None
+    def connect(host,port,cb): pass
     listen       : action(int, action(Connection)->None) -> None
-    
-# Hidden:
+    def listen(port,cb): pass
 
-actor _EnvActor ():
-    def do_stdout_write(str):
-        pass
-    def do_stdin_install(callback):
-        pass
-    def do_connect(address, port, on_success):
-        pass
-    def do_listen(port, on_success):
-        pass
+actor Connection ():
+    write       : action(str) -> None
+    def write(s): pass
+    close       : action() -> None
+    def close() : pass
+    on_receipt  : action(action(str)->None, action(str)->None) -> None
+    def on_receipt(cb1, cb2): pass
 
-class _Env (Env):
-    @property
-    actual      : _EnvActor
-    def __init__(self,actual):
-        self.actual = actual
-    def stdout_write(self,mess):
-        self.actual.do_stdout_write(mess)
-    def stdin_install(self,callback):
-        self.actual.do_stdin_install(callback)
-    def connect(self,address, port, on_success):
-        self.actual.do_connect(address, port, on_success)
-    def listen(self, port, on_success):
-        self.actual.do_listen(port, on_success)

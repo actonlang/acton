@@ -125,7 +125,6 @@ $R minienv$$Env$connect$local (minienv$$Env __self__, $str host, $int port, $fun
     struct hostent *ent;
     int hostid;
     int fd = new_socket(cb);
-  
     ent = gethostbyname((char *)host->str); //this should be replaced by calling getaddrinfo
     if(ent==NULL) {
       fprintf(stderr,"Name lookup error");  // should connect have one more param prescribing what do with errors before connection is established?
@@ -138,17 +137,17 @@ $R minienv$$Env$connect$local (minienv$$Env __self__, $str host, $int port, $fun
       fd_data[fd].sock_addr.sin_addr = iaddr;
       fd_data[fd].sock_addr.sin_port = htons(port->val);
       fd_data[fd].sock_addr.sin_family = AF_INET;
-      if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) {// couldn't connect immediately, 
-        if (errno!=EINPROGRESS)  {                                                            // so check if attempt continues asynchronously.
-          fprintf(stderr,"Connect failed");
-          exit(-1);
-          //netError(fd,"Connect failed");
-        } else {
+      if (connect(fd,(struct sockaddr *)&fd_data[fd].sock_addr,sizeof(struct sockaddr)) < 0) { // couldn't connect immediately, 
+        if (errno==EINPROGRESS)  {                                                             // so check if attempt continues asynchronously.
           printf("connect returned EINPROGRESS error on fd %d\n",fd);
           EV_SET(&fd_data[fd].event_spec,fd,EVFILT_WRITE,EV_ADD | EV_ONESHOT,0,0,NULL);
           kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
+        } else {
+          fprintf(stderr,"Connect failed");
+          exit(-1);
+          //netError(fd,"Connect failed");
         }
-      } else
+      } else // connect succeeded immediately (can this ever happen?)
         setupConnection(fd,host);
     }
     return $R_CONT(c$cont, $None);

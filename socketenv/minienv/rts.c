@@ -645,6 +645,16 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     return m;
 }
 
+$Msg $EVENT($Actor to, $Cont cont) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    $Msg m = $NEW($Msg, to, cont, now.tv_sec, &$Done$instance);
+    if (ENQ_msg(m, to)) {
+        ENQ_ready(to);
+    }
+    return m;
+}   
+    
 $Msg $AFTER(time_t sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;

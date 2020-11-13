@@ -1,5 +1,7 @@
 #ifndef client
 #define client
+#include "../../builtin/builtin.h"
+#include "rts.h"
 #include "minienv.h"
 struct client$$l$1lambda;
 struct client$$l$2lambda;
@@ -24,8 +26,8 @@ struct client$$l$1lambda$class {
     void* (*__init__) (client$$l$1lambda, minienv$$Connection, client$$client);
     void* (*__serialize__) (client$$l$1lambda, $Serial$state);
     client$$l$1lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$1lambda); 
-    $bool (*__bool__) (client$$l$1lambda); 
+    $str (*__str__) (client$$l$1lambda);
+    $bool (*__bool__) (client$$l$1lambda);
     $R (*__call__) (client$$l$1lambda, $Cont);
 };
 struct client$$l$1lambda {
@@ -40,9 +42,9 @@ struct client$$l$2lambda$class {
     void* (*__init__) (client$$l$2lambda, client$$client);
     void* (*__serialize__) (client$$l$2lambda, $Serial$state);
     client$$l$2lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$2lambda); 
-    $bool (*__bool__) (client$$l$2lambda); 
-    $Msg (*__call__) (client$$l$2lambda, minienv$$Connection); 
+    $str (*__str__) (client$$l$2lambda);
+    $bool (*__bool__) (client$$l$2lambda);
+    $Msg (*__call__) (client$$l$2lambda, minienv$$Connection);
 };
 struct client$$l$2lambda {
     struct client$$l$2lambda$class *$class;
@@ -55,8 +57,8 @@ struct client$$l$5lambda$class {
     void* (*__init__) (client$$l$5lambda, minienv$$Connection);
     void* (*__serialize__) (client$$l$5lambda, $Serial$state);
     client$$l$5lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$5lambda); 
-    $bool (*__bool__) (client$$l$5lambda); 
+    $str (*__str__) (client$$l$5lambda);
+    $bool (*__bool__) (client$$l$5lambda);
     $R (*__call__) (client$$l$5lambda, $str, $Cont);
 };
 struct client$$l$5lambda {
@@ -71,8 +73,8 @@ struct client$$l$7lambda$class {
     void* (*__init__) (client$$l$7lambda, minienv$$Env);
     void* (*__serialize__) (client$$l$7lambda, $Serial$state);
     client$$l$7lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$7lambda); 
-    $bool (*__bool__) (client$$l$7lambda); 
+    $str (*__str__) (client$$l$7lambda);
+    $bool (*__bool__) (client$$l$7lambda);
     $R (*__call__) (client$$l$7lambda, $str, $Cont);
 };
 struct client$$l$7lambda {
@@ -86,8 +88,8 @@ struct client$$l$9lambda$class {
     void* (*__init__) (client$$l$9lambda, minienv$$Env);
     void* (*__serialize__) (client$$l$9lambda, $Serial$state);
     client$$l$9lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$9lambda); 
-    $bool (*__bool__) (client$$l$9lambda); 
+    $str (*__str__) (client$$l$9lambda);
+    $bool (*__bool__) (client$$l$9lambda);
     $R (*__call__) (client$$l$9lambda, $str, $Cont);
 };
 struct client$$l$9lambda {
@@ -101,8 +103,8 @@ struct client$$l$10lambda$class {
     void* (*__init__) (client$$l$10lambda, client$$client, minienv$$Connection, $Cont);
     void* (*__serialize__) (client$$l$10lambda, $Serial$state);
     client$$l$10lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$10lambda); 
-    $bool (*__bool__) (client$$l$10lambda); 
+    $str (*__str__) (client$$l$10lambda);
+    $bool (*__bool__) (client$$l$10lambda);
     $R (*__call__) (client$$l$10lambda, $Msg);
 };
 struct client$$l$10lambda {
@@ -118,8 +120,8 @@ struct client$$l$11lambda$class {
     void* (*__init__) (client$$l$11lambda, client$$client, minienv$$Connection);
     void* (*__serialize__) (client$$l$11lambda, $Serial$state);
     client$$l$11lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$l$11lambda); 
-    $bool (*__bool__) (client$$l$11lambda); 
+    $str (*__str__) (client$$l$11lambda);
+    $bool (*__bool__) (client$$l$11lambda);
     $R (*__call__) (client$$l$11lambda, $Cont);
 };
 struct client$$l$11lambda {
@@ -134,8 +136,8 @@ struct client$$client$class {
     $R (*__init__) (client$$client, minienv$$Env, $Cont);
     void* (*__serialize__) (client$$client, $Serial$state);
     client$$client (*__deserialize__) ($Serial$state);
-    $str (*__str__) (client$$client); // abstract!!!
-    $bool (*__bool__) (client$$client); // abstract!!!
+    $str (*__str__) (client$$client);
+    $bool (*__bool__) (client$$client);
     $R (*session$local) (client$$client, minienv$$Connection, $Cont);
     $Msg (*session) (client$$client, minienv$$Connection);
 };
@@ -156,6 +158,5 @@ extern struct client$$l$9lambda$class client$$l$9lambda$methods;
 extern struct client$$l$10lambda$class client$$l$10lambda$methods;
 extern struct client$$l$11lambda$class client$$l$11lambda$methods;
 extern struct client$$client$class client$$client$methods;
-
-void client$$__init__();
+void client$$__init__ ();
 #endif
