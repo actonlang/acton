@@ -168,8 +168,10 @@ primNEW                             = gPrim "NEW"
 primNEWCC                           = gPrim "NEWCC"
 primRegister                        = gPrim "register"
 
-tostrKW                             = name "to$str"
-tobytearrayKW                       = name "to$bytearray"
+primToInt                           = name "to$int"
+primToFloat                         = name "to$float"
+primToStr                           = name "to$str"
+primToBytearray                     = name "to$bytearray"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -360,16 +362,16 @@ genCall env t0 ts e@(Var _ n) p
   where info                        = findQName n env
         (new,p')                    = if t0 == tR then (primNEWCC, rotate p) else (primNEW, p)
 genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
-genCall env t0 ts e p               = apply env (typeInstOf env ts e) e callKW p
+genCall env t0 ts e p               = enter env e callKW p
 
 genDotCall env dec e@(Var _ x) n p
   | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
-  | NClass{} <- info                = apply env (typeOf env e) (eDot e n) callKW p
+  | NClass{} <- info                = enter env (eDot e n) callKW p
   where info                        = findQName x env
 genDotCall env dec e n p
-  | Just NoDec <- dec               = apply env (typeOf env e) e n p
+  | Just NoDec <- dec               = enter env e n p
   | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
-genDotCall env dec e n p            = apply env (typeOf env e) (eDot e n) callKW p
+genDotCall env dec e n p            = enter env (eDot e n) callKW p
 
 
 genDot env ts e@(Var _ x) n
@@ -378,8 +380,8 @@ genDot env [] e n                   = gen env e <> text "->" <> gen env n
 genDot env ts e n                   = gen env e <> text "->" <> gen env n
 
 
-apply env t e n p                   = gen env primAPP <> parens (gen env t <> comma <+> gen env e <> comma <+> 
-                                                                 gen env n <> comma <+> gen env p)
+enter env e n PosNil                = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env e)
+enter env e n p                     = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env (PosArg e p))
 
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
@@ -400,13 +402,13 @@ instance Gen Expr where
       | n `elem` global env         = genTopName env n
       | isAlias n env               = genTopName env n
     gen env (Var _ n)               = gen env n
-    gen env (Int _ _ str)           = text str
-    gen env (Float _ _ str)         = text str
+    gen env (Int _ _ str)           = gen env primToInt <> parens (text str)
+    gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env primTrue
     gen env (Bool _ False)          = gen env primFalse
     gen env (None _)                = gen env primNone
-    gen env e@Strings{}             = gen env tostrKW <> parens (genStr env e)
-    gen env e@BStrings{}            = gen env tobytearrayKW <> parens (genStr env e)
+    gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
+    gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
     gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
