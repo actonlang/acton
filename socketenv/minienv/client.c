@@ -1,5 +1,5 @@
 #include "client.h"
-void* client$$l$1lambda$__init__ (client$$l$1lambda l$self, minienv$$Connection t$y, client$$client __self__) {
+$NoneType client$$l$1lambda$__init__ (client$$l$1lambda l$self, minienv$$Connection t$y, client$$client __self__) {
     l$self->t$y = t$y;
     l$self->__self__ = __self__;
     return $None;
@@ -7,97 +7,69 @@ void* client$$l$1lambda$__init__ (client$$l$1lambda l$self, minienv$$Connection 
 $R client$$l$1lambda$__call__ (client$$l$1lambda l$self, $Cont c$cont) {
     minienv$$Connection t$y = l$self->t$y;
     client$$client __self__ = l$self->__self__;
-    return $APP(client$$client, __self__, session$local, t$y, ($Cont)c$cont);
+    return __self__->$class->session$local(__self__, t$y, ($Cont)c$cont);
 }
 struct client$$l$1lambda$class client$$l$1lambda$methods;
-void* client$$l$2lambda$__init__ (client$$l$2lambda l$self, client$$client __self__) {
+$NoneType client$$l$2lambda$__init__ (client$$l$2lambda l$self, client$$client __self__) {
     l$self->__self__ = __self__;
     return $None;
 }
 $Msg client$$l$2lambda$__call__ (client$$l$2lambda l$self, minienv$$Connection t$y) {
     client$$client __self__ = l$self->__self__;
-    return $EVENT(($Actor)__self__, ($Cont)$NEW(client$$l$1lambda, t$y, __self__));
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(client$$l$1lambda, t$y, __self__));
 }
 struct client$$l$2lambda$class client$$l$2lambda$methods;
-void* client$$l$5lambda$__init__ (client$$l$5lambda l$self, minienv$$Connection l$4self) {
-    l$self->l$4self = l$4self;
+$NoneType client$$l$4lambda$__init__ (client$$l$4lambda l$self, minienv$$Env l$3self) {
+    l$self->l$3self = l$3self;
     return $None;
 }
-$R client$$l$5lambda$__call__ (client$$l$5lambda l$self, $str l$1x, $Cont l$2x) {
-    minienv$$Connection l$4self = l$self->l$4self;
-    //    return $APP(minienv$$Connection, l$4self, write, l$1x, ($Cont)l$2x);
-    $APP(minienv$$Connection, l$4self, write, l$1x);   // new
-    return $R_CONT(l$2x, $None);                       // new
+$NoneType client$$l$4lambda$__call__ (client$$l$4lambda l$self, $str l$1x) {
+    minienv$$Env l$3self = l$self->l$3self;
+    return ($NoneType)l$3self->$class->stdout_write(l$3self, l$1x);
 }
-struct client$$l$5lambda$class client$$l$5lambda$methods;
-$R client$$l$3c$1cont (client$$client __self__, minienv$$Connection conn, $Cont c$cont, $Msg c$2res) {
-  //    return $APP(minienv$$Env, __self__->env, stdin_install, ($function)$NEW(client$$l$5lambda, conn), ($Cont)$SKIPRES(c$cont));
-  $APP(minienv$$Env, __self__->env, stdin_install, ($function)$NEW(client$$l$5lambda, conn));  // new
-  return $R_CONT(c$cont, $None);                                                               // new  Note: c$2res unused
-}
-void* client$$l$7lambda$__init__ (client$$l$7lambda l$self, minienv$$Env l$6self) {
-    l$self->l$6self = l$6self;
+struct client$$l$4lambda$class client$$l$4lambda$methods;
+$NoneType client$$l$6lambda$__init__ (client$$l$6lambda l$self, minienv$$Env l$5self) {
+    l$self->l$5self = l$5self;
     return $None;
 }
-$R client$$l$7lambda$__call__ (client$$l$7lambda l$self, $str l$1x, $Cont l$2x) {
-    minienv$$Env l$6self = l$self->l$6self;
-    // return $APP(minienv$$Env, l$6self, stdout_write, l$1x, ($Cont)l$2x);
-    $APP(minienv$$Env, l$6self, stdout_write, l$1x);  // new
-    return $R_CONT(l$2x,$None);                       // new
+$NoneType client$$l$6lambda$__call__ (client$$l$6lambda l$self, $str l$1x) {
+    minienv$$Env l$5self = l$self->l$5self;
+    return ($NoneType)l$5self->$class->stdout_write(l$5self, l$1x);
 }
-struct client$$l$7lambda$class client$$l$7lambda$methods;
-void* client$$l$9lambda$__init__ (client$$l$9lambda l$self, minienv$$Env l$8self) {
-    l$self->l$8self = l$8self;
+struct client$$l$6lambda$class client$$l$6lambda$methods;
+$NoneType client$$l$8lambda$__init__ (client$$l$8lambda l$self, minienv$$Connection l$7self) {
+    l$self->l$7self = l$7self;
     return $None;
 }
-$R client$$l$9lambda$__call__ (client$$l$9lambda l$self, $str l$1x, $Cont l$2x) {
-    minienv$$Env l$8self = l$self->l$8self;
-    // return $APP(minienv$$Env, l$8self, stdout_write, l$1x, ($Cont)l$2x);
-    $APP(minienv$$Env, l$8self, stdout_write, l$1x);
-    return $R_CONT(l$2x, $None);
-
+$NoneType client$$l$8lambda$__call__ (client$$l$8lambda l$self, $str l$1x) {
+    minienv$$Connection l$7self = l$self->l$7self;
+    return ($NoneType)l$7self->$class->write(l$7self, l$1x);
+}
+struct client$$l$8lambda$class client$$l$8lambda$methods;
+$NoneType client$$l$9lambda$__init__ (client$$l$9lambda l$self, client$$client __self__, minienv$$Connection conn) {
+    l$self->__self__ = __self__;
+    l$self->conn = conn;
+    return $None;
+}
+$R client$$l$9lambda$__call__ (client$$l$9lambda l$self, $Cont c$cont) {
+    client$$client __self__ = l$self->__self__;
+    minienv$$Connection conn = l$self->conn;
+    return __self__->$class->session$local(__self__, conn, ($Cont)c$cont);
 }
 struct client$$l$9lambda$class client$$l$9lambda$methods;
-void* client$$l$10lambda$__init__ (client$$l$10lambda l$self, client$$client __self__, minienv$$Connection conn, $Cont c$cont) {
-    l$self->__self__ = __self__;
-    l$self->conn = conn;
-    l$self->c$cont = c$cont;
-    return $None;
-}
-$R client$$l$10lambda$__call__ (client$$l$10lambda l$self, $Msg l$1x) {
-    client$$client __self__ = l$self->__self__;
-    minienv$$Connection conn = l$self->conn;
-    $Cont c$cont = l$self->c$cont;
-    return client$$l$3c$1cont(__self__, conn, c$cont, l$1x);
-}
-struct client$$l$10lambda$class client$$l$10lambda$methods;
-void* client$$l$11lambda$__init__ (client$$l$11lambda l$self, client$$client __self__, minienv$$Connection conn) {
-    l$self->__self__ = __self__;
-    l$self->conn = conn;
-    return $None;
-}
-$R client$$l$11lambda$__call__ (client$$l$11lambda l$self, $Cont c$cont) {
-    client$$client __self__ = l$self->__self__;
-    minienv$$Connection conn = l$self->conn;
-    return $APP(client$$client, __self__, session$local, conn, ($Cont)c$cont);
-}
-struct client$$l$11lambda$class client$$l$11lambda$methods;
 $R client$$client$__init__ (client$$client __self__, minienv$$Env env, $Cont c$cont) {
     __self__->env = env;
     $Number w$63 = ($Number)$NEW($Integral$int);
-    // return $APP(minienv$$Env, __self__->env, connect, to$str("localhost"), $APP($Number, w$63, __fromatom__, 12345), ($function)$NEW(client$$l$2lambda, __self__), ($Cont)$SKIPRES(c$cont));
-    $int port = $APP($Number, w$63, __fromatom__, to$int(12345)); // new
-    $APP(minienv$$Env, __self__->env, connect, to$str("localhost"), port, ($function)$NEW(client$$l$2lambda, __self__)); // new
-    return $R_CONT(c$cont,$None); // new
+    __self__->env->$class->connect(__self__->env, to$str("localhost"), w$63->$class->__fromatom__(w$63, to$int(12345)), ($function)$NEW(client$$l$2lambda, __self__));
+    return $R_CONT(c$cont, $None);
 }
 $R client$$client$session$local (client$$client __self__, minienv$$Connection conn, $Cont c$cont) {
-    // return $APP(minienv$$Connection, conn, on_receipt, ($function)$NEW(client$$l$7lambda, __self__->env), ($function)$NEW(client$$l$9lambda, __self__->env), ($Cont)$NEW(client$$l$10lambda, __self__, conn, c$cont));
-    $APP(minienv$$Connection, conn, on_receipt, ($function)$NEW(client$$l$7lambda, __self__->env), ($function)$NEW(client$$l$9lambda, __self__->env)); // new
-    return $R_CONT(($Cont)$NEW(client$$l$10lambda, __self__, conn, c$cont), $None); // new
+    conn->$class->on_receipt(conn,  ($function)$NEW(client$$l$4lambda, __self__->env),  ($function)$NEW(client$$l$6lambda, __self__->env));
+    __self__->env->$class->stdin_install(__self__->env,  ($function)$NEW(client$$l$8lambda, conn));
+    return $R_CONT(c$cont, $None);
 }
 $Msg client$$client$session (client$$client __self__, minienv$$Connection conn) {
-    // return $ASYNC(($Actor)__self__, ($Cont)$NEW(client$$l$11lambda, __self__, conn));
-    return $EVENT(($Actor)__self__, ($Cont)$NEW(client$$l$11lambda, __self__, conn)); // new
+    return $ASYNC(($Actor)__self__, ($Cont)$NEW(client$$l$9lambda, __self__, conn));
 }
 struct client$$client$class client$$client$methods;
 int client$$done$ = 0;
@@ -120,18 +92,25 @@ void client$$__init__ () {
         $register(&client$$l$2lambda$methods);
     }
     {
-        client$$l$5lambda$methods.$GCINFO = "client$$l$5lambda";
-        client$$l$5lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        client$$l$5lambda$methods.__init__ = client$$l$5lambda$__init__;
-        client$$l$5lambda$methods.__call__ = client$$l$5lambda$__call__;
-        $register(&client$$l$5lambda$methods);
+        client$$l$4lambda$methods.$GCINFO = "client$$l$4lambda";
+        client$$l$4lambda$methods.$superclass = ($Super$class)&$function$methods;
+        client$$l$4lambda$methods.__init__ = client$$l$4lambda$__init__;
+        client$$l$4lambda$methods.__call__ = client$$l$4lambda$__call__;
+        $register(&client$$l$4lambda$methods);
     }
     {
-        client$$l$7lambda$methods.$GCINFO = "client$$l$7lambda";
-        client$$l$7lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        client$$l$7lambda$methods.__init__ = client$$l$7lambda$__init__;
-        client$$l$7lambda$methods.__call__ = client$$l$7lambda$__call__;
-        $register(&client$$l$7lambda$methods);
+        client$$l$6lambda$methods.$GCINFO = "client$$l$6lambda";
+        client$$l$6lambda$methods.$superclass = ($Super$class)&$function$methods;
+        client$$l$6lambda$methods.__init__ = client$$l$6lambda$__init__;
+        client$$l$6lambda$methods.__call__ = client$$l$6lambda$__call__;
+        $register(&client$$l$6lambda$methods);
+    }
+    {
+        client$$l$8lambda$methods.$GCINFO = "client$$l$8lambda";
+        client$$l$8lambda$methods.$superclass = ($Super$class)&$function$methods;
+        client$$l$8lambda$methods.__init__ = client$$l$8lambda$__init__;
+        client$$l$8lambda$methods.__call__ = client$$l$8lambda$__call__;
+        $register(&client$$l$8lambda$methods);
     }
     {
         client$$l$9lambda$methods.$GCINFO = "client$$l$9lambda";
@@ -139,20 +118,6 @@ void client$$__init__ () {
         client$$l$9lambda$methods.__init__ = client$$l$9lambda$__init__;
         client$$l$9lambda$methods.__call__ = client$$l$9lambda$__call__;
         $register(&client$$l$9lambda$methods);
-    }
-    {
-        client$$l$10lambda$methods.$GCINFO = "client$$l$10lambda";
-        client$$l$10lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        client$$l$10lambda$methods.__init__ = client$$l$10lambda$__init__;
-        client$$l$10lambda$methods.__call__ = client$$l$10lambda$__call__;
-        $register(&client$$l$10lambda$methods);
-    }
-    {
-        client$$l$11lambda$methods.$GCINFO = "client$$l$11lambda";
-        client$$l$11lambda$methods.$superclass = ($Super$class)&$Cont$methods;
-        client$$l$11lambda$methods.__init__ = client$$l$11lambda$__init__;
-        client$$l$11lambda$methods.__call__ = client$$l$11lambda$__call__;
-        $register(&client$$l$11lambda$methods);
     }
     {
         client$$client$methods.$GCINFO = "client$$client";
@@ -170,11 +135,10 @@ void client$$__init__ () {
 $R $ROOT(minienv$$Env env, $Cont then) {
   $register(&client$$l$1lambda$methods);
   $register(&client$$l$2lambda$methods);
-  $register(&client$$l$5lambda$methods);
-  $register(&client$$l$7lambda$methods);
+  $register(&client$$l$4lambda$methods);
+  $register(&client$$l$6lambda$methods);
+  $register(&client$$l$8lambda$methods);
   $register(&client$$l$9lambda$methods);
-  $register(&client$$l$10lambda$methods);
-  $register(&client$$l$11lambda$methods);
   $register(&minienv$$Env$methods);
   $register(&client$$client$methods);
   return $NEWCC(client$$client,then,env);

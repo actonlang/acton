@@ -636,25 +636,22 @@ $Catcher POP_catcher($Actor a) {
 
 $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline;
+    time_t baseline;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    PUSH_outgoing(self, m);
-//    if (ENQ_msg(m, to)) {
-//        ENQ_ready(to);
-//    }
-    return m;
-}
-
-$Msg $EVENT($Actor to, $Cont cont) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    $Msg m = $NEW($Msg, to, cont, now.tv_sec, &$Done$instance);
-    if (ENQ_msg(m, to)) {
-        ENQ_ready(to);
+    if (self) {
+        m->baseline = self->msg->baseline;
+        PUSH_outgoing(self, m);
+    } else {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        m->baseline = now.tv_sec;
+        if (ENQ_msg(m, to)) {
+           ENQ_ready(to);
+        }
     }
     return m;
-}   
-    
+}
+     
 $Msg $AFTER(time_t sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     time_t baseline = self->msg->baseline + sec;
