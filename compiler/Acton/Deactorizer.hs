@@ -303,19 +303,6 @@ instance LambdaFree Elem where
 -- Convert environments -----------------------------------------------------------------------------------------
 
 conv (n, NAct q p k te')            = (n, NClass q [([Nothing],TC primActor [])] (convActorEnv q p k te'))
-  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : [ (n, convI i) | (n,i) <- te' ]
-          where t0                  = tSchema q0 (TFun NoLoc fx0 p k tNone)
-
-        convI (NSig sc dec)         = NSig (convS sc) dec
-        convI (NDef sc dec)         = NDef (convS sc) dec
-        convI i                     = i
-
-        convS (TSchema l q t)       = TSchema l q (convT t)
-
-        convT (TFun l fx p k t)
-          | fx == fxAction          = TFun l fx0 p k (tMsg t)
-        convT t                     = t
-
-        fx0                         = fxAct tSelf
+  where convActorEnv q0 p k te'     = (initKW, NDef t0 NoDec) : te'
+          where t0                  = tSchema q0 (TFun NoLoc (fxAct tSelf) p k tNone)
 conv ni                             = ni
-
