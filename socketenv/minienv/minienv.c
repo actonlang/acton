@@ -16,9 +16,8 @@ int new_socket ($function handler) {
 }
 
 void setupConnection (int fd, $str remoteHost) {
-  printf("setting up connection\n");
   minienv$$Connection conn = $NEW(minienv$$Connection,fd,NULL);
-  fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn); // ???????
+  fd_data[fd].chandler->$class->__call__(fd_data[fd].chandler, conn);
 }
 
 
@@ -106,6 +105,11 @@ $R minienv$$l$7lambda$__call__ (minienv$$l$7lambda l$self, $Cont c$cont) {
 }
 struct minienv$$l$7lambda$class minienv$$l$7lambda$methods;
 $R minienv$$Env$__init__ (minienv$$Env __self__, $Cont c$cont) {
+    __self__->$next = NULL;
+    __self__->$msg = NULL;
+    __self__->$outgoing = NULL;
+    __self__->$catcher = NULL;
+    atomic_flag_clear(&__self__->$msg_lock);
     return $R_CONT(c$cont, $None);
 }
 $R minienv$$Env$stdout_write$local (minienv$$Env __self__, $str s, $Cont c$cont) {
@@ -176,6 +180,11 @@ $Msg minienv$$Env$listen (minienv$$Env __self__, $int port, $function cb) {
 }
 struct minienv$$Env$class minienv$$Env$methods;
 $R minienv$$Connection$__init__ (minienv$$Connection __self__, int descriptor, $Cont c$cont) {
+    __self__->$next = NULL;
+    __self__->$msg = NULL;
+    __self__->$outgoing = NULL;
+    __self__->$catcher = NULL;
+    atomic_flag_clear(&__self__->$msg_lock);
     __self__->descriptor = descriptor;
     return $R_CONT(c$cont, $None);
 }
@@ -195,7 +204,6 @@ $R minienv$$Connection$on_receipt$local (minienv$$Connection __self__, $function
     fd_data[__self__->descriptor].kind = readhandler;
     fd_data[__self__->descriptor].rhandler = on_input;
     fd_data[__self__->descriptor].errhandler = on_error;
-    printf("storing fd_data on fd %d\n",__self__->descriptor);
     EV_SET(&fd_data[__self__->descriptor].event_spec,__self__->descriptor,EVFILT_READ,EV_ADD,0,0,NULL);
     kevent(kq,&fd_data[__self__->descriptor].event_spec,1,NULL,0,NULL);
     return $R_CONT(c$cont, $None);
