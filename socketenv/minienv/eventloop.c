@@ -1,5 +1,6 @@
           while(1) {
             struct kevent timer;
+            pthread_setspecific(self_key, NULL);
             EV_SET(&timer, 9999, EVFILT_TIMER, EV_ADD | EV_ONESHOT, 0, 500, 0);
             kevent(kq,&timer,1,0,0,0);
             struct kevent kev;
@@ -9,7 +10,7 @@
             int count;
             int nready = kevent(kq,NULL,0,&kev,1,NULL);
             if (nready<0) {
-              printf("kevent error %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
+               printf("kevent error %s. kev.ident=%lu, kq is %d\n",strerror(errno),kev.ident,kq);
                exit(-1);
             }
             int fd = kev.ident;
@@ -32,7 +33,6 @@
               break;
             switch (fd_data[fd].kind) {
             case connecthandler:
-              printf("connect event on descriptor %d\n",fd);
               if (kev.filter==EVFILT_READ) { // we are a listener and someone tries to connect
                 while ((fd2 = accept(kq, (struct sockaddr *)&addr,&socklen)) != -1) {
                   fcntl(fd2,F_SETFL,O_NONBLOCK);
@@ -44,7 +44,7 @@
                   getnameinfo((struct sockaddr *)&addr,socklen,buf,100,NULL,0,0);
                   setupConnection(fd2,to$str(buf));
                 }
-              }else { // we are a client and a delayed connection attempt has succeeded
+              } else { // we are a client and a delayed connection attempt has succeeded
                 setupConnection(fd,to$str("TODO Fix host name here"));
               }
               break;
