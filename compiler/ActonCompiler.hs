@@ -187,15 +187,23 @@ runRestPasses args paths src env0 original = do
 
                           (normalized, normEnv) <- Acton.Normalizer.normalize typeEnv tchecked
                           iff (norm args) $ dump "norm" (Pretty.print normalized)
+                          --traceM ("#################### normalized env0:")
+                          --traceM (Pretty.render (Pretty.pretty normEnv))
 
                           (deacted,deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
                           iff (deact args) $ dump "deact" (Pretty.print deacted)
+                          --traceM ("#################### deacted env0:")
+                          --traceM (Pretty.render (Pretty.pretty deactEnv))
 
                           (cpstyled,cpsEnv) <- Acton.CPS.convert deactEnv deacted
                           iff (cps args) $ dump "cps" (Pretty.print cpstyled)
+                          --traceM ("#################### cps'ed env0:")
+                          --traceM (Pretty.render (Pretty.pretty cpsEnv))
 
                           (lifted,liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
                           iff (llift args) $ dump "llift" (Pretty.print lifted)
+                          --traceM ("#################### lifteded env0:")
+                          --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                           (h,c) <- Acton.CodeGen.generate liftEnv lifted
                           iff (hgen args) $ dump "hgen (.h)" h

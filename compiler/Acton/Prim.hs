@@ -40,6 +40,7 @@ primASSERT          = gPrim "ASSERT"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primCAST            = gPrim "CAST"
+primCONSTCONT       = gPrim "CONSTCONT"
 
 primFORMAT          = gPrim "FORMAT"
 
@@ -90,6 +91,7 @@ primMkEnv cls def var sig =
                             (noq primASSERT,        def scASSERT NoDec),
                             (noq primISINSTANCE,    def scISINSTANCE NoDec),
                             (noq primCAST,          def scCAST NoDec),
+                            (noq primCONSTCONT,     def scCONSTCONT NoDec),
 
                             (noq primFORMAT,        def scFORMAT NoDec),
                         
@@ -268,6 +270,14 @@ scCAST              = tSchema [quant a, quant b] tCAST
   where tCAST       = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar b)
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
+
+--  $CONSTCONT      : [X,A] => ($Cont[X,A], A) -> $Cont[X,tNone]
+scCONSTCONT         = tSchema [quant x, quant a] tCONSTCONT
+  where tCONSTCONT  = tFun fxPure (posRow tCont' $ posRow (tVar a) posNil) kwdNil tCont''
+        tCont'      = tCont (tVar x) (tVar a)
+        tCont''     = tCont (tVar x) tNone
+        x           = TV KFX $ name "X"
+        a           = TV KType $ name "A"
 
 --  $FORMAT         : [P] => (str, (*P)) -> str
 scFORMAT            = tSchema [quant p] tFORMAT

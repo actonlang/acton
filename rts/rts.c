@@ -252,36 +252,43 @@ $Cont $Cont$__deserialize__($Serial$state state) {
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-void $RetNew$__init__($RetNew $this, $Cont cont, $WORD obj) {
+void $ConstCont$__init__($ConstCont $this, $WORD val, $Cont cont) {
+    $this->val = val;
     $this->cont = cont;
-    $this->obj = obj;
 }
 
-$bool $RetNew$__bool__($RetNew self) {
+$bool $ConstCont$__bool__($ConstCont self) {
   return $True;
 }
 
-$str $RetNew$__str__($RetNew self) {
+$str $ConstCont$__str__($ConstCont self) {
   char *s;
-  asprintf(&s,"<$RetNew object at %p>",self);
+  asprintf(&s,"<$ConstCont object at %p>",self);
   return to$str(s);
 }
 
-void $RetNew$__serialize__($RetNew self, $Serial$state state) {
+void $ConstCont$__serialize__($ConstCont self, $Serial$state state) {
+    $step_serialize(self->val,state);
       $step_serialize(self->cont,state);
-      $step_serialize(self->obj,state);
 }
 
-$RetNew $RetNew$__deserialize__($Serial$state state) {
-    $RetNew res = $DNEW($RetNew,state);
+$ConstCont $ConstCont$__deserialize__($Serial$state state) {
+    $ConstCont res = $DNEW($ConstCont,state);
+    res->val = $step_deserialize(state);
     res->cont = $step_deserialize(state);
-    res->obj = $step_deserialize(state);
     return res;
 }
 
-$R $RetNew$__call__($RetNew $this, $WORD _ignore) {
+$R $ConstCont$__call__($ConstCont $this, $WORD _ignore) {
     $Cont cont = $this->cont;
-    return cont->$class->__call__(cont, $this->obj);
+    return cont->$class->__call__(cont, $this->val);
+}
+
+$Cont $CONSTCONT($WORD val, $Cont cont){
+    $ConstCont obj = malloc(sizeof(struct $ConstCont));
+    obj->$class = &$ConstCont$methods;
+    $ConstCont$methods.__init__(obj, val, cont);
+    return ($Cont)obj;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -343,16 +350,16 @@ struct $Cont$class $Cont$methods = {
     NULL
 };
 
-struct $RetNew$class $RetNew$methods = {
-    "$RetNew",
+struct $ConstCont$class $ConstCont$methods = {
+    "$ConstCont",
     UNASSIGNED,
     NULL,
-    $RetNew$__init__,
-    $RetNew$__serialize__,
-    $RetNew$__deserialize__,
-    $RetNew$__bool__,
-    $RetNew$__str__,
-    $RetNew$__call__
+    $ConstCont$__init__,
+    $ConstCont$__serialize__,
+    $ConstCont$__deserialize__,
+    $ConstCont$__bool__,
+    $ConstCont$__str__,
+    $ConstCont$__call__
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -774,7 +781,7 @@ void $register_rts () {
   $register_force(CLOS_ID,&$function$methods);
   $register_force(CONT_ID,&$Cont$methods);
   $register_force(DONE_ID,&$Done$methods);
-  $register_force(RETNEW_ID,&$RetNew$methods);
+  $register_force(CONSTCONT_ID,&$ConstCont$methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////

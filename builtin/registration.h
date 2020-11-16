@@ -30,7 +30,7 @@
 #define CLOS_ID 16
 #define CONT_ID 17
 #define DONE_ID 18
-#define RETNEW_ID 19
+#define CONSTCONT_ID 19
 #define STRITERATOR_ID 20
 #define LISTITERATOR_ID 21
 #define DICTITERATOR_ID 22
@@ -61,9 +61,9 @@
 
 
 /* 
- * Register the builtin classes (those with the above class id's except MSG_ID  -- RETNEW_ID). 
+ * Register the builtin classes (those with the above class id's except MSG_ID  -- CONSTCONT_ID). 
  * This must be the first registration call, since it also initializes the data structures containing the mapping. 
- * This call does *not* register the rts class id's MSG_ID  -- RETNEW_ID, which must be registered by 
+ * This call does *not* register the rts class id's MSG_ID  -- CONSTCONT_ID, which must be registered by 
  * a call to register_rts in rts.h. 
  */
 

@@ -14,14 +14,14 @@ struct $Actor;
 struct $Catcher;
 struct $function;
 struct $Cont;
-struct $RetNew;
+struct $ConstCont;
 
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
 typedef struct $function *$function;
 typedef struct $Cont *$Cont;
-typedef struct $RetNew *$RetNew;
+typedef struct $ConstCont *$ConstCont;
 
 extern struct $Msg$class $Msg$methods;
 extern struct $Actor$class $Actor$methods;
@@ -29,7 +29,7 @@ extern struct $Catcher$class $Catcher$methods;
 extern struct $function$class $function$methods;
 extern struct $Cont$class $Cont$methods;
 extern struct $Cont$class $Done$methods;
-extern struct $RetNew$class $RetNew$methods;
+extern struct $ConstCont$class $ConstCont$methods;
 
 enum $RTAG { $RDONE, $RFAIL, $RCONT, $RWAIT };
 typedef enum $RTAG $RTAG;
@@ -140,22 +140,23 @@ struct $Cont {
     struct $Cont$class *$class;
 };
 
-struct $RetNew$class {
+struct $ConstCont$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($RetNew, $Cont, $WORD);
-    void (*__serialize__)($RetNew, $Serial$state);
-    $RetNew (*__deserialize__)($Serial$state);
-    $bool (*__bool__)($RetNew);
-    $str (*__str__)($RetNew);
-    $R (*__call__)($RetNew, $WORD);
+    void (*__init__)($ConstCont, $WORD, $Cont);
+    void (*__serialize__)($ConstCont, $Serial$state);
+    $ConstCont (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($ConstCont);
+    $str (*__str__)($ConstCont);
+    $R (*__call__)($ConstCont, $WORD);
 };
-struct $RetNew {
-    struct $RetNew$class *$class;
+struct $ConstCont {
+    struct $ConstCont$class *$class;
+    $WORD val;
     $Cont cont;
-    $WORD obj;
 };
+$Cont $CONSTCONT($WORD, $Cont);
 
 $Msg $ASYNC($Actor, $Cont);
 $Msg $AFTER(time_t, $Cont);

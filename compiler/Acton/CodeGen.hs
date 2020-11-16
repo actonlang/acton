@@ -57,6 +57,8 @@ modNames (FromImportAll _ (ModRef (0,Just m)) : is)
 modNames []                         = []
 
 
+conParamNames                       = map (Internal CodeGenPass "par") [1..]
+
 -- Header -------------------------------------------------------------------------------------------
 
 hModule env (Module m imps stmts)   = text "#ifndef" <+> gen env m $+$
@@ -94,7 +96,9 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
         initdef : meths             = fields env tc
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
-methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi
+methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
+                                      gen env t <+> newcon env n <> parens (params env r)
+  where TFun _ _ r _ t              = typeInstOf env (map tVar $ tybound q) (eVar n)
 methstub env Def{}                  = empty
 
 fields env c                        = map field te
@@ -145,11 +149,18 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 
 classname env n                     = genTopName env (Derived n $ name "class")
 
-methodtable env n                   = genTopName env (Derived n $ name "methods")
+methodtable env n                   = genTopName env (tableName n)
 
 methodtable' env (NoQ n)            = methodtable env n
-methodtable' env (GName m n)        = gen env $ GName m (Derived n $ name "methods")
+methodtable' env (GName m n)        = gen env $ GName m (tableName n)
 
+newcon env n                        = genTopName env (conName n)
+
+newcon' env (NoQ n)                 = newcon env n
+newcon' env (GName m n)             = gen env $ GName m (conName n)
+
+tableName n                         = Derived n $ name "methods"
+conName n                           = Derived n $ name "new"
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
@@ -172,6 +183,8 @@ primToInt                           = name "to$int"
 primToFloat                         = name "to$float"
 primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
+
+tmpV                                = primKW "tmp"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -206,6 +219,7 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d m)
         ret | fallsthru b           = text "return" <+> gen env primNone <> semi
             | otherwise             = empty
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      declCon env1 n q $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
   where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
         env1                        = defineTVars q env
@@ -361,31 +375,58 @@ genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten (Tuple _ p KwdNil)  = p
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env t0 ts e@(Var _ n) p
+  | NClass{} <- info                = genNew env ts n p
   | NDef{} <- info                  = gen env e <> parens (gen env p)
-  | NClass{} <- info                = gen env new <> parens (gen env $ PosArg e p')
   where info                        = findQName n env
-        (new,p')                    = if t0 == tR then (primNEWCC, rotate p) else (primNEW, p)
 genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
-genCall env t0 ts e p               = enter env e callKW p
+genCall env t0 ts e p               = genEnter env ts e callKW p
+
+
+genNew env ts n p                   = newcon' env n <> parens (gen env p)
+
+declCon env n q                     = (genTopName env n <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
+                                      nest 4 (genTopName env n <+> gen env tmpV <+> equals <+> malloc <> semi $+$
+                                              gen env tmpV <> text "->" <> gen env classKW <+> equals <+> char '&' <> methodtable env n <> semi $+$
+                                              initcall) $+$
+                                      char '}'
+  where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
+        pars                        = pPar conParamNames r
+        args                        = pArg pars
+        malloc                      = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+        initcall | t == tR          = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
+                 | otherwise        = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
+                                      text "return" <+> gen env tmpV <> semi
+        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,t]) [eVar tmpV, e]) PosNil
+        retobj (PosArg e p)         = PosArg e (retobj p)
+
+comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env dec e@(Var _ x) n p
-  | NClass{} <- info, Just _ <- dec = gen env e <> text "." <> gen env n <> parens (gen env p)
-  | NClass{} <- info                = enter env (eDot e n) callKW p
+  | NClass{} <- info, Just _ <- dec = methodtable' env x <> text "." <> gen env n <> parens (gen env p)
+  | NClass{} <- info                = genEnter env [] (eDot e n) callKW p
   where info                        = findQName x env
 genDotCall env dec e n p
-  | Just NoDec <- dec               = enter env e n p
+  | Just NoDec <- dec               = genEnter env [] e n p
   | Just Static <- dec              = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env p)
-genDotCall env dec e n p            = enter env (eDot e n) callKW p
+genDotCall env dec e n p            = genEnter env [] (eDot e n) callKW p
 
 
 genDot env ts e@(Var _ x) n
-  | NClass{} <- findQName x env     = gen env e <> text "." <> gen env n
+  | NClass{} <- findQName x env     = methodtable' env x <> text "." <> gen env n
 genDot env [] e n                   = gen env e <> text "->" <> gen env n
 genDot env ts e n                   = gen env e <> text "->" <> gen env n
 
 
-enter env e n PosNil                = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env e)
-enter env e n p                     = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env (PosArg e p))
+genEnter env ts e n p
+  | costly e                        = parens (lbrace <+> (gen env t <+> gen env tmpV <+> equals <+> gen env e <> semi $+$
+                                                          genEnter env [] (eVar tmpV) n p <> semi) <+> rbrace)
+  where costly Var{}                = False
+        costly (Dot _ e n)          = costly e
+        costly (DotI _ e i)         = costly e
+        costly e                    = True
+        t                           = typeInstOf env ts e
+genEnter env ts e n PosNil          = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env e)
+genEnter env ts e n p               = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env (PosArg e p))
 
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
@@ -428,11 +469,6 @@ instance Gen Expr where
     gen env e@Cond{}                = genPrec env 0 e
 
 genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s
-
-rotate p                            = rot [] p
- where rot es (PosArg e PosNil)     = PosArg e $ foldl (flip PosArg) PosNil es
-       rot es (PosArg e p)          = rot (e:es) p
-       rot es p                     = foldl (flip PosArg) p es
 
 nargs                               :: PosArg -> Int
 nargs PosNil                        = 0

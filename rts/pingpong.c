@@ -8,13 +8,13 @@ void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
 }
 
 $bool lambda$1$__bool__(lambda$1 self) {
-  return $True;
+    return $True;
 }
 
 $str lambda$1$__str__(lambda$1 self) {
-  char *s;
-  asprintf(&s,"<lambda$1 object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<lambda$1 object at %p>",self);
+    return to$str(s);
 }
 
 void lambda$1$__serialize__(lambda$1 self, $Serial$state state) {
@@ -38,6 +38,13 @@ $R lambda$1$__call__(lambda$1 $this, $Cont then) {
     return self->$class->pong(self, count, $Integral$int$witness->$class->__neg__($Integral$int$witness, q), then);
 }
 
+lambda$1 lambda$1$new(Pingpong self, $int count, $int q) {
+    lambda$1 obj = malloc(sizeof(struct lambda$1));
+    obj->$class = &lambda$1$methods;
+    lambda$1$methods.__init__(obj, self, count, q);
+    return obj;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
@@ -46,13 +53,13 @@ void lambda$2$__init__(lambda$2 $this, Pingpong self, $int q) {
 }
 
 $bool lambda$2$__bool__(lambda$2 self) {
-  return $True;
+    return $True;
 }
 
 $str lambda$2$__str__(lambda$2 self) {
-  char *s;
-  asprintf(&s,"<lambda$2 object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<lambda$2 object at %p>",self);
+    return to$str(s);
 }
 
 void lambda$2$__serialize__(lambda$2 self, $Serial$state state) {
@@ -75,6 +82,13 @@ $R lambda$2$__call__ (lambda$2 $this, $Cont then) {
     return self->$class->ping(self, q, then);
 }
 
+lambda$2 lambda$2$new(Pingpong self, $int q) {
+    lambda$2 obj = malloc(sizeof(struct lambda$2));
+    obj->$class = &lambda$2$methods;
+    lambda$2$methods.__init__(obj, self, q);
+    return obj;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 
 $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
@@ -85,13 +99,13 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
 }
 
 $bool Pingpong$__bool__(Pingpong self) {
-  return $True;
+    return $True;
 }
 
 $str Pingpong$__str__(Pingpong self) {
-  char *s;
-  asprintf(&s,"<Pingpong object at %p>",self);
-  return to$str(s);
+    char *s;
+    asprintf(&s,"<Pingpong object at %p>",self);
+    return to$str(s);
 }
 void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
     $step_serialize(self->i,state);
@@ -99,27 +113,33 @@ void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
 }
 
 Pingpong Pingpong$__deserialize__($Serial$state state) {
-  Pingpong res = $DNEW(Pingpong,state);
+    Pingpong res = $DNEW(Pingpong,state);
     res->i = $step_deserialize(state);
     res->count = $step_deserialize(state);
     return res;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////
-
 $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
     self->count = $Integral$int$witness->$class->__add__($Integral$int$witness, self->count, to$int(1));
     $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, self->count, q);
     printf("Ping %8ld\n", j->val);
-    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count, q));
+    $AFTER(1, ($Cont)lambda$1$new(self, self->count, q));
     return $R_CONT(then, $None);
 }
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
     $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, n, q);
     printf("     %8ld Pong\n", j->val);
-    $AFTER(2, ($Cont)$NEW(lambda$2, self, $Integral$int$witness->$class->__neg__($Integral$int$witness, q)));
+    $AFTER(2, ($Cont)lambda$2$new(self, $Integral$int$witness->$class->__neg__($Integral$int$witness, q)));
     return $R_CONT(then, $None);
 }
+
+$R Pingpong$new($int i, $Cont then) {
+    Pingpong obj = malloc(sizeof(struct Pingpong));
+    obj->$class = &Pingpong$methods;
+    return Pingpong$methods.__init__(obj, i, $CONSTCONT(obj,then));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
 
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
@@ -160,6 +180,6 @@ $R $ROOT($Env env, $Cont then) {
     $register(&lambda$1$methods);
     $register(&lambda$2$methods);
     $register(&Pingpong$methods);
-    return $NEWCC(Pingpong, then, to$int(env));
+    return Pingpong$new(to$int(env), then);
 }
 

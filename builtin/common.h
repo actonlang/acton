@@ -14,7 +14,7 @@ void $printobj(char *mess,$WORD obj);
 
 #define $NEWCC($X, $c, ...) ({ $X $x = malloc(sizeof(struct $X)); \
                                $x->$class = &$X ## $methods; \
-                               $x->$class->__init__($x, ##__VA_ARGS__, ($Cont)$NEW($RetNew,$c,($WORD)$x)); })
+                               $x->$class->__init__($x, ##__VA_ARGS__, $CONSTCONT($x,$c)); })
 
 #define $DNEW($T, $state)   ({ $T $t = malloc(sizeof(struct $T)); \
                                $t->$class = &$T ## $methods;                                     \

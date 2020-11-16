@@ -27,6 +27,7 @@ struct lambda$1 {
     $int count;
     $int q;
 };
+lambda$1 lambda$1$new(Pingpong, $int, $int);
 
 struct lambda$2$class {
     char *$GCINFO;
@@ -44,6 +45,7 @@ struct lambda$2 {
     Pingpong self;
     $int q;
 };
+lambda$2 lambda$2$new(Pingpong, $int);
 
 struct Pingpong$class {
     char *$GCINFO;
@@ -67,6 +69,7 @@ struct Pingpong {
     $int i;
     $int count;
 };
+$R Pingpong$new($int, $Cont);
 
 extern struct lambda$1$class lambda$1$methods;
 extern struct lambda$2$class lambda$2$methods;
