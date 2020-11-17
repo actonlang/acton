@@ -34,6 +34,9 @@ struct $table_struct {
 
 // General methods /////////////////////////////////////////////////////////////////////////
 
+$dict $dict$new($Hashable wit1, $Mapping wit2, $WORD m) {
+  return $NEW($dict,wit1, wit2, m);
+}
 
 void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping) { 
   dict->numelements = 0;
@@ -301,6 +304,10 @@ static $WORD $Iterator$dict_next($Iterator$dict self) {
   }
   return NULL;
 }
+
+$Iterator$dict $Iterator$dict$new($dict dict) {
+  return $NEW($Iterator$dict, dict);
+}
  
 void $Iterator$dict_init($Iterator$dict self, $dict dict) {
   self->src = dict;
@@ -426,6 +433,10 @@ static $WORD $Iterator$dict$values_next($Iterator$dict$values self) {
   return NULL;
 }
  
+$Iterator$dict$values $Iterator$dict$values$new($dict dict) {
+  return $NEW($Iterator$dict$values, dict);
+}
+ 
 void $Iterator$dict$values_init($Iterator$dict$values self, $dict dict) {
   self->src = dict;
   self->nxt = 0;
@@ -473,6 +484,10 @@ static $WORD $Iterator$dict$items_next($Iterator$dict$items self) {
     i++;
   }
   return NULL;
+}
+ 
+$Iterator$dict$items $Iterator$dict$items$new($dict dict) {
+  return $NEW($Iterator$dict$items, dict);
 }
  
 void $Iterator$dict$items_init($Iterator$dict$items self, $dict dict) {

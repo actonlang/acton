@@ -64,10 +64,19 @@ void $Indexed$dict$__delitem__ ($Indexed$dict wit, $dict dict, $WORD key) {
   $dict_delitem(dict, wit->w$Mapping$dict->w$Hashable$Mapping,key);
 }
 
+$Mapping$dict $Mapping$dict$new($Hashable h) {
+  return $NEW($Mapping$dict, h);
+}
+
 void $Mapping$dict$__init__($Mapping$dict self, $Hashable h) {
   self->w$Indexed$Mapping = $NEW($Indexed$dict,self,($Eq)h);
   self->w$Hashable$Mapping = h;
 }
+
+$Indexed$dict $Indexed$dict$new($Mapping$dict master, $Eq e) {
+  return $NEW($Indexed$dict, master, e);
+}
+
 
 void $Indexed$dict$__init__($Indexed$dict self, $Mapping$dict master, $Eq e) {
   self->w$Mapping$dict = master;

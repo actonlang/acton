@@ -5,8 +5,12 @@ $complex to$complex(complex double c) {
   return res;
 }
 
-void $complex_init($complex self, $Number$opaque c){
-  self->val = c->proto->$class->__complx__(c->proto,c->impl)->val;
+$complex $complex$new($Number wit, $WORD c) {
+  return $NEW($complex,wit,c);
+}
+
+void $complex_init($complex self, $Number wit, $WORD c){
+  self->val = wit->$class->__complx__(wit,c)->val;
 }
 
 void $complex_serialize($complex c,$Serial$state state) {

@@ -2,6 +2,10 @@ $Iterator $Iterable$Iterator_iter($Iterable$Iterator wit, $Iterator self) {
   return self;
 }
 
+$Iterable$Iterator $Iterable$Iterator$new() {
+  return $NEW($Iterable$Iterator);
+}
+
 struct $Iterable$Iterator$class $Iterable$Iterator$methods = {"", UNASSIGNED,NULL, (void (*)($Iterable$Iterator))$default__init__,$Iterable$Iterator_iter};
 struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$methods};
 $Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;

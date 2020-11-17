@@ -21,7 +21,7 @@ extern struct $range$class $range$methods;
 $range $range$new($int, $int, $int);
 
 extern struct $Iterable$range$class $Iterable$range$methods;
-$Iterable$range $Iterable$range$new($range);
+$Iterable$range $Iterable$range$new();
 extern $Iterable$range $Iterable$range$witness;
 
 extern struct $Sequence$range$class $Sequence$range$methods;
