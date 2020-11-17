@@ -97,7 +97,7 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      gen env t <+> newcon env n <> parens (params env r)
+                                      gen env t <+> newcon env n <> parens (params env r) <> semi
   where TFun _ _ r _ t              = typeInstOf env (map tVar $ tybound q) (eVar n)
 methstub env Def{}                  = empty
 
@@ -392,7 +392,7 @@ declCon env n q                     = (genTopName env n <+> newcon env n <> pare
   where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
         pars                        = pPar conParamNames r
         args                        = pArg pars
-        malloc                      = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
+        malloc                      = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> genTopName env n))
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi

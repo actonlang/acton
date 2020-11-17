@@ -30,6 +30,7 @@ import Data.Graph
 import qualified Data.List
 import System.IO
 import System.Directory
+import System.Process
 import System.FilePath.Posix
 import qualified System.Exit
 
@@ -48,7 +49,7 @@ data Args       = Args {
                     cgen    :: Bool,
 --                    tracef  :: Bool,
 --                    expand  :: Bool,
-                    make    :: Bool,
+--                    make    :: Bool,
                     verbose :: Bool,
                     nobuiltin :: Bool,
                     syspath :: String,
@@ -71,7 +72,7 @@ getArgs         = Args
                     <*> switch (long "cgen"    <> help "Show the generated .c file")
 --                    <*> switch (long "trace"   <> help "Trace this module's functions and methods at run-time (Acton files only")
 --                    <*> switch (long "expand"  <> help "Show the result after identifier expansion (Yang files only)")
-                    <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
+--                    <*> switch (long "make"    <> help "(Re-)compile recursively this and all imported modules as needed")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
@@ -89,12 +90,12 @@ treatOneFile args
                      (case ext paths of
                         ".act"   -> (do (src,tree) <- Acton.Parser.parseModule mn (srcFile paths)
                                         iff (parse args) $ dump "parse" (Pretty.print tree)
-                                        if make args
-                                         then do let task = ActonTask mn src tree
-                                                 chaseImportsAndCompile args paths task
-                                         else do env0 <- Acton.Env.initEnv (nobuiltin args)
-                                                 runRestPasses args paths src env0 tree
-                                                 return ())
+--                                        if make args
+                                        let task = ActonTask mn src tree
+                                        chaseImportsAndCompile args paths task)
+--                                         else do env0 <- Acton.Env.initEnv (nobuiltin args)
+--                                                 runRestPasses args paths src env0 tree
+--                                                 return ()
                                           `catch` handle Acton.Parser.parserError "" paths
 {-
                         ".yang"  -> if make args
@@ -149,7 +150,7 @@ checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
                              if found
                               then checkDirs path1 dirs
                               else do createDirectory path1
-                                      writeFile (joinPath [path1,"__init__.py"]) ""
+--                                      writeFile (joinPath [path1,"__init__.py"]) ""
                                       checkDirs path1 dirs
   where path1           = joinPath [path,d]
 
@@ -206,6 +207,9 @@ runRestPasses args paths src env0 original = do
                           --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                           (h,c) <- Acton.CodeGen.generate liftEnv lifted
+                          writeFile (outbase ++ ".h") h
+                          writeFile (outbase ++ ".c") c
+                          createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c"])
                           iff (hgen args) $ dump "hgen (.h)" h
                           iff (cgen args) $ dump "cgen (.c)" c
 
@@ -259,15 +263,15 @@ chaseImportsAndCompile args paths task
                                 (as,cs)        = Data.List.partition isAcyclic sccs
                             if null cs
                              then do env0 <- Acton.Env.initEnv False
-                                     foldM (doTask args paths) (env0,[])
-                                           ([PythonTask (A.modName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
+                                     foldM (doTask args paths) (env0,[]) [t | AcyclicSCC t <- as]
+--                                           ([PythonTask (A.modName ["python",body])| body <- pythonFiles] ++ [t | AcyclicSCC t <- as])
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
   where isAcyclic (AcyclicSCC _) = True
         isAcyclic _    = False
         showCycle (CyclicSCC ts) = "\n"++concatMap (\t-> concat (intersperse "." (A.modPath (name t)))++" ") ts
-        pythonFiles    = ["dwdm", "getenv", "logging", "netconf_","power","re","timestamp","traceback","xmlparse", "xmlprint"]
+--        pythonFiles    = ["dwdm", "getenv", "logging", "netconf_","power","re","timestamp","traceback","xmlparse", "xmlprint"]
 
 chaseImportedFiles :: Args -> Paths -> [A.ModName] -> [CompileTask] -> IO ([CompileTask])
 chaseImportedFiles args paths imps tasks
@@ -311,7 +315,7 @@ chaseImportedFiles args paths imps tasks
 
 
 doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
-                             = do ok <- checkUptoDate paths ".ty" actFile tyFile [pyFile] (syspath args) (importsOf t)
+                             = do ok <- checkUptoDate paths ".ty" actFile tyFile [hFile, cFile] (syspath args) (importsOf t)
                                   if ok then do iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                                 return ifaces
                                    else do checkDirs (projSysRoot paths) (init (A.modPath qn))
@@ -322,7 +326,8 @@ doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
   where actFile             = joinPath (projSrcRoot paths : A.modPath qn)++ ".act"
         outBase             = joinPath (projSysRoot paths : A.modPath qn)
         tyFile              = outBase ++ ".ty"
-        pyFile              = outBase ++ ".py"
+        hFile               = outBase ++ ".h"
+        cFile               = outBase ++ ".c"
 {-        
 doTask args paths ifaces@(env, yangifaces) t@(YangTask qn m) = do
          let outFiles = case m of
