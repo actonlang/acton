@@ -92,8 +92,8 @@ struct Pingpong$class Pingpong$methods = {
 };
 
 $R $ROOT($Env env, $Cont then) {
-    $register(($Serializable$methods)&lambda$1$methods);
-    $register(($Serializable$methods)&lambda$2$methods);
-    $register(($Serializable$methods)&Pingpong$methods);
+    $register(&lambda$1$methods);
+    $register(&lambda$2$methods);
+    $register(&Pingpong$methods);
     return $NEWCC(Pingpong, then, to$int(env));
 }

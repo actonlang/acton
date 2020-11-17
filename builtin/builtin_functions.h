@@ -26,6 +26,7 @@ struct $Iterator$enumerate {
 };
 
 extern struct $Iterator$enumerate$class $Iterator$enumerate$methods;
+$Iterator$enumerate $Iterator$enumerate$new($Iterator,$int);
 
 $Iterator $enumerate($Iterable wit, $WORD iter, $int start);
 
@@ -53,6 +54,7 @@ struct $Iterator$filter {
 };
 
 extern struct $Iterator$filter$class $Iterator$filter$methods;
+$Iterator$filter $Iterator$filter$new($Iterator,$bool(*)($WORD));
 
 $Iterator $filter($Iterable wit, $bool(*f)($WORD), $WORD iter);
 
@@ -80,6 +82,7 @@ struct $Iterator$map {
 };
 
 extern struct $Iterator$map$class $Iterator$map$methods;
+$Iterator$map $Iterator$map$new($Iterator,$WORD(*)($WORD));
 
 $Iterator $map($Iterable wit, $WORD(*f)($WORD), $WORD iter);
 
@@ -108,6 +111,7 @@ struct $Iterator$zip {
 };
 
 extern struct $Iterator$zip$class $Iterator$zip$methods;
+$Iterator$zip $Iterator$zip$new($Iterator, $Iterator);
 
 $Iterator $zip($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2);
 

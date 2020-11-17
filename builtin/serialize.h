@@ -74,4 +74,5 @@ struct $Hashable$WORD {
 };
 
 struct $Hashable$WORD$class $Hashable$WORD$methods;
+$Hashable$WORD $Hashable$WORD$new();
 struct $Hashable$WORD *$Hashable$WORD$witness;

@@ -53,12 +53,18 @@ struct $bytearray$class {
 };
 
 extern struct $bytearray$class $bytearray$methods;
+$bytearray $bytearray$new($Sequence$opaque);
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
+$Ord$bytearray $Ord$bytearray$new();
 extern struct $Hashable$bytearray$class $Hashable$bytearray$methods;
-extern struct $Plus$bytearray$class $Plus$bytearraymethods;
+$Hashable$bytearray $Hashable$bytearray$new();
+extern struct $Plus$bytearray$class $Plus$bytearray$methods;
+$Plus$bytearray $Plus$bytearray$new();
 extern struct $Sliceable$bytearray$class $Sliceable$bytearray$methods;
+$Sliceable$bytearray $Sliceable$bytearray$new();
 extern struct $Container$bytearray$class $Container$bytearray$methods;
+$Container$bytearray $Container$bytearray$new();
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Hashable$bytearray *$Hashable$bytearray$witness;

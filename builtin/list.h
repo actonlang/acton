@@ -19,9 +19,12 @@ struct $list {
 };
 
 extern struct $list$class $list$methods;
+$list $list$new($Sequence, $WORD);
 
 extern struct $Sequence$list$class $Sequence$list$methods;
-extern struct $Container$list$class $Container$list$methods; 
+$Sequence$list $Sequence$list$new();
+extern struct $Container$list$class $Container$list$methods;
+$Container$list $Container$list$new($Eq);
 
 extern struct $Sequence$list *$Sequence$list$witness;
 extern struct $Container$list *$Container$list_new($Eq); // equality is for elements
@@ -51,4 +54,5 @@ struct $Iterator$list {
 };
 
 extern struct  $Iterator$list$class  $Iterator$list$methods;
+$Iterator$list $Iterator$list$new($list);
 

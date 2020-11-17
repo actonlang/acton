@@ -15,6 +15,7 @@ struct $bool {
 };
 
 extern struct $bool$class $bool$methods;
+$bool $bool$new($struct);
 
 $bool to$bool(long b);
 long from$bool($bool b);

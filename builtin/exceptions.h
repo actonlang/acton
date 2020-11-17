@@ -17,6 +17,7 @@ struct $BaseException {
 };
 
 extern struct $BaseException$class $BaseException$methods;
+$BaseException $BaseException$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $SystemExit$class {
   char *$GCINFO;
@@ -37,6 +38,7 @@ struct $SystemExit {
 };
 
 extern struct $SystemExit$class $SystemExit$methods;
+$SystemExit $SystemExit$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyboardInterrupt$class {
   char *$GCINFO;
@@ -57,6 +59,7 @@ struct $KeyboardInterrupt {
 };
 
 extern struct $KeyboardInterrupt$class $KeyboardInterrupt$methods;
+$KeyboardInterrupt $KeyboardInterrupt$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $Exception$class {
   char *$GCINFO;
@@ -77,6 +80,7 @@ struct $Exception {
 };
 
 extern struct $Exception$class $Exception$methods;
+$Exception $Exception$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $AssertionError$class {
   char *$GCINFO;
@@ -97,6 +101,7 @@ struct $AssertionError {
 };
 
 extern struct $AssertionError$class $AssertionError$methods;
+$AssertionError $AssertionError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $LookupError$class {
   char *$GCINFO;
@@ -117,6 +122,7 @@ struct $LookupError {
 };
 
 extern struct $LookupError$class $LookupError$methods;
+$LookupError $LookupError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $IndexError$class {
   char *$GCINFO;
@@ -137,6 +143,7 @@ struct $IndexError {
 };
 
 extern struct $IndexError$class $IndexError$methods;
+$IndexError $IndexError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $KeyError$class {
   char *$GCINFO;
@@ -157,6 +164,7 @@ struct $KeyError {
 };
 
 extern struct $KeyError$class $KeyError$methods;
+$KeyError $KeyError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $MemoryError$class {
   char *$GCINFO;
@@ -177,6 +185,7 @@ struct $MemoryError {
 };
 
 extern struct $MemoryError$class $MemoryError$methods;
+$MemoryError $MemoryError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $OSError$class {
   char *$GCINFO;
@@ -197,6 +206,7 @@ struct $OSError {
 };
 
 extern struct $OSError$class $OSError$methods;
+$OSError $OSError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $RuntimeError$class {
   char *$GCINFO;
@@ -217,6 +227,7 @@ struct $RuntimeError {
 };
 
 extern struct $RuntimeError$class $RuntimeError$methods;
+$RuntimeError $RuntimeError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $NotImplementedError$class {
   char *$GCINFO;
@@ -237,6 +248,7 @@ struct $NotImplementedError {
 };
 
 extern struct $NotImplementedError$class $NotImplementedError$methods;
+$NotImplementedError $NotImplementedError$new($str);
 ////////////////////////////////////////////////////////////////////////////////////////
 struct $ValueError$class {
   char *$GCINFO;
@@ -257,6 +269,7 @@ struct $ValueError {
 };
 
 extern struct $ValueError$class $ValueError$methods;
+$ValueError $ValueError$new($str);
 
 void RAISE($BaseException e);
 

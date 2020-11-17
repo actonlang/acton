@@ -18,9 +18,12 @@ struct $dict {
 };
 
 extern struct $dict$class $dict$methods;
+$dict $dict$new($Hashable, $Mapping, $WORD);
 
 extern struct  $Mapping$dict$class $Mapping$dict$methods;
+$Mapping$dict $Mapping$dict$new($Hashable);
 extern struct  $Indexed$dict$class $Indexed$dict$methods;
+$Indexed$dict $Indexed$dict$new($Mapping$dict, $Eq);
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
@@ -47,6 +50,7 @@ struct $Iterator$dict {
 };
 
 extern struct $Iterator$dict$class  $Iterator$dict$methods;
+$Iterator$dict $Iterator$dict$new($dict);
 
 // values iterator
 
@@ -71,6 +75,7 @@ struct $Iterator$dict$values {
 };
 
 extern struct $Iterator$dict$values$class  $Iterator$dict$values$methods;
+$Iterator$dict$values $Iterator$dict$values$new($dict);
 
 // items iterator
 
@@ -95,3 +100,4 @@ struct $Iterator$dict$items {
 };
 
 extern struct $Iterator$dict$items$class  $Iterator$dict$items$methods;
+$Iterator$dict$items $Iterator$dict$items$new($dict);

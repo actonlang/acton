@@ -16,11 +16,16 @@ struct $float {
 };
 
 extern struct $float$class $float$methods;
+$float $float$new($Super);
 
 extern struct $Real$float$class $Real$float$methods;
+$Real$float $Real$float$new();
 extern struct $Minus$float$class $Minus$float$methods;
+$Minus$float $Minus$float$new();
 extern struct $Ord$float$class $Ord$float$methods;
+$Ord$float $Ord$float$new();
 extern struct $Hashable$float$class $Hashable$float$methods;
+$Hashable$float $Hashable$float$new();
 
 extern struct $Real$float *$Real$float$witness;
 extern struct $Minus$float *$Minus$float$witness;

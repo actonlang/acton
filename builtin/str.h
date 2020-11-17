@@ -59,12 +59,18 @@ struct $str$class {
 };
 
 extern struct $str$class $str$methods;
+$str $str$new($struct);
 
 extern struct $Ord$str$class $Ord$str$methods;
+$Ord$str $Ord$str$new();
 extern struct $Hashable$str$class $Hashable$str$methods;
-extern struct $Plus$str$class $Plus$strmethods;
+$Hashable$str $Hashable$str$new();
+extern struct $Plus$str$class $Plus$str$methods;
+$Plus$str $Plus$str$new();
 extern struct $Sliceable$str$class $Sliceable$str$methods;
+$Sliceable$str $Sliceable$str$new();
 extern struct $Container$str$class $Container$str$methods;
+$Container$str $Container$str$new();
 
 extern struct $Ord$str *$Ord$str$witness;
 extern struct $Hashable$str *$Hashable$str$witness;
@@ -101,6 +107,7 @@ struct $Iterator$str {
 };
 
 extern struct  $Iterator$str$class  $Iterator$str$methods;
+$Iterator$str $Iterator$str$new($str);
 
 // bytearray /////////////////////////////////////////////////////////////////////////////////////
 
@@ -161,12 +168,18 @@ struct $bytearray$class {
 };
 
 extern struct $bytearray$class $bytearray$methods;
+$bytearray $bytearray$new($struct);
 
 extern struct $Ord$bytearray$class $Ord$bytearray$methods;
-extern struct $Sequence$bytearray$class $Sequence$bytearraymethods;
-extern struct $Collection$bytearray$class $Collection$bytearraymethods;
-extern struct $Plus$bytearray$class $Plus$bytearraymethods;
+$Ord$bytearray $Ord$bytearray$new();
+extern struct $Sequence$bytearray$class $Sequence$bytearray$methods;
+$Sequence$bytearray $Sequence$bytearray$new();
+extern struct $Collection$bytearray$class $Collection$bytearray$methods;
+$Collection$bytearray $Collection$bytearray$new();
+extern struct $Plus$bytearray$class $Plus$bytearray$methods;
+$Plus$bytearray $Plus$bytearray$new();
 extern struct $Container$bytearray$class $Container$bytearray$methods;
+$Container$bytearray $Container$bytearray$new();
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
@@ -200,6 +213,7 @@ struct $Iterator$bytearray {
 };
 
 extern struct  $Iterator$bytearray$class  $Iterator$bytearray$methods;
+$Iterator$bytearray $Iterator$bytearray$new($bytearray);
 
 //builtin functions //////////////////////////////////////////////////////////////////////////////////
 

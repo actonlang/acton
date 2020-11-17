@@ -15,12 +15,18 @@ struct $int {
 };
 
 extern struct $int$class $int$methods;
+$int $int$new($Super);
 
 extern struct $Integral$int$class $Integral$int$methods;
+$Integral$int $Integral$int$new();
 extern struct $Logical$int$class $Logical$int$methods;
+$Logical$int $Logical$int$new();
 extern struct $Minus$int$class $Minus$int$methods;
+$Minus$int $Minus$int$new();
 extern struct $Ord$int$class $Ord$int$methods;
+$Ord$int $Ord$int$new();
 extern struct $Hashable$int$class $Hashable$int$methods;
+$Hashable$int $Hashable$int$new();
 
 extern struct $Integral$int *$Integral$int$witness;
 extern struct $Logical$int *$Logical$int$witness;

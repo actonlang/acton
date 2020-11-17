@@ -273,6 +273,9 @@ struct $bytearray$class $bytearray$methods =
    $bytearray_rfind, $bytearray_rindex, $bytearray_rjust,
    $bytearray_rpartition, $bytearray_rstrip, $bytearray_split, $bytearray_splitlines, $bytearray_startswith, $bytearray_strip, $bytearray_upper, $bytearray_zfill};
 
+$bytearray $bytearray$new($Sequence$opaque s) {
+    return $NEW($bytearray, s);
+}
 
 
 // Implementations of protocol methods for bytearray

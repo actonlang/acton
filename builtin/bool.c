@@ -27,6 +27,10 @@ $bool $bool_deserialize($Serial$state state) {
 
 struct $bool$class $bool$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$bool_init, $bool_serialize, $bool_deserialize, $bool_bool, $bool_str};
 
+$bool $bool$new($struct s) {
+    return $NEW($bool, s);
+}
+
 $bool to$bool(long b) {
   $bool res = malloc(sizeof(struct $bool));
   res->$class = &$bool$methods;

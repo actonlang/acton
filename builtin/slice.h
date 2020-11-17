@@ -17,5 +17,6 @@ typedef struct $Slice {
 } *$Slice;
 
 extern struct $Slice$class $Slice$methods;
+$Slice $Slice$new($int,$int,$int);
 
 void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int *step);

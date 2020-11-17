@@ -16,15 +16,19 @@ struct $tuple {
 };
 
 extern struct $tuple$class $tuple$methods;
+$tuple $tuple$new(int,...);
 
 #define $NEWTUPLE($len, ...)  ({ $tuple $t = malloc(sizeof(struct $tuple)+$len*sizeof($WORD)); \
                                  $t->$class = &$tuple$methods; \
                                  $t->$class->__init__($t, $len, ##__VA_ARGS__); \
                                  $t; })
 
-extern struct $Iterable$tuple$class $Iterable$tuple$methods; 
+extern struct $Iterable$tuple$class $Iterable$tuple$methods;
+$Iterable$tuple $Iterable$tuple$new();
 extern struct $Sliceable$tuple$class $Sliceable$tuple$methods;
-extern struct $Hashable$tuple$class $Hashable$tuple$methods; 
+$Sliceable$tuple $Sliceable$tuple$new();
+extern struct $Hashable$tuple$class $Hashable$tuple$methods;
+$Hashable$tuple $Hashable$tuple$new();
 
 extern struct $Iterable$tuple *$Iterable$tuple$witness;
 extern struct $Sliceable$tuple *$Sliceable$tuple$witness;
@@ -53,3 +57,4 @@ struct $Iterator$tuple {
 };
 
 extern struct $Iterator$tuple$class $Iterator$tuple$methods;
+$Iterator$tuple $Iterator$tuple$new($tuple);

@@ -40,6 +40,7 @@ struct $Initializable {
 };
 
 extern struct $Initializable$class $Initializable$methods;
+$Initializable $Initializable$new();
 
 // Serializable //////////////////////////////////////////////////////
 
@@ -63,6 +64,7 @@ struct $Serializable {
 };
 
 extern struct $Serializable$class $Serializable$methods;
+$Serializable $Serializable$new();
 
 // struct //////////////////////////////////////////////////////
 
@@ -91,6 +93,7 @@ struct $struct {
 };
 
 extern struct $struct$class $struct$methods;
+$struct $struct$new();
 
 // object //////////////////////////////////////////////////////
 
@@ -117,5 +120,6 @@ struct $object {
 };
 
 extern struct $object$class $object$methods;
+$object $object$new();
 
   

@@ -65,12 +65,15 @@ struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"",UNASSIGNED,($
                                                                 $Iterator$enumerate_bool,$Iterator$enumerate_str, $Iterator$enumerate_next};
 
 
-            
+$Iterator$enumerate $Iterator$enumerate$new($Iterator it, $int n) {
+    return $NEW($Iterator$enumerate, it, n);
+}
+
 $Iterator $enumerate($Iterable wit, $WORD iter, $int start) {
   $Iterator it = wit->$class->__iter__(wit,iter);
   if (!start)
     start = to$int(0);
-  return ($Iterator)$NEW($Iterator$enumerate,it,start); 
+  return ($Iterator)$Iterator$enumerate$new(it,start); 
 }
 
 // filter ////////////////////////////////////////////////////////////////////////////////
@@ -112,9 +115,13 @@ struct $Iterator$filter$class $Iterator$filter$methods = {"",UNASSIGNED,($Super$
                                                           $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
                                                           $Iterator$filter_bool,$Iterator$filter_str, $Iterator$filter_next};
 
+$Iterator$filter $Iterator$filter$new($Iterator it, $bool(*f)($WORD)) {
+    return $NEW($Iterator$filter, it, f);
+}
+
 $Iterator $filter($Iterable wit, $bool(*f)($WORD), $WORD iter) {
   $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$NEW($Iterator$filter,it,f);
+  return ($Iterator)$Iterator$filter$new(it,f);
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
@@ -156,9 +163,13 @@ struct $Iterator$map$class $Iterator$map$methods = {"",UNASSIGNED,($Super$class)
                                                                 $Iterator$map_serialize, $Iterator$map$_deserialize,  
                                                                 $Iterator$map_bool,$Iterator$map_str, $Iterator$map_next};
 
+$Iterator$map $Iterator$map$new($Iterator it, $WORD(*f)($WORD)) {
+    return $NEW($Iterator$map, it, f);
+}
+
 $Iterator $map($Iterable wit, $WORD(*f)($WORD), $WORD iter) {
   $Iterator it = wit->$class->__iter__(wit,iter);
-  return ($Iterator)$NEW($Iterator$map,it,f);
+  return ($Iterator)$Iterator$map$new(it,f);
 }
 
 
@@ -253,8 +264,12 @@ struct $Iterator$zip$class $Iterator$zip$methods = {"",UNASSIGNED,($Super$class)
                                                     $Iterator$zip_serialize, $Iterator$zip$_deserialize, 
                                                     $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_next};
 
+$Iterator$zip $Iterator$zip$new($Iterator iter1, $Iterator iter2) {
+    return $NEW($Iterator$zip, iter1, iter2);
+}
+
 $Iterator $zip ($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2) {
   $Iterator it1 = wit1->$class->__iter__(wit1,iter1);
   $Iterator it2 = wit2->$class->__iter__(wit2,iter2);
-  return ($Iterator)$NEW($Iterator$zip,it1,it2);
+  return ($Iterator)$Iterator$zip$new(it1,it2);
 }

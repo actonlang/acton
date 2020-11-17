@@ -17,13 +17,18 @@ struct $complex {
 };
 
 extern struct $complex$class $complex$methods;
+$complex $complex$new($Number$opaque);
 
 $complex to$complex(complex double c);
 
 extern struct $Number$complex$class $Number$complex$methods;
+$Number$complex $Number$complex$new();
 extern struct $Minus$complex$class $Minus$complex$methods;
+$Minus$complex $Minus$complex$new();
 extern struct $Eq$complex$class $Eq$complex$methods;
+$Eq$complex $Eq$complex$new();
 extern struct $Hashable$complex$class $Hashable$complex$methods;
+$Hashable$complex $Hashable$complex$new();
 
 extern struct $Number$complex *$Number$complex$witness;
 extern struct $Minus$complex *$Minus$complex$witness;

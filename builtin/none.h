@@ -14,3 +14,4 @@ struct $NoneType {
 };
 
 extern struct $NoneType$class $NoneType$methods;
+$NoneType $NoneType$new();

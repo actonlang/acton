@@ -18,11 +18,14 @@ struct $range {
 
 
 extern struct $range$class $range$methods;
+$range $range$new($int, $int, $int);
 
 extern struct $Iterable$range$class $Iterable$range$methods;
+$Iterable$range $Iterable$range$new($range);
 extern $Iterable$range $Iterable$range$witness;
 
 extern struct $Sequence$range$class $Sequence$range$methods;
+$Sequence$range $Sequence$range$new();
 //extern struct $Container$range$class $Container$range$methods; 
 
 extern struct $Sequence$range *$Sequence$range$witness;
@@ -51,4 +54,5 @@ struct $Iterator$range {
 };
 
 extern struct $Iterator$range$class  $Iterator$range$methods;
+$Iterator$range $Iterator$range$new($range);
 extern $Iterator$range $Iterator$range$witness;

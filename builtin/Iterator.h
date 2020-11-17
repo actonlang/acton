@@ -17,9 +17,11 @@ struct $Iterator {
 };
 
 extern struct $Iterable$Iterator$class $Iterable$Iterator$methods;
+$Iterable$Iterator $Iterable$Iterator$new();
 extern struct $Iterable$Iterator *$Iterable$Iterator$witness;
 
 extern struct $Iterator$class $Iterator$methods;
+$Iterator $Iterator$new();
 extern struct $Iterator *$Iterator$witness;
 
 $WORD $next($Iterator);
