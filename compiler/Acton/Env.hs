@@ -672,11 +672,12 @@ getWitness env cn p         = fromJust $ findWitness env cn (qmatch env (tcname 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findAttr env tc n           = fmap f $ findAttrInfo env tc n
-  where f (w, NSig sc d)    = (w, sc, Just d)
-        f (w, NDef sc d)    = (w, sc, Just d)
-        f (w, NVar t)       = (w, monotype t, Nothing)
-        f (w, NSVar t)      = (w, monotype t, Nothing)
+findAttr env tc n           = fmap summarize $ findAttrInfo env tc n
+
+summarize (w, NSig sc d)    = (w, sc, Just d)
+summarize (w, NDef sc d)    = (w, sc, Just d)
+summarize (w, NVar t)       = (w, monotype t, Nothing)
+summarize (w, NSVar t)      = (w, monotype t, Nothing)
 
 findAttrInfo                :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, NameInfo)
 findAttrInfo env tc n       = findIn [ (w,u,te') | (w,u) <- findAncestry env tc, let (_,te') = findCon env u ]
@@ -685,6 +686,10 @@ findAttrInfo env tc n       = findIn [ (w,u,te') | (w,u) <- findAncestry env tc,
                                 Nothing -> findIn tes
         findIn []           = Nothing
 
+abstractAttr                :: EnvF x -> TCon -> Name -> Bool
+abstractAttr env tc n       = case lookup n $ snd $ splitSigs $ concat [ attrEnv env c | (_,c) <- findAncestry env tc ] of
+                                Just i -> False
+                                _  -> True
 
 findAttr'                   :: EnvF x -> TCon -> Name -> (TSchema, Maybe Deco)
 findAttr' env tc n          = case findAttr env tc n of

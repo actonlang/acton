@@ -1071,13 +1071,14 @@ instance Infer Expr where
 
     infer env (Dot l x@(Var _ c) n)
       | NClass q us te <- cinfo         = do (cs0,ts) <- instQBinds env q
-                                             case findAttr env (TC c ts) n of
+                                             let tc = TC c ts
+                                             case findAttr env tc n of
                                                 Just (_,sc,dec)
                                                   | dec == Just Property -> err l "Property attribute not selectable by class"
+                                                  | abstractAttr env tc n -> err l "Abstract attribute not selectable by class"
                                                   | otherwise -> do
                                                       (cs1,tvs,t) <- instantiate env sc
-                                                      let t0 = tCon $ TC c ts
-                                                          t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                      let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
                                                       return (cs0++cs1, t', app2nd dec t' (tApp (Dot l x n) (ts++tvs)) $ witsOf (cs0++cs1))
                                                 Nothing ->
                                                     case findWitness env c (hasAttr env n) of
@@ -1085,18 +1086,18 @@ instance Infer Expr where
                                                             (cs1,p,we) <- instWitness env ts wit
                                                             let Just (wf,sc,dec) = findAttr env p n
                                                             (cs2,tvs,t) <- instantiate env sc
-                                                            let t0 = tCon $ TC c ts
-                                                                t' = subst [(tvSelf,t0)] $ addSelf t dec
+                                                            let t' = subst [(tvSelf,tCon tc)] $ addSelf t dec
                                                             return (cs1++cs2, t', app t' (tApp (eDot (wf we) n) tvs) $ witsOf cs2)
                                                         Nothing -> err1 l "Attribute not found"
       | NProto q us te <- cinfo         = do (_,ts) <- instQBinds env q
-                                             case findAttr env (TC c ts) n of
+                                             let tc = TC c ts
+                                             case findAttr env tc n of
                                                 Just (wf,sc,dec) -> do
                                                     (cs1,tvs,t) <- instantiate env sc
                                                     t0 <- newTVar
                                                     let t' = subst [(tvSelf,t0)] $ addSelf t dec
                                                     w <- newWitness
-                                                    return (Impl w t0 (TC c ts) :
+                                                    return (Impl w t0 tc :
                                                             cs1, t', app t' (tApp (Dot l (wf $ eVar w) n) tvs) $ witsOf cs1)
                                                 Nothing -> err1 l "Attribute not found"
       where cinfo                       = findQName c env
