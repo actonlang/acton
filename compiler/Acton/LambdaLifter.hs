@@ -183,7 +183,11 @@ llSuite env (Decl l ds : ss)
         env1                            = define (envOf ds) env
 llSuite env (s : ss)
   | ctxt env == InDef                   = (:) <$> ll env s <*> llSuite (extLocals s env1) ss
-  | otherwise                           = (:) <$> ll env s <*> llSuite env1 ss
+  | ctxt env == InClass                 = (:) <$> ll env s <*> llSuite env1 ss
+  | ctxt env == OnTop                   = do s' <- ll env s
+                                             ds <- liftedToTop
+                                             ss' <- llSuite env1 ss
+                                             return $ if null ds then s':ss' else Decl l0 ds : s' : ss'
   where env1                            = define (envOf s) env
 
 
@@ -220,21 +224,22 @@ instance Lift Branch where
 
 
 
-freefun env e@(Var l (NoQ n))
+freefun env e@(Var l qn@(NoQ n))
   | Just vts <- findFree n env          = Just (tApp (Var l (NoQ $ liftedName env n)) (map tVar tvs), vts)
-  | isAlias n env                       = Just (e, [])
+  | isClass env qn || isAlias n env     = Just (e, [])
   | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
 freefun env (Var l n)                   = Just (Var l (primSubst n), [])
-freefun env (TApp l e@(Var l' (NoQ n)) ts)
+freefun env (TApp l e@(Var l' qn@(NoQ n)) ts)
   | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ conv ts), vts)
-  | isAlias n env                       = Just (TApp l e (conv ts), [])
+  | isClass env qn || isAlias n env     = Just (TApp l e (conv ts), [])
   | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
 freefun env (TApp l (Var l' n) ts)      = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
+                                             traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
                                              liftToTop [Class l0 n q base te]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env
@@ -249,7 +254,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- subst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) initBody NoDec fxPure
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
-        initBody                        = [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
+        initBody                        = mkBody [ MutAssign l0 (eDot (eVar llSelf) v) (eVar v) | (v,t) <- vts ]
         callDef                         = Def l0 callKW [] callPars KwdNIL (Just t) callBody NoDec fx
         callPars                        = PosPar llSelf (Just tSelf) Nothing p
         callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
