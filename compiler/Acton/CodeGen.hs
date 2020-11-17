@@ -473,7 +473,16 @@ instance Gen Expr where
       where n                       = primTuple
             table                   = methodtable' env n
             tmp                     = gen env tmpV
-    gen env (List _ es)             = brackets (commaSep (gen env) es)
+    gen env (List _ es)             = parens (lbrace <+> (
+                                        gen env n <+> tmp <+> equals <+> newcon' env n <> parens (text "NULL" <> comma <+> text "NULL") <> semi $+$
+                                        vcat [ append <> parens (pars e) <> semi | e <- es ] $+$
+                                        tmp <> semi) <+> rbrace)
+      where n                       = qnList
+            tmp                     = gen env tmpV
+            w                       = gen env witSequenceList
+            append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
+            pars e                  = w <> comma <+> tmp <> comma <+> gen env e
+        -- brackets (commaSep (gen env) es)
     gen env e@BinOp{}               = genPrec env 0 e
     gen env e@UnOp{}                = genPrec env 0 e
     gen env e@Cond{}                = genPrec env 0 e
