@@ -4,7 +4,7 @@ struct $complex$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($complex, $Number$opaque);
+  void (*__init__)($complex, $Number, $WORD);
   void (*__serialize__)($complex,$Serial$state);
   $complex (*__deserialize__)($Serial$state);
   $bool (*__bool__)($complex);
@@ -17,7 +17,7 @@ struct $complex {
 };
 
 extern struct $complex$class $complex$methods;
-$complex $complex$new($Number$opaque);
+$complex $complex$new($Number, $WORD);
 
 $complex to$complex(complex double c);
 

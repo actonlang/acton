@@ -2,14 +2,14 @@
 #include <utf8proc.h>
 
 int main() {
-  $range r = $NEW($range,to$int(50),to$int(250),to$int(50));
+  $range r = $range$new(to$int(50),to$int(250),to$int(50));
   $list lst0 = $list_fromiter(($Iterator)$NEW($Iterator$range,r));
-  $bytearray b = $NEW($bytearray,($struct)lst0);
+  $bytearray b = $bytearray$new(($struct)lst0);
   $print(1,b->$class->center(b,to$int(25),NULL));
-  $range r2 = $NEW($range,to$int(65),to$int(91),NULL);
-  $range r3 = $NEW($range,to$int(75),to$int(77),NULL);
-  $list lst2 = $list_fromiter(($Iterator)$NEW($Iterator$range,r2));
-  $list lst3 = $list_fromiter(($Iterator)$NEW($Iterator$range,r3));
+  $range r2 = $range$new(to$int(65),to$int(91),NULL);
+  $range r3 = $range$new(to$int(75),to$int(77),NULL);
+  $list lst2 = $list_fromiter(($Iterator)$Iterator$range$new(r2));
+  $list lst3 = $list_fromiter(($Iterator)$Iterator$range$new(r3));
   $bytearray b2 = $NEW($bytearray,($struct)lst2);
   $bytearray b3 = $NEW($bytearray,($struct)lst3);
   $Sequence wit = ($Sequence)$Sequence$bytearray$witness;

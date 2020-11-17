@@ -19,6 +19,10 @@ static $Iterator $set_iter_entry($set set);
 
 // General methods ///////////////////////////////////////////////////////////////////////////////////
 
+$set $set$new($Hashable wit1, $Set wit2, $WORD s) {
+  return $NEW($set, wit1, wit2, s);
+}
+
 void $set_init($set set, $Hashable hashwit, $Set swit, $WORD s) {
   set->numelements = 0;
   set->fill = 0;
@@ -489,6 +493,10 @@ static $WORD $Iterator$set_next($Iterator$set self) {
     return (($setentry*)res)->key;
   } 
   return NULL;
+}
+
+$Iterator$set $Iterator$set$new($set s) {
+  return $NEW($Iterator$set, s);
 }
 
 void $Iterator$set_init($Iterator$set self, $set set) {

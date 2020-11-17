@@ -104,7 +104,11 @@ void $Logical$set$__init__($Logical$set self, $Set$set master) {
 void $Minus$set$__init__($Minus$set self, $Set$set master) {
   self->w$Set$set = master;
 }
-                      
+
+$Set$set $Set$set$new($Hashable h) {
+  return $NEW($Set$set, h);
+}
+
 void $Set$set$__init__($Set$set self, $Hashable h) {
   self->w$Ord$Set = $NEW($Ord$set,self);
   self->w$Logical$Set = $NEW($Logical$set,self);

@@ -1,3 +1,7 @@
+$NoneType $NoneType$new() {
+  return $NEW($NoneType);
+}
+
 
 void $NoneType__serialize__($NoneType self, $Serial$state state) {
   $add_header(NONE_ID,0,state);

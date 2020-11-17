@@ -1,5 +1,9 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
+$list $list$new($Sequence wit, $WORD seq) {
+  return $NEW($list, wit, seq);
+}
+
 void $list_init($list lst, $Sequence wit, $WORD seq) {
   if (!seq) {
     lst->length = 0;
@@ -154,6 +158,10 @@ int $list_containsnot($Eq w, $list lst, $WORD elem) {
 
 static $WORD $Iterator$list_next($Iterator$list self) {
   return self->nxt >= self->src->length ? NULL : self->src->data[self->nxt++];
+}
+
+$Iterator$list $Iterator$list$new($list lst) {
+  return $NEW($Iterator$list, lst);
 }
 
 void $Iterator$list_init($Iterator$list self, $list lst) {

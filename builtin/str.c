@@ -628,6 +628,10 @@ $str $str_getslice($str s, $Slice slc) {
 
 // General methods ////////////////////////////////////////////////////////////// 
 
+$str $str$new($struct s) {
+  return $NEW($str, s);
+}
+
 void $str_init($str self, $struct s) {
   $str res = s->$class->__str__(s);
   self->nchars = res->nchars;
@@ -2473,6 +2477,10 @@ void $bytearray_serialize($bytearray,$Serial$state);
 $bytearray $bytearray_deserialize($Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
+
+$bytearray $bytearray$new($struct s) {
+  return $NEW($bytearray, s);
+}
 
 void $bytearray_init($bytearray self, $struct s) {
   if (!s) {

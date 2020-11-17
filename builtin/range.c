@@ -1,3 +1,6 @@
+$range $range$new($int start, $int stop, $int step) {
+  return $NEW($range, start, stop, step);
+}
 
 void $range$__init__($range self, $int start, $int stop, $int step) {
   if (start) 
@@ -55,6 +58,10 @@ static $WORD $Iterator$range_next($Iterator$range self) {
     return res > self->src->stop ? to$int(res) : NULL;
 }
 
+$Iterator$range $Iterator$range$new($range rng) {
+  return $NEW($Iterator$range,rng);
+}
+
 void $Iterator$range_init($Iterator$range self, $range rng) {
   self->src = rng;
   self->nxt = 0;
@@ -92,6 +99,10 @@ struct $Iterator$range$class $Iterator$range$methods = {"",UNASSIGNED,($Super$cl
 //$Iterator $range_iter($range rng) {
 //  return ($Iterator)$NEW($Iterator$range,rng);
 //}
+
+$Iterable$range $Iterable$range$new() {
+  return $NEW($Iterable$range);
+}
 
 void $Iterable$range$__init__ ($Iterable$range wit){
   return;

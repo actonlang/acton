@@ -10,7 +10,11 @@ long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $int_init($int self, $WORD a){
+$int $int$new($Super s) {
+  return $NEW($int,s);
+}
+
+void $int_init($int self, $Super a){
   self->val = $int_fromatom(a)->val;
 }
 

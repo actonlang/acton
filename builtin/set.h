@@ -31,11 +31,11 @@ $set $set$new($Hashable, $Set, $WORD);
 extern struct $Set$set$class $Set$set$methods;
 $Set$set $Set$set$new($Hashable);
 extern struct $Ord$set$class $Ord$set$methods;
-$Ord$set $Ord$set$new($Set$set);
+//$Ord$set $Ord$set$new($Set$set);
 extern struct $Minus$set$class $Minus$set$methods;
-$Minus$set $Minus$set$new($Set$set);
+//$Minus$set $Minus$set$new($Set$set);
 extern struct $Logical$set$class $Logical$set$methods;
-$Logical$set $Logical$set$new($Set$set);
+//$Logical$set $Logical$set$new($Set$set);
 
 extern struct $Set$set *$Set$set_new($Hashable);
 

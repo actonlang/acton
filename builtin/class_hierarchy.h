@@ -32,7 +32,7 @@ struct $Initializable$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                   // = NULL
-  void (*__init__)($Initializable,...);
+  void (*__init__)($Initializable);
 };
 
 struct $Initializable {
@@ -54,7 +54,7 @@ struct $Serializable$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                   // = Initializable$methods
-  void (*__init__)($Serializable,...);
+  void (*__init__)($Serializable);
   void (*__serialize__)($Serializable, $Serial$state);
   $Serializable (*__deserialize__)($Serial$state);
 };
@@ -81,7 +81,7 @@ struct $struct$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                      // = Serializable$methods
-  void (*__init__)($struct,...);
+  void (*__init__)($struct);
   void (*__serialize__)($struct, $Serial$state);
   $struct (*__deserialize__)($Serial$state);
   $bool (*__bool__)($struct);
@@ -108,7 +108,7 @@ struct $object$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;                      // = $struct$methods
-  void (*__init__)($object,...);
+  void (*__init__)($object);
   void (*__serialize__)($object, $Serial$state);
   $object (*__deserialize__)($Serial$state);
   $bool (*__bool__)($object);

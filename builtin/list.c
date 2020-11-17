@@ -94,6 +94,11 @@ void $Sequence$list$reverse($Sequence$list wit, $list self) {
   $list_reverse(self);
 }
 
+$Container$list $Container$list$new($Eq e) {
+  return $NEW($Container$list,e);
+}
+
+
 void $Container$list$__init__($Container$list self, $Eq w$Eq$A) {
   self->w$Eq$A = w$Eq$A;
 }
@@ -104,6 +109,10 @@ void $Collection$list$__init__($Collection$list self, $Sequence$list master) {
 
 void $Plus$list$__init__($Plus$list self, $Sequence$list master) {
   self->w$Sequence$list = master;
+}
+
+$Sequence$list $Sequence$list$new() {
+  return $NEW($Sequence$list);
 }
 
 void $Sequence$list$__init__($Sequence$list self) {

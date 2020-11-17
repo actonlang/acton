@@ -2,7 +2,11 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-void $float_init($float self, $WORD x){
+$float $float$new($Super s) {
+  return $NEW($float,s);
+}
+
+void $float_init($float self, $Super x){
   self->val = $float_fromatom(x)->val;
 }
 
