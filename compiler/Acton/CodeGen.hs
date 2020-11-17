@@ -385,20 +385,21 @@ genCall env t0 ts e p               = genEnter env ts e callKW p
 genNew env ts n p                   = newcon' env n <> parens (gen env p)
 
 declCon env n q                     = (genTopName env n <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (genTopName env n <+> gen env tmpV <+> equals <+> malloc <> semi $+$
+                                      nest 4 (genTopName env n <+> gen env tmpV <+> equals <+> malloc env (NoQ n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
   where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
         pars                        = pPar conParamNames r
         args                        = pArg pars
-        malloc                      = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
         retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,t]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV,NVar (tCon $ TC (NoQ n) [])) : envOf pars) env
+
+malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
@@ -464,9 +465,14 @@ instance Gen Expr where
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
     gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
-    gen env (Tuple _ p KwdNil)
-      | PosNil <- p                 = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show 0))
-      | otherwise                   = gen env primNEW <> parens (gen env primTuple <> comma <+> text (show $ nargs p) <> comma <+> gen env p)
+    gen env (Tuple _ p KwdNil)      = parens (lbrace <+> (
+                                        gen env n <+> tmp <+> equals <+> malloc env n <> semi $+$
+                                        tmp <> text "->" <> gen env classKW <+> equals <+> char '&' <> table <> semi $+$
+                                        table <> dot <> gen env initKW <> parens (tmp <> comma <+> text (show $ nargs p) <> comma' (gen env p)) <> semi $+$
+                                        tmp <> semi) <+> rbrace)
+      where n                       = primTuple
+            table                   = methodtable' env n
+            tmp                     = gen env tmpV
     gen env (List _ es)             = brackets (commaSep (gen env) es)
     gen env e@BinOp{}               = genPrec env 0 e
     gen env e@UnOp{}                = genPrec env 0 e
