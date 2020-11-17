@@ -21,6 +21,7 @@ delitemKW                           = name "__delitem__"
 getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
+appendKW                            = name "append"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
 callKW                              = name "__call__"
@@ -223,3 +224,5 @@ uInt                                = UCon qnInt
 uFloat                              = UCon qnFloat
 uBool                               = UCon qnBool
 uStr                                = UCon qnStr
+
+witSequenceList                     = gBuiltin (Derived (Derived nSequence nList) (name "witness"))
