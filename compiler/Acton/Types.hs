@@ -274,8 +274,8 @@ instance InfEnv Stmt where
                                              return (cs1, te1, Decl l ds1)
       | nodup ds                        = do (cs1,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (define te1 env) ds1
-                                             (cs3,te2,ds3) <- genEnv env (cs1++cs2) te1 ds2
-                                             return (cs3, te2, Decl l ds3)
+                                             (cs3,te2,ds3) <- genEnv env cs2 te1 ds2
+                                             return (cs1++cs3, te2, Decl l ds3)
 
 
 infTarget env (Var l (NoQ n))           = case findName n env of
