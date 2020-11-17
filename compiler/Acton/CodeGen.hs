@@ -386,18 +386,19 @@ genNew env ts n p                   = newcon' env n <> parens (gen env p)
 
 declCon env n q                     = (genTopName env n <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (genTopName env n <+> gen env tmpV <+> equals <+> malloc <> semi $+$
-                                              gen env tmpV <> text "->" <> gen env classKW <+> equals <+> char '&' <> methodtable env n <> semi $+$
-                                              initcall) $+$
+                                              gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
+                                              initcall env1) $+$
                                       char '}'
   where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
         pars                        = pPar conParamNames r
         args                        = pArg pars
         malloc                      = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
-        initcall | t == tR          = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
-                 | otherwise        = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
+        initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
+                     | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
         retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,t]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
+        env1                        = ldefine ((tmpV,NVar (tCon $ TC (NoQ n) [])) : envOf pars) env
 
 comma' x                            = if isEmpty x then empty else comma <+> x
 
@@ -419,12 +420,13 @@ genDot env ts e n                   = gen env e <> text "->" <> gen env n
 
 genEnter env ts e n p
   | costly e                        = parens (lbrace <+> (gen env t <+> gen env tmpV <+> equals <+> gen env e <> semi $+$
-                                                          genEnter env [] (eVar tmpV) n p <> semi) <+> rbrace)
+                                                          genEnter env1 [] (eVar tmpV) n p <> semi) <+> rbrace)
   where costly Var{}                = False
         costly (Dot _ e n)          = costly e
         costly (DotI _ e i)         = costly e
         costly e                    = True
         t                           = typeInstOf env ts e
+        env1                        = ldefine [(tmpV,NVar t)] env
 genEnter env ts e n PosNil          = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env e)
 genEnter env ts e n p               = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env (PosArg e p))
 
@@ -446,7 +448,9 @@ instance Gen Expr where
     gen env (Var _ (NoQ n))
       | n `elem` global env         = genTopName env n
       | isAlias n env               = genTopName env n
-    gen env (Var _ n)               = gen env n
+    gen env (Var _ n)
+      | NClass{} <- findQName n env = newcon' env n
+      | otherwise                   = gen env n
     gen env (Int _ _ str)           = gen env primToInt <> parens (text str)
     gen env (Float _ _ str)         = gen env primToFloat <> parens (text str)
     gen env (Bool _ True)           = gen env primTrue
