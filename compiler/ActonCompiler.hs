@@ -214,7 +214,7 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do env0 <- Acton.Env.initEnv False
+                             then do env0 <- Acton.Env.initEnv (nobuiltin args)
                                      foldM (doTask args paths) (env0,[]) [t | AcyclicSCC t <- as]
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
