@@ -384,12 +384,14 @@ genCall env t0 ts e p               = genEnter env ts e callKW p
 
 genNew env ts n p                   = newcon' env n <> parens (gen env p)
 
-declCon env n q                     = (genTopName env n <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (genTopName env n <+> gen env tmpV <+> equals <+> malloc env (NoQ n) <> semi $+$
+declCon env n q                     = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
+                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (NoQ n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
   where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
+        tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ tybound q)
+        tRes                        = if t == tR then tR else tObj
         pars                        = pPar conParamNames r
         args                        = pArg pars
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
@@ -397,7 +399,7 @@ declCon env n q                     = (genTopName env n <+> newcon env n <> pare
                                       text "return" <+> gen env tmpV <> semi
         retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,t]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
-        env1                        = ldefine ((tmpV,NVar (tCon $ TC (NoQ n) [])) : envOf pars) env
+        env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
 
 malloc env n                        = text "malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 
