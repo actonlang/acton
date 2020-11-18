@@ -149,18 +149,21 @@ classlink env n                     = text "struct" <+> classname env n <+> text
 
 classname env n                     = genTopName env (Derived n $ name "class")
 
-methodtable env n                   = genTopName env (tableName n)
+methodtable env n                   = gen env (tableName $ gname env n)
 
 methodtable' env (NoQ n)            = methodtable env n
-methodtable' env (GName m n)        = gen env $ GName m (tableName n)
+methodtable' env n                  = gen env $ tableName n
 
-newcon env n                        = genTopName env (conName n)
+tableName (GName m n)               = GName m (Derived n $ name "methods")
+
+
+newcon env n                        = gen env (conName $ gname env n)
 
 newcon' env (NoQ n)                 = newcon env n
-newcon' env (GName m n)             = gen env $ GName m (conName n)
+newcon' env n                       = gen env $ conName n
 
-tableName n                         = Derived n $ name "methods"
-conName n                           = Derived n $ name "new"
+conName (GName m n)                 = GName m (Derived n $ name "new")
+
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
