@@ -357,7 +357,7 @@ instance Gen PosArg where
     gen env (PosArg e p)            = gen env e <> comma <+> gen env p
     gen env PosNil                  = empty
 
-formatlong s                        = s
+formatLit (Strings l ss)            = Strings l [format $ concat ss]
   where format []                   = []
         format ('%':s)              = '%' : flags s
         format (c:s)                = c : format s
@@ -366,13 +366,13 @@ formatlong s                        = s
         flags s                     = width s
         width ('*':s)               = '*' : dot s
         width (n:s)
-          | n `elem` "123456789"    = n : dot (dropWhile (`elem` "0123456789") s)
+          | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in n : n' ++ dot s'
         width s                     = dot s
         dot ('.':s)                 = '.' : prec s
         dot s                       = len s
         prec ('*':s)                = '*' : len s
         prec (n:s)
-          | n `elem` "0123456789"   = n : len (dropWhile (`elem` "0123456789") s)
+          | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in n : n' ++ len s'
         prec s                      = len s
         len (l:s)
           | l `elem` "hlL"          = 'l' : conv s
@@ -391,7 +391,7 @@ genCall env t0 [row] (Var _ n) p
   where i                           = nargs p
         qn                          = unalias env n
 genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
-  | n == primFORMAT                 = gen env n <> parens (genStr env s <> unbox row (flatten tup))
+  | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> unbox row (flatten tup))
   where unbox (TNil _ _) p          = empty
         unbox (TRow _  _ _ t r) (PosArg e p)
           | t == tStr               = comma <+> expr <> text "->str" <> unbox r p
