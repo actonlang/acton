@@ -862,7 +862,7 @@ $Sequence$opaque $Sequence$pack($Sequence proto, $WORD impl);
 
 struct $Mapping {
     $Mapping$class $class;
-    $Indexed w$Indexed$Mapping;
+    $Indexed w$Indexed;
     $Eq w$Eq$A;
 };
 
@@ -1207,7 +1207,7 @@ $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
 
 struct $Mapping$dict {
     $Mapping$dict$class $class;
-    $Indexed$dict w$Indexed$Mapping;
+    $Indexed w$Indexed;
     $Hashable w$Hashable$Mapping;
 };
 

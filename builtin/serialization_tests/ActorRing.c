@@ -317,7 +317,7 @@ $int total_msgs;
 
 void $init_module() {
     $Mapping$dict$witness = ($Mapping)$NEW($Mapping$dict, ($Hashable)$Hashable$int$witness);
-    $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed$Mapping;
+    $Indexed$dict$witness = $Mapping$dict$witness->w$Indexed;
     
     no_actors = to$int(5);
     total_msgs = to$int(20);

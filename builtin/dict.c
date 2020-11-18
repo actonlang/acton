@@ -69,7 +69,7 @@ $Mapping$dict $Mapping$dict$new($Hashable h) {
 }
 
 void $Mapping$dict$__init__($Mapping$dict self, $Hashable h) {
-  self->w$Indexed$Mapping = $NEW($Indexed$dict,self,($Eq)h);
+  self->w$Indexed = ($Indexed)$NEW($Indexed$dict,self,($Eq)h);
   self->w$Hashable$Mapping = h;
 }
 
