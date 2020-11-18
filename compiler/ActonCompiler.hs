@@ -48,7 +48,7 @@ data Args       = Args {
                     verbose :: Bool,
                     nobuiltin :: Bool,
                     syspath :: String,
-                    files   :: [String]
+                    file    :: String
                 }
                 deriving Show
 
@@ -66,18 +66,15 @@ getArgs         = Args
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
-                    <*> some (argument str (metavar "FILES"))
+                    <*> argument str (metavar "FILE")
 
-descr           = fullDesc <> progDesc "Compile Acton (and Yang) source files to native executables"
+descr           = fullDesc <> progDesc "Compile an Acton source file with necessary recompilation of imported modules"
                     <> header "actonc - the Acton compiler"
 
 nodump args     = and [ not $ flag args | flag <- [parse,kinds,types,sigs,norm,deact,cps,llift,hgen,cgen] ]
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
-                     mapM_ (\str -> treatOneFile (args {files = [str]})) (files args)
-
-treatOneFile args
-                = do paths <- findPaths args
+                     paths <- findPaths args
                      let mn = A.modName (modpath paths)
                      (case ext paths of
                         ".act"   -> (do (src,tree) <- Acton.Parser.parseModule mn (srcFile paths)
@@ -128,13 +125,13 @@ checkDirs path (d:dirs) = do found <- doesDirectoryExist path1
   where path1           = joinPath [path,d]
 
 findPaths               :: Args -> IO Paths
-findPaths args          = do absfile <- canonicalizePath (head (files args))
+findPaths args          = do absfile <- canonicalizePath (file args)
                              (projRoot,dirsSrc,dirsTarget) <- findDirs absfile
                              sysRoot <- canonicalizePath (ifExists (syspath args) projRoot)
                              checkDirs sysRoot (dirsTarget++dirsSrc)
                              let modpath = dirsSrc ++ [body]
                              return $ Paths projRoot (joinPath (sysRoot : dirsTarget)) modpath ext
-  where (body,ext)      = splitExtension $ takeFileName $ head (files args)
+  where (body,ext)      = splitExtension $ takeFileName $ file args
 
         ifExists "" p   = p
         ifExists p _    = p
