@@ -1140,41 +1140,56 @@ instance Infer Expr where
     infer env (List l es)               = do t0 <- newTVar
                                              (cs,es') <- infElems env es t0
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pSequence t0) :
-                                                     cs, t1, eCall (tApp (eDot (eDot (eVar w) (witAttr qnCollection)) fromiterKW) [t1]) [List l es'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pSequence t0) :
+                                                     Impl w2 t2 (pIterable t0) :
+                                                     cs, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [eVar w2, List l es'])
     infer env (ListComp l e1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
                                              (cs2,es) <- infElems (define te env) [e1] t0
                                              let [e1'] = es
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pSequence t0) :
-                                                     cs1++cs2, t1, eCall (tApp (eDot (eDot (eVar w) (witAttr qnCollection)) fromiterKW) [t1]) [ListComp l e1' co'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pSequence t0) :
+                                                     Impl w2 t2 (pIterable t0) :
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eDot (eVar w1) (witAttr qnCollection)) fromiterKW) [t2]) [eVar w2, ListComp l e1' co'])
     infer env (Set l es)                = do t0 <- newTVar
                                              (cs,es')  <- infElems env es t0
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pSet t0) :
-                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l es'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pSet t0) :
+                                                     Impl w2 t2 (pIterable t0) :
+                                                     cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [eVar w2, List l es'])
     infer env (SetComp l e1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              t0 <- newTVar
                                              (cs2,es) <- infElems (define te env) [e1] t0
                                              let [e1'] = es
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pSet t0) :
-                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l e1' co'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pSet t0) :
+                                                     Impl w2 t2 (pIterable t0) :
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [eVar w2, ListComp l e1' co'])
                                              
     infer env (Dict l as)               = do tk <- newTVar
                                              tv <- newTVar
                                              (cs,as') <- infAssocs env as tk tv
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pMapping tk tv) :
-                                                     cs, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [List l as'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pMapping tk tv) :
+                                                     Impl w2 t2 (pIterable (tTupleP (posRow tk $ posRow tv posNil))) :
+                                                     cs, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [eVar w2, List l as'])
     infer env (DictComp l a1 co)
       | nodup co                        = do (cs1,te,co') <- infEnv env co
                                              tk <- newTVar
@@ -1182,9 +1197,12 @@ instance Infer Expr where
                                              (cs2,as) <- infAssocs (define te env) [a1] tk tv
                                              let [a1'] = as
                                              t1 <- newTVar
-                                             w <- newWitness
-                                             return (Impl w t1 (pMapping tk tv) :
-                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w) fromiterKW) [t1]) [ListComp l a1' co'])
+                                             t2 <- newTVar
+                                             w1 <- newWitness
+                                             w2 <- newWitness
+                                             return (Impl w1 t1 (pMapping tk tv) :
+                                                     Impl w2 t2 (pIterable (tTupleP (posRow tk $ posRow tv posNil))) :
+                                                     cs1++cs2, t1, eCall (tApp (eDot (eVar w1) fromiterKW) [t2]) [eVar w2, ListComp l a1' co'])
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
 
