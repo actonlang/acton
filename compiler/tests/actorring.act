@@ -18,7 +18,7 @@ actor Act(i):
 actor Root(_ignore):
     table = []
 
-    for i in range(no_actors):
+    for i in range(no_actors,None,None):
         table.append(Act(i))
 
     table[0].work(no_actors, table)
