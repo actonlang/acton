@@ -503,7 +503,9 @@ instance Gen Expr where
       where n                       = primTuple
             table                   = methodtable' env n
             tmp                     = gen env tmpV
-    gen env (List _ es)             = parens (lbrace <+> (
+    gen env (List _ es)
+      | null es                     = newcon' env n <> parens (text "NULL" <> comma <+> text "NULL")
+      | otherwise                   = parens (lbrace <+> (
                                         gen env n <+> tmp <+> equals <+> newcon' env n <> parens (text "NULL" <> comma <+> text "NULL") <> semi $+$
                                         vcat [ append <> parens (pars e) <> semi | e <- es ] $+$
                                         tmp <> semi) <+> rbrace)
