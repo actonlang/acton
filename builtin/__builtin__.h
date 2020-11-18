@@ -1390,6 +1390,7 @@ struct $Integral$int$class {
     $Super$class $superclass;
     void (*__init__)($Integral$int);
     $int (*__add__)($Integral$int, $int, $int);
+    $int (*__iadd__)($Integral$int, $int, $int);
     $int (*__fromatom__)($Integral$int,$WORD);
     $complex (*__complx__)($Integral$int, $int);
     $int (*__mul__)($Integral$int, $int, $int);

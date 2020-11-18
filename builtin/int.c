@@ -280,13 +280,38 @@ struct $Minus$int $Minus$int_instance;
 struct $Ord$int $Ord$int_instance;
 struct $Hashable$int $Hashable$int_instance;
 
-struct $Integral$int$class $Integral$int$methods = {"",UNASSIGNED,NULL,$Integral$int_init,$Integral$int$__add__,$Integral$int$__fromatom__,$Integral$int$__complx__,
-                                                    $Integral$int$__mul__,$Integral$int$__truediv__,$Integral$int$__pow__,$Integral$int$__neg__,
-                                                    $Integral$int$__pos__,$Integral$int$real,$Integral$int$imag,$Integral$int$__abs__,$Integral$int$__conjugate__,
-                                                    $Integral$int$__float__ , $Integral$int$__trunc__ , $Integral$int$__floor__ ,
-                                                    $Integral$int$__ceil__ , $Integral$int$__round__ , $Integral$int$numerator , $Integral$int$denominator ,
-                                                    $Integral$int$__int__ , $Integral$int$__index__ , $Integral$int$__divmod__ , $Integral$int$__floordiv__ ,
-                                                    $Integral$int$__mod__ , $Integral$int$__lshift__ , $Integral$int$__rshift__ , $Integral$int$__invert__};
+struct $Integral$int$class $Integral$int$methods = {
+    "",
+    UNASSIGNED,
+    NULL,
+    $Integral$int_init,
+    $Integral$int$__add__,
+    ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
+    $Integral$int$__fromatom__,
+    $Integral$int$__complx__,
+    $Integral$int$__mul__,
+    $Integral$int$__truediv__,
+    $Integral$int$__pow__,
+    $Integral$int$__neg__,
+    $Integral$int$__pos__,
+    $Integral$int$real,
+    $Integral$int$imag,
+    $Integral$int$__abs__,
+    $Integral$int$__conjugate__,
+    $Integral$int$__float__,
+    $Integral$int$__trunc__,
+    $Integral$int$__floor__,
+    $Integral$int$__ceil__,
+    $Integral$int$__round__,
+    $Integral$int$numerator,
+    $Integral$int$denominator,
+    $Integral$int$__int__,
+    $Integral$int$__index__,
+    $Integral$int$__divmod__,
+    $Integral$int$__floordiv__,
+    $Integral$int$__mod__,$Integral$int$__lshift__,
+    $Integral$int$__rshift__,$Integral$int$__invert__
+};
 struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance, &$Minus$int_instance};
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
