@@ -644,9 +644,9 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     return m;
 }
 
-$Msg $AFTER(time_t sec, $Cont cont) {
+$Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline + sec;
+    time_t baseline = self->msg->baseline + sec->val;
     $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
 //    ENQ_timed(m);

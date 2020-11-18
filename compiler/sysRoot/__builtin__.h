@@ -943,7 +943,7 @@ struct $Number$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Number);
-    $WORD (*__add__)($Plus, $WORD, $WORD);
+    $WORD (*__add__)($Number, $WORD, $WORD);
     $WORD (*__fromatom__)($Number,$WORD);
     $complex (*__complx__)($Number, $WORD);
     $WORD (*__mul__)($Number, $WORD, $WORD);
@@ -978,7 +978,7 @@ struct $Real$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Real);
-    $WORD (*__add__)($Plus, $WORD, $WORD);
+    $WORD (*__add__)($Real, $WORD, $WORD);
     $WORD (*__fromatom__)($Real,$WORD);
     $complex (*__complx__)($Real, $WORD);
     $WORD (*__mul__)($Real, $WORD, $WORD);

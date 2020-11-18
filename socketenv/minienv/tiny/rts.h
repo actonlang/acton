@@ -158,7 +158,7 @@ struct $RetNew {
 };
 
 $Msg $ASYNC($Actor, $Cont);
-$Msg $AFTER(time_t, $Cont);
+$Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
 
 void $PUSH($Cont);
