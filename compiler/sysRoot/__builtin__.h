@@ -133,17 +133,11 @@ typedef struct $Eq *$Eq;
 struct $Eq$class;
 typedef struct $Eq$class *$Eq$class;
 
-struct $Eq$opaque;
-typedef struct $Eq$opaque *$Eq$opaque;
-
 struct $Ord;
 typedef struct $Ord *$Ord;
 
 struct $Ord$class;
 typedef struct $Ord$class *$Ord$class;
-
-struct $Ord$opaque;
-typedef struct $Ord$opaque *$Ord$opaque;
 
 struct $Logical;
 typedef struct $Logical *$Logical;
@@ -151,17 +145,11 @@ typedef struct $Logical *$Logical;
 struct $Logical$class;
 typedef struct $Logical$class *$Logical$class;
 
-struct $Logical$opaque;
-typedef struct $Logical$opaque *$Logical$opaque;
-
 struct $Plus;
 typedef struct $Plus *$Plus;
 
 struct $Plus$class;
 typedef struct $Plus$class *$Plus$class;
-
-struct $Plus$opaque;
-typedef struct $Plus$opaque *$Plus$opaque;
 
 struct $Minus;
 typedef struct $Minus *$Minus;
@@ -169,17 +157,11 @@ typedef struct $Minus *$Minus;
 struct $Minus$class;
 typedef struct $Minus$class *$Minus$class;
 
-struct $Minus$opaque;
-typedef struct $Minus$opaque *$Minus$opaque;
-
 struct $Hashable;
 typedef struct $Hashable *$Hashable;
 
 struct $Hashable$class;
 typedef struct $Hashable$class *$Hashable$class;
-
-struct $Hashable$opaque;
-typedef struct $Hashable$opaque *$Hashable$opaque;
 
 struct $Indexed;
 typedef struct $Indexed *$Indexed;
@@ -187,17 +169,11 @@ typedef struct $Indexed *$Indexed;
 struct $Indexed$class;
 typedef struct $Indexed$class *$Indexed$class;
 
-struct $Indexed$opaque;
-typedef struct $Indexed$opaque *$Indexed$opaque;
-
 struct $Sliceable;
 typedef struct $Sliceable *$Sliceable;
 
 struct $Sliceable$class;
 typedef struct $Sliceable$class *$Sliceable$class;
-
-struct $Sliceable$opaque;
-typedef struct $Sliceable$opaque *$Sliceable$opaque;
 
 struct $Iterable;
 typedef struct $Iterable *$Iterable;
@@ -205,17 +181,11 @@ typedef struct $Iterable *$Iterable;
 struct $Iterable$class;
 typedef struct $Iterable$class *$Iterable$class;
 
-struct $Iterable$opaque;
-typedef struct $Iterable$opaque *$Iterable$opaque;
-
 struct $Collection;
 typedef struct $Collection *$Collection;
 
 struct $Collection$class;
 typedef struct $Collection$class *$Collection$class;
-
-struct $Collection$opaque;
-typedef struct $Collection$opaque *$Collection$opaque;
 
 struct $Container;
 typedef struct $Container *$Container;
@@ -223,17 +193,11 @@ typedef struct $Container *$Container;
 struct $Container$class;
 typedef struct $Container$class *$Container$class;
 
-struct $Container$opaque;
-typedef struct $Container$opaque *$Container$opaque;
-
 struct $Sequence;
 typedef struct $Sequence *$Sequence;
 
 struct $Sequence$class;
 typedef struct $Sequence$class *$Sequence$class;
-
-struct $Sequence$opaque;
-typedef struct $Sequence$opaque *$Sequence$opaque;
 
 struct $Mapping;
 typedef struct $Mapping *$Mapping;
@@ -241,17 +205,11 @@ typedef struct $Mapping *$Mapping;
 struct $Mapping$class;
 typedef struct $Mapping$class *$Mapping$class;
 
-struct $Mapping$opaque;
-typedef struct $Mapping$opaque *$Mapping$opaque;
-
 struct $Set;
 typedef struct $Set *$Set;
 
 struct $Set$class;
 typedef struct $Set$class *$Set$class;
-
-struct $Set$opaque;
-typedef struct $Set$opaque *$Set$opaque;
 
 struct $Number;
 typedef struct $Number *$Number;
@@ -259,17 +217,11 @@ typedef struct $Number *$Number;
 struct $Number$class;
 typedef struct $Number$class *$Number$class;
 
-struct $Number$opaque;
-typedef struct $Number$opaque *$Number$opaque;
-
 struct $Real;
 typedef struct $Real *$Real;
 
 struct $Real$class;
 typedef struct $Real$class *$Real$class;
-
-struct $Real$opaque;
-typedef struct $Real$opaque *$Real$opaque;
 
 struct $Rational;
 typedef struct $Rational *$Rational;
@@ -277,17 +229,11 @@ typedef struct $Rational *$Rational;
 struct $Rational$class;
 typedef struct $Rational$class *$Rational$class;
 
-struct $Rational$opaque;
-typedef struct $Rational$opaque *$Rational$opaque;
-
 struct $Integral;
 typedef struct $Integral *$Integral;
 
 struct $Integral$class;
 typedef struct $Integral$class *$Integral$class;
-
-struct $Integral$opaque;
-typedef struct $Integral$opaque *$Integral$opaque;
 
 struct $Sequence$list;
 typedef struct $Sequence$list *$Sequence$list;
@@ -550,15 +496,6 @@ struct $Eq$class {
     $bool (*__ne__)($Eq, $WORD, $WORD);
 };
 
-struct $Eq$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Eq proto;
-    $WORD impl;
-};
-
-$Eq$opaque $Eq$pack($Eq proto, $WORD impl);
-
 
 // $Ord ////////////////////////////////////////////////////////////
 
@@ -579,15 +516,6 @@ struct $Ord$class {
     $bool (*__ge__)($Ord, $WORD, $WORD);
 };
 
-struct $Ord$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Ord proto;
-    $WORD impl;
-};
-
-$Ord$opaque $Ord$pack($Ord proto, $WORD impl);
-
 
 // $Logical ////////////////////////////////////////////////////////////
 
@@ -605,15 +533,6 @@ struct $Logical$class {
     $WORD (*__xor__)($Logical, $WORD, $WORD);
 };
 
-struct $Logical$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Logical proto;
-    $WORD impl;
-};
-
-$Logical$opaque $Logical$pack($Logical proto, $WORD impl);
-
 
 // $Plus ////////////////////////////////////////////////////////////
 
@@ -627,16 +546,10 @@ struct $Plus$class {
     $Super$class $superclass;
     void (*__init__)($Plus);
     $WORD (*__add__)($Plus, $WORD, $WORD);
+    $WORD (*__iadd__)($Plus, $WORD, $WORD);
 };
 
-struct $Plus$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Plus proto;
-    $WORD impl;
-};
-
-$Plus$opaque $Plus$pack($Plus proto, $WORD impl);
+$WORD $Plus$__iadd__ ($Plus, $WORD, $WORD);
 
 
 // $Minus ////////////////////////////////////////////////////////////
@@ -652,15 +565,6 @@ struct $Minus$class {
     void (*__init__)($Minus);
     $WORD (*__sub__)($Minus, $WORD, $WORD);
 };
-
-struct $Minus$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Minus proto;
-    $WORD impl;
-};
-
-$Minus$opaque $Minus$pack($Minus proto, $WORD impl);
 
 
 // $Hashable ////////////////////////////////////////////////////////////
@@ -679,14 +583,6 @@ struct $Hashable$class {
     $int (*__hash__)($Hashable, $WORD);
 };
 
-struct $Hashable$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Hashable proto;
-    $WORD impl;
-};
-
-$Hashable$opaque $Hashable$pack($Hashable proto, $WORD impl);
 
 // $Indexed ////////////////////////////////////////////////////////////
 
@@ -704,15 +600,6 @@ struct $Indexed$class {
     void (*__setitem__)($Indexed, $WORD, $WORD, $WORD);
     void (*__delitem__)($Indexed, $WORD, $WORD);
 };
-
-struct $Indexed$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Indexed proto;
-    $WORD impl;
-};
-
-$Indexed$opaque $Indexed$pack($Indexed proto, $WORD impl);
 
 
 // $Sliceable ////////////////////////////////////////////////////////////
@@ -734,15 +621,6 @@ struct $Sliceable$class {
     void (*__delslice__)($Sliceable, $WORD, $Slice);
 };
 
-struct $Sliceable$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Sliceable proto;
-    $WORD impl;
-};
-
-$Sliceable$opaque $Sliceable$pack($Sliceable proto, $WORD impl);
-
 
 // $Iterable ////////////////////////////////////////////////////////////
 
@@ -757,15 +635,6 @@ struct $Iterable$class {
     void (*__init__)($Iterable);
     $Iterator (*__iter__)($Iterable, $WORD);
 };
-
-struct $Iterable$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Iterable proto;
-    $WORD impl;
-};
-
-$Iterable$opaque $Iterable$pack($Iterable proto, $WORD impl);
 
 
 // $Collection ////////////////////////////////////////////////////////////
@@ -783,15 +652,6 @@ struct $Collection$class {
     $WORD (*__fromiter__)($Collection, $Iterable, $WORD);
     $int (*__len__)($Collection, $WORD);
 };
-
-struct $Collection$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Collection proto;
-    $WORD impl;
-};
-
-$Collection$opaque $Collection$pack($Collection proto, $WORD impl);
 
 
 // $Container ////////////////////////////////////////////////////////////
@@ -812,15 +672,6 @@ struct $Container$class {
     $bool (*__contains__)($Container, $WORD, $WORD);
     $bool (*__containsnot__)($Container, $WORD, $WORD);
 };
-
-struct $Container$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Container proto;
-    $WORD impl;
-};
-
-$Container$opaque $Container$pack($Container proto, $WORD impl);
 
 
 // $Sequence ////////////////////////////////////////////////////////////
@@ -847,15 +698,6 @@ struct $Sequence$class {
     void (*append)($Sequence, $WORD, $WORD);
     void (*reverse)($Sequence, $WORD);
 };
-
-struct $Sequence$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Sequence proto;
-    $WORD impl;
-};
-
-$Sequence$opaque $Sequence$pack($Sequence proto, $WORD impl);
 
 
 // $Mapping ////////////////////////////////////////////////////////////
@@ -885,15 +727,6 @@ struct $Mapping$class {
     void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
 
-struct $Mapping$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Mapping proto;
-    $WORD impl;
-};
-
-$Mapping$opaque $Mapping$pack($Mapping proto, $WORD impl);
-
 
 // $Set ////////////////////////////////////////////////////////////
 
@@ -921,15 +754,6 @@ struct $Set$class {
     $WORD (*pop)($Set, $WORD);
 };
 
-struct $Set$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Set proto;
-    $WORD impl;
-};
-
-$Set$opaque $Set$pack($Set proto, $WORD impl);
-
 
 // $Number ////////////////////////////////////////////////////////////
 
@@ -944,6 +768,7 @@ struct $Number$class {
     $Super$class $superclass;
     void (*__init__)($Number);
     $WORD (*__add__)($Number, $WORD, $WORD);
+    $WORD (*__iadd__)($Number, $WORD, $WORD);
     $WORD (*__fromatom__)($Number,$WORD);
     $complex (*__complx__)($Number, $WORD);
     $WORD (*__mul__)($Number, $WORD, $WORD);
@@ -956,15 +781,6 @@ struct $Number$class {
     $WORD (*__abs__)($Number, $Real, $WORD);
     $WORD (*conjugate)($Number, $WORD);
 };
-
-struct $Number$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Number proto;
-    $WORD impl;
-};
-
-$Number$opaque $Number$pack($Number proto, $WORD impl);
 
 
 // $Real ////////////////////////////////////////////////////////////
@@ -979,6 +795,7 @@ struct $Real$class {
     $Super$class $superclass;
     void (*__init__)($Real);
     $WORD (*__add__)($Real, $WORD, $WORD);
+    $WORD (*__iadd__)($Real, $WORD, $WORD);
     $WORD (*__fromatom__)($Real,$WORD);
     $complex (*__complx__)($Real, $WORD);
     $WORD (*__mul__)($Real, $WORD, $WORD);
@@ -997,15 +814,6 @@ struct $Real$class {
     $WORD (*__round__)($Real, $WORD, $int);
 };
 
-struct $Real$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Real proto;
-    $WORD impl;
-};
-
-$Real$opaque $Real$pack($Real proto, $WORD impl);
-
 
 // $Rational ////////////////////////////////////////////////////////////
 
@@ -1019,6 +827,7 @@ struct $Rational$class {
     $Super$class $superclass;
     void (*__init__)($Rational);
     $WORD (*__add__)($Rational, $WORD, $WORD);
+    $WORD (*__iadd__)($Rational, $WORD, $WORD);
     $WORD (*__fromatom__)($Rational,$WORD);
     $complex (*__complx__)($Rational, $WORD);
     $WORD (*__mul__)($Rational, $WORD, $WORD);
@@ -1039,15 +848,6 @@ struct $Rational$class {
     $WORD (*denominator)($Rational, $Integral, $WORD);
 };
 
-struct $Rational$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Rational proto;
-    $WORD impl;
-};
-
-$Rational$opaque $Rational$pack($Rational proto, $WORD impl);
-
 
 // $Integral ////////////////////////////////////////////////////////////
 
@@ -1063,6 +863,7 @@ struct $Integral$class {
     $Super$class $superclass;
     void (*__init__)($Integral);
     $WORD (*__add__)($Integral, $WORD, $WORD);
+    $WORD (*__iadd__)($Integral, $WORD, $WORD);
     $WORD (*__fromatom__)($Integral,$WORD);
     $complex (*__complx__)($Integral, $WORD);
     $WORD (*__mul__)($Integral, $WORD, $WORD);
@@ -1091,14 +892,6 @@ struct $Integral$class {
     $WORD (*__invert__)($Integral, $WORD);
 };
 
-struct $Integral$opaque {
-    char *$GCINFO;
-    int $class_id;
-    $Integral proto;
-    $WORD impl;
-};
-
-$Integral$opaque $Integral$pack($Integral proto, $WORD impl);
 
 // $Sequence$list ////////////////////////////////////////////////////////////
 
@@ -1172,6 +965,7 @@ struct $Plus$list$class {
     $Super$class $superclass;
     void (*__init__)($Plus$list, $Sequence$list);
     $list (*__add__)($Plus$list, $list, $list);
+    $list (*__iadd__)($Plus$list, $list, $list);
 };
 
 void $Plus$list$__init__ ($Plus$list, $Sequence$list);
