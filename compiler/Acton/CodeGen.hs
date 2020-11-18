@@ -357,6 +357,31 @@ instance Gen PosArg where
     gen env (PosArg e p)            = gen env e <> comma <+> gen env p
     gen env PosNil                  = empty
 
+formatlong s                        = s
+  where format []                   = posNil
+        format ('%':s)              = flags s
+        format (c:s)                = format s
+        flags (f:s)
+          | f `elem` "#0- +"        = flags s
+        flags s                     = width s
+        width ('*':s)               = posRow tInt (dot s)
+        width (n:s)
+          | n `elem` "123456789"    = dot (dropWhile (`elem` "0123456789") s)
+        width s                     = dot s
+        dot ('.':s)                 = prec s
+        dot s                       = len s
+        prec ('*':s)                = posRow tInt (len s)
+        prec (n:s)
+          | n `elem` "0123456789"   = len (dropWhile (`elem` "0123456789") s)
+        prec s                      = len s
+        len (l:s)
+          | l `elem` "hlL"          = conv s
+        len s                       = conv s
+        conv (t:s)
+          | t `elem` "diouxXc"      = posRow tInt (format s)
+          | t `elem` "eEfFgG"       = posRow tFloat (format s)
+          | t `elem` "rsa"          = posRow tStr (format s)
+          | t == '%'                = format s
 
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
@@ -385,7 +410,7 @@ genCall env t0 ts e p               = genEnter env ts e callKW p
 genNew env ts n p                   = newcon' env n <> parens (gen env p)
 
 declCon env n q                     = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (NoQ n) <> semi $+$
+                                      nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
