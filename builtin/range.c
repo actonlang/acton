@@ -125,8 +125,8 @@ struct $Collection$range$class $Collection$range$methods;
 struct $Plus$range$class $Plus$range$methods;
 
 void $Sequence$range$__init__($Sequence$range self) {
-  self->w$Collection$Sequence = $NEW($Collection$range, self);
-  self->w$Plus$Sequence = $NEW($Plus$range, self);
+  self->w$Collection = ($Collection)$NEW($Collection$range, self);
+  self->w$Plus = ($Plus)$NEW($Plus$range, self);
 }
 
 $int $Sequence$range$__getitem__ ($Sequence$range wit, $range self, $int n) {
@@ -148,7 +148,7 @@ void $Sequence$range$__delitem__ ($Sequence$range wit, $range self, $int n) {
 }
 
 $range $Sequence$range$__getslice__ ($Sequence$range wit, $range self, $Slice slc) {
-  int len = $Collection$range$__len__(wit->w$Collection$Sequence,self)->val;
+  int len = wit->w$Collection->$class->__len__(wit->w$Collection,self)->val;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
   $int sstart = $Sequence$range$__getitem__(wit,self,to$int(start));
@@ -214,7 +214,11 @@ struct $Sequence$range$class $Sequence$range$methods = {"",UNASSIGNED,NULL,$Sequ
                                                         $Sequence$range$__getslice__, $Sequence$range$__setslice__, $Sequence$range$__delslice__,
                                                         NULL,NULL,NULL,NULL};
 // $Sequence$range$__reversed__,$Sequence$range$insert,$Sequence$range$append,$Sequence$range$reverse};
-struct $Sequence$range $Sequence$range_instance = {&$Sequence$range$methods, &$Collection$range_instance,&$Plus$range_instance};
+struct $Sequence$range $Sequence$range_instance = {
+    &$Sequence$range$methods,
+    ($Collection)&$Collection$range_instance,
+    ($Plus)&$Plus$range_instance
+};
 struct $Sequence$range *$Sequence$range$witness = &$Sequence$range_instance;
 
 struct $Collection$range$class $Collection$range$methods = {"",UNASSIGNED,NULL,$Collection$range$__init__,

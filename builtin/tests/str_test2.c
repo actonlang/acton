@@ -32,12 +32,12 @@ int main() {
     $list lst = s->$class->split(s,to$str("/"),NULL);
     printf("list has been split");
     $Sequence$list wit4 = $Sequence$list$witness;
-    $int len = wit4->w$Collection$Sequence->$class->__len__(wit4->w$Collection$Sequence,lst);
+    $int len = wit4->w$Collection->$class->__len__(wit4->w$Collection,lst);
     for (long i=0; i < from$int(len); i++) {
       printf("  '%s'\n",from$str(wit4->$class->__getitem__(wit4,lst,to$int(i))));
     }
     $str space = to$str(" ");
-    $str joined = space->$class->join(space,($Iterable)wit4->w$Collection$Sequence,lst);
+    $str joined = space->$class->join(space,($Iterable)wit4->w$Collection,lst);
     printf("joined string is '%s'\n",from$str(joined));
   }
   $str chinese = to$str("但他呼吁进行全面调查");

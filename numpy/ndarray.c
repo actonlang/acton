@@ -444,7 +444,7 @@ $ndarray $ndarray_linspace($float a, $float b, $int n) {
 // array of ints described by a range
 
 $ndarray $ndarray_arange($int start, $int stop, $int step) {
-  $Collection$range wit = $Sequence$range$witness->w$Collection$Sequence;
+  $Collection$range wit = $Sequence$range$witness->w$Collection;
   $range r = $NEW($range,start,stop,step);
   $int len = wit->$class->__len__(wit,r);
   $list shape = $NEW($list,NULL,NULL);

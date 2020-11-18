@@ -3,28 +3,68 @@ struct $Sequence$list  $Sequence$list_instance;
 struct $Collection$list $Collection$list_instance;
 struct $Plus$list $Plus$list_instance;
 
-struct $Sequence$list$class $Sequence$list$methods = {"", UNASSIGNED,NULL,$Sequence$list$__init__,$Sequence$list$__getitem__, $Sequence$list$__setitem__, $Sequence$list$__delitem__,
-                                                                  $Sequence$list$__getslice__, $Sequence$list$__setslice__, $Sequence$list$__delslice__,
-                                                               $Sequence$list$__reversed__,$Sequence$list$insert,$Sequence$list$append,$Sequence$list$reverse};
-struct $Sequence$list $Sequence$list_instance = {&$Sequence$list$methods, &$Collection$list_instance,&$Plus$list_instance};
+struct $Sequence$list$class $Sequence$list$methods = {
+    "", 
+    UNASSIGNED,
+    NULL,
+    $Sequence$list$__init__,
+    $Sequence$list$__getitem__,
+    $Sequence$list$__setitem__,
+    $Sequence$list$__delitem__,
+    $Sequence$list$__getslice__,
+    $Sequence$list$__setslice__,
+    $Sequence$list$__delslice__,
+    $Sequence$list$__reversed__,
+    $Sequence$list$insert,
+    $Sequence$list$append,
+    $Sequence$list$reverse
+};
+struct $Sequence$list $Sequence$list_instance = {
+    &$Sequence$list$methods,
+    ($Collection)&$Collection$list_instance, 
+    ($Plus)&$Plus$list_instance
+};
 $Sequence$list $Sequence$list$witness = &$Sequence$list_instance;
 
-struct $Collection$list$class $Collection$list$methods = {"",UNASSIGNED, NULL,$Collection$list$__init__,$Collection$list$__iter__,
-                                                          $Collection$list$__fromiter__,$Collection$list$__len__};
-struct $Collection$list $Collection$list_instance = {&$Collection$list$methods,&$Sequence$list_instance};
+struct $Collection$list$class $Collection$list$methods = {
+    "",
+    UNASSIGNED,
+    NULL,
+    $Collection$list$__init__,
+    $Collection$list$__iter__,
+    $Collection$list$__fromiter__,
+    $Collection$list$__len__
+};
+struct $Collection$list $Collection$list_instance = {
+    &$Collection$list$methods,
+    &$Sequence$list_instance
+};
 $Collection$list $Collection$list$witness = &$Collection$list_instance;
 
 
-struct $Plus$list$class $Plus$list$methods = {"", UNASSIGNED,NULL,$Plus$list$__init__, $Plus$list$__add__};
-struct $Plus$list $Plus$list_instance = {&$Plus$list$methods, &$Sequence$list_instance};
+struct $Plus$list$class $Plus$list$methods = {
+    "",
+    UNASSIGNED,
+    NULL,
+    $Plus$list$__init__,
+    $Plus$list$__add__
+};
+struct $Plus$list $Plus$list_instance = {
+    &$Plus$list$methods,
+    &$Sequence$list_instance
+};
 $Plus$list $Plus$list$witness = &$Plus$list_instance;
 
-struct $Container$list$class $Container$list$methods = {"", UNASSIGNED,NULL,$Container$list$__init__,
-                                                        ($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
-                                                        ($list (*)($Container$list,$Iterable,$WORD))$Collection$list$__fromiter__,
-                                                        ($int (*)($Container$list, $list))$Collection$list$__len__,
-                                                        $Container$list$__contains__,$Container$list$__containsnot__};
-
+struct $Container$list$class $Container$list$methods = {
+    "",
+    UNASSIGNED,
+    NULL,
+    $Container$list$__init__,
+    ($Iterator (*)($Container$list, $list))$Collection$list$__iter__,
+    ($list (*)($Container$list,$Iterable,$WORD))$Collection$list$__fromiter__,
+    ($int (*)($Container$list, $list))$Collection$list$__len__,
+    $Container$list$__contains__,$Container$list$__containsnot__
+};
 
 $list $Plus$list$__add__ ($Plus$list wit, $list a, $list b) {
   return $list_add(a,b);
@@ -116,6 +156,6 @@ $Sequence$list $Sequence$list$new() {
 }
 
 void $Sequence$list$__init__($Sequence$list self) {
-  self->w$Collection$Sequence = $NEW($Collection$list, self);
-  self->w$Plus$Sequence = $NEW($Plus$list, self);
+  self->w$Collection = ($Collection)$NEW($Collection$list, self);
+  self->w$Plus = ($Plus)$NEW($Plus$list, self);
 }

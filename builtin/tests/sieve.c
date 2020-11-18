@@ -108,5 +108,5 @@ int main() {
 
   //$Sequence$list wit = $Sequence$list$witness;
   //$list primes = sieveS(wit,10000000);
-  //printf("%ld\n",from$int(wit->w$Collection$Sequence->$class->__len__(wit->w$Collection$Sequence,primes)));
+  //printf("%ld\n",from$int(wit->w$Collection->$class->__len__(wit->w$Collection,primes)));
 }

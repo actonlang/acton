@@ -827,8 +827,8 @@ $Container$opaque $Container$pack($Container proto, $WORD impl);
 
 struct $Sequence {
     $Sequence$class $class;
-    $Collection w$Collection$Sequence;
-    $Plus w$Plus$Sequence;
+    $Collection w$Collection;
+    $Plus w$Plus;
 };
 
 struct $Sequence$class {
@@ -1104,8 +1104,8 @@ $Integral$opaque $Integral$pack($Integral proto, $WORD impl);
 
 struct $Sequence$list {
     $Sequence$list$class $class;
-    $Collection$list w$Collection$Sequence;
-    $Plus$list w$Plus$Sequence;
+    $Collection w$Collection;
+    $Plus w$Plus;
 };
 
 struct $Sequence$list$class {
@@ -1393,8 +1393,8 @@ $Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
 
 struct $Sequence$range {
     $Sequence$range$class $class;
-    $Collection$range w$Collection$Sequence;
-    $Plus$range w$Plus$Sequence;
+    $Collection w$Collection;
+    $Plus w$Plus;
 };
 
 struct $Sequence$range$class {
@@ -2072,8 +2072,8 @@ $bool $Ord$bytearray$__ge__ ($Ord$bytearray, $bytearray, $bytearray);
 
 struct $Sequence$bytearray {
     $Sequence$bytearray$class $class;
-    $Collection$bytearray w$Collection$Sequence;
-    $Plus$bytearray w$Plus$Sequence;
+    $Collection w$Collection;
+    $Plus w$Plus;
 };
 
 struct $Sequence$bytearray$class {
