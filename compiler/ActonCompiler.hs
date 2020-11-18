@@ -177,9 +177,11 @@ runRestPasses args paths src env0 original = do
                           --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                           (h,c) <- Acton.CodeGen.generate liftEnv lifted
-                          writeFile (outbase ++ ".h") h
-                          writeFile (outbase ++ ".c") c
-                          createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c", "-o"++outbase++".o"])
+                          
+                          iff (not $ nobuiltin args) $ do
+                              writeFile (outbase ++ ".h") h
+                              writeFile (outbase ++ ".c") c
+                              createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c", "-o"++outbase++".o"])
                           iff (hgen args) $ dump "hgen (.h)" h
                           iff (cgen args) $ dump "cgen (.c)" c
 
