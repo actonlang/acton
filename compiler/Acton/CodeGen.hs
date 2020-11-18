@@ -328,7 +328,7 @@ genStmt env s                       = vcat [ gen env t <+> gen env n <> semi | (
   where te                          = envOf s `exclude` defined env
 
 instance Gen Stmt where
-    gen env (Expr _ e)              = gen env e <> semi
+    gen env (Expr _ e)              = genExp' env e <> semi
     gen env (Assign _ [p] e)        = gen env p <+> equals <+> genExp env t e <> semi
       where t                       = typeOf env p
     gen env (MutAssign _ tg e)      = gen env tg <+> equals <+> genExp env t e <> semi
@@ -339,7 +339,7 @@ instance Gen Stmt where
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = (text "while" <+> parens (gen env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+    gen env (While _ e b [])        = (text "while" <+> parens (genExp env tBool e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env _                       = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -358,30 +358,30 @@ instance Gen PosArg where
     gen env PosNil                  = empty
 
 formatlong s                        = s
-  where format []                   = posNil
-        format ('%':s)              = flags s
-        format (c:s)                = format s
+  where format []                   = []
+        format ('%':s)              = '%' : flags s
+        format (c:s)                = c : format s
         flags (f:s)
-          | f `elem` "#0- +"        = flags s
+          | f `elem` "#0- +"        = f : flags s
         flags s                     = width s
-        width ('*':s)               = posRow tInt (dot s)
+        width ('*':s)               = '*' : dot s
         width (n:s)
-          | n `elem` "123456789"    = dot (dropWhile (`elem` "0123456789") s)
+          | n `elem` "123456789"    = n : dot (dropWhile (`elem` "0123456789") s)
         width s                     = dot s
-        dot ('.':s)                 = prec s
+        dot ('.':s)                 = '.' : prec s
         dot s                       = len s
-        prec ('*':s)                = posRow tInt (len s)
+        prec ('*':s)                = '*' : len s
         prec (n:s)
-          | n `elem` "0123456789"   = len (dropWhile (`elem` "0123456789") s)
+          | n `elem` "0123456789"   = n : len (dropWhile (`elem` "0123456789") s)
         prec s                      = len s
         len (l:s)
-          | l `elem` "hlL"          = conv s
-        len s                       = conv s
-        conv (t:s)
-          | t `elem` "diouxXc"      = posRow tInt (format s)
-          | t `elem` "eEfFgG"       = posRow tFloat (format s)
-          | t `elem` "rsa"          = posRow tStr (format s)
-          | t == '%'                = format s
+          | l `elem` "hlL"          = 'l' : conv s
+        len s                       = conv0 s
+        conv0 (t:s)
+          | t `elem` "diouxXc"      = 'l' : conv (t:s)
+        conv0 s                     = conv s
+        conv (t:s)                  = t : format s
+
 
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
@@ -470,6 +470,9 @@ adjustC t (TOpt _ t') e             = adjustC t t' e
 adjustC t t' e                      = adjust t t' e
 
 genExp env t' e                     = gen env (adjustC t t' e')
+  where (t, e')                     = typeOf' env e
+
+genExp' env e                       = gen env e'
   where (t, e')                     = typeOf' env e
 
 instance Gen Expr where
