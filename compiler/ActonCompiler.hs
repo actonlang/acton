@@ -71,6 +71,8 @@ getArgs         = Args
 descr           = fullDesc <> progDesc "Compile Acton (and Yang) source files to native executables"
                     <> header "actonc - the Acton compiler"
 
+nodump args     = and [ not $ flag args | flag <- [parse,kinds,types,sigs,norm,deact,cps,llift,hgen,cgen] ]
+
 main            = do args <- execParser (info (getArgs <**> helper) descr)
                      mapM_ (\str -> treatOneFile (args {files = [str]})) (files args)
 
@@ -260,8 +262,9 @@ chaseImportedFiles args paths imps tasks
 
 doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
                              = do ok <- checkUptoDate paths ".ty" actFile tyFile [hFile, cFile] (syspath args) (importsOf t)
-                                  if ok then do iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
-                                                return ifaces
+                                  if ok && nodump args then do 
+                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
+                                           return ifaces
                                    else do checkDirs (projSysRoot paths) (init (A.modPath qn))
                                            iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                            (env',te) <- runRestPasses args (paths{modpath = A.modPath qn, ext = ".act"}) src env m
