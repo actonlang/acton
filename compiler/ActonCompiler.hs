@@ -209,7 +209,7 @@ runRestPasses args paths src env0 original = do
                           (h,c) <- Acton.CodeGen.generate liftEnv lifted
                           writeFile (outbase ++ ".h") h
                           writeFile (outbase ++ ".c") c
-                          createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c"])
+                          createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c", "-o"++outbase++".o"])
                           iff (hgen args) $ dump "hgen (.h)" h
                           iff (cgen args) $ dump "cgen (.c)" c
 
@@ -356,7 +356,7 @@ doTask args paths ifaces@(env, yangifaces) t@(YangTask qn m) = do
          actFile  = outbase ++ ".act"
          [_,i]    = A.modPath qn
          id       = Y.Ident SpanEmpty i
--}
+
 doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
                         = do ok <- checkUptoDate paths ".ty" typesFile tyFile [] (joinPath (syspath args : ["python"])) []
                              if ok then return ifaces --putStrLn ("Skipping  "++ typesFile ++ " (files are up to date).")
@@ -369,7 +369,7 @@ doTask args paths ifaces@(env, yangifaces) (PythonTask qn)
    where pythonBase     = joinPath (syspath args : A.modPath qn)
          typesFile      =  pythonBase ++ ".types"
          tyFile         =  pythonBase ++ ".ty"
-         
+-}
 checkUptoDate :: Paths -> String -> FilePath -> FilePath -> [FilePath] -> FilePath -> [A.ModName] -> IO Bool
 checkUptoDate paths ext srcFile iFile outFiles libRoot imps
                         = do srcExists <- System.Directory.doesFileExist srcFile
