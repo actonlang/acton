@@ -122,14 +122,14 @@ Pingpong Pingpong$__deserialize__($Serial$state state) {
 $R Pingpong$ping(Pingpong self, $int q, $Cont then) {
     self->count = $Integral$int$witness->$class->__add__($Integral$int$witness, self->count, to$int(1));
     $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, self->count, q);
-    printf("Ping %8ld\n", j->val);
-    $AFTER(1, ($Cont)lambda$1$new(self, self->count, q));
+    $print(1, $FORMAT("%ld Ping %8ld", self->i->val, j->val));
+    $AFTER(to$int(1), ($Cont)lambda$1$new(self, self->count, q));
     return $R_CONT(then, $None);
 }
 $R Pingpong$pong(Pingpong self, $int n, $int q, $Cont then) {
     $int j = $Integral$int$witness->$class->__mul__($Integral$int$witness, n, q);
-    printf("     %8ld Pong\n", j->val);
-    $AFTER(2, ($Cont)lambda$2$new(self, $Integral$int$witness->$class->__neg__($Integral$int$witness, q)));
+    $print(1, $FORMAT("%ld       %7ld Pong", self->i->val, j->val));
+    $AFTER(to$int(2), ($Cont)lambda$2$new(self, $Integral$int$witness->$class->__neg__($Integral$int$witness, q)));
     return $R_CONT(then, $None);
 }
 
