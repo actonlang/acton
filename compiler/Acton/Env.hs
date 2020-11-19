@@ -24,8 +24,8 @@ import Prelude hiding ((<>))
 
 
 
-mkEnv                       :: (FilePath,FilePath) -> Env0 -> Module -> IO Env0
-mkEnv paths env m           = getImps paths env (imps m)
+mkEnv                       :: FilePath -> Env0 -> Module -> IO Env0
+mkEnv prefix env m          = getImps prefix env (imps m)
 
 
 type TEnv                   = [(Name, NameInfo)]
@@ -483,15 +483,14 @@ unSig te                    = map f te
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
 
-initEnv                    :: Bool -> IO Env0
-initEnv nobuiltin           = if nobuiltin
+initEnv                    :: FilePath -> Bool -> IO Env0
+initEnv path nobuiltin     = if nobuiltin
                                 then return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
                                                     modules = [(nPrim,NModule envPrim)],
                                                     witnesses = [],
                                                     thismod = Nothing,
                                                     envX = () }
-                                else do path <- getExecutablePath
-                                        envBuiltin <- InterfaceFiles.readFile (joinPath [takeDirectory path,"__builtin__.ty"])
+                                else do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
                                         let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
                                                          modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
                                                          thismod = Nothing,
@@ -774,13 +773,13 @@ allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ 
   where con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ GName m n | (n,i) <- te, con i ]
+        cons m (Just te)    = [ GName m n | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [QName]
 allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ]
+        protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allVars                     :: EnvF x -> Kind -> [TVar]
 allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
@@ -853,52 +852,45 @@ mro env us                              = merge [] $ map lin us' ++ [us']
 
 -- Import handling (local definitions only) ----------------------------------------------
 
-getImps                         :: (FilePath,FilePath) -> EnvF x -> [Import] -> IO (EnvF x)
-getImps ps env []               = return env
-getImps ps env (i:is)           = do env' <- impModule ps env i
-                                     getImps ps env' is
+getImps                         :: FilePath -> EnvF x -> [Import] -> IO (EnvF x)
+getImps prefix env []           = return env
+getImps prefix env (i:is)       = do env' <- impModule prefix env i
+                                     getImps prefix env' is
 
 
-impModule                       :: (FilePath,FilePath) -> EnvF x -> Import -> IO (EnvF x)
-impModule ps env (Import _ ms)  = imp env ms
+impModule                       :: FilePath -> EnvF x -> Import -> IO (EnvF x)
+impModule prefix env (Import _ ms)
+                                = imp env ms
   where imp env []              = return env
         imp env (ModuleItem m as : is)
-                                = do (env1,te) <- doImp ps env m
+                                = do (env1,te) <- doImp prefix env m
                                      let ModName (m0:_) = m
                                          env2 = maybe (define [(m0, NMAlias $ ModName [m0])] env1) (\n->define [(n, NMAlias m)] env1) as
                                      imp (importWits m te env2) is
-impModule ps env (FromImport _ (ModRef (0,Just m)) items)
-                                = do (env1,te) <- doImp ps env m
+impModule prefix env (FromImport _ (ModRef (0,Just m)) items)
+                                = do (env1,te) <- doImp prefix env m
                                      return $ importSome items m te $ importWits m te $ env1
-impModule ps env (FromImportAll _ (ModRef (0,Just m)))
-                                = do (env1,te) <- doImp ps env m
+impModule prefix env (FromImportAll _ (ModRef (0,Just m)))
+                                = do (env1,te) <- doImp prefix env m
                                      return $ importAll m te $ importWits m te $ env1
 impModule _ _ i                 = illegalImport (loc i)
 
 
 moduleRefs te                   = nub $ [ m | (_,NMAlias m) <- te ] ++ [ m | (_,NAlias (GName m _)) <- te ]
 
+subImp prefix env []            = return env
+subImp prefix env (m:ms)        = do (env',_) <- doImp prefix env m
+                                     subImp prefix env' ms
 
-subImp paths env []             = return env
-subImp paths env (m:ms)         = do (env',_) <- doImp paths env m
-                                     subImp paths env' ms
-
-doImp (p,sysp) env m            = case lookupMod m env of
+doImp prefix env m              = case lookupMod m env of
                                     Just te -> return (env, te)
                                     Nothing -> do
                                         found <- doesFileExist fpath
-                                        if found
-                                         then do te <- InterfaceFiles.readFile fpath
-                                                 env' <- subImp (p,sysp) env (moduleRefs te)
-                                                 return (addMod m te env', te)
-                                         else do found <- doesFileExist fpath2
-                                                 unless found (fileNotFound m)
-                                                 te <- InterfaceFiles.readFile fpath2
-                                                 env' <- subImp (p,sysp) env (moduleRefs te)
-                                                 return (addMod m te env', te)
-  where fpath                   = joinPath (p : mpath m) ++ ".ty"
-        fpath2                  = joinPath (sysp : mpath m) ++ ".ty"
-        mpath (ModName ns)      = map nstr ns
+                                        unless found (fileNotFound m)
+                                        te <- InterfaceFiles.readFile fpath
+                                        env' <- subImp prefix env (moduleRefs te)
+                                        return (addMod m te env', te)
+  where fpath                   = joinPath (prefix : modPath m) ++ ".ty"
 
 
 importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
@@ -1020,8 +1012,8 @@ instance HasLoc CompilationError where
     loc (NoClassOrProto n)          = loc n
     loc (OtherError l str)          = l
 
-compilationError                    :: EnvF x -> CompilationError -> (SrcLoc, String)
-compilationError env err            = (loc err, render (expl err))
+compilationError                    :: CompilationError -> (SrcLoc, String)
+compilationError err                = (loc err, render (expl err))
   where
     expl (KindError l k1 k2)        = text "Expected a" <+> pretty k2 <> comma <+> text "actual kind is" <+> pretty k1
     expl (InfiniteKind l v k)       = text "Infinite kind inferred:" <+> pretty v <+> equals <+> pretty k

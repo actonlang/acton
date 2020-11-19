@@ -14,6 +14,7 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Subst
 import Prelude hiding ((<>))
+import System.FilePath.Posix
 
 generate                            :: Acton.Env.Env0 -> Module -> IO (String,String)
 generate env m                      = do return (h,c)
@@ -47,7 +48,8 @@ ret env                             = retX $ envX env
 
 -- Helpers ------------------------------------------------------------------------------------------
 
-include env m                       = text "#include" <+> doubleQuotes (gen env m <> text ".h")
+include                             :: GenEnv -> String -> ModName -> Doc
+include env dir m                   = text "#include" <+> doubleQuotes (text (joinPath $ dir : modPath m) <> text ".h")
 
 modNames (Import _ ms : is)         = [ m | ModuleItem m _ <- ms ] ++ modNames is
 modNames (FromImport _ (ModRef (0,Just m)) _ : is)
@@ -61,14 +63,12 @@ conParamNames                       = map (Internal CodeGenPass "par") [1..]
 
 -- Header -------------------------------------------------------------------------------------------
 
-hModule env (Module m imps stmts)   = text "#ifndef" <+> gen env m $+$
-                                      text "#define" <+> gen env m $+$
-                                      include env (name "builtin") $+$
-                                      include env (name "rts") $+$
-                                      vcat (map (include env) $ modNames imps) $+$
+hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
+                                      include env "builtin" (modName ["builtin"]) $+$
+                                      include env "rts" (modName ["rts"]) $+$
+                                      vcat (map (include env "modules") $ modNames imps) $+$
                                       hSuite env stmts $+$
-                                      text "void" <+> genTopName env initKW <+> parens empty <> semi $+$
-                                      text "#endif"
+                                      text "void" <+> genTopName env initKW <+> parens empty <> semi
 
 hSuite env []                       = empty
 hSuite env (s:ss)                   = hStmt env s $+$ hSuite (gdefine (envOf s) env) ss
@@ -192,7 +192,7 @@ tmpV                                = primKW "tmp"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env (Module m imps stmts)   = include env m $+$
+cModule env (Module m imps stmts)   = include env "modules" m $+$
                                       declModule env stmts $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$

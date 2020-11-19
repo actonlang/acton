@@ -130,6 +130,8 @@ modName ss      = ModName (map name ss)
 
 modPath (ModName ns) = map nstr ns
 
+modCat (ModName ns) n = ModName (ns++[n])
+
 instance Ord ModName where
     compare a b = compare (modPath a) (modPath b)
 
