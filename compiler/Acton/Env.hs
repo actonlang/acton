@@ -594,8 +594,8 @@ findQName (GName m n) env
   | otherwise               = case lookupMod m env of
                                 Just te -> case lookup n te of
                                     Just i -> i
-                                    Nothing -> error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
-                                Nothing -> error ("## Failed lookup of module " ++ prstr m)
+                                    Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
+                                Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
 
 
 findName n env              = findQName (NoQ n) env
