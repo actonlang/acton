@@ -46,7 +46,7 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
 $R Pingpong$ping(Pingpong self, $Cont then) {
     self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
     printf("%ld Ping %ld\n", self->i->val, self->count->val);
-    $AFTER(1, ($Cont)$NEW(lambda$1, self, self->count));
+    $AFTER(to$int(1), ($Cont)$NEW(lambda$1, self, self->count));
     return $R_CONT(then, $None);
 }
 void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
@@ -61,7 +61,7 @@ Pingpong Pingpong$__deserialize__($Serial$state state) {
 }
 $R Pingpong$pong(Pingpong self, $int q, $Cont then) {
     printf("%ld     %ld Pong\n", self->i->val, q->val);
-    $AFTER(2, ($Cont)$NEW(lambda$2, self));
+    $AFTER(to$int(2), ($Cont)$NEW(lambda$2, self));
     return $R_CONT(then, $None);
 }
 

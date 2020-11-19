@@ -11,7 +11,7 @@ void $list_init($list lst, $Sequence wit, $WORD seq) {
     lst->data = NULL;
     return;
   }
-  $Collection wit2 = wit->w$Collection$Sequence;
+  $Collection wit2 = wit->w$Collection;
   int len = wit2->$class->__len__(wit2,seq)->val;
   lst->data = malloc(len*sizeof($WORD));
   if (lst->data == NULL) {

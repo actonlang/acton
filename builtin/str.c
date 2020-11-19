@@ -2229,7 +2229,11 @@ struct $Sequence$bytearray$class $Sequence$bytearray$methods = {"", UNASSIGNED,N
                                                                 $Sequence$bytearray$__getitem__, $Sequence$bytearray$__setitem__, $Sequence$bytearray$__delitem__,
                                                                 $Sequence$bytearray$__getslice__, $Sequence$bytearray$__setslice__, $Sequence$bytearray$__delslice__,
                                                                 $Sequence$bytearray$__reversed__,$Sequence$bytearray$insert,$Sequence$bytearray$append,$Sequence$bytearray$reverse};
-struct $Sequence$bytearray $Sequence$bytearray_instance = {&$Sequence$bytearray$methods, &$Collection$bytearray_instance,&$Plus$bytearray_instance};
+struct $Sequence$bytearray $Sequence$bytearray_instance = {
+    &$Sequence$bytearray$methods,
+    ($Collection)&$Collection$bytearray_instance,
+    ($Plus)&$Plus$bytearray_instance
+};
 $Sequence$bytearray $Sequence$bytearray$witness = &$Sequence$bytearray_instance;
 
 struct $Collection$bytearray$class $Collection$bytearray$methods = {"",UNASSIGNED, NULL,$Collection$bytearray$__init__,$Collection$bytearray$__iter__,
@@ -2257,8 +2261,8 @@ void $Plus$bytearray$__init__($Plus$bytearray self, $Sequence$bytearray master) 
 }
 
 void $Sequence$bytearray$__init__($Sequence$bytearray self) {
-  self->w$Collection$Sequence = $NEW($Collection$bytearray, self);
-  self->w$Plus$Sequence = $NEW($Plus$bytearray, self);
+  self->w$Collection = ($Collection)$NEW($Collection$bytearray, self);
+  self->w$Plus = ($Plus)$NEW($Plus$bytearray, self);
 }
 
 void $Container$bytearray$__init__ ($Container$bytearray wit, $Eq w$Eq$A) {

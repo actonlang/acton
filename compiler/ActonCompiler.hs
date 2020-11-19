@@ -48,6 +48,7 @@ data Args       = Args {
                     verbose :: Bool,
                     nobuiltin :: Bool,
                     syspath :: String,
+                    root    :: String,
                     file    :: String
                 }
                 deriving Show
@@ -66,6 +67,7 @@ getArgs         = Args
                     <*> switch (long "verbose" <> help "Print progress info during execution")
                     <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
+                    <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
 
 descr           = fullDesc <> progDesc "Compile an Acton source file with necessary recompilation of imported modules"
@@ -177,9 +179,11 @@ runRestPasses args paths src env0 original = do
                           --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                           (h,c) <- Acton.CodeGen.generate liftEnv lifted
-                          writeFile (outbase ++ ".h") h
-                          writeFile (outbase ++ ".c") c
-                          createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c", "-o"++outbase++".o"])
+                          
+                          iff (not $ nobuiltin args) $ do
+                              writeFile (outbase ++ ".h") h
+                              writeFile (outbase ++ ".c") c
+                              createProcess (proc "gcc" ["-c", "-I"++syspath args, outbase ++ ".c", "-o"++outbase++".o"])
                           iff (hgen args) $ dump "hgen (.h)" h
                           iff (cgen args) $ dump "cgen (.c)" c
 
@@ -214,8 +218,9 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do env0 <- Acton.Env.initEnv False
-                                     foldM (doTask args paths) (env0,[]) [t | AcyclicSCC t <- as]
+                             then do env0 <- Acton.Env.initEnv (nobuiltin args)
+                                     env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
+                                     buildExecutable env1 args task `catch` handle (Acton.Env.compilationError env1) (src task) paths
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
@@ -257,16 +262,16 @@ chaseImportedFiles args paths imps tasks
                                                          (iqns ++ concatMap importsOf t) 
 
 
-doTask args paths ifaces@(env, yangifaces) t@(ActonTask qn src m)
+doTask args paths env t@(ActonTask qn src m)
                              = do ok <- checkUptoDate paths ".ty" actFile tyFile [hFile, cFile] (syspath args) (importsOf t)
                                   if ok && nodump args then do 
                                            iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
-                                           return ifaces
+                                           return env
                                    else do checkDirs (projSysRoot paths) (init (A.modPath qn))
                                            iff (verbose args) (putStr ("Compiling "++ actFile ++ "... ") >> hFlush stdout)
                                            (env',te) <- runRestPasses args (paths{modpath = A.modPath qn, ext = ".act"}) src env m
                                            iff (verbose args) (putStrLn "Done.")
-                                           return (Acton.Env.addMod qn te env', yangifaces)
+                                           return (Acton.Env.addMod qn te env')
   where actFile             = joinPath (projSrcRoot paths : A.modPath qn)++ ".act"
         outBase             = joinPath (projSysRoot paths : A.modPath qn)
         tyFile              = outBase ++ ".ty"
@@ -291,3 +296,16 @@ checkUptoDate paths ext srcFile iFile outFiles libRoot imps
                                      if ok then do impfileTime <- System.Directory.getModificationTime impSysFile
                                                    return (impfileTime < iTime)
                                        else error ("********************\nError: cannot find interface file "++impFile)
+
+buildExecutable env args task
+  | null $ root args        = return ()
+  | otherwise               = do putStrLn ("## root = " ++ prstr qn)
+                                 case Acton.Env.findQName qn env of
+                                      i@(Acton.Env.NAct q (A.TRow _ _ _ t A.TNil{}) A.TNil{} te) -> do
+                                         putStrLn ("## Root is " ++ prstr (n,i))
+                                         putStrLn ("## Env is " ++ prstr t)
+                                      i -> do
+                                         putStrLn ("## Root is " ++ prstr (n,i))
+                                 return ()
+  where n                   = A.name (root args)
+        qn                  = A.GName (name task) n

@@ -239,7 +239,7 @@ freefun env (TApp l (Var l' n) ts)      = Just (TApp l (Var l' (primSubst n)) (c
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
-                                             traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
+                                             --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
                                              liftToTop [Class l0 n q base te]
                                              return $ eCall (tApp (eVar n) (map tVar $ tvarScope env)) es
   where q                               = quantScope env

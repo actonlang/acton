@@ -7,10 +7,12 @@ actor Pingpong(i):
 #    _pong : action(int) -> None
     def _ping():
         count = count + i
-        print('{i} Ping {count}')
+        print('%d Ping %8d' % (i,count))
+#        print('{i} Ping {count}')
         after 1: _pong(-count)
     def _pong(q):
-        print('{i}      {q} Pong')
+        print('%d      %8d Pong' % (i,q))
+#        print('{i}      {q} Pong')
         after 2: _ping()
         #relay(2, _ping)
     _ping()

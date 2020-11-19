@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0f115015640da696bc3107947bb011851ac7e5ac69a373e9b7e1e9863c07d3d1
+-- hash: e81cb3999ea162237d2895b36ceb13dda9b265dd6ebcba9054c3b97765bf4099
 
 name:           acton
 version:        0.3.0
@@ -65,6 +65,7 @@ executable actonc
     , optparse-applicative
     , parser-combinators
     , pretty
+    , process
     , scientific
     , transformers
     , utf8-string

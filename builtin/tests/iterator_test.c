@@ -16,8 +16,8 @@ int main() {
   $register_builtin();
   $bool b1 = is_iterator(($Super)to$int(3));
   $dict d = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
-  $Mapping$dict wit = $NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
-  $Indexed$dict wit2 = wit->w$Indexed$Mapping;
+  $Mapping wit = ($Mapping)$NEW($Mapping$dict,($Hashable)$Hashable$int$witness);
+  $Indexed wit2 = wit->w$Indexed;
   wit2->$class->__setitem__(wit2,d,to$int(5),to$str("A string"));
   $Iterator it = wit->$class->__iter__(wit,d);
   $bool b2 = is_iterator(($Super)d);
