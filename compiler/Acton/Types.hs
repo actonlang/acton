@@ -61,10 +61,14 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
-                                             let s = [ (tv,tWild) | tv <- tyfree te ]
+                                             let s = [ (tv,repl (tvkind tv)) | tv <- tyfree te ]
                                                  te1 = subst s te
                                                  te2 = normTEnv $ if inBuiltin env then unSig te1 else te1
                                              return (te2, ss2)
+  where repl KType                      = tNone 
+        repl KFX                        = fxPure
+        repl PRow                       = posNil
+        repl KRow                       = kwdNil
 
 
 class Infer a where
