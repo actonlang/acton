@@ -41,6 +41,10 @@ void normalize_slice($Slice slc, int len, int *slen, int *start, int *stop, int 
     *slen = (*stop-*start)/ *step + ((*stop-*start)%*step != 0);
 }
 
+$Slice $Slice$new($int start,$int stop,$int step) {
+  return $NEW($Slice,start,stop,step);
+}
+
 void $Slice__init__($Slice s, $int start, $int stop, $int step) {
   if (start) {
     s->start = malloc(sizeof(int));

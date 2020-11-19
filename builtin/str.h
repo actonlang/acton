@@ -70,7 +70,7 @@ $Plus$str $Plus$str$new();
 extern struct $Sliceable$str$class $Sliceable$str$methods;
 $Sliceable$str $Sliceable$str$new();
 extern struct $Container$str$class $Container$str$methods;
-$Container$str $Container$str$new();
+$Container$str $Container$str$new($Eq);
 
 extern struct $Ord$str *$Ord$str$witness;
 extern struct $Hashable$str *$Hashable$str$witness;
@@ -175,11 +175,11 @@ $Ord$bytearray $Ord$bytearray$new();
 extern struct $Sequence$bytearray$class $Sequence$bytearray$methods;
 $Sequence$bytearray $Sequence$bytearray$new();
 extern struct $Collection$bytearray$class $Collection$bytearray$methods;
-$Collection$bytearray $Collection$bytearray$new();
+$Collection$bytearray $Collection$bytearray$new($Sequence$bytearray);
 extern struct $Plus$bytearray$class $Plus$bytearray$methods;
-$Plus$bytearray $Plus$bytearray$new();
+$Plus$bytearray $Plus$bytearray$new($Sequence$bytearray);
 extern struct $Container$bytearray$class $Container$bytearray$methods;
-$Container$bytearray $Container$bytearray$new();
+$Container$bytearray $Container$bytearray$new($Eq);
 
 extern struct $Ord$bytearray *$Ord$bytearray$witness;
 extern struct $Sequence$bytearray *$Sequence$bytearray$witness;
