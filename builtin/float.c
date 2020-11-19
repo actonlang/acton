@@ -190,6 +190,31 @@ void $Minus$float_init($Minus$float wit, $Real$float w$Real$float) {
   wit->w$Real$float =  w$Real$float;
 }
 
+void $Ord$float_init($Ord$float wit) {
+  return;
+}
+
+void $Hashable$float_init($Hashable$float wit) {
+  return;
+}
+
+$Real$float $Real$float$new() {
+  return $NEW($Real$float);
+}
+
+$Minus$float $Minus$float$new($Real$float wit) {
+  return $NEW($Minus$float,wit);
+}
+  
+$Ord$float $Ord$float$new() {
+  return $NEW($Ord$float);
+}
+
+$Hashable$float $Hashable$float$new() {
+  return $NEW($Hashable$float);
+}
+
+
  struct $Real$float $Real$float_instance;
  struct $Minus$float $Minus$float_instance;
  struct $Ord$float $Ord$float_instance;
@@ -208,14 +233,14 @@ struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Real$float
 $Minus$float $Minus$float$witness = &$Minus$float_instance;
 
 
-struct $Ord$float$class $Ord$float$methods = {"", UNASSIGNED,NULL,  (void (*)($Ord$float))$default__init__, $Ord$float$__eq__ , $Ord$float$__ne__ , $Ord$float$__lt__ , $Ord$float$__le__ ,
+struct $Ord$float$class $Ord$float$methods = {"", UNASSIGNED,NULL,  $Ord$float_init, $Ord$float$__eq__ , $Ord$float$__ne__ , $Ord$float$__lt__ , $Ord$float$__le__ ,
                                                      $Ord$float$__gt__ , $Ord$float$__ge__};
 struct $Ord$float $Ord$float_instance = {&$Ord$float$methods};
 $Ord$float $Ord$float$witness = &$Ord$float_instance;
 
 
 
-struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$float))$default__init__,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
+struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, $Hashable$float_init,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
 struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
 $Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
  

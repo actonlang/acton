@@ -264,6 +264,7 @@ $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
 
 void $Integral$int_init($Integral$int wit) {
   wit-> w$Logical$Integral = $NEW($Logical$int,wit);
+  wit-> w$Minus$Integral = $NEW($Minus$int,wit);
 };
 
 void $Logical$int_init($Logical$int wit, $Integral$int w$Integral$int) {
@@ -273,6 +274,35 @@ void $Logical$int_init($Logical$int wit, $Integral$int w$Integral$int) {
 void $Minus$int_init($Minus$int wit, $Integral$int w$Integral$int) {
   wit->w$Integral$int =  w$Integral$int;
 }
+
+void $Ord$int_init($Ord$int wit) {
+  return;
+}
+
+void $Hashable$int_init($Hashable$int wit) {
+  return;
+}
+
+$Integral$int $Integral$int$new() {
+  return $NEW($Integral$int);
+}
+
+$Logical$int $Logical$int$new($Integral$int wit) {
+  return $NEW($Logical$int,wit);
+}
+  
+$Minus$int $Minus$int$new($Integral$int wit) {
+  return $NEW($Minus$int,wit);
+}
+  
+$Ord$int $Ord$int$new() {
+  return $NEW($Ord$int);
+}
+
+$Hashable$int $Hashable$int$new() {
+  return $NEW($Hashable$int);
+}
+
 
 struct $Integral$int $Integral$int_instance;
 struct $Logical$int $Logical$int_instance;
@@ -298,10 +328,10 @@ struct $Minus$int$class $Minus$int$methods = {"",UNASSIGNED, NULL,$Minus$int_ini
 struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
 
-struct $Ord$int$class $Ord$int$methods = {"",UNASSIGNED, NULL,(void (*)($Ord$int))$default__init__,$Ord$int$__eq__,$Ord$int$__ne__,$Ord$int$__lt__,$Ord$int$__le__,$Ord$int$__gt__,$Ord$int$__ge__};
+struct $Ord$int$class $Ord$int$methods = {"",UNASSIGNED, NULL,$Ord$int_init,$Ord$int$__eq__,$Ord$int$__ne__,$Ord$int$__lt__,$Ord$int$__le__,$Ord$int$__gt__,$Ord$int$__ge__};
 struct $Ord$int $Ord$int_instance = {&$Ord$int$methods};
 $Ord$int $Ord$int$witness = &$Ord$int_instance;
 
-struct $Hashable$int$class $Hashable$int$methods = {"",UNASSIGNED, NULL,(void (*)($Hashable$int))$default__init__, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
+struct $Hashable$int$class $Hashable$int$methods = {"",UNASSIGNED, NULL,$Hashable$int_init, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
 struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};
 $Hashable$int $Hashable$int$witness = &$Hashable$int_instance;

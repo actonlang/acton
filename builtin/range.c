@@ -124,6 +124,10 @@ $Iterable$range $Iterable$range$witness = &$Iterable$range_instance;
 struct $Collection$range$class $Collection$range$methods;
 struct $Plus$range$class $Plus$range$methods;
 
+$Sequence$range $Sequence$range$new() {
+  return $NEW($Sequence$range);
+}
+
 void $Sequence$range$__init__($Sequence$range self) {
   self->w$Collection$Sequence = $NEW($Collection$range, self);
   self->w$Plus$Sequence = $NEW($Plus$range, self);

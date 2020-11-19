@@ -21,7 +21,7 @@ $float $float$new($Super);
 extern struct $Real$float$class $Real$float$methods;
 $Real$float $Real$float$new();
 extern struct $Minus$float$class $Minus$float$methods;
-$Minus$float $Minus$float$new();
+$Minus$float $Minus$float$new($Real$float);
 extern struct $Ord$float$class $Ord$float$methods;
 $Ord$float $Ord$float$new();
 extern struct $Hashable$float$class $Hashable$float$methods;

@@ -129,6 +129,31 @@ void $Minus$complex_init($Minus$complex wit, $Number$complex w$Number$complex) {
   wit->w$Number$complex =  w$Number$complex;
 }
 
+void $Eq$complex_init($Eq$complex wit) {
+  return;
+}
+
+void $Hashable$complex_init($Hashable$complex wit) {
+  return;
+}
+
+$Number$complex $Number$complex$new() {
+  return $NEW($Number$complex);
+}
+
+$Minus$complex $Minus$complex$new($Number$complex wit) {
+  return $NEW($Minus$complex,wit);
+}
+  
+$Eq$complex $Eq$complex$new() {
+  return $NEW($Eq$complex);
+}
+
+$Hashable$complex $Hashable$complex$new() {
+  return $NEW($Hashable$complex);
+}
+
+
 struct $Number$complex $Number$complex_instance;
 struct $Minus$complex $Minus$complex_instance;
 struct $Eq$complex $Eq$complex_instance;
@@ -144,10 +169,10 @@ struct $Minus$complex$class $Minus$complex$methods = {"", UNASSIGNED,NULL,$Minus
 struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, &$Number$complex_instance};
 $Minus$complex $Minus$complex$witness = &$Minus$complex_instance;
 
-struct $Eq$complex$class $Eq$complex$methods = {"", UNASSIGNED,NULL,(void (*)($Eq$complex))$default__init__,$Eq$complex$__eq__,$Eq$complex$__ne__};
+struct $Eq$complex$class $Eq$complex$methods = {"", UNASSIGNED,NULL,$Eq$complex_init,$Eq$complex$__eq__,$Eq$complex$__ne__};
 struct $Eq$complex $Eq$complex_instance = {&$Eq$complex$methods};
 $Eq$complex $Eq$complex$witness = &$Eq$complex_instance;
 
-struct $Hashable$complex$class $Hashable$complex$methods = {"",UNASSIGNED, NULL, (void (*)($Hashable$complex))$default__init__,$Hashable$complex$__eq__,$Hashable$complex$__ne__,$Hashable$complex$__hash__};
+struct $Hashable$complex$class $Hashable$complex$methods = {"",UNASSIGNED, NULL,$Hashable$complex_init,$Hashable$complex$__eq__,$Hashable$complex$__ne__,$Hashable$complex$__hash__};
  struct $Hashable$complex $Hashable$complex_instance = {&$Hashable$complex$methods};
  $Hashable$complex $Hashable$complex$witness = &$Hashable$complex_instance;

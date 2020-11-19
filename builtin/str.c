@@ -174,6 +174,7 @@ $int $Hashable$str$__hash__($Hashable$str wit, $str str) {
   return to$int($string_hash(str));
 }
 
+
 // Method tables for witness classes
 
 struct $Ord$str$class  $Ord$str$methods = {"", UNASSIGNED, NULL,(void (*)($Ord$str))$default__init__,$Ord$str$__eq__, $Ord$str$__ne__, $Ord$str$__lt__, $Ord$str$__le__, $Ord$str$__gt__, $Ord$str$__ge__};
@@ -479,6 +480,11 @@ include mutating methods.
 
 // $Ord ///////////////////////////////////////////////////////////////////////////////////////////////
 
+$Ord$str $Ord$str$new() {
+  return $NEW($Ord$str);
+}
+
+
 // TODO: We should consider how to normalize strings before comparisons
 
 int $str_eq($str a, $str b) {
@@ -510,9 +516,18 @@ int $str_ge($str a, $str b) {
  
 // $Hashable ///////////////////////////////////////////////////////////////////////////////////
 
+$Hashable$str $Hashable$str$new() {
+  return $NEW($Hashable$str);
+}
+
+
 // hash function $string_hash defined in hash.c
 
 // $Plus /////////////////////////////////////////////////////////////////////////////////////////////
+
+$Plus$str $Plus$str$new() {
+  return $NEW($Plus$str);
+}
 
 $str $str_add($str s, $str t) {
   $str res;
@@ -523,13 +538,17 @@ $str $str_add($str s, $str t) {
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
-         
+
 $int $str_len($str s) {
   $int res = to$int(s->nchars);
   return res;
 }
 
 // $Container ///////////////////////////////////////////////////////////////////////////
+
+$Container$str $Container$str$new($Eq wit) {
+  return $NEW($Container$str,wit);
+}
 
 int $str_contains($str s, $str sub) {
   return bmh(s->str,sub->str,s->nbytes,sub->nbytes) > 0;
@@ -540,6 +559,10 @@ int $str_containsnot($str s, $str sub) {
 }
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
+
+$Iterator$str $Iterator$str$new($str str) {
+  return $NEW($Iterator$str, str);
+}
 
 void $Iterator$str_init($Iterator$str self, $str str) {
   self->src = str;
@@ -2060,6 +2083,10 @@ int $bytearray_containsnot ($bytearray, $int);
 
 // Ord
 
+$Ord$bytearray $Ord$bytearray$new() {
+  return $NEW($Ord$bytearray);
+}
+
 $bool $Ord$bytearray$__eq__ ($Ord$bytearray wit, $bytearray a, $bytearray b) {
   return to$bool($bytearray_eq(a,b));
 }
@@ -2085,6 +2112,10 @@ $bool $Ord$bytearray$__ge__ ($Ord$bytearray wit, $bytearray a, $bytearray b){
 }
 
 // Sequence
+
+$Sequence$bytearray $Sequence$bytearray$new() {
+  return $NEW($Sequence$bytearray);
+}
 
 $int $Sequence$bytearray$__getitem__ ($Sequence$bytearray wit, $bytearray self, $int ix) {
   return $bytearray_getitem(self,from$int(ix));
@@ -2129,6 +2160,10 @@ void $Sequence$bytearray$reverse($Sequence$bytearray wit, $bytearray self) {
 
 // Collection
 
+$Collection$bytearray $Collection$bytearray$new($Sequence$bytearray wit) {
+  return $NEW($Collection$bytearray,wit);
+}
+
 $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray wit, $bytearray str) {
   return $bytearray_iter(str);
 }
@@ -2143,11 +2178,19 @@ $int $Collection$bytearray$__len__ ($Collection$bytearray wit, $bytearray str) {
 
 // Plus
 
+$Plus$bytearray $Plus$bytearray$new($Sequence$bytearray wit) {
+  return $NEW($Plus$bytearray,wit);
+}
+
 $bytearray $Plus$bytearray$__add__ ($Plus$bytearray wit, $bytearray a, $bytearray b) {
   return $bytearray_add(a,b);
 }
 
 // Container
+
+$Container$bytearray $Container$bytearray$new($Eq wit) {
+  return $NEW($Container$bytearray, wit);
+}
 
 $Iterator $Container$bytearray$__iter__ ($Container$bytearray wit, $bytearray str) {
   return $bytearray_iter(str);
