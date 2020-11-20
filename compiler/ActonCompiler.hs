@@ -78,13 +78,12 @@ nodump args     = and [ not $ flag args | flag <- [parse,kinds,types,sigs,norm,d
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
                      paths <- findPaths args
-                     putStrLn ("## sysPath: " ++ sysPath paths)
-                     putStrLn ("## sysRoot: " ++ sysRoot paths)
-                     putStrLn ("## srcRoot: " ++ srcRoot paths)
-                     putStrLn ("## equal: " ++ show (srcRoot paths == sysRoot paths))
-                     putStrLn ("## modPrefix: " ++ prstrs (modPrefix paths))
-                     putStrLn ("## ext: " ++ ext paths)
-                     putStrLn ("## topMod: " ++ prstr (topMod paths))
+                     when (verbose args) $ do
+                         putStrLn ("## sysPath: " ++ sysPath paths)
+                         putStrLn ("## sysRoot: " ++ sysRoot paths)
+                         putStrLn ("## srcRoot: " ++ srcRoot paths)
+                         putStrLn ("## modPrefix: " ++ prstrs (modPrefix paths))
+                         putStrLn ("## topMod: " ++ prstr (topMod paths))
                      let mn = topMod paths
                      (case ext paths of
                         ".act"   -> do (src,tree) <- Acton.Parser.parseModule mn (file args)
@@ -125,7 +124,7 @@ data Paths      = Paths {
 
 srcFile                 :: Paths -> A.ModName -> Maybe FilePath
 srcFile paths mn        = case stripPrefix (modPrefix paths) (A.modPath mn) of
-                            Just ns -> Just $ joinPath (srcRoot paths : ns ++ [".act"])
+                            Just ns -> Just $ joinPath (srcRoot paths : ns) ++ ".act"
                             Nothing -> Nothing
 
 sysFile                 :: Paths -> A.ModName -> FilePath
