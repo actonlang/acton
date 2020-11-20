@@ -338,7 +338,6 @@ mutCall env e                           = fxCall env mutFX e
 primNoCont                              = [primASYNCf, primAFTERf]
 
 contFX (TFX _ (FXAct _))                = True                              -- TODO: refine this test using finer-grained effects
-contFX (TVar _ _)                       = True
 contFX _                                = False
 
 mutFX (TFX _ (FXMut _))                 = True
