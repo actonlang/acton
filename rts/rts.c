@@ -75,8 +75,6 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 ///////////////////////////////////////////////////////////////////////////////////////////////
 #endif
 
-$Env $ENV = 10;
-
 extern $R $ROOT($Env, $Cont);
 
 $Actor root_actor = NULL;
@@ -574,7 +572,7 @@ struct $Cont $Done$instance = {
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    return $ROOT($ENV, then);
+    return $ROOT(to$int(10), then);
 }
 
 struct $Cont$class $NewRoot$methods = {

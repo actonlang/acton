@@ -5,6 +5,7 @@ import qualified Acton.Syntax as A
 
 import qualified Acton.Relabel
 import qualified Acton.Env
+import qualified Acton.QuickType
 import qualified Acton.Kinds
 import qualified Acton.Types
 import qualified Acton.Solver
@@ -73,8 +74,6 @@ getArgs         = Args
 
 descr           = fullDesc <> progDesc "Compile an Acton source file with necessary recompilation of imported modules"
                     <> header "actonc - the Acton compiler"
-
-nodump args     = and [ not $ flag args | flag <- [parse,kinds,types,sigs,norm,deact,cps,llift,hgen,cgen] ]
 
 main            = do args <- execParser (info (getArgs <**> helper) descr)
                      paths <- findPaths args
@@ -173,7 +172,7 @@ chaseImportsAndCompile args paths task
                             if null cs
                              then do env0 <- Acton.Env.initEnv (sysRoot paths) (nobuiltin args)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
-                                     buildExecutable env1 args task 
+                                     buildExecutable env1 args paths task
                                          `catch` handle Acton.Env.compilationError (src task) paths (name task)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
@@ -218,7 +217,7 @@ chaseImportedFiles args paths imps task
 doTask :: Args -> Paths -> Acton.Env.Env0 -> CompileTask -> IO Acton.Env.Env0
 doTask args paths env t@(ActonTask mn src m)
                             = do ok <- checkUptoDate paths actFile tyFile [hFile, cFile] (importsOf t)
-                                 if ok && nodump args then do
+                                 if ok && mn /= topMod paths then do
                                           iff (verbose args) (putStrLn ("Skipping  "++ actFile ++ " (files are up to date)."))
                                           return env
                                   else do touchDirs (sysRoot paths) mn
@@ -300,7 +299,7 @@ handle f src paths mn ex = do putStrLn "\n********************"
                               System.Exit.exitFailure
   where Just fname     = srcFile paths mn
         outbase        = sysFile paths mn
-        removeIfExists f = removeFile f `catch` handleExists
+        removeIfExists f = trace ("#### REMOVING " ++ f) $ removeFile f `catch` handleExists
         handleExists :: IOException -> IO ()
         handleExists _ = return ()
 
@@ -308,15 +307,27 @@ makeReport (loc, msg) file src = errReport (sp, msg) src
   where sp = Acton.Parser.extractSrcSpan loc file src
 
 
-buildExecutable env args task
+buildExecutable env args paths task
   | null $ root args        = return ()
   | otherwise               = do putStrLn ("## root = " ++ prstr qn)
+                                 putStrLn ("## " ++ prstr n ++ " : " ++ prstr sc)
                                  case Acton.Env.findQName qn env of
-                                      i@(Acton.Env.NAct q (A.TRow _ _ _ t A.TNil{}) A.TNil{} te) -> do
-                                         putStrLn ("## Root is " ++ prstr (n,i))
+                                     i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
                                          putStrLn ("## Env is " ++ prstr t)
-                                      i -> do
-                                         putStrLn ("## Root is " ++ prstr (n,i))
+                                         c <- Acton.CodeGen.genRoot env qn t
+                                         writeFile rootFile c
+                                         createProcess (proc "gcc" $ ["-I"++sysPath paths, rootFile, objFile, "-o"++binFile] ++ libFiles)
+                                     _ ->
+                                         error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
                                  return ()
   where n                   = A.name (root args)
-        qn                  = A.GName (name task) n
+        mn                  = name task
+        qn                  = A.GName mn n
+        (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
+        outbase             = sysFile paths mn
+        rootFile            = outbase ++ ".root.c"
+        objFile             = outbase ++ ".o"
+        sysbase             = sysPath paths
+        libFiles            = "-lutf8proc" : map (++".o") [joinPath [sysbase,"rts","rts"],joinPath [sysbase,"builtin","builtin"]]
+        binFile             = dropExtension srcbase
+        Just srcbase        = srcFile paths mn

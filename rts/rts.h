@@ -165,7 +165,7 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-typedef int $Env;
+typedef $int $Env;
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

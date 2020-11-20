@@ -180,6 +180,6 @@ $R $ROOT($Env env, $Cont then) {
     $register(&lambda$1$methods);
     $register(&lambda$2$methods);
     $register(&Pingpong$methods);
-    return Pingpong$new(to$int(env), then);
+    return Pingpong$new(env, then);
 }
 

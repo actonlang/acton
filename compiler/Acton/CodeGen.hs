@@ -22,6 +22,17 @@ generate env m                      = do return (h,c)
         c                           = render $ cModule env0 m
         env0                        = genEnv $ setMod (modname m) env
 
+genRoot                             :: Acton.Env.Env0 -> QName -> Type -> IO String
+genRoot env0 qn@(GName m n) t       = do return $ render cRoot
+  where env                         = genEnv $ setMod m env0
+        env1                        = ldefine (envOf pars) env
+        pars                        = pPar conParamNames r
+        r                           = posRow t $ posRow (tCont tWild tWild) posNil
+        cRoot                       = include env "modules" m $+$
+                                      (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
+                                       nest 4 (gen env1 (GName m initKW) <> parens empty <> semi $+$
+                                               text "return" <+> genNew env1 [] qn (pArg pars) <> semi) $+$
+                                       char '}'
 
 -- Environment --------------------------------------------------------------------------------------
 
@@ -177,9 +188,7 @@ primNone                            = gPrim "None"
 primTrue                            = gPrim "True"
 primFalse                           = gPrim "False"
 
-primAPP                             = gPrim "APP"
-primNEW                             = gPrim "NEW"
-primNEWCC                           = gPrim "NEWCC"
+primROOT                            = gPrim "ROOT"
 primRegister                        = gPrim "register"
 
 primToInt                           = name "to$int"
