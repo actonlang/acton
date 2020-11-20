@@ -16,9 +16,10 @@ import Acton.Subst
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 
-generate                            :: Acton.Env.Env0 -> Module -> IO (String,String)
-generate env m                      = do return (h,c)
-  where h                           = render $ hModule env0 m
+generate                            :: Acton.Env.Env0 -> Module -> IO (String,String,String)
+generate env m                      = do return (n, h,c)
+  where n                           = render $ quotes $ gen env0 (modname m)
+        h                           = render $ hModule env0 m
         c                           = render $ cModule env0 m
         env0                        = genEnv $ setMod (modname m) env
 

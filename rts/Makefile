@@ -4,6 +4,7 @@ rts.o: rts.c rts.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-pthread \
 		-c rts.c
+	ar cr ../lib/libActon.a rts.o
 
 pingpong: rts.o pingpong.c pingpong.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \

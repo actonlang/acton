@@ -281,12 +281,19 @@ runRestPasses args paths env0 parsed = do
                       --traceM ("#################### lifteded env0:")
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
-                      (h,c) <- Acton.CodeGen.generate liftEnv lifted
+                      (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
 
                       iff (not $ nobuiltin args) $ do
-                          writeFile (outbase ++ ".h") h
-                          writeFile (outbase ++ ".c") c
-                          createProcess (proc "gcc" ["-c", "-I"++sysPath paths, outbase ++ ".c", "-o"++outbase++".o"])
+                          let libDir = joinPath [sysPath paths,"lib"]
+                              cFile = outbase ++ ".c"
+                              hFile = outbase ++ ".h"
+                              oFile = joinPath [libDir,n++".o"]
+                              aFile = joinPath [libDir,"libActon.a"]
+                              gccCmd = "gcc -c -I" ++ sysPath paths ++ " -o" ++ oFile ++ " " ++ cFile
+                              arCmd = "ar r " ++ aFile ++ " " ++ oFile
+                          writeFile hFile h
+                          writeFile cFile c
+                          createProcess (shell $ gccCmd ++ " && " ++ arCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
                       iff (hgen args) $ dump "hgen (.h)" h
                       iff (cgen args) $ dump "cgen (.c)" c
 
@@ -299,7 +306,7 @@ handle f src paths mn ex = do putStrLn "\n********************"
                               System.Exit.exitFailure
   where Just fname     = srcFile paths mn
         outbase        = sysFile paths mn
-        removeIfExists f = trace ("#### REMOVING " ++ f) $ removeFile f `catch` handleExists
+        removeIfExists f = removeFile f `catch` handleExists
         handleExists :: IOException -> IO ()
         handleExists _ = return ()
 
@@ -309,25 +316,22 @@ makeReport (loc, msg) file src = errReport (sp, msg) src
 
 buildExecutable env args paths task
   | null $ root args        = return ()
-  | otherwise               = do putStrLn ("## root = " ++ prstr qn)
-                                 putStrLn ("## " ++ prstr n ++ " : " ++ prstr sc)
-                                 case Acton.Env.findQName qn env of
-                                     i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
-                                         putStrLn ("## Env is " ++ prstr t)
-                                         c <- Acton.CodeGen.genRoot env qn t
-                                         writeFile rootFile c
-                                         createProcess (proc "gcc" $ ["-I"++sysPath paths, rootFile, objFile, "-o"++binFile] ++ libFiles)
-                                     _ ->
-                                         error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
-                                 return ()
+  | otherwise               = case Acton.Env.findQName qn env of
+                                  i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
+                                      putStrLn ("## Env is " ++ prstr t)
+                                      c <- Acton.CodeGen.genRoot env qn t
+                                      writeFile rootFile c
+                                      createProcess (shell gccCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
+                                      return ()
+                                  _ ->
+                                      error ("********************\nRoot " ++ prstr n ++ " : " ++ prstr sc ++ " is not instantiable")
   where n                   = A.name (root args)
         mn                  = name task
         qn                  = A.GName mn n
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        objFile             = outbase ++ ".o"
-        sysbase             = sysPath paths
-        libFiles            = "-lutf8proc" : map (++".o") [joinPath [sysbase,"rts","rts"],joinPath [sysbase,"builtin","builtin"]]
+        libFiles            = " -lutf8proc " ++ joinPath [sysPath paths,"lib","libActon.a"] ++ " "
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
+        gccCmd              = "gcc -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile

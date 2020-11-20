@@ -1,5 +1,6 @@
 all:
 	gcc -c -O3 builtin.c
+	ar cr ../lib/libActon.a builtin.o
 	cd tests && $(MAKE)
 	cd serialization_tests && $(MAKE)
 clean:
