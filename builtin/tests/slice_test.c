@@ -16,7 +16,7 @@ int main() {
   slc = $Slice$new(to$int(10),to$int(30),to$int(2));
   wit->$class->__setslice__(wit,($Iterable)wit->w$Collection,lst2,slc,lst3);
   $print(2,to$str("lst2 = "),lst2);
-  $range r = $NEW($range,NULL,to$int(10000),NULL);
+  $range r = $NEW($range,to$int(10000),NULL,NULL);
   $list lst4 = $NEW($list,($Sequence)$Sequence$range$witness,r);
 
   $Iterator it = $Iterable$range$witness->$class->__iter__($Iterable$range$witness,$NEW($range,to$int(1000),to$int(1),to$int(-1)));
