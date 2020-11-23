@@ -2,12 +2,12 @@
 
 class struct:
   __init__ : () -> None
-  __str__ : () -> str
   __bool__ : () -> bool
-  def __str__(self):
-      return ''
+  __str__ : () -> str
   def __bool__(self):
       return True
+  def __str__(self):
+      return ''
 
 class object:
   pass
