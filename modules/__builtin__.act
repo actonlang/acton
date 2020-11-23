@@ -25,7 +25,7 @@ class bool:
   pass
 
 class BaseException:
-  pass
+  __init__ : (str) -> None
 
 class SystemExit (BaseException):
   pass
