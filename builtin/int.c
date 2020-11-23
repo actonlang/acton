@@ -10,11 +10,11 @@ long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$int $int$new($Super s) {
+$int $int$new($WORD s) {
   return $NEW($int,s);
 }
 
-void $int_init($int self, $Super a){
+void $int_init($int self, $WORD a){
   self->val = $int_fromatom(a)->val;
 }
 
@@ -49,7 +49,7 @@ long from$int($int w) {
   return w->val;
 }
 
-$int $int_fromatom($Super a) {
+$int $int_fromatom($WORD a) {
   if ($ISINSTANCE(a,$int)) return ($int)a;
   if ($ISINSTANCE(a,$float)) return to$int(round((($float)a)->val));
   if ($ISINSTANCE(a,$bool)) return to$int((($bool)a)->val);

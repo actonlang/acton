@@ -2,11 +2,11 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$float $float$new($Super s) {
+$float $float$new($WORD s) {
   return $NEW($float,s);
 }
 
-void $float_init($float self, $Super x){
+void $float_init($float self, $WORD x){
   self->val = $float_fromatom(x)->val;
 }
 
@@ -44,7 +44,7 @@ double from$float($float x) {
   return x->val;
 }
 
-$float $float_fromatom($Super a) {
+$float $float_fromatom($WORD a) {
   if ($ISINSTANCE(a,$int)) return to$float((double)(($int)a)->val);
   if ($ISINSTANCE(a,$float)) return ($float)a;
   if ($ISINSTANCE(a,$bool)) return to$float((double)(($bool)a)->val);

@@ -2,7 +2,7 @@ struct $float$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($float, $Super);
+  void (*__init__)($float, $WORD);
   void (*__serialize__)($float,$Serial$state);
   $float (*__deserialize__)($Serial$state);
   $bool (*__bool__)($float);
@@ -16,7 +16,7 @@ struct $float {
 };
 
 extern struct $float$class $float$methods;
-$float $float$new($Super);
+$float $float$new($WORD);
 
 extern struct $Real$float$class $Real$float$methods;
 $Real$float $Real$float$new();
@@ -35,4 +35,4 @@ extern struct $Hashable$float *$Hashable$float$witness;
 $float to$float(double x);
 double from$float($float x);
 
-$float $float_fromatom($Super a);
+$float $float_fromatom($WORD a);
