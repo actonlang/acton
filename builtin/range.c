@@ -3,11 +3,13 @@ $range $range$new($int start, $int stop, $int step) {
 }
 
 void $range$__init__($range self, $int start, $int stop, $int step) {
-  if (start) 
+  if (stop) {
       self->start = from$int(start);
-  else 
+      self->stop = from$int(stop);
+  } else {
       self->start = 0;
-  self->stop = from$int(stop);
+      self->stop = from$int(start);
+  }
   if (step) {
     int stp = from$int(step);
     if (stp==0) {
@@ -121,8 +123,11 @@ $Iterable$range $Iterable$range$witness = &$Iterable$range_instance;
 
 // $Sequence$range ////////////////////////////////////////////////////////////
 
-struct $Collection$range$class $Collection$range$methods;
-struct $Plus$range$class $Plus$range$methods;
+struct $Collection$range$class $Collection$range$methods = {"",UNASSIGNED,NULL,$Collection$range$__init__,
+                                                            $Collection$range$__iter__,$Collection$range$__fromiter__,
+                                                            $Collection$range$__len__};
+
+struct $Plus$range$class $Plus$range$methods = {"",UNASSIGNED,NULL,$Plus$range$__init__,$Plus$range$__add__};
 
 $Sequence$range $Sequence$range$new() {
   return $NEW($Sequence$range);
@@ -224,10 +229,6 @@ struct $Sequence$range $Sequence$range_instance = {
     ($Plus)&$Plus$range_instance
 };
 struct $Sequence$range *$Sequence$range$witness = &$Sequence$range_instance;
-
-struct $Collection$range$class $Collection$range$methods = {"",UNASSIGNED,NULL,$Collection$range$__init__,
-                                                            $Collection$range$__iter__,$Collection$range$__fromiter__,
-                                                            $Collection$range$__len__};
 
 struct $Collection$range $Collection$range_instance = {&$Collection$range$methods,&$Sequence$range_instance};
 $Collection$range $Collection$range$witness = &$Collection$range_instance;

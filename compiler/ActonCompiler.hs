@@ -282,6 +282,8 @@ runRestPasses args paths env0 parsed = do
                       --traceM (Pretty.render (Pretty.pretty liftEnv))
 
                       (n,h,c) <- Acton.CodeGen.generate liftEnv lifted
+                      iff (hgen args) $ dump "hgen (.h)" h
+                      iff (cgen args) $ dump "cgen (.c)" c
 
                       iff (not $ nobuiltin args) $ do
                           let libDir = joinPath [sysPath paths,"lib"]
@@ -293,9 +295,10 @@ runRestPasses args paths env0 parsed = do
                               arCmd = "ar r " ++ aFile ++ " " ++ oFile
                           writeFile hFile h
                           writeFile cFile c
+                          iff (cgen args) $ do
+                              putStrLn gccCmd
+                              putStrLn arCmd
                           createProcess (shell $ gccCmd ++ " && " ++ arCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
-                      iff (hgen args) $ dump "hgen (.h)" h
-                      iff (cgen args) $ dump "cgen (.c)" c
 
                       return (env0 `Acton.Env.withModulesFrom` env,iface)
 
@@ -321,6 +324,8 @@ buildExecutable env args paths task
                                       putStrLn ("## Env is " ++ prstr t)
                                       c <- Acton.CodeGen.genRoot env qn t
                                       writeFile rootFile c
+                                      iff (cgen args) $ do
+                                          putStrLn gccCmd
                                       createProcess (shell gccCmd) >>= \(_,_,_,hdl) -> waitForProcess hdl
                                       return ()
                                   _ ->
