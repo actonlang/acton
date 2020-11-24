@@ -236,7 +236,7 @@ nm = malloc(sizeof(struct $bytearray)); \
 
 // Conversion to and from C strings
 
-$str to$str(char *str) {
+$str to$str(char *str) { 
   int nbytes = 0;
   int nchars = 0;
 
@@ -244,11 +244,9 @@ $str to$str(char *str) {
   int cp, cpnbytes;
   while(1) {
     if (*p == '\0') {
-      $str res = malloc(sizeof(struct $str));
-      res->$class = &$str$methods;
-      res->nbytes = nbytes;
-      res->nchars = nchars;
-      res->str = (unsigned char*)str;
+      $str res;
+      NEW_UNFILLED_STR(res,nchars, nbytes);
+      memcpy(res->str,str,nbytes);
       return res;
     }
     cpnbytes = utf8proc_iterate(p,-1,&cp);
