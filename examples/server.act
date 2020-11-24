@@ -1,5 +1,3 @@
-import minienv
-
 actor server(env):
 
     def session(conn):

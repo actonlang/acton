@@ -11,6 +11,7 @@ pingpong: rts.o pingpong.c pingpong.h
 		-lutf8proc \
 		rts.o \
 		../builtin/builtin.o \
+		../builtin/minienv.o \
 		pingpong.c \
 		-o pingpong
 
@@ -21,6 +22,7 @@ pingpong2: rts.c pingpong.c pingpong.h
 		-pthread \
 		rts.c \
 		../builtin/builtin.o \
+		../builtin/minienv.o \
 		pingpong.c \
 		-o pingpong2
 

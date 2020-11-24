@@ -1,5 +1,6 @@
 #include "rts.h"
 #include "pingpong.h"
+#include "../builtin/minienv.h"
 
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count, $int q) {
     $this->self = self;
@@ -180,6 +181,6 @@ $R $ROOT($Env env, $Cont then) {
     $register(&lambda$1$methods);
     $register(&lambda$2$methods);
     $register(&Pingpong$methods);
-    return Pingpong$new(env, then);
+    return Pingpong$new(env->pp, then);
 }
 

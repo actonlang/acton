@@ -1,6 +1,5 @@
-#ifndef minienv
-#define minienv
-
+#pragma once
+//////////////////////////////////////////////////////////////////////////////////
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/event.h>
@@ -11,11 +10,12 @@
 #include <sys/errno.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-#include "../../builtin/builtin.h"
-#include "rts.h"
+#include <pthread.h>
 
+#include "builtin.h"
+#include "../rts/rts.h"
 
-#define BUF_SIZE 1024
+#define SOCK_BUF_SIZE 1024
 
 #define MAX_FD  10
 
@@ -28,15 +28,17 @@ struct FileDescriptorData {
   $function chandler;
   struct sockaddr_in sock_addr;
   struct kevent event_spec;
-  char buffer[BUF_SIZE];
+  char buffer[SOCK_BUF_SIZE];
 };
 
 struct FileDescriptorData fd_data[MAX_FD];
 int kq;
 
-void setupConnection (int fd, $str remoteHost);
+void setupConnection (int fd);
+$str $getName(int fd);
+void $eventloop();
 
-
+//////////////////////////////////////////////////////////////////////////////////////
 struct minienv$$l$1lambda;
 struct minienv$$l$2lambda;
 struct minienv$$l$3lambda;
@@ -44,8 +46,8 @@ struct minienv$$l$4lambda;
 struct minienv$$l$5lambda;
 struct minienv$$l$6lambda;
 struct minienv$$l$7lambda;
-struct minienv$$Env;
-struct minienv$$Connection;
+struct $Env;
+struct $Connection;
 typedef struct minienv$$l$1lambda *minienv$$l$1lambda;
 typedef struct minienv$$l$2lambda *minienv$$l$2lambda;
 typedef struct minienv$$l$3lambda *minienv$$l$3lambda;
@@ -53,54 +55,54 @@ typedef struct minienv$$l$4lambda *minienv$$l$4lambda;
 typedef struct minienv$$l$5lambda *minienv$$l$5lambda;
 typedef struct minienv$$l$6lambda *minienv$$l$6lambda;
 typedef struct minienv$$l$7lambda *minienv$$l$7lambda;
-typedef struct minienv$$Env *minienv$$Env;
-typedef struct minienv$$Connection *minienv$$Connection;
+typedef struct $Env *$Env;
+typedef struct $Connection *$Connection;
 struct minienv$$l$1lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$1lambda, minienv$$Env, $str);
-    void* (*__serialize__) (minienv$$l$1lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$1lambda, $Env, $str);
+    $NoneType (*__serialize__) (minienv$$l$1lambda, $Serial$state);
     minienv$$l$1lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$1lambda); 
-    $bool (*__bool__) (minienv$$l$1lambda); 
+    $bool (*__bool__) (minienv$$l$1lambda);
+    $str (*__str__) (minienv$$l$1lambda);
     $R (*__call__) (minienv$$l$1lambda, $Cont);
 };
 struct minienv$$l$1lambda {
     struct minienv$$l$1lambda$class *$class;
-    minienv$$Env __self__;
+    $Env __self__;
     $str s;
 };
 struct minienv$$l$2lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$2lambda, minienv$$Env, $function);
-    void* (*__serialize__) (minienv$$l$2lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$2lambda, $Env, $function);
+    $NoneType (*__serialize__) (minienv$$l$2lambda, $Serial$state);
     minienv$$l$2lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$2lambda); 
-    $bool (*__bool__) (minienv$$l$2lambda); 
+    $bool (*__bool__) (minienv$$l$2lambda);
+    $str (*__str__) (minienv$$l$2lambda);
     $R (*__call__) (minienv$$l$2lambda, $Cont);
 };
 struct minienv$$l$2lambda {
     struct minienv$$l$2lambda$class *$class;
-    minienv$$Env __self__;
+    $Env __self__;
     $function cb;
 };
 struct minienv$$l$3lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$3lambda, minienv$$Env, $str, $int, $function);
-    void* (*__serialize__) (minienv$$l$3lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$3lambda, $Env, $str, $int, $function);
+    $NoneType (*__serialize__) (minienv$$l$3lambda, $Serial$state);
     minienv$$l$3lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$3lambda); 
-    $bool (*__bool__) (minienv$$l$3lambda); 
+    $bool (*__bool__) (minienv$$l$3lambda);
+    $str (*__str__) (minienv$$l$3lambda);
     $R (*__call__) (minienv$$l$3lambda, $Cont);
 };
 struct minienv$$l$3lambda {
     struct minienv$$l$3lambda$class *$class;
-    minienv$$Env __self__;
+    $Env __self__;
     $str host;
     $int port;
     $function cb;
@@ -109,16 +111,16 @@ struct minienv$$l$4lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$4lambda, minienv$$Env, $int, $function);
-    void* (*__serialize__) (minienv$$l$4lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$4lambda, $Env, $int, $function);
+    $NoneType (*__serialize__) (minienv$$l$4lambda, $Serial$state);
     minienv$$l$4lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$4lambda); 
-    $bool (*__bool__) (minienv$$l$4lambda); 
+    $bool (*__bool__) (minienv$$l$4lambda);
+    $str (*__str__) (minienv$$l$4lambda);
     $R (*__call__) (minienv$$l$4lambda, $Cont);
 };
 struct minienv$$l$4lambda {
     struct minienv$$l$4lambda$class *$class;
-    minienv$$Env __self__;
+    $Env __self__;
     $int port;
     $function cb;
 };
@@ -126,94 +128,95 @@ struct minienv$$l$5lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$5lambda, minienv$$Connection, $str);
-    void* (*__serialize__) (minienv$$l$5lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$5lambda, $Connection, $str);
+    $NoneType (*__serialize__) (minienv$$l$5lambda, $Serial$state);
     minienv$$l$5lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$5lambda); 
-    $bool (*__bool__) (minienv$$l$5lambda); 
+    $bool (*__bool__) (minienv$$l$5lambda);
+    $str (*__str__) (minienv$$l$5lambda);
     $R (*__call__) (minienv$$l$5lambda, $Cont);
 };
 struct minienv$$l$5lambda {
     struct minienv$$l$5lambda$class *$class;
-    minienv$$Connection __self__;
+    $Connection __self__;
     $str s;
 };
 struct minienv$$l$6lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$6lambda, minienv$$Connection);
-    void* (*__serialize__) (minienv$$l$6lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$6lambda, $Connection);
+    $NoneType (*__serialize__) (minienv$$l$6lambda, $Serial$state);
     minienv$$l$6lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$6lambda); 
-    $bool (*__bool__) (minienv$$l$6lambda); 
+    $bool (*__bool__) (minienv$$l$6lambda);
+    $str (*__str__) (minienv$$l$6lambda);
     $R (*__call__) (minienv$$l$6lambda, $Cont);
 };
 struct minienv$$l$6lambda {
     struct minienv$$l$6lambda$class *$class;
-    minienv$$Connection __self__;
+    $Connection __self__;
 };
 struct minienv$$l$7lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    void* (*__init__) (minienv$$l$7lambda, minienv$$Connection, $function, $function);
-    void* (*__serialize__) (minienv$$l$7lambda, $Serial$state);
+    $NoneType (*__init__) (minienv$$l$7lambda, $Connection, $function, $function);
+    $NoneType (*__serialize__) (minienv$$l$7lambda, $Serial$state);
     minienv$$l$7lambda (*__deserialize__) ($Serial$state);
-    $str (*__str__) (minienv$$l$7lambda); 
-    $bool (*__bool__) (minienv$$l$7lambda); 
+    $bool (*__bool__) (minienv$$l$7lambda);
+    $str (*__str__) (minienv$$l$7lambda);
     $R (*__call__) (minienv$$l$7lambda, $Cont);
 };
 struct minienv$$l$7lambda {
     struct minienv$$l$7lambda$class *$class;
-    minienv$$Connection __self__;
+    $Connection __self__;
     $function cb1;
     $function cb2;
 };
-struct minienv$$Env$class {
+struct $Env$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $R (*__init__) (minienv$$Env, $Cont);
-    void* (*__serialize__) (minienv$$Env, $Serial$state);
-    minienv$$Env (*__deserialize__) ($Serial$state);
-    $bool (*__bool__) (minienv$$Env);
-    $str (*__str__) (minienv$$Env);
-    $R (*stdout_write$local) (minienv$$Env, $str, $Cont);
-    $R (*stdin_install$local) (minienv$$Env, $function, $Cont);
-    $R (*connect$local) (minienv$$Env, $str, $int, $function, $Cont);
-    $R (*listen$local) (minienv$$Env, $int, $function, $Cont);
-    $Msg (*stdout_write) (minienv$$Env, $str);
-    $Msg (*stdin_install) (minienv$$Env, $function);
-    $Msg (*connect) (minienv$$Env, $str, $int, $function);
-    $Msg (*listen) (minienv$$Env, $int, $function);
+    $R (*__init__) ($Env, $Cont);
+    $NoneType (*__serialize__) ($Env, $Serial$state);
+    $Env (*__deserialize__) ($Serial$state);
+    $bool (*__bool__) ($Env);
+    $str (*__str__) ($Env);
+    $R (*stdout_write$local) ($Env, $str, $Cont);
+    $R (*stdin_install$local) ($Env, $function, $Cont);
+    $R (*connect$local) ($Env, $str, $int, $function, $Cont);
+    $R (*listen$local) ($Env, $int, $function, $Cont);
+    $Msg (*stdout_write) ($Env, $str);
+    $Msg (*stdin_install) ($Env, $function);
+    $Msg (*connect) ($Env, $str, $int, $function);
+    $Msg (*listen) ($Env, $int, $function);
 };
-struct minienv$$Env {
-    struct minienv$$Env$class *$class;
+struct $Env {
+    struct $Env$class *$class;
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
     $Catcher $catcher;
     $Lock $msg_lock;
+    $int pp;
 };
-struct minienv$$Connection$class {
+struct $Connection$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $R (*__init__) (minienv$$Connection, int, $Cont);
-    void* (*__serialize__) (minienv$$Connection, $Serial$state);
-    minienv$$Connection (*__deserialize__) ($Serial$state);
-    $bool (*__bool__) (minienv$$Connection);
-    $str (*__str__) (minienv$$Connection);
-    $R (*write$local) (minienv$$Connection, $str, $Cont);
-    $R (*close$local) (minienv$$Connection, $Cont);
-    $R (*on_receipt$local) (minienv$$Connection, $function, $function, $Cont);
-    $Msg (*write) (minienv$$Connection, $str);
-    $Msg (*close) (minienv$$Connection);
-    $Msg (*on_receipt) (minienv$$Connection, $function, $function);
+    $R (*__init__) ($Connection, int, $Cont);
+    $NoneType (*__serialize__) ($Connection, $Serial$state);
+    $Connection (*__deserialize__) ($Serial$state);
+    $bool (*__bool__) ($Connection);
+    $str (*__str__) ($Connection);
+    $R (*write$local) ($Connection, $str, $Cont);
+    $R (*close$local) ($Connection, $Cont);
+    $R (*on_receipt$local) ($Connection, $function, $function, $Cont);
+    $Msg (*write) ($Connection, $str);
+    $Msg (*close) ($Connection);
+    $Msg (*on_receipt) ($Connection, $function, $function);
 };
-struct minienv$$Connection {
-    struct minienv$$Connection$class *$class;
+struct $Connection {
+    struct $Connection$class *$class;
     $Actor $next;
     $Msg $msg;
     $Msg $outgoing;
@@ -222,14 +225,21 @@ struct minienv$$Connection {
     int descriptor;
 };
 extern struct minienv$$l$1lambda$class minienv$$l$1lambda$methods;
+minienv$$l$1lambda minienv$$l$1lambda$new($Env, $str);
 extern struct minienv$$l$2lambda$class minienv$$l$2lambda$methods;
+minienv$$l$2lambda minienv$$l$2lambda$new($Env, $function);
 extern struct minienv$$l$3lambda$class minienv$$l$3lambda$methods;
+minienv$$l$3lambda minienv$$l$3lambda$new($Env, $str, $int, $function);
 extern struct minienv$$l$4lambda$class minienv$$l$4lambda$methods;
+minienv$$l$4lambda minienv$$l$4lambda$new($Env, $int, $function);
 extern struct minienv$$l$5lambda$class minienv$$l$5lambda$methods;
+minienv$$l$5lambda minienv$$l$5lambda$new($Connection, $str);
 extern struct minienv$$l$6lambda$class minienv$$l$6lambda$methods;
+minienv$$l$6lambda minienv$$l$6lambda$new($Connection);
 extern struct minienv$$l$7lambda$class minienv$$l$7lambda$methods;
-extern struct minienv$$Env$class minienv$$Env$methods;
-extern struct minienv$$Connection$class minienv$$Connection$methods;
-
-void minienv$$__init__();
-#endif
+minienv$$l$7lambda minienv$$l$7lambda$new($Connection, $function, $function);
+extern struct $Env$class $Env$methods;
+$R $Env$new($Cont);
+extern struct $Connection$class $Connection$methods;
+$R $Connection$new(int,$Cont);
+void minienv$$__init__ ();

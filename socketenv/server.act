@@ -1,4 +1,0 @@
-import stdenv
-
-actor server(env):
-    env.listen(12345,lambda conn:conn.on_receipt(input = conn.write,error = env.stdout.write))

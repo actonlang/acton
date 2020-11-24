@@ -1,4 +1,3 @@
-import minienv
 
 actor client(env):
 
