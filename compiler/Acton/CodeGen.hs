@@ -110,7 +110,7 @@ decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n 
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       gen env t <+> newcon env n <> parens (params env r) <> semi
-  where TFun _ _ r _ t              = typeInstOf env (map tVar $ tybound q) (eVar n)
+  where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env Def{}                  = empty
 
 fields env c                        = map field te
@@ -427,7 +427,7 @@ declCon env n q                     = (gen env tRes <+> newcon env n <> parens (
                                               gen env tmpV <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi $+$
                                               initcall env1) $+$
                                       char '}'
-  where TFun _ fx r _ t             = typeInstOf env (map tVar $ tybound q) (eVar n)
+  where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ tybound q)
         tRes                        = if t == tR then tR else tObj
         pars                        = pPar conParamNames r

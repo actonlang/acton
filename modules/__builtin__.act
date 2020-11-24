@@ -13,16 +13,16 @@ class object:
   pass
 
 class int:
-  pass
+  __init__ : ((int|float|bool|str)) -> None
 
 class float:
-  pass
+  __init__ : ((int|float|bool|str)) -> None
 
 class complex:
-  pass
+  __init__ : (Number) -> None
 
 class bool:
-  pass
+  __init__ : (struct) -> None
 
 class BaseException:
   __init__ : (str) -> None
@@ -64,13 +64,14 @@ class ValueError (Exception):
   pass
 
 class Slice:
-  pass
+  __init__     : (?int,?int,?int) -> None
   
 class list[A] (object):
-  copy : () -> list[A]
+  __init__     : (Sequence[A]) -> None
+  copy         : () -> list[A]
 
 class range:
-  __init__ : (int,?int,?int) -> None
+  __init__     : (int,?int,?int) -> None
 
 class Iterator[A] (object):
   __next__     : () -> A
@@ -79,6 +80,7 @@ protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
 class str:
+  __init__     : (struct) -> None
   capitalize   : () -> str
   center       : (int,?str) -> str
   count        : (str,?int,?int) -> int
@@ -115,6 +117,7 @@ class str:
   zfill        : (str,int) -> str
 
 class bytearray (object):
+  __init__     : (struct) -> None
   capitalize   : () -> bytearray
   center       : (int,?bytearray) -> bytearray
   count        : (bytearray,?int,?int) -> int
