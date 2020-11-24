@@ -269,9 +269,8 @@ instance InfEnv Stmt where
     
     infEnv env (Signature l ns sc dec)
       | not $ null redefs               = illegalRedef (head redefs)
-      | otherwise                       = return ([], [(n, NSig sc dec') | n <- ns], Signature l ns sc dec')
+      | otherwise                       = return ([], [(n, NSig sc dec) | n <- ns], Signature l ns sc dec)
       where redefs                      = [ n | n <- ns, findName n env /= NReserved ]
-            dec'                        = case (sctype sc, dec) of (TFun{}, _) -> dec; (_, NoDec) -> Property; _ -> dec
 
     infEnv env (Data l _ _)             = notYet l "data syntax"
 

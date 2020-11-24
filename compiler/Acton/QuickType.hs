@@ -91,6 +91,9 @@ isClosed                            :: NameInfo -> Bool
 isClosed (NVar _)                   = True
 isClosed (NSVar _)                  = True
 isClosed (NSig _ Property)          = True
+isClosed (NSig sc _)
+  | TFun{} <- sctype sc             = False
+  | otherwise                       = True      -- 'closed' ~ 'not a function'
 isClosed _                          = False
 
 closedType                          :: EnvF x -> Expr -> Bool
