@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "../builtin/builtin.h"
 
@@ -15,6 +16,8 @@ struct $Catcher;
 struct $function;
 struct $Cont;
 struct $ConstCont;
+
+pthread_key_t self_key;
 
 typedef struct $Msg *$Msg;
 typedef struct $Actor *$Actor;
@@ -165,7 +168,7 @@ $R $AWAIT($Msg, $Cont);
 void $PUSH($Cont);
 void $POP();
 
-typedef $int $Env;
+//typedef $int $Env;
 
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);

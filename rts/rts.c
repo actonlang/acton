@@ -4,6 +4,7 @@
 #include <stdarg.h>
 
 #include "rts.h"
+#include "../builtin/minienv.h"
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -72,7 +73,6 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 
     return 0;
 }
-///////////////////////////////////////////////////////////////////////////////////////////////
 #endif
 
 extern $R $ROOT($Env, $Cont);
@@ -84,8 +84,6 @@ $Lock readyQ_lock;
 
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
-
-pthread_key_t self_key;
 
 static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
@@ -572,7 +570,8 @@ struct $Cont $Done$instance = {
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    return $ROOT(to$int(10), then);
+    $Env env = $NEW($Env,NULL);
+    return $ROOT(env, then);
 }
 
 struct $Cont$class $NewRoot$methods = {
@@ -636,12 +635,19 @@ $Catcher POP_catcher($Actor a) {
 
 $Msg $ASYNC($Actor to, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline;
+    time_t baseline = 0;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
-    PUSH_outgoing(self, m);
-//    if (ENQ_msg(m, to)) {
-//        ENQ_ready(to);
-//    }
+    if (self) {
+        m->baseline = self->msg->baseline;
+        PUSH_outgoing(self, m);
+    } else {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        m->baseline = now.tv_sec;
+        if (ENQ_msg(m, to)) {
+           ENQ_ready(to);
+        }
+    }
     return m;
 }
 
@@ -747,9 +753,12 @@ void *main_loop(void *arg) {
                   }
                 }
 #endif
-                // TODO: do I/O polling
-              static struct timespec idle_wait = { 0, 500000000 };  // 500ms
-              nanosleep(&idle_wait, NULL);
+                if  ((int)arg==0) {
+                    $eventloop();
+                } else {
+                  static struct timespec idle_wait = { 0, 500000000 };  // 500ms
+                  nanosleep(&idle_wait, NULL);
+                }
             }
         }
     }
@@ -791,6 +800,7 @@ int main(int argc, char **argv) {
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
     printf("%ld worker threads\n", num_cores);
+    kq = kqueue();
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
     pthread_t threads[num_cores];
@@ -863,3 +873,4 @@ to listen:
     
 
 */
+

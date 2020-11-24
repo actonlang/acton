@@ -77,6 +77,7 @@ conParamNames                       = map (Internal CodeGenPass "par") [1..]
 
 hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
                                       include env "builtin" (modName ["builtin"]) $+$
+                                      include env "builtin" (modName ["minienv"]) $+$
                                       include env "rts" (modName ["rts"]) $+$
                                       vcat (map (include env "modules") $ modNames imps) $+$
                                       hSuite env stmts $+$
