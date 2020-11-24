@@ -1412,6 +1412,7 @@ instance InfEnvT Pattern where
                                                  NReserved -> do
                                                      traceM ("## infEnvT " ++ prstr n ++ " : " ++ prstr t)
                                                      return ([], [(n, NVar t)], t, PVar l n (Just t))
+                                                 NSig (TSchema _ [] TFun{}) _ -> notYet l "Assignment to variable with function signature"
                                                  NSig (TSchema _ [] t') _ -> do
                                                      traceM ("## infEnvT (sig) " ++ prstr n ++ " : " ++ prstr t ++ " < " ++ prstr t')
                                                      return ([Cast t t'], [(n, NVar t')], t, PVar l n (Just t))
