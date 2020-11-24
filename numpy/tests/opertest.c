@@ -2,7 +2,7 @@
 #include "../numpy.h"
 
 int main() {
-  $ndarray v = $ndarray_arange(NULL,to$int(60),NULL);
+  $ndarray v = $ndarray_arange(to$int(60),NULL,NULL);
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(3));
   $list_append(newshape,to$int(2));

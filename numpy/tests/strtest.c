@@ -10,7 +10,7 @@ int main() {
   $list_append(elems,to$float(7.0));
   $ndarray q = $ndarray_array(($Primitive)$Primitive$float$witness,elems);
   $printobj("q =",q);
-  $ndarray a = $ndarray_arange(NULL,to$int(10),NULL);
+  $ndarray a = $ndarray_arange(to$int(10),NULL,NULL);
   $printobj("a =",a);
   $list ix = $NEW($list,NULL,NULL);
   $list_append(ix,to$int(2));
