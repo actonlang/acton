@@ -2,7 +2,7 @@
 #include "../numpy.h"
 
 int main() {
-  $ndarray a = $ndarray_arange(NULL,to$int(60),NULL);
+  $ndarray a = $ndarray_arange(to$int(60),NULL,NULL);
   $printobj("a.shape =",a->shape);
   $printobj("a.strides =",a->strides);
   $printobj("a=",a);

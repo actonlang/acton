@@ -5,7 +5,7 @@ int main(int argc, char *argv[]) {
   long n;
   sscanf(argv[1],"%ld",&n);
   $ndarray x = $ndarray_linspace(to$float(0.0),to$float(1.0), to$int(n*n*n*n));
-  $ndarray y = $ndarray_arange(NULL,to$int(n*n*n*n),NULL);
+  $ndarray y = $ndarray_arange(to$int(n*n*n*n),NULL,NULL);
   //$printobj("x =",x);
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(n));
