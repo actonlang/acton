@@ -4,9 +4,7 @@ actor client(env):
         conn.on_receipt(env.stdout_write, env.stdout_write)
         env.stdin_install(conn.write)
 
-    if env.args.__len__() != 3:
-        print('length of argv is %d' % env.args.__len__())
-        print(env.args)
+    if len(env.args) != 3:
         print('usage: client host port')
         env.exit(-1)
     else:
