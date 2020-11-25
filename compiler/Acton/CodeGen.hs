@@ -353,7 +353,7 @@ instance Gen Stmt where
     gen env (Break _)               = text "break" <> semi
     gen env (Continue _)            = text "continue" <> semi
     gen env (If _ (b:bs) b2)        = genBranch env "if" b $+$ vmap (genBranch env "else if") bs $+$ genElse env b2
-    gen env (While _ e b [])        = (text "while" <+> parens (genExp env tBool e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+    gen env (While _ e b [])        = (text "while" <+> parens (genExp env tBool e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env _                       = empty
 
 genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
