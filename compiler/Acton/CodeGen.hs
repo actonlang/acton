@@ -356,7 +356,7 @@ instance Gen Stmt where
     gen env (While _ e b [])        = (text "while" <+> parens (genExp env tBool e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e) <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -558,7 +558,7 @@ eliminated in previous passes.
 genPrec env _ (UnOp _ Not e)            = text "!" <> genPrec env 4 e
 genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&" <+> genPrec env 4 e2)
 genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+> text "||" <+> genPrec env 3 e2)
-genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (genPrec env 2 e <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
+genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (parens (genPrec env 2 e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
 genPrec env _ e                         = gen env e
 
 instance Gen Elem where
