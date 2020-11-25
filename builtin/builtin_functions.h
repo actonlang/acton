@@ -116,3 +116,23 @@ $Iterator$zip $Iterator$zip$new($Iterator, $Iterator);
 $Iterator $zip($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2);
 
 
+// EqOpt //////////////////////////////////////////////////////
+
+struct $EqOpt;
+typedef struct $EqOpt *$EqOpt;
+
+struct $EqOpt$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)($EqOpt, $Eq);
+    $bool (*__eq__)($EqOpt, $WORD, $WORD);
+    $bool (*__ne__)($EqOpt, $WORD, $WORD);
+};
+
+struct $EqOpt {
+    struct $EqOpt$class *$class;
+    $Eq w$Eq$A;
+};
+
+$EqOpt $EqOpt$new($Eq);

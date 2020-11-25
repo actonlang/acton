@@ -25,7 +25,7 @@ void $printobj(char *mess,$WORD obj);
                                  while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
                                  $c == ($Super$class)&$T ## $methods; })
 
-#define $ISNOTNONE(x)         ((x) != $None)
+#define $ISNOTNONE(x)         ((x) != $None ? $True : $False)
 
 #define $SKIPRES(cont)        (cont)
 

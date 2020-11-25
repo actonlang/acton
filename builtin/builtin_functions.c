@@ -273,3 +273,28 @@ $Iterator $zip ($Iterable wit1, $Iterable wit2, $WORD iter1, $WORD iter2) {
   $Iterator it2 = wit2->$class->__iter__(wit2,iter2);
   return ($Iterator)$Iterator$zip$new(it1,it2);
 }
+
+// EqOpt //////////////////////////////////////////////////////
+
+void $EqOpt$__init__($EqOpt wit, $Eq w$Eq$A) {
+    wit->w$Eq$A = w$Eq$A;
+}
+
+$bool $EqOpt$__eq__($EqOpt wit, $WORD a, $WORD b) {
+    if (a && b)
+        return wit->w$Eq$A->$class->__eq__(wit->w$Eq$A, a, b);
+    return (!a && !b) ? $True : $False;
+}
+
+$bool $EqOpt$__ne__($EqOpt wit, $WORD a, $WORD b) {
+    if (a && b)
+        return wit->w$Eq$A->$class->__ne__(wit->w$Eq$A, a, b);
+    return (!a && !b) ? $False : $True;
+}
+
+struct $EqOpt$class $EqOpt$methods = {"", UNASSIGNED, NULL, $EqOpt$__init__, $EqOpt$__eq__, $EqOpt$__ne__};
+
+
+$EqOpt $EqOpt$new($Eq w$Eq$A) {
+    return $NEW($EqOpt, w$Eq$A);
+}
