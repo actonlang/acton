@@ -46,6 +46,7 @@ struct minienv$$l$4lambda;
 struct minienv$$l$5lambda;
 struct minienv$$l$6lambda;
 struct minienv$$l$7lambda;
+struct minienv$$l$8lambda;
 struct $Env;
 struct $Connection;
 typedef struct minienv$$l$1lambda *minienv$$l$1lambda;
@@ -55,6 +56,7 @@ typedef struct minienv$$l$4lambda *minienv$$l$4lambda;
 typedef struct minienv$$l$5lambda *minienv$$l$5lambda;
 typedef struct minienv$$l$6lambda *minienv$$l$6lambda;
 typedef struct minienv$$l$7lambda *minienv$$l$7lambda;
+typedef struct minienv$$l$8lambda *minienv$$l$8lambda;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
 struct minienv$$l$1lambda$class {
@@ -128,7 +130,7 @@ struct minienv$$l$5lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (minienv$$l$5lambda, $Connection, $str);
+    $NoneType (*__init__) (minienv$$l$5lambda, $Env, $int);
     $NoneType (*__serialize__) (minienv$$l$5lambda, $Serial$state);
     minienv$$l$5lambda (*__deserialize__) ($Serial$state);
     $bool (*__bool__) (minienv$$l$5lambda);
@@ -137,14 +139,14 @@ struct minienv$$l$5lambda$class {
 };
 struct minienv$$l$5lambda {
     struct minienv$$l$5lambda$class *$class;
-    $Connection __self__;
-    $str s;
+    $Env __self__;
+    $int n;
 };
 struct minienv$$l$6lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (minienv$$l$6lambda, $Connection);
+    $NoneType (*__init__) (minienv$$l$6lambda, $Connection, $str);
     $NoneType (*__serialize__) (minienv$$l$6lambda, $Serial$state);
     minienv$$l$6lambda (*__deserialize__) ($Serial$state);
     $bool (*__bool__) (minienv$$l$6lambda);
@@ -154,12 +156,13 @@ struct minienv$$l$6lambda$class {
 struct minienv$$l$6lambda {
     struct minienv$$l$6lambda$class *$class;
     $Connection __self__;
+    $str s;
 };
 struct minienv$$l$7lambda$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $NoneType (*__init__) (minienv$$l$7lambda, $Connection, $function, $function);
+    $NoneType (*__init__) (minienv$$l$7lambda, $Connection);
     $NoneType (*__serialize__) (minienv$$l$7lambda, $Serial$state);
     minienv$$l$7lambda (*__deserialize__) ($Serial$state);
     $bool (*__bool__) (minienv$$l$7lambda);
@@ -169,6 +172,21 @@ struct minienv$$l$7lambda$class {
 struct minienv$$l$7lambda {
     struct minienv$$l$7lambda$class *$class;
     $Connection __self__;
+};
+struct minienv$$l$8lambda$class {
+    char *$GCINFO;
+    $int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) (minienv$$l$8lambda, $Connection, $function, $function);
+    $NoneType (*__serialize__) (minienv$$l$8lambda, $Serial$state);
+    minienv$$l$8lambda (*__deserialize__) ($Serial$state);
+    $bool (*__bool__) (minienv$$l$8lambda);
+    $str (*__str__) (minienv$$l$8lambda);
+    $R (*__call__) (minienv$$l$8lambda, $Cont);
+};
+struct minienv$$l$8lambda {
+    struct minienv$$l$8lambda$class *$class;
+    $Connection __self__;
     $function cb1;
     $function cb2;
 };
@@ -176,7 +194,7 @@ struct $Env$class {
     char *$GCINFO;
     $int $class_id;
     $Super$class $superclass;
-    $R (*__init__) ($Env, $Cont);
+    $R (*__init__) ($Env, $list, $Cont);
     $NoneType (*__serialize__) ($Env, $Serial$state);
     $Env (*__deserialize__) ($Serial$state);
     $bool (*__bool__) ($Env);
@@ -185,10 +203,12 @@ struct $Env$class {
     $R (*stdin_install$local) ($Env, $function, $Cont);
     $R (*connect$local) ($Env, $str, $int, $function, $Cont);
     $R (*listen$local) ($Env, $int, $function, $Cont);
+    $R (*exit$local) ($Env, $int, $Cont);
     $Msg (*stdout_write) ($Env, $str);
     $Msg (*stdin_install) ($Env, $function);
     $Msg (*connect) ($Env, $str, $int, $function);
     $Msg (*listen) ($Env, $int, $function);
+    $Msg (*exit) ($Env, $int);
 };
 struct $Env {
     struct $Env$class *$class;
@@ -197,7 +217,7 @@ struct $Env {
     $Msg $outgoing;
     $Catcher $catcher;
     $Lock $msg_lock;
-    $int pp;
+    $list args;
 };
 struct $Connection$class {
     char *$GCINFO;
@@ -233,13 +253,15 @@ minienv$$l$3lambda minienv$$l$3lambda$new($Env, $str, $int, $function);
 extern struct minienv$$l$4lambda$class minienv$$l$4lambda$methods;
 minienv$$l$4lambda minienv$$l$4lambda$new($Env, $int, $function);
 extern struct minienv$$l$5lambda$class minienv$$l$5lambda$methods;
-minienv$$l$5lambda minienv$$l$5lambda$new($Connection, $str);
+minienv$$l$5lambda minienv$$l$5lambda$new($Env, $int);
 extern struct minienv$$l$6lambda$class minienv$$l$6lambda$methods;
-minienv$$l$6lambda minienv$$l$6lambda$new($Connection);
+minienv$$l$6lambda minienv$$l$6lambda$new($Connection, $str);
 extern struct minienv$$l$7lambda$class minienv$$l$7lambda$methods;
-minienv$$l$7lambda minienv$$l$7lambda$new($Connection, $function, $function);
+minienv$$l$7lambda minienv$$l$7lambda$new($Connection);
+extern struct minienv$$l$8lambda$class minienv$$l$8lambda$methods;
+minienv$$l$8lambda minienv$$l$8lambda$new($Connection, $function, $function);
 extern struct $Env$class $Env$methods;
-$R $Env$new($Cont);
+$R $Env$new($list,$Cont);
 extern struct $Connection$class $Connection$methods;
 $R $Connection$new(int,$Cont);
 void minienv$$__init__ ();

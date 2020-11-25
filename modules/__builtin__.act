@@ -534,9 +534,9 @@ zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]
 
 ## Environment ################################################
 
-actor Env ():
-    pp : int
-    pp = 10
+actor Env (argv):
+    args : list[str]
+    args = argv
     stdout_write : action(str) -> None
     def stdout_write(s): pass
     stdin_install: action(action(str)->None) -> None
@@ -545,6 +545,8 @@ actor Env ():
     def connect(host,port,cb): pass
     listen       : action(int, action(Connection)->None) -> None
     def listen(port,cb): pass
+    exit        : action(int) -> None
+    def exit(n): pass
 
 actor Connection ():
     write       : action(str) -> None
@@ -553,4 +555,6 @@ actor Connection ():
     def close() : pass
     on_receipt  : action(action(str)->None, action(str)->None) -> None
     def on_receipt(cb1, cb2): pass
+    
+
 

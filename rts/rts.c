@@ -85,6 +85,8 @@ $Lock readyQ_lock;
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
 
+$list args = NULL;
+
 static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
@@ -570,7 +572,7 @@ struct $Cont $Done$instance = {
 ////////////////////////////////////////////////////////////////////////////////////////
 $R $NewRoot$__call__ ($Cont $this, $WORD val) {
     $Cont then = ($Cont)val;
-    $Env env = $NEW($Env,NULL);
+    $Env env = $NEW($Env,args,NULL);
     return $ROOT(env, then);
 }
 
@@ -813,9 +815,13 @@ int main(int argc, char **argv) {
     }
     $register_builtin();
     $register_rts();
+
+    args = $list$new(NULL,NULL);
+    for (int i=0; i< argc; i++)
+      $list_append(args,to$str(argv[i]));
     
     BOOTSTRAP();
-
+    
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);
     }

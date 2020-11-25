@@ -102,61 +102,79 @@ minienv$$l$4lambda minienv$$l$4lambda$new($Env C$1par, $int C$2par, $function C$
     return $tmp;
 }
 struct minienv$$l$4lambda$class minienv$$l$4lambda$methods = {"minienv$$l$4lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$4lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$4lambda$__call__};
-;
-$NoneType minienv$$l$5lambda$__init__ (minienv$$l$5lambda l$self, $Connection __self__, $str s) {
+
+$NoneType minienv$$l$5lambda$__init__ (minienv$$l$5lambda l$self, $Env __self__, $int n) {
     l$self->__self__ = __self__;
-    l$self->s = s;
+    l$self->n = n;
     return $None;
 }
 $R minienv$$l$5lambda$__call__ (minienv$$l$5lambda l$self, $Cont c$cont) {
-    $Connection __self__ = l$self->__self__;
-    $str s = l$self->s;
-    return __self__->$class->write$local(__self__, s, ($Cont)c$cont);
+    $Env __self__ = l$self->__self__;
+    $int n = l$self->n;
+    return __self__->$class->exit$local(__self__, n, ($Cont)c$cont);
 }
-minienv$$l$5lambda minienv$$l$5lambda$new($Connection C$1par, $str C$2par) {
+minienv$$l$5lambda minienv$$l$5lambda$new($Env C$1par, $int C$2par) {
     minienv$$l$5lambda $tmp = malloc(sizeof(struct minienv$$l$5lambda));
     $tmp->$class = &minienv$$l$5lambda$methods;
     minienv$$l$5lambda$methods.__init__($tmp, C$1par, C$2par);
     return $tmp;
 }
-struct minienv$$l$5lambda$class minienv$$l$5lambda$methods= {"minienv$$l$5lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$5lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$5lambda$__call__};
-$NoneType minienv$$l$6lambda$__init__ (minienv$$l$6lambda l$self, $Connection __self__) {
+struct minienv$$l$5lambda$class minienv$$l$5lambda$methods  = {"minienv$$l$5lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$5lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$5lambda$__call__};
+
+$NoneType minienv$$l$6lambda$__init__ (minienv$$l$6lambda l$self, $Connection __self__, $str s) {
     l$self->__self__ = __self__;
+    l$self->s = s;
     return $None;
 }
 $R minienv$$l$6lambda$__call__ (minienv$$l$6lambda l$self, $Cont c$cont) {
     $Connection __self__ = l$self->__self__;
-    return __self__->$class->close$local(__self__, ($Cont)c$cont);
+    $str s = l$self->s;
+    return __self__->$class->write$local(__self__, s, ($Cont)c$cont);
 }
-minienv$$l$6lambda minienv$$l$6lambda$new($Connection C$1par) {
+minienv$$l$6lambda minienv$$l$6lambda$new($Connection C$1par, $str C$2par) {
     minienv$$l$6lambda $tmp = malloc(sizeof(struct minienv$$l$6lambda));
     $tmp->$class = &minienv$$l$6lambda$methods;
-    minienv$$l$6lambda$methods.__init__($tmp, C$1par);
+    minienv$$l$6lambda$methods.__init__($tmp, C$1par, C$2par);
     return $tmp;
 }
 struct minienv$$l$6lambda$class minienv$$l$6lambda$methods= {"minienv$$l$6lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$6lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$6lambda$__call__};
-$NoneType minienv$$l$7lambda$__init__ (minienv$$l$7lambda l$self, $Connection __self__, $function cb1, $function cb2) {
+
+$NoneType minienv$$l$7lambda$__init__ (minienv$$l$7lambda l$self, $Connection __self__) {
+    l$self->__self__ = __self__;
+    return $None;
+}
+$R minienv$$l$7lambda$__call__ (minienv$$l$7lambda l$self, $Cont c$cont) {
+    $Connection __self__ = l$self->__self__;
+    return __self__->$class->close$local(__self__, ($Cont)c$cont);
+}
+minienv$$l$7lambda minienv$$l$7lambda$new($Connection C$1par) {
+    minienv$$l$7lambda $tmp = malloc(sizeof(struct minienv$$l$7lambda));
+    $tmp->$class = &minienv$$l$7lambda$methods;
+    minienv$$l$7lambda$methods.__init__($tmp, C$1par);
+    return $tmp;
+}
+struct minienv$$l$7lambda$class minienv$$l$7lambda$methods= {"minienv$$l$7lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$7lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$7lambda$__call__};
+$NoneType minienv$$l$8lambda$__init__ (minienv$$l$8lambda l$self, $Connection __self__, $function cb1, $function cb2) {
     l$self->__self__ = __self__;
     l$self->cb1 = cb1;
     l$self->cb2 = cb2;
     return $None;
 }
-$R minienv$$l$7lambda$__call__ (minienv$$l$7lambda l$self, $Cont c$cont) {
+$R minienv$$l$8lambda$__call__ (minienv$$l$8lambda l$self, $Cont c$cont) {
     $Connection __self__ = l$self->__self__;
     $function cb1 = l$self->cb1;
     $function cb2 = l$self->cb2;
     return __self__->$class->on_receipt$local(__self__, cb1, cb2, ($Cont)c$cont);
 }
-minienv$$l$7lambda minienv$$l$7lambda$new($Connection C$1par, $function C$2par, $function C$3par) {
-    minienv$$l$7lambda $tmp = malloc(sizeof(struct minienv$$l$7lambda));
-    $tmp->$class = &minienv$$l$7lambda$methods;
-    minienv$$l$7lambda$methods.__init__($tmp, C$1par, C$2par, C$3par);
+minienv$$l$8lambda minienv$$l$8lambda$new($Connection C$1par, $function C$2par, $function C$3par) {
+    minienv$$l$8lambda $tmp = malloc(sizeof(struct minienv$$l$8lambda));
+    $tmp->$class = &minienv$$l$8lambda$methods;
+    minienv$$l$8lambda$methods.__init__($tmp, C$1par, C$2par, C$3par);
     return $tmp;
 }
-struct minienv$$l$7lambda$class minienv$$l$7lambda$methods= {"minienv$$l$7lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$7lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$7lambda$__call__};
-$R $Env$__init__ ($Env __self__, $Cont c$cont) {
-    $Number w$9 = ($Number)$Integral$int$new();
-    __self__->pp = w$9->$class->__fromatom__(w$9, ($WORD)to$int(10));
+struct minienv$$l$8lambda$class minienv$$l$8lambda$methods= {"minienv$$l$8lambda", NULL, ($Super$class)&$Cont$methods, minienv$$l$8lambda$__init__, NULL, NULL, NULL, NULL,  minienv$$l$8lambda$__call__};
+$R $Env$__init__ ($Env __self__, $list args, $Cont c$cont) {
+    __self__->args = args;
     __self__->$next = NULL;
     __self__->$msg = NULL;
     __self__->$outgoing = NULL;
@@ -220,6 +238,10 @@ $R $Env$listen$local ($Env __self__, $int port, $function cb, $Cont c$cont) {
     kevent(kq,&fd_data[fd].event_spec,1,NULL,0,NULL);
     return $R_CONT(c$cont, $None);
 }
+$R $Env$exit$local ($Env __self__, $int n, $Cont c$cont) {
+    exit(n->val);
+    return $R_CONT(c$cont, $None);
+}
 $Msg $Env$stdout_write ($Env __self__, $str s) {
     return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$1lambda$new(__self__, s));
 }
@@ -232,12 +254,15 @@ $Msg $Env$connect ($Env __self__, $str host, $int port, $function cb) {
 $Msg $Env$listen ($Env __self__, $int port, $function cb) {
     return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$4lambda$new(__self__, port, cb));
 }
-$R $Env$new($Cont C$1par) {
+$Msg $Env$exit ($Env __self__, $int n) {
+    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$5lambda$new(__self__, n));
+}
+$R $Env$new($list args, $Cont C$1par) {
     $Env $tmp = malloc(sizeof(struct $Env));
     $tmp->$class = &$Env$methods;
-    return $Env$methods.__init__($tmp, $CONSTCONT($tmp, C$1par));
+    return $Env$methods.__init__($tmp, args, $CONSTCONT($tmp, C$1par));
 }
-struct $Env$class $Env$methods = {"$Env", NULL, ($Super$class)&$Actor$methods, $Env$__init__, NULL, NULL, NULL, NULL, $Env$stdout_write$local,  $Env$stdin_install$local,  $Env$connect$local, $Env$listen$local, $Env$stdout_write, $Env$stdin_install,  $Env$connect,  $Env$listen};
+struct $Env$class $Env$methods = {"$Env", NULL, ($Super$class)&$Actor$methods, $Env$__init__, NULL, NULL, NULL, NULL, $Env$stdout_write$local,  $Env$stdin_install$local,  $Env$connect$local, $Env$listen$local, $Env$exit$local, $Env$stdout_write, $Env$stdin_install,  $Env$connect,  $Env$listen, $Env$exit};
 $R $Connection$__init__ ($Connection __self__, int descriptor, $Cont c$cont) {
     __self__->$next = NULL;
     __self__->$msg = NULL;
@@ -269,13 +294,13 @@ $R $Connection$on_receipt$local ($Connection __self__, $function cb1, $function 
     return $R_CONT(c$cont, $None);
 }
 $Msg $Connection$write ($Connection __self__, $str s) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$5lambda$new(__self__, s));
+    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$6lambda$new(__self__, s));
 }
 $Msg $Connection$close ($Connection __self__) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$6lambda$new(__self__));
+    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$7lambda$new(__self__));
 }
 $Msg $Connection$on_receipt ($Connection __self__, $function cb1, $function cb2) {
-    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$7lambda$new(__self__, cb1, cb2));
+    return $ASYNC(($Actor)__self__, ($Cont)minienv$$l$8lambda$new(__self__, cb1, cb2));
 }
 $R $Connection$new(int fd,$Cont C$1par) {
     $Connection $tmp = malloc(sizeof(struct $Connection));
@@ -336,6 +361,13 @@ void minienv$$__init__ () {
         minienv$$l$7lambda$methods.__call__ = minienv$$l$7lambda$__call__;
         $register(&minienv$$l$7lambda$methods);
     }
+    {
+        minienv$$l$8lambda$methods.$GCINFO = "minienv$$l$8lambda";
+        minienv$$l$8lambda$methods.$superclass = ($Super$class)&$Cont$methods;
+        minienv$$l$8lambda$methods.__init__ = minienv$$l$8lambda$__init__;
+        minienv$$l$8lambda$methods.__call__ = minienv$$l$8lambda$__call__;
+        $register(&minienv$$l$8lambda$methods);
+    }
     { 
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
@@ -346,10 +378,12 @@ void minienv$$__init__ () {
         $Env$methods.stdin_install$local = $Env$stdin_install$local;
         $Env$methods.connect$local = $Env$connect$local;
         $Env$methods.listen$local = $Env$listen$local;
+        $Env$methods.exit$local = $Env$exit$local;
         $Env$methods.stdout_write = $Env$stdout_write;
         $Env$methods.stdin_install = $Env$stdin_install;
         $Env$methods.connect = $Env$connect;
         $Env$methods.listen = $Env$listen;
+        $Env$methods.exit = $Env$exit;
         $register(&$Env$methods);
     }
     {
