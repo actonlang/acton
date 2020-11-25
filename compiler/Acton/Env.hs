@@ -407,7 +407,7 @@ uniUnion env us1 us2        = sort $ uniNub env $ us1++us2
 
 
 uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
-  where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mbStr ]
+  where nss                             = [ catMaybes [i,f,b,s] | s <- mbStr, b <- mb qnBool, f <- mb qnFloat, i <- mb qnInt ]
         mb c | uniElem env us (UCon c)  = [Just c]
              | otherwise                = [Nothing, Just c]
         mbStr | not $ null lits         = [Just qnStr]
@@ -415,7 +415,7 @@ uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
           where lits                    = filter uniLit us
 
 uniBelow env us                         = [ ns | ns <- nss, length ns > 1 ]
-  where nss                             = [ catMaybes [i,f,b,s] | i <- mb qnInt, f <- mb qnFloat, b <- mb qnBool, s <- mb qnStr ]
+  where nss                             = [ catMaybes [i,f,b,s] | s <- mb qnStr, b <- mb qnBool, f <- mb qnFloat, i <- mb qnInt ]
         mb c | uniElem env us (UCon c)  = [Nothing, Just c]
              | otherwise                = [Nothing]
 

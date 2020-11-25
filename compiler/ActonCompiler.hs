@@ -321,7 +321,7 @@ buildExecutable env args paths task
   | null $ root args        = return ()
   | otherwise               = case Acton.Env.findQName qn env of
                                   i@(Acton.Env.NAct [] (A.TRow _ _ _ t A.TNil{}) A.TNil{} _) -> do
-                                      putStrLn ("## Env is " ++ prstr t)
+                                      -- putStrLn ("## Env is " ++ prstr t)
                                       c <- Acton.CodeGen.genRoot env qn t
                                       writeFile rootFile c
                                       iff (cgen args) $ do

@@ -954,7 +954,7 @@ allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
 allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
 allBelow env (TFX _ FXAction)           = [CAction]
-allBelow env (TUnion _ us)              = map CUnion (uniBelow env us) ++ [ CCon n | UCon n <- us ]
+allBelow env (TUnion _ us)              = [ CCon n | UCon n <- us ] ++ map CUnion (uniBelow env us)
 allBelow env _                          = []
 
 protos env (CCon n)                     = map (tcname . proto) $ allWitnesses env n
@@ -1032,15 +1032,23 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         emb _                           = []
         
 
-solve' env te tt eq vs cs               = do traceM ("###solving: " ++ prstrs vs)
-                                             sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- solved ]
-                                             cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- solved ]
+solve' env te tt eq vs cs
+  | not $ null unique                   = do traceM ("###solving: " ++ prstrs (dom unique))
+                                             sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- unique ]
+                                             cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- unique ]
+                                             env <- msubst env
+                                             te <- msubst te
+                                             simplify' env te tt eq (cs'++cs)
+  | otherwise                           = do traceM ("###approximating: " ++ prstrs vs)
+                                             sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- approx ]
+                                             cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- approx ]
                                              env <- msubst env
                                              te <- msubst te
                                              simplify' env te tt eq (cs'++cs)
   where tvmap0                          = Map.fromList [ (v, candidates env (tvkind v)) | v <- vs ]
         tvmap1                          = foldl (constrain env) tvmap0 cs
-        solved                          = [ (v, solution v) | v <- vs ]
+        unique                          = [ (v, mkres (head cs)) | v <- vs, let cs = lookup' v tvmap1, length cs == 1 ]
+        approx                          = [ (v, solution v) | v <- vs ]
         solution v                      = case lookup' v tvmap1 of
                                             [] -> err1 v ("Cannot solve " ++ prstrs cs ++ " for variable")
                                             c:cs -> trace ("#### Candidates for " ++ prstr v ++ ": " ++ prstrs (c:cs)) $ mkres c
