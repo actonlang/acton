@@ -803,6 +803,14 @@ int main(int argc, char **argv) {
 #endif
     printf("%ld worker threads\n", num_cores);
     kq = kqueue();
+    $register_builtin();
+    $register_rts();
+
+    args = $list$new(NULL,NULL);
+    for (int i=0; i< argc; i++)
+      $list_append(args,to$str(argv[i]));
+    
+    BOOTSTRAP();
     pthread_key_create(&self_key, NULL);
     // start worker threads, one per CPU
     pthread_t threads[num_cores];
@@ -813,14 +821,6 @@ int main(int argc, char **argv) {
         CPU_SET(idx, &cpu_set);
         pthread_setaffinity_np(threads[idx], sizeof(cpu_set), &cpu_set);
     }
-    $register_builtin();
-    $register_rts();
-
-    args = $list$new(NULL,NULL);
-    for (int i=0; i< argc; i++)
-      $list_append(args,to$str(argv[i]));
-    
-    BOOTSTRAP();
     
     for(int idx = 0; idx < num_cores; ++idx) {
         pthread_join(threads[idx], NULL);

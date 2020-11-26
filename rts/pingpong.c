@@ -181,6 +181,6 @@ $R $ROOT($Env env, $Cont then) {
     $register(&lambda$1$methods);
     $register(&lambda$2$methods);
     $register(&Pingpong$methods);
-    return Pingpong$new(env->pp, then);
+    return Pingpong$new($int$new($list_getitem(env->args,1)), then);
 }
 
