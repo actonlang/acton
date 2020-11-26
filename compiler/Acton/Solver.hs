@@ -1034,12 +1034,14 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         
 
 solve' env te tt eq vs cs
+{-
   | not $ null unique                   = do traceM ("###solving: " ++ prstrs (dom unique))
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- unique ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- unique ]
                                              env <- msubst env
                                              te <- msubst te
                                              simplify' env te tt eq (cs'++cs)
+-}
   | otherwise                           = do traceM ("###approximating: " ++ prstrs vs)
                                              sequence [ unify env (tVar v) =<< instwild env (tvkind v) t | (v, Right t) <- approx ]
                                              cs' <- sequence [ Impl <$> newWitness <*> pure (tVar v) <*> instwildcon env p | (v, Left p) <- approx ]

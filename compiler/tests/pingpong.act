@@ -1,7 +1,8 @@
 
 actor Pingpong(env):
     var count = 0
-    i = int(env.args[1])
+    (_arg : str) = env.args[1]
+    i = int(_arg)
     def _ping():
         count = count + i
         print('%d Ping %8d' % (i,count))
