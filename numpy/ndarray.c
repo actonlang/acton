@@ -214,10 +214,10 @@ $ndarray $ndarray_getslice($ndarray a, $list ix) {
     if (!ixi)
       nulls++;
     else {
-      if ($ISINSTANCE(ixi,$int))
+      if ($ISINSTANCE(ixi,$int)->val)
         ints++; 
       else
-        if ($ISINSTANCE(ixi,$Slice))
+        if ($ISINSTANCE(ixi,$Slice)->val)
           slices++;
         else {
           fprintf(stderr,"internal error: unexpected type of ndarray index element\n");
@@ -249,10 +249,10 @@ $ndarray $ndarray_getslice($ndarray a, $list ix) {
       $list_setitem(res->strides,respos,to$int(0));
       $list_setitem(res->shape,respos--,to$int(1));
     } else {
-      if ($ISINSTANCE(currindex,$int)) {
+      if ($ISINSTANCE(currindex,$int)->val) {
         currstride = $LONGELEM(a->strides,apos--);
         offset += currstride * ((($int)currindex)->val);
-      } else if ($ISINSTANCE(currindex,$Slice)) {
+      } else if ($ISINSTANCE(currindex,$Slice)->val) {
         int slen,start,stop,step;
         normalize_slice(($Slice)currindex,$LONGELEM(a->shape,apos),&slen,&start,&stop,&step);
         currstride = $LONGELEM(a->strides,apos);
@@ -408,18 +408,18 @@ $ndarray $ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),$ndarray
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
 $ndarray $ndarray_fromatom($WORD a) {
-  if ($ISINSTANCE(($Super)a,$int)) {
+  if ($ISINSTANCE(($Super)a,$int)->val) {
     $ndarray res = $newarray(LongType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->l = (($int)a)->val;
     return res;
   }
-  if ($ISINSTANCE(($Super)a,$float)) {
+  if ($ISINSTANCE(($Super)a,$float)->val) {
     $ndarray res = $newarray(DblType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->d = (($float)a)->val;
     return res;
   }
-  if ($ISINSTANCE(($Super)a,$bool)) return NULL;
-  if ($ISINSTANCE(($Super)a,$str)) return NULL;
+  if ($ISINSTANCE(($Super)a,$bool)->val) return NULL;
+  if ($ISINSTANCE(($Super)a,$str)->val) return NULL;
   fprintf(stderr,"internal error: ndarray_fromatom: argument not of atomic type");
   exit(-1);
 }

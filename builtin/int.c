@@ -50,10 +50,10 @@ long from$int($int w) {
 }
 
 $int $int_fromatom($WORD a) {
-  if ($ISINSTANCE(a,$int)) return ($int)a;
-  if ($ISINSTANCE(a,$float)) return to$int(round((($float)a)->val));
-  if ($ISINSTANCE(a,$bool)) return to$int((($bool)a)->val);
-  if ($ISINSTANCE(a,$str)) {
+  if ($ISINSTANCE(a,$int)->val) return ($int)a;
+  if ($ISINSTANCE(a,$float)->val) return to$int(round((($float)a)->val));
+  if ($ISINSTANCE(a,$bool)->val) return to$int((($bool)a)->val);
+  if ($ISINSTANCE(a,$str)->val) {
     long x;
     int c;
     sscanf((char *)(($str)a)->str,"%ld%n",&x,&c);

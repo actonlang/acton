@@ -45,10 +45,10 @@ double from$float($float x) {
 }
 
 $float $float_fromatom($WORD a) {
-  if ($ISINSTANCE(a,$int)) return to$float((double)(($int)a)->val);
-  if ($ISINSTANCE(a,$float)) return ($float)a;
-  if ($ISINSTANCE(a,$bool)) return to$float((double)(($bool)a)->val);
-  if ($ISINSTANCE(a,$str)) {
+  if ($ISINSTANCE(a,$int)->val) return to$float((double)(($int)a)->val);
+  if ($ISINSTANCE(a,$float)->val) return ($float)a;
+  if ($ISINSTANCE(a,$bool)->val) return to$float((double)(($bool)a)->val);
+  if ($ISINSTANCE(a,$str)->val) {
     double x;
     int c;
     sscanf((char *)(($str)a)->str,"%lf%n",&x,&c);
