@@ -136,3 +136,10 @@ struct $EqOpt {
 };
 
 $EqOpt $EqOpt$new($Eq);
+
+
+// EqUnion //////////////////////////////////////////////////////
+
+extern $Eq $wEqUnion;
+
+$Eq $EqUnion$new();

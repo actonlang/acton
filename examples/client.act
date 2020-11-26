@@ -1,6 +1,6 @@
 actor client(env):
 
-    def session(conn):
+    action def session(conn):
         conn.on_receipt(env.stdout_write, env.stdout_write)
         env.stdin_install(conn.write)
 

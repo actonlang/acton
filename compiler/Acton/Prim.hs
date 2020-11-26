@@ -53,7 +53,8 @@ primIdentityOpt     = gPrim "IdentityOpt"
 primWEqNone         = gPrim "wEqNone"
 primWIdentityNone   = gPrim "wIdentityNone"
 primWEqUnion        = gPrim "wEqUnion"
-primWPlusInt        = gPrim "wPlusInt"
+
+primWIntegralInt    = gPrim "Integral$int$witness"
 
 primISNOTNONE       = gPrim "ISNOTNONE"
 
@@ -108,7 +109,7 @@ primMkEnv cls def var sig =
                             (noq primWEqNone,       var tEqNone),
                             (noq primWIdentityNone, var tIdentityNone),
                             (noq primWEqUnion,      var tEqUnion),
-                            (noq primWPlusInt,      var tPlusInt),
+                            (noq primWIntegralInt,  var tIntegralInt),
 
                             (noq primISNOTNONE,     def scISNOTNONE NoDec),
 
@@ -318,8 +319,8 @@ tIdentityNone       = tCon $ TC qnIdentity [tNone]
 --  $wEqUnion       : Eq[(int|float|bool|str)]
 tEqUnion            = tCon $ TC qnEq [tUnion $ map UCon [qnInt,qnFloat,qnBool,qnStr]]
 
---  $wPlusInt       : Plus[int]
-tPlusInt            = tCon $ TC qnPlus [tInt]
+--  $Integral$Int$witness : Integral[int]
+tIntegralInt        = tCon $ TC qnIntegral [tInt]
 
 
 --  $ISNOTNONE      : [A] => pure (?A) -> bool

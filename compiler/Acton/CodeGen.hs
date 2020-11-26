@@ -190,6 +190,9 @@ primNone                            = gPrim "None"
 primTrue                            = gPrim "True"
 primFalse                           = gPrim "False"
 
+primAND                             = gPrim "AND"
+primOR                              = gPrim "OR"
+primNOT                             = gPrim "NOT"
 primROOT                            = gPrim "ROOT"
 primRegister                        = gPrim "register"
 
@@ -396,6 +399,38 @@ formatLit (Strings l ss)            = Strings l [format $ concat ss]
         conv0 s                     = conv s
         conv (t:s)                  = t : format s
 
+castLit env (Strings l ss) p        = format (concat ss) p
+  where format [] p                 = empty
+        format ('%':s) p            = flags s p
+        format (c:s) p              = format s p
+        flags (f:s) p
+          | f `elem` "#0- +"        = flags s p
+        flags s p                   = width s p
+        width ('*':s) (PosArg e p)  = comma <+> parens (text "int") <> expr <> dot s p
+          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+        width (n:s) p
+          | n `elem` "123456789"    = let (n',s') = span (`elem` "0123456789") s in dot s' p
+        width s p                   = dot s p
+        dot ('.':s) p               = prec s p
+        dot s p                     = len s p
+        prec ('*':s) (PosArg e p)   = comma <+> parens (text "int") <> expr <> len s p
+          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+        prec (n:s) p
+          | n `elem` "0123456789"   = let (n',s') = span (`elem` "0123456789") s in len s' p
+        prec s p                    = len s p
+        len (l:s) p
+          | l `elem` "hlL"          = conv s p
+        len s p                     = conv s p
+        conv (t:s) (PosArg e p)
+          | t `elem` "diouxXc"      = comma <+> expr <> format s p
+          where expr                = parens (parens (gen env tInt) <> gen env e) <> text "->val"
+        conv (t:s) (PosArg e p)
+          | t `elem` "eEfFgG"       = comma <+> expr <> format s p
+          where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
+        conv (t:s) (PosArg e p)
+          | t `elem` "rsa"          = comma <+> expr <> format s p
+          where expr                = parens (parens (gen env tStr) <> gen env e) <> text "->str"
+        conv ('%':s) p              = format s p
 
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
@@ -405,7 +440,7 @@ genCall env t0 [row] (Var _ n) p
   where i                           = nargs p
         qn                          = unalias env n
 genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
-  | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> unbox row (flatten tup))
+  | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
   where unbox (TNil _ _) p          = empty
         unbox (TRow _  _ _ t r) (PosArg e p)
           | t == tStr               = comma <+> expr <> text "->str" <> unbox r p
@@ -508,7 +543,7 @@ instance Gen Expr where
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env [] e n
     gen env (DotI _ e i)            = gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
-    gen env (RestI _ e i)           = text "CodeGen for tuple tail not implemented"
+    gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
     gen env (Tuple _ p KwdNil)      = parens (lbrace <+> (
                                         gen env n <+> tmp <+> equals <+> malloc env n <> semi $+$
                                         tmp <> text "->" <> gen env classKW <+> equals <+> char '&' <> table <> semi $+$
@@ -529,9 +564,13 @@ instance Gen Expr where
             append                  = w <> text "->" <> gen env classKW <> text "->" <> gen env appendKW
             pars e                  = w <> comma <+> tmp <> comma <+> gen env e
         -- brackets (commaSep (gen env) es)
-    gen env e@BinOp{}               = genPrec env 0 e
-    gen env e@UnOp{}                = genPrec env 0 e
-    gen env e@Cond{}                = genPrec env 0 e
+    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env e1 <> comma <+> gen env e2)
+    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env e1 <> comma <+> gen env e2)
+    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env e)
+    gen env (Cond _ e1 e e2)        = parens (parens (gen env e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
+--    gen env e@BinOp{}               = genPrec env 0 e
+--    gen env e@UnOp{}                = genPrec env 0 e
+--    gen env e@Cond{}                = genPrec env 0 e
 
 genStr env s                        = doubleQuotes $ text $ tail $ init $ concat $ sval s
 
@@ -556,7 +595,7 @@ eliminated in previous passes.
 -}
 
 genPrec env _ (UnOp _ Not e)            = text "!" <> genPrec env 4 e
-genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&" <+> genPrec env 4 e2)
+genPrec env n e@(BinOp _ e1 And e2)     = parensIf (n > 3) (genPrec env 3 e1 <+> text "&&&&&" <+> genPrec env 4 e2)
 genPrec env n e@(BinOp _ e1 Or e2)      = parensIf (n > 2) (genPrec env 2 e1 <+> text "||" <+> genPrec env 3 e2)
 genPrec env n (Cond _ e1 e e2)          = parensIf (n > 1) (parens (genPrec env 2 e) <> text "->val" <+> text "?" <+> gen env e1 <+> text ":" <+> genPrec env 1 e2)
 genPrec env _ e                         = gen env e

@@ -102,7 +102,7 @@ wrapC c f env                           = eCallCont2 c [level, eLambda' [] cont]
   where (level, cont)                   = f 0 env
 
 unwrapL 0 lvl                           = eVar lvl
-unwrapL n lvl                           = eCall (eDot (eQVar primWPlusInt) addKW) [eInt n, unwrapL 0 lvl]
+unwrapL n lvl                           = eCall (eDot (eQVar primWIntegralInt) addKW) [eInt n, unwrapL 0 lvl]
 
 seqcont n (Pop : ctx)                   = seqcont (n+1) ctx
 seqcont n (Seq c : ctx)                 = (eInt n, eCallCont (methFX ctx) tNone c eNone)

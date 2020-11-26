@@ -59,7 +59,6 @@ infTop env ss                           = do traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
                                              (cs,te,ss1) <- (if inBuiltin env then infEnv else infSuiteEnv) env ss
                                              popFX
-                                             traceM ("### solveAll " ++ prstrs cs)
                                              eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
@@ -461,7 +460,8 @@ toSigs te                               = map makeSig te
 
 --------------------------------------------------------------------------------------------------------------------------
 
-solveAll env te tt cs                   = do (cs,eq) <- simplify env te tt cs
+solveAll env te tt cs                   = do traceM ("### solveAll " ++ prstrs cs)
+                                             (cs,eq) <- simplify env te tt cs
                                              (_,cs,_,eq) <- refine env cs te eq
                                              loop eq cs
   where loop eq []                      = return eq
@@ -475,8 +475,7 @@ solveScoped env vs te tt cs             = do traceM ("## solveScoped " ++ prstrs
                                              loop eq cs
   where loop eq cs
           | null vs1                    = return (cs, eq)
-          | otherwise                   = do traceM ("## solving " ++ prstrs vs1)
-                                             (cs,eq) <- solve env te tt eq vs1 cs
+          | otherwise                   = do (cs,eq) <- solve env te tt eq vs1 cs
                                              loop eq cs
           where vs1                     = nub [ headvar c | c <- cs, any (`elem` vs) (tyfree c), univar (headvar c) ]
 

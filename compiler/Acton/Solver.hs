@@ -251,6 +251,7 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX (FXAct t1) (FXAct t2)        = Just $ unify env t1 t2
         castFX FXAction FXAction            = Just $ return ()
         castFX FXAction (FXAct _)           = Just $ return ()
+        castFX FXPure FXAction              = Just $ return ()
         castFX fx1 fx2                      = Nothing
 
 cast' env (TNil _ k1) (TNil _ k2)

@@ -21,9 +21,15 @@ void $printobj(char *mess,$WORD obj);
                                $dict_setitem($state->done,($Hashable)$Hashable$int$witness,to$int($state->row_no-1),$t); \
                                $t; })
 
+#define $AND(a, b)            ((a)->val ? (b) : $False)
+
+#define $OR(a, b)             ((a)->val ? $True : (b))
+
+#define $NOT(a)               ((a)->val ? $False : $True)
+
 #define $ISINSTANCE($x,$T)    ({ $Super$class $c = (($Super)$x)->$class; \
                                  while($c && $c != ($Super$class)&$T ## $methods) $c = $c->$superclass; \
-                                 $c == ($Super$class)&$T ## $methods; })
+                                 to$bool($c != 0); })
 
 #define $ISNOTNONE(x)         ((x) != $None ? $True : $False)
 

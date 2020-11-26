@@ -298,3 +298,28 @@ struct $EqOpt$class $EqOpt$methods = {"", UNASSIGNED, NULL, $EqOpt$__init__, $Eq
 $EqOpt $EqOpt$new($Eq w$Eq$A) {
     return $NEW($EqOpt, w$Eq$A);
 }
+
+
+// EqUnion //////////////////////////////////////////////////////
+
+void $EqUnion$__init__($Eq wit) { }
+
+$bool $EqUnion$__eq__($Eq wit, $WORD a, $WORD b) {
+    if ((($struct)a)->$class != (($struct)b)->$class)
+        return $False;
+    return $False;
+}
+
+$bool $EqUnion$__ne__($Eq wit, $WORD a, $WORD b) {
+    return $NOT($EqUnion$__eq__(wit, a, b));
+}
+
+struct $Eq$class $EqUnion$methods = {"", UNASSIGNED, NULL, $EqUnion$__init__, $EqUnion$__eq__, $EqUnion$__ne__};
+
+struct $Eq $EqUnion$inst = {(struct $Eq$class *)&$EqUnion$methods};
+
+$Eq $wEqUnion = &$EqUnion$inst;
+
+$Eq $EqUnion$new() {
+    return $wEqUnion;
+}
