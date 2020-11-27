@@ -481,7 +481,7 @@ comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env dec e@(Var _ x) n p
   | NClass{} <- info, Just _ <- dec = methodtable' env x <> text "." <> gen env n <> parens (gen env p)
-  | NClass{} <- info                = genEnter env [] (eDot e n) callKW p
+  | NClass{} <- info                = genEnter env [] (eDot e n) callKW p       -- In case n is a closure...
   where info                        = findQName x env
 genDotCall env dec e n p
   | Just NoDec <- dec               = genEnter env [] e n p
@@ -504,8 +504,9 @@ genEnter env ts e n p
         costly e                    = True
         t                           = typeInstOf env ts e
         env1                        = ldefine [(tmpV,NVar t)] env
-genEnter env ts e n PosNil          = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env e)
-genEnter env ts e n p               = gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (gen env (PosArg e p))
+genEnter env ts e n p               = cast (gen env e) <> text "->" <> gen env classKW <> text "->" <> gen env n <> parens (cast (gen env e) <> comma' (gen env p))
+  where cast | n `elem` structKWs   = parens . (parens (gen env tStruct) <>)
+             | otherwise            = id
 
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
