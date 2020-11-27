@@ -1253,6 +1253,11 @@ infAssocs env (StarStar e : as) tk tv   = do t1 <- newTVar
 inferBool env (BinOp l e1 And e2)       = do (cs1,env1,s1,e1') <- inferBool env e1
                                              (cs2,env2,s2,e2') <- inferBool env1 e2
                                              return (cs1++cs2, env2, s1++s2, BinOp l e1' And (termsubst s1 e2'))
+inferBool env (BinOp l e1 Or e2)        = do (cs1,_,_,e1') <- inferBool env e1
+                                             (cs2,_,_,e2') <- inferBool env e2
+                                             return (cs1++cs2, env, [], BinOp l e1' Or e2')
+inferBool env (UnOp l Not e)            = do (cs,_,_,e') <- inferBool env e
+                                             return (cs, env, [], UnOp l Not e')
 inferBool env (CompOp l e1 [OpArg op e2])
   | Just n <- noneTest e1 op e2         = do t <- newTVar
                                              (cs1,e') <- inferSub env (tOpt t) (eVar n)
