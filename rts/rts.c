@@ -87,6 +87,9 @@ $Lock timerQ_lock;
 
 $list args = NULL;
 
+pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
+
 static inline void spinlock_lock($Lock *f) {
     while (atomic_flag_test_and_set(f) == true) {
         // spin until we could set the flag
@@ -758,8 +761,11 @@ void *main_loop(void *arg) {
                 if  ((int)arg==0) {
                     $eventloop();
                 } else {
-                  static struct timespec idle_wait = { 0, 500000000 };  // 500ms
-                  nanosleep(&idle_wait, NULL);
+                  pthread_mutex_lock(&sleep_lock);
+                  pthread_cond_wait(&work_to_do, &sleep_lock);
+                  pthread_mutex_unlock(&sleep_lock);
+                  //static struct timespec idle_wait = { 0, 50000000 };  // 500ms
+                  //nanosleep(&idle_wait, NULL);
                 }
             }
         }

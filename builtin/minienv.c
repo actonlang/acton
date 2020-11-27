@@ -470,5 +470,9 @@ void $eventloop() {
       fprintf(stderr,"internal error: no event handler on descriptor %d\n",fd);
       exit(-1);
     }
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_signal(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
+
   } 
 }
