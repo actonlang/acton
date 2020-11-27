@@ -366,13 +366,8 @@ instance Vars Type where
     free (TOpt _ t)                 = free t
     free (TCon  _ c)                = free c
     free (TRow _ _ _ t r)           = free t ++ free r
-    free (TFX _ fx)                 = free fx
     free _                          = []
 
-instance Vars FX where
-    free (FXMut t)                  = free t
-    free (FXAct t)                  = free t
-    free _                          = []
 
 instance Vars Constraint where
     free (Cast t1 t2)               = free t1 ++ free t2
@@ -380,4 +375,3 @@ instance Vars Constraint where
     free (Impl w t p)               = free t ++ free p
     free (Sel w t1 n t2)            = free t1 ++ free t2
     free (Mut t1 n t2)              = free t1 ++ free t2
-    free (Seal w fx1 fx2 t1 t2)     = free fx1 ++ free fx2 ++ free t1 ++ free t2

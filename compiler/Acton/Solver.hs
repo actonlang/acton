@@ -140,39 +140,6 @@ reduce' env eq c@(Mut (TCon _ tc) n _)
   | otherwise                               = err1 n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
-reduce' env eq (Seal Nothing (TVar _ v1) (TVar _ v2) t1 t2)
-  | v1 == v2                                = reduce env eq [Cast t1 t2]
-reduce' env eq (Seal (Just w) fx@(TVar _ v1) (TVar _ v2) t1 t2)
-  | v1 == v2                                = do let e = eCall (eVar px0) []
-                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) [Cast t1 t2]
-  where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx
-        t                                   = tFun fx posNil kwdNil t1
-reduce' env eq c@(Seal w TVar{} _ _ _)      = do defer [c]; return eq                               -- Defer until both effects
-reduce' env eq c@(Seal w _ TVar{} _ _)      = do defer [c]; return eq                               -- are instantiated
-reduce' env eq (Seal Nothing fx1 fx2 t1 t2)
-  | fx1 == fxAction, fx2 /= fxAction        = do traceM ("  #sealing cast")                         -- Unsealing:
-                                                 let cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
-                                                 reduce env eq cs
-  | otherwise                               = do traceM ("  #no sealing cast")                      -- No sealing needed:
-                                                 let cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
-                                                 reduce env eq cs
-reduce' env eq (Seal (Just w) fx1 fx2 t1 t2)
-  | Just s <- isFXAct fx1, fx2 == fxAction  = do traceM ("  #sealing " ++ prstr w)                  -- Sealing:
-                                                 let e = eCall (primAsync s) [eVar px0]             --   Wrap closure into an async message
-                                                     cs = [Cast t1 t2]                              --   Relate the result types, fx1 can be anything
-                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  | fx1 == fxAction, Just s <- isFXAct fx1  = do traceM ("  #unsealing " ++ prstr w)                -- Unsealing:
-                                                 let e = eCall (eVar px0) []                        --   Call action closure right away
-                                                     cs = [Cast fx1 fx2, Cast (tMsg t1) t2]         --   Relate the effects, result must be a message
-                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  | otherwise                               = do traceM ("  #no sealing " ++ prstr w)               -- No sealing needed:
-                                                 let e = eCall (eVar px0) []                        --   Call closure right away
-                                                     cs = [Cast fx1 fx2, Cast t1 t2]                --   Relate the effects and result types
-                                                 reduce env ((w, wFun t t2, lambdaFX e):eq) cs
-  where lambdaFX e                          = Lambda NoLoc (pospar [(px0,t)]) KwdNIL e fx1
-        t                                   = tFun fx1 posNil kwdNil t1
-        primAsync s                         = tApp (eQVar primASYNCw) [s,t1]
-
 reduce' env eq c                            = noRed c
 
 
@@ -222,9 +189,10 @@ cast' env (TCon _ c1) (TCon _ c2)
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do reduce env [] [Seal Nothing fx1 fx2 t1 t2]
+                                            = do cast env fx1 fx2
                                                  cast env p2 p1
                                                  cast env k2 k1
+                                                 cast env t1 t2
 
 cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do cast env p1 p2
@@ -242,17 +210,15 @@ cast' env (TNone _) (TOpt _ t)              = return ()
 cast' env (TNone _) (TNone _)               = return ()
 
 cast' env (TFX _ fx1) (TFX _ fx2)
-  | Just unifs <- castFX fx1 fx2            = unifs
-  where castFX FXPure FXPure                = Just $ return ()
-        castFX FXPure (FXMut _)             = Just $ return ()
-        castFX FXPure (FXAct _)             = Just $ return ()
-        castFX (FXMut t1) (FXMut t2)        = Just $ unify env t1 t2
-        castFX (FXMut t1) (FXAct t2)        = Just $ unify env t1 t2
-        castFX (FXAct t1) (FXAct t2)        = Just $ unify env t1 t2
-        castFX FXAction FXAction            = Just $ return ()
-        castFX FXAction (FXAct _)           = Just $ return ()
-        castFX FXPure FXAction              = Just $ return ()
-        castFX fx1 fx2                      = Nothing
+  | castFX fx1 fx2                          = return ()
+  where castFX FXPure   FXPure              = True
+        castFX FXPure   FXMut               = True
+        castFX FXPure   FXAction            = True
+        castFX FXMut    FXMut               = True
+        castFX FXMut    FXAction            = True
+        castFX FXAction FXAction            = True
+        castFX FXExt    FXExt               = True
+        castFX fx1      fx2                 = False
 
 cast' env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
@@ -340,12 +306,7 @@ unify' env (TOpt _ t1) (TOpt _ t2)          = unify env t1 t2
 unify' env (TNone _) (TNone _)              = return ()
 
 unify' env (TFX _ fx1) (TFX _ fx2)
-  | Just unifs <- unifyFX fx1 fx2           = unifs
-  where unifyFX FXPure FXPure               = Just $ return ()
-        unifyFX (FXMut t1) (FXMut t2)       = Just $ unify env t1 t2
-        unifyFX (FXAct t1) (FXAct t2)       = Just $ unify env t1 t2
-        unifyFX FXAction FXAction           = Just $ return ()
-        unifyFX fx1 fx2                     = Nothing
+  | fx1 == fx2                              = return ()
 
 unify' env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
@@ -383,17 +344,15 @@ sub' env eq w t1 t2@TWild{}                 = return (idwit w t1 t2 : eq)
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wx <- newWitness
-                                                 wp <- newWitness
+                                            = do wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
-                                                 tv <- newTVar
                                                  let e = eLambda [(px0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
-                                                     e0 = eCall (eVar wx) [lambda0 fx1 $ eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]]
+                                                     e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
                                                      e1 = eCall (eVar wp) [eVar px1]
                                                      e2 = eCall (eVar wk) [eVar px2]
-                                                     cs = [Seal (Just wx) fx1 fx2 t1' tv, Sub wp p2 p1, Sub wk k2 k1, Sub wt tv t2']
+                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
@@ -607,10 +566,6 @@ varinfo cs                                  = f cs (VInfo [] [] Map.empty Map.em
     f (Impl w (TVar _ v) p : cs)            = f cs . pbound v w p . embed (tyfree p)
     f (Mut (TVar _ v) n t : cs)             = f cs . mutattr v n . embed (tyfree t)
     f (Sel _ (TVar _ v) n t : cs)           = f cs . selattr v n . embed (tyfree t)
-    f (Seal w fx1 fx2 t1 t2 : cs)
-      | TVar _ v1 <- fx1, TVar _ v2 <- fx2  = f cs . varvar v1 v2 . embed (tyfree [t1,t2])
-      | TVar _ v <- fx1                     = f cs . ubound v fx2 . embed (tyfree [t1,t2])
-      | TVar _ v <- fx2                     = f cs . lbound v fx1 . embed (tyfree [t1,t2])
     f []                                    = Just
     f (_ : cs)                              = \_ -> Nothing
 
@@ -647,8 +602,6 @@ instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> i
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t
 instwild env _ (TCon l c)               = TCon l <$> instwildcon env c
 instwild env _ (TRow l k n t r)         = TRow l k n <$> instwild env KType t <*> instwild env k r
-instwild env _ (TFX l (FXMut t))        = TFX l <$> FXMut <$> instwild env KType t
-instwild env _ (TFX l (FXAct t))        = TFX l <$> FXAct <$> instwild env KType t
 instwild env k t                        = return t
 
 instwildcon env c                       = case tconKind (tcname c) env of
@@ -698,16 +651,14 @@ glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
 glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
-  where glfx FXAction FXAction          = FXAction
-        glfx FXAction (FXAct _)         = FXAction
-        glfx (FXAct _) FXAction         = FXAction
-        glfx FXAction fx2               = noGLB t1 t2
-        glfx fx1 FXAction               = noGLB t1 t2
-        glfx FXPure _                   = FXPure
-        glfx _ FXPure                   = FXPure
-        glfx (FXMut t1) _               = FXMut t1
-        glfx _ (FXMut t2)               = FXMut t2
-        glfx (FXAct t1) (FXAct t2)      = FXAct t1
+  where glfx FXExt    FXExt             = FXExt
+        glfx FXExt    fx2               = noGLB t1 t2
+        glfx fx1      FXExt             = noGLB t1 t2
+        glfx FXPure   _                 = FXPure
+        glfx _        FXPure            = FXPure
+        glfx FXMut    _                 = FXMut
+        glfx _        FXMut             = FXMut
+        glfx FXAction FXAction          = FXAction
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = tNil k1
@@ -767,16 +718,14 @@ lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
-  where lufx FXAction FXAction          = FXAction
-        --lufx FXAction FXPure            = FXAction
-        --lufx FXPure FXAction            = FXAction
-        lufx FXAction _                 = FXAct tWild
-        lufx _ FXAction                 = FXAct tWild
-        lufx (FXAct t1) _               = FXAct t1
-        lufx _ (FXAct t2)               = FXAct t2
-        lufx (FXMut t1) _               = FXMut t1
-        lufx _ (FXMut t2)               = FXMut t2
-        lufx FXPure FXPure              = FXPure
+  where lufx FXExt FXExt                = FXExt
+        lufx FXExt    fx2               = noLUB t1 t2
+        lufx fx1      FXExt             = noLUB t1 t2
+        lufx FXAction _                 = FXAction
+        lufx _        FXAction          = FXAction
+        lufx FXMut    _                 = FXMut
+        lufx _        FXMut             = FXMut
+        lufx FXPure   FXPure            = FXPure
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = tNil k1
@@ -876,10 +825,8 @@ improve env te tt eq cs
         dots                            = dom mutC ++ dom selC ++ dom selP
         fixedvars                       = tyfree env
         pvars                           = Map.keys (pbounds vi) ++ tyfree (Map.elems (pbounds vi))
-        sealL                           = [ v | Seal _ (TVar _ v) _ _ _ <- cs ]
-        sealU                           = [ v | Seal _ _ (TVar _ v) _ _ <- cs ]
         (posvars0,negvars0)             = polvars te `polcat` polvars tt
-        (posvars,negvars)               = (posvars0++fixedvars++vvsL++sealL, negvars0++fixedvars++vvsU++sealU)
+        (posvars,negvars)               = (posvars0++fixedvars++vvsL, negvars0++fixedvars++vvsU)
         obsvars                         = posvars0 ++ negvars0 ++ fixedvars ++ pvars ++ embedded vi
         boundvars                       = Map.keys (ubounds vi) ++ Map.keys (lbounds vi)
         boundprot                       = tyfree (Map.elems $ ubounds vi) ++ tyfree (Map.elems $ lbounds vi)
@@ -914,8 +861,8 @@ data Candidate                          = CProto QName
                                         | CTuple
                                         | CPure
                                         | CMut
-                                        | CAct
                                         | CAction
+                                        | CExt
                                         deriving (Eq,Show)
 
 instance Pretty Candidate where
@@ -935,10 +882,10 @@ allAbove env (TOpt _ t)                 = [COpt]
 allAbove env (TNone _)                  = [CNone]
 allAbove env (TFun _ _ _ _ _)           = [CFun,CNone]
 allAbove env (TTuple _ _ _)             = [CTuple,CNone]
-allAbove env (TFX _ FXPure)             = [CPure,CMut,CAct]
-allAbove env (TFX _ (FXMut _))          = [CMut,CAct]
-allAbove env (TFX _ (FXAct _))          = [CAct]
-allAbove env (TFX _ FXAction)           = [CAction,CAct]
+allAbove env (TFX _ FXPure)             = [CPure,CMut,CAction]
+allAbove env (TFX _ FXMut)              = [CMut,CAction]
+allAbove env (TFX _ FXAction)           = [CAction]
+allAbove env (TFX _ FXExt)              = [CExt]
 allAbove env (TUnion _ us)
   | all uniLit us                       = CCon qnStr : map CUnion (uniAbove env [UCon qnStr]) ++ [CNone]
   | otherwise                           = map CUnion (uniAbove env us) ++ [CNone]
@@ -952,9 +899,9 @@ allBelow env (TNone _)                  = [CNone]
 allBelow env (TFun _ _ _ _ _)           = [CFun]
 allBelow env (TTuple _ _ _)             = [CTuple]
 allBelow env (TFX _ FXPure)             = [CPure]
-allBelow env (TFX _ (FXMut _))          = [CMut,CPure]
-allBelow env (TFX _ (FXAct _))          = [CAct,CMut,CPure,CAction]
-allBelow env (TFX _ FXAction)           = [CAction]
+allBelow env (TFX _ FXMut)              = [CMut,CPure]
+allBelow env (TFX _ FXAction)           = [CAction,CMut,CPure]
+allBelow env (TFX _ FXExt)              = [CExt]
 allBelow env (TUnion _ us)              = [ CCon n | UCon n <- us ] ++ map CUnion (uniBelow env us)
 allBelow env _                          = []
 
@@ -990,20 +937,12 @@ constrain env vs (Sub w t (TVar _ v))   = Map.adjust (intersect $ allAbove env t
 constrain env vs (Impl w (TVar _ v) p)  = Map.adjust (filter (\c -> any (qmatch env $ tcname p) (protos env c))) v vs
 constrain env vs (Mut (TVar _ v) n t)   = Map.adjust (filter (\c -> n `elem` attrs env c)) v vs
 constrain env vs (Sel w (TVar _ v) n t) = Map.adjust (filter (\c -> n `elem` attrs env c || n `elem` protoattrs env c)) v vs
-constrain env vs (Seal w (TVar _ v) (TVar _ v') _ _)
-  | univar v && univar v'               = vs
-constrain env vs (Seal w (TVar _ v) t _ _)
-  | t == fxAction                       = Map.adjust (intersect $ allBelow env t) v vs
-  | otherwise                           = Map.adjust (intersect $ allBelow env t) v vs
-constrain env vs (Seal w t (TVar _ v) _ _)
-  | t == fxAction || w == Nothing       = Map.adjust (intersect $ allAbove env t) v vs
-  | otherwise                           = Map.adjust (intersect $ allAbove env t ++ [CAction]) v vs
 constrain env vs _                      = vs
 
 
 candidates env KType                    = map CProto (allProtos env) ++ [CNone,COpt,CFun,CTuple] ++ 
                                           map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove env [])
-candidates env KFX                      = [CPure,CMut,CAct,CAction] ++ map CVar (allVars env KFX)
+candidates env KFX                      = [CPure,CMut,CAction,CExt] ++ map CVar (allVars env KFX)
 candidates env k                        = map CVar (allVars env k)
 
 --
@@ -1027,7 +966,6 @@ solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ pr
         emb (Sub _ TVar{} t)            = tyfree t
         emb (Sub _ t TVar{})            = tyfree t
         emb (Impl _ t p)                = tyfree p
-        emb (Seal _ fx1 fx2 t1 t2)      = emb (Cast fx1 fx2) ++ emb (Cast t1 t2)
         emb (Sel _ TVar{} n t)          = tyfree t
         emb (Mut TVar{} n t)            = tyfree t
         emb _                           = []
@@ -1064,9 +1002,9 @@ solve' env te tt eq vs cs
         mkres CFun                      = Right $ tFun tWild tWild tWild tWild
         mkres CTuple                    = Right $ tTuple tWild tWild
         mkres CPure                     = Right $ fxPure
-        mkres CMut                      = Right $ fxMut tWild
-        mkres CAct                      = Right $ fxAct tWild
+        mkres CMut                      = Right $ fxMut
         mkres CAction                   = Right $ fxAction
+        mkres CExt                      = Right $ fxExt
         mkcon n                         = case tconKind n env of
                                             KFun ks _ -> TC n (replicate (length ks) tWild)
                                             _         -> TC n []
@@ -1081,13 +1019,6 @@ collapse env eq vs cs                   = col [] eq cs
         col cs eq (Sub w t1@TVar{} t2@TVar{} : cs')
           | tvar t1 `elem` vs,
             tvar t2 `elem` vs           = unify env t1 t2 >> msubst cs' >>= col cs (idwit w t1 t2 : eq)
-        col cs eq (Seal w fx1@TVar{} fx2@TVar{} t1 t2 : cs')
-          | tvar fx1 `elem` vs,
-            tvar fx2 `elem` vs          = trace ("### collapse " ++ prstr w) $ unify env fx1 fx2 >> msubst cs' >>= col (Cast t1 t2 : cs) eq'
-          where eq' | Just w' <- w      = (w', wFun t t2, e) : eq
-                    | otherwise         = eq
-                t                       = tFun fx1 posNil kwdNil t1
-                e                       = Lambda NoLoc (pospar [(px0,t)]) KwdNIL (eCall (eVar px0) []) fx2
         col cs eq (c : cs')             = col (c : cs) eq cs'
 
 
@@ -1110,12 +1041,6 @@ replace ub lb (Sub w (TVar _ v) t)
   | Just t' <- lookup v ub              = Sub w t' t
 replace ub lb (Sub w t (TVar _ v))
   | Just t' <- lookup v lb              = Sub w t t'
-replace ub lb c@(Seal _ TVar{} TVar{} _ _)
-                                        = c
-replace ub lb (Seal w (TVar _ v) fx t t')
-  | Just fx' <- lookup v ub             = Seal w fx' fx t t'
-replace ub lb (Seal w fx (TVar _ v) t t')
-  | Just fx' <- lookup v lb             = Seal w fx fx' t t'
 replace ub lb c                         = c
 
 solveDots env mutC selC selP cs         = do (eqs,css) <- unzip <$> mapM solveDot cs
@@ -1181,5 +1106,3 @@ rowWit KRow w n t r wt wr               = eLambda [(px0,kwdRow n t r)] eTup
         e2                              = eCall (eVar wr) [Rest l0 (eVar px0) n]
 
 wFun t1 t2                              = tFun fxPure (posRow t1 posNil) kwdNil t2
-
-lambda0 fx e                            = Lambda NoLoc PosNIL KwdNIL e fx

@@ -217,13 +217,7 @@ instance Relabel Type where
     relabel (TWild _) = TWild <$> newLoc
     relabel (TNil _ k) = TNil <$> newLoc <*> return k
     relabel (TRow _ k n t r) = TRow <$> newLoc <*> return k <*> relabel n <*> relabel t <*> relabel r
-    relabel (TFX _ fx) = TFX <$> newLoc <*> relabel fx
-
-instance Relabel FX where
-    relabel (FXAction) = return FXAction
-    relabel (FXAct t) = FXAct <$> relabel t
-    relabel (FXMut t) = FXMut <$> relabel t
-    relabel (FXPure) = return FXPure
+    relabel (TFX _ fx) = TFX <$> newLoc <*> pure fx
 
 instance Relabel Constraint where
     relabel (Cast t1 t2) = Cast <$> relabel t1 <*> relabel t2
@@ -231,4 +225,3 @@ instance Relabel Constraint where
     relabel (Impl w t p) = Impl <$> relabel w <*> relabel t <*> relabel p
     relabel (Sel w t1 n t2) = Sel w <$> relabel t1 <*> relabel n <*> relabel t2
     relabel (Mut t1 n t2) = Mut <$> relabel t1 <*> relabel n <*> relabel t2
-    relabel (Seal w fx1 fx2 t1 t2) = Seal w <$> relabel fx1 <*> relabel fx2 <*> relabel t1 <*> relabel t2

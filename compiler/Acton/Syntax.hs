@@ -190,7 +190,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut Type | FXAct Type | FXAction deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXAction | FXExt deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
@@ -221,7 +221,6 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type TCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
-                | Seal  (Maybe Name) Type Type Type Type
                 deriving (Show,Read,Generic)
 
 type Constraints = [Constraint]
@@ -299,15 +298,11 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxAction        = tTFX FXAction
-fxAct t         = tTFX (FXAct t)
-fxMut t         = tTFX (FXMut t)
 fxPure          = tTFX FXPure
+fxMut           = tTFX FXMut
+fxAction        = tTFX FXAction
+fxExt           = tTFX FXExt
 fxWild          = tWild
-
-isFXAct (TFX _ (FXAct s))
-                = Just s
-isFXAct _       = Nothing
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
@@ -438,7 +433,6 @@ instance HasLoc Constraint where
     loc (Impl _ _ p)    = loc p
     loc (Sel _ _ n _)   = loc n
     loc (Mut _ n _)     = loc n
-    loc (Seal _ _ t _ _)= loc t
 
 
 -- Eq -------------------------

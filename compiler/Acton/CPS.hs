@@ -350,11 +350,10 @@ mutCall env e                           = fxCall env mutFX e
 
 primNoCont                              = [primASYNCf, primAFTERf]
 
-contFX (TFX _ (FXAct _))                = True                              -- TODO: refine this test using finer-grained effects?
+contFX (TFX _ FXAction)                 = True                              -- TODO: refine this test using finer-grained effects?
 contFX _                                = False
 
-mutFX (TFX _ (FXMut _))                 = True
-mutFX (TFX _ (FXAct _))                 = True
+mutFX (TFX _ FXMut)                     = True
 mutFX (TFX _ FXAction)                  = True
 mutFX _                                 = False
 
@@ -536,10 +535,10 @@ instance Conv Type where
     conv t                              = t
 
 instance Conv FX where
-    conv (FXAct t)                      = FXMut (conv t)
-    conv (FXMut t)                      = FXMut (conv t)
-    conv FXAction                       = FXAction
+    conv FXAction                       = FXMut
+    conv FXMut                          = FXMut
     conv FXPure                         = FXPure
+    conv FXExt                          = FXExt
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)

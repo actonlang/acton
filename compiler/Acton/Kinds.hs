@@ -146,8 +146,6 @@ instance ConvTWild Type where
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
     convTWild (TCon l c)            = TCon l <$> convTWild c
     convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
-    convTWild (TFX l (FXMut t))     = TFX l <$> FXMut <$> convTWild t
-    convTWild (TFX l (FXAct t))     = TFX l <$> FXMut <$> convTWild t
     convTWild t                     = return t
 
 instance ConvTWild TCon where
@@ -485,14 +483,7 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
-    kinfer env (TFX l fx)           = do fx <- kchk env fx
-                                         return (KFX, TFX l fx)
-
-instance KCheck FX where
-    kchk env (FXAction)             = return FXAction
-    kchk env (FXAct t)              = FXAct <$> kexp KType env t
-    kchk env (FXMut t)              = FXMut <$> kexp KType env t
-    kchk env (FXPure)               = return FXPure
+    kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
@@ -567,13 +558,7 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
-    ksubst g (TFX l fx)             = TFX l <$> ksubst g fx
-
-instance KSubst FX where
-    ksubst g FXPure                 = return FXPure
-    ksubst g (FXMut t)              = FXMut <$> ksubst g t
-    ksubst g (FXAct t)              = FXAct <$> ksubst g t
-    ksubst g FXAction               = return FXAction
+    ksubst g (TFX l fx)             = return $ TFX l fx
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e

@@ -22,7 +22,7 @@
     - Set up dedicated rts thread for DB protocol daemon                    1d      2d
     - Add serialization calls to rts                                        3h      8h
     X Typecheck and convert formatted string literals                       1d      2d
-!   - Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
+!   - Fully defer ASYNC/AWAIT wrapping to the deactorizer pass (*)          1d      2d
 
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w
@@ -40,6 +40,19 @@
     - Translate list comprehensions                                         2d      3d
     / Handle the with statements                                            2d      3d
     - Implement raise and try in the rts                                    3d      4d
+
+
+(*) - There is only one action effect, at the top of the effect chain FXpure - FXproc - FXaction
+    - Constructs await and after, as well as state variable reads and writes, all cause the effect FXaction
+    - Actor intercom is typechecked just as ordinary function calls, notably unifying sender's & receiver's effects
+    - Now, in the Deactorizer:
+        - For each NAct placed in the environment, all occurrences of FXaction are replaced by the special effect FXext
+        - A traversal of all expressions resolve mismatches between actual and expected effects as follows:
+            - Mismatched expressions that are not calls are eta-expanded
+            - An mismatched call E() at the top of an Expr or an await is replaced by ASYNC(E)()
+            - All other mismatched calls E() are replaced by AWAIT ASYNC(E)()
+            - Side condition: the calls in an "after t E" construct must match, i.e., be actor-internal
+        - Moreover, the constructs "async E" and "await E" are replaced by ASYNC(E) and AWAIT(E), respectively
 
 
 Acton II

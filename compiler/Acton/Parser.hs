@@ -1080,8 +1080,7 @@ effect  = addLoc $
             S.TVar NoLoc <$> tvar
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> rword "action" *> return S.fxAction
-        <|> rword "act" *> optvar S.fxAct
-        <|> rword "mut" *> optvar S.fxMut
+        <|> rword "mut" *> return S.fxMut
         <|> rword "pure" *> return S.fxPure
   where optvar f = brackets (f <$> (addLoc $ S.TVar NoLoc <$> tvar)) <|> return S.tWild
 

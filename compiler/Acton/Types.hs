@@ -143,7 +143,7 @@ instance (InfEnv a) => InfEnv [a] where
 targetFX Var{}                          = return []
 targetFX _                              = do st <- newTVar
                                              fx <- currFX
-                                             return [Cast (fxMut st) fx]
+                                             return [Cast fxMut fx]
 
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
@@ -263,7 +263,7 @@ instance InfEnv Stmt where
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,t,e2') <- infer env e2
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             return (Cast fxAction fx :
                                                      cs1++cs2, [], After l e1' e2')
     
     infEnv env (Signature l ns sc dec)
@@ -291,7 +291,7 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                                  return ([], t, name "_", Var l (NoQ n))
                                              NSVar t -> do
                                                  fx <- currFX
-                                                 return ([Cast (actorFX env l) fx], t, name "_", Var l (NoQ n))
+                                                 return ([Cast fxAction fx], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
@@ -621,7 +621,6 @@ instance Check Decl where
                                              t <- maybe newTVar return a
                                              pushFX fx t
                                              st <- newTVar
-                                             env1 <- pure $ maybeSetActorFX st env1
                                              wellformed env1 q
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
@@ -629,9 +628,7 @@ instance Check Decl where
                                              (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                                 csx = case fx of
-                                                         TVar _ v | univar v, inAct env1 -> [Cast (actorFX env1 l) fx]
-                                                         _ -> [Cast fxPure fx]
+                                                 csx = [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
                                              (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst++csx)
                                              checkNoEscape env tvs
@@ -644,8 +641,7 @@ instance Check Decl where
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
                                              st <- newActVar
                                              traceM ("## actor st: " ++ prstr st)
-                                             pushFX (fxAct st) tNone
-                                             env1 <- pure $ setActorFX st env1
+                                             pushFX fxAction tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
@@ -871,7 +867,7 @@ instance Infer Expr where
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
-                                                return ([Cast (actorFX env l) fx], t, x)
+                                                return ([Cast fxAction fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
@@ -885,8 +881,7 @@ instance Infer Expr where
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
-                                                st <- newTVar
-                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
+                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 n q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
@@ -918,7 +913,7 @@ instance Infer Expr where
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             return (Cast fxAction fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1424,7 +1419,7 @@ instance InfEnvT Pattern where
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast (actorFX env l) fx :
+                                                     return (Cast fxAction fx :
                                                              Cast t t' : 
                                                              [], [], t, PVar l n Nothing)
                                                  _ -> 

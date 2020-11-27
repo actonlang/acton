@@ -36,7 +36,7 @@ schemaOf env (Var _ n)              = case findQName n env of
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec)
                                         NAct q p k _ ->
-                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), Just NoDec)
+                                            (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec)
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
 schemaOf env (Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
@@ -68,7 +68,7 @@ schemaOf' env e@(Var _ n)           = case findQName n env of
                                                 t' = if restype t == tR then t else t{ restype = tSelf }
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
                                         NAct q p k _ ->
-                                            (tSchema q (tFun (fxAct tWild) p k (tCon0 n q)), Just NoDec, e)
+                                            (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec, e)
                                         i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
 schemaOf' env e@(Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
@@ -436,15 +436,14 @@ castable env (TNone _) (TOpt _ t)           = True
 castable env (TNone _) (TNone _)            = True
 
 castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
-  where castable' FXPure FXPure             = True
-        castable' FXPure (FXMut _)          = True
-        castable' FXPure (FXAct _)          = True
-        castable' (FXMut t1) (FXMut t2)     = t1 == t2
-        castable' (FXMut t1) (FXAct t2)     = t1 == t2
-        castable' (FXAct t1) (FXAct t2)     = t1 == t2
+  where castable' FXPure   FXPure           = True
+        castable' FXPure   FXMut            = True
+        castable' FXPure   FXAction         = True
+        castable' FXMut    FXMut            = True
+        castable' FXMut    FXAction         = True
         castable' FXAction FXAction         = True
-        castable' FXAction (FXAct _)        = True
-        castable' fx1 fx2                   = False
+        castable' FXExt    FXExt            = True
+        castable' fx1      fx2              = False
 
 castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True

@@ -142,15 +142,8 @@ instance QMatch Type where
     qmatch env (TWild _) (TWild _)                          = True
     qmatch env (TNil _ s1)  (TNil _ s2)                     = s1 == s2
     qmatch env (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && qmatch env t1 t2 && qmatch env r1 r2
-    qmatch env (TFX _ fx1) (TFX _ fx2)                      = qmatch env fx1 fx2
+    qmatch env (TFX _ fx1) (TFX _ fx2)                      = fx1 == fx2
     qmatch env _ _                                          = False
-
-instance QMatch FX where
-    qmatch env FXPure FXPure        = True
-    qmatch env (FXMut a) (FXMut b)  = qmatch env a b
-    qmatch env (FXAct a) (FXAct b)  = qmatch env a b
-    qmatch env FXAction FXAction    = True
-    qmatch env _ _                  = False
 
 instance QMatch [UType] where
     qmatch env as bs                = and [ any (qmatch env a) bs | a <- as ] && and [ any (qmatch env b) as | b <- bs ]
@@ -938,9 +931,6 @@ headvar (Sub w t (TVar _ v))        = v     -- ?
 headvar (Sel w (TVar _ v) n t)      = v
 
 headvar (Mut (TVar _ v) n t)        = v
-
-headvar (Seal w (TVar _ v) _ _ _)   = v
-headvar (Seal w _ (TVar _ v) _ _)   = v     -- ?
 
 
 -- Error handling ----------------------------------------------------------------------------------------------------

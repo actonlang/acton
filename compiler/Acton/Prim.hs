@@ -15,8 +15,6 @@ primActor           = gPrim "Actor"
 primR               = gPrim "R"
 primCont            = gPrim "Cont"
 
-primASYNCw          = gPrim "ASYNCw"
-
 primASYNCf          = gPrim "ASYNCf"
 primAFTERf          = gPrim "AFTERf"
 primAWAITf          = gPrim "AWAITf"
@@ -68,9 +66,7 @@ tCont x t           = tCon $ TC primCont [x,posRow t posNil]
 
 
 primMkEnv cls def var sig = 
-                        [   (noq primASYNCw,        def scASYNCw NoDec),
-
-                            (noq primASYNCf,        def scASYNCf NoDec),
+                        [   (noq primASYNCf,        def scASYNCf NoDec),
                             (noq primAFTERf,        def scAFTERf NoDec),
                             (noq primAWAITf,        def scAWAITf NoDec),
 
@@ -140,90 +136,64 @@ clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, 
         p           = TV PRow (name "P")
 
 
---  $ASYNCw         : [S,A] => act[S](act[S]()->A) -> Msg[A]
-scASYNCw            = tSchema [quant s, quant a] tASYNC
-  where tASYNC      = tFun actS (posRow tFun' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $ASYNCf         : [A] => action($Actor, ext()->A) -> Msg[A]
+scASYNCf            = tSchema [quant a] tASYNC
+  where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun actS posNil kwdNil (tVar a)
-        actS        = fxAct $ tVar s
+        tFun'       = tFun fxExt posNil kwdNil (tVar a)
 
---  $ASYNCf         : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
-scASYNCf            = tSchema [quant s, quant a] tASYNC
-  where tASYNC      = tFun actS (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $AFTERf         : [A] => action(int, action()->A) -> Msg[A]
+scAFTERf            = tSchema [quant a] tAFTER
+  where tAFTER      = tFun fxAction (posRow tInt $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun actS posNil kwdNil (tVar a)
-        actS        = fxAct $ tVar s
+        tFun'       = tFun fxAction posNil kwdNil (tVar a)
 
---  $AFTERf         : [S,A] => act[S](int, act[S]()->A) -> Msg[A]
-scAFTERf            = tSchema [quant s, quant a] tAFTER
-  where tAFTER      = tFun actS (posRow tInt $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
-        a           = TV KType $ name "A"
-        tFun'       = tFun actS posNil kwdNil (tVar a)
-        actS        = fxAct $ tVar s
-
---  $AWAITf         : [S,A] => act[S](Msg[A]) -> A
-scAWAITf            = tSchema [quant s, quant a] tAWAIT
-  where tAWAIT      = tFun actS (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
-        s           = TV KType $ name "S"
+--  $AWAITf         : [A] => action(Msg[A]) -> A
+scAWAITf            = tSchema [quant a] tAWAIT
+  where tAWAIT      = tFun fxAction (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "T"
-        actS        = fxAct $ tVar s
 
 
---  $ASYNCc         : [S,A] => mut[S]($Actor, mut[S](mut[S](A)->$R)->$R) -> Msg[A]
-scASYNCc            = tSchema [quant s, quant a] tASYNC
-  where tASYNC      = tFun mutS (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $ASYNCc         : [A] => mut($Actor, mut(mut(A)->$R)->$R) -> Msg[A]
+scASYNCc            = tSchema [quant a] tASYNC
+  where tASYNC      = tFun fxMut (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun mutS (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun mutS (posRow (tVar a) posNil) kwdNil tR
-        mutS        = fxMut $ tVar s
+        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
 
---  $AFTERc         : [S,A] => mut[S](int, mut[S](mut[S](A)->$R)->$R) -> Msg[A]
-scAFTERc            = tSchema [quant s, quant a] tAFTER
-  where tAFTER      = tFun mutS (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $AFTERc         : [A] => mut(int, mut(mut(A)->$R)->$R) -> Msg[A]
+scAFTERc            = tSchema [quant a] tAFTER
+  where tAFTER      = tFun fxMut (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tFun mutS (posRow tCont'' posNil) kwdNil tR
-        tCont''     = tFun mutS (posRow (tVar a) posNil) kwdNil tR
-        mutS        = fxMut $ tVar s
+        tCont'      = tFun fxMut (posRow tCont'' posNil) kwdNil tR
+        tCont''     = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
 
---  $AWAITc         : [S,A] => mut[S](Msg[A], mut[S](A)->$R) -> $R
-scAWAITc            = tSchema [quant s, quant a] tAWAIT
-  where tAWAIT      = tFun mutS (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
-        s           = TV KType $ name "S"
+--  $AWAITc         : [A] => mut(Msg[A], mut(A)->$R) -> $R
+scAWAITc            = tSchema [quant a] tAWAIT
+  where tAWAIT      = tFun fxMut (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
         a           = TV KType $ name "A"
-        tCont'      = tFun mutS (posRow (tVar a) posNil) kwdNil tR
-        mutS        = fxMut $ tVar s
+        tCont'      = tFun fxMut (posRow (tVar a) posNil) kwdNil tR
 
 
---  $ASYNC          : [S,A] => mut[S]($Actor, $Cont[mut[S],($Cont[mut[S],A],)]) -> Msg[A]
-scASYNC             = tSchema [quant s, quant a] tASYNC
-  where tASYNC      = tFun mutS (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $ASYNC          : [A] => mut($Actor, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
+scASYNC             = tSchema [quant a] tASYNC
+  where tASYNC      = tFun fxMut (posRow tActor $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tCont mutS tCont''
-        tCont''     = tCont mutS (tVar a)
-        mutS        = fxMut $ tVar s
+        tCont'      = tCont fxMut tCont''
+        tCont''     = tCont fxMut (tVar a)
 
---  $AFTER          : [S,A] => mut[S](int, $Cont[mut[S],($Cont[mut[S],A],)]) -> Msg[A]
-scAFTER             = tSchema [quant s, quant a] tAFTER
-  where tAFTER      = tFun mutS (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
-        s           = TV KType $ name "S"
+--  $AFTER          : [A] => mut(int, $Cont[mut,($Cont[mut,A],)]) -> Msg[A]
+scAFTER             = tSchema [quant a] tAFTER
+  where tAFTER      = tFun fxMut (posRow tInt $ posRow tCont' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tCont'      = tCont mutS tCont''
-        tCont''     = tCont mutS (tVar a)
-        mutS        = fxMut $ tVar s
+        tCont'      = tCont fxMut tCont''
+        tCont''     = tCont fxMut (tVar a)
 
---  $AWAIT          : [S,A] => mut[S](Msg[A], $Cont[mut[S],(A,)]) -> $R
-scAWAIT             = tSchema [quant s, quant a] tAWAIT
-  where tAWAIT      = tFun mutS (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
-        s           = TV KType $ name "S"
+--  $AWAIT          : [A] => mut(Msg[A], $Cont[mut,(A,)]) -> $R
+scAWAIT             = tSchema [quant a] tAWAIT
+  where tAWAIT      = tFun fxMut (posRow (tMsg $ tVar a) $ posRow tCont' posNil) kwdNil tR
         a           = TV KType $ name "A"
-        tCont'      = tCont mutS (tVar a)
-        mutS        = fxMut $ tVar s
+        tCont'      = tCont fxMut (tVar a)
 
 
 
