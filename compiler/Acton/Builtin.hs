@@ -22,9 +22,11 @@ getsliceKW                          = name "__getslice__"
 setsliceKW                          = name "__setslice__"
 delsliceKW                          = name "__delslice__"
 appendKW                            = name "append"
+callKW                              = name "__call__"
 boolKW                              = name "__bool__"
 strKW                               = name "__str__"
-callKW                              = name "__call__"
+
+structKWs                           = [boolKW, strKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"
