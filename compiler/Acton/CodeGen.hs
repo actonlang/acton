@@ -32,7 +32,7 @@ genRoot env0 qn@(GName m n) t       = do return $ render cRoot
         cRoot                       = include env "modules" m $+$
                                       (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
                                        nest 4 (gen env1 (GName m initKW) <> parens empty <> semi $+$
-                                               text "return" <+> genNew env1 [] qn (pArg pars) <> semi) $+$
+                                               text "return" <+> genNew env1 qn (pArg pars) <> semi) $+$
                                        char '}'
 
 -- Environment --------------------------------------------------------------------------------------
@@ -317,7 +317,7 @@ unCkeyword str
   | str `Data.Set.member` rws       = preEscape str
   | otherwise                       = str
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "auto",     "break",    "case",     "char",     "continue", "default",
+                                        "auto",     "break",    "case",     "char",     "const",    "continue",
                                         "default",  "do",       "double",   "else",     "enum",     "extern",
                                         "float",    "for",      "goto",     "if",       "int",      "long",
                                         "register", "return",   "short",    "signed",   "sizeof",   "static",
@@ -373,6 +373,7 @@ instance Gen PosArg where
     gen env (PosArg e PosNil)       = gen env e
     gen env (PosArg e p)            = gen env e <> comma <+> gen env p
     gen env PosNil                  = empty
+
 
 formatLit (Strings l ss)            = Strings l [format $ concat ss]
   where format []                   = []
@@ -449,14 +450,14 @@ genCall env t0 [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten (Tuple _ p KwdNil)  = p
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env t0 ts e@(Var _ n) p
-  | NClass{} <- info                = genNew env ts n p
+  | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = gen env e <> parens (gen env p)
   where info                        = findQName n env
 genCall env t0 ts e0@(Dot _ e n) p  = genDotCall env (snd $ schemaOf env e0) e n p
 genCall env t0 ts e p               = genEnter env ts e callKW p
 
 
-genNew env ts n p                   = newcon' env n <> parens (gen env p)
+genNew env n p                      = newcon' env n <> parens (gen env p)
 
 declCon env n q                     = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> malloc env (gname env n) <> semi $+$
@@ -471,7 +472,7 @@ declCon env n q                     = (gen env tRes <+> newcon env n <> parens (
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$
                                       text "return" <+> gen env tmpV <> semi
-        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,t]) [eVar tmpV, e]) PosNil
+        retobj (PosArg e PosNil)    = PosArg (eCall (tApp (eQVar primCONSTCONT) [fx,tObj]) [eVar tmpV, e]) PosNil
         retobj (PosArg e p)         = PosArg e (retobj p)
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
 
@@ -539,7 +540,8 @@ instance Gen Expr where
     gen env (None _)                = gen env primNone
     gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
     gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
-    gen env e0@(Call _ e p KwdNil)  = genCall env (typeOf env e0) [] e p
+    gen env e0@Call{}               = genCall env t0 [] e p
+      where (t0, Call _ e p _)      = typeOf' env e0
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env [] e n

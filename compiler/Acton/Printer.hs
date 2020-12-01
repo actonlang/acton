@@ -444,7 +444,7 @@ instance Pretty FX where
     pretty FXAction                 = text "action"
     pretty FXMut                    = text "mut"
     pretty FXPure                   = text "pure"
-    pretty FXExt                    = text "ext"
+    pretty FXAsync                  = text "async"
 
 instance Pretty Kind where
     pretty KType                    = text "type"

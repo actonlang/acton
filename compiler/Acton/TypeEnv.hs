@@ -16,7 +16,7 @@ data TypeX                      = TypeX {
 
 type Env                        = EnvF TypeX
 
-data EnvCtx                     = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
+data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
 typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False }
 
@@ -28,6 +28,10 @@ instance Subst TypeX where
     tyfree x                    = []
 
 
+setInDef env
+  | onTop env                   = modX env $ \x -> x{ context = CtxDef }
+  | otherwise                   = env
+
 setInAct env                    = modX env $ \x -> x{ context = CtxAct }
 
 setInClass env                  = modX env $ \x -> x{ context = CtxClass }
@@ -35,6 +39,8 @@ setInClass env                  = modX env $ \x -> x{ context = CtxClass }
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
 onTop env                       = context (envX env) == CtxTop
+
+inDef env                       = context (envX env) == CtxDef
 
 inAct env                       = context (envX env) == CtxAct
 

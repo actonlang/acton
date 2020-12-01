@@ -17,7 +17,7 @@ import Acton.QuickType
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
 convert env0 m                          = return (runCpsM (convMod m), mapModules1 conv env0)
   where env                             = cpsEnv env0
-        convMod (Module m imps ss)      = do ss' <- pre env ss
+        convMod (Module m imps ss)      = do ss' <- preSuite env ss
                                              --traceM ("######## preCPS:\n" ++ render (vcat $ map pretty ss') ++ "\n########")
                                              Module m imps <$> cps env ss'
 
@@ -460,13 +460,13 @@ instance PreCPS Expr where
     pre env (Dot l e n)                 = Dot l <$> pre env e <*> return n
     pre env (DotI l e i)                = DotI l <$> pre env e <*> return i
     pre env (RestI l e i)               = RestI l <$> pre env e <*> return i
-    pre env (Lambda l p KwdNIL e fx)
+    pre env e0@(Lambda l p KwdNIL e fx)
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
-                                             case contCall env e && null prefixes of
-                                                True -> do
-                                                    let p' = conv p; t' = conv t; fx' = conv fx
-                                                    return $ Lambda l (addContPar0 p' fx' t') KwdNIL (addContArg env1 e (eVar contKW)) fx'
-                                                False -> do
+                                             case prefixes of
+                                                [] -> let p' = conv p; t' = conv t; fx' = conv fx
+                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx' t' contKW e'
+                                                      in return $ Lambda l (addContPar0 p' fx' t') KwdNIL e1 fx'
+                                                _ -> do
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
                                                     return (Var l0 (NoQ f))
@@ -538,7 +538,7 @@ instance Conv FX where
     conv FXAction                       = FXMut
     conv FXMut                          = FXMut
     conv FXPure                         = FXPure
-    conv FXExt                          = FXExt
+    conv FXAsync                        = FXAsync
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)

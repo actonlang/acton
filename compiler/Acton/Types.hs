@@ -350,7 +350,7 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
                                                  traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
-                                                 return ([], [(n, NDef (openAction' env sc) dec)], d)
+                                                 return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
@@ -487,11 +487,6 @@ checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err2 escaped "Escaping type variable"
 
-openAction env (TFun l fx p k t)
-  | fx == fxAction                      = TFun l tWild p k t
-openAction env t                        = t
-
-openAction' env (TSchema l q t)         = TSchema l q $ openAction env t
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
 wellformed env x                        = do _ <- solveAll env [] tNone cs
@@ -523,33 +518,25 @@ instance (Check a) => Check [a] where
 infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)
                                              bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))
                                              return (sigs ++ dsigs ++ bsigs)
-  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
-        async (TSchema l q (TFun l' fx p k t))
-          | mustWrap q fx               = TSchema l q (TFun l' fxAction p k t)
-        async sc                        = sc
-        mustWrap q (TVar _ tv)          = tv `notElem` tybound q
-        mustWrap q (TFX _ FXPure)       = False
-        mustWrap q _                    = True
-        mkNDef n                        = do p <- newTVarOfKind PRow
-                                             k <- newTVarOfKind KRow
-                                             t <- newTVar
-                                             return (n, NDef (monotype $ tFun fxAction p k t) NoDec)
-        mkNVar n                        = do t <- newTVar
-                                             return (n, NVar t)
+  where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
         dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
+        mkNDef n                        = do t <- newTVar
+                                             return (n, NDef (monotype $ t) NoDec)
         pvars ss                        = nub $ concat $ map pvs ss
           where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
                 pvs _                   = []
+        mkNVar n                        = do t <- newTVar
+                                             return (n, NVar t)
 
 matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
                                              (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
-                                             traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
+                                             --traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, i) | isHidden n      = return ([], [])
-        check1 (n, NVar t)              = do traceM ("## matchActorAssumption for attribute " ++ prstr n)
+        check1 (n, NVar t)              = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              unify env t t0
                                              return ([],[])
           where t0                      = case lookup n te0 of
@@ -557,7 +544,7 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
                                              traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             unify env t (openAction env t0)
+                                             unify env t t0
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
@@ -635,7 +622,7 @@ instance Check Decl where
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchDefAssumption env cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
-      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
+      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)

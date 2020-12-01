@@ -625,6 +625,11 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
 
+isDef                       :: EnvF x -> QName -> Bool
+isDef env n                 = case findQName n env of
+                                NDef _ _ -> True
+                                _ -> False
+
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case findQName n env of
                                 NAct q p k te -> True
@@ -638,6 +643,12 @@ isClass env n               = case findQName n env of
 isProto                     :: EnvF x -> QName -> Bool
 isProto env n               = case findQName n env of
                                 NProto q us te -> True
+                                _ -> False
+
+isDefOrClass                :: EnvF x -> QName -> Bool
+isDefOrClass env n          = case findQName n env of
+                                NDef _ _ -> True
+                                NClass _ _ _ -> True
                                 _ -> False
 
 findWitness                 :: EnvF x -> QName -> (Witness->Bool) -> Maybe Witness
@@ -762,7 +773,7 @@ inheritedAttrs env n        = inh (dom te) us
                 te'         = snd $ splitSigs te
 
 allCons                     :: EnvF x -> [QName]
-allCons env                 = reverse $ [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
   where con NClass{}        = True
         con NAct{}          = True
         con _               = False

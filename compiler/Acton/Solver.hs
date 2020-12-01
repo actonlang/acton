@@ -217,7 +217,6 @@ cast' env (TFX _ fx1) (TFX _ fx2)
         castFX FXMut    FXMut               = True
         castFX FXMut    FXAction            = True
         castFX FXAction FXAction            = True
-        castFX FXExt    FXExt               = True
         castFX fx1      fx2                 = False
 
 cast' env (TNil _ k1) (TNil _ k2)
@@ -355,6 +354,12 @@ sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')               
                                                      cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
+
+
+-- (pure lambda px0: fx2 lambda *px1, **px2: wt(wx(px0)(*wp(px1),**wk(px2)))) f
+-- ~~>  fx2 lambda *px1, **px2: wx(f)(*px1,**px2)
+--      ~~>  f                                              if wx = $ID
+--      ~~>  fx2 lambda *px1, **px2: f(*px1,**px2)          if wx = $ETA
 
 
 --                existing            expected
@@ -651,10 +656,7 @@ glb env (TOpt _ t1) t2                  = glb env t1 t2
 glb env t1 (TOpt _ t2)                  = glb env t1 t2
 
 glb env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (glfx fx1 fx2)
-  where glfx FXExt    FXExt             = FXExt
-        glfx FXExt    fx2               = noGLB t1 t2
-        glfx fx1      FXExt             = noGLB t1 t2
-        glfx FXPure   _                 = FXPure
+  where glfx FXPure   _                 = FXPure
         glfx _        FXPure            = FXPure
         glfx FXMut    _                 = FXMut
         glfx _        FXMut             = FXMut
@@ -718,10 +720,7 @@ lub env (TOpt _ t1) t2                  = tOpt $ lub env t1 t2
 lub env t1 (TOpt _ t2)                  = tOpt $ lub env t1 t2
 
 lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = tTFX (lufx fx1 fx2)
-  where lufx FXExt FXExt                = FXExt
-        lufx FXExt    fx2               = noLUB t1 t2
-        lufx fx1      FXExt             = noLUB t1 t2
-        lufx FXAction _                 = FXAction
+  where lufx FXAction _                 = FXAction
         lufx _        FXAction          = FXAction
         lufx FXMut    _                 = FXMut
         lufx _        FXMut             = FXMut
@@ -774,8 +773,6 @@ improve env te tt eq cs
                                              sequence [ unify env (tVar v) (tVar v') | (v,v') <- gsimple ]
                                              simplify' env te tt eq cs
   | not $ null cyclic                   = err2 cyclic ("Cyclic subtyping:")
-  | not $ null openFX                   = do traceM ("  *Close actor FX: " ++ prstrs openFX)
-                                             simplify' env te tt eq ([ Cast (tVar tv) fxAction | tv <- openFX ] ++ cs)
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd
                                              lb <- mapM (mkLUB env) multiLBnd
                                              traceM ("  *GLB " ++ prstrs ub)
@@ -807,8 +804,6 @@ improve env te tt eq cs
         Right vclosed                   = closure
         (vvsL,vvsU)                     = unzip vclosed
         gsimple                         = gsimp vclosed obsvars (varvars vi)
-        openFX                          = [ v | v <- actFX, fxAction `notElem` lookup' v (ubounds vi) ]
-        actFX                           = [ v | (n,i@NAct{}) <- te ++ names env, v <- tyfree i, univar v, tvkind v == KFX ]
         multiUBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (ubounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiLBnd                       = [ (v,ts) | (v,ts) <- Map.assocs (lbounds vi), v `notElem` embedded vi, length ts > 1 ]
         multiPBnd                       = [ (v,ps) | (v,ps) <- Map.assocs (pbounds vi), length ps > 1 ]
@@ -862,7 +857,6 @@ data Candidate                          = CProto QName
                                         | CPure
                                         | CMut
                                         | CAction
-                                        | CExt
                                         deriving (Eq,Show)
 
 instance Pretty Candidate where
@@ -885,7 +879,6 @@ allAbove env (TTuple _ _ _)             = [CTuple,CNone]
 allAbove env (TFX _ FXPure)             = [CPure,CMut,CAction]
 allAbove env (TFX _ FXMut)              = [CMut,CAction]
 allAbove env (TFX _ FXAction)           = [CAction]
-allAbove env (TFX _ FXExt)              = [CExt]
 allAbove env (TUnion _ us)
   | all uniLit us                       = CCon qnStr : map CUnion (uniAbove env [UCon qnStr]) ++ [CNone]
   | otherwise                           = map CUnion (uniAbove env us) ++ [CNone]
@@ -901,7 +894,6 @@ allBelow env (TTuple _ _ _)             = [CTuple]
 allBelow env (TFX _ FXPure)             = [CPure]
 allBelow env (TFX _ FXMut)              = [CMut,CPure]
 allBelow env (TFX _ FXAction)           = [CAction,CMut,CPure]
-allBelow env (TFX _ FXExt)              = [CExt]
 allBelow env (TUnion _ us)              = [ CCon n | UCon n <- us ] ++ map CUnion (uniBelow env us)
 allBelow env _                          = []
 
@@ -942,7 +934,7 @@ constrain env vs _                      = vs
 
 candidates env KType                    = map CProto (allProtos env) ++ [CNone,COpt,CFun,CTuple] ++ 
                                           map CCon (allCons env) ++ map CVar (allVars env KType) ++ map CUnion (uniAbove env [])
-candidates env KFX                      = [CPure,CMut,CAction,CExt] ++ map CVar (allVars env KFX)
+candidates env KFX                      = [CPure,CMut,CAction] ++ map CVar (allVars env KFX)
 candidates env k                        = map CVar (allVars env k)
 
 --
@@ -1004,7 +996,6 @@ solve' env te tt eq vs cs
         mkres CPure                     = Right $ fxPure
         mkres CMut                      = Right $ fxMut
         mkres CAction                   = Right $ fxAction
-        mkres CExt                      = Right $ fxExt
         mkcon n                         = case tconKind n env of
                                             KFun ks _ -> TC n (replicate (length ks) tWild)
                                             _         -> TC n []

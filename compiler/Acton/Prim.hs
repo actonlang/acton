@@ -59,6 +59,8 @@ primISNOTNONE       = gPrim "ISNOTNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
+primETA             = gPrim "ETA"
+
 
 tActor              = tCon $ TC primActor []
 tR                  = tCon $ TC primR []
@@ -110,7 +112,9 @@ primMkEnv cls def var sig =
                             (noq primISNOTNONE,     def scISNOTNONE NoDec),
 
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
-                            (noq primSKIPRES,       def scSKIPRES NoDec)
+                            (noq primSKIPRES,       def scSKIPRES NoDec),
+
+                            (noq primETA,           def scETA NoDec)
                             
                       ]
 
@@ -136,11 +140,11 @@ clCont cls def      = cls [quant x, quant p] [([Nothing],TC qnFunction [tVar x, 
         p           = TV PRow (name "P")
 
 
---  $ASYNCf         : [A] => action($Actor, ext()->A) -> Msg[A]
+--  $ASYNCf         : [A] => async($Actor, action()->A) -> Msg[A]
 scASYNCf            = tSchema [quant a] tASYNC
   where tASYNC      = tFun fxAction (posRow tActor $ posRow tFun' posNil) kwdNil (tMsg $ tVar a)
         a           = TV KType $ name "A"
-        tFun'       = tFun fxExt posNil kwdNil (tVar a)
+        tFun'       = tFun fxAsync posNil kwdNil (tVar a)
 
 --  $AFTERf         : [A] => action(int, action()->A) -> Msg[A]
 scAFTERf            = tSchema [quant a] tAFTER
@@ -242,9 +246,9 @@ scCAST              = tSchema [quant a, quant b] tCAST
         a           = TV KType $ name "A"
         b           = TV KType $ name "B"
 
---  $CONSTCONT      : [X,A] => ($Cont[X,A], A) -> $Cont[X,tNone]
+--  $CONSTCONT      : [X,A] => (A, $Cont[X,A]) -> $Cont[X,tNone]
 scCONSTCONT         = tSchema [quant x, quant a] tCONSTCONT
-  where tCONSTCONT  = tFun fxPure (posRow tCont' $ posRow (tVar a) posNil) kwdNil tCont''
+  where tCONSTCONT  = tFun fxPure (posRow (tVar a) $ posRow tCont' posNil) kwdNil tCont''
         tCont'      = tCont (tVar x) (tVar a)
         tCont''     = tCont (tVar x) tNone
         x           = TV KFX $ name "X"
@@ -312,4 +316,9 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         tCont'      = tCont (tVar x) tNone
         tCont''     = tCont (tVar x) (tVar a)
         x           = TV KFX $ name "X"
+        a           = TV KType $ name "A"
+
+--  $ETA            : [A] => pure(A) -> A
+scETA               = tSchema [quant a] tETA
+  where tETA        = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "A"

@@ -222,20 +222,16 @@ instance Lift Decl where
 instance Lift Branch where
     ll env (Branch e ss)                = Branch <$> ll env e <*> llSuite env ss
 
-
-
 freefun env e@(Var l qn@(NoQ n))
   | Just vts <- findFree n env          = Just (tApp (Var l (NoQ $ liftedName env n)) (map tVar tvs), vts)
-  | isClass env qn || isAlias n env     = Just (e, [])
-  | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
-freefun env (Var l n)                   = Just (Var l (primSubst n), [])
+freefun env (Var l n)
+  | isDefOrClass env n                  = Just (Var l (primSubst n), [])
 freefun env (TApp l e@(Var l' qn@(NoQ n)) ts)
   | Just vts <- findFree n env          = Just (TApp l (Var l' (NoQ $ liftedName env n)) (map tVar tvs ++ conv ts), vts)
-  | isClass env qn || isAlias n env     = Just (TApp l e (conv ts), [])
-  | otherwise                           = Nothing
   where Just tvs                        = lookup n (quantmap env)
-freefun env (TApp l (Var l' n) ts)      = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
+freefun env (TApp l (Var l' n) ts)
+  | isDefOrClass env n                  = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
 closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
@@ -260,6 +256,8 @@ closureConvert env lambda t0 vts0 es    = do n <- newName "lambda"
         callBody                        = [ Assign l0 [PVar l0 v (Just t)] (eDot (eVar llSelf) v) | (v,t) <- vts ] ++ [Return l0 (Just e)]
 
 instance Lift Expr where
+    ll env e@(Var l (NoQ n))
+      | n `elem` dom (locals env)       = pure e
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
       where par                         = pPar paramNames (conv p)
@@ -401,7 +399,7 @@ instance Conv FX where
     conv FXAction                       = FXMut
     conv FXMut                          = FXMut
     conv FXPure                         = FXPure
-    conv FXExt                          = FXExt
+    conv FXAsync                        = FXAsync
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)

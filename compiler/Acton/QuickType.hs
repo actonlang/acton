@@ -442,7 +442,8 @@ castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
         castable' FXMut    FXMut            = True
         castable' FXMut    FXAction         = True
         castable' FXAction FXAction         = True
-        castable' FXExt    FXExt            = True
+        castable' FXAsync  FXAsync          = True
+        castable' FXAsync  FXAction         = True
         castable' fx1      fx2              = False
 
 castable env (TNil _ k1) (TNil _ k2)

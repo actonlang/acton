@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances #-}
 module Acton.Deactorizer where
 
 import Acton.Syntax
@@ -13,8 +14,16 @@ import Pretty
 import Control.Monad.State.Strict
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
-deactorize env0 m                   = return (runDeactM (deact env m), mapModules1 conv env0)
-  where env                         = deactEnv env0
+deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactTop env b), mapModules1 conv env1)
+  where env                         = deactEnv env1
+        env1                        = mapModules1 sealActors env0
+
+deactTop env []                     = return []
+deactTop env (s : ss)               = do s' <- deact env s
+                                         ss' <- deactTop env1 ss
+                                         return (s' : ss')
+  where env1                        = extend (map sealActors $ envOf s) env
+
 
 -- Deactorizing monad
 type DeactM a                       = State DeactState a
@@ -59,6 +68,54 @@ setSampled ns env                   = modX env $ \x -> x{ sampledX = ns ++ sampl
 clearSampled env                    = modX env $ \x -> x{ sampledX = [] }
 
 
+-- Actor interface sealing --------------------------------------------------------------------------------
+
+sealActors (n, NAct q p k te)       = (n, NAct (seal q) (seal p) (seal k) (seal te))
+sealActors ni                       = ni
+
+class Seal a where
+    seal                            :: a -> a
+
+instance (Seal a) => Seal [a] where
+    seal                            = map seal
+
+instance Seal (Name, NameInfo) where
+    seal (n, i)                     = (n, seal i)
+
+instance Seal NameInfo where
+    seal (NSig sc dec)              = NSig (seal sc) dec
+    seal (NDef sc dec)              = NDef (seal sc) dec
+    seal (NVar t)                   = NVar (seal t)
+    seal i                          = i
+
+instance Seal QBind where
+    seal (Quant c ps)               = Quant c (seal ps)
+
+instance Seal TSchema where
+    seal (TSchema l q t)            = TSchema l (seal q) (seal t)
+
+instance Seal Type where
+    seal (TVar l v)                 = TVar l v
+    seal (TCon l c)                 = TCon l $ seal c
+    seal (TFun l fx p k t)          = TFun l (seal fx) (seal p) (seal k) (seal t)
+    seal (TTuple l p k)             = TTuple l (seal p) (seal k)
+    seal (TUnion l us)              = TUnion l us
+    seal (TOpt l t)                 = TOpt l (seal t)
+    seal (TNone l)                  = TNone l
+    seal (TWild l)                  = TWild l
+    seal (TNil l k)                 = TNil l k
+    seal (TRow l k n t r)           = TRow l k n (seal t) (seal r)
+    seal (TFX l fx)                 = TFX l (seal fx)
+
+instance Seal TCon where
+    seal (TC c ts)                  = TC c (seal ts)
+
+instance Seal FX where
+    seal FXMut                      = FXMut
+    seal FXPure                     = FXPure
+    seal FXAction                   = FXAsync         -- the sealing essence!
+
+
 -- Deactorize actor declarations -----------------------------------------------------------------------
 
 class Deact a where
@@ -69,9 +126,6 @@ instance Deact a => Deact (Maybe a) where
 
 instance Deact a => Deact [a] where
     deact env                       = traverse (deact env)
-
-instance Deact Module where
-    deact env (Module m imps ss)    = Module m imps <$> deactSuite env ss
 
 
 deactSuite env []                   = return []
@@ -112,7 +166,7 @@ instance Deact Stmt where
 
 instance Deact Decl where
     deact env (Actor l n q p KwdNIL b)
-                                    = do inits <- deactSuite env1 inits
+                                    = do inits <- deactSuite env2 inits
                                          decls <- mapM deactMeths decls
                                          let _init_ = Def l0 initKW [] (addSelfPar p) KwdNIL (Just tNone) (mkBody $ copies++inits) NoDec fxAction
                                          return $ Class l n q [TC primActor [], cStruct] (propsigs ++ [Decl l0 [_init_]] ++ decls ++ wrapped)
@@ -159,7 +213,7 @@ instance Deact Decl where
                     self            = Var l0 (NoQ selfKW)
                     clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (par2arg p) KwdNil) fx
                     ts              = map tVar (tybound q)
-                    ts'             = [tSelf, t]
+                    ts'             = [t]
 
     deact env (Def l n q p KwdNIL t b d fx)
                                     = do b <- deactSuite env1 b
@@ -176,9 +230,9 @@ addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
 
--- $ASYNCf : [S,A] => act[S]($Actor, act[S]()->A) -> Msg[A]
--- $AFTERf : [S,A] => act[S](int,    act[S]()->A) -> Msg[A]
--- $AWAITf : [S,A] => act[S](Msg[A])              -> A
+-- $ASYNCf : [A] => async($Actor, action()->A) -> Msg[A]
+-- $AFTERf : [A] => action(int,   action()->A) -> Msg[A]
+-- $AWAITf : [A] => action(Msg[A])             -> A
 
 
 instance Deact Expr where
