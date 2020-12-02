@@ -718,7 +718,7 @@ instance Check Branch where
 refine                                  :: Env -> Constraints -> TEnv -> Equations 
                                            -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
-  | not $ null solve_vs                 = do traceM ("  #solving vs : " ++ prstrs solve_vs)
+  | not $ null solve_vs                 = do traceM ("  #solving vs : " ++ prstrs solve_vs ++ " (collapse_vs: " ++ prstrs collapse_vs ++ ")")
                                              traceM ("           cs : " ++ prstrs cs)
                                              (cs',eq') <- solve (define te env) te tNone eq solve_vs cs
                                              refineAgain cs' eq'
@@ -735,7 +735,7 @@ refine env cs te eq
                                              traceM ("             cs : " ++ prstrs cs)
                                              traceM ("             te : " ++ prstr te)
                                              return (gen_vs, cs, te, eq)
-  where solve_vs                        = [ headvar c | c <- cs, mustSolve c ]
+  where solve_vs                        = [ headvar c | c <- cs, not (canQual c) ] \\ collapse_vs
         collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
         ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
@@ -743,8 +743,6 @@ refine env cs te eq
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
-        mustSolve c                     = not (canQual c) && not (mustCollapse c)
-
         canQual (Cast (TVar _ v) TCon{})   = univar v
         canQual (Impl _ (TVar _ v) _)      = univar v
         canQual _                          = False

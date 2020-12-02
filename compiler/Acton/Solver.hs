@@ -955,14 +955,14 @@ candidates env k                        = map CVar (allVars env k)
 
 solve                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> [TVar] -> Constraints -> TypeM (Constraints,Equations)
 solve env te tt eq [] cs                = return (cs, eq)
-solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ prstrs vs1 ++ " (embedded: " ++ prstrs (vs `intersect` embedded) ++ ")")
+solve env te tt eq vs cs                = do traceM ("###trying collapse " ++ prstrs vs1 ++ " (embedded: " ++ prstrs embedded ++ ")")
                                              (cs,eq) <- collapse env eq vs1 cs
                                              vs2 <- (nub . filter univar . tyfree) <$> msubst (map tVar vs1)
                                              solve' env te tt eq vs2 (reverse cs)
   where vs0                             = vs \\ embedded
         vs1 | null vs0                  = vs
             | otherwise                 = vs0
-        embedded                        = concat $ [ emb c | c <- cs, headvar c `elem` vs ]
+        embedded                        = concat $ [ emb c | c <- cs ]
         emb (Cast TVar{} TVar{})        = []
         emb (Cast TVar{} t)             = tyfree t
         emb (Cast t TVar{})             = tyfree t
