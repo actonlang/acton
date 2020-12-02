@@ -94,9 +94,6 @@ instance Transform Expr where
       | Lambda{} <- e',
         Just s1 <- pzip (ppar e') p',
         Just s2 <-  kzip (kpar e') k'   = termsubst (s1++s2) (exp1 e')
-      | e' == eQVar primACT             = case posArgHead p' of
-                                            f@Lambda{} -> f{ efx = fxAction }
-                                            _ -> Call l e' p' k'
       | otherwise                       = Call l e' p' k'
       where e'                          = trans env e
             p'                          = trans env p
