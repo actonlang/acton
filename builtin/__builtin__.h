@@ -301,24 +301,6 @@ typedef struct $Iterable$Iterator *$Iterable$Iterator;
 struct $Iterable$Iterator$class;
 typedef struct $Iterable$Iterator$class *$Iterable$Iterator$class;
 
-struct $Sequence$range;
-typedef struct $Sequence$range *$Sequence$range;
-
-struct $Sequence$range$class;
-typedef struct $Sequence$range$class *$Sequence$range$class;
-
-struct $Collection$range;
-typedef struct $Collection$range *$Collection$range;
-
-struct $Collection$range$class;
-typedef struct $Collection$range$class *$Collection$range$class;
-
-struct $Plus$range;
-typedef struct $Plus$range *$Plus$range;
-
-struct $Plus$range$class;
-typedef struct $Plus$range$class *$Plus$range$class;
-
 struct $Ord$str;
 typedef struct $Ord$str *$Ord$str;
 
@@ -481,6 +463,13 @@ typedef struct $Container$bytearray *$Container$bytearray;
 struct $Container$bytearray$class;
 typedef struct $Container$bytearray$class *$Container$bytearray$class;
 
+struct $Hashable$WORD;
+typedef struct $Hashable$WORD *$Hashable$WORD;
+
+struct $Hashable$WORD$class;
+typedef struct $Hashable$WORD$class *$Hashable$WORD$class;
+
+
 // $Eq ////////////////////////////////////////////////////////////
 
 struct $Eq {
@@ -492,10 +481,16 @@ struct $Eq$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Eq);
+    void (*__serialize__)($Eq,$Serial$state);
+    $Eq (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Eq);
+    $str (*__str__)($Eq);
     $bool (*__eq__)($Eq, $WORD, $WORD);
     $bool (*__ne__)($Eq, $WORD, $WORD);
 };
 
+extern struct $Eq$class $Eq$methods;
+$Eq $Eq$new();
 
 // $Ord ////////////////////////////////////////////////////////////
 
@@ -508,6 +503,10 @@ struct $Ord$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord);
+    void (*__serialize__)($Ord,$Serial$state);
+    $Ord (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord);
+    $str (*__str__)($Ord);
     $bool (*__eq__)($Ord, $WORD, $WORD);
     $bool (*__ne__)($Ord, $WORD, $WORD);
     $bool (*__lt__)($Ord, $WORD, $WORD);
@@ -516,6 +515,8 @@ struct $Ord$class {
     $bool (*__ge__)($Ord, $WORD, $WORD);
 };
 
+extern struct $Ord$class $Ord$methods;
+$Ord $Ord$new();
 
 // $Logical ////////////////////////////////////////////////////////////
 
@@ -528,11 +529,17 @@ struct $Logical$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Logical);
+    void (*__serialize__)($Logical,$Serial$state);
+    $Logical (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Logical);
+    $str (*__str__)($Logical);
     $WORD (*__and__)($Logical, $WORD, $WORD);
     $WORD (*__or__)($Logical, $WORD, $WORD);
     $WORD (*__xor__)($Logical, $WORD, $WORD);
 };
 
+extern struct $Logical$class $Logical$methods;
+$Logical $Logical$new();
 
 // $Plus ////////////////////////////////////////////////////////////
 
@@ -545,12 +552,18 @@ struct $Plus$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus);
+    void (*__serialize__)($Plus,$Serial$state);
+    $Plus (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Plus);
+    $str (*__str__)($Plus);
     $WORD (*__add__)($Plus, $WORD, $WORD);
     $WORD (*__iadd__)($Plus, $WORD, $WORD);
 };
 
 $WORD $Plus$__iadd__ ($Plus, $WORD, $WORD);
 
+extern struct $Plus$class $Plus$methods;
+$Plus $Plus$new();
 
 // $Minus ////////////////////////////////////////////////////////////
 
@@ -563,9 +576,15 @@ struct $Minus$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Minus);
+    void (*__serialize__)($Minus,$Serial$state);
+    $Minus (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Minus);
+    $str (*__str__)($Minus);
     $WORD (*__sub__)($Minus, $WORD, $WORD);
 };
 
+extern struct $Minus$class $Minus$methods;
+$Minus $Minus$new();
 
 // $Hashable ////////////////////////////////////////////////////////////
 
@@ -578,17 +597,23 @@ struct $Hashable$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable);
+    void (*__serialize__)($Hashable,$Serial$state);
+    $Hashable (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable);
+    $str (*__str__)($Hashable);
     $bool (*__eq__)($Hashable, $WORD, $WORD);
     $bool (*__ne__)($Hashable, $WORD, $WORD);
     $int (*__hash__)($Hashable, $WORD);
 };
 
+extern struct $Hashable$class $Hashable$methods;
+$Hashable $Hashable$new();
 
 // $Indexed ////////////////////////////////////////////////////////////
 
 struct $Indexed {
     $Indexed$class $class;
-    $Eq w$Eq$Indexed;
+    $Eq w$Eq$A$Indexed;
 };
 
 struct $Indexed$class {
@@ -596,11 +621,17 @@ struct $Indexed$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Indexed, $Eq);
+    void (*__serialize__)($Indexed,$Serial$state);
+    $Indexed (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Indexed);
+    $str (*__str__)($Indexed);
     $WORD (*__getitem__)($Indexed, $WORD, $WORD);
     void (*__setitem__)($Indexed, $WORD, $WORD, $WORD);
     void (*__delitem__)($Indexed, $WORD, $WORD);
 };
 
+extern struct $Indexed$class $Indexed$methods;
+$Indexed $Indexed$new($Eq);
 
 // $Sliceable ////////////////////////////////////////////////////////////
 
@@ -613,14 +644,20 @@ struct $Sliceable$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sliceable);
+    void (*__serialize__)($Sliceable,$Serial$state);
+    $Sliceable (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sliceable);
+    $str (*__str__)($Sliceable);
     $WORD (*__getitem__)($Sliceable, $WORD, $int);
     void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
     void (*__delitem__)($Sliceable, $WORD, $int);
     $WORD (*__getslice__)($Sliceable, $WORD, $Slice);
-  void (*__setslice__)($Sliceable, $Iterable, $WORD, $Slice, $WORD);
+   void (*__setslice__)($Sliceable, $Iterable, $WORD, $Slice, $WORD);
     void (*__delslice__)($Sliceable, $WORD, $Slice);
 };
 
+extern struct $Sliceable$class $Sliceable$methods;
+$Sliceable $Sliceable$new();
 
 // $Iterable ////////////////////////////////////////////////////////////
 
@@ -633,9 +670,15 @@ struct $Iterable$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable);
+    void (*__serialize__)($Iterable,$Serial$state);
+    $Iterable (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Iterable);
+    $str (*__str__)($Iterable);
     $Iterator (*__iter__)($Iterable, $WORD);
 };
 
+extern struct $Iterable$class $Iterable$methods;
+$Iterable $Iterable$new();
 
 // $Collection ////////////////////////////////////////////////////////////
 
@@ -648,17 +691,23 @@ struct $Collection$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Collection);
+    void (*__serialize__)($Collection,$Serial$state);
+    $Collection (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Collection);
+    $str (*__str__)($Collection);
     $Iterator (*__iter__)($Collection, $WORD);
     $WORD (*__fromiter__)($Collection, $Iterable, $WORD);
     $int (*__len__)($Collection, $WORD);
 };
 
+extern struct $Collection$class $Collection$methods;
+$Collection $Collection$new();
 
 // $Container ////////////////////////////////////////////////////////////
 
 struct $Container {
     $Container$class $class;
-    $Eq w$Eq$A;
+    $Eq w$Eq$A$Container;
 };
 
 struct $Container$class {
@@ -666,6 +715,10 @@ struct $Container$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container, $Eq);
+    void (*__serialize__)($Container,$Serial$state);
+    $Container (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Container);
+    $str (*__str__)($Container);
     $Iterator (*__iter__)($Container, $WORD);
     $WORD (*__fromiter__)($Container, $Iterable, $WORD);
     $int (*__len__)($Container, $WORD);
@@ -673,6 +726,7 @@ struct $Container$class {
     $bool (*__containsnot__)($Container, $WORD, $WORD);
 };
 
+extern struct $Container$class $Container$methods;
 
 // $Sequence ////////////////////////////////////////////////////////////
 
@@ -687,6 +741,10 @@ struct $Sequence$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sequence);
+    void (*__serialize__)($Sequence,$Serial$state);
+    $Sequence (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sequence);
+    $str (*__str__)($Sequence);
     $WORD (*__getitem__)($Sequence, $WORD, $int);
     void (*__setitem__)($Sequence, $WORD, $int, $WORD);
     void (*__delitem__)($Sequence, $WORD, $int);
@@ -699,13 +757,15 @@ struct $Sequence$class {
     void (*reverse)($Sequence, $WORD);
 };
 
+extern struct $Sequence$class $Sequence$methods;
+$Sequence $Sequence$new();
 
 // $Mapping ////////////////////////////////////////////////////////////
 
 struct $Mapping {
     $Mapping$class $class;
     $Indexed w$Indexed;
-    $Eq w$Eq$A;
+    $Eq w$Eq$A$Mapping;
 };
 
 struct $Mapping$class {
@@ -713,6 +773,10 @@ struct $Mapping$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Mapping, $Eq);
+    void (*__serialize__)($Mapping,$Serial$state);
+    $Mapping (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Mapping);
+    $str (*__str__)($Mapping);
     $Iterator (*__iter__)($Mapping, $WORD);
     $WORD (*__fromiter__)($Mapping, $Iterable, $WORD);
     $int (*__len__)($Mapping, $WORD);
@@ -727,15 +791,17 @@ struct $Mapping$class {
     void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
 
+extern struct $Mapping$class $Mapping$methods;
+$Mapping $Mapping$new();
 
 // $Set ////////////////////////////////////////////////////////////
 
 struct $Set {
     $Set$class $class;
-    $Ord w$Ord$Set;
-    $Logical w$Logical$Set;
-    $Minus w$Minus$Set;
-    $Eq w$Eq$Set;
+    $Ord w$Ord;
+    $Logical w$Logical;
+    $Minus w$Minus;
+    $Eq w$Eq$A$Set;
 };
 
 struct $Set$class {
@@ -743,6 +809,10 @@ struct $Set$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Set, $Eq);
+    void (*__serialize__)($Set,$Serial$state);
+    $Set (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Set);
+    $str (*__str__)($Set);
     $Iterator (*__iter__)($Set, $WORD);
     $WORD (*__fromiter__)($Set, $Iterable, $WORD);
     $int (*__len__)($Set, $WORD);
@@ -754,12 +824,13 @@ struct $Set$class {
     $WORD (*pop)($Set, $WORD);
 };
 
+extern struct $Set$class $Set$methods;
 
 // $Number ////////////////////////////////////////////////////////////
 
 struct $Number {
     $Number$class $class;
-    $Minus w$Minus$Number;
+    $Minus w$Minus;
 };
 
 struct $Number$class {
@@ -767,6 +838,10 @@ struct $Number$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Number);
+    void (*__serialize__)($Number,$Serial$state);
+    $Number (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Number);
+    $str (*__str__)($Number);
     $WORD (*__add__)($Number, $WORD, $WORD);
     $WORD (*__iadd__)($Number, $WORD, $WORD);
     $WORD (*__fromatom__)($Number,$WORD);
@@ -782,6 +857,9 @@ struct $Number$class {
     $WORD (*conjugate)($Number, $WORD);
 };
 
+extern struct $Number$class $Number$methods;
+$Number $Number$new();
+
 
 // $Real ////////////////////////////////////////////////////////////
 
@@ -794,6 +872,10 @@ struct $Real$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Real);
+    void (*__serialize__)($Real,$Serial$state);
+    $Real (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Real);
+    $str (*__str__)($Real);
     $WORD (*__add__)($Real, $WORD, $WORD);
     $WORD (*__iadd__)($Real, $WORD, $WORD);
     $WORD (*__fromatom__)($Real,$WORD);
@@ -814,6 +896,8 @@ struct $Real$class {
     $WORD (*__round__)($Real, $WORD, $int);
 };
 
+extern struct $Real$class $Real$methods;
+$Real $Real$new();
 
 // $Rational ////////////////////////////////////////////////////////////
 
@@ -826,6 +910,10 @@ struct $Rational$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Rational);
+    void (*__serialize__)($Rational,$Serial$state);
+    $Rational (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Rational);
+    $str (*__str__)($Rational);
     $WORD (*__add__)($Rational, $WORD, $WORD);
     $WORD (*__iadd__)($Rational, $WORD, $WORD);
     $WORD (*__fromatom__)($Rational,$WORD);
@@ -848,13 +936,15 @@ struct $Rational$class {
     $WORD (*denominator)($Rational, $Integral, $WORD);
 };
 
+extern struct $Rational$class $Rational$methods;
+$Rational $Rational$new();
 
 // $Integral ////////////////////////////////////////////////////////////
 
 struct $Integral {
     $Integral$class $class;
-    $Logical w$Logical$Integral;
-    $Minus w$Minus$Integral;
+    $Logical w$Logical;
+    $Minus w$Minus;
 };
 
 struct $Integral$class {
@@ -862,6 +952,10 @@ struct $Integral$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Integral);
+    void (*__serialize__)($Integral,$Serial$state);
+    $Integral (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Integral);
+    $str (*__str__)($Integral);
     $WORD (*__add__)($Integral, $WORD, $WORD);
     $WORD (*__iadd__)($Integral, $WORD, $WORD);
     $WORD (*__fromatom__)($Integral,$WORD);
@@ -892,6 +986,7 @@ struct $Integral$class {
     $WORD (*__invert__)($Integral, $WORD);
 };
 
+extern struct $Integral$class $Integral$methods;
 
 // $Sequence$list ////////////////////////////////////////////////////////////
 
@@ -906,6 +1001,10 @@ struct $Sequence$list$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sequence$list);
+    void (*__serialize__)($Sequence$list,$Serial$state);
+    $Sequence$list (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sequence$list);
+    $str (*__str__)($Sequence$list);
     $WORD (*__getitem__)($Sequence$list, $list, $int);
     void (*__setitem__)($Sequence$list, $list, $int, $WORD);
     void (*__delitem__)($Sequence$list, $list, $int);
@@ -919,6 +1018,8 @@ struct $Sequence$list$class {
 };
 
 void $Sequence$list$__init__ ($Sequence$list);
+void $Sequence$list$__serialize__($Sequence$list, $Serial$state);
+$Sequence$list $Sequence$list$__deserialize__( $Serial$state);
 $WORD $Sequence$list$__getitem__ ($Sequence$list, $list, $int);
 void $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
 void $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
@@ -934,20 +1035,26 @@ void $Sequence$list$reverse ($Sequence$list, $list);
 
 struct $Collection$list {
     $Collection$list$class $class;
-    $Sequence$list w$Sequence$list;
+    $Sequence w$Sequence;
 };
 
 struct $Collection$list$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Collection$list, $Sequence$list);
+    void (*__init__)($Collection$list, $Sequence);
+    void (*__serialize__)($Collection$list,$Serial$state);
+    $Collection$list (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Collection$list);
+    $str (*__str__)($Collection$list);
     $Iterator (*__iter__)($Collection$list, $list);
     $list (*__fromiter__)($Collection$list, $Iterable, $WORD);
     $int (*__len__)($Collection$list, $list);
 };
 
-void $Collection$list$__init__ ($Collection$list, $Sequence$list);
+void $Collection$list$__init__ ($Collection$list, $Sequence);
+void $Collection$list$__serialize__($Collection$list, $Serial$state);
+$Collection$list $Collection$list$__deserialize__( $Serial$state);
 $Iterator $Collection$list$__iter__ ($Collection$list, $list);
 $list $Collection$list$__fromiter__ ($Collection$list, $Iterable, $WORD);
 $int $Collection$list$__len__ ($Collection$list, $list);
@@ -956,26 +1063,32 @@ $int $Collection$list$__len__ ($Collection$list, $list);
 
 struct $Plus$list {
     $Plus$list$class $class;
-    $Sequence$list w$Sequence$list;
+    $Sequence w$Sequence;
 };
 
 struct $Plus$list$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$list, $Sequence$list);
+    void (*__init__)($Plus$list, $Sequence);
+    void (*__serialize__)($Plus$list,$Serial$state);
+    $Plus$list (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Plus$list);
+    $str (*__str__)($Plus$list);
     $list (*__add__)($Plus$list, $list, $list);
     $list (*__iadd__)($Plus$list, $list, $list);
 };
 
-void $Plus$list$__init__ ($Plus$list, $Sequence$list);
+void $Plus$list$__init__ ($Plus$list, $Sequence);
+void $Plus$list$__serialize__($Plus$list, $Serial$state);
+$Plus$list $Plus$list$__deserialize__( $Serial$state);
 $list $Plus$list$__add__ ($Plus$list, $list, $list);
 
 // $Container$list ////////////////////////////////////////////////////////////
 
 struct $Container$list {
     $Container$list$class $class;
-    $Eq w$Eq$A;
+    $Eq w$Eq$A$Container$list;
 };
 
 struct $Container$list$class {
@@ -983,6 +1096,10 @@ struct $Container$list$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container$list, $Eq);
+    void (*__serialize__)($Container$list,$Serial$state);
+    $Container$list (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Container$list);
+    $str (*__str__)($Container$list);
     $Iterator (*__iter__)($Container$list, $list);
     $list (*__fromiter__)($Container$list, $Iterable, $WORD);
     $int (*__len__)($Container$list, $list);
@@ -991,6 +1108,8 @@ struct $Container$list$class {
 };
 
 void $Container$list$__init__ ($Container$list, $Eq);
+void $Container$list$__serialize__($Container$list, $Serial$state);
+$Container$list $Container$list$__deserialize__( $Serial$state);
 $Iterator $Container$list$__iter__ ($Container$list, $list);
 $list $Container$list$__fromiter__ ($Container$list, $Iterable, $WORD);
 $int $Container$list$__len__ ($Container$list, $list);
@@ -1002,7 +1121,8 @@ $bool $Container$list$__containsnot__ ($Container$list, $list, $WORD);
 struct $Mapping$dict {
     $Mapping$dict$class $class;
     $Indexed w$Indexed;
-    $Hashable w$Hashable$Mapping;
+    $Eq w$Eq$A$Mapping$dict;
+    $Hashable w$Hashable$A$Mapping$dict;
 };
 
 struct $Mapping$dict$class {
@@ -1010,6 +1130,10 @@ struct $Mapping$dict$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Mapping$dict, $Hashable);
+    void (*__serialize__)($Mapping$dict,$Serial$state);
+    $Mapping$dict (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Mapping$dict);
+    $str (*__str__)($Mapping$dict);
     $Iterator (*__iter__)($Mapping$dict, $dict);
     $dict (*__fromiter__)($Mapping$dict, $Iterable, $WORD);
     $int (*__len__)($Mapping$dict, $dict);
@@ -1025,6 +1149,8 @@ struct $Mapping$dict$class {
 };
 
 void $Mapping$dict$__init__ ($Mapping$dict, $Hashable);
+void $Mapping$dict$__serialize__($Mapping$dict, $Serial$state);
+$Mapping$dict $Mapping$dict$__deserialize__( $Serial$state);
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict, $dict);
 $dict $Mapping$dict$__fromiter__ ($Mapping$dict, $Iterable, $WORD);
 $int $Mapping$dict$__len__ ($Mapping$dict, $dict);
@@ -1042,21 +1168,28 @@ void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 
 struct $Indexed$dict {
     $Indexed$dict$class $class;
-    $Mapping$dict w$Mapping$dict;
-    $Eq w$Eq$A;
+    $Mapping w$Mapping;
+    $Eq w$Eq$A$Mapping$dict;
+    $Hashable w$Hashable$A$Mapping$dict;
 };
 
 struct $Indexed$dict$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Indexed$dict, $Mapping$dict, $Eq);
+    void (*__init__)($Indexed$dict, $Mapping, $Eq);
+    void (*__serialize__)($Indexed$dict,$Serial$state);
+    $Indexed$dict (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Indexed$dict);
+    $str (*__str__)($Indexed$dict);
     $WORD (*__getitem__)($Indexed$dict, $dict, $WORD);
     void (*__setitem__)($Indexed$dict, $dict, $WORD, $WORD);
     void (*__delitem__)($Indexed$dict, $dict, $WORD);
 };
 
-void $Indexed$dict$__init__ ($Indexed$dict, $Mapping$dict, $Eq);
+void $Indexed$dict$__init__ ($Indexed$dict, $Mapping, $Eq);
+void $Indexed$dict$__serialize__($Indexed$dict, $Serial$state);
+$Indexed$dict $Indexed$dict$__deserialize__( $Serial$state);
 $WORD $Indexed$dict$__getitem__ ($Indexed$dict, $dict, $WORD);
 void $Indexed$dict$__setitem__ ($Indexed$dict, $dict, $WORD, $WORD);
 void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
@@ -1065,10 +1198,11 @@ void $Indexed$dict$__delitem__ ($Indexed$dict, $dict, $WORD);
 
 struct $Set$set {
     $Set$set$class $class;
-    $Ord$set w$Ord$Set;
-    $Logical$set w$Logical$Set;
-    $Minus$set w$Minus$Set;
-    $Hashable w$Hashable$Set;
+    $Ord w$Ord;
+    $Logical w$Logical;
+    $Minus w$Minus;
+    $Eq w$Eq$A$Set$set;
+    $Hashable w$Hashable$A$Set$set;
 };
 
 struct $Set$set$class {
@@ -1076,6 +1210,10 @@ struct $Set$set$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Set$set, $Hashable);
+    void (*__serialize__)($Set$set,$Serial$state);
+    $Set$set (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Set$set);
+    $str (*__str__)($Set$set);
     $Iterator (*__iter__)($Set$set, $set);
     $set (*__fromiter__)($Set$set, $Iterable, $WORD);
     $int (*__len__)($Set$set, $set);
@@ -1088,6 +1226,8 @@ struct $Set$set$class {
 };
 
 void $Set$set$__init__ ($Set$set, $Hashable);
+void $Set$set$__serialize__($Set$set, $Serial$state);
+$Set$set $Set$set$__deserialize__( $Serial$state);
 $Iterator $Set$set$__iter__ ($Set$set, $set);
 $set $Set$set$__fromiter__ ($Set$set, $Iterable, $WORD);
 $int $Set$set$__len__ ($Set$set, $set);
@@ -1102,14 +1242,18 @@ $WORD $Set$set$pop ($Set$set, $set);
 
 struct $Ord$set {
     $Ord$set$class $class;
-    $Set$set w$Set$set;
+    $Set w$Set;
 };
 
 struct $Ord$set$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Ord$set, $Set$set);
+    void (*__init__)($Ord$set, $Set);
+    void (*__serialize__)($Ord$set,$Serial$state);
+    $Ord$set (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord$set);
+    $str (*__str__)($Ord$set);
     $bool (*__eq__)($Ord$set, $set, $set);
     $bool (*__ne__)($Ord$set, $set, $set);
     $bool (*__lt__)($Ord$set, $set, $set);
@@ -1118,7 +1262,9 @@ struct $Ord$set$class {
     $bool (*__ge__)($Ord$set, $set, $set);
 };
 
-void $Ord$set$__init__ ($Ord$set, $Set$set);
+void $Ord$set$__init__ ($Ord$set, $Set);
+void $Ord$set$__serialize__($Ord$set, $Serial$state);
+$Ord$set $Ord$set$__deserialize__( $Serial$state);
 $bool $Ord$set$__eq__ ($Ord$set, $set, $set);
 $bool $Ord$set$__ne__ ($Ord$set, $set, $set);
 $bool $Ord$set$__lt__ ($Ord$set, $set, $set);
@@ -1130,20 +1276,26 @@ $bool $Ord$set$__ge__ ($Ord$set, $set, $set);
 
 struct $Logical$set {
     $Logical$set$class $class;
-    $Set$set w$Set$set;
+    $Set w$Set;
 };
 
 struct $Logical$set$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Logical$set, $Set$set);
+    void (*__init__)($Logical$set, $Set);
+    void (*__serialize__)($Logical$set,$Serial$state);
+    $Logical$set (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Logical$set);
+    $str (*__str__)($Logical$set);
     $set (*__and__)($Logical$set, $set, $set);
     $set (*__or__)($Logical$set, $set, $set);
     $set (*__xor__)($Logical$set, $set, $set);
 };
 
-void $Logical$set$__init__ ($Logical$set, $Set$set);
+void $Logical$set$__init__ ($Logical$set, $Set);
+void $Logical$set$__serialize__($Logical$set, $Serial$state);
+$Logical$set $Logical$set$__deserialize__( $Serial$state);
 $set $Logical$set$__and__ ($Logical$set, $set, $set);
 $set $Logical$set$__or__ ($Logical$set, $set, $set);
 $set $Logical$set$__xor__ ($Logical$set, $set, $set);
@@ -1152,18 +1304,24 @@ $set $Logical$set$__xor__ ($Logical$set, $set, $set);
 
 struct $Minus$set {
     $Minus$set$class $class;
-    $Set$set w$Set$set;
+    $Set w$Set;
 };
 
 struct $Minus$set$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$set, $Set$set);
+    void (*__init__)($Minus$set, $Set);
+    void (*__serialize__)($Minus$set,$Serial$state);
+    $Minus$set (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Minus$set);
+    $str (*__str__)($Minus$set);
     $set (*__sub__)($Minus$set, $set, $set);
 };
 
-void $Minus$set$__init__ ($Minus$set, $Set$set);
+void $Minus$set$__init__ ($Minus$set, $Set);
+void $Minus$set$__serialize__($Minus$set, $Serial$state);
+$Minus$set $Minus$set$__deserialize__( $Serial$state);
 $set $Minus$set$__sub__ ($Minus$set, $set, $set);
 
 // $Iterable$Iterator ////////////////////////////////////////////////////////////
@@ -1177,89 +1335,19 @@ struct $Iterable$Iterator$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable$Iterator);
+    void (*__serialize__)($Iterable$Iterator,$Serial$state);
+    $Iterable$Iterator (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Iterable$Iterator);
+    $str (*__str__)($Iterable$Iterator);
     $Iterator (*__iter__)($Iterable$Iterator, $Iterator);
 };
 
 void $Iterable$Iterator$__init__ ($Iterable$Iterator);
+void $Iterable$Iterator$__serialize__($Iterable$Iterator, $Serial$state);
+$Iterable$Iterator $Iterable$Iterator$__deserialize__( $Serial$state);
 $Iterator $Iterable$Iterator$__iter__ ($Iterable$Iterator, $Iterator);
 
-// $Sequence$range ////////////////////////////////////////////////////////////
-
-struct $Sequence$range {
-    $Sequence$range$class $class;
-    $Collection w$Collection;
-    $Plus w$Plus;
-};
-
-struct $Sequence$range$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Sequence$range);
-    $int (*__getitem__)($Sequence$range, $range, $int);
-    void (*__setitem__)($Sequence$range, $range, $int, $int);
-    void (*__delitem__)($Sequence$range, $range, $int);
-    $range (*__getslice__)($Sequence$range, $range, $Slice);
-    void (*__setslice__)($Sequence$range, $Iterable, $range, $Slice, $WORD);
-    void (*__delslice__)($Sequence$range, $range, $Slice);
-    $Iterator (*__reversed__)($Sequence$range, $range);
-    void (*insert)($Sequence$range, $range, $int, $int);
-    void (*append)($Sequence$range, $range, $int);
-    void (*reverse)($Sequence$range, $range);
-};
-
-void $Sequence$range$__init__ ($Sequence$range);
-$int $Sequence$range$__getitem__ ($Sequence$range, $range, $int);
-void $Sequence$range$__setitem__ ($Sequence$range, $range, $int, $int);
-void $Sequence$range$__delitem__ ($Sequence$range, $range, $int);
-$range $Sequence$range$__getslice__ ($Sequence$range, $range, $Slice);
-void $Sequence$range$__setslice__ ($Sequence$range, $Iterable, $range, $Slice, $WORD);
-void $Sequence$range$__delslice__ ($Sequence$range, $range, $Slice);
-$Iterator $Sequence$range$__reversed__ ($Sequence$range, $range);
-void $Sequence$range$insert ($Sequence$range, $range, $int, $int);
-void $Sequence$range$append ($Sequence$range, $range, $int);
-void $Sequence$range$reverse ($Sequence$range, $range);
-
-// $Collection$range ////////////////////////////////////////////////////////////
-
-struct $Collection$range {
-    $Collection$range$class $class;
-    $Sequence$range w$Sequence$range;
-};
-
-struct $Collection$range$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Collection$range, $Sequence$range);
-    $Iterator (*__iter__)($Collection$range, $range);
-    $range (*__fromiter__)($Collection$range, $Iterable, $WORD);
-    $int (*__len__)($Collection$range, $range);
-};
-
-void $Collection$range$__init__ ($Collection$range, $Sequence$range);
-$Iterator $Collection$range$__iter__ ($Collection$range, $range);
-$range $Collection$range$__fromiter__ ($Collection$range, $Iterable, $WORD);
-$int $Collection$range$__len__ ($Collection$range, $range);
-
-// $Plus$range ////////////////////////////////////////////////////////////
-
-struct $Plus$range {
-    $Plus$range$class $class;
-    $Sequence$range w$Sequence$range;
-};
-
-struct $Plus$range$class {
-    char *$GCINFO;
-    int $class_id;
-    $Super$class $superclass;
-    void (*__init__)($Plus$range, $Sequence$range);
-    $range (*__add__)($Plus$range, $range, $range);
-};
-
-void $Plus$range$__init__ ($Plus$range, $Sequence$range);
-$range $Plus$range$__add__ ($Plus$range, $range, $range);
-
+ 
 // $Ord$str ////////////////////////////////////////////////////////////
 
 struct $Ord$str {
@@ -1271,6 +1359,10 @@ struct $Ord$str$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$str);
+    void (*__serialize__)($Ord$str,$Serial$state);
+    $Ord$str (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord$str);
+    $str (*__str__)($Ord$str);
     $bool (*__eq__)($Ord$str, $str, $str);
     $bool (*__ne__)($Ord$str, $str, $str);
     $bool (*__lt__)($Ord$str, $str, $str);
@@ -1280,6 +1372,8 @@ struct $Ord$str$class {
 };
 
 void $Ord$str$__init__ ($Ord$str);
+void $Ord$str$__serialize__($Ord$str, $Serial$state);
+$Ord$str $Ord$str$__deserialize__( $Serial$state);
 $bool $Ord$str$__eq__ ($Ord$str, $str, $str);
 $bool $Ord$str$__ne__ ($Ord$str, $str, $str);
 $bool $Ord$str$__lt__ ($Ord$str, $str, $str);
@@ -1291,7 +1385,7 @@ $bool $Ord$str$__ge__ ($Ord$str, $str, $str);
 
 struct $Container$str {
     $Container$str$class $class;
-    $Eq w$Eq$A;
+    $Eq w$Eq$A$Container$str;
 };
 
 struct $Container$str$class {
@@ -1299,13 +1393,20 @@ struct $Container$str$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container$str, $Eq);
+    void (*__serialize__)($Container$str,$Serial$state);
+    $Container$str (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Container$str);
+    $str (*__str__)($Container$str);
     $Iterator (*__iter__)($Container$str, $str);
+    $str (*__fromiter__)($Container$str, $Iterable, $WORD);
     $int (*__len__)($Container$str, $str);
     $bool (*__contains__)($Container$str, $str, $str);
     $bool (*__containsnot__)($Container$str, $str, $str);
 };
 
 void $Container$str$__init__ ($Container$str, $Eq);
+void $Container$str$__serialize__($Container$str, $Serial$state);
+$Container$str $Container$str$__deserialize__( $Serial$state);
 $Iterator $Container$str$__iter__ ($Container$str, $str);
 $int $Container$str$__len__ ($Container$str, $str);
 $bool $Container$str$__contains__ ($Container$str, $str, $str);
@@ -1322,6 +1423,10 @@ struct $Sliceable$str$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sliceable$str);
+    void (*__serialize__)($Sliceable$str,$Serial$state);
+    $Sliceable$str (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sliceable$str);
+    $str (*__str__)($Sliceable$str);
     $str (*__getitem__)($Sliceable$str, $str, $int);
     void (*__setitem__)($Sliceable$str, $str, $int, $str);
     void (*__delitem__)($Sliceable$str, $str, $int);
@@ -1331,6 +1436,8 @@ struct $Sliceable$str$class {
 };
 
 void $Sliceable$str$__init__ ($Sliceable$str);
+void $Sliceable$str$__serialize__($Sliceable$str, $Serial$state);
+$Sliceable$str $Sliceable$str$__deserialize__( $Serial$state);
 $str $Sliceable$str$__getitem__ ($Sliceable$str, $str, $int);
 void $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
 void $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
@@ -1349,10 +1456,18 @@ struct $Plus$str$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Plus$str);
+    void (*__serialize__)($Plus$str,$Serial$state);
+    $Plus$str (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Plus$str);
+    $str (*__str__)($Plus$str);
     $str (*__add__)($Plus$str, $str, $str);
 };
 
 void $Plus$str$__init__ ($Plus$str);
+void $Plus$str$__serialize__($Plus$str, $Serial$state);
+$Plus$str $Plus$str$__deserialize__( $Serial$state);
+$bool $Plus$str$__bool__($Plus$str);
+$str $Plus$str$__str__($Plus$str);
 $str $Plus$str$__add__ ($Plus$str, $str, $str);
 
 // $Hashable$str ////////////////////////////////////////////////////////////
@@ -1366,12 +1481,18 @@ struct $Hashable$str$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$str);
+    void (*__serialize__)($Hashable$str,$Serial$state);
+    $Hashable$str (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$str);
+    $str (*__str__)($Hashable$str);
     $bool (*__eq__)($Hashable$str, $str, $str);
     $bool (*__ne__)($Hashable$str, $str, $str);
     $int (*__hash__)($Hashable$str, $str);
 };
 
 void $Hashable$str$__init__ ($Hashable$str);
+void $Hashable$str$__serialize__($Hashable$str, $Serial$state);
+$Hashable$str $Hashable$str$__deserialize__( $Serial$state);
 $bool $Hashable$str$__eq__ ($Hashable$str, $str, $str);
 $bool $Hashable$str$__ne__ ($Hashable$str, $str, $str);
 $int $Hashable$str$__hash__ ($Hashable$str, $str);
@@ -1380,8 +1501,8 @@ $int $Hashable$str$__hash__ ($Hashable$str, $str);
 
 struct $Integral$int {
     $Integral$int$class $class;
-    $Logical$int w$Logical$Integral;
-    $Minus$int w$Minus$Integral;
+    $Logical w$Logical;
+    $Minus w$Minus;
 };
 
 struct $Integral$int$class {
@@ -1389,6 +1510,10 @@ struct $Integral$int$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Integral$int);
+    void (*__serialize__)($Integral$int,$Serial$state);
+    $Integral$int (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Integral$int);
+    $str (*__str__)($Integral$int);
     $int (*__add__)($Integral$int, $int, $int);
     $int (*__iadd__)($Integral$int, $int, $int);
     $int (*__fromatom__)($Integral$int,$WORD);
@@ -1420,6 +1545,8 @@ struct $Integral$int$class {
 };
 
 void $Integral$int$__init__ ($Integral$int);
+void $Integral$int$__serialize__($Integral$int, $Serial$state);
+$Integral$int $Integral$int$__deserialize__( $Serial$state);
 $int $Integral$int$__add__($Integral$int, $int, $int);
 $int $Integral$int$__fromatom__($Integral$int,$WORD);
 $complex $Integral$int$__complx__($Integral$int, $int);
@@ -1452,20 +1579,26 @@ $int $Integral$int$__invert__ ($Integral$int, $int);
 
 struct $Logical$int {
     $Logical$int$class $class;
-    $Integral$int w$Integral$int;
+    $Integral w$Integral;
 };
 
 struct $Logical$int$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Logical$int, $Integral$int);
+    void (*__init__)($Logical$int, $Integral);
+    void (*__serialize__)($Logical$int,$Serial$state);
+    $Logical$int (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Logical$int);
+    $str (*__str__)($Logical$int);
     $int (*__and__)($Logical$int, $int, $int);
     $int (*__or__)($Logical$int, $int, $int);
     $int (*__xor__)($Logical$int, $int, $int);
 };
 
-void $Logical$int$__init__ ($Logical$int, $Integral$int);
+void $Logical$int$__init__ ($Logical$int, $Integral);
+void $Logical$int$__serialize__($Logical$int, $Serial$state);
+$Logical$int $Logical$int$__deserialize__( $Serial$state);
 $int $Logical$int$__and__ ($Logical$int, $int, $int);
 $int $Logical$int$__or__ ($Logical$int, $int, $int);
 $int $Logical$int$__xor__ ($Logical$int, $int, $int);
@@ -1474,18 +1607,24 @@ $int $Logical$int$__xor__ ($Logical$int, $int, $int);
 
 struct $Minus$int {
     $Minus$int$class $class;
-    $Integral$int w$Integral$int;
+    $Integral w$Integral;
 };
 
 struct $Minus$int$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$int, $Integral$int);
+    void (*__init__)($Minus$int, $Integral);
+    void (*__serialize__)($Minus$int,$Serial$state);
+    $Minus$int (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Minus$int);
+    $str (*__str__)($Minus$int);
     $int (*__sub__)($Minus$int, $int, $int);
 };
 
-void $Minus$int$__init__ ($Minus$int, $Integral$int);
+void $Minus$int$__init__ ($Minus$int, $Integral);
+void $Minus$int$__serialize__($Minus$int, $Serial$state);
+$Minus$int $Minus$int$__deserialize__( $Serial$state);
 $int $Minus$int$__sub__ ($Minus$int, $int, $int);
 
 // $Ord$int /////////////////////////////////////////////////////////////////
@@ -1499,6 +1638,10 @@ struct $Ord$int$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$int);
+    void (*__serialize__)($Ord$int,$Serial$state);
+    $Ord$int (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord$int);
+    $str (*__str__)($Ord$int);
     $bool (*__eq__)($Ord$int, $int, $int);
     $bool (*__ne__)($Ord$int, $int, $int);
     $bool (*__lt__)($Ord$int, $int, $int);
@@ -1508,6 +1651,8 @@ struct $Ord$int$class {
 };
 
 void $Ord$int$__init__ ($Ord$int);
+void $Ord$int$__serialize__($Ord$int, $Serial$state);
+$Ord$int $Ord$int$__deserialize__( $Serial$state);
 $bool $Ord$int$__eq__ ($Ord$int, $int, $int);
 $bool $Ord$int$__ne__ ($Ord$int, $int, $int);
 $bool $Ord$int$__lt__ ($Ord$int, $int, $int);
@@ -1527,12 +1672,18 @@ struct $Hashable$int$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$int);
+    void (*__serialize__)($Hashable$int,$Serial$state);
+    $Hashable$int (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$int);
+    $str (*__str__)($Hashable$int);
     $bool (*__eq__)($Hashable$int, $int, $int);
     $bool (*__ne__)($Hashable$int, $int, $int);
     $int (*__hash__)($Hashable$int, $int);
 };
 
 void $Hashable$int$__init__ ($Hashable$int);
+void $Hashable$int$__serialize__($Hashable$int, $Serial$state);
+$Hashable$int $Hashable$int$__deserialize__( $Serial$state);
 $bool $Hashable$int$__eq__ ($Hashable$int, $int, $int);
 $bool $Hashable$int$__ne__ ($Hashable$int, $int, $int);
 $int $Hashable$int$__hash__ ($Hashable$int, $int);
@@ -1541,7 +1692,7 @@ $int $Hashable$int$__hash__ ($Hashable$int, $int);
 
 struct $Real$float {
     $Real$float$class $class;
-    $Minus$float w$Minus$Real;
+    $Minus w$Minus;
 };
 
 struct $Real$float$class {
@@ -1549,6 +1700,10 @@ struct $Real$float$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Real$float);
+    void (*__serialize__)($Real$float,$Serial$state);
+    $Real$float (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Real$float);
+    $str (*__str__)($Real$float);
     $float (*__add__)($Real$float, $float, $float);
     $float (*__fromatom__)($Real$float,$WORD);
     $complex (*__complx__)($Real$float, $float);
@@ -1569,6 +1724,8 @@ struct $Real$float$class {
 };
 
 void $Real$float$__init__ ($Real$float);
+void $Real$float$__serialize__($Real$float, $Serial$state);
+$Real$float $Real$float$__deserialize__( $Serial$state);
 $float $Real$float$__add__($Real$float, $float, $float);
 $float $Real$float$__fromatom__($Real$float,$WORD);
 $complex $Real$float$__complx__($Real$float, $float);
@@ -1591,18 +1748,24 @@ $float $Real$float$__round__ ($Real$float, $float, $int);
 
 struct $Minus$float {
     $Minus$float$class $class;
-    $Real$float w$Real$float;
+    $Real w$Real;
 };
 
 struct $Minus$float$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$float, $Real$float);
+    void (*__init__)($Minus$float, $Real);
+    void (*__serialize__)($Minus$float,$Serial$state);
+    $Minus$float (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Minus$float);
+    $str (*__str__)($Minus$float);
     $float (*__sub__)($Minus$float, $float, $float);
 };
 
-void $Minus$float$__init__ ($Minus$float, $Real$float);
+void $Minus$float$__init__ ($Minus$float, $Real);
+void $Minus$float$__serialize__($Minus$float, $Serial$state);
+$Minus$float $Minus$float$__deserialize__( $Serial$state);
 $float $Minus$float$__sub__ ($Minus$float, $float, $float);
 
 // $Ord$float /////////////////////////////////////////////////////////////////
@@ -1616,6 +1779,10 @@ struct $Ord$float$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$float);
+    void (*__serialize__)($Ord$float,$Serial$state);
+    $Ord$float (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord$float);
+    $str (*__str__)($Ord$float);
     $bool (*__eq__)($Ord$float, $float, $float);
     $bool (*__ne__)($Ord$float, $float, $float);
     $bool (*__lt__)($Ord$float, $float, $float);
@@ -1625,6 +1792,8 @@ struct $Ord$float$class {
 };
 
 void $Ord$float$__init__ ($Ord$float);
+void $Ord$float$__serialize__($Ord$float, $Serial$state);
+$Ord$float $Ord$float$__deserialize__( $Serial$state);
 $bool $Ord$float$__eq__ ($Ord$float, $float, $float);
 $bool $Ord$float$__ne__ ($Ord$float, $float, $float);
 $bool $Ord$float$__lt__ ($Ord$float, $float, $float);
@@ -1643,12 +1812,18 @@ struct $Hashable$float$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$float);
+    void (*__serialize__)($Hashable$float,$Serial$state);
+    $Hashable$float (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$float);
+    $str (*__str__)($Hashable$float);
     $bool (*__eq__)($Hashable$float, $float, $float);
     $bool (*__ne__)($Hashable$float, $float, $float);
     $int (*__hash__)($Hashable$float, $float);
 };
 
 void $Hashable$float$__init__ ($Hashable$float);
+void $Hashable$float$__serialize__($Hashable$float, $Serial$state);
+$Hashable$float $Hashable$float$__deserialize__( $Serial$state);
 $bool $Hashable$float$__eq__ ($Hashable$float, $float, $float);
 $bool $Hashable$float$__ne__ ($Hashable$float, $float, $float);
 $int $Hashable$float$__hash__ ($Hashable$float, $float);
@@ -1657,7 +1832,7 @@ $int $Hashable$float$__hash__ ($Hashable$float, $float);
 
 struct $Number$complex {
     $Number$complex$class $class;
-    $Minus$complex w$Minus$Number;
+    $Minus w$Minus;
 };
 
 struct $Number$complex$class {
@@ -1665,6 +1840,10 @@ struct $Number$complex$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Number$complex);
+    void (*__serialize__)($Number$complex,$Serial$state);
+    $Number$complex (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Number$complex);
+    $str (*__str__)($Number$complex);
     $complex (*__add__)($Number$complex, $complex, $complex);
     $complex (*__fromatom__)($Number$complex,$WORD);
     $complex (*__complx__)($Number$complex, $complex);
@@ -1680,6 +1859,8 @@ struct $Number$complex$class {
 };
 
 void $Number$complex$__init__ ($Number$complex);
+void $Number$complex$__serialize__($Number$complex, $Serial$state);
+$Number$complex $Number$complex$__deserialize__( $Serial$state);
 $complex $Number$complex$__add__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__fromatom__($Number$complex,$WORD);
 $complex $Number$complex$__complx__ ($Number$complex, $complex);
@@ -1697,18 +1878,24 @@ $complex $Number$complex$conjugate ($Number$complex, $complex);
 
 struct $Minus$complex {
     $Minus$complex$class $class;
-    $Number$complex w$Number$complex;
+    $Number w$Number;
 };
 
 struct $Minus$complex$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Minus$complex, $Number$complex);
+    void (*__init__)($Minus$complex, $Number);
+    void (*__serialize__)($Minus$complex,$Serial$state);
+    $Minus$complex (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Minus$complex);
+    $str (*__str__)($Minus$complex);
     $complex (*__sub__)($Minus$complex, $complex, $complex);
 };
 
-void $Minus$complex$__init__ ($Minus$complex, $Number$complex);
+void $Minus$complex$__init__ ($Minus$complex, $Number);
+void $Minus$complex$__serialize__($Minus$complex, $Serial$state);
+$Minus$complex $Minus$complex$__deserialize__( $Serial$state);
 $complex $Minus$complex$__sub__ ($Minus$complex, $complex, $complex);
 
 // $Eq$complex ////////////////////////////////////////////////////////////
@@ -1722,10 +1909,17 @@ struct $Eq$complex$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Eq$complex);
+    void (*__serialize__)($Eq$complex,$Serial$state);
+    $Eq$complex (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Eq$complex);
+    $str (*__str__)($Eq$complex);
     $bool (*__eq__)($Eq$complex, $complex, $complex);
     $bool (*__ne__)($Eq$complex, $complex, $complex);
 };
 
+void $Eq$complex$__init__($Eq$complex);
+void $Eq$complex$__serialize__($Eq$complex, $Serial$state);
+$Eq$complex $Eq$complex$__deserialize__( $Serial$state);
 $bool $Eq$complex$__eq__ ($Eq$complex, $complex, $complex);
 $bool $Eq$complex$__ne__ ($Eq$complex, $complex, $complex);
 
@@ -1740,12 +1934,20 @@ struct $Hashable$complex$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$complex);
+    void (*__serialize__)($Hashable$complex,$Serial$state);
+    $Hashable$complex (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$complex);
+    $str (*__str__)($Hashable$complex);
     $bool (*__eq__)($Hashable$complex, $complex, $complex);
     $bool (*__ne__)($Hashable$complex, $complex, $complex);
     $int (*__hash__)($Hashable$complex, $complex);
 };
 
 void $Hashable$complex$__init__ ($Hashable$complex);
+void $Hashable$complex$__serialize__($Hashable$complex, $Serial$state);
+$Hashable$complex $Hashable$complex$__deserialize__( $Serial$state);
+$bool $Hashable$complex$__bool__($Hashable$complex);
+$str $Hashable$complex$__str__($Hashable$complex);
 $bool $Hashable$complex$__eq__ ($Hashable$complex, $complex, $complex);
 $bool $Hashable$complex$__ne__ ($Hashable$complex, $complex, $complex);
 $int $Hashable$complex$__hash__ ($Hashable$complex, $complex);
@@ -1761,10 +1963,16 @@ struct $Iterable$range$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable$range);
+    void (*__serialize__)($Iterable$range,$Serial$state);
+    $Iterable$range (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Iterable$range);
+    $str (*__str__)($Iterable$range);
     $Iterator (*__iter__)($Iterable$range, $range);
 };
 
 void $Iterable$range$__init__ ($Iterable$range);
+void $Iterable$range$__serialize__($Iterable$range, $Serial$state);
+$Iterable$range $Iterable$range$__deserialize__( $Serial$state);
 $Iterator $Iterable$range$__iter__ ($Iterable$range, $range);
 
 // $Iterable$tuple ////////////////////////////////////////////////////////////
@@ -1778,10 +1986,16 @@ struct $Iterable$tuple$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Iterable$tuple);
+    void (*__serialize__)($Iterable$tuple,$Serial$state);
+    $Iterable$tuple (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Iterable$tuple);
+    $str (*__str__)($Iterable$tuple);
     $Iterator (*__iter__)($Iterable$tuple, $tuple);
 };
 
 void $Iterable$tuple$__init__ ($Iterable$tuple);
+void $Iterable$tuple$__serialize__($Iterable$tuple, $Serial$state);
+$Iterable$tuple $Iterable$tuple$__deserialize__( $Serial$state);
 $Iterator $Iterable$tuple$__iter__ ($Iterable$tuple, $tuple);
 
 // $Sliceable$tuple ////////////////////////////////////////////////////////////
@@ -1797,7 +2011,11 @@ struct $Sliceable$tuple$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sliceable$tuple);
-    $WORD (*__getitem__)($Sliceable$tuple , $tuple, $int);
+    void (*__serialize__)($Sliceable$tuple,$Serial$state);
+    $Sliceable$tuple (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sliceable$tuple);
+    $str (*__str__)($Sliceable$tuple);
+    $WORD (*__getitem__)($Sliceable$tuple, $tuple, $int);
     void (*__setitem__)($Sliceable$tuple, $tuple, $int, $WORD);
     void (*__delitem__)($Sliceable$tuple, $tuple, $int);
     $tuple (*__getslice__)($Sliceable$tuple, $tuple, $Slice);
@@ -1806,6 +2024,8 @@ struct $Sliceable$tuple$class {
 };
 
 void $Sliceable$tuple$__init__ ($Sliceable$tuple);
+void $Sliceable$tuple$__serialize__($Sliceable$tuple, $Serial$state);
+$Sliceable$tuple $Sliceable$tuple$__deserialize__( $Serial$state);
 $WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple, $tuple, $int);
 void $Sliceable$tuple$__setitem__ ($Sliceable$tuple, $tuple, $int, $WORD);
 void $Sliceable$tuple$__delitem__ ($Sliceable$tuple, $tuple, $int);
@@ -1818,7 +2038,7 @@ void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $Slice);
 struct $Hashable$tuple {
   $Hashable$tuple$class $class;
   int w$Hashable$tuple$size;
-  $Hashable *w$Hashable$tuple;
+  $Hashable *w$Hashable;
 };
 
 struct $Hashable$tuple$class {
@@ -1826,12 +2046,18 @@ struct $Hashable$tuple$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Hashable$tuple,int,$Hashable*);
+    void (*__serialize__)($Hashable$tuple,$Serial$state);
+    $Hashable$tuple (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$tuple);
+    $str (*__str__)($Hashable$tuple);
     $bool (*__eq__)($Hashable$tuple, $tuple, $tuple);
     $bool (*__ne__)($Hashable$tuple, $tuple, $tuple);
     $int (*__hash__)($Hashable$tuple, $tuple);
 };
   
 void $Hashable$tuple$__init__ ($Hashable$tuple,int,$Hashable*);
+void $Hashable$tuple$__serialize__($Hashable$tuple, $Serial$state);
+$Hashable$tuple $Hashable$tuple$__deserialize__( $Serial$state);
 $bool $Hashable$tuple$__eq__ ($Hashable$tuple, $tuple, $tuple);
 $bool $Hashable$tuple$__ne__ ($Hashable$tuple, $tuple, $tuple);
 $int $Hashable$tuple$__hash__ ($Hashable$tuple, $tuple);
@@ -1847,6 +2073,10 @@ struct $Ord$bytearray$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Ord$bytearray);
+    void (*__serialize__)($Ord$bytearray,$Serial$state);
+    $Ord$bytearray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Ord$bytearray);
+    $str (*__str__)($Ord$bytearray);
     $bool (*__eq__)($Ord$bytearray, $bytearray, $bytearray);
     $bool (*__ne__)($Ord$bytearray, $bytearray, $bytearray);
     $bool (*__lt__)($Ord$bytearray, $bytearray, $bytearray);
@@ -1856,6 +2086,10 @@ struct $Ord$bytearray$class {
 };
 
 void $Ord$bytearray$__init__ ($Ord$bytearray);
+void $Ord$bytearray$__serialize__($Ord$bytearray, $Serial$state);
+$Ord$bytearray $Ord$bytearray$__deserialize__( $Serial$state);
+$bool $Ord$bytearray$__bool__($Ord$bytearray);
+$str $Ord$bytearray$__str__($Ord$bytearray);
 $bool $Ord$bytearray$__eq__ ($Ord$bytearray, $bytearray, $bytearray);
 $bool $Ord$bytearray$__ne__ ($Ord$bytearray, $bytearray, $bytearray);
 $bool $Ord$bytearray$__lt__ ($Ord$bytearray, $bytearray, $bytearray);
@@ -1876,6 +2110,10 @@ struct $Sequence$bytearray$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Sequence$bytearray);
+    void (*__serialize__)($Sequence$bytearray,$Serial$state);
+    $Sequence$bytearray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Sequence$bytearray);
+    $str (*__str__)($Sequence$bytearray);
     $int (*__getitem__)($Sequence$bytearray, $bytearray, $int);
     void (*__setitem__)($Sequence$bytearray, $bytearray, $int, $int);
     void (*__delitem__)($Sequence$bytearray, $bytearray, $int);
@@ -1889,6 +2127,10 @@ struct $Sequence$bytearray$class {
 };
 
 void $Sequence$bytearray$__init__ ($Sequence$bytearray);
+void $Sequence$bytearray$__serialize__($Sequence$bytearray, $Serial$state);
+$Sequence$bytearray $Sequence$bytearray$__deserialize__( $Serial$state);
+$bool $Sequence$bytearray$__bool__($Sequence$bytearray);
+$str $Sequence$bytearray$__str__($Sequence$bytearray);
 $int $Sequence$bytearray$__getitem__ ($Sequence$bytearray, $bytearray, $int);
 void $Sequence$bytearray$__setitem__ ($Sequence$bytearray, $bytearray, $int, $int);
 void $Sequence$bytearray$__delitem__ ($Sequence$bytearray, $bytearray, $int);
@@ -1904,20 +2146,28 @@ void $Sequence$bytearray$reverse ($Sequence$bytearray, $bytearray);
 
 struct $Collection$bytearray {
     $Collection$bytearray$class $class;
-    $Sequence$bytearray w$Sequence$bytearray;
+    $Sequence w$Sequence;
 };
 
 struct $Collection$bytearray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Collection$bytearray, $Sequence$bytearray);
+    void (*__init__)($Collection$bytearray, $Sequence);
+    void (*__serialize__)($Collection$bytearray,$Serial$state);
+    $Collection$bytearray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Collection$bytearray);
+    $str (*__str__)($Collection$bytearray);
     $Iterator (*__iter__)($Collection$bytearray, $bytearray);
     $bytearray (*__fromiter__)($Collection$bytearray, $Iterable, $WORD);
     $int (*__len__)($Collection$bytearray, $bytearray);
 };
 
-void $Collection$bytearray$__init__ ($Collection$bytearray, $Sequence$bytearray);
+void $Collection$bytearray$__init__ ($Collection$bytearray, $Sequence);
+void $Collection$bytearray$__serialize__($Collection$bytearray, $Serial$state);
+$Collection$bytearray $Collection$bytearray$__deserialize__( $Serial$state);
+$bool $Collection$bytearray$__bool__($Collection$bytearray);
+$str $Collection$bytearray$__str__($Collection$bytearray);
 $Iterator $Collection$bytearray$__iter__ ($Collection$bytearray, $bytearray);
 $bytearray $Collection$bytearray$__fromiter__ ($Collection$bytearray, $Iterable, $WORD);
 $int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
@@ -1926,25 +2176,33 @@ $int $Collection$bytearray$__len__ ($Collection$bytearray, $bytearray);
 
 struct $Plus$bytearray {
     $Plus$bytearray$class $class;
-    $Sequence$bytearray w$Sequence$bytearray;
+    $Sequence w$Sequence;
 };
 
 struct $Plus$bytearray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Plus$bytearray, $Sequence$bytearray);
+    void (*__init__)($Plus$bytearray, $Sequence);
+    void (*__serialize__)($Plus$bytearray,$Serial$state);
+    $Plus$bytearray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Plus$bytearray);
+    $str (*__str__)($Plus$bytearray);
     $bytearray (*__add__)($Plus$bytearray, $bytearray, $bytearray);
 };
 
-void $Plus$bytearray$__init__ ($Plus$bytearray, $Sequence$bytearray);
+void $Plus$bytearray$__init__ ($Plus$bytearray, $Sequence);
+void $Plus$bytearray$__serialize__($Plus$bytearray, $Serial$state);
+$Plus$bytearray $Plus$bytearray$__deserialize__( $Serial$state);
+$bool $Plus$bytearray$__bool__($Plus$bytearray);
+$str $Plus$bytearray$__str__($Plus$bytearray);
 $bytearray $Plus$bytearray$__add__ ($Plus$bytearray, $bytearray, $bytearray);
 
 // $Container$bytearray ////////////////////////////////////////////////////////////
 
 struct $Container$bytearray {
     $Container$bytearray$class $class;
-    $Eq w$Eq$A;
+    $Eq w$Eq$A$Container$bytearray;
 };
 
 struct $Container$bytearray$class {
@@ -1952,6 +2210,10 @@ struct $Container$bytearray$class {
     int $class_id;
     $Super$class $superclass;
     void (*__init__)($Container$bytearray, $Eq);
+    void (*__serialize__)($Container$bytearray,$Serial$state);
+    $Container$bytearray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Container$bytearray);
+    $str (*__str__)($Container$bytearray);
     $Iterator (*__iter__)($Container$bytearray, $bytearray);
     $int (*__len__)($Container$bytearray, $bytearray);
     $bool (*__contains__)($Container$bytearray, $bytearray, $int);
@@ -1959,8 +2221,13 @@ struct $Container$bytearray$class {
 };
 
 void $Container$bytearray$__init__ ($Container$bytearray, $Eq);
+void $Container$bytearray$__serialize__($Container$bytearray, $Serial$state);
+$Container$bytearray $Container$bytearray$__deserialize__( $Serial$state);
+$bool $Container$bytearray$__bool__($Container$bytearray);
+$str $Container$bytearray$__str__($Container$bytearray);
 $Iterator $Container$bytearray$__iter__ ($Container$bytearray, $bytearray);
 $int $Container$bytearray$__len__ ($Container$bytearray, $bytearray);
 $bool $Container$bytearray$__contains__ ($Container$bytearray, $bytearray, $int);
 $bool $Container$bytearray$__containsnot__ ($Container$bytearray, $bytearray, $int);
 
+void $register_builtin_protocols();
