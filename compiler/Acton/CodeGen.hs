@@ -510,19 +510,19 @@ genEnter env ts e n p               = cast (gen env e) <> text "->" <> gen env c
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
 
-adjustC TVar{} TVar{} e             = e
-adjustC TNone{} t' e                = e
-adjustC (TCon _ c) (TCon _ c') e
+adjust TVar{} TVar{} e              = e
+adjust TNone{} t' e                 = e
+adjust (TCon _ c) (TCon _ c') e
   | tcname c == tcname c'           = e
-adjustC (TOpt _ t) t' e             = adjustC t t' e
-adjustC t (TOpt _ t') e             = adjustC t t' e
-adjustC t t' e                      = adjust t t' e
+adjust (TOpt _ t) t' e              = adjust t t' e
+adjust t (TOpt _ t') e              = adjust t t' e
+adjust t t' e                       = typecast t t' e
 
-genExp env t' e                     = gen env (adjustC t t' e')
-  where (t, e')                     = typeOf' env e
+genExp env t' e                     = gen env (adjust t t' e')
+  where (t, e')                     = qType env adjust e
 
 genExp' env e                       = gen env e'
-  where (t, e')                     = typeOf' env e
+  where (t, e')                     = qType env adjust e
 
 instance Gen Expr where
     gen env (Var _ (NoQ n))
@@ -539,7 +539,7 @@ instance Gen Expr where
     gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
     gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
     gen env e0@Call{}               = genCall env t0 [] e p
-      where (t0, Call _ e p _)      = typeOf' env e0
+      where (t0, Call _ e p _)      = qType env typecast e0
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env [] e n
