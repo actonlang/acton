@@ -59,7 +59,7 @@ primISNOTNONE       = gPrim "ISNOTNONE"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-primETA             = gPrim "ETA"
+primACT             = gPrim "ACT"
 
 
 tActor              = tCon $ TC primActor []
@@ -114,7 +114,7 @@ primMkEnv cls def var sig =
                             (noq primSKIPRESc,      def scSKIPRESc NoDec),
                             (noq primSKIPRES,       def scSKIPRES NoDec),
 
-                            (noq primETA,           def scETA NoDec)
+                            (noq primACT,           def scACT NoDec)
                             
                       ]
 
@@ -318,7 +318,6 @@ scSKIPRES           = tSchema [quant x, quant a] tSKIPRES
         x           = TV KFX $ name "X"
         a           = TV KType $ name "A"
 
---  $ETA            : [A] => pure(A) -> A
-scETA               = tSchema [quant a] tETA
-  where tETA        = tFun fxPure (posRow (tVar a) posNil) kwdNil (tVar a)
-        a           = TV KType $ name "A"
+--  $ACT            : pure(_) -> _
+scACT               = tSchema [] tACT
+  where tACT        = tFun fxPure (posRow tWild posNil) kwdNil tWild

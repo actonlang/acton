@@ -626,8 +626,6 @@ instance Check Decl where
             tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- newActVar
-                                             traceM ("## actor st: " ++ prstr st)
                                              pushFX fxAction tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
@@ -635,11 +633,9 @@ instance Check Decl where
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvar st : tvs) te tNone (csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             when (tvar st `elem` fvs) $ err l "Actor state escapes"
-                                             substitute (tvar st) tSelf
                                              return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env

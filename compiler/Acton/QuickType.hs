@@ -133,6 +133,9 @@ instance TypeOf Expr where
 --  typeOf env (Imaginary _ i s)    = undefined
 --  typeOf env (NotImplemented _)   = undefined
 --  typeOf env (Ellipsis _)         = undefined
+    typeOf env (Call _ e ps ks)
+      | e == eQVar primACT          = t{ fx = fxAction }
+      where t                       = typeOf env (posArgHead ps)
     typeOf env (Call _ e ps ks)     = case typeOf env e of
                                         TFun _ fx p k t -> if fx == fxAction then tMsg t else t
                                         t -> error ("###### typeOf Fun " ++ prstr e ++ " : " ++ prstr t)
@@ -188,6 +191,9 @@ instance TypeOf Expr where
 --  typeOf' env (Imaginary _ i s)   = undefined
 --  typeOf' env (NotImplemented _)  = undefined
 --  typeOf' env (Ellipsis _)        = undefined
+    typeOf' env (Call l e p KwdNil)
+      | e == eQVar primACT          = (t{ fx = fxAction }, eCall e [e'])
+      where (t, e')                 = typeOf' env (posArgHead p)
     typeOf' env (Call l e p KwdNil) = case t of
                                         TFun _ fx r' k t' -> (if fx == fxAction then tMsg t' else t', Call l e' (adjust r r' p) KwdNil)
                                         t -> error ("###### typeOf' Fun " ++ prstr e ++ " : " ++ prstr t)

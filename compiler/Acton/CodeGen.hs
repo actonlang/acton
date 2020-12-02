@@ -27,7 +27,7 @@ genRoot                             :: Acton.Env.Env0 -> QName -> Type -> IO Str
 genRoot env0 qn@(GName m n) t       = do return $ render cRoot
   where env                         = genEnv $ setMod m env0
         env1                        = ldefine (envOf pars) env
-        pars                        = pPar conParamNames r
+        pars                        = pPar paramNames' r
         r                           = posRow t $ posRow (tCont tWild tWild) posNil
         cRoot                       = include env "modules" m $+$
                                       (gen env tR <+> gen env primROOT <+> parens (gen env pars) <+> char '{') $+$
@@ -70,8 +70,6 @@ modNames (FromImportAll _ (ModRef (0,Just m)) : is)
                                     = m : modNames is
 modNames []                         = []
 
-
-conParamNames                       = map (Internal CodeGenPass "par") [1..]
 
 -- Header -------------------------------------------------------------------------------------------
 
@@ -467,7 +465,7 @@ declCon env n q                     = (gen env tRes <+> newcon env n <> parens (
   where TFun _ fx r _ t             = sctype $ fst $ schemaOf env (eVar n)
         tObj                        = tCon $ TC (unalias env $ NoQ n) (map tVar $ tybound q)
         tRes                        = if t == tR then tR else tObj
-        pars                        = pPar conParamNames r
+        pars                        = pPar paramNames' r
         args                        = pArg pars
         initcall env | t == tR      = text "return" <+> methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma <+> gen env (retobj args)) <> semi
                      | otherwise    = methodtable env n <> dot <> gen env initKW <> parens (gen env tmpV <> comma' (gen env args)) <> semi $+$

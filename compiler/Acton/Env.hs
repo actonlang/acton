@@ -780,7 +780,7 @@ allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ 
         cons m (Just te)    = [ GName m n | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [QName]
-allProtos env               = reverse $ [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where proto NProto{}      = True
         proto _             = False
         protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]

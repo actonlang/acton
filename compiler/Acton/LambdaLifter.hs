@@ -126,9 +126,7 @@ extraArgs env n                 = case findFree n env of
                                     Just vts -> vts
                                     _        -> []
 
-llSelf                          = Internal LLiftPass "self" 0
-
-paramNames                      = map (Internal LLiftPass "x") [1..]
+llSelf                          = paramName0 "self"
 
 
 -- Helpers ------------------------------------------------------------------------------------------------------------------
@@ -260,7 +258,7 @@ instance Lift Expr where
       | n `elem` dom (locals env)       = pure e
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
-      where par                         = pPar paramNames (conv p)
+      where par                         = pPar paramNames' (conv p)
             call e' vts                 = Call l0 e' (addArgs vts $ par2arg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
@@ -314,7 +312,7 @@ llDot env l e n ts
   | otherwise                           = do e' <- llSub env e
                                              n' <- newName "self"
                                              closureConvert env (Lambda l0 par KwdNIL (call n') fx) t [(n',t')] [e']
-  where par                             = pPar paramNames (conv p)
+  where par                             = pPar paramNames' (conv p)
         TFun _ fx p _ t                 = typeOf env e0
         call n'                         = Call l0 (eDot (eVar n') n) (par2arg par) KwdNil
         call' x                         = Call l0 (eDot (eQVar x) n) (par2arg par) KwdNil

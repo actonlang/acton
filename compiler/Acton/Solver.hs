@@ -343,18 +343,30 @@ sub' env eq w t1 t2@TWild{}                 = return (idwit w t1 t2 : eq)
 --                as declared               as called
 --                existing                  expected
 sub' env eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')                   -- TODO: implement pos/kwd argument shifting
-                                            = do wp <- newWitness
+                                            = do wx <- newWitness
+                                                 wp <- newWitness
                                                  wk <- newWitness
                                                  wt <- newWitness
                                                  let e = eLambda [(px0,t1)] e'
                                                      e' = Lambda l0 (PosSTAR px1 $ Just $ tTupleP p2) (KwdSTAR px2 $ Just $ tTupleK k2) e0 fx2
-                                                     e0 = eCall (eVar wt) [Call l0 (eVar px0) (PosStar e1) (KwdStar e2)]
+                                                     e0 = eCall (eVar wt) [Call l0 (eCall (eVar wx) [eVar px0]) (PosStar e1) (KwdStar e2)]
                                                      e1 = eCall (eVar wp) [eVar px1]
                                                      e2 = eCall (eVar wk) [eVar px2]
-                                                     cs = [Cast fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
+                                                     cs = [Sub wx fx1 fx2, Sub wp p2 p1, Sub wk k2 k1, Sub wt t1' t2']
 
                                                  reduce env ((w, wFun t1 t2, e):eq) cs
 
+sub' env eq w t1@(TFX _ fx1) t2@(TFX _ fx2)
+  | castFX fx1 fx2                          = return (idwit w t1 t2 : eq)
+  | liftFX fx1 fx2                          = return ((w, wFun t1 t2, eQVar primACT) : eq)
+  where castFX FXPure   FXPure              = True
+        castFX FXPure   FXMut               = True
+        castFX FXMut    FXMut               = True
+        castFX FXAction FXAction            = True
+        castFX _        _                   = False
+        liftFX FXPure   FXAction            = True
+        liftFX FXMut    FXAction            = True
+        liftFX _        _                   = False
 
 -- (pure lambda px0: fx2 lambda *px1, **px2: wt(wx(px0)(*wp(px1),**wk(px2)))) f
 -- ~~>  fx2 lambda *px1, **px2: wx(f)(*px1,**px2)

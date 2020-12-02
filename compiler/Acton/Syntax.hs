@@ -96,7 +96,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Kindvar | Xistvar | Actvar | Wildvar | Typevar | Witness | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass | CodeGenPass
+data Prefix     = Kindvar | Xistvar | Wildvar | Typevar | Witness | Parvar | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic)
@@ -109,20 +109,24 @@ nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "$" ++ unique i ++ s
   where prefix Kindvar      = "K"
         prefix Xistvar      = "X"
-        prefix Actvar       = "A"
         prefix Wildvar      = "_"
         prefix Typevar      = "T"
         prefix Witness      = "w"
+        prefix Parvar       = "p"
         prefix TypesPass    = "t"
         prefix NormPass     = "n"
         prefix DeactPass    = "d"
         prefix CPSPass      = "c"
         prefix LLiftPass    = "l"
-        prefix CodeGenPass  = "C"
         unique 0            = ""
         unique i            = show i
 
 name            = Name NoLoc
+
+paramName0 s    = Internal Parvar s 0
+paramNames s    = map (Internal Parvar s) [1..]
+paramNames'     = paramNames ""
+
 
 data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 

@@ -216,7 +216,18 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l [catStrings ss]
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
-    norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env (joinArg ps ks) <*> pure KwdNil
+    norm env (Call l e p _)
+      | e == eQVar primACT          = do f <- norm env (posArgHead p)
+                                         case f of
+                                            Lambda{} -> return f{ efx = fxAction }
+                                            _ -> let t = typeOf env f
+                                                     pars = pPar paramNames' (posrow t)
+                                                     args = par2arg pars
+                                                 in return $ Lambda l pars KwdNIL f fxAction
+    norm env (Call l e p k)
+      | Call _ e' p' _ <- e,
+        e' == eQVar primACT         = norm env (Call l (posArgHead p') p k)
+    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
