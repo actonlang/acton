@@ -21,8 +21,7 @@ struct $Super {
 
 // Initializable //////////////////////////////////////////////////////
 
-// Fundamental class, from which all classes inherit.
-// All witness classes inherit from Initializable
+// For the moment (end of Nov, 2020), we have no use for Initializable and Serializable
 
 typedef struct $Initializable$class *$Initializable$class;
 
@@ -43,8 +42,6 @@ extern struct $Initializable$class $Initializable$methods;
 $Initializable $Initializable$new();
 
 // Serializable //////////////////////////////////////////////////////
-
-// Witness classes are not serializable.
 
 typedef struct $Serializable$class *$Serializable$class;
 

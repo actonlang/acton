@@ -45,6 +45,16 @@ struct $complex$class $complex$methods = {"",UNASSIGNED,($Super$class)&$struct$m
 
 // $Number$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
+void $Number$complex$__serialize__($Number$complex self, $Serial$state state) {
+  $step_serialize(self->w$Minus, state);
+}
+
+$Number$complex $Number$complex$__deserialize__($Serial$state state) {
+   $Number$complex res = $DNEW($Number$complex,state);
+   res->w$Minus = ($Minus)$step_deserialize(state);
+   return res;
+}
+
 $complex $Number$complex$__add__($Number$complex wit, $complex a, $complex b) {
   return to$complex(a->val + b->val);
 }  
@@ -91,10 +101,28 @@ $complex $Number$complex$conjugate ($Number$complex wit, $complex c) {
 
 // $Minus$complex  ////////////////////////////////////////////////////////////////////////////////////////
 
+void $Minus$complex$__serialize__($Minus$complex self, $Serial$state state) {
+  $step_serialize(self->w$Number, state);
+}
+
+$Minus$complex $Minus$complex$__deserialize__($Serial$state state) {
+   $Minus$complex res = $DNEW($Minus$complex,state);
+   res->w$Number = ($Number)$step_deserialize(state);
+   return res;
+}
+
 $complex $Minus$complex$__sub__($Minus$complex wit, $complex a, $complex b) {
   return to$complex(a->val - b->val);
 }  
 // $Eq$complex  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Eq$complex$__serialize__($Eq$complex self, $Serial$state state) {
+}
+
+$Eq$complex $Eq$complex$__deserialize__($Serial$state state) {
+   $Eq$complex res = $DNEW($Eq$complex,state);
+   return res;
+}
 
 $bool $Eq$complex$__eq__ ($Eq$complex wit, $complex a, $complex b) {
   return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
@@ -106,6 +134,14 @@ $bool $Eq$complex$__ne__ ($Eq$complex wit, $complex a, $complex b) {
 
 
 // $Hashable$complex  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Hashable$complex$__serialize__($Hashable$complex self, $Serial$state state) {
+}
+
+$Hashable$complex $Hashable$complex$__deserialize__($Serial$state state) {
+   $Hashable$complex res = $DNEW($Hashable$complex,state);
+   return res;
+}
 
 $bool $Hashable$complex$__eq__($Hashable$complex wit, $complex a, $complex b) {
   return to$bool(creal(a->val) == creal(b->val) && cimag(a->val) == cimag(b->val));
@@ -122,11 +158,11 @@ $int $Hashable$complex$__hash__($Hashable$complex wit, $complex a) {
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Number$complex_init ($Number$complex wit) {
-  wit-> w$Minus$Number = $NEW($Minus$complex,wit);
+  wit-> w$Minus = ($Minus)$NEW($Minus$complex,($Number)wit);
 }
 
-void $Minus$complex_init($Minus$complex wit, $Number$complex w$Number$complex) {
-  wit->w$Number$complex =  w$Number$complex;
+void $Minus$complex_init($Minus$complex wit, $Number w$Number) {
+  wit->w$Number =  w$Number;
 }
 
 void $Eq$complex_init($Eq$complex wit) {
@@ -141,7 +177,7 @@ $Number$complex $Number$complex$new() {
   return $NEW($Number$complex);
 }
 
-$Minus$complex $Minus$complex$new($Number$complex wit) {
+$Minus$complex $Minus$complex$new($Number wit) {
   return $NEW($Minus$complex,wit);
 }
   
@@ -159,20 +195,72 @@ struct $Minus$complex $Minus$complex_instance;
 struct $Eq$complex $Eq$complex_instance;
 struct $Hashable$complex $Hashable$complex_instance;
 
-struct $Number$complex$class $Number$complex$methods = {"", UNASSIGNED,NULL, $Number$complex_init,$Number$complex$__add__,NULL,$Number$complex$__complx__,
-                                               $Number$complex$__mul__,$Number$complex$__truediv__,$Number$complex$__pow__,$Number$complex$__neg__,
-                                               $Number$complex$__pos__,$Number$complex$real,$Number$complex$imag,$Number$complex$__abs__,$Number$complex$conjugate};
-struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, &$Minus$complex_instance};
+struct $Number$complex$class $Number$complex$methods = {
+    "$Number$complex",
+    UNASSIGNED,
+    ($Super$class)&$Number$methods,
+    $Number$complex_init,
+    $Number$complex$__serialize__,
+    $Number$complex$__deserialize__,
+    ($bool (*)($Number$complex))$default__bool__,
+    ($str (*)($Number$complex))$default__str__,
+    $Number$complex$__add__,
+    NULL,
+    $Number$complex$__complx__,
+    $Number$complex$__mul__,
+    $Number$complex$__truediv__,
+    $Number$complex$__pow__,
+    $Number$complex$__neg__,
+    $Number$complex$__pos__,
+    $Number$complex$real,
+    $Number$complex$imag,
+    $Number$complex$__abs__,
+    $Number$complex$conjugate
+};
+struct $Number$complex $Number$complex_instance = {&$Number$complex$methods, ($Minus)&$Minus$complex_instance};
 $Number$complex $Number$complex$witness = &$Number$complex_instance;
 
-struct $Minus$complex$class $Minus$complex$methods = {"", UNASSIGNED,NULL,$Minus$complex_init,$Minus$complex$__sub__};
-struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, &$Number$complex_instance};
+struct $Minus$complex$class $Minus$complex$methods = {
+    "$Minus$complex",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    $Minus$complex_init,
+    $Minus$complex$__serialize__,
+    $Minus$complex$__deserialize__,
+    ($bool (*)($Minus$complex))$default__bool__,
+    ($str (*)($Minus$complex))$default__str__,
+    $Minus$complex$__sub__
+};
+struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, ($Number)&$Number$complex_instance};
 $Minus$complex $Minus$complex$witness = &$Minus$complex_instance;
 
-struct $Eq$complex$class $Eq$complex$methods = {"", UNASSIGNED,NULL,$Eq$complex_init,$Eq$complex$__eq__,$Eq$complex$__ne__};
+struct $Eq$complex$class $Eq$complex$methods = {
+    "$Eq$complex",
+    UNASSIGNED,
+    ($Super$class)&$Eq$methods,
+    $Eq$complex_init,
+    $Eq$complex$__serialize__,
+    $Eq$complex$__deserialize__,
+    ($bool (*)($Eq$complex))$default__bool__,
+    ($str (*)($Eq$complex))$default__str__,
+    $Eq$complex$__eq__,
+    $Eq$complex$__ne__
+};
 struct $Eq$complex $Eq$complex_instance = {&$Eq$complex$methods};
 $Eq$complex $Eq$complex$witness = &$Eq$complex_instance;
 
-struct $Hashable$complex$class $Hashable$complex$methods = {"",UNASSIGNED, NULL,$Hashable$complex_init,$Hashable$complex$__eq__,$Hashable$complex$__ne__,$Hashable$complex$__hash__};
+struct $Hashable$complex$class $Hashable$complex$methods = {
+    "$Hashable$complex",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    $Hashable$complex_init,
+    $Hashable$complex$__serialize__,
+    $Hashable$complex$__deserialize__,
+    ($bool (*)($Hashable$complex))$default__bool__,
+    ($str (*)($Hashable$complex))$default__str__,
+    $Hashable$complex$__eq__,
+    $Hashable$complex$__ne__,
+    $Hashable$complex$__hash__
+};
  struct $Hashable$complex $Hashable$complex_instance = {&$Hashable$complex$methods};
  $Hashable$complex $Hashable$complex$witness = &$Hashable$complex_instance;

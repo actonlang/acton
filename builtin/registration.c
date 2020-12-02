@@ -64,6 +64,7 @@ void $register_builtin() {
   $register_force(RUNTIMEERROR_ID,&$RuntimeError$methods);
   $register_force(NOTIMPLEMENTEDERROR_ID,&$NotImplementedError$methods);
   $register_force(VALUEERROR_ID,&$ValueError$methods);
+  $register_builtin_protocols();
 }
 
 

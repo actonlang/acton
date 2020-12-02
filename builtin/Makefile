@@ -1,6 +1,6 @@
 all:
-	gcc -c -g builtin.c
-	gcc -c -g minienv.c
+	gcc -c -O3 builtin.c
+	gcc -c -O3 minienv.c
 	ar cr ../lib/libActon.a builtin.o minienv.o
 	cd tests && $(MAKE)
 	cd serialization_tests && $(MAKE)

@@ -445,7 +445,7 @@ extension set[A(Hashable)] (Set[A]): pass
 
 extension Iterator[A](Iterable[A]): pass
 
-extension range (Sequence[int]): pass
+extension range (Iterable[int]): pass
 
 extension str (Ord): pass
 
@@ -491,7 +491,7 @@ def divmod [A(Integral)] (a : A, b : A) -> (A, A):
 
 enumerate : (Iterable[A],?int) -> Iterator[(A,int)]
 
-filter : (?((A) -> B), Iterable[A]) -> Iterator[B]
+filter : (?((A) -> B), Iterable[A]) -> Iterator[A]
 
 def hash(x : Hashable) -> int:
   return x.__hash__()

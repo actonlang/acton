@@ -19,6 +19,14 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
  
 // Hashable$WORD methods //////////////////////////////////////////////////
 
+void $Hashable$WORD$__serialize__($Hashable$WORD self, $Serial$state state) {
+}
+
+$Hashable$WORD $Hashable$WORD$__deserialize__($Serial$state state) {
+   $Hashable$WORD res = $DNEW($Hashable$WORD,state);
+   return res;
+}
+
 $bool $Hashable$WORD_eq($Hashable$WORD wit, $WORD a, $WORD b) {
   return to$bool(a==b);
 }
@@ -31,7 +39,19 @@ $int $Hashable$WORD_hash($Hashable$WORD wit, $WORD a) {
   return to$int($pointer_hash(a));
 }
 
-struct $Hashable$WORD$class $Hashable$WORD$methods = {"",UNASSIGNED,NULL,(void (*)($Hashable$WORD))$default__init__, $Hashable$WORD_eq,$Hashable$WORD_ne,$Hashable$WORD_hash};
+struct $Hashable$WORD$class $Hashable$WORD$methods = {
+    "$Hashable$WORD",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    (void (*)($Hashable$WORD))$default__init__,
+    $Hashable$WORD$__serialize__,
+    $Hashable$WORD$__deserialize__,
+    ($bool (*)($Hashable$WORD))$default__bool__,
+    ($str (*)($Hashable$WORD))$default__str__,
+    $Hashable$WORD_eq,
+    $Hashable$WORD_ne,
+    $Hashable$WORD_hash
+};
 struct $Hashable$WORD $Hashable$WORD_instance = {&$Hashable$WORD$methods};
 struct $Hashable$WORD *$Hashable$WORD$witness = &$Hashable$WORD_instance;
 

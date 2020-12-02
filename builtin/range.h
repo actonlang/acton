@@ -24,13 +24,6 @@ extern struct $Iterable$range$class $Iterable$range$methods;
 $Iterable$range $Iterable$range$new();
 extern $Iterable$range $Iterable$range$witness;
 
-extern struct $Sequence$range$class $Sequence$range$methods;
-$Sequence$range $Sequence$range$new();
-//extern struct $Container$range$class $Container$range$methods; 
-
-extern struct $Sequence$range *$Sequence$range$witness;
-//extern struct $Container$range *$Container$range$witness;
-
 // Iterators over ranges ///////////////////////////////////////////////////////
 
 typedef struct $Iterator$range *$Iterator$range;

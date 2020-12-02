@@ -4,6 +4,7 @@ typedef void *$WORD;
 
 void $default__init__($WORD);
 
+
 void $printobj(char *mess,$WORD obj);
 
 

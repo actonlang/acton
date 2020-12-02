@@ -24,7 +24,7 @@ $complex to$complex(complex double c);
 extern struct $Number$complex$class $Number$complex$methods;
 $Number$complex $Number$complex$new();
 extern struct $Minus$complex$class $Minus$complex$methods;
-$Minus$complex $Minus$complex$new($Number$complex);
+$Minus$complex $Minus$complex$new($Number);
 extern struct $Eq$complex$class $Eq$complex$methods;
 $Eq$complex $Eq$complex$new();
 extern struct $Hashable$complex$class $Hashable$complex$methods;

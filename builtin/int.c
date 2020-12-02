@@ -60,7 +60,7 @@ $int $int_fromatom($WORD a) {
     if (c==(($str)a)->nbytes)
       return to$int(x);
     else 
-      RAISE(($BaseException)$NEW($ValueError,to$str("int_fromatom(): invalid str literal for type int")));
+      RAISE(($BaseException)$NEW($ValueError,to$str("int_fromatom(): invalid str value for type int")));
   }
   fprintf(stderr,"internal error: int_fromatom: argument not of atomic type");
   exit(-1);
@@ -69,6 +69,17 @@ $int $int_fromatom($WORD a) {
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
 
+void $Integral$int$__serialize__($Integral$int self, $Serial$state state) {
+  $step_serialize(self->w$Logical, state);
+  $step_serialize(self->w$Minus, state);
+}
+
+$Integral$int $Integral$int$__deserialize__($Serial$state state) {
+   $Integral$int res = $DNEW($Integral$int,state);
+   res->w$Logical = ($Logical)$step_deserialize(state);
+   res->w$Minus = ($Minus)$step_deserialize(state);
+   return res;
+}
 
 $int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
   return to$int(a->val + b->val);
@@ -202,6 +213,16 @@ $int $Integral$int$__invert__($Integral$int wit,  $int a) {
 
 // Logical$int  ////////////////////////////////////////////////////////////////////////////////////////
 
+void $Logical$int$__serialize__($Logical$int self, $Serial$state state) {
+  $step_serialize(self->w$Integral, state);
+}
+
+$Logical$int $Logical$int$__deserialize__($Serial$state state) {
+   $Logical$int res = $DNEW($Logical$int,state);
+   res->w$Integral = ($Integral)$step_deserialize(state);
+   return res;
+}
+
 $int $Logical$int$__and__($Logical$int wit,  $int a, $int b) {
   return to$int(a->val & b->val);
 }
@@ -216,11 +237,29 @@ $int $Logical$int$__xor__($Logical$int wit,  $int a, $int b) {
  
 // $Minus$int  ////////////////////////////////////////////////////////////////////////////////////////
 
+void $Minus$int$__serialize__($Minus$int self, $Serial$state state) {
+  $step_serialize(self->w$Integral, state);
+}
+
+$Minus$int $Minus$int$__deserialize__($Serial$state state) {
+   $Minus$int res = $DNEW($Minus$int,state);
+   res->w$Integral = ($Integral)$step_deserialize(state);
+   return res;
+}
+
 $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
   return to$int(a->val - b->val);
 }  
 
 // $Ord$int  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Ord$int$__serialize__($Ord$int self, $Serial$state state) {
+}
+
+$Ord$int $Ord$int$__deserialize__($Serial$state state) {
+   $Ord$int res = $DNEW($Ord$int,state);
+   return res;
+}
 
 $bool $Ord$int$__eq__ ($Ord$int wit, $int a, $int b) {
   return to$bool(a->val == b->val);
@@ -248,6 +287,14 @@ $bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
 
 // $Hashable$int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void $Hashable$int$__serialize__($Hashable$int self, $Serial$state state) {
+}
+
+$Hashable$int $Hashable$int$__deserialize__($Serial$state state) {
+   $Hashable$int res = $DNEW($Hashable$int,state);
+   return res;
+}
+
 $bool $Hashable$int$__eq__($Hashable$int wit, $int a, $int b) {
   return to$bool(a->val == b->val);
 }
@@ -263,16 +310,16 @@ $int $Hashable$int$__hash__($Hashable$int wit, $int a) {
 // Initialization ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Integral$int_init($Integral$int wit) {
-  wit-> w$Logical$Integral = $NEW($Logical$int,wit);
-  wit-> w$Minus$Integral = $NEW($Minus$int,wit);
+  wit-> w$Logical = ($Logical)$NEW($Logical$int,($Integral)wit);
+  wit-> w$Minus = ($Minus)$NEW($Minus$int,($Integral)wit);
 };
 
-void $Logical$int_init($Logical$int wit, $Integral$int w$Integral$int) {
-  wit->w$Integral$int =  w$Integral$int;
+void $Logical$int_init($Logical$int wit, $Integral w$Integral) {
+  wit->w$Integral =  w$Integral;
 }
 
-void $Minus$int_init($Minus$int wit, $Integral$int w$Integral$int) {
-  wit->w$Integral$int =  w$Integral$int;
+void $Minus$int_init($Minus$int wit, $Integral w$Integral) {
+  wit->w$Integral =  w$Integral;
 }
 
 void $Ord$int_init($Ord$int wit) {
@@ -287,11 +334,11 @@ $Integral$int $Integral$int$new() {
   return $NEW($Integral$int);
 }
 
-$Logical$int $Logical$int$new($Integral$int wit) {
+$Logical$int $Logical$int$new($Integral wit) {
   return $NEW($Logical$int,wit);
 }
   
-$Minus$int $Minus$int$new($Integral$int wit) {
+$Minus$int $Minus$int$new($Integral wit) {
   return $NEW($Minus$int,wit);
 }
   
@@ -311,10 +358,14 @@ struct $Ord$int $Ord$int_instance;
 struct $Hashable$int $Hashable$int_instance;
 
 struct $Integral$int$class $Integral$int$methods = {
-    "",
+    "$Integral$int",
     UNASSIGNED,
-    NULL,
+    ($Super$class)&$Integral$methods,
     $Integral$int_init,
+    $Integral$int$__serialize__,
+    $Integral$int$__deserialize__,
+    ($bool (*)($Integral$int))$default__bool__,
+    ($str (*)($Integral$int))$default__str__,
     $Integral$int$__add__,
     ($int (*)($Integral$int, $int, $int))$Plus$__iadd__,
     $Integral$int$__fromatom__,
@@ -342,21 +393,74 @@ struct $Integral$int$class $Integral$int$methods = {
     $Integral$int$__mod__,$Integral$int$__lshift__,
     $Integral$int$__rshift__,$Integral$int$__invert__
 };
-struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, &$Logical$int_instance, &$Minus$int_instance};
+
+struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Logical)&$Logical$int_instance, ($Minus)&$Minus$int_instance};
 $Integral$int $Integral$int$witness = &$Integral$int_instance;
 
-struct $Logical$int$class $Logical$int$methods =  {"", UNASSIGNED,NULL,$Logical$int_init, $Logical$int$__and__, $Logical$int$__or__, $Logical$int$__xor__};
-struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, &$Integral$int_instance};
+struct $Logical$int$class $Logical$int$methods =  {
+    "$Logical$int",
+    UNASSIGNED,
+    ($Super$class)&$Logical$methods,
+    $Logical$int_init,
+    $Logical$int$__serialize__,
+    $Logical$int$__deserialize__,
+    ($bool (*)($Logical$int))$default__bool__,
+    ($str (*)($Logical$int))$default__str__,
+    $Logical$int$__and__,
+    $Logical$int$__or__,
+    $Logical$int$__xor__
+};
+
+struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, ($Integral)&$Integral$int_instance};
 $Logical$int $Logical$int$witness = &$Logical$int_instance;
 
-struct $Minus$int$class $Minus$int$methods = {"",UNASSIGNED, NULL,$Minus$int_init, $Minus$int$__sub__};
-struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, &$Integral$int_instance};
+struct $Minus$int$class $Minus$int$methods = {
+    "$Minus$int",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    $Minus$int_init,
+    $Minus$int$__serialize__,
+    $Minus$int$__deserialize__,
+    ($bool (*)($Minus$int))$default__bool__,
+    ($str (*)($Minus$int))$default__str__,
+    $Minus$int$__sub__
+};
+struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, ($Integral)&$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;
 
-struct $Ord$int$class $Ord$int$methods = {"",UNASSIGNED, NULL,$Ord$int_init,$Ord$int$__eq__,$Ord$int$__ne__,$Ord$int$__lt__,$Ord$int$__le__,$Ord$int$__gt__,$Ord$int$__ge__};
+struct $Ord$int$class $Ord$int$methods = {
+    "$Ord$int",
+    UNASSIGNED,
+    ($Super$class)&$Ord$methods,
+    $Ord$int_init,
+    $Ord$int$__serialize__,
+    $Ord$int$__deserialize__,
+    ($bool (*)($Ord$int))$default__bool__,
+    ($str (*)($Ord$int))$default__str__,
+    $Ord$int$__eq__,
+    $Ord$int$__ne__,
+    $Ord$int$__lt__,
+    $Ord$int$__le__,
+    $Ord$int$__gt__,
+    $Ord$int$__ge__
+};
+
 struct $Ord$int $Ord$int_instance = {&$Ord$int$methods};
 $Ord$int $Ord$int$witness = &$Ord$int_instance;
 
-struct $Hashable$int$class $Hashable$int$methods = {"",UNASSIGNED, NULL,$Hashable$int_init, $Hashable$int$__eq__,$Hashable$int$__neq__,$Hashable$int$__hash__};
+struct $Hashable$int$class $Hashable$int$methods = {
+    "$Hashable$int",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    $Hashable$int_init,
+    $Hashable$int$__serialize__,
+    $Hashable$int$__deserialize__,
+    ($bool (*)($Hashable$int))$default__bool__,
+    ($str (*)($Hashable$int))$default__str__,
+    $Hashable$int$__eq__,
+    $Hashable$int$__neq__,
+    $Hashable$int$__hash__
+};
+
 struct $Hashable$int $Hashable$int_instance = {&$Hashable$int$methods};
 $Hashable$int $Hashable$int$witness = &$Hashable$int_instance;

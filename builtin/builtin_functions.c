@@ -13,13 +13,14 @@ void $print(int size, ...) {
     va_start(args,size);
     if (size > 0) {
         $struct elem = va_arg(args,$struct);
-        puts((const char*)elem->$class->__str__(elem)->str);
+        fputs((const char*)elem->$class->__str__(elem)->str,stdout);
     }
     for (int i=1; i<size; i++) {
         putchar(' ');
         $struct elem = va_arg(args,$struct);
-        puts((const char*)elem->$class->__str__(elem)->str);
+        fputs((const char*)elem->$class->__str__(elem)->str,stdout);
     }
+    putchar('\n');
     va_end(args);
 }
 
@@ -310,7 +311,7 @@ $bool $EqUnion$__ne__($Eq wit, $WORD a, $WORD b) {
     return $NOT($EqUnion$__eq__(wit, a, b));
 }
 
-struct $Eq$class $EqUnion$methods = {"", UNASSIGNED, NULL, $EqUnion$__init__, $EqUnion$__eq__, $EqUnion$__ne__};
+struct $Eq$class $EqUnion$methods = {"", UNASSIGNED, NULL, $EqUnion$__init__, NULL, NULL, NULL, NULL, $EqUnion$__eq__, $EqUnion$__ne__};
 
 struct $Eq $EqUnion$inst = {(struct $Eq$class *)&$EqUnion$methods};
 

@@ -1,17 +1,61 @@
 
-struct  $Mapping$dict$class $Mapping$dict$methods = {"",UNASSIGNED,NULL,$Mapping$dict$__init__,$Mapping$dict$__iter__,
-                                                     $Mapping$dict$__fromiter__, $Mapping$dict$__len__, $Mapping$dict$__contains__,
-                                                     $Mapping$dict$__containsnot__, $Mapping$dict$get, $Mapping$dict$keys, $Mapping$dict$values,
-                                                     $Mapping$dict$items, $Mapping$dict$update, $Mapping$dict$popitem, $Mapping$dict$setdefault};
+struct  $Mapping$dict$class $Mapping$dict$methods = {
+    "$Mapping$dict",
+    UNASSIGNED,
+    ($Super$class)&$Mapping$methods,
+    $Mapping$dict$__init__,
+    $Mapping$dict$__serialize__,
+    $Mapping$dict$__deserialize__,
+    ($bool (*)($Mapping$dict))$default__bool__,
+    ($str (*)($Mapping$dict))$default__str__,
+    $Mapping$dict$__iter__,
+    $Mapping$dict$__fromiter__,
+    $Mapping$dict$__len__,
+    $Mapping$dict$__contains__,
+    $Mapping$dict$__containsnot__,
+    $Mapping$dict$get,
+    $Mapping$dict$keys,
+    $Mapping$dict$values,
+    $Mapping$dict$items,
+    $Mapping$dict$update,
+    $Mapping$dict$popitem,
+    $Mapping$dict$setdefault
+};
 
-struct $Indexed$dict$class   $Indexed$dict$methods = {"", UNASSIGNED,NULL,$Indexed$dict$__init__, $Indexed$dict$__getitem__, $Indexed$dict$__setitem__, $Indexed$dict$__delitem__};
+struct $Indexed$dict$class $Indexed$dict$methods = {
+    "$Indexed$dict",
+    UNASSIGNED,
+    ($Super$class)&$Indexed$methods,
+    $Indexed$dict$__init__,
+    $Indexed$dict$__serialize__,
+    $Indexed$dict$__deserialize__,
+    ($bool (*)($Indexed$dict))$default__bool__,
+    ($str (*)($Indexed$dict))$default__str__,
+    $Indexed$dict$__getitem__,
+    $Indexed$dict$__setitem__,
+    $Indexed$dict$__delitem__
+};
+
+void $Mapping$dict$__serialize__($Mapping$dict self, $Serial$state state) {
+  $step_serialize(self->w$Indexed, state);
+  $step_serialize(self->w$Eq$A$Mapping$dict, state);
+  $step_serialize(self->w$Hashable$A$Mapping$dict, state);
+}
+
+$Mapping$dict $Mapping$dict$__deserialize__($Serial$state state) {
+   $Mapping$dict res = $DNEW($Mapping$dict,state);
+   res->w$Indexed = ($Indexed)$step_deserialize(state);
+   res->w$Eq$A$Mapping$dict = ($Eq)$step_deserialize(state);
+   res->w$Hashable$A$Mapping$dict = ($Hashable)$step_deserialize(state);
+   return res;
+}
 
 $Iterator $Mapping$dict$__iter__ ($Mapping$dict wit, $dict dict) {
   return $dict_iter(dict);
 }
 
 $dict $Mapping$dict$__fromiter__ ($Mapping$dict wit, $Iterable wit2, $WORD iter) {
-  return $dict_fromiter(wit->w$Hashable$Mapping,wit2->$class->__iter__(wit2,iter));
+  return $dict_fromiter(wit->w$Hashable$A$Mapping$dict,wit2->$class->__iter__(wit2,iter));
 }
 
 $int $Mapping$dict$__len__ ($Mapping$dict wit, $dict dict) {
@@ -19,15 +63,15 @@ $int $Mapping$dict$__len__ ($Mapping$dict wit, $dict dict) {
 }
   
 $bool $Mapping$dict$__contains__ ($Mapping$dict wit, $dict dict, $WORD key) {
-  return to$bool($dict_contains(dict,wit->w$Hashable$Mapping,key));
+  return to$bool($dict_contains(dict,wit->w$Hashable$A$Mapping$dict,key));
 }
 
 $bool $Mapping$dict$__containsnot__ ($Mapping$dict wit, $dict dict, $WORD key) {
-  return to$bool(!$dict_contains(dict,wit->w$Hashable$Mapping,key));
+  return to$bool(!$dict_contains(dict,wit->w$Hashable$A$Mapping$dict,key));
 }
 
 $WORD $Mapping$dict$get ($Mapping$dict wit, $dict dict, $WORD key, $WORD deflt) {
-  return $dict_get(dict,wit->w$Hashable$Mapping,key,deflt);
+  return $dict_get(dict,wit->w$Hashable$A$Mapping$dict,key,deflt);
 }
 
 $Iterator $Mapping$dict$keys ($Mapping$dict wit, $dict dict) {
@@ -43,25 +87,39 @@ $Iterator $Mapping$dict$items ($Mapping$dict wit, $dict dict) {
 }
 
 void $Mapping$dict$update ($Mapping$dict wit, $Iterable wit2, $dict dict, $WORD other) {
-  $dict_update(dict,wit->w$Hashable$Mapping,wit2->$class->__iter__(wit2,other));
+  $dict_update(dict,wit->w$Hashable$A$Mapping$dict,wit2->$class->__iter__(wit2,other));
 }
 
 $tuple $Mapping$dict$popitem ($Mapping$dict wit, $dict dict) {
-  return $dict_popitem(dict, wit->w$Hashable$Mapping);
+  return $dict_popitem(dict, wit->w$Hashable$A$Mapping$dict);
 }
 
 void $Mapping$dict$setdefault ($Mapping$dict wit, $dict dict, $WORD key, $WORD deflt) {
-  $dict_setdefault(dict,wit->w$Hashable$Mapping,key,deflt);
+  $dict_setdefault(dict,wit->w$Hashable$A$Mapping$dict,key,deflt);
+}
+
+void $Indexed$dict$__serialize__($Indexed$dict self, $Serial$state state) {
+  $step_serialize(self->w$Mapping, state);
+  $step_serialize(self->w$Eq$A$Mapping$dict, state);
+  $step_serialize(self->w$Hashable$A$Mapping$dict, state);
+}
+
+$Indexed$dict $Indexed$dict$__deserialize__($Serial$state state) {
+   $Indexed$dict res = $DNEW($Indexed$dict,state);
+   res->w$Mapping = ($Mapping)$step_deserialize(state);
+   res->w$Eq$A$Mapping$dict = ($Eq)$step_deserialize(state);
+   res->w$Hashable$A$Mapping$dict = ($Hashable)$step_deserialize(state);
+   return res;
 }
 
 $WORD $Indexed$dict$__getitem__ ($Indexed$dict wit, $dict dict, $WORD key) {
-  return $dict_getitem(dict, wit->w$Mapping$dict->w$Hashable$Mapping,key);
+  return $dict_getitem(dict, (($Mapping$dict)wit->w$Mapping)->w$Hashable$A$Mapping$dict,key);
 }
 void $Indexed$dict$__setitem__ ($Indexed$dict wit, $dict dict, $WORD key, $WORD value) {
-  $dict_setitem(dict, wit->w$Mapping$dict->w$Hashable$Mapping,key,value);
+  $dict_setitem(dict,  (($Mapping$dict)wit->w$Mapping)->w$Hashable$A$Mapping$dict,key,value);
 }
 void $Indexed$dict$__delitem__ ($Indexed$dict wit, $dict dict, $WORD key) {
-  $dict_delitem(dict, wit->w$Mapping$dict->w$Hashable$Mapping,key);
+  $dict_delitem(dict,  (($Mapping$dict)wit->w$Mapping)->w$Hashable$A$Mapping$dict,key);
 }
 
 $Mapping$dict $Mapping$dict$new($Hashable h) {
@@ -69,18 +127,20 @@ $Mapping$dict $Mapping$dict$new($Hashable h) {
 }
 
 void $Mapping$dict$__init__($Mapping$dict self, $Hashable h) {
-  self->w$Indexed = ($Indexed)$NEW($Indexed$dict,self,($Eq)h);
-  self->w$Hashable$Mapping = h;
+  self->w$Indexed = ($Indexed)$NEW($Indexed$dict,($Mapping)self,($Eq)h);
+  self->w$Eq$A$Mapping$dict = ($Eq)h;
+  self->w$Hashable$A$Mapping$dict = h;
 }
 
-$Indexed$dict $Indexed$dict$new($Mapping$dict master, $Eq e) {
+$Indexed$dict $Indexed$dict$new($Mapping master, $Eq e) {
   return $NEW($Indexed$dict, master, e);
 }
 
 
-void $Indexed$dict$__init__($Indexed$dict self, $Mapping$dict master, $Eq e) {
-  self->w$Mapping$dict = master;
-  self->w$Eq$A = e;
+void $Indexed$dict$__init__($Indexed$dict self, $Mapping master, $Eq e) {
+  self->w$Mapping = master;
+  self->w$Eq$A$Mapping$dict = e;
+  self->w$Hashable$A$Mapping$dict = ($Hashable)e;
 }
 
 
