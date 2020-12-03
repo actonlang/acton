@@ -159,7 +159,7 @@ instance InfEnv Stmt where
                                              cs3 <- targetFX tg
                                              return (cs1++cs2++cs3, [], assign w tg' e')
       where assign w (Index _ e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
-            assign w (Slice _ e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
+            assign w (Slice _ e sl) r   = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
             assign _ tg r               = MutAssign l tg r
 
     infEnv env (AugAssign l tg o e)     = do (cs1,t,w,lval) <- infTarget env tg
@@ -171,7 +171,7 @@ instance InfEnv Stmt where
                                                       cs1++cs2++cs3++cs4, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
       where assign _ (Var l (NoQ n)) r  = Assign l [PVar NoLoc n Nothing] r
             assign w (Index l e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
-            assign w (Slice l e [sl]) r = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
+            assign w (Slice l e sl) r   = Expr l $ eCall (eDot (eVar w) setsliceKW) (e : sliz2args sl ++ [r])
             assign _ tg r               = MutAssign l tg r
             
             protocol PlusA              = pPlus
@@ -210,7 +210,7 @@ instance InfEnv Stmt where
                                              return (constr tg' t ++ cs1 ++ cs2, [], delete w tg')
       where delete _ (Var _ (NoQ n))    = Assign l [PVar NoLoc n Nothing] eNone
             delete w (Index _ e ix)     = Expr l $ eCall (eDot (eVar w) delitemKW) [e, ix]
-            delete w (Slice _ e [sl])   = Expr l $ eCall (eDot (eVar w) delsliceKW) (e : sliz2args sl)
+            delete w (Slice _ e sl)     = Expr l $ eCall (eDot (eVar w) delsliceKW) (e : sliz2args sl)
             delete _ tg                 = MutAssign l tg eNone
             
             constr Var{} t              = [Cast tNone t]
@@ -302,14 +302,13 @@ infTarget env (Index l e ix)            = do ti <- newTVar
                                              return (Impl w t (pIndexed ti t0) :
                                                      Cast t tObject :
                                                      cs1++cs2, t0, w, Index l e' ix')
-infTarget env (Slice l e [sl])          = do (cs1,sl') <- inferSlice env sl
+infTarget env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
                                              t0 <- newTVar
                                              w <- newWitness
                                              return (Impl w t (pSliceable t0) :
                                                      Cast t tObject :
-                                                     cs1++cs2, t, w, Slice l e' [sl'])
-infTarget env (Slice l e slz)           = notYet l "Multidimensional slicing"
+                                                     cs1++cs2, t, w, Slice l e' sl')
 infTarget env (Dot l e n)               = do (cs,t1,e') <- infer env e
                                              t2 <- newTVar
                                              return (Mut t1 n t2 :
@@ -907,13 +906,12 @@ instance Infer Expr where
                                              (cs2,t,e') <- infer env e
                                              return (Impl w t (pIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
-    infer env (Slice l e [sl])          = do (cs1,sl') <- inferSlice env sl
+    infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
                                              t0 <- newTVar
                                              w <- newWitness
                                              return (Impl w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) (e' : sliz2args sl'))
-    infer env (Slice l e slz)           = notYet l "Multidimensional slicing"
     infer env (BasicSlice l e slz)      = notYet l "Multidimensional slicing"
     infer env (Cond l e1 e e2)          = do t0 <- newTVar
                                              (cs0,env',s,e') <- inferBool env e

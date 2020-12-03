@@ -987,7 +987,7 @@ atom_expr = do
                  splitlist a [S.BExpr e] = S.Index NoLoc a e
                  splitlist a ss
                      | all isBExpr ss       = S.Index NoLoc a (S.eTuple [e | S.BExpr e <- ss])
-                     | not (any isBExpr ss) = S.Slice NoLoc a [s | S.BSliz s <- ss]
+                     | not (any isBExpr ss) = foldl (S.Slice NoLoc) a [s | S.BSliz s <- ss]
                      | otherwise            = S.BasicSlice NoLoc a ss -- error "ndarray basic slicing not yet implemented"
                  isBExpr (S.BExpr _) =True; isBExpr _ = False
                  -- indexlist = (:) <$> expr <*> commaList expr
