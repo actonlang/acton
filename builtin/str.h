@@ -175,9 +175,9 @@ $Ord$bytearray $Ord$bytearray$new();
 extern struct $Sequence$bytearray$class $Sequence$bytearray$methods;
 $Sequence$bytearray $Sequence$bytearray$new();
 extern struct $Collection$bytearray$class $Collection$bytearray$methods;
-$Collection$bytearray $Collection$bytearray$new($Sequence$bytearray);
+$Collection$bytearray $Collection$bytearray$new($Sequence);
 extern struct $Plus$bytearray$class $Plus$bytearray$methods;
-$Plus$bytearray $Plus$bytearray$new($Sequence$bytearray);
+$Plus$bytearray $Plus$bytearray$new($Sequence);
 extern struct $Container$bytearray$class $Container$bytearray$methods;
 $Container$bytearray $Container$bytearray$new($Eq);
 
@@ -232,3 +232,4 @@ $int $ord($str c);
 // used in defining __str__ method for collection types (list, dict, set)
 $str $str_join_par(char lpar,$list elems, char rpar);
 
+$str $default__str__($struct);

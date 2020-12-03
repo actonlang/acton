@@ -57,13 +57,15 @@ $Serializable $deserialize_file(char *file);
 
 // $Hashable$WORD$witness is needed to create the Mapping$dict witness necessary for serialization.
 
-typedef struct $Hashable$WORD *$Hashable$WORD;
-
 struct $Hashable$WORD$class {
     char *$GCINFO;
     int $class_id;
-    $Super$class *superclass;
+    $Super$class superclass;
     void (*__init__)($Hashable$WORD);
+    void (*__serialize__)($Hashable$WORD,$Serial$state);
+    $Hashable$WORD (*__deserialize__)($Serial$state);
+    $bool (*__bool__)($Hashable$WORD);
+    $str (*__str__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);
     $bool (*__ne__)($Hashable$WORD, $WORD, $WORD);
     $int (*__hash__)($Hashable$WORD, $WORD);

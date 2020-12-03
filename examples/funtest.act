@@ -1,0 +1,9 @@
+actor main(env):
+
+    lst : list[int]
+    lst = [10,11]
+
+    print(lst)
+
+    #for i in lst:
+    #    print(i)

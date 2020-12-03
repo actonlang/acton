@@ -31,7 +31,16 @@ $str $float_str($float x) {
   return to$str(s);
 }
 
-struct $float$class $float$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$float_init,$float_serialize, $float_deserialize,$float_bool,$float_str};
+struct $float$class $float$methods = {
+    "$float",
+    UNASSIGNED,
+    ($Super$class)&$struct$methods,
+    $float_init,
+    $float_serialize,
+    $float_deserialize,
+    $float_bool,
+    $float_str
+};
   
 $float to$float(double x) {
   $float res = malloc(sizeof(struct $float));
@@ -61,8 +70,18 @@ $float $float_fromatom($WORD a) {
   exit(-1);
 }
 
-
 // $Real$float /////////////////////////////////////////////////////////////////////////
+
+void $Real$float$__serialize__($Real$float self, $Serial$state state) {
+  $step_serialize(self->w$Minus, state);
+}
+
+$Real$float $Real$float$__deserialize__($Serial$state state) {
+   $Real$float res = $DNEW($Real$float,state);
+   res->w$Minus = ($Minus)$step_deserialize(state);
+   return res;
+}
+
 
 $float $Real$float$__add__($Real$float wit,  $float a, $float b) {
   return to$float(from$float(a) + from$float(b));
@@ -135,11 +154,29 @@ $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {
      
 // $Minus$float  ////////////////////////////////////////////////////////////////////////////////////////
 
+void $Minus$float$__serialize__($Minus$float self, $Serial$state state) {
+  $step_serialize(self->w$Real, state);
+}
+
+$Minus$float $Minus$float$__deserialize__($Serial$state state) {
+   $Minus$float res = $DNEW($Minus$float,state);
+   res->w$Real = ($Real)$step_deserialize(state);
+   return res;
+}
+
 $float $Minus$float$__sub__($Minus$float wit,  $float a, $float b) {
   return to$float(from$float(a) - from$float(b));
 }  
 
 // $Ord$float  ////////////////////////////////////////////////////////////////////////////////////////
+
+void $Ord$float$__serialize__($Ord$float self, $Serial$state state) {
+}
+
+$Ord$float $Ord$float$__deserialize__($Serial$state state) {
+   $Ord$float res = $DNEW($Ord$float,state);
+   return res;
+}
 
 $bool $Ord$float$__eq__ ($Ord$float wit, $float a, $float b) {
   return to$bool(a->val == b->val);
@@ -168,6 +205,14 @@ $bool $Ord$float$__ge__ ($Ord$float wit, $float a, $float b) {
 
 // $Hashable$float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void $Hashable$float$__serialize__($Hashable$float self, $Serial$state state) {
+}
+
+$Hashable$float $Hashable$float$__deserialize__($Serial$state state) {
+   $Hashable$float res = $DNEW($Hashable$float,state);
+   return res;
+}
+
 $bool $Hashable$float$__eq__($Hashable$float wit, $float a, $float b) {
   return to$bool(a->val == b->val);
 }
@@ -183,11 +228,11 @@ $int $Hashable$float$__hash__($Hashable$float wit, $float a) {
 // init methods ////////////////////////////////////////////////////////////////////////////////////////////////
 
 void $Real$float_init($Real$float wit) {
-  wit-> w$Minus$Real = $NEW($Minus$float,wit);
+  wit-> w$Minus = ($Minus)$NEW($Minus$float,($Real)wit);
 };
 
-void $Minus$float_init($Minus$float wit, $Real$float w$Real$float) {
-  wit->w$Real$float =  w$Real$float;
+void $Minus$float_init($Minus$float wit, $Real w$Real) {
+  wit->w$Real =  w$Real;
 }
 
 void $Ord$float_init($Ord$float wit) {
@@ -202,7 +247,7 @@ $Real$float $Real$float$new() {
   return $NEW($Real$float);
 }
 
-$Minus$float $Minus$float$new($Real$float wit) {
+$Minus$float $Minus$float$new($Real wit) {
   return $NEW($Minus$float,wit);
 }
   
@@ -220,27 +265,83 @@ $Hashable$float $Hashable$float$new() {
  struct $Ord$float $Ord$float_instance;
  struct $Hashable$float $Hashable$float_instance;
 
-struct $Real$float$class $Real$float$methods = {"", UNASSIGNED,NULL, $Real$float_init, $Real$float$__add__, $Real$float$__fromatom__,$Real$float$__complx__,
-                                               $Real$float$__mul__,$Real$float$__truediv__,$Real$float$__pow__,$Real$float$__neg__,
-                                                $Real$float$__pos__,$Real$float$real,$Real$float$imag,$Real$float$__abs__,$Real$float$conjugate,
-                                                $Real$float$__float__ , $Real$float$__trunc__ , $Real$float$__floor__ ,
-                                                     $Real$float$__ceil__ , $Real$float$__round__};
-struct $Real$float $Real$float_instance = {&$Real$float$methods, &$Minus$float_instance};
+struct $Real$float$class $Real$float$methods = {
+    "$Real$float",
+    UNASSIGNED,
+    ($Super$class)&$Real$methods,
+    $Real$float_init,
+    $Real$float$__serialize__,
+    $Real$float$__deserialize__,
+    ($bool (*)($Real$float))$default__bool__,
+    ($str (*)($Real$float))$default__str__,
+    $Real$float$__add__,
+    $Real$float$__fromatom__,
+    $Real$float$__complx__,
+    $Real$float$__mul__,
+    $Real$float$__truediv__,
+    $Real$float$__pow__,
+    $Real$float$__neg__,
+    $Real$float$__pos__,
+    $Real$float$real,
+    $Real$float$imag,
+    $Real$float$__abs__,
+    $Real$float$conjugate,
+    $Real$float$__float__,
+    $Real$float$__trunc__ ,
+    $Real$float$__floor__ ,
+    $Real$float$__ceil__ ,
+    $Real$float$__round__
+};
+struct $Real$float $Real$float_instance = {&$Real$float$methods, ($Minus)&$Minus$float_instance};
 $Real$float $Real$float$witness = &$Real$float_instance;
 
-struct $Minus$float$class $Minus$float$methods = {"", UNASSIGNED,NULL, $Minus$float_init,$Minus$float$__sub__};
-struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, &$Real$float_instance};
+struct $Minus$float$class $Minus$float$methods = {
+    "$Minus$float",
+    UNASSIGNED,
+    ($Super$class)&$Minus$methods,
+    $Minus$float_init,
+    $Minus$float$__serialize__,
+    $Minus$float$__deserialize__,
+    ($bool (*)($Minus$float))$default__bool__,
+    ($str (*)($Minus$float))$default__str__,
+    $Minus$float$__sub__
+};
+struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, ($Real)&$Real$float_instance};
 $Minus$float $Minus$float$witness = &$Minus$float_instance;
 
 
-struct $Ord$float$class $Ord$float$methods = {"", UNASSIGNED,NULL,  $Ord$float_init, $Ord$float$__eq__ , $Ord$float$__ne__ , $Ord$float$__lt__ , $Ord$float$__le__ ,
-                                                     $Ord$float$__gt__ , $Ord$float$__ge__};
+struct $Ord$float$class $Ord$float$methods = {
+    "$Ord$float",
+    UNASSIGNED,
+    ($Super$class)&$Ord$methods,
+    $Ord$float_init,
+    $Ord$float$__serialize__,
+    $Ord$float$__deserialize__,
+    ($bool (*)($Ord$float))$default__bool__,
+    ($str (*)($Ord$float))$default__str__,
+    $Ord$float$__eq__ ,
+    $Ord$float$__ne__ ,
+    $Ord$float$__lt__ ,
+    $Ord$float$__le__ ,
+    $Ord$float$__gt__ ,
+    $Ord$float$__ge__
+};
 struct $Ord$float $Ord$float_instance = {&$Ord$float$methods};
 $Ord$float $Ord$float$witness = &$Ord$float_instance;
 
-
-
-struct $Hashable$float$class $Hashable$float$methods = {"",UNASSIGNED, NULL, $Hashable$float_init,$Hashable$float$__eq__,$Hashable$float$__neq__,$Hashable$float$__hash__};
+struct $Hashable$float$class $Hashable$float$methods = {
+    "$Hashable$float",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    $Hashable$float_init,
+    $Hashable$float$__serialize__,
+    $Hashable$float$__deserialize__,
+    ($bool (*)($Hashable$float))$default__bool__,
+    ($str (*)($Hashable$float))$default__str__,
+    $Hashable$float$__eq__,
+    $Hashable$float$__neq__,
+    $Hashable$float$__hash__
+};
 struct $Hashable$float $Hashable$float_instance = {&$Hashable$float$methods};
 $Hashable$float $Hashable$float$witness = &$Hashable$float_instance;
  

@@ -197,7 +197,7 @@ long $tuple_hash($Hashable$tuple wit,$tuple tup) {
   long y;
   long mult = _PyHASH_MULTIPLIER;
   for (int i=0; i < size; i++) {
-    $Hashable h = wit->w$Hashable$tuple[i];
+    $Hashable h = wit->w$Hashable[i];
     y = from$int(h->$class->__hash__(h,tup->components[i]));
     x = (x ^ y) * mult;
     mult += (long)(82520UL + 2*(size-i-1));

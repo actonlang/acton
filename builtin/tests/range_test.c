@@ -19,14 +19,4 @@ int main() {
   $Set$set wit2 = $Set$set$new(($Hashable)$Hashable$int$witness);
   $list lst2 = $list_fromiter(wit2->$class->__iter__(wit2,s));
   $print(2,to$str("lst2 = "),lst2);
-  int start = 2;
-  int stop = 13;
-  int step = 3;
-  struct $Slice slc;
-  slc.start = &start;
-  slc.stop = &stop;
-  slc.step = &step;
-  $print(1,$Sequence$range$__getslice__($Sequence$range$witness,r2,&slc));
-  $list lst3 = $list$new(($Sequence)$Sequence$range$witness,r2);
-  $print(1,lst3);
 }

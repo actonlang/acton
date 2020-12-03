@@ -3,7 +3,7 @@ all: rts.o pingpong # rts2.o pingpong2
 rts.o: rts.c rts.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
 		-pthread \
-		-c rts.c
+		-c -O3 rts.c
 	ar cr ../lib/libActon.a rts.o
 
 pingpong: rts.o pingpong.c pingpong.h

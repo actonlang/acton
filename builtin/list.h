@@ -23,6 +23,10 @@ $list $list$new($Sequence, $WORD);
 
 extern struct $Sequence$list$class $Sequence$list$methods;
 $Sequence$list $Sequence$list$new();
+extern struct $Collection$list$class $Collection$list$methods;
+$Collection$list $Collection$list$new($Sequence);
+extern struct $Plus$list$class $Plus$list$methods;
+$Plus$list $Plus$list$new($Sequence);
 extern struct $Container$list$class $Container$list$methods;
 $Container$list $Container$list$new($Eq);
 

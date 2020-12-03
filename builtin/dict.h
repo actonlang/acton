@@ -23,7 +23,7 @@ $dict $dict$new($Hashable, $Mapping, $WORD);
 extern struct  $Mapping$dict$class $Mapping$dict$methods;
 $Mapping$dict $Mapping$dict$new($Hashable);
 extern struct  $Indexed$dict$class $Indexed$dict$methods;
-$Indexed$dict $Indexed$dict$new($Mapping$dict, $Eq);
+$Indexed$dict $Indexed$dict$new($Mapping, $Eq);
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 

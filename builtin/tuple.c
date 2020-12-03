@@ -100,7 +100,7 @@ $Iterator$tuple $Iterator$tuple$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$tuple$class $Iterator$tuple$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$tuple_init,
+struct $Iterator$tuple$class $Iterator$tuple$methods = {"$Iterator$tuple",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$tuple_init,
                                                         $Iterator$tuple_serialize,$Iterator$tuple$_deserialize,$Iterator$tuple_bool,$Iterator$tuple_str,$Iterator$tuple_next};
 
 
@@ -114,11 +114,36 @@ void $Iterable$tuple$__init__($Iterable$tuple self) {
   return;
 }
 
-struct $Iterable$tuple$class $Iterable$tuple$methods = {"",UNASSIGNED, NULL,$Iterable$tuple$__init__,$Iterable$tuple$__iter__};
+void $Iterable$tuple$__serialize__($Iterable$tuple self, $Serial$state state) {
+}
+
+$Iterable$tuple $Iterable$tuple$__deserialize__($Serial$state state) {
+   $Iterable$tuple res = $DNEW($Iterable$tuple,state);
+   return res;
+}
+struct $Iterable$tuple$class $Iterable$tuple$methods = {
+    "$Iterable$tuple",
+    UNASSIGNED,
+    ($Super$class)&$Iterable$methods,
+    $Iterable$tuple$__init__,
+    $Iterable$tuple$__serialize__,
+    $Iterable$tuple$__deserialize__,
+    ($bool (*)($Iterable$tuple))$default__bool__,
+    ($str (*)($Iterable$tuple))$default__str__,
+    $Iterable$tuple$__iter__
+};
 struct $Iterable$tuple $Iterable$tuple$instance = {&$Iterable$tuple$methods};
 struct $Iterable$tuple *$Iterable$tuple$witness = &$Iterable$tuple$instance;
 
 // Sliceable ///////////////////////////////////////////////////////////////
+
+void $Sliceable$tuple$__serialize__($Sliceable$tuple self, $Serial$state state) {
+}
+
+$Sliceable$tuple $Sliceable$tuple$__deserialize__($Serial$state state) {
+   $Sliceable$tuple res = $DNEW($Sliceable$tuple,state);
+   return res;
+}
 
 void $Sliceable$tuple$__init__ ($Sliceable$tuple wit) {
   return;
@@ -174,9 +199,22 @@ void $Sliceable$tuple$__delslice__ ($Sliceable$tuple wit, $tuple self, $Slice sl
   exit(-1);
 }
 
-struct $Sliceable$tuple$class $Sliceable$tuple$methods = {"",UNASSIGNED, NULL,$Sliceable$tuple$__init__,
-                                                          $Sliceable$tuple$__getitem__,$Sliceable$tuple$__setitem__,$Sliceable$tuple$__delitem__,
-                                                          $Sliceable$tuple$__getslice__, $Sliceable$tuple$__setslice__, $Sliceable$tuple$__delslice__};
+struct $Sliceable$tuple$class $Sliceable$tuple$methods = {
+    "$Sliceable$tuple",
+    UNASSIGNED,
+    ($Super$class)&$Sliceable$methods,
+    $Sliceable$tuple$__init__,
+    $Sliceable$tuple$__serialize__,
+    $Sliceable$tuple$__deserialize__,
+    ($bool (*)($Sliceable$tuple))$default__bool__,
+    ($str (*)($Sliceable$tuple))$default__str__,
+    $Sliceable$tuple$__getitem__,
+    $Sliceable$tuple$__setitem__,
+    $Sliceable$tuple$__delitem__,
+    $Sliceable$tuple$__getslice__,
+    $Sliceable$tuple$__setslice__,
+    $Sliceable$tuple$__delslice__
+};
 struct  $Sliceable$tuple $Sliceable$tuple$instance = {&$Sliceable$tuple$methods};
 struct $Sliceable$tuple *$Sliceable$tuple$witness = &$Sliceable$tuple$instance;
 
@@ -184,13 +222,25 @@ struct $Sliceable$tuple *$Sliceable$tuple$witness = &$Sliceable$tuple$instance;
 
 void $Hashable$tuple$__init__ ($Hashable$tuple wit, int n, $Hashable *comps) {
   wit->w$Hashable$tuple$size = n;
-  wit->w$Hashable$tuple = comps;
+  wit->w$Hashable = comps;
+}
+
+void $Hashable$tuple$__serialize__($Hashable$tuple self, $Serial$state state) {
+  $step_serialize(to$int(self->w$Hashable$tuple$size), state);
+  // we need to serialize the array of Hashables!!
+}
+
+$Hashable$tuple $Hashable$tuple$__deserialize__($Serial$state state) {
+   $Hashable$tuple res = $DNEW($Hashable$tuple,state);
+   res->w$Hashable$tuple$size = (int)from$int($step_deserialize(state));
+   res->w$Hashable = NULL; // We do not get hash functions for the tuple!
+   return res;
 }
 
 $bool $Hashable$tuple$__eq__ ($Hashable$tuple wit, $tuple tup1, $tuple tup2) {
   //type-checking guarantees that sizes are equal
   for (int i=0; i<tup1->size; i++)
-    if (!wit->w$Hashable$tuple[i]->$class->__eq__(wit->w$Hashable$tuple[i],tup1->components[i],tup1->components[i]))
+    if (!wit->w$Hashable[i]->$class->__eq__(wit->w$Hashable[i],tup1->components[i],tup2->components[i]))
       return $False;
   return $True;
 }
@@ -204,6 +254,17 @@ $int $Hashable$tuple$__hash__ ($Hashable$tuple wit, $tuple tup) {
   return to$int($tuple_hash(wit,tup));
 }
 
-struct $Hashable$tuple$class $Hashable$tuple$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$Hashable$tuple$__init__,
-                                                          $Hashable$tuple$__eq__,$Hashable$tuple$__ne__,$Hashable$tuple$__hash__};
+struct $Hashable$tuple$class $Hashable$tuple$methods = {
+    "$Hashable$tuple",
+    UNASSIGNED,
+    ($Super$class)&$Hashable$methods,
+    $Hashable$tuple$__init__,
+    $Hashable$tuple$__serialize__,
+    $Hashable$tuple$__deserialize__,
+    ($bool (*)($Hashable$tuple))$default__bool__,
+    ($str (*)($Hashable$tuple))$default__str__,
+    $Hashable$tuple$__eq__,
+    $Hashable$tuple$__ne__,
+    $Hashable$tuple$__hash__
+};
 

@@ -21,3 +21,5 @@ $bool to$bool(long b);
 long from$bool($bool b);
 
 $bool $True, $False;
+
+$bool $default__bool__($struct);

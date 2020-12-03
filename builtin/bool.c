@@ -47,3 +47,8 @@ struct $bool $f = {&$bool$methods,0L};
 
 $bool $True = &$t;
 $bool $False = &$f;
+
+
+$bool $default__bool__($struct self) {
+  return $True;
+}
