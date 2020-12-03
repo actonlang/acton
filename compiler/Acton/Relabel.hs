@@ -77,6 +77,7 @@ instance Relabel Expr where
     relabel (BStrings _ ss) = BStrings <$> newLoc <*> return ss
     relabel (Call _ e ps ks) = Call <$> newLoc <*> relabel e <*> relabel ps <*> relabel ks
     relabel (TApp _ e ts) = TApp <$> newLoc <*> relabel e <*> relabel ts
+    relabel (Async _ e) = Async <$> newLoc <*> relabel e
     relabel (Await _ e) = Await <$> newLoc <*> relabel e
     relabel (Index _ e is) = Index <$> newLoc <*> relabel e <*> relabel is
     relabel (Slice _ e sl) = Slice <$> newLoc <*> relabel e <*> relabel sl

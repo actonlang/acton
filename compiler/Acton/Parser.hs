@@ -877,10 +877,12 @@ commaList p = many (try (comma *> p)) <* optional comma
 
 atom_expr = do
               await <- optional $ withLoc $ rword "await" *> return (S.Await NoLoc)
+              async <- optional $ withLoc $ rword "async" *> return (S.Async NoLoc)
               a <- atom
               ts <- many trailer
               let e = foldl app a ts
-              return $ maybe e (app e) await 
+                  e' = maybe e (app e) async
+              return $ maybe e' (app e') await 
               <?> "atomic expression"
   where app a (l,f) = (f a){S.eloc = S.eloc a `upto` l}
              

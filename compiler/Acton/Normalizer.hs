@@ -224,6 +224,7 @@ instance Norm Expr where
       | TTuple _ p k <- t           = DotI l <$> norm env e <*> pure (nargs p + narg n k)
       | otherwise                   = Dot l <$> norm env e <*> pure n
       where t                       = typeOf env e
+    norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c

@@ -114,8 +114,10 @@ instance QType Expr where
       where (t, e')                 = qType env f e
             (p, ps')                = qType env f ps
             (k, ks')                = qType env f ks
+    qType env f (Async l e)         = (tMsg t, Async l e')
+      where (t, e')                 = qType env f e
     qType env f (Await l e)         = case t of
-                                        TCon _ (TC c [t]) | qmatch env c qnMsg -> (t, Await l e')
+                                        TCon _ (TC c [t]) | qualEq env c qnMsg -> (t, Await l e')
       where (t, e')                 = qType env f e
     qType env f (BinOp l e1 Or e2)  = (tBool, BinOp l (qMatch f t1 tBool e1) Or (qMatch f t2 tBool e2'))
       where (t1, e1')               = qType env f e1

@@ -308,6 +308,7 @@ instance Subst Stmt where
 instance Subst Expr where
     msubst (Call l e p k)           = Call l <$> msubst e <*> msubst p <*> msubst k
     msubst (TApp l e ts)            = TApp l <$> msubst e <*> msubst ts
+    msubst (Async l e)              = Async l <$> msubst e
     msubst (Await l e)              = Await l <$> msubst e
     msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
     msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl

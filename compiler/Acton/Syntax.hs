@@ -62,6 +62,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
+                | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
@@ -495,6 +496,7 @@ instance Eq Expr where
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
     x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
+    x@Async{}           ==  y@Async{}           = exp1 x == exp1 y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
@@ -621,11 +623,11 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","actor","after","and","as",
-                                        "assert","await","break","class","continue","def","del","elif","else",
-                                        "except","extension","finally","for","from","if","import","in","is",
-                                        "isinstance","lambda","not","or","pass","protocol","raise","return",
-                                        "try","var","while","with","yield"
+                                        "False","None","NotImplemented","Self","True","action","actor","after","and","as",
+                                        "assert","async","await","break","class","continue","def","del","elif","else",
+                                        "except","extension","finally","for","from","if","import","in","is","isinstance",
+                                        "lambda","mut","not","or","pass","protocol","pure","raise","return","try","var",
+                                        "while","with","yield"
                                       ]
 
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1
