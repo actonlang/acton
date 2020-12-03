@@ -14,11 +14,7 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.CodeGen
-{-
-import qualified Yang.Syntax as Y
-import qualified Yang.Parser
-import qualified YangCompiler
--}
+import qualified Acton.Builtin
 import Utils
 import qualified Pretty
 import qualified InterfaceFiles
@@ -48,7 +44,7 @@ data Args       = Args {
                     hgen    :: Bool,
                     cgen    :: Bool,
                     verbose :: Bool,
-                    nobuiltin :: Bool,
+                    stub    :: Bool,
                     syspath :: String,
                     root    :: String,
                     file    :: String
@@ -64,10 +60,10 @@ getArgs         = Args
                     <*> switch (long "deact"   <> help "Show the result after deactorization")
                     <*> switch (long "cps"     <> help "Show the result after CPS conversion")
                     <*> switch (long "llift"   <> help "Show the result of lambda-lifting")
-                    <*> switch (long "hgen"    <> help "Show the generated .h file")
-                    <*> switch (long "cgen"    <> help "Show the generated .c file")
+                    <*> switch (long "hgen"    <> help "Show the generated .h header")
+                    <*> switch (long "cgen"    <> help "Show the generated .c code")
                     <*> switch (long "verbose" <> help "Print progress info during execution")
-                    <*> switch (long "nobuiltin" <> help "No builtin module (only for compiling __builtin__.act)")
+                    <*> switch (long "stub"    <> help "Stub (.ty) file generation only")
                     <*> strOption (long "path" <> metavar "TARGETDIR" <> value "" <> showDefault)
                     <*> strOption (long "root" <> value "" <> showDefault)
                     <*> argument str (metavar "FILE")
@@ -146,7 +142,7 @@ findPaths args          = do execDir <- takeDirectory <$> System.Environment.get
                              let sysRoot = joinPath [sysPath,"modules"]
                              absfile <- canonicalizePath (file args)
                              (srcRoot,subdirs) <- analyze (takeDirectory absfile) []
-                             let modPrefix = if nobuiltin args || srcRoot == sysRoot then [] else split (takeFileName srcRoot)
+                             let modPrefix = if srcRoot == sysRoot then [] else split (takeFileName srcRoot)
                                  topMod = A.modName $ modPrefix++subdirs++[body]
                              touchDirs sysRoot topMod
                              return $ Paths sysPath sysRoot srcRoot modPrefix ext topMod
@@ -170,7 +166,7 @@ chaseImportsAndCompile args paths task
                             let sccs = stronglyConnComp  [(t,name t,importsOf t) | t <- tasks]
                                 (as,cs) = Data.List.partition isAcyclic sccs
                             if null cs
-                             then do env0 <- Acton.Env.initEnv (sysRoot paths) (nobuiltin args)
+                             then do env0 <- Acton.Env.initEnv (sysRoot paths) (stub args) (topMod paths == Acton.Builtin.mBuiltin)
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
                                          `catch` handle Acton.Env.compilationError (src task) paths (name task)
@@ -285,7 +281,7 @@ runRestPasses args paths env0 parsed = do
                       iff (hgen args) $ dump "hgen (.h)" h
                       iff (cgen args) $ dump "cgen (.c)" c
 
-                      iff (not $ nobuiltin args) $ do
+                      iff (not $ stub args) $ do
                           let libDir = joinPath [sysPath paths,"lib"]
                               cFile = outbase ++ ".c"
                               hFile = outbase ++ ".h"
