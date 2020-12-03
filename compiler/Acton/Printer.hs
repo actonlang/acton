@@ -143,7 +143,7 @@ instance Pretty Expr where
     pretty (Async _ e)              = text "async" <+> pretty e
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
-    pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
+    pretty (Slice _ e sl)           = pretty e <> brackets (pretty sl)
     pretty (BasicSlice _ e sl)      = pretty e <> brackets (commaList sl)
     pretty (IsInstance _ e c)       = text "isinstance" <> parens (pretty e <> comma <+> pretty c)
     pretty (Dot _ e n)              = pretty e <> dot <> pretty n

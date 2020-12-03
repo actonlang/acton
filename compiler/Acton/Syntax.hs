@@ -65,7 +65,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
-                | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
+                | Slice         { eloc::SrcLoc, exp1::Expr, slice::Sliz }
                 | BasicSlice    { eloc::SrcLoc, exp1::Expr, bslice::[BasicSliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | IsInstance    { eloc::SrcLoc, exp1::Expr, classref::QName }
