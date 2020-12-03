@@ -1,55 +1,55 @@
 #include "../../builtin/builtin.h"
 #include "../numpy.h"
 
-$ndarray $pow3($Integral$ndarray wit, $ndarray x) {
-  $ndarray tmp =  wit->$class->__mul__(wit,x,x);
+numpy$$ndarray $pow3(numpy$$Integral$ndarray wit, numpy$$ndarray x) {
+  numpy$$ndarray tmp =  wit->$class->__mul__(wit,x,x);
   return wit->$class->__mul__(wit,tmp,x);
 }
 
-$ndarray loess_simple($ndarray x, $ndarray y, $ndarray xin, $int win) {
+numpy$$ndarray loess_simple(numpy$$ndarray x, numpy$$ndarray y, numpy$$ndarray xin, $int win) {
   $list ix = $NEW($list,NULL,NULL);
   $Slice s = $NEW($Slice,NULL,NULL,NULL);
   $list_append(ix,s);
   $list_append(ix,NULL);
-  $Primitive witp = ($Primitive)$Primitive$float$witness;
-  $Integral$ndarray wit = $NEW($Integral$ndarray,witp);
-  $Minus$ndarray wit2 = wit-> w$Minus$Integral;
-  $ndarray tmp1 = wit2->$class->__sub__(wit2,xin,$ndarray_getslice(x,ix));
-  $ndarray xd = $ndarray_abs(witp,tmp1);
-  $ndarray tmp2 = $ndarray_partition(witp,xd,win);
+  numpy$$Primitive witp = (numpy$$Primitive)numpy$$Primitive$float$witness;
+  numpy$$Integral$ndarray wit = $NEW(numpy$$Integral$ndarray,witp);
+  numpy$$Minus$ndarray wit2 = (numpy$$Minus$ndarray)wit-> w$Minus;
+  numpy$$ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpy$$ndarray_getslice(x,ix));
+  numpy$$ndarray xd = numpy$$ndarray_abs(witp,tmp1);
+  numpy$$ndarray tmp2 = numpy$$ndarray_partition(witp,xd,win);
   $list ix2 = $NEW($list,NULL,NULL);
   $list_append(ix2,s);
   $list_append(ix2,win);
-  $ndarray tmp3 = $ndarray_getslice(tmp2,ix2);
-  $ndarray tmp4 = $ndarray_getslice(tmp3,ix);
-  $ndarray tmp5 = wit->$class->__truediv__(wit,xd,tmp4);
-  $ndarray w = $ndarray_clip(witp,tmp5,to$float(0.0),to$float(1.0));
-  $ndarray tmp6 = $pow3(wit,w);
-  $ndarray tmp7 = wit2->$class->__sub__(wit2,$ndarray_fromatom(to$float(1.0)),tmp6);
-  $ndarray ws = $pow3(wit,tmp7);
-  $ndarray a00 = $ndarray_sum(witp,ws,to$int(1));
-  $ndarray a01 = $ndarray_dot(witp,ws,x);
-  $ndarray a11 = $ndarray_dot(witp,ws,wit->$class->__mul__(wit,x,x));
-  $ndarray b0 = $ndarray_dot(witp,ws,y);
-  $ndarray b1 = $ndarray_dot(witp,ws,wit->$class->__mul__(wit,x,y));
-  $ndarray det = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,a11),wit->$class->__mul__(wit,a01,a01));
-  $ndarray tmp8 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a11,b0),wit->$class->__mul__(wit,a01,b1));
-  $ndarray tmp9 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,b1),wit->$class->__mul__(wit,a01,b0));
-  $ndarray tmp10 = wit->$class->__add__(wit,tmp8,wit->$class->__mul__(wit,tmp9,xin));
+  numpy$$ndarray tmp3 = numpy$$ndarray_getslice(tmp2,ix2);
+  numpy$$ndarray tmp4 = numpy$$ndarray_getslice(tmp3,ix);
+  numpy$$ndarray tmp5 = wit->$class->__truediv__(wit,xd,tmp4);
+  numpy$$ndarray w = numpy$$ndarray_clip(witp,tmp5,to$float(0.0),to$float(1.0));
+  numpy$$ndarray tmp6 = $pow3(wit,w);
+  numpy$$ndarray tmp7 = wit2->$class->__sub__(wit2,numpy$$ndarray_fromatom(to$float(1.0)),tmp6);
+  numpy$$ndarray ws = $pow3(wit,tmp7);
+  numpy$$ndarray a00 = numpy$$ndarray_sum(witp,ws,to$int(1));
+  numpy$$ndarray a01 = numpy$$ndarray_dot(witp,ws,x);
+  numpy$$ndarray a11 = numpy$$ndarray_dot(witp,ws,wit->$class->__mul__(wit,x,x));
+  numpy$$ndarray b0 = numpy$$ndarray_dot(witp,ws,y);
+  numpy$$ndarray b1 = numpy$$ndarray_dot(witp,ws,wit->$class->__mul__(wit,x,y));
+  numpy$$ndarray det = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,a11),wit->$class->__mul__(wit,a01,a01));
+  numpy$$ndarray tmp8 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a11,b0),wit->$class->__mul__(wit,a01,b1));
+  numpy$$ndarray tmp9 = wit2->$class->__sub__(wit2,wit->$class->__mul__(wit,a00,b1),wit->$class->__mul__(wit,a01,b0));
+  numpy$$ndarray tmp10 = wit->$class->__add__(wit,tmp8,wit->$class->__mul__(wit,tmp9,xin));
   return wit->$class->__truediv__(wit,tmp10,det);
 }
 
-$ndarray mkarray(double elems[], int len){
+numpy$$ndarray mkarray(double elems[], int len){
   $list lst = $NEW($list,NULL,NULL);
   for (int i =0; i< len; i++)
     $list_append(lst,to$float(elems[i]));
-  return $ndarray_array(($Primitive)$Primitive$float$witness,lst);
+  return numpy$$ndarray_array((numpy$$Primitive)numpy$$Primitive$float$witness,lst);
 }
   
 int main(int argc, char *argv[]) {
   long n;
   sscanf(argv[1],"%ld",&n);
-  $ndarray xx,yy;
+  numpy$$ndarray xx,yy;
   long win;
   if (n <= 21) {
     
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
     yy = mkarray(yy0,n);
     win = n/4-1;
   }
-  $ndarray res = loess_simple(xx,yy,xx,to$int(win));
+  numpy$$ndarray res = loess_simple(xx,yy,xx,to$int(win));
   printf("[ %0.3f %0.3f ... %0.3f %0.3f ]\n",res->data[0].d, res->data[1].d, res->data[n-2].d,
          res->data[n-1].d);
 }

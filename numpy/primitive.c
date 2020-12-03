@@ -1,5 +1,5 @@
 
-int elem_size(enum ElemType typ) {
+int $elem_size(enum ElemType typ) {
   switch (typ) {
   case LongType:
     return 1;
@@ -138,22 +138,24 @@ union $Bytes8 from$obj$float($WORD x) {
   return res;
 }
 
-struct $Primitive$int$class $Primitive$int$methods = {"",UNASSIGNED,NULL,(void (*)($Primitive$int))$default__init__,
+struct numpy$$Primitive$int$class numpy$$Primitive$int$methods = {"numpy$$Primitive$int",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$int))$default__init__,
+                                                                  NULL,NULL,NULL,NULL,
                                                       LongType,to$obj$int,from$obj$int,l$prim_str,
                                                       l$add,l$sub,l$mul,l$div,l$mod,l$land,l$lor,l$band,l$bor,l$bxor,l$lsh,l$rsh,l$pow,
                                                       l$iadd,l$isub,l$imul,l$idiv,l$imod,l$iband,l$ibor,l$ibxor,l$ilsh,l$irsh,
                                                       l$eq,l$neq,l$lt,l$le,l$gt,l$ge,l$abs,l$neg,l$lnot,l$bnot};
 
 
-struct $Primitive$float$class $Primitive$float$methods = {"",UNASSIGNED,NULL,(void (*)($Primitive$float))$default__init__, 
+struct numpy$$Primitive$float$class numpy$$Primitive$float$methods = {"numpy$$Primitive$float",UNASSIGNED,NULL,(void (*)(numpy$$Primitive$float))$default__init__, 
+                                                                  NULL,NULL,NULL,NULL,
                                                           DblType,to$obj$float,from$obj$float,d$prim_str,
                                                           d$add,d$sub,d$mul,d$div,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,d$pow,
                                                           d$iadd,d$isub,d$imul,d$idiv,NULL,NULL,NULL,NULL,NULL,NULL,
                                                           d$eq,d$neq,d$lt,d$le,d$gt,d$ge,d$abs,d$neg,NULL,NULL};
 
-struct $Primitive$int $Primitive$int_instance = {&$Primitive$int$methods};
-$Primitive$int $Primitive$int$witness = &$Primitive$int_instance;
+struct numpy$$Primitive$int numpy$$Primitive$int_instance = {&numpy$$Primitive$int$methods};
+numpy$$Primitive$int numpy$$Primitive$int$witness = &numpy$$Primitive$int_instance;
 
-struct $Primitive$float $Primitive$float_instance = {&$Primitive$float$methods};
-$Primitive$float $Primitive$float$witness = &$Primitive$float_instance;
+struct numpy$$Primitive$float numpy$$Primitive$float_instance = {&numpy$$Primitive$float$methods};
+numpy$$Primitive$float numpy$$Primitive$float$witness = &numpy$$Primitive$float_instance;
 
