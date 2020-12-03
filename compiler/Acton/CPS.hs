@@ -291,13 +291,12 @@ instance CPS Decl where
 
     cps env (Def l n q p KwdNIL (Just t) b d fx)
       | contFX fx                       = do b' <- cpsSuite env1 b
-                                             return $ Def l n q' (addContPar p' fx' t') KwdNIL (Just tR) b' d fx'
-      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx'
+                                             return $ Def l n q' (addContPar p' fx t') KwdNIL (Just tR) b' d fx
+      | otherwise                       = return $ Def l n q' p' KwdNIL (Just t') (conv b) d fx
       where env1                        = define (envOf p) $ defineTVars q $ Meth contKW t fx +: setDefCtxt env
             q'                          = conv q
             p'                          = conv p
             t'                          = conv t
-            fx'                         = conv fx
             addContPar                  = if inClass env && d /= Static then addContPar1 else addContPar0
 
     cps env d                           = error ("cps unexpected: " ++ prstr d)
@@ -463,9 +462,9 @@ instance PreCPS Expr where
     pre env e0@(Lambda l p KwdNIL e fx)
       | contFX fx                       = do (prefixes,e') <- withPrefixes $ preTop env1 e
                                              case prefixes of
-                                                [] -> let p' = conv p; t' = conv t; fx' = conv fx
-                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx' t' contKW e'
-                                                      in return $ Lambda l (addContPar0 p' fx' t') KwdNIL e1 fx'
+                                                [] -> let p' = conv p; t' = conv t
+                                                          e1 = if contCall env e then addContArg env1 e' (eVar contKW) else eCallCont fx t' contKW e'
+                                                      in return $ Lambda l (addContPar0 p' fx t') KwdNIL e1 fx
                                                 _ -> do
                                                     f <- newName "lambda"
                                                     prefix [sDecl [Def l f [] p KwdNIL (Just t) (prefixes ++ [sReturn e']) NoDec fx]]
@@ -521,24 +520,16 @@ instance Conv QBind where
     conv (Quant v cs)                   = Quant v (conv cs)
 
 instance Conv Type where
-    conv (TFun l fx p TNil{} t)
-       | contFX fx                      = TFun l fx' (addCont (conv p) (conv t)) kwdNil tR
-       | otherwise                      = TFun l fx' (conv p) kwdNil (conv t)
-       where fx'                        = conv fx
-             addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
-             addCont p c                = posRow (tFun fx' (posRow c posNil) kwdNil tR) p
+    conv t0@(TFun l fx p TNil{} t)
+       | contFX fx && t /= tR           = TFun l fx (addCont (conv p) (conv t)) kwdNil tR
+       | otherwise                      = TFun l fx (conv p) kwdNil (conv t)
+       where addCont (TRow l k n t p) c = TRow l k n t (addCont p c)
+             addCont p c                = posRow (tFun fx (posRow c posNil) kwdNil tR) p
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
     conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
-    conv (TFX l x)                      = TFX l (conv x)
     conv t                              = t
-
-instance Conv FX where
-    conv FXAction                       = FXMut
-    conv FXMut                          = FXMut
-    conv FXPure                         = FXPure
-    conv FXAsync                        = FXAsync
 
 instance Conv TCon where
     conv (TC c ts)                      = TC c (conv ts)
@@ -580,7 +571,7 @@ instance Conv Expr where
     conv (Dot l e n)                    = Dot l (conv e) n
     conv (DotI l e i)                   = DotI l (conv e) i
     conv (RestI l e i)                  = RestI l (conv e) i
-    conv (Lambda l p KwdNIL e fx)       = Lambda l (conv p) KwdNIL (conv e) (conv fx)
+    conv (Lambda l p KwdNIL e fx)       = Lambda l (conv p) KwdNIL (conv e) fx
     conv (Yield l e)                    = Yield l (conv e)
     conv (YieldFrom l e)                = YieldFrom l (conv e)
     conv (Tuple l es ks)                = Tuple l (conv es) (conv ks)

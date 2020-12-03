@@ -268,10 +268,6 @@ pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
 posarg es       = foldr PosArg PosNil es
 
-par2arg (PosPar n _ _ p)    = PosArg (eVar n) (par2arg p)
-par2arg (PosSTAR n _)       = PosStar (eVar n)
-par2arg PosNIL              = PosNil
-
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing
 

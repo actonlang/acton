@@ -259,7 +259,7 @@ instance Lift Expr where
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
       where par                         = pPar paramNames' (conv p)
-            call e' vts                 = Call l0 e' (addArgs vts $ par2arg par) KwdNil
+            call e' vts                 = Call l0 e' (addArgs vts $ pArg par) KwdNil
             TFun _ fx p _ t             = typeOf env e
 
     ll env (Call l e p KwdNil)
@@ -310,12 +310,12 @@ llDot env l e n ts
   | Var _ x <- e,
     NClass{} <- findQName x env         = closureConvert env (Lambda l0 par KwdNIL (call' x) fx) t [] []
   | otherwise                           = do e' <- llSub env e
-                                             n' <- newName "self"
+                                             n' <- newName "obj"
                                              closureConvert env (Lambda l0 par KwdNIL (call n') fx) t [(n',t')] [e']
   where par                             = pPar paramNames' (conv p)
         TFun _ fx p _ t                 = typeOf env e0
-        call n'                         = Call l0 (eDot (eVar n') n) (par2arg par) KwdNil
-        call' x                         = Call l0 (eDot (eQVar x) n) (par2arg par) KwdNil
+        call n'                         = Call l0 (eDot (eVar n') n) (pArg par) KwdNil
+        call' x                         = Call l0 (eDot (eQVar x) n) (pArg par) KwdNil
         t'                              = typeOf env e
         e0                              = tApp (Dot l e n) (conv ts)
 

@@ -101,7 +101,9 @@ instance Seal TSchema where
 instance Seal Type where
     seal (TVar l v)                 = TVar l v
     seal (TCon l c)                 = TCon l $ seal c
-    seal (TFun l fx p k t)          = TFun l (seal fx) (seal p) (seal k) (seal t)
+    seal (TFun l fx p k t)
+      | fx == fxAction              = TFun l (seal fx) (seal p) (seal k) (tMsg (seal t))
+      | otherwise                   = TFun l (seal fx) (seal p) (seal k) (seal t)
     seal (TTuple l p k)             = TTuple l (seal p) (seal k)
     seal (TUnion l us)              = TUnion l us
     seal (TOpt l t)                 = TOpt l (seal t)
@@ -216,13 +218,12 @@ instance Deact Decl where
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p KwdNIL (Just t) b d fx)
-                                    = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just $ tMsg t) [Return l0 (Just $ async)] d fxAction]
+                                    = Decl l0 [Def l0 n q (addSelfPar p) KwdNIL (Just $ tMsg t) [Return l0 (Just $ async)] d fxAsync]
               where n'              = localName n
-                    async           = Call l0 (tApp (eQVar primASYNCf) ts') (PosArg self (PosArg clos PosNil)) KwdNil
+                    async           = Call l0 (tApp (eQVar primASYNCf) [t]) (PosArg self (PosArg clos PosNil)) KwdNil
                     self            = Var l0 (NoQ selfKW)
-                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (par2arg p) KwdNil) fx
+                    clos            = Lambda l0 PosNIL KwdNIL (Call l0 (tApp (selfRef n') ts) (pArg p) KwdNil) fx
                     ts              = map tVar (tybound q)
-                    ts'             = [t]
 
     deact env (Def l n q p KwdNIL (Just t) b d fx)
                                     = do b <- deactSuite env1 b
@@ -252,15 +253,23 @@ instance Deact Handler where
     deact env (Handler ex b)        = Handler ex <$> deactSuite env1 b
       where env1                    = extendAndShadow (envOf ex) env
 
-{-
-adapt env t0@TFun{} t1@TFun{} e     = case (tfx $ fx t0, tfx $ fx t1) of
-                                        (FXAction, FXAction) -> e
-                                        (fx0,      FXAction) -> undefined       -- eta-expand and set fx
-                                        (FXAsync,  FXAsync)  -> e
-                                        (FXAction, FXAsync)  -> undefined       -- wrap into $ASYNC
-                                        (fx0,      FXAsync)  -> undefined       -- exta expand and wrap into $ASYNC
-                                        (fx0,      fx1)      -> e
--}
+
+adapt env t0@(TFun _ fx@(TFX _ x) p _ t) (TFun _ fx'@(TFX _ x') p' _ t') e
+  | (FXAction, FXAction) <- (x,x')  = eta
+  | (_,        FXAction) <- (x,x')  = etaF
+  | (FXAsync,  FXAsync)  <- (x,x')  = eta
+  | (FXAction, FXAsync)  <- (x,x')  = async clos
+  | (_,        FXAsync)  <- (x,x')  = async closF
+  | (_,        _)        <- (x,x')  = eta
+  where pars                        = pPar paramNames' p'
+        args                        = qMatch (adapt env) p' p (pArg pars)
+        e0                          = Call l0 e args KwdNil
+        e1                          = qMatch (adapt env) t t' e0
+        etaF                        = Lambda l0 pars KwdNIL e1 fx'
+        eta                         = if args == pArg pars && e1 == e0 then e else etaF
+        closF                       = Lambda l0 PosNIL KwdNIL e1 fx
+        clos                        = if args == PosNil && e1 == e0 then e else closF
+        async cl                    = Lambda l0 pars KwdNIL (Call l0 (tApp (eQVar primASYNCf) [t']) (PosArg (eVar selfKW) $ PosArg cl PosNil) KwdNil) fx'
 adapt env t0 t1 e
 --  | not $ castable env t0 t1        = error ("### Internal type mismatch " ++ prstr e ++ " : " ++ prstr t0 ++ " </ " ++ prstr t1)
   | otherwise                       = e
