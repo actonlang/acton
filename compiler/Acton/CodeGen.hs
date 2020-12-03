@@ -84,15 +84,15 @@ hModule env (Module m imps stmts)   = text "#pragma" <+> text "once" $+$
 hSuite env []                       = empty
 hSuite env (s:ss)                   = hStmt env s $+$ hSuite (gdefine (envOf s) env) ss
 
-hStmt env (Decl _ ds)               = vmap (stub env1) ds $+$
+hStmt env (Decl _ ds)               = vmap (declstub env1) ds $+$
                                       vmap (typedef env1) ds $+$
                                       vmap (decl env1) ds $+$
                                       vmap (methstub env1) ds
   where env1                        = gdefine (envOf ds) env
 hStmt env s                         = vcat [ text "extern" <+> gen env t <+> genTopName env n <> semi | (n,NVar t) <- envOf s]
 
-stub env (Class _ n q a b)          = text "struct" <+> genTopName env n <> semi
-stub env Def{}                      = empty
+declstub env (Class _ n q a b)      = text "struct" <+> genTopName env n <> semi
+declstub env Def{}                  = empty
 
 typedef env (Class _ n q a b)       = text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 typedef env Def{}                   = empty

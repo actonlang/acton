@@ -35,13 +35,14 @@ data EnvF x                 = EnvF {
                                 modules    :: TEnv,
                                 witnesses  :: [(QName,Witness)],
                                 thismod    :: Maybe ModName,
+                                stub       :: Bool,
                                 envX       :: x }
 
 type Env0                   = EnvF ()
 
 
 setX                        :: EnvF y -> x -> EnvF x
-setX env x                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, thismod = thismod env, envX = x }
+setX env x                  = EnvF { names = names env, modules = modules env, witnesses = witnesses env, thismod = thismod env, stub = stub env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -476,21 +477,22 @@ unSig te                    = map f te
 -- Env construction and modification -------------------------------------------------------------------------------------------
 
 
-initEnv                    :: FilePath -> Bool -> IO Env0
-initEnv path nobuiltin     = if nobuiltin
-                                then return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
-                                                    modules = [(nPrim,NModule envPrim)],
-                                                    witnesses = [],
-                                                    thismod = Nothing,
-                                                    envX = () }
-                                else do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
-                                        let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
-                                                         modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
-                                                         thismod = Nothing,
-                                                         witnesses = [],
-                                                         envX = () }
-                                            env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
-                                        return env
+initEnv                    :: FilePath -> Bool -> Bool -> IO Env0
+initEnv path stub True     = return $ EnvF{ names = [(nPrim,NMAlias mPrim)],
+                                            modules = [(nPrim,NModule envPrim)],
+                                            witnesses = [],
+                                            thismod = Nothing,
+                                            stub = stub,
+                                            envX = () }
+initEnv path stub False    = do envBuiltin <- InterfaceFiles.readFile (joinPath [path,"__builtin__.ty"])
+                                let env0 = EnvF{ names = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)],
+                                                 modules = [(nPrim,NModule envPrim), (nBuiltin,NModule envBuiltin)],
+                                                 witnesses = [],
+                                                 thismod = Nothing,
+                                                 stub = stub,
+                                                 envX = () }
+                                    env = importAll mBuiltin envBuiltin $ importWits mBuiltin envBuiltin $ env0
+                                return env
 
 envPrim                     = primMkEnv NClass NDef NVar NSig
 

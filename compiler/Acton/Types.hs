@@ -57,14 +57,14 @@ simpSig (n, i)                  = (n, i)
 infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
-                                             (cs,te,ss1) <- (if inBuiltin env then infEnv else infSuiteEnv) env ss
+                                             (cs,te,ss1) <- (if stub env then infEnv else infSuiteEnv) env ss
                                              popFX
                                              eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te
                                              ss2 <- termred <$> msubst (bindWits eq ++ ss1)
                                              let s = [ (tv,repl (tvkind tv)) | tv <- tyfree te ]
                                                  te1 = subst s te
-                                                 te2 = normTEnv $ if inBuiltin env then unSig te1 else te1
+                                                 te2 = normTEnv $ if stub env then unSig te1 else te1
                                              return (te2, ss2)
   where repl KType                      = tNone 
         repl KFX                        = fxPure
@@ -421,7 +421,7 @@ instance InfEnv Decl where
                                              checkNoEscape env (tybound q)
                                              (nterms,asigs,sigs) <- checkAttributes final te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
-                                             when (not (null asigs || inBuiltin env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
+                                             when (not (null asigs || stub env)) $ err3 l asigs "Protocol method/attribute lacks implementation:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              -- w <- newWitness
                                              return (cs1, [(extensionName (head us) n, NExt n q ps te)], Extension l n q us (bindWits eq1 ++ b'))
