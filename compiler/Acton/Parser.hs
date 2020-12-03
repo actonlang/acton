@@ -977,16 +977,16 @@ atom_expr = do
 
                  bslicelist = (:) <$> bslice <*> commaList bslice
                  tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))
-                 bslice :: Parser S.BasicSlice
-                 bslice =  S.BSlice . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
+                 bslice :: Parser S.BasicSliz
+                 bslice =  S.BSliz . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
                        <|> do e <- expr
                               mbt <- optional tailslice
-                              return (maybe (S.BExpr e) (S.BSlice . uncurry (S.Sliz NoLoc (Just e))) mbt)
+                              return (maybe (S.BExpr e) (S.BSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
                  splitlist a [S.BExpr e] = S.Index NoLoc a e
                  splitlist a ss
                      | all isBExpr ss       = S.Index NoLoc a (S.eTuple [e | S.BExpr e <- ss])
-                     | not (any isBExpr ss) = S.Slice NoLoc a [s | S.BSlice s <- ss]
-                     | otherwise            = error "ndarray basic slicing not yet implemented"
+                     | not (any isBExpr ss) = S.Slice NoLoc a [s | S.BSliz s <- ss]
+                     | otherwise            = S.BasicSlice NoLoc a ss -- error "ndarray basic slicing not yet implemented"
                  isBExpr (S.BExpr _) =True; isBExpr _ = False
                  -- indexlist = (:) <$> expr <*> commaList expr
                  -- slicelist = (:) <$> slice <*> commaList slice

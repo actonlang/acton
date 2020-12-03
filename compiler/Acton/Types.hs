@@ -934,6 +934,7 @@ instance Infer Expr where
                                              return (Impl w t (pSliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) (e' : sliz2args sl'))
     infer env (Slice l e slz)           = notYet l "Multidimensional slicing"
+    infer env (BasicSlice l e slz)      = notYet l "Multidimensional slicing"
     infer env (Cond l e1 e e2)          = do t0 <- newTVar
                                              (cs0,env',s,e') <- inferBool env e
                                              (cs1,e1') <- inferSub env' t0 e1

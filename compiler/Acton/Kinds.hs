@@ -311,6 +311,7 @@ instance KCheck Expr where
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
+    kchk env (BasicSlice l e ss)    = BasicSlice l <$> kchk env e <*> kchk env ss
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
     kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return c
@@ -406,6 +407,10 @@ instance KCheck Assoc where
 instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
+instance KCheck BasicSliz where
+    kchk env (BExpr e)              = BExpr <$> kchk env e
+    kchk env (BSliz s)              = BSliz <$> kchk env s
+    
 instance KCheck TSchema where
     kchk env (TSchema l q t)
       | not $ null ambig            = err2 ambig "Ambiguous type variable in schema:"

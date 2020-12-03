@@ -194,6 +194,7 @@ instance Vars Expr where
     free (Await _ e)                = free e
     free (Index _ e ix)             = free e ++ free ix
     free (Slice _ e sl)             = free e ++ free sl
+    free (BasicSlice _ e sl)        = free e ++ free sl
     free (Cond _ e1 e e2)           = free [e1,e,e2]
     free (IsInstance _ e c)         = free e ++ free c
     free (BinOp _ e1 o e2)          = free [e1,e2]
@@ -292,6 +293,10 @@ instance Vars OpArg where
 
 instance Vars Sliz where
     free (Sliz _ e1 e2 e3)          = free e1 ++ free e2 ++ free e3
+
+instance Vars BasicSliz where
+    free (BExpr e)                  = free e
+    free (BSliz s)                  = free s
 
 instance Vars Comp where
     free (CompFor _ pat e c)        = (free e ++ free c) \\ bound pat

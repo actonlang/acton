@@ -324,6 +324,7 @@ instance Subst Expr where
     msubst (Await l e)              = Await l <$> msubst e
     msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
     msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl
+    msubst (BasicSlice l e sl)      = BasicSlice l <$> msubst e <*> msubst sl
     msubst (Cond l e1 cond e2)      = Cond l <$> msubst e1 <*> msubst cond <*> msubst e2
     msubst (IsInstance l e c)       = IsInstance l <$> msubst e <*> return c
     msubst (BinOp l e1 op e2)       = BinOp l <$> msubst e1 <*> return op <*> msubst e2
@@ -419,6 +420,15 @@ instance Subst Sliz where
     msubst (Sliz l e1 e2 e3)        = Sliz l <$> msubst e1 <*> msubst e2 <*> msubst e3
 
     tyfree (Sliz _ e1 e2 e3)        = tyfree e1 ++ tyfree e2 ++ tyfree e3
+
+instance Subst BasicSliz where
+    msubst (BExpr e)                = BExpr <$> msubst e
+    msubst (BSliz s)                = BSliz <$> msubst s
+
+    tyfree (BExpr e)                = tyfree e
+    tyfree (BSliz s)                = tyfree s
+    
+
 
 instance Subst OpArg where
     msubst (OpArg op e)             = OpArg op <$> msubst e

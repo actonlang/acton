@@ -101,6 +101,7 @@ instance Transform Expr where
     trans env (Await l e)               = Await l (trans env e)
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
+    trans env (BasicSlice l e sl)       = BasicSlice l (trans env e) (trans env sl)
     trans env (Cond l e1 e2 e3)         = Cond l (trans env e1) (trans env e2) (trans env e3)
     trans env (IsInstance l e c)        = IsInstance l (trans env e) c
     trans env (BinOp l e1 op e2)        = BinOp l (trans env e1) op (trans env e2)
@@ -293,3 +294,7 @@ instance Transform Assoc where
   
 instance Transform Sliz where
     trans env (Sliz l e1 e2 e3)         = Sliz l (trans env e1) (trans env e2) (trans env e3)
+
+instance Transform BasicSliz where
+    trans env (BExpr e)                 = BExpr (trans env e) 
+    trans env (BSliz s)                 = BSliz (trans env s)
