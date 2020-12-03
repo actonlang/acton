@@ -985,9 +985,9 @@ atom_expr = do
                               mbt <- optional tailslice
                               return (maybe (S.BExpr e) (S.BSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
                  splitlist a [S.BExpr e] = S.Index NoLoc a e
+                 splitlist a [S.BSliz s] = S.Slice NoLoc a s
                  splitlist a ss
                      | all isBExpr ss       = S.Index NoLoc a (S.eTuple [e | S.BExpr e <- ss])
-                     | not (any isBExpr ss) = foldl (S.Slice NoLoc) a [s | S.BSliz s <- ss]
                      | otherwise            = S.BasicSlice NoLoc a ss -- error "ndarray basic slicing not yet implemented"
                  isBExpr (S.BExpr _) =True; isBExpr _ = False
                  -- indexlist = (:) <$> expr <*> commaList expr
