@@ -4,6 +4,7 @@ module Acton.Transform where
 import Utils
 import Acton.Syntax
 import Acton.Names
+import Acton.Prim
 import Acton.Printer
 
 
@@ -98,6 +99,7 @@ instance Transform Expr where
             p'                          = trans env p
             k'                          = trans env k
     trans env (TApp l e ts)             = TApp l (trans env e) ts
+    trans env (Async l e)               = Async l (trans env e)
     trans env (Await l e)               = Await l (trans env e)
     trans env (Index l e is)            = Index l (trans env e) (trans env is)
     trans env (Slice l e sl)            = Slice l (trans env e) (trans env sl)
@@ -214,10 +216,9 @@ rename s n                              = case lookup n s of
 
 erename s e                             = termsubst [ (n, eVar n') | (n,n') <- s ] e
 
-yNames                                  = map (Internal TypesPass "y") [0..]
-
-pNames                                  = map (Internal TypesPass "p") [0..]
-kNames                                  = map (Internal TypesPass "k") [0..]
+yNames                                  = paramNames "y"
+pNames                                  = paramNames "p"
+kNames                                  = paramNames "k"
 
 instance Transform Exception where
     trans env (Exception e mbe)         = Exception (trans env e) (trans env mbe)

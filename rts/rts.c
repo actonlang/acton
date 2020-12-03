@@ -567,7 +567,7 @@ struct $Cont$class $Done$methods = {
     $Done__deserialize__,
     $Done$__bool__,
     $Done$__str__,
-    $DONE$__call__
+    ($R (*)($Cont, ...))$DONE$__call__
 };
 struct $Cont $Done$instance = {
     &$Done$methods
@@ -588,7 +588,7 @@ struct $Cont$class $NewRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $NewRoot$__call__
+    ($R (*)($Cont, ...))$NewRoot$__call__
 };
 struct $Cont $NewRoot$instance = {
     &$NewRoot$methods
@@ -608,7 +608,7 @@ struct $Cont$class $WriteRoot$methods = {
     NULL,
     NULL,
     NULL,
-    $WriteRoot$__call__
+    ($R (*)($Cont, ...))$WriteRoot$__call__
 };
 struct $Cont $WriteRoot$instance = {
     &$WriteRoot$methods

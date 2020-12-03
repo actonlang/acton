@@ -114,6 +114,7 @@ instance Pretty (PosArg,KwdArg) where
     pretty (ps, KwdNil)             = pretty ps
     pretty (ps, ks)                 = pretty ps  <> comma <+> pretty ks
 
+atomic Async{}                      = False
 atomic Await{}                      = False
 atomic Cond{}                       = False
 atomic BinOp{}                      = False
@@ -139,6 +140,7 @@ instance Pretty Expr where
         | atomic e                  = pretty e <> parens (pretty (ps,ks))
         | otherwise                 = parens (pretty e) <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
+    pretty (Async _ e)              = text "async" <+> pretty e
     pretty (Await _ e)              = text "await" <+> pretty e
     pretty (Index _ e ix)           = pretty e <> brackets (pretty ix)
     pretty (Slice _ e sl)           = pretty e <> brackets (commaList sl)
@@ -446,10 +448,10 @@ prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t
 
 instance Pretty FX where
-    pretty (FXAction)               = text "action"
-    pretty (FXAct t)                = text "act" <> brackets (pretty t)
-    pretty (FXMut t)                = text "mut" <> brackets (pretty t)
-    pretty (FXPure)                 = text "pure"
+    pretty FXAction                 = text "action"
+    pretty FXMut                    = text "mut"
+    pretty FXPure                   = text "pure"
+    pretty FXAsync                  = text "async"
 
 instance Pretty Kind where
     pretty KType                    = text "type"
@@ -467,8 +469,6 @@ instance Pretty Constraint where
     pretty (Impl w t u)             = pretty w <+> colon <+> pretty t <+> parens (pretty u)
     pretty (Sel w t1 n t2)          = pretty w <+> colon <+> pretty t1 <> text "." <> pretty n <+> text "<" <+> pretty t2
     pretty (Mut t1 n t2)            = pretty t1 <+> text "." <> pretty n <+> text ">" <+> pretty t2
-    pretty (Seal w fx1 fx2 t1 t2)   = maybe empty ((<+> colon) . pretty) w  <+> text "seal" <+> 
-                                      parens (pretty fx1 <+> text "<" <+> pretty fx2) <+> parens (pretty t1 <+> text "<" <+> pretty t2)
 
 
 instance Pretty (TVar,TVar) where

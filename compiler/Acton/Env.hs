@@ -113,52 +113,45 @@ instance Data.Binary.Binary NameInfo
 
 -- Equality modulo qualified/unqualified type names and unifiable type variables
 
-class QMatch a where
-    qmatch                          :: EnvF x -> a -> a -> Bool
+class QualEq a where
+    qualEq                          :: EnvF x -> a -> a -> Bool
 
-instance QMatch [Type] where
-    qmatch env as bs                = and [ qmatch env a b | (a,b) <- as `zip` bs ]
+instance QualEq [Type] where
+    qualEq env as bs                = and [ qualEq env a b | (a,b) <- as `zip` bs ]
 
-instance QMatch (QName,Witness) where
-    qmatch env (x,a) (y,b)          = qmatch env x y && m a b
-      where m a@WClass{} b@WClass{} = qmatch env (tcname (proto a)) (tcname (proto b))
-            m a@WInst{}  b@WInst{}  = qmatch env (tcname (proto a)) (tcname (proto b))
+instance QualEq (QName,Witness) where
+    qualEq env (x,a) (y,b)          = qualEq env x y && m a b
+      where m a@WClass{} b@WClass{} = qualEq env (tcname (proto a)) (tcname (proto b))
+            m a@WInst{}  b@WInst{}  = qualEq env (tcname (proto a)) (tcname (proto b))
             m a          b          = False
 
-instance QMatch QName where
-    qmatch env a b                  = unalias env a == unalias env b
+instance QualEq QName where
+    qualEq env a b                  = unalias env a == unalias env b
 
-instance QMatch TCon where
-    qmatch env (TC a ts) (TC b us)  = qmatch env a b && qmatch env ts us
+instance QualEq TCon where
+    qualEq env (TC a ts) (TC b us)  = qualEq env a b && qualEq env ts us
 
-instance QMatch Type where
-    qmatch env (TVar _ v1) (TVar _ v2)                      = univar v1 || univar v2 || v1 == v2
-    qmatch env (TCon _ c1) (TCon _ c2)                      = qmatch env c1 c2
-    qmatch env (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)    = qmatch env e1 e2 && qmatch env p1 p2 && qmatch env r1 r2 && qmatch env t1 t2
-    qmatch env (TTuple _ p1 r1) (TTuple _ p2 r2)            = qmatch env p1 p2 && qmatch env r1 r2
-    qmatch env (TUnion _ u1) (TUnion _ u2)                  = qmatch env u1 u2
-    qmatch env (TOpt _ t1) (TOpt _ t2)                      = qmatch env t1 t2
-    qmatch env (TNone _) (TNone _)                          = True
-    qmatch env (TWild _) (TWild _)                          = True
-    qmatch env (TNil _ s1)  (TNil _ s2)                     = s1 == s2
-    qmatch env (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && qmatch env t1 t2 && qmatch env r1 r2
-    qmatch env (TFX _ fx1) (TFX _ fx2)                      = qmatch env fx1 fx2
-    qmatch env _ _                                          = False
+instance QualEq Type where
+    qualEq env (TVar _ v1) (TVar _ v2)                      = univar v1 || univar v2 || v1 == v2
+    qualEq env (TCon _ c1) (TCon _ c2)                      = qualEq env c1 c2
+    qualEq env (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)    = qualEq env e1 e2 && qualEq env p1 p2 && qualEq env r1 r2 && qualEq env t1 t2
+    qualEq env (TTuple _ p1 r1) (TTuple _ p2 r2)            = qualEq env p1 p2 && qualEq env r1 r2
+    qualEq env (TUnion _ u1) (TUnion _ u2)                  = qualEq env u1 u2
+    qualEq env (TOpt _ t1) (TOpt _ t2)                      = qualEq env t1 t2
+    qualEq env (TNone _) (TNone _)                          = True
+    qualEq env (TWild _) (TWild _)                          = True
+    qualEq env (TNil _ s1)  (TNil _ s2)                     = s1 == s2
+    qualEq env (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && qualEq env t1 t2 && qualEq env r1 r2
+    qualEq env (TFX _ fx1) (TFX _ fx2)                      = fx1 == fx2
+    qualEq env _ _                                          = False
 
-instance QMatch FX where
-    qmatch env FXPure FXPure        = True
-    qmatch env (FXMut a) (FXMut b)  = qmatch env a b
-    qmatch env (FXAct a) (FXAct b)  = qmatch env a b
-    qmatch env FXAction FXAction    = True
-    qmatch env _ _                  = False
+instance QualEq [UType] where
+    qualEq env as bs                = and [ any (qualEq env a) bs | a <- as ] && and [ any (qualEq env b) as | b <- bs ]
 
-instance QMatch [UType] where
-    qmatch env as bs                = and [ any (qmatch env a) bs | a <- as ] && and [ any (qmatch env b) as | b <- bs ]
-
-instance QMatch UType where
-    qmatch env (UCon a) (UCon b)    = qmatch env a b
-    qmatch env (ULit a) (ULit b)    = a == b
-    qmatch env _ _                  = False
+instance QualEq UType where
+    qualEq env (UCon a) (UCon b)    = qualEq env a b
+    qualEq env (ULit a) (ULit b)    = a == b
+    qualEq env _ _                  = False
 
 instance Pretty (QName,Witness) where
     pretty (n, WClass q p w ws) = text "WClass" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty p) <+>
@@ -508,7 +501,7 @@ addWit                      :: EnvF x -> (QName,Witness) -> EnvF x
 addWit env cwit
   | exists                  = env
   | otherwise               = env{ witnesses = cwit : witnesses env }
-  where exists              = any (qmatch env cwit) (witnesses env)
+  where exists              = any (qualEq env cwit) (witnesses env)
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env              = env{ names = [ (x, NReserved) | x <- nub xs ] ++ names env }
@@ -632,6 +625,11 @@ tconKind n env              = case findQName n env of
   where kind k []           = k
         kind k q            = KFun [ tvkind v | Quant v _ <- q ] k
 
+isDef                       :: EnvF x -> QName -> Bool
+isDef env n                 = case findQName n env of
+                                NDef _ _ -> True
+                                _ -> False
+
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case findQName n env of
                                 NAct q p k te -> True
@@ -647,26 +645,32 @@ isProto env n               = case findQName n env of
                                 NProto q us te -> True
                                 _ -> False
 
+isDefOrClass                :: EnvF x -> QName -> Bool
+isDefOrClass env n          = case findQName n env of
+                                NDef _ _ -> True
+                                NClass _ _ _ -> True
+                                _ -> False
+
 findWitness                 :: EnvF x -> QName -> (Witness->Bool) -> Maybe Witness
 findWitness env cn f        = listToMaybe $ filter f $ allWitnesses env cn
 
 allWitnesses                :: EnvF x -> QName -> [Witness]
-allWitnesses env cn         = [ w | (c,w) <- witnesses env, qmatch env c cn ]
+allWitnesses env cn         = [ w | (c,w) <- witnesses env, qualEq env c cn ]
 
 implProto                   :: EnvF x -> TCon -> Witness -> Bool
 implProto env p w           = case w of
-                                WClass{} -> qmatch env (tcname p) (tcname p')
-                                WInst{}  -> qmatch env p p'
+                                WClass{} -> qualEq env (tcname p) (tcname p')
+                                WInst{}  -> qualEq env p p'
   where p'                  = proto w
 
 hasAttr                     :: EnvF x -> Name -> Witness -> Bool
 hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: EnvF x -> QName -> QName -> Bool
-hasWitness env cn pn        =  not $ null $ findWitness env cn (qmatch env pn . tcname . proto)
+hasWitness env cn pn        =  not $ null $ findWitness env cn (qualEq env pn . tcname . proto)
 
 getWitness                  :: EnvF x -> QName -> TCon -> Witness
-getWitness env cn p         = fromJust $ findWitness env cn (qmatch env (tcname p) . tcname . proto)
+getWitness env cn p         = fromJust $ findWitness env cn (qualEq env (tcname p) . tcname . proto)
 
 -- TCon queries ------------------------------------------------------------------------------------------------------------------
 
@@ -699,17 +703,17 @@ findAncestry                :: EnvF x -> TCon -> [WTCon]
 findAncestry env tc         = ([Nothing],tc) : fst (findCon env tc)
 
 findAncestor                :: EnvF x -> TCon -> QName -> Maybe (Expr->Expr,TCon)
-findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qmatch env (tcname p') qn ]
+findAncestor env p qn       = listToMaybe [ (wexpr ws, p') | (ws,p') <- findAncestry env p, qualEq env (tcname p') qn ]
 
 hasAncestor'                :: EnvF x -> QName -> QName -> Bool
-hasAncestor' env qn qn'     = any (qmatch env qn') [ tcname c' | (w,c') <- us ]
+hasAncestor' env qn qn'     = any (qualEq env qn') [ tcname c' | (w,c') <- us ]
   where (_,us,_)            = findConName qn env
 
 hasAncestor                 :: EnvF x -> TCon -> TCon -> Bool
 hasAncestor env c c'        = hasAncestor' env (tcname c) (tcname c')
 
 commonAncestors             :: EnvF x -> TCon -> TCon -> [TCon]
-commonAncestors env c1 c2   = filter (\c -> any (qmatch env (tcname c)) ns) $ map snd (findAncestry env c1)
+commonAncestors env c1 c2   = filter (\c -> any (qualEq env (tcname c)) ns) $ map snd (findAncestry env c1)
   where ns                  = map (tcname . snd) (findAncestry env c2)
 
 directAncestors             :: EnvF x -> QName -> [QName]
@@ -769,14 +773,14 @@ inheritedAttrs env n        = inh (dom te) us
                 te'         = snd $ splitSigs te
 
 allCons                     :: EnvF x -> [QName]
-allCons env                 = reverse $ [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
   where con NClass{}        = True
         con NAct{}          = True
         con _               = False
         cons m (Just te)    = [ GName m n | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
 
 allProtos                   :: EnvF x -> [QName]
-allProtos env               = reverse $ [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where proto NProto{}      = True
         proto _             = False
         protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
@@ -843,7 +847,7 @@ mro env us                              = merge [] $ map lin us' ++ [us']
     equal (w1,u1) (w2,u2)
       | headmatch                       = tcargs u1 == tcargs u2 || err2 [u1,u2] "Inconsistent protocol instantiations"
       | otherwise                       = False
-      where headmatch                   = qmatch env (tcname u1) (tcname u2)
+      where headmatch                   = qualEq env (tcname u1) (tcname u2)
 
     absent                              :: WTCon -> [WTCon] -> Bool
     absent (w,h) us                     = tcname h `notElem` map (tcname . snd) us
@@ -938,9 +942,6 @@ headvar (Sub w t (TVar _ v))        = v     -- ?
 headvar (Sel w (TVar _ v) n t)      = v
 
 headvar (Mut (TVar _ v) n t)        = v
-
-headvar (Seal w (TVar _ v) _ _ _)   = v
-headvar (Seal w _ (TVar _ v) _ _)   = v     -- ?
 
 
 -- Error handling ----------------------------------------------------------------------------------------------------

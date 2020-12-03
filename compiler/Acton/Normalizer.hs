@@ -216,7 +216,7 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l [catStrings ss]
     norm env (BStrings l ss)        = return $ BStrings l [catStrings ss]
-    norm env (Call l e ps ks)       = Call l <$> norm env e <*> norm env (joinArg ps ks) <*> pure KwdNil
+    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure ts
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
@@ -224,6 +224,7 @@ instance Norm Expr where
       | TTuple _ p k <- t           = DotI l <$> norm env e <*> pure (nargs p + narg n k)
       | otherwise                   = Dot l <$> norm env e <*> pure n
       where t                       = typeOf env e
+    norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> norm env e2 <*> norm env e3
     norm env (IsInstance l e c)     = IsInstance l <$> norm env e <*> pure c

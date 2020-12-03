@@ -62,6 +62,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | BStrings      { eloc::SrcLoc, sval::[String] }
                 | Call          { eloc::SrcLoc, fun::Expr, pargs::PosArg, kargs::KwdArg }
                 | TApp          { eloc::SrcLoc, fun::Expr, targs::[Type] }
+                | Async         { eloc::SrcLoc, exp1::Expr }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::[Sliz] }
@@ -97,7 +98,7 @@ data Pattern    = PVar          { ploc::SrcLoc, pn::Name, pann::Maybe Type }
 
 type Target     = Expr
 
-data Prefix     = Kindvar | Xistvar | Actvar | Wildvar | Typevar | Witness | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass | CodeGenPass
+data Prefix     = Kindvar | Xistvar | Wildvar | Typevar | Witness | Parvar | TypesPass | NormPass | DeactPass | CPSPass | LLiftPass
                 deriving (Eq,Ord,Show,Read,Generic)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic)
@@ -110,20 +111,24 @@ nstr (Derived n s)          = nstr n ++ "$" ++ nstr s
 nstr (Internal p s i)       = prefix p ++ "$" ++ unique i ++ s
   where prefix Kindvar      = "K"
         prefix Xistvar      = "X"
-        prefix Actvar       = "A"
         prefix Wildvar      = "_"
         prefix Typevar      = "T"
         prefix Witness      = "w"
+        prefix Parvar       = "p"
         prefix TypesPass    = "t"
         prefix NormPass     = "n"
         prefix DeactPass    = "d"
         prefix CPSPass      = "c"
         prefix LLiftPass    = "l"
-        prefix CodeGenPass  = "C"
         unique 0            = ""
         unique i            = show i
 
 name            = Name NoLoc
+
+paramName0 s    = Internal Parvar s 0
+paramNames s    = map (Internal Parvar s) [1..]
+paramNames'     = paramNames ""
+
 
 data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic)
 
@@ -191,7 +196,7 @@ data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Ge
 
 data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
 
-data FX         = FXPure | FXMut Type | FXAct Type | FXAction deriving (Eq,Show,Read,Generic)
+data FX         = FXPure | FXMut | FXAction | FXAsync deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
 
@@ -222,7 +227,6 @@ data Constraint = Cast  Type Type
                 | Impl  Name Type TCon
                 | Sel   Name Type Name Type
                 | Mut   Type Name Type
-                | Seal  (Maybe Name) Type Type Type Type
                 deriving (Show,Read,Generic)
 
 type Constraints = [Constraint]
@@ -265,10 +269,6 @@ pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
 posarg es       = foldr PosArg PosNil es
 
-par2arg (PosPar n _ _ p)    = PosArg (eVar n) (par2arg p)
-par2arg (PosSTAR n _)       = PosStar (eVar n)
-par2arg PosNIL              = PosNil
-
 pVar n t        = PVar NoLoc n (Just t)
 pVar' n         = PVar NoLoc n Nothing
 
@@ -300,15 +300,11 @@ tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
 nSelf           = Name NoLoc "Self"
 
-fxAction        = tTFX FXAction
-fxAct t         = tTFX (FXAct t)
-fxMut t         = tTFX (FXMut t)
 fxPure          = tTFX FXPure
+fxMut           = tTFX FXMut
+fxAction        = tTFX FXAction
+fxAsync         = tTFX FXAsync
 fxWild          = tWild
-
-isFXAct (TFX _ (FXAct s))
-                = Just s
-isFXAct _       = Nothing
 
 posRow t r      = TRow NoLoc PRow (name "_") t r
 posVar mbv      = maybe tWild tVar mbv
@@ -439,7 +435,6 @@ instance HasLoc Constraint where
     loc (Impl _ _ p)    = loc p
     loc (Sel _ _ n _)   = loc n
     loc (Mut _ n _)     = loc n
-    loc (Seal _ _ t _ _)= loc t
 
 
 -- Eq -------------------------
@@ -498,6 +493,7 @@ instance Eq Expr where
     x@BStrings{}        ==  y@BStrings{}        = sval x == sval y
     x@Call{}            ==  y@Call{}            = fun x == fun y && pargs x == pargs y && kargs x == kargs y
     x@TApp{}            ==  y@TApp{}            = fun x == fun y && targs x == targs y
+    x@Async{}           ==  y@Async{}           = exp1 x == exp1 y
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
@@ -625,11 +621,11 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","actor","after","and","as",
-                                        "assert","await","break","class","continue","def","del","elif","else",
-                                        "except","extension","finally","for","from","if","import","in","is",
-                                        "isinstance","lambda","not","or","pass","protocol","raise","return",
-                                        "try","var","while","with","yield"
+                                        "False","None","NotImplemented","Self","True","action","actor","after","and","as",
+                                        "assert","async","await","break","class","continue","def","del","elif","else",
+                                        "except","extension","finally","for","from","if","import","in","is","isinstance",
+                                        "lambda","mut","not","or","pass","protocol","pure","raise","return","try","var",
+                                        "while","with","yield"
                                       ]
 
 isHidden (Name _ str)               = length (takeWhile (=='_') str) == 1

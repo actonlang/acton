@@ -146,8 +146,6 @@ instance ConvTWild Type where
     convTWild (TOpt l t)            = TOpt l <$> convTWild t
     convTWild (TCon l c)            = TCon l <$> convTWild c
     convTWild (TRow l k n t r)      = TRow l k n <$> convTWild t <*> convTWild r
-    convTWild (TFX l (FXMut t))     = TFX l <$> FXMut <$> convTWild t
-    convTWild (TFX l (FXAct t))     = TFX l <$> FXMut <$> convTWild t
     convTWild t                     = return t
 
 instance ConvTWild TCon where
@@ -309,6 +307,7 @@ instance KCheck Expr where
     kchk env (BStrings l ss)        = return $ BStrings l ss
     kchk env (Call l e ps ks)       = Call l <$> kchk env e <*> kchk env ps <*> kchk env ks
     kchk env (TApp l e ts)          = internal l "Unexpected TApp in kchk"
+    kchk env (Async l e)            = Async l <$> kchk env e
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
     kchk env (BasicSlice l e ss)    = BasicSlice l <$> kchk env e <*> kchk env ss
@@ -490,14 +489,7 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
-    kinfer env (TFX l fx)           = do fx <- kchk env fx
-                                         return (KFX, TFX l fx)
-
-instance KCheck FX where
-    kchk env (FXAction)             = return FXAction
-    kchk env (FXAct t)              = FXAct <$> kexp KType env t
-    kchk env (FXMut t)              = FXMut <$> kexp KType env t
-    kchk env (FXPure)               = return FXPure
+    kinfer env (TFX l fx)           = return (KFX, TFX l fx)
 
 kexp k env t                        = do (k',t) <- kinfer env t
                                          kunify (loc t) k' k
@@ -572,13 +564,7 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
-    ksubst g (TFX l fx)             = TFX l <$> ksubst g fx
-
-instance KSubst FX where
-    ksubst g FXPure                 = return FXPure
-    ksubst g (FXMut t)              = FXMut <$> ksubst g t
-    ksubst g (FXAct t)              = FXAct <$> ksubst g t
-    ksubst g FXAction               = return FXAction
+    ksubst g (TFX l fx)             = return $ TFX l fx
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e
@@ -623,6 +609,7 @@ instance KSubst Expr where
     ksubst g (BStrings l ss)        = return $ BStrings l ss
     ksubst g (Call l e ps ks)       = Call l <$> ksubst g e <*> ksubst g ps <*> ksubst g ks
     ksubst g (TApp l e ts)          = TApp l <$> ksubst g e <*> ksubst g ts
+    ksubst g (Async l e)            = Async l <$> ksubst g e
     ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl

@@ -11,28 +11,26 @@ import Acton.Names
 import Acton.Subst
 
 data TypeX                      = TypeX {
-                                    actorstate :: Maybe Type,
                                     context    :: EnvCtx,
                                     indecl     :: Bool }
 
 type Env                        = EnvF TypeX
 
-data EnvCtx                     = CtxTop | CtxAct | CtxClass deriving (Eq,Show)
+data EnvCtx                     = CtxTop | CtxDef | CtxAct | CtxClass deriving (Eq,Show)
 
-typeX env0                      = setX env0 TypeX{ actorstate = Nothing, context = CtxTop, indecl = False }
+typeX env0                      = setX env0 TypeX{ context = CtxTop, indecl = False }
 
 instance Pretty TypeX where
     pretty _                    = empty
 
 instance Subst TypeX where
-    msubst x                    = do as <- msubst (actorstate x)
-                                     return x{ actorstate = as }
-    tyfree x                    = tyfree (actorstate x)
+    msubst x                    = return x
+    tyfree x                    = []
 
 
-setActorFX st env               = modX env $ \x -> x{ actorstate = Just st }
-
-maybeSetActorFX st env          = maybe (setActorFX st env) (const env) (actorstate $ envX env)       -- Only set if not already present
+setInDef env
+  | onTop env                   = modX env $ \x -> x{ context = CtxDef }
+  | otherwise                   = env
 
 setInAct env                    = modX env $ \x -> x{ context = CtxAct }
 
@@ -40,11 +38,9 @@ setInClass env                  = modX env $ \x -> x{ context = CtxClass }
 
 setInDecl env                   = modX env $ \x -> x{ indecl = True }
 
-actorFX env l                   = case actorstate (envX env) of
-                                    Just st -> fxAct st
-                                    Nothing -> err l "Actor scope expected"
-
 onTop env                       = context (envX env) == CtxTop
+
+inDef env                       = context (envX env) == CtxDef
 
 inAct env                       = context (envX env) == CtxAct
 

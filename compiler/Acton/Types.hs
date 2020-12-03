@@ -143,7 +143,7 @@ instance (InfEnv a) => InfEnv [a] where
 targetFX Var{}                          = return []
 targetFX _                              = do st <- newTVar
                                              fx <- currFX
-                                             return [Cast (fxMut st) fx]
+                                             return [Cast fxMut fx]
 
 instance InfEnv Stmt where
     infEnv env (Expr l e)               = do (cs,_,e') <- infer env e
@@ -263,7 +263,7 @@ instance InfEnv Stmt where
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,t,e2') <- infer env e2
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             return (Cast fxAction fx :
                                                      cs1++cs2, [], After l e1' e2')
     
     infEnv env (Signature l ns sc dec)
@@ -291,7 +291,7 @@ infTarget env (Var l (NoQ n))           = case findName n env of
                                                  return ([], t, name "_", Var l (NoQ n))
                                              NSVar t -> do
                                                  fx <- currFX
-                                                 return ([Cast (actorFX env l) fx], t, name "_", Var l (NoQ n))
+                                                 return ([Cast fxAction fx], t, name "_", Var l (NoQ n))
                                              _ -> 
                                                  err1 n "Variable not assignable:"
 infTarget env (Index l e ix)            = do ti <- newTVar
@@ -350,7 +350,7 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec | matchingDec n sc dec (deco d) -> do
                                                  traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec))
-                                                 return ([], [(n, NDef (openAction' env sc) dec)], d)
+                                                 return ([], [(n, NDef sc dec)], d)
                                              NReserved -> do
                                                  prow <- newTVarOfKind PRow
                                                  krow <- newTVarOfKind KRow
@@ -487,11 +487,6 @@ checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
                                                  traceM ("####### env:\n" ++ prstr env1)
                                                  err2 escaped "Escaping type variable"
 
-openAction env (TFun l fx p k t)
-  | fx == fxAction                      = TFun l tWild p k t
-openAction env t                        = t
-
-openAction' env (TSchema l q t)         = TSchema l q $ openAction env t
 
 wellformed                              :: (WellFormed a) => Env -> a -> TypeM ()
 wellformed env x                        = do _ <- solveAll env [] tNone cs
@@ -523,33 +518,25 @@ instance (Check a) => Check [a] where
 infActorEnv env ss                      = do dsigs <- mapM mkNDef (dvars ss \\ dom sigs)
                                              bsigs <- mapM mkNVar (pvars ss \\ dom (sigs++dsigs))
                                              return (sigs ++ dsigs ++ bsigs)
-  where sigs                            = [ (n, NSig sc' dec) | Signature _ ns sc dec <- ss, let sc' = async sc, n <- ns, not $ isHidden n ]
-        async (TSchema l q (TFun l' fx p k t))
-          | mustWrap q fx               = TSchema l q (TFun l' fxAction p k t)
-        async sc                        = sc
-        mustWrap q (TVar _ tv)          = tv `notElem` tybound q
-        mustWrap q (TFX _ FXPure)       = False
-        mustWrap q _                    = True
-        mkNDef n                        = do p <- newTVarOfKind PRow
-                                             k <- newTVarOfKind KRow
-                                             t <- newTVar
-                                             return (n, NDef (monotype $ tFun fxAction p k t) NoDec)
-        mkNVar n                        = do t <- newTVar
-                                             return (n, NVar t)
+  where sigs                            = [ (n, NSig sc dec) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
         dvars ss                        = nub [ n | Decl _ ds <- ss, Def{dname=n} <- ds, not $ isHidden n ]
+        mkNDef n                        = do t <- newTVar
+                                             return (n, NDef (monotype $ t) NoDec)
         pvars ss                        = nub $ concat $ map pvs ss
           where pvs (Assign _ pats _)   = filter (not . isHidden) $ bound pats
                 pvs (If _ bs els)       = foldr intersect (pvars els) [ pvars ss | Branch _ ss <- bs ]
                 pvs _                   = []
+        mkNVar n                        = do t <- newTVar
+                                             return (n, NVar t)
 
 matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " ++ prstr n0)
                                              (cs,eq) <- simplify env te0 tNone [Cast (prowOf p) p0, Cast (krowOf k) k0]
                                              (css,eqs) <- unzip <$> mapM check1 te
-                                             traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
+                                             --traceM ("## matchActorAssumption returns " ++ prstrs (cs ++ concat css))
                                              return (cs ++ concat css, eq ++ concat eqs)
   where NAct _ p0 k0 te0                = findName n0 env
         check1 (n, i) | isHidden n      = return ([], [])
-        check1 (n, NVar t)              = do traceM ("## matchActorAssumption for attribute " ++ prstr n)
+        check1 (n, NVar t)              = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
                                              unify env t t0
                                              return ([],[])
           where t0                      = case lookup n te0 of
@@ -557,7 +544,7 @@ matchActorAssumption env n0 p k te      = do traceM ("## matchActorAssumption " 
                                              Just (NVar t0) -> t0
         check1 (n, NDef sc _)           = do (cs1,_,t) <- instantiate env sc
                                              traceM ("## matchActorAssumption for method " ++ prstr n)
-                                             unify env t (openAction env t0)
+                                             unify env t t0
                                              (cs2,eq) <- solveScoped (defineTVars q env) (tybound q) te0 tNone cs1
                                              checkNoEscape env (tybound q)
                                              return (cs2, eq)
@@ -621,7 +608,6 @@ instance Check Decl where
                                              t <- maybe newTVar return a
                                              pushFX fx t
                                              st <- newTVar
-                                             env1 <- pure $ maybeSetActorFX st env1
                                              wellformed env1 q
                                              wellformed env1 a
                                              (csp,te0,p') <- infEnv env1 p
@@ -629,34 +615,27 @@ instance Check Decl where
                                              (csb,b') <- infDefBody (define te1 (define te0 env1)) n p' b
                                              popFX
                                              let cst = if fallsthru b then [Cast tNone t] else []
-                                                 csx = case fx of
-                                                         TVar _ v | univar v, inAct env1 -> [Cast (actorFX env1 l) fx]
-                                                         _ -> [Cast fxPure fx]
+                                                 csx = [Cast fxPure fx]
                                                  t1 = tFun fx (prowOf p') (krowOf k') t
                                              (cs1,eq1) <- solveScoped env1 tvs [] t1 (csp++csk++csb++cst++csx)
                                              checkNoEscape env tvs
                                              -- At this point, n has the type given by its def annotations.
                                              -- Now check that this type is no less general than its recursion assumption in env.
                                              matchDefAssumption env cs1 (Def l n q p' k' (Just t) (bindWits eq1 ++ b') dec fx)
-      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q env
+      where env1                        = reserve (bound (p,k) ++ bound b \\ stateScope env) $ defineTVars q $ setInDef env
             tvs                         = tybound q
 
     checkEnv env (Actor l n q p k b)    = do traceM ("## checkEnv actor " ++ prstr n)
-                                             st <- newActVar
-                                             traceM ("## actor st: " ++ prstr st)
-                                             pushFX (fxAct st) tNone
-                                             env1 <- pure $ setActorFX st env1
+                                             pushFX fxAction tNone
                                              wellformed env1 q
                                              (csp,te1,p') <- infEnv env1 p
                                              (csk,te2,k') <- infEnv (define te1 env1) k
                                              (csb,te,b') <- infSuiteEnv (define te2 $ define te1 env1) b
                                              (cs0,eq0) <- matchActorAssumption env1 n p' k' te
                                              popFX
-                                             (cs1,eq1) <- solveScoped env1 (tvar st : tvs) te tNone (csp++csk++csb++cs0)
+                                             (cs1,eq1) <- solveScoped env1 tvs te tNone (csp++csk++csb++cs0)
                                              checkNoEscape env tvs
                                              fvs <- tyfree <$> msubst env
-                                             when (tvar st `elem` fvs) $ err l "Actor state escapes"
-                                             substitute (tvar st) tSelf
                                              return (cs1, Actor l n (noqual env q) (qualWPar env q p') k' (bindWits (eq1++eq0) ++ defsigs ++ b'))
       where env1                        = reserve (bound (p,k) ++ bound b) $ defineTVars q $
                                           define [(selfKW, NVar tRef)] $ reserve (statevars b) $ setInAct env
@@ -739,7 +718,7 @@ instance Check Branch where
 refine                                  :: Env -> Constraints -> TEnv -> Equations 
                                            -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
-  | not $ null solve_vs                 = do traceM ("  #solving vs : " ++ prstrs solve_vs)
+  | not $ null solve_vs                 = do traceM ("  #solving vs : " ++ prstrs solve_vs ++ " (collapse_vs: " ++ prstrs collapse_vs ++ ")")
                                              traceM ("           cs : " ++ prstrs cs)
                                              (cs',eq') <- solve (define te env) te tNone eq solve_vs cs
                                              refineAgain cs' eq'
@@ -756,7 +735,7 @@ refine env cs te eq
                                              traceM ("             cs : " ++ prstrs cs)
                                              traceM ("             te : " ++ prstr te)
                                              return (gen_vs, cs, te, eq)
-  where solve_vs                        = [ headvar c | c <- cs, mustSolve c ]
+  where solve_vs                        = [ headvar c | c <- cs, not (canQual c) ] \\ collapse_vs
         collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
         ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
@@ -764,8 +743,6 @@ refine env cs te eq
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
-        mustSolve c                     = not (canQual c) && not (mustCollapse c)
-
         canQual (Cast (TVar _ v) TCon{})   = univar v
         canQual (Impl _ (TVar _ v) _)      = univar v
         canQual _                          = False
@@ -871,7 +848,7 @@ instance Infer Expr where
                                             NVar t -> return ([], t, x)
                                             NSVar t -> do
                                                 fx <- currFX
-                                                return ([Cast (actorFX env l) fx], t, x)
+                                                return ([Cast fxAction fx], t, x)
                                             NDef sc d -> do 
                                                 (cs,tvs,t) <- instantiate env sc
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
@@ -885,8 +862,7 @@ instance Infer Expr where
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
                                                         return (cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
-                                                st <- newTVar
-                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun (fxAct st) p k (tCon0 n q)))
+                                                (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 n q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
                                             NSig _ _ -> nameReserved n
                                             NReserved -> nameReserved n
@@ -915,10 +891,14 @@ instance Infer Expr where
                                              return (Sub w t (tFun fx prow krow t0) :
                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
     infer env (TApp l e ts)             = internal l "Unexpected TApp in infer"
+    infer env (Async l e)               = do (cs1,t,e') <- infer env e
+                                             fx <- currFX
+                                             return (Cast fxAction fx :
+                                                     cs1, tMsg t, Async l e')
     infer env (Await l e)               = do t0 <- newTVar
                                              (cs1,e') <- inferSub env (tMsg t0) e
                                              fx <- currFX
-                                             return (Cast (actorFX env l) fx :
+                                             return (Cast fxAction fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do ti <- newTVar
                                              (cs1,ix') <- inferSub env ti ix
@@ -1425,7 +1405,7 @@ instance InfEnvT Pattern where
                                                      return ([Cast t t'], [], t, PVar l n Nothing)
                                                  NSVar t' -> do
                                                      fx <- currFX
-                                                     return (Cast (actorFX env l) fx :
+                                                     return (Cast fxAction fx :
                                                              Cast t t' : 
                                                              [], [], t, PVar l n Nothing)
                                                  _ -> 

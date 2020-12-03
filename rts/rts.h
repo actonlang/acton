@@ -124,7 +124,7 @@ struct $function$class {
     $function (*__deserialize__)($Serial$state);
     $bool (*__bool__)($function);
     $str (*__str__)($function);
-    $WORD (*__call__)($function, $WORD);
+    $WORD (*__call__)($function, ...);
 };
 struct $function {
     struct $function$class *$class;
@@ -139,7 +139,7 @@ struct $Cont$class {
     $Cont (*__deserialize__)($Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
-    $R (*__call__)($Cont, $WORD);
+    $R (*__call__)($Cont, ...);
 };
 struct $Cont {
     struct $Cont$class *$class;

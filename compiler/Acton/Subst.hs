@@ -25,16 +25,13 @@ closeDepVars vs cs
         heads (Sub w t _)           = tyfree t
         heads (Sel w t n _)         = tyfree t
         heads (Mut t n _)           = tyfree t
-        heads (Seal q t _ t' _)     = tyfree t ++ tyfree t'
         deps (Impl w _ p)           = tyfree p
         deps (Cast _ t)             = typars t
         deps (Sub w _ t)            = typars t
         deps (Sel w _ n t)          = typars t
         deps (Mut _ n t)            = typars t
-        deps (Seal w _ t _ t')      = typars t ++ typars t'
         typars (TOpt _ t)           = typars t
         typars (TCon _ c)           = tyfree c
-        typars (TFX _ fx)           = tyfree fx
         typars _                    = []
 
 
@@ -86,14 +83,12 @@ instance Subst Constraint where
     msubst (Impl w t p)             = Impl w <$> msubst t <*> msubst p
     msubst (Sel w t1 n t2)          = Sel w <$> msubst t1 <*> return n <*> msubst t2
     msubst (Mut t1 n t2)            = Mut <$> msubst t1 <*> return n <*> msubst t2
-    msubst (Seal w fx1 fx2 t1 t2)   = Seal w <$> msubst fx1 <*> msubst fx2 <*> msubst t1 <*> msubst t2
 
     tyfree (Cast t1 t2)             = tyfree t1 ++ tyfree t2
     tyfree (Sub w t1 t2)            = tyfree t1 ++ tyfree t2
     tyfree (Impl w t p)             = tyfree t ++ tyfree p
     tyfree (Sel w t1 n t2)          = tyfree t1 ++ tyfree t2
     tyfree (Mut t1 n t2)            = tyfree t1 ++ tyfree t2
-    tyfree (Seal w fx1 fx2 t1 t2)   = tyfree fx1 ++ tyfree fx2 ++ tyfree t1 ++ tyfree t2
 
 instance Subst TSchema where
     msubst (TSchema l [] t)         = TSchema l [] <$> msubst t
@@ -221,7 +216,7 @@ instance Subst Type where
     msubst (TWild l)                = return $ TWild l
     msubst (TNil l s)               = return $ TNil l s
     msubst (TRow l k n t r)         = TRow l k n <$> msubst t <*> msubst r
-    msubst (TFX l fx)               = TFX l <$> msubst fx
+    msubst (TFX l fx)               = return $ TFX l fx
 
     tyfree (TVar _ v)               = [v]
     tyfree (TCon _ c)               = tyfree c
@@ -233,16 +228,8 @@ instance Subst Type where
     tyfree (TWild _)                = []
     tyfree (TNil _ _)               = []
     tyfree (TRow _ _ _ t r)         = tyfree t ++ tyfree r
-    tyfree (TFX l fx)               = tyfree fx
+    tyfree (TFX l fx)               = []
 
-instance Subst FX where
-    msubst (FXMut t)                = FXMut <$> msubst t
-    msubst (FXAct t)                = FXAct <$> msubst t
-    msubst fx                       = return fx
-    
-    tyfree (FXMut t)                = tyfree t
-    tyfree (FXAct t)                = tyfree t
-    tyfree _                        = []  
     
 instance Subst PosPar where
     msubst (PosPar n t e p)         = PosPar n <$> msubst t <*> msubst e <*> msubst p
@@ -321,6 +308,7 @@ instance Subst Stmt where
 instance Subst Expr where
     msubst (Call l e p k)           = Call l <$> msubst e <*> msubst p <*> msubst k
     msubst (TApp l e ts)            = TApp l <$> msubst e <*> msubst ts
+    msubst (Async l e)              = Async l <$> msubst e
     msubst (Await l e)              = Await l <$> msubst e
     msubst (Index l e ix)           = Index l <$> msubst e <*> msubst ix
     msubst (Slice l e sl)           = Slice l <$> msubst e <*> msubst sl
@@ -478,15 +466,10 @@ instance Polarity Type where
     polvars (TWild _)               = ([],[])
     polvars (TNil _ _)              = ([],[])
     polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
-    polvars (TFX l fx)              = polvars fx
+    polvars (TFX l fx)              = ([],[])
 
 instance Polarity TCon where
     polvars (TC c ts)               = (vs,vs) where vs = tyfree ts
-
-instance Polarity FX where
-    polvars (FXMut t)               = polvars t
-    polvars (FXAct t)               = polvars t
-    polvars _                       = ([],[])
 
 instance Polarity QBind where
     polvars (Quant v cs)            = (vs,vs) where vs = v : tyfree cs
