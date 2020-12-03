@@ -2,8 +2,8 @@
 //Select element #n in lst which is a list[int].
 #define $LONGELEM(lst,n)   ((($int)lst->data[n])->val)
 
-$array_iterator_state $mk_iterator($ndarray a);
-union $Bytes8 *iter_next($array_iterator_state it);
+numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a);
+union $Bytes8 *iter_next(numpy$$array_iterator_state it);
 
 
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
@@ -11,16 +11,16 @@ union $Bytes8 *iter_next($array_iterator_state it);
 // method for creating ndarray structs.
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
-static $ndarray $newarray(enum ElemType typ, long ndim,long size,$list shape,$list strides,bool allocate_data) {
-  $ndarray res = malloc(sizeof(struct $ndarray));
-  res->$class = &$ndarray$methods;
+static numpy$$ndarray $newarray(enum ElemType typ, long ndim,long size,$list shape,$list strides,bool allocate_data) {
+  numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
+  res->$class = &numpy$$ndarray$methods;
   res->elem_type = typ;
   res->ndim = ndim;
   res->size = size;
   res->offset = 0;
   res->shape = shape;
   res->strides = strides;
-  if (allocate_data) res->data = malloc(size * elem_size(typ) * sizeof(union $Bytes8));
+  if (allocate_data) res->data = malloc(size * $elem_size(typ) * sizeof(union $Bytes8));
   return res;
 }
 
@@ -31,7 +31,7 @@ long $prod($list lst) {
   return res;
 }
 
-bool $is_contiguous($ndarray a) {
+bool $is_contiguous(numpy$$ndarray a) {
   long size = $LONGELEM(a->strides,a->ndim-1);
   if (size != 1) return false;
   for (int i = a->ndim-2; i>=0; i--) {
@@ -57,13 +57,13 @@ $list $mk_strides($list shape) {
 
 // Superclass methods /////////////////////////////////////////////////////////////////////////
 
-void $ndarray__init__($ndarray a, $WORD w) {
-  $ndarray r = $ndarray_fromatom(w);
-  memcpy(a,r,sizeof(struct $ndarray));
+void numpy$$ndarray__init__(numpy$$ndarray a, $WORD w) {
+  numpy$$ndarray r = numpy$$ndarray_fromatom(w);
+  memcpy(a,r,sizeof(struct numpy$$ndarray));
 }
 
 
-$str $ndarray__str__($ndarray a) {
+$str numpy$$ndarray__str__(numpy$$ndarray a) {
   if (a->ndim==0) {
     switch (a->elem_type) {
     case LongType:
@@ -77,8 +77,8 @@ $str $ndarray__str__($ndarray a) {
     ix->length = 1;
     for (long i = 0; i< $LONGELEM(a->shape,0); i++) {
       ix->data[0] = to$int(i);
-      $ndarray b = $ndarray_getslice(a,ix);
-      $list_append(strs,$ndarray__str__(b));
+      numpy$$ndarray b = numpy$$ndarray_getslice(a,ix);
+      $list_append(strs,numpy$$ndarray__str__(b));
     }
     $str s = $str_join_par('[',strs,']');
     $Plus wit = ($Plus)$Plus$str$witness;
@@ -90,7 +90,7 @@ $str $ndarray__str__($ndarray a) {
 
 // reshape attempts to present a new view, but may have to copy data.
 
-$ndarray $ndarray_reshape($ndarray a, $list newshape) {
+numpy$$ndarray numpy$$ndarray_reshape(numpy$$ndarray a, $list newshape) {
   long size = $prod(newshape);
   if (a->size != size)
     RAISE(($BaseException)$NEW($ValueError,to$str("wrong number of array elements for reshape")));
@@ -128,7 +128,7 @@ $ndarray $ndarray_reshape($ndarray a, $list newshape) {
   for (int i = newstrides->length-2; i>=0; i--)
     newstrides->data[i] = to$int($LONGELEM(newstrides,i+1) * $LONGELEM(newshape,i+1));
   // Build result
-  $ndarray res = $newarray(a->elem_type,newshape->length,a->size,newshape,newstrides,false);
+  numpy$$ndarray res = $newarray(a->elem_type,newshape->length,a->size,newshape,newstrides,false);
   if (!needcopy) {
     res->offset = a->offset;
     res->data = a->data;
@@ -137,7 +137,7 @@ $ndarray $ndarray_reshape($ndarray a, $list newshape) {
     res->data = malloc(size * sizeof(union $Bytes8));
     union $Bytes8 *ixres = res->data;
     union $Bytes8 *ixa;
-    $array_iterator_state ita = $mk_iterator(a);
+    numpy$$array_iterator_state ita = $mk_iterator(a);
     while ((ixa = iter_next(ita))) {
       *ixres = *ixa;
       ixres++;
@@ -149,7 +149,7 @@ $ndarray $ndarray_reshape($ndarray a, $list newshape) {
 // permutes axes in a to the order given by axes.
 // If second argument is NULL, reverse order of axes.
 // Does not copy data; returns a new view.
-$ndarray $ndarray_transpose($ndarray a, $list axes) {
+numpy$$ndarray numpy$$ndarray_transpose(numpy$$ndarray a, $list axes) {
   $list newshape, newstrides;
   if (!axes) {
     newshape = $list_copy(a->shape);
@@ -176,22 +176,22 @@ $ndarray $ndarray_transpose($ndarray a, $list axes) {
       newstrides->data[i] = a->strides->data[n];
     }
   }
-  $ndarray res = $newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
+  numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,newshape,newstrides,false);
   res->data = a->data;
   return res;
 }
 
-$ndarray $ndarray_flatten($ndarray a) {
+numpy$$ndarray numpy$$ndarray_flatten(numpy$$ndarray a) {
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(a->size));
-  return $ndarray_reshape(a,newshape);
+  return numpy$$ndarray_reshape(a,newshape);
 }
 
 // Makes a contiguous deep copy of its argument with stride of last dimension == 1.
 
-$ndarray $ndarray_copy($ndarray a) {
-  $ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
-  $array_iterator_state it = $mk_iterator(a);
+numpy$$ndarray numpy$$ndarray_copy(numpy$$ndarray a) {
+  numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
+  numpy$$array_iterator_state it = $mk_iterator(a);
   union $Bytes8 *ixres, *ixa;
   ixres = res->data;
   while ((ixa = iter_next(it))) {
@@ -203,7 +203,7 @@ $ndarray $ndarray_copy($ndarray a) {
 
 // basic slicing 
 
-$ndarray $ndarray_getslice($ndarray a, $list ix) {
+numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray a, $list ix) {
   // assert length of ix > 0
   int nulls = 0;
   int ints = 0;
@@ -228,7 +228,7 @@ $ndarray $ndarray_getslice($ndarray a, $list ix) {
   if (ints+slices > a->ndim)
     RAISE(($BaseException)$NEW($ValueError,to$str("indexing too many dimensions")));
   int ndim = a->ndim + nulls - ints;
-  $ndarray res = $newarray(a->elem_type,ndim,0,$list_new(ndim),$list_new(ndim),false); // size 0 is temporary
+  numpy$$ndarray res = $newarray(a->elem_type,ndim,0,$list_new(ndim),$list_new(ndim),false); // size 0 is temporary
   res->shape->length = ndim;
   res->strides->length = ndim;
   res->data = a->data;
@@ -270,13 +270,13 @@ $ndarray $ndarray_getslice($ndarray a, $list ix) {
   return res;
 }
 
-struct $ndarray$class $ndarray$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$ndarray__init__,NULL,NULL,NULL,$ndarray__str__,$ndarray_reshape,$ndarray_transpose,$ndarray_copy,$ndarray_getslice};
+struct numpy$$ndarray$class numpy$$ndarray$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,numpy$$ndarray__init__,NULL,NULL,NULL,numpy$$ndarray__str__,numpy$$ndarray_reshape,numpy$$ndarray_transpose,numpy$$ndarray_copy,numpy$$ndarray_getslice};
 
 // Iterating over an ndarray //////////////////////////////////////////////////////////////////////////////
 
 // Aims to be as fast as possible; used in many methods below and in protocol implementations 
-$array_iterator_state $mk_iterator($ndarray a) {
-  $array_iterator_state res = malloc(sizeof(struct $array_iterator_state));
+numpy$$array_iterator_state $mk_iterator(numpy$$ndarray a) {
+  numpy$$array_iterator_state res = malloc(sizeof(struct numpy$$array_iterator_state));
   if (a->ndim==0)
     RAISE(($BaseException)$NEW($ValueError,to$str("cannot make iterator for 0-dim array")));
   res->ndim1 = a->ndim-1;
@@ -295,7 +295,7 @@ $array_iterator_state $mk_iterator($ndarray a) {
   return res;
 }
 
-union $Bytes8 *iter_next($array_iterator_state it) {
+union $Bytes8 *iter_next(numpy$$array_iterator_state it) {
   it->current += it->currentstride;
   if (++it->lastshapepos == it->lastshapelength) { 
     it->lastshapepos = 0;
@@ -324,12 +324,12 @@ union $Bytes8 *iter_next($array_iterator_state it) {
  
 // Auxiliary function for mapping functions and operators over an ndarray ///////////////////////////////////////////
 
-$ndarray $ndarray_func(union $Bytes8(*f)(union $Bytes8),$ndarray a) {
+numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a) {
   $list resstrides = $mk_strides(a->shape);
-  $ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true); 
+  numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true); 
   union $Bytes8 *ixres = res->data;
   union $Bytes8 *ixa;
-  $array_iterator_state it = $mk_iterator(a);
+  numpy$$array_iterator_state it = $mk_iterator(a);
   while ((ixa = iter_next(it))) {
     *ixres = f(*ixa);
     ixres++;
@@ -341,7 +341,7 @@ $ndarray $ndarray_func(union $Bytes8(*f)(union $Bytes8),$ndarray a) {
 
 // returns the common extended shape and, as outparams, iterators for the two extended operands
 
-$ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator_state *it1, $array_iterator_state *it2) {
+numpy$$ndarray numpy$$ndarray_broadcast(numpy$$ndarray a1, numpy$$ndarray a2, numpy$$array_iterator_state *it1, numpy$$array_iterator_state *it2) {
   int len;
   $list resshape, shape1, shape2, strides1, strides2;
   shape1 = $list_copy(a1->shape);
@@ -375,8 +375,8 @@ $ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator_state *it1
     else
       RAISE(($BaseException)$NEW($ValueError,to$str("ndarray broadcasting: shapes do not match")));
   }
-  $ndarray res = $newarray(a1->elem_type,len,$prod(resshape),resshape,$mk_strides(resshape),true);
-  $ndarray tmparr = $newarray(a1->elem_type,len,res->size,res->shape,strides1,false); // only for making iterators
+  numpy$$ndarray res = $newarray(a1->elem_type,len,$prod(resshape),resshape,$mk_strides(resshape),true);
+  numpy$$ndarray tmparr = $newarray(a1->elem_type,len,res->size,res->shape,strides1,false); // only for making iterators
   tmparr->offset = a1->offset; 
   tmparr->data = a1->data;
   *it1 = $mk_iterator(tmparr);
@@ -387,11 +387,11 @@ $ndarray $ndarray_broadcast($ndarray a1, $ndarray a2, $array_iterator_state *it1
   return res;
 }
  
-$ndarray $ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),$ndarray a, $ndarray b) {
+numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),numpy$$ndarray a, numpy$$ndarray b) {
   union $Bytes8 *ix1, *ix2, *ixres;
   long stride1, stride2, len;
-  $array_iterator_state it1, it2;
-  $ndarray res = $ndarray_broadcast(a,b,&it1,&it2);
+  numpy$$array_iterator_state it1, it2;
+  numpy$$ndarray res = numpy$$ndarray_broadcast(a,b,&it1,&it2);
   ixres = res->data;
   while ((ix1 = iter_next(it1))) {
       ix2 = iter_next(it2);
@@ -407,14 +407,14 @@ $ndarray $ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),$ndarray
 
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
-$ndarray $ndarray_fromatom($WORD a) {
+numpy$$ndarray numpy$$ndarray_fromatom($WORD a) {
   if ($ISINSTANCE(($Super)a,$int)->val) {
-    $ndarray res = $newarray(LongType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+    numpy$$ndarray res = $newarray(LongType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->l = (($int)a)->val;
     return res;
   }
   if ($ISINSTANCE(($Super)a,$float)->val) {
-    $ndarray res = $newarray(DblType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+    numpy$$ndarray res = $newarray(DblType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->d = (($float)a)->val;
     return res;
   }
@@ -428,12 +428,12 @@ $ndarray $ndarray_fromatom($WORD a) {
 
 // n evenly spaced floats between a and b
 
-$ndarray $ndarray_linspace($float a, $float b, $int n) {
+numpy$$ndarray numpy$$ndarray_linspace($float a, $float b, $int n) {
   $list shape = $NEW($list,NULL,NULL);
   $list_append(shape,n);
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
-  $ndarray res = $newarray(DblType,1,n->val,shape,strides,true);
+  numpy$$ndarray res = $newarray(DblType,1,n->val,shape,strides,true);
   double step = (b->val - a->val)/(n->val-1);
   for (long i = 0; i<n->val; i++) {
     res->data[i].d = a->val + i * step;
@@ -443,15 +443,15 @@ $ndarray $ndarray_linspace($float a, $float b, $int n) {
 
 // array of ints described by a range
 
-$ndarray $ndarray_arange($int start, $int stop, $int step) {
-  $Collection$range wit = ($Collection$range)$Sequence$range$witness->w$Collection;
+numpy$$ndarray numpy$$ndarray_arange($int start, $int stop, $int step) {
+  $Iterable$range wit = $Iterable$range$witness;
   $range r = $NEW($range,start,stop,step);
-  $int len = wit->$class->__len__(wit,r);
+  long len = (stop->val - start->val)/step->val;
   $list shape = $NEW($list,NULL,NULL);
-  $list_append(shape,len);
+  $list_append(shape,to$int(len));
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
-  $ndarray res = $newarray(LongType,1,len->val,shape,strides,true);
+  numpy$$ndarray res = $newarray(LongType,1,len,shape,strides,true);
   $Iterator it = wit->$class->__iter__(wit,r);
   $WORD elem;
   int i=0;
@@ -464,14 +464,14 @@ $ndarray $ndarray_arange($int start, $int stop, $int step) {
 
 // make an array from a list
 
-$ndarray $ndarray_array($Primitive wit, $list elems) {
+numpy$$ndarray numpy$$ndarray_array(numpy$$Primitive wit, $list elems) {
   $list shape = $NEW($list,NULL,NULL);
   $list_append(shape,to$int(elems->length));
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
   if (elems->length == 0)
     RAISE(($BaseException)$NEW($ValueError,to$str("function array cannot create empty ndarray")));
-  $ndarray res = $newarray(wit->$class->elem_type,1,elems->length,shape,strides,true);
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,1,elems->length,shape,strides,true);
   for (int i=0; i<elems->length; i++) 
     res->data[i] = wit->$class->from$obj($list_getitem(elems,i));
   return res;
@@ -482,10 +482,10 @@ $ndarray $ndarray_array($Primitive wit, $list elems) {
 
 // Most of these are yet only defined with default parameters.
 
-$ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k) {
-  $ndarray res = $ndarray_copy(a);
+numpy$$ndarray numpy$$ndarray_partition(numpy$$Primitive wit, numpy$$ndarray a, $int k) {
+  numpy$$ndarray res = numpy$$ndarray_copy(a);
   res->ndim--;
-  $array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+  numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
   res->ndim++;
   for (int i=0; i < $LONGELEM(res->shape,res->ndim-2); i++) {
     union $Bytes8 *start =iter_next(it);
@@ -494,8 +494,8 @@ $ndarray $ndarray_partition($Primitive wit, $ndarray a, $int k) {
   return res;
 }
 
-$ndarray $ndarray_sort($Primitive wit, $ndarray a, $int axis) {
-  $ndarray res = $ndarray_copy(a);
+numpy$$ndarray numpy$$ndarray_sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
+  numpy$$ndarray res = numpy$$ndarray_copy(a);
   if (!axis) {
     quicksort(res->data,0,res->size-1,wit->$class->$lt);
     $list newshape = $list_new(1);
@@ -507,7 +507,7 @@ $ndarray $ndarray_sort($Primitive wit, $ndarray a, $int axis) {
     res->ndim = 1;
   } else if (axis->val == -1 || axis->val == a->ndim-1) {
     res->ndim--;
-    $array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
+    numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
     res->ndim++;
     union $Bytes8 *start;
     while ((start = iter_next(it))) 
@@ -518,9 +518,9 @@ $ndarray $ndarray_sort($Primitive wit, $ndarray a, $int axis) {
 }
 
 
-$ndarray $ndarray_clip($Primitive wit, $ndarray a, $WORD low, $WORD high) {
-  $ndarray res = $ndarray_copy(a);
-  $array_iterator_state it = $mk_iterator(res);
+numpy$$ndarray numpy$$ndarray_clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high) {
+  numpy$$ndarray res = numpy$$ndarray_copy(a);
+  numpy$$array_iterator_state it = $mk_iterator(res);
   union $Bytes8 lo, hi, x, *ix, *ixres = res->data;
   if (low) lo = wit->$class->from$obj(low);
   if (high) hi = wit->$class->from$obj(high);
@@ -537,7 +537,7 @@ $ndarray $ndarray_clip($Primitive wit, $ndarray a, $WORD low, $WORD high) {
   return res;
 }
 
-union $Bytes8 $dot1dim($Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long size, long stridea, long strideb) {
+union $Bytes8 $dot1dim(numpy$$Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long size, long stridea, long strideb) {
   // a has stride 1 since it is copied except for dot(a,b) when both a and b are 1dim
   union $Bytes8 res = (union $Bytes8)0L;
   union $Bytes8 *ixa, *ixb, *ixaend;
@@ -552,11 +552,11 @@ union $Bytes8 $dot1dim($Primitive wit, union $Bytes8 *a, union $Bytes8 *b, long 
   return res;
 }
  
-$ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b) {
-  $ndarray res;
+numpy$$ndarray numpy$$ndarray_dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b) {
+  numpy$$ndarray res;
   if (a->ndim==0 || b->ndim==0) {
     // following  Python's numpy, we multiply elementwise...
-    $Integral$ndarray wit2 = $NEW($Integral$ndarray,wit);
+    numpy$$Integral$ndarray wit2 = $NEW(numpy$$Integral$ndarray,wit);
     res = wit2->$class->__mul__(wit2,a,b);
   } else if (b->ndim==1) {
     long len = $LONGELEM(b->shape,0);
@@ -571,7 +571,7 @@ $ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b) {
     } else {
       union $Bytes8 *ixres = res->data, *ixa;
       a->ndim--;
-      $array_iterator_state ita = $mk_iterator(a);
+      numpy$$array_iterator_state ita = $mk_iterator(a);
       a->ndim++;
       while ((ixa = iter_next(ita))) {
         *ixres = $dot1dim(wit,ixa,b->data,len,stridea,strideb);
@@ -584,7 +584,7 @@ $ndarray $ndarray_dot($Primitive wit, $ndarray a, $ndarray b) {
   return res; 
 }
 
-union $Bytes8 $sum1dim($Primitive wit, union $Bytes8 *a, long size, long stridea) { 
+union $Bytes8 $sum1dim(numpy$$Primitive wit, union $Bytes8 *a, long size, long stridea) { 
   union $Bytes8 res = (union $Bytes8)0L;
   union $Bytes8 *ixa, *ixaend;
   ixa = a;
@@ -597,11 +597,11 @@ union $Bytes8 $sum1dim($Primitive wit, union $Bytes8 *a, long size, long stridea
 }
 
 
-$ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis) {
-  $ndarray res;
+numpy$$ndarray numpy$$ndarray_sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
+  numpy$$ndarray res;
   if(!axis) {
     union $Bytes8 resd = (union $Bytes8) 0L;
-   $array_iterator_state it = $mk_iterator(a);
+   numpy$$array_iterator_state it = $mk_iterator(a);
    union $Bytes8 *ixa;
    while ((ixa = iter_next(it)))
      wit->$class->$iadd(&resd,*ixa); 
@@ -615,7 +615,7 @@ $ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis) {
     $list newshape = $list_getslice(a->shape,$NEW($Slice,NULL,to$int(-1),NULL));
     res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
     a->ndim--;
-    $array_iterator_state ita = $mk_iterator(a);
+    numpy$$array_iterator_state ita = $mk_iterator(a);
     a->ndim++;
     union $Bytes8 *ixa;
     union $Bytes8 *ixres = res->data;
@@ -628,11 +628,11 @@ $ndarray $ndarray_sum($Primitive wit, $ndarray a, $int axis) {
     return res;
 }         
 
-$ndarray $ndarray_abs($Primitive wit, $ndarray a) {
-  return $ndarray_func(wit->$class->$abs,a);
+numpy$$ndarray numpy$$ndarray_abs(numpy$$Primitive wit, numpy$$ndarray a) {
+  return numpy$$ndarray_func(wit->$class->$abs,a);
 }
 
-$WORD $ndarray_scalar ($Primitive wit, $ndarray a) {
+$WORD numpy$$ndarray_scalar (numpy$$Primitive wit, numpy$$ndarray a) {
   if (a->ndim > 0)
      RAISE(($BaseException)$NEW($ValueError,to$str("scalar only for zero-dim arrays")));
   return wit->$class->to$obj(a->data[0]);
@@ -641,35 +641,35 @@ $WORD $ndarray_scalar ($Primitive wit, $ndarray a) {
 
 // Iterator over ndarrays ////////////////////////////////////////////////////////////////////////
 
-void $Iterator$ndarray_init($Iterator$ndarray self, $Primitive pwit, $ndarray a) {
+void numpy$$Iterator$ndarray_init(numpy$$Iterator$ndarray self, numpy$$Primitive pwit, numpy$$ndarray a) {
   self->pwit = pwit;
   self->it = $mk_iterator(a);
 }
 
-$bool $Iterator$ndarray_bool($Iterator$ndarray self) {
+$bool numpy$$Iterator$ndarray_bool(numpy$$Iterator$ndarray self) {
   return $True;
 }
 
-$str $Iterator$ndarray_str($Iterator$ndarray self) {
+$str numpy$$Iterator$ndarray_str(numpy$$Iterator$ndarray self) {
   char *s;
   asprintf(&s,"<ndarray iterator object at %p>",self);
   return to$str(s);
 }
 
-$WORD $Iterator$ndarray$__next__($Iterator$ndarray self) {
+$WORD numpy$$Iterator$ndarray$__next__(numpy$$Iterator$ndarray self) {
   union $Bytes8 *n = iter_next(self->it);
   return n ? self->pwit->$class->to$obj(*n) : NULL;
 }
 
-void $Iterator$ndarray_serialize($Iterator$ndarray self,$Serial$state state) {
+void numpy$$Iterator$$ndarray_serialize(numpy$$Iterator$ndarray self,$Serial$state state) {
   RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
 }
 
-$Iterator$ndarray $Iterator$ndarray$_deserialize($Serial$state state) {
+numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize($Serial$state state) {
   RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
    return NULL;
 }
 
-struct $Iterator$ndarray$class $Iterator$ndarray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$ndarray_init,
-                                                      $Iterator$ndarray_serialize, $Iterator$ndarray$_deserialize,$Iterator$ndarray_bool,$Iterator$ndarray_str,$Iterator$ndarray$__next__};
+struct numpy$$Iterator$ndarray$class numpy$$Iterator$ndarray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, numpy$$Iterator$ndarray_init,
+                                                      numpy$$Iterator$$ndarray_serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$ndarray_bool,numpy$$Iterator$ndarray_str,numpy$$Iterator$ndarray$__next__};
 

@@ -1,165 +1,190 @@
 
-struct $Integral$ndarray;
-typedef struct $Integral$ndarray *$Integral$ndarray;
+struct numpy$$Integral$ndarray;
+typedef struct numpy$$Integral$ndarray *numpy$$Integral$ndarray;
 
-struct $Integral$ndarray$class;
-typedef struct $Integral$ndarray$class *$Integral$ndarray$class;
+struct numpy$$Integral$ndarray$class;
+typedef struct numpy$$Integral$ndarray$class *numpy$$Integral$ndarray$class;
 
-struct $Logical$ndarray;
-typedef struct $Logical$ndarray *$Logical$ndarray;
+struct numpy$$Logical$ndarray;
+typedef struct numpy$$Logical$ndarray *numpy$$Logical$ndarray;
 
-struct $Logical$ndarray$class;
-typedef struct $Logical$ndarray$class *$Logical$ndarray$class;
+struct numpy$$Logical$ndarray$class;
+typedef struct numpy$$Logical$ndarray$class *numpy$$Logical$ndarray$class;
 
-struct $Minus$ndarray;
-typedef struct $Minus$ndarray *$Minus$ndarray;
+struct numpy$$Minus$ndarray;
+typedef struct numpy$$Minus$ndarray *numpy$$Minus$ndarray;
 
-struct $Minus$ndarray$class;
-typedef struct $Minus$ndarray$class *$Minus$ndarray$class;
+struct numpy$$Minus$ndarray$class;
+typedef struct numpy$$Minus$ndarray$class *numpy$$Minus$ndarray$class;
 
-struct $Iterable$ndarray;
-typedef struct $Iterable$ndarray *$Iterable$ndarray;
+struct numpy$$Iterable$ndarray;
+typedef struct numpy$$Iterable$ndarray *numpy$$Iterable$ndarray;
 
-struct $Iterable$ndarray$class;
-typedef struct $Iterable$ndarray$class *$Iterable$ndarray$class;
+struct numpy$$Iterable$ndarray$class;
+typedef struct numpy$$Iterable$ndarray$class *numpy$$Iterable$ndarray$class;
 
-// $Integral$ndarray ////////////////////////////////////////////////////////////
+// numpy$$Integral$ndarray ////////////////////////////////////////////////////////////
 
-struct $Integral$ndarray {
-    $Integral$ndarray$class $class;
-    $Logical$ndarray w$Logical$Integral;
-    $Minus$ndarray w$Minus$Integral;
-    $Primitive w$Primitive$A;
+struct numpy$$Integral$ndarray {
+    numpy$$Integral$ndarray$class $class;
+    $Logical w$Logical;
+    $Minus w$Minus;
+    numpy$$Primitive w$Primitive$A$numpy;
 };
 
-struct $Integral$ndarray$class {
+struct numpy$$Integral$ndarray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Integral$ndarray,$Primitive);
-    $ndarray (*__add__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__fromatom__)($Integral$ndarray,$WORD);
-    $complex (*__complx__)($Integral$ndarray, $ndarray);
-    $ndarray (*__mul__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__truediv__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__pow__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__neg__)($Integral$ndarray, $ndarray);
-    $ndarray (*__pos__)($Integral$ndarray, $ndarray);
-    $WORD (*real)($Integral$ndarray, $Real, $ndarray);
-    $WORD (*imag)($Integral$ndarray, $Real, $ndarray);
-    $WORD (*__abs__)($Integral$ndarray, $Real, $ndarray);
-    $ndarray (*conjugate)($Integral$ndarray, $ndarray);
-    $float (*__float__)($Integral$ndarray, $ndarray);
-    $WORD (*__trunc__)($Integral$ndarray, $Integral, $ndarray);
-    $WORD (*__floor__)($Integral$ndarray, $Integral, $ndarray);
-    $WORD (*__ceil__)($Integral$ndarray, $Integral, $ndarray);
-    $ndarray (*__round__)($Integral$ndarray, $ndarray, $ndarray);
-    $WORD (*numerator)($Integral$ndarray, $Integral, $ndarray);
-    $WORD (*denominator)($Integral$ndarray, $Integral, $ndarray);
-    $ndarray (*__int__)($Integral$ndarray, $ndarray);
-    $ndarray (*__index__)($Integral$ndarray, $ndarray);
-    $tuple (*__divmod__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__floordiv__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__mod__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__lshift__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__rshift__)($Integral$ndarray, $ndarray, $ndarray);
-    $ndarray (*__invert__)($Integral$ndarray, $ndarray);
+    void (*__init__)(numpy$$Integral$ndarray,numpy$$Primitive);
+    void (*__serialize__)(numpy$$Integral$ndarray,$Serial$state); 
+    numpy$$Integral$ndarray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(numpy$$Integral$ndarray);
+    $str (*__str__)(numpy$$Integral$ndarray);
+    numpy$$ndarray (*__add__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__fromatom__)(numpy$$Integral$ndarray,$WORD);
+    $complex (*__complx__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__mul__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__truediv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__pow__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__neg__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__pos__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    $WORD (*real)(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+    $WORD (*imag)(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+    $WORD (*__abs__)(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+    numpy$$ndarray (*conjugate)(numpy$$Integral$ndarray, numpy$$ndarray);
+    $float (*__float__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    $WORD (*__trunc__)(numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+    $WORD (*__floor__)(numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+    $WORD (*__ceil__)(numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+    numpy$$ndarray (*__round__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    $WORD (*numerator)(numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+    $WORD (*denominator)(numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+    numpy$$ndarray (*__int__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__index__)(numpy$$Integral$ndarray, numpy$$ndarray);
+    $tuple (*__divmod__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__floordiv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__mod__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__lshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__rshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__invert__)(numpy$$Integral$ndarray, numpy$$ndarray);
 };
 
-void $Integral$ndarray$__init__ ($Integral$ndarray);
-$ndarray $Integral$ndarray$__add__($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__fromatom__($Integral$ndarray,$WORD);
-$complex $Integral$ndarray$__complx__($Integral$ndarray, $ndarray);
-$ndarray $Integral$ndarray$__mul__($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__truediv__($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__pow__($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__neg__($Integral$ndarray, $ndarray);
-$ndarray $Integral$ndarray$__pos__($Integral$ndarray, $ndarray);
-$WORD $Integral$ndarray$real($Integral$ndarray, $Real, $ndarray);
-$WORD $Integral$ndarray$imag($Integral$ndarray, $Real, $ndarray);
-$WORD $Integral$ndarray$__abs__($Integral$ndarray, $Real, $ndarray);
-$ndarray $Integral$ndarray$conjugate($Integral$ndarray, $ndarray);
-$float $Integral$ndarray$__float__ ($Integral$ndarray, $ndarray);
-$WORD $Integral$ndarray$__trunc__ ($Integral$ndarray, $Integral, $ndarray);
-$WORD $Integral$ndarray$__floor__ ($Integral$ndarray, $Integral, $ndarray);
-$WORD $Integral$ndarray$__ceil__ ($Integral$ndarray, $Integral, $ndarray);
-$ndarray $Integral$ndarray$__round__ ($Integral$ndarray, $ndarray, $ndarray);
-$WORD $Integral$ndarray$numerator ($Integral$ndarray, $Integral, $ndarray);
-$WORD $Integral$ndarray$denominator ($Integral$ndarray, $Integral, $ndarray);
-$ndarray $Integral$ndarray$__int__ ($Integral$ndarray, $ndarray);
-$ndarray $Integral$ndarray$__index__ ($Integral$ndarray, $ndarray);
-$tuple $Integral$ndarray$__divmod__ ($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__floordiv__ ($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__mod__ ($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__lshift__ ($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__rshift__ ($Integral$ndarray, $ndarray, $ndarray);
-$ndarray $Integral$ndarray$__invert__ ($Integral$ndarray, $ndarray);
+void numpy$$Integral$ndarray$__init__ ($Integral);
+void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray,$Serial$state); 
+numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state);
+numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray,$WORD);
+$complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__mul__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__truediv__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__pow__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__neg__(numpy$$Integral$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__pos__(numpy$$Integral$ndarray, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$real(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$imag(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$__abs__(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$conjugate(numpy$$Integral$ndarray, numpy$$ndarray);
+$float numpy$$Integral$ndarray$__float__ (numpy$$Integral$ndarray, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$__trunc__ (numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$__floor__ (numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$__ceil__ (numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__round__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$numerator (numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+$WORD numpy$$Integral$ndarray$denominator (numpy$$Integral$ndarray, $Integral, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__int__ (numpy$$Integral$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__index__ (numpy$$Integral$ndarray, numpy$$ndarray);
+$tuple numpy$$Integral$ndarray$__divmod__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__floordiv__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__mod__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__lshift__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__rshift__ (numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Integral$ndarray$__invert__ (numpy$$Integral$ndarray, numpy$$ndarray);
 
-// $Logical$ndarray ////////////////////////////////////////////////////////////
+// numpy$$Logical$ndarray ////////////////////////////////////////////////////////////
 
-struct $Logical$ndarray {
-    $Logical$ndarray$class $class;
-    $Integral$ndarray w$Integral$ndarray;
+struct numpy$$Logical$ndarray {
+    numpy$$Logical$ndarray$class $class;
+    $Integral w$Integral;
 };
 
-struct $Logical$ndarray$class {
+struct numpy$$Logical$ndarray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__)($Logical$ndarray, $Integral$ndarray);
-    $ndarray (*__and__)($Logical$ndarray, $ndarray, $ndarray);
-    $ndarray (*__or__)($Logical$ndarray, $ndarray, $ndarray);
-    $ndarray (*__xor__)($Logical$ndarray, $ndarray, $ndarray);
+    void (*__init__)(numpy$$Logical$ndarray, $Integral);
+    void (*__serialize__)(numpy$$Logical$ndarray,$Serial$state); 
+    numpy$$Logical$ndarray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(numpy$$Logical$ndarray);
+    $str (*__str__)(numpy$$Logical$ndarray);
+    numpy$$ndarray (*__and__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__or__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__xor__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
-void $Logical$ndarray$__init__ ($Logical$ndarray, $Integral$ndarray);
-$ndarray $Logical$ndarray$__and__ ($Logical$ndarray, $ndarray, $ndarray);
-$ndarray $Logical$ndarray$__or__ ($Logical$ndarray, $ndarray, $ndarray);
-$ndarray $Logical$ndarray$__xor__ ($Logical$ndarray, $ndarray, $ndarray);
+void numpy$$Logical$ndarray$__init__ (numpy$$Logical$ndarray, $Integral);
+void numpy$$Logical$ndarray$__serialize__(numpy$$Logical$ndarray,$Serial$state); 
+numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__($Serial$state);
+numpy$$ndarray numpy$$Logical$ndarray$__and__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Logical$ndarray$__or__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+numpy$$ndarray numpy$$Logical$ndarray$__xor__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
 
-// $Minus$ndarray ////////////////////////////////////////////////////////////
+// numpy$$Minus$ndarray ////////////////////////////////////////////////////////////
 
-struct $Minus$ndarray {
-    $Minus$ndarray$class $class;
-    $Integral$ndarray w$Integral$ndarray;
+struct numpy$$Minus$ndarray {
+    numpy$$Minus$ndarray$class $class;
+    $Integral w$Integral;
 };
 
-struct $Minus$ndarray$class {
+struct numpy$$Minus$ndarray$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-  void (*__init__)($Minus$ndarray, $Integral$ndarray);
-    $ndarray (*__sub__)($Minus$ndarray, $ndarray, $ndarray);
+    void (*__init__)(numpy$$Minus$ndarray, $Integral);
+    void (*__serialize__)(numpy$$Minus$ndarray,$Serial$state); 
+    numpy$$Minus$ndarray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(numpy$$Minus$ndarray);
+    $str (*__str__)(numpy$$Minus$ndarray);
+    numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
-void $Minus$ndarray$__init__ ($Minus$ndarray, $Integral$ndarray);
-$ndarray $Minus$ndarray$__sub__ ($Minus$ndarray, $ndarray, $ndarray);
+void numpy$$Minus$ndarray$__init__ (numpy$$Minus$ndarray, $Integral);
+void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray,$Serial$state); 
+numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__($Serial$state);
+numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 
-// $Iterable$ndarray ////////////////////////////////////////////////////////////
+// numpy$$Iterable$ndarray ////////////////////////////////////////////////////////////
 
-struct $Iterable$ndarray {
-  $Iterable$ndarray$class $class;
-  $Primitive pwit;
+/*  Later (needs implementation of Iterator$ndarray)
+struct numpy$$Iterable$ndarray {
+  numpy$$Iterable$ndarray$class $class;
+  numpy$$Primitive pwit;
 };
 
-struct $Iterable$ndarray$class {
-  char *$GCINFO;
-  int $class_id;
-  $Super$class $superclass;
-  void (*__init__)($Iterable$ndarray, $Primitive);
-  $Iterator (*__iter__)($Iterable$ndarray, $ndarray);
+struct numpy$$Iterable$ndarray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__)(numpy$$Iterable$ndarray, numpy$$Primitive);
+    void (*__serialize__)(numpy$$Iterable$ndarray,$Serial$state); 
+    numpy$$Iterable$ndarray (*__deserialize__)($Serial$state);
+    $bool (*__bool__)(numpy$$Iterable$ndarray);
+    $str (*__str__)(numpy$$Iterable$ndarray);
+    $Iterator (*__iter__)(numpy$$Iterable$ndarray, numpy$$ndarray);
 };
 
-//void $Iterable$ndarray$__init__ ($Iterable$ndarray);
-$Iterator $Iterable$ndarray$__iter__ ($Iterable$ndarray, $ndarray);
-
+void numpy$$Iterable$ndarray$__init__ (numpy$$Iterable$ndarray);
+void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state); 
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
+$Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
+*/
 
 
 // method tables /////////////////////////////////////////////////////////////////
 
-extern struct $Integral$ndarray$class $Integral$ndarray$methods;
-extern struct $Logical$ndarray$class $Logical$ndarray$methods;
-extern struct $Minus$ndarray$class $Minus$ndarray$methods;
-extern struct $Iterable$ndarray$class $Iterable$ndarray$methods;
+extern struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods;
+extern struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods;
+extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
+// extern struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods;
 
 

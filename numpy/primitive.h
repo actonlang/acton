@@ -4,26 +4,28 @@
 // This file provides the necessary type definitions and $UnboxedFunctions structs for the
 // two Acton types supported at the moment, int and float (i.e., boxed long and double).
 
-struct $Primitive;
-typedef struct $Primitive *$Primitive;
 
-struct $Primitive$class;
-typedef struct $Primitive$class *$Primitive$class;
 
-struct $Primitive$int;
-typedef struct $Primitive$int *$Primitive$int;
+struct numpy$$Primitive;
+typedef struct numpy$$Primitive *numpy$$Primitive;
 
-struct $Primitive$int$class;
-typedef struct $Primitive$int$class *$Primitive$int$class;
+struct numpy$$Primitive$class;
+typedef struct numpy$$Primitive$class *numpy$$Primitive$class;
 
-struct $Primitive$float;
-typedef struct $Primitive$float *$Primitive$float;
+struct numpy$$Primitive$int;
+typedef struct numpy$$Primitive$int *numpy$$Primitive$int;
 
-struct $Primitive$float$class;
-typedef struct $Primitive$float$class *$Primitive$float$class;
+struct numpy$$Primitive$int$class;
+typedef struct numpy$$Primitive$int$class *numpy$$Primitive$int$class;
 
-struct $Primitive {
-    $Primitive$class $class;
+struct numpy$$Primitive$float;
+typedef struct numpy$$Primitive$float *numpy$$Primitive$float;
+
+struct numpy$$Primitive$float$class;
+typedef struct numpy$$Primitive$float$class *numpy$$Primitive$float$class;
+
+struct numpy$$Primitive {
+    numpy$$Primitive$class $class;
 };
 
 union $Bytes8 {
@@ -33,13 +35,17 @@ union $Bytes8 {
 
 enum ElemType {LongType,DblType};
 
-int elem_size(enum ElemType typ);
+int $elem_size(enum ElemType typ);
 
-struct $Primitive$class {
+struct numpy$$Primitive$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Primitive);
+  void (*__init__)(numpy$$Primitive);
+  void (*__serialize__)(numpy$$Primitive,$Serial$state); 
+  numpy$$Primitive (*__deserialize__)($Serial$state);
+  $bool (*__bool__)(numpy$$Primitive);
+  $str (*__str__)(numpy$$Primitive);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);                      
   union $Bytes8 (*from$obj)($WORD);
@@ -84,15 +90,19 @@ $str d$prim_str(union $Bytes8 n);
 
 // Primitive instance for int ///////////////////////////////////////////////////////////////
 
-struct $Primitive$int {
-    $Primitive$int$class $class;
+struct numpy$$Primitive$int {
+    numpy$$Primitive$int$class $class;
 };
 
-struct $Primitive$int$class {
+struct numpy$$Primitive$int$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Primitive$int);
+  void (*__init__)(numpy$$Primitive$int);
+  void (*__serialize__)(numpy$$Primitive$int,$Serial$state); 
+  numpy$$Primitive$int (*__deserialize__)($Serial$state);
+  $bool (*__bool__)(numpy$$Primitive$int);
+  $str (*__str__)(numpy$$Primitive$int);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);                      
   union $Bytes8 (*from$obj)($WORD);                    
@@ -134,15 +144,19 @@ struct $Primitive$int$class {
 
 // Primitive instance for float ///////////////////////////////////////////////////////////////
 
-struct $Primitive$float {
-  $Primitive$float$class $class;
+struct numpy$$Primitive$float {
+  numpy$$Primitive$float$class $class;
 };
 
-struct $Primitive$float$class {
+struct numpy$$Primitive$float$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($Primitive$float);
+  void (*__init__)(numpy$$Primitive$float);
+  void (*__serialize__)(numpy$$Primitive$float,$Serial$state); 
+  numpy$$Primitive$float (*__deserialize__)($Serial$state);
+  $bool (*__bool__)(numpy$$Primitive$float);
+  $str (*__str__)(numpy$$Primitive$float);
   enum ElemType elem_type;
   $WORD (*to$obj)(union $Bytes8);                      
   union $Bytes8 (*from$obj)($WORD);
@@ -184,11 +198,11 @@ struct $Primitive$float$class {
 
 // Witnesses ////////////////////////////////////////////////////////////////////////////
 
-extern struct $Primitive$int$class  $Primitive$int$methods;
-extern struct $Primitive$float$class  $Primitive$float$methods;
+extern struct numpy$$Primitive$int$class  numpy$$Primitive$int$methods;
+extern struct numpy$$Primitive$float$class  numpy$$Primitive$float$methods;
 
-extern struct $Primitive$int *$Primitive$int$witness;
-extern struct $Primitive$float *$Primitive$float$witness;
+extern struct numpy$$Primitive$int *numpy$$Primitive$int$witness;
+extern struct numpy$$Primitive$float *numpy$$Primitive$float$witness;
 
 
 
