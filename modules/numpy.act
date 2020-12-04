@@ -1,13 +1,14 @@
 protocol Primitive: pass
 
-class ndselection(struct):
+class ndselect(struct):
     pass
 
-class ndindexselection(ndselection):
+class ndindex(ndselect):
     __init__: (int) -> None
 
-class ndsliceselection(ndselection):
+class ndslice(ndselect):
     __init__: (Slice) -> None
+    
 class ndarray[A]: 
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
@@ -15,7 +16,7 @@ class ndarray[A]:
     transpose       : (?list[int]) -> Self
     flatten         : () -> Self                     # the same as reshape([-1])
     copy            : () -> Self                     # makes a contiguous deep copy
-    __nd_getslice__ : (list[?ndselection]) -> Self
+    __ndgetslice__ : (list[?ndselect]) -> Self
 
 
 partition           : [A (Primitive)] => (ndarray[A],int,?int)   -> ndarray[A]
