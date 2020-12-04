@@ -58,6 +58,9 @@ infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
                                              (cs,te,ss1) <- (if stub env then infEnv else infSuiteEnv) env ss
+                                             traceM ("### AFTER infSuiteEnv:\n" ++ render (nest 4 (vcat $ map pretty ss1)))
+                                             ss1 <- msubst ss1
+                                             traceM ("### AFTER msubst:\n" ++ render (nest 4 (vcat $ map pretty ss1)))
                                              popFX
                                              eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te
@@ -450,9 +453,7 @@ checkAttributes final te' te
 stripQual q                             = [ Quant v [] | Quant v us <- q ]
 
 toSigs te                               = map makeSig te
-  where sigs                            = [ n | (n,NSig{}) <- te ]
-        makeSig (n, i) | n `elem` sigs  = (n,i)
-        makeSig (n, NDef sc dec)        = (n, NSig sc dec)
+  where makeSig (n, NDef sc dec)        = (n, NSig sc dec)
         makeSig (n, NVar t)             = (n, NSig (monotype t) Static)
         makeSig (n, i)                  = (n,i)
 
@@ -679,6 +680,7 @@ instance Check Decl where
                                              popFX
                                              (cs1,eq1) <- solveScoped env1 tvs te tNone (csu++csb)
                                              checkNoEscape env tvs
+                                             b' <- msubst b'
                                              return (cs1, convExtension env n' n q ps eq1 wmap b')
       where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q

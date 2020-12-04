@@ -36,7 +36,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
 
         mainClass                       = Class NoLoc n0 q1 main mainClassBody
-          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts eq1 b)
+          where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts tSelf' eq1 b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
@@ -47,12 +47,12 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) (tVar tvSelf' : tcargs p)
+          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) (tSelf' : tcargs p)
                 path ws inh             = if inh then tcname (head main) : ws else ws
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts eq1 b)
+        sibClassBody ws n p wes inh     = qsigs ++ psigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts tSelf' eq1 b)
           where psigs                   = [ Signature NoLoc [w0] (monotype t0) Property ]
                 sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
@@ -80,7 +80,7 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
         main                            = head [ instProto t0 p | ([],p,_) <- ps ]       -- never empty!
 
         mainClass                       = Class NoLoc n1 q1 [main] mainClassBody
-          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts eq1 b)
+          where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts t0 eq1 b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
                 mainInitBody            = bindWits eq0 ++ initCall ts (witArgs [tcname main] wmap ++ sibSubs []) main : qcopies
@@ -93,7 +93,7 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
 
-        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts eq1 b)
+        sibClassBody ws n p wes inh     = qsigs ++ Decl NoLoc [sibInit] : pruneDefs env n (convStmts t0 eq1 b)
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
@@ -147,26 +147,27 @@ modOf (QName m _)                       = QName m
 modOf (GName m _)                       = GName m
 
 
-convProto (TC n ts)                     = TC n (tVar tvSelf' : ts)
+convProto (TC n ts)                     = TC n (tSelf' : ts)
 
 instProto t (TC n ts)                   = TC n (t : ts)
 
 tvSelf'                                 = TV KType (Internal Typevar "S" 0)
+tSelf'                                  = tVar tvSelf'
 qSelf'                                  = Quant tvSelf' []
 selfKW'                                 = Internal Witness "self" 0
 thisKW'                                 = Internal Witness "this" 0
 
-convSelf t                              = subst [(tvSelf, tVar tvSelf')] t
+convSelf t0 t                           = subst [(tvSelf, t0)] t
 
-convStmts eq stmts                      = map conv stmts
-  where conv (Signature l ns sc Static) = Signature l ns (convSelf sc) NoDec
-        conv (Signature l ns sc _)      = Signature l ns (convSelf $ convS sc) NoDec
+convStmts t0 eq stmts                   = map conv stmts
+  where conv (Signature l ns sc Static) = Signature l ns (convSelf t0 sc) NoDec
+        conv (Signature l ns sc _)      = Signature l ns (convSelf t0 $ convS sc) NoDec
         conv (Decl l ds)                = Decl l (map convD ds)
         conv s                          = s
         convS (TSchema l q t)           = TSchema l (q) (convT t)
         convT (TFun l fx p k t)         = TFun l fx (posRow (tVar tvSelf) p) k t
         convT t                         = t
-        convD (Def l n q p k t b d x)   = Def l n (convSelf q) (wit2par [(selfKW',tSelf)] $ convSelf p) (convSelf k) (convSelf t) b' d x
+        convD (Def l n q p k t b d x)   = Def l n (convSelf t0 q) (wit2par [(selfKW',tSelf)] $ convSelf t0 p) (convSelf t0 k) (convSelf t0 t) b' d x
           where b'                      = bindWits eq ++ b
         convD d                         = d
 
