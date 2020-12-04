@@ -763,17 +763,16 @@ fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)   -- rever
   where tes                 = [ attrEnv env c | (_,c) <- findAncestry env tc ]
         init                = take 1 $ filter ((==initKW) . fst) $ concat tes
 
-inheritedAttrs              :: EnvF x -> QName -> [(QName,TEnv)]
-inheritedAttrs env n        = inh (dom te) us
+inheritedAttrs              :: EnvF x -> QName -> [(QName,[Name])]
+inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
   where (_,us,te)           = findConName n env
-        te'                 = snd $ splitSigs te
         inh ns0 []          = []
         inh ns0 (u:us)
-          | null te'        = inh ns0 us
-          | otherwise       = (c',te') : inh (dom te'++ ns0) us
-          where c'          = tcname (snd u)
-                (_,_,te)    = findConName c' env
-                te'         = (snd $ splitSigs te) `exclude` ns0
+          | null ns1        = inh ns0 us
+          | otherwise       = (c,ns1) : inh (ns1++ns0) us
+          where c           = tcname (snd u)
+                (_,_,te)    = findConName c env
+                ns1         = (dom $ snd $ splitSigs te) \\ ns0
 
 allCons                     :: EnvF x -> [QName]
 allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]

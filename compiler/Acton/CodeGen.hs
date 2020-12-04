@@ -244,7 +244,7 @@ declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname
 
 
 initModule env []                   = empty
-initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n as $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
+initModule env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as $+$ initClass env n b) $+$ char '}' | Class _ n q as b <- ds ] $+$
                                       initModule env1 ss
   where env1                        = gdefine (envOf ds) env
 initModule env (Signature{} : ss)   = initModule env ss
@@ -255,14 +255,16 @@ initModule env (s : ss)             = genStmt env s $+$
         env1                        = gdefine te env
 
 
-initClassBase env c as              = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
+initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n i | (c',te) <- inheritedAttrs env (NoQ c), (n,i) <- te ]
+                                      vcat [ inherit c' n | (c',ns) <- inheritedAttrs env (NoQ c), n <- ns ]
   where super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         selfsubst                   = subst [(tvSelf, tCon $ TC (NoQ c) [])]
-        inherit c' n i              = methodtable env c <> dot <> gen env n <+> equals <+> cast i <> methodtable' env c' <> dot <> gen env n <> semi
-          where cast (NVar t)       = parens (gen env $ selfsubst t)
-                cast (NDef sc dec)  = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
+        inherit c' n                = methodtable env c <> dot <> gen env n <+> equals <+> cast (fromJust $ lookup n te) <> methodtable' env c' <> dot <> gen env n <> semi
+        cast (NSig sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
+        cast (NDef sc dec)          = parens (gen env (selfsubst $ addSelf (sctype sc) (Just dec)))
+        cast (NVar t)               = parens (gen env $ selfsubst t)
+        te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
 
 initClass env c []                  = gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
