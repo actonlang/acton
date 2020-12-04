@@ -766,13 +766,14 @@ fullAttrEnv env tc          = normTEnv $ init ++ concat (reverse tes)   -- rever
 inheritedAttrs              :: EnvF x -> QName -> [(QName,TEnv)]
 inheritedAttrs env n        = inh (dom te) us
   where (_,us,te)           = findConName n env
+        te'                 = snd $ splitSigs te
         inh ns0 []          = []
         inh ns0 (u:us)
           | null te'        = inh ns0 us
           | otherwise       = (c',te') : inh (dom te'++ ns0) us
           where c'          = tcname (snd u)
                 (_,_,te)    = findConName c' env
-                te'         = snd $ splitSigs te
+                te'         = (snd $ splitSigs te) `exclude` ns0
 
 allCons                     :: EnvF x -> [QName]
 allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]

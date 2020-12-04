@@ -683,7 +683,6 @@ instance Check Decl where
       where env1                        = define (subst s te) $ defineInst n ps thisKW' $ defineSelf n q $ defineTVars q $ setInClass env
             tvs                         = tvSelf : tybound q
             n'                          = extensionName (head us) n
---            n'                          = noq $ wname $ getWitness env n (head us)
             NExt _ _ ps te              = findName n' env
             s                           = [(tvSelf, tCon $ TC n (map tVar $ tybound q))]
 
