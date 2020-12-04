@@ -3,19 +3,20 @@ protocol Primitive: pass
 class ndselection(struct):
     pass
 
-class ndindexselection(ndselection):
-    __init__: (int) -> None
+class ndindex(ndselection):
+    __init__: (?int) -> None
 
-class ndsliceselection(ndselection):
-    __init__: (Slice) -> None
-class ndarray[A]: 
+class ndslice(ndselection):
+    __init__: (slice) -> None
+
+class ndarray[A] ():
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
     reshape         : (list[int]) -> Self
     transpose       : (?list[int]) -> Self
     flatten         : () -> Self                     # the same as reshape([-1])
     copy            : () -> Self                     # makes a contiguous deep copy
-    __nd_getslice__ : (list[?ndselection]) -> Self
+    __ndgetslice__  : (list[ndselection]) -> Self
 
 
 partition           : [A (Primitive)] => (ndarray[A],int,?int)   -> ndarray[A]

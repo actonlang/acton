@@ -310,8 +310,8 @@ instance KCheck Expr where
     kchk env (Async l e)            = Async l <$> kchk env e
     kchk env (Await l e)            = Await l <$> kchk env e
     kchk env (Index l e is)         = Index l <$> kchk env e <*> kchk env is
-    kchk env (BasicSlice l e ss)    = BasicSlice l <$> kchk env e <*> kchk env ss
     kchk env (Slice l e sl)         = Slice l <$> kchk env e <*> kchk env sl
+    kchk env (NDSlice l e ss)       = NDSlice l <$> kchk env e <*> kchk env ss
     kchk env (Cond l e1 e2 e3)      = Cond l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
     kchk env (IsInstance l e c)     = IsInstance l <$> kchk env e <*> return c
     kchk env (BinOp l e1 op e2)     = BinOp l <$> kchk env e1 <*> return op <*> kchk env e2
@@ -406,9 +406,9 @@ instance KCheck Assoc where
 instance KCheck Sliz where
     kchk env (Sliz l e1 e2 e3)      = Sliz l <$> kchk env e1 <*> kchk env e2 <*> kchk env e3
 
-instance KCheck BasicSliz where
-    kchk env (BExpr e)              = BExpr <$> kchk env e
-    kchk env (BSliz s)              = BSliz <$> kchk env s
+instance KCheck NDSliz where
+    kchk env (NDExpr e)             = NDExpr <$> kchk env e
+    kchk env (NDSliz s)             = NDSliz <$> kchk env s
     
 instance KCheck TSchema where
     kchk env (TSchema l q t)

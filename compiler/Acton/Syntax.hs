@@ -66,7 +66,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Await         { eloc::SrcLoc, exp1::Expr }
                 | Index         { eloc::SrcLoc, exp1::Expr, index::Expr }
                 | Slice         { eloc::SrcLoc, exp1::Expr, slice::Sliz }
-                | BasicSlice    { eloc::SrcLoc, exp1::Expr, bslice::[BasicSliz] }
+                | NDSlice       { eloc::SrcLoc, exp1::Expr, bslice::[NDSliz] }
                 | Cond          { eloc::SrcLoc, exp1::Expr, cond::Expr, exp2::Expr }
                 | IsInstance    { eloc::SrcLoc, exp1::Expr, classref::QName }
                 | BinOp         { eloc::SrcLoc, exp1::Expr, bop::Binary, exp2::Expr }
@@ -174,10 +174,10 @@ data KwdPat     = KwdPat Name Pattern KwdPat | KwdPatStar Pattern | KwdPatNil de
 
 data OpArg      = OpArg Comparison Expr deriving (Eq,Show)
 data Sliz       = Sliz SrcLoc (Maybe Expr) (Maybe Expr) (Maybe Expr) deriving (Show)
+data NDSliz     = NDExpr Expr | NDSliz Sliz deriving (Show,Eq)
 data Comp       = CompFor SrcLoc Pattern Expr Comp | CompIf SrcLoc Expr Comp | NoComp deriving (Show)
 data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq)
 
-data BasicSliz  = BExpr Expr | BSliz Sliz deriving (Show,Eq)
 
 data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq)
 data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,Generic)
@@ -497,7 +497,7 @@ instance Eq Expr where
     x@Await{}           ==  y@Await{}           = exp1 x == exp1 y
     x@Index{}           ==  y@Index{}           = exp1 x == exp1 y && index x == index y
     x@Slice{}           ==  y@Slice{}           = exp1 x == exp1 y && slice x == slice y
-    x@BasicSlice{}      ==  y@BasicSlice{}      = exp1 x == exp1 y && bslice x == bslice y
+    x@NDSlice{}         ==  y@NDSlice{}         = exp1 x == exp1 y && bslice x == bslice y
     x@Cond{}            ==  y@Cond{}            = exp1 x == exp1 y && cond x == cond y && exp2 x == exp2 y
     x@IsInstance{}      ==  y@IsInstance{}      = exp1 x == exp1 y && classref x == classref y
     x@BinOp{}           ==  y@BinOp{}           = exp1 x == exp1 y && bop x == bop y && exp2 x == exp2 y

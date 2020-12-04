@@ -975,21 +975,21 @@ atom_expr = do
                         return (\a -> maybe (S.DotI NoLoc a i) (const $ S.RestI NoLoc a i) mb)
                  strdot = do
                         (p,str) <- withPos stringP 
-                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))   -- init/tail?
+                        return (\a -> S.Dot NoLoc a (S.Name NoLoc (init(tail str))))
 
                  bslicelist = (:) <$> bslice <*> commaList bslice
                  tailslice = (,) <$> (colon *> optional expr) <*> (maybe Nothing id <$> optional (colon *> optional expr))
-                 bslice :: Parser S.BasicSliz
-                 bslice =  S.BSliz . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
+                 bslice :: Parser S.NDSliz
+                 bslice =  S.NDSliz . uncurry (S.Sliz NoLoc Nothing) <$> tailslice
                        <|> do e <- expr
                               mbt <- optional tailslice
-                              return (maybe (S.BExpr e) (S.BSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
-                 splitlist a [S.BExpr e] = S.Index NoLoc a e
-                 splitlist a [S.BSliz s] = S.Slice NoLoc a s
+                              return (maybe (S.NDExpr e) (S.NDSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
+                 splitlist a [S.NDExpr e] = S.Index NoLoc a e
+                 splitlist a [S.NDSliz s] = S.Slice NoLoc a s
                  splitlist a ss
-                     | all isBExpr ss       = S.Index NoLoc a (S.eTuple [e | S.BExpr e <- ss])
-                     | otherwise            = S.BasicSlice NoLoc a ss -- error "ndarray basic slicing not yet implemented"
-                 isBExpr (S.BExpr _) =True; isBExpr _ = False
+                     | all isNDExpr ss       = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
+                     | otherwise            = S.NDSlice NoLoc a ss
+                 isNDExpr (S.NDExpr _) =True; isNDExpr _ = False
                  -- indexlist = (:) <$> expr <*> commaList expr
                  -- slicelist = (:) <$> slice <*> commaList slice
                  -- slice = addLoc (do 

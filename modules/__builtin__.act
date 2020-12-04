@@ -63,7 +63,7 @@ class NotImplementedError (RuntimeError):
 class ValueError (Exception):
   pass
 
-class Slice:
+class slice:
   __init__     : (?int,?int,?int) -> None
   
 class list[A] (object):
@@ -361,9 +361,9 @@ protocol Indexed[A (Eq),B]:
   __delitem__  : (A) -> None
 
 protocol Sliceable[A] (Indexed[int,A]):
-  __getslice__ : (Slice) -> Self
-  __setslice__ : (Slice,Iterable[A]) -> None
-  __delslice__ : (Slice) -> None
+  __getslice__ : (slice) -> Self
+  __setslice__ : (slice,Iterable[A]) -> None
+  __delslice__ : (slice) -> None
   
 protocol Collection[A] (Iterable[A]):
   @staticmethod

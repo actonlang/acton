@@ -122,8 +122,10 @@ fields env c                        = map field te
         field (n, NSig sc Property) = empty
 
 funsig env n (TFun _ _ r _ t)       = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env r)
+funsig env n t                      = varsig env n t
 
 methsig env c n (TFun _ _ r _ t)    = gen env t <+> parens (char '*' <> gen env n) <+> parens (params env $ posRow (tCon c) r)
+methsig env c n t                   = varsig env n t
 
 params env (TNil _ _)               = empty
 params env (TRow _ _ _ t r@TRow{})  = gen env t <> comma <+> params env r
