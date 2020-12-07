@@ -613,6 +613,7 @@ instance KSubst Expr where
     ksubst g (Await l e)            = Await l <$> ksubst g e
     ksubst g (Index l e is)         = Index l <$> ksubst g e <*> ksubst g is
     ksubst g (Slice l e sl)         = Slice l <$> ksubst g e <*> ksubst g sl
+    ksubst g (NDSlice l e sl)       = NDSlice l <$> ksubst g e <*> ksubst g sl
     ksubst g (Cond l e1 e2 e3)      = Cond l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
     ksubst g (IsInstance l e c)     = IsInstance l <$> ksubst g e <*> return c
     ksubst g (BinOp l e1 op e2)     = BinOp l <$> ksubst g e1 <*> return op <*> ksubst g e2
@@ -701,4 +702,8 @@ instance KSubst Assoc where
 instance KSubst Sliz where
     ksubst g (Sliz l e1 e2 e3)      = Sliz l <$> ksubst g e1 <*> ksubst g e2 <*> ksubst g e3
 
-
+instance KSubst NDSliz where
+    ksubst g (NDExpr e)             = NDExpr <$> ksubst g e
+    ksubst g (NDSliz s)             = NDSliz <$> ksubst g s
+    
+    

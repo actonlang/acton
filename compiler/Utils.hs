@@ -124,3 +124,7 @@ generalError err                = (loc err,render (expl err))
   where
     expl (InternalErr _ doc)    = text "(internal)" <+> doc
     expl (NotYet _ doc)         = text "Not yet supported:" <+> doc
+
+iff True m                      = m >> return ()
+iff False _                     = return ()
+

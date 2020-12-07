@@ -95,9 +95,6 @@ main            = do args <- execParser (info (getArgs <**> helper) descr)
                                  putStrLn (Pretty.render (Pretty.pretty (te :: Acton.Env.TEnv)))
 
 
-iff True m      = m >> return ()
-iff False _     = return ()
-
 dump h txt      = putStrLn ("\n\n#################################### " ++ h ++ ":\n" ++ txt)
 
 data Paths      = Paths {

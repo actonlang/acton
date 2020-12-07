@@ -37,15 +37,15 @@ ifMissingSuggest p str = do
 parseModule :: S.ModName -> String -> IO (String,S.Module)
 parseModule qn file = do
     contents <- readFile file
-    case runParser (St.evalStateT file_input []) file (contents ++ "\n") of
+    case runParser (St.evalStateT file_input initState) file (contents ++ "\n") of
         Left err -> Control.Exception.throw err
         Right (i,s) -> return (contents, S.Module qn i s)
 
 parseTest file = snd (unsafePerformIO (parseModule (S.modName ["test"]) file))
 
-parseTestStr p str = case runParser (St.evalStateT p []) "" str of
-                       Left err -> putStrLn (errorBundlePretty err)
-                       Right t  -> print t
+parseTestStr b p str = case runParser (St.evalStateT p (b,[])) "" str of
+                         Left err -> putStrLn (errorBundlePretty err)
+                         Right t  -> print t
 
 parserError :: ParseErrorBundle String Void -> (SrcLoc,String)
 parserError err = (NoLoc,errorBundlePretty err)
@@ -53,7 +53,7 @@ parserError err = (NoLoc,errorBundlePretty err)
 extractSrcSpan :: SrcLoc -> String -> String -> SrcSpan
 extractSrcSpan NoLoc file src = SpanEmpty
 extractSrcSpan (Loc l r) file src = sp
-  where Right sp = runParser (St.evalStateT (extractP l r) []) file (src ++ "\n")
+  where Right sp = runParser (St.evalStateT (extractP l r) initState) file (src ++ "\n")
         extractP :: Int -> Int -> Parser SrcSpan
         extractP l r = do
             setOffset l
@@ -66,16 +66,29 @@ extractSrcSpan (Loc l r) file src = sp
                     else return $ SpanCoLinear f (unPos srow) (unPos scol) (unPos ecol - 1)
                 else return $ SpanMultiLine f (unPos srow) (unPos scol) (unPos erow) (unPos ecol - 1)
 
+-- Parser state -----------------------------------------------------------
+
+type ParserState = (Bool, [CTX])  -- (Is numpy imported?, Parser contexts)
+
+pushCtx ctx (b,ctxs) = (b, ctx:ctxs)
+popCtx (b,ctxs)      = (b,tail ctxs)
+getCtxs (_,ctxs)      = ctxs
+
+setNumpy b1 (b,ctxs) = (b1,ctxs)
+getNumpy (b,_)       = b
+
+initState            = (False,[])
+
 -- Parser contexts ---------------------------------------------------------
 
-type Parser = St.StateT [CTX] (Parsec Void String)
+type Parser = St.StateT ParserState (Parsec Void String)
 
 data CTX = TOP | PAR | IF | SEQ | LOOP | DATA | DEF | CLASS | PROTO | EXT | ACTOR deriving (Show,Eq)
 
-withCtx ctx = between (St.modify (ctx:)) (St.modify tail)
+withCtx ctx = between (St.modify (pushCtx ctx)) (St.modify popCtx)
 
 ifCtx accept ignore yes no = do
-    cs <- St.get
+    cs <- St.gets getCtxs
     case filter (`notElem` ignore) cs of
         c:_ | c `elem` accept -> yes
         _                     -> no
@@ -96,7 +109,6 @@ assertNotData       = ifCtx [DATA]                  [IF,SEQ,LOOP]       (fail "s
 --ifData              = ifCtx [DATA]                  [IF,SEQ,LOOP]
 
 ifPar               = ifCtx [PAR]                   []
-
 
 --- Whitespace consumers ----------------------------------------------------
 
@@ -572,8 +584,10 @@ import_stmt = import_name <|> import_from
    where import_name = addLoc $ do
                 rword "import"
                 S.Import NoLoc <$> module_item `sepBy1` comma
+                
          module_item = do
-                dn <- module_name
+                dn@(S.ModName ns) <- module_name
+                iff (length ns==1 && S.nstr(head ns) == "numpy") $  St.modify (setNumpy True)
                 S.ModuleItem dn <$> optional (rword "as" *> name)
                           
          import_from = addLoc $ do
@@ -588,6 +602,9 @@ import_stmt = import_name <|> import_from
          import_module = do
                 ds <- many dot
                 mbn <- optional module_name
+                let isNumpy Nothing = False
+                    isNumpy (Just (S.ModName ns)) = length ns==1 && S.nstr(head ns) == "numpy"
+                iff (null ds && isNumpy mbn) $ St.modify (setNumpy True)
                 return $ S.ModRef (length ds, mbn)
          import_items = ([] <$ star)   -- Note: [] means all...
                      <|> parens import_as_names
@@ -945,7 +962,8 @@ atom_expr = do
         trailer = withLoc (
                       (do
                         ss <- brackets bslicelist
-                        return (\a -> splitlist a ss))
+                        numpyImp <- St.gets getNumpy
+                        return (\a -> splitlist a numpyImp ss))
                        
                       -- try (do
                       --   ixs <- brackets indexlist
@@ -984,11 +1002,11 @@ atom_expr = do
                        <|> do e <- expr
                               mbt <- optional tailslice
                               return (maybe (S.NDExpr e) (S.NDSliz . uncurry (S.Sliz NoLoc (Just e))) mbt)
-                 splitlist a [S.NDExpr e] = S.Index NoLoc a e
-                 splitlist a [S.NDSliz s] = S.Slice NoLoc a s
-                 splitlist a ss
-                     | all isNDExpr ss       = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
-                     | otherwise            = S.NDSlice NoLoc a ss
+                 splitlist a _ [S.NDExpr e] = S.Index NoLoc a e
+                 splitlist a _ [S.NDSliz s] = S.Slice NoLoc a s
+                 splitlist a numpyImp ss
+                     | not numpyImp && all isNDExpr ss = S.Index NoLoc a (S.eTuple [e | S.NDExpr e <- ss])
+                     | otherwise                       = S.NDSlice NoLoc a ss
                  isNDExpr (S.NDExpr _) =True; isNDExpr _ = False
                  -- indexlist = (:) <$> expr <*> commaList expr
                  -- slicelist = (:) <$> slice <*> commaList slice

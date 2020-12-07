@@ -39,3 +39,6 @@ extension ndarray[A (Primitive)] (Iterable[A]): pass
 
 extension int (Primitive): pass
 extension float (Primitive): pass
+
+extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
+
