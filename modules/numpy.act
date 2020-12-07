@@ -34,11 +34,10 @@ array               : [A (Primitive)] => (list[A])               -> ndarray[A]
 
 
 extension ndarray[A (Primitive)] (Integral): pass
-
+extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
 extension ndarray[A (Primitive)] (Iterable[A]): pass
 
 extension int (Primitive): pass
 extension float (Primitive): pass
 
-extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
-
+newaxis = None
