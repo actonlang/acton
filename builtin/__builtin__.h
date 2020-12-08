@@ -1461,6 +1461,7 @@ struct $Plus$str$class {
     $bool (*__bool__)($Plus$str);
     $str (*__str__)($Plus$str);
     $str (*__add__)($Plus$str, $str, $str);
+    $str (*__iadd__)($Plus$str, $str, $str);
 };
 
 void $Plus$str$__init__ ($Plus$str);
@@ -1705,6 +1706,7 @@ struct $Real$float$class {
     $bool (*__bool__)($Real$float);
     $str (*__str__)($Real$float);
     $float (*__add__)($Real$float, $float, $float);
+    $float (*__iadd__)($Real$float, $float, $float);
     $float (*__fromatom__)($Real$float,$WORD);
     $complex (*__complx__)($Real$float, $float);
     $float (*__mul__)($Real$float, $float, $float);
@@ -1845,6 +1847,7 @@ struct $Number$complex$class {
     $bool (*__bool__)($Number$complex);
     $str (*__str__)($Number$complex);
     $complex (*__add__)($Number$complex, $complex, $complex);
+    $complex (*__iadd__)($Number$complex, $complex, $complex);
     $complex (*__fromatom__)($Number$complex,$WORD);
     $complex (*__complx__)($Number$complex, $complex);
     $complex (*__mul__)($Number$complex, $complex, $complex);
@@ -2189,6 +2192,7 @@ struct $Plus$bytearray$class {
     $bool (*__bool__)($Plus$bytearray);
     $str (*__str__)($Plus$bytearray);
     $bytearray (*__add__)($Plus$bytearray, $bytearray, $bytearray);
+    $bytearray (*__iadd__)($Plus$bytearray, $bytearray, $bytearray);
 };
 
 void $Plus$bytearray$__init__ ($Plus$bytearray, $Sequence);

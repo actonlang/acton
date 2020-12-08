@@ -205,7 +205,8 @@ struct $Number$complex$class $Number$complex$methods = {
     ($bool (*)($Number$complex))$default__bool__,
     ($str (*)($Number$complex))$default__str__,
     $Number$complex$__add__,
-    NULL,
+    ($complex (*)($Number$complex, $complex, $complex))$Plus$__iadd__,
+    NULL,        // fromatom
     $Number$complex$__complx__,
     $Number$complex$__mul__,
     $Number$complex$__truediv__,
