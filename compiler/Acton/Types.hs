@@ -58,9 +58,7 @@ infTop                                  :: Env -> Suite -> TypeM (TEnv,Suite)
 infTop env ss                           = do traceM ("\n## infEnv top")
                                              pushFX fxPure tNone
                                              (cs,te,ss1) <- (if stub env then infEnv else infSuiteEnv) env ss
-                                             traceM ("### AFTER infSuiteEnv:\n" ++ render (nest 4 (vcat $ map pretty ss1)))
                                              ss1 <- msubst ss1
-                                             traceM ("### AFTER msubst:\n" ++ render (nest 4 (vcat $ map pretty ss1)))
                                              popFX
                                              eq <- solveAll (define te env) te tNone cs
                                              te <- msubst te

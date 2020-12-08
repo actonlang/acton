@@ -665,6 +665,11 @@ implProto env p w           = case w of
                                 WInst{}  -> qualEq env p p'
   where p'                  = proto w
 
+implProto'                  :: EnvF x -> QName -> Witness -> Bool
+implProto' env pn w         = case w of
+                                WClass{} -> qualEq env pn (tcname $ proto w)
+                                WInst{}  -> qualEq env pn (tcname $ proto w)
+
 hasAttr                     :: EnvF x -> Name -> Witness -> Bool
 hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)
 
@@ -831,7 +836,7 @@ mro1 env us                             = mro env us
 mro                                     :: EnvF x -> [TCon] -> [WTCon]
 mro env us                              = merge [] $ map lin us' ++ [us']
   where
-    us'                                 = case us of [] -> []; u:us -> ([Nothing],u) : [ ([Just (tcname u)],u) | u <- us ]
+    us'                                 = case us of [] -> []; u:us -> ([Just (tcname u)],u) : [ ([Just (tcname u)],u) | u <- us ]
     
     lin                                 :: WTCon -> [WTCon]
     lin (w,u)                           = (w,u) : [ (w++w',u') | (w',u') <- us' ]

@@ -397,3 +397,23 @@ maxtype env (t:ts)                          = maxt t ts
           | otherwise                       = maxt t ts
         maxt top []                         = top
 maxtype env []                              = tWild
+
+
+----------------------------------------------------------------------------------------------------------------------
+-- extends predicate
+----------------------------------------------------------------------------------------------------------------------
+{-
+extends                                     :: EnvF x -> Type -> QName -> Maybe ([Type],Expr)
+extends env (TCon _ c) pn                   = case findWitness env (tcname c) (implProto' env pn) of
+                                                Just (WClass q p w ws) -> [ constr (subst s (tVar v)) (subst s u) | Quant v us <- q, u <- us ]
+                                                 where s = tybound q `zip` tcargs c
+                                                Just (WInst p w ws) -> Just (tcargs p, wexpr ws (eQVar w))
+                                                Nothing -> Nothing
+
+extends'                                    :: EnvF x -> Type -> TCon -> Bool
+extends env (TCon _ c) p                    = case findWitness env (tcname c) (implProto env p) of
+                                                Just (WClass q p w ws) -> and [ extends' env (subst s $ tVar v) (subst s u) | Quant v us <- q, u <- us ]
+                                                    where s = tybound q `zip` tcargs c
+                                                Just (WInst p w ws) -> True
+                                                Nothing -> False
+-}

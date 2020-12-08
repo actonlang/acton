@@ -254,6 +254,19 @@ instance Deact Handler where
       where env1                    = extendAndShadow (envOf ex) env
 
 
+fxfree (TVar _ v)                   = []
+fxfree (TCon _ c)                   = concat $ map fxfree $ tcargs c
+fxfree (TFun _ fx p k t)            = fxfree fx ++ fxfree p ++ fxfree k ++ fxfree t
+fxfree (TTuple _ p k)               = fxfree p ++ fxfree k
+fxfree (TUnion _ as)                = []
+fxfree (TOpt _ t)                   = fxfree t
+fxfree (TNone _)                    = []
+fxfree (TWild _)                    = []
+fxfree (TNil _ _)                   = []
+fxfree (TRow _ _ _ t r)             = fxfree t ++ fxfree r
+fxfree (TFX l fx)                   = [fx]
+
+
 adapt env t0@(TFun _ fx@(TFX _ x) p _ t) (TFun _ fx'@(TFX _ x') p' _ t') e
   | (FXAction, FXAction) <- (x,x')  = eta
   | (_,        FXAction) <- (x,x')  = etaF
@@ -271,8 +284,10 @@ adapt env t0@(TFun _ fx@(TFX _ x) p _ t) (TFun _ fx'@(TFX _ x') p' _ t') e
         clos                        = if args == PosNil && e1 == e0 then e else closF
         async cl                    = Lambda l0 pars KwdNIL (Call l0 (tApp (eQVar primASYNCf) [t']) (PosArg (eVar selfKW) $ PosArg cl PosNil) KwdNil) fx'
 adapt env t0 t1 e
---  | not $ castable env t0 t1        = error ("### Internal type mismatch " ++ prstr e ++ " : " ++ prstr t0 ++ " </ " ++ prstr t1)
-  | otherwise                       = e
+  | all (`elem`[FXPure,FXMut]) fxs  = e
+  | all (`elem`[FXAction]) fxs      = e
+  | TCon _ tc <- t0                 = undefined                                 -- Continue here...
+  where fxs                         = fxfree t0 ++ fxfree t1
 
 
 deactExp env t e                    = deact env $ qMatch (adapt env) t' t e'
