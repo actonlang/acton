@@ -4,7 +4,7 @@ class ndselect(struct):
     pass
 
 class ndindex(ndselect):
-    __init__: (?int) -> None
+    __init__: (int) -> None
 
 class ndslice(ndselect):
     __init__: (slice) -> None
@@ -31,7 +31,7 @@ scalar              : [A (Primitive)] => (ndarray[A])            -> A           
 arange              :                    (?int,int,?int)         -> ndarray[int]       
 linspace            :                    (float, float, int)     -> ndarray[float]
 array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
-
+full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]           
 
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
@@ -40,4 +40,5 @@ extension ndarray[A (Primitive)] (Iterable[A]): pass
 extension int (Primitive): pass
 extension float (Primitive): pass
 
-newaxis = None
+newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
+
