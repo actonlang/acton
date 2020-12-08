@@ -1,3 +1,4 @@
+#include <limits.h>
 
 //Select element #n in lst which is a list[int].
 #define $LONGELEM(lst,n)   ((($int)lst->data[n])->val)
@@ -57,13 +58,67 @@ $list $mk_strides($list shape) {
 
 // Superclass methods /////////////////////////////////////////////////////////////////////////
 
-void numpy$$ndarray__init__(numpy$$ndarray a, $WORD w) {
-  numpy$$ndarray r = numpy$$ndarray_fromatom(w);
-  memcpy(a,r,sizeof(struct numpy$$ndarray));
+void numpy$$ndarray__init__(numpy$$ndarray self, $WORD w) {
+    numpy$$ndarray r = numpy$$ndarray_fromatom(w);
+    memcpy(self,r,sizeof(struct numpy$$ndarray));
 }
 
+void  numpy$$ndarray$__serialize__(numpy$$ndarray self, $Serial$state state) {
+  $int prevkey = ($int)$dict_get(state->done,($Hashable)$Hashable$WORD$witness,self,NULL);
+  if (prevkey) {
+    $val_serialize(-self->$class->$class_id,&prevkey->val,state);
+    return;
+  }
+  $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
+  int blobsize = 5 + self->size;
+  $ROW row = $add_header(self->$class->$class_id,blobsize,state);
+  row->blob[0] = ($WORD)self->elem_type;
+  row->blob[1] = ($WORD)self->ndim;
+  row->blob[2] = ($WORD)self->size;
+  row->blob[3] = ($WORD)self->offset;
+  row->blob[4] = ($WORD)self->elem_size;
+  memcpy(&row->blob[5],self->data,self->size*sizeof($WORD));
+  $step_serialize(self->shape, state);
+  $step_serialize(self->strides, state);
+}
 
-$str numpy$$ndarray__str__(numpy$$ndarray a) {
+numpy$$ndarray numpy$$ndarray$__deserialize__($Serial$state state) {
+  $ROW this = state->row;
+  state->row = this->next;
+  state->row_no++;
+  if (this->class_id < 0) {
+    return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
+  } else {
+    numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
+    $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
+    res->$class = &numpy$$ndarray$methods;
+    res->elem_type = (enum ElemType)this->blob[0];
+    res->ndim = (long)this->blob[1];
+    res->size = (long)this->blob[2];
+    res->offset = (long)this->blob[3];
+    res->elem_size = (long)this->blob[4];
+    res->data = malloc(res->size*sizeof($WORD));
+    memcpy(res->data, &this->blob[5],res->size*sizeof($WORD));
+    res->shape = $step_deserialize(state);
+    res->strides= $step_deserialize(state);
+    return res;
+  }
+}
+
+$bool  numpy$$ndarray$__bool__(numpy$$ndarray a) {
+  if (a->size > 1) 
+    RAISE(($BaseException)$NEW($ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
+  switch (a->elem_type) {
+  case LongType:
+    return to$bool(a->data[a->offset].l != 0);
+  case DblType:
+    return to$bool(a->data[a->offset].d != 0.0);
+  }
+}
+
+numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix);
+
+$str numpy$$ndarray$__str__(numpy$$ndarray a) {
   if (a->ndim==0) {
     switch (a->elem_type) {
     case LongType:
@@ -76,9 +131,9 @@ $str numpy$$ndarray__str__(numpy$$ndarray a) {
     $list ix = $list_new(1);
     ix->length = 1;
     for (long i = 0; i< $LONGELEM(a->shape,0); i++) {
-      ix->data[0] = to$int(i);
-      numpy$$ndarray b = numpy$$ndarray_getslice(a,ix);
-      $list_append(strs,numpy$$ndarray__str__(b));
+      ix->data[0] = numpy$$ndindex$new(to$int(i));
+      numpy$$ndarray b = numpy$$ndarray$__ndgetslice__(a,ix);
+      $list_append(strs,numpy$$ndarray$__str__(b));
     }
     $str s = $str_join_par('[',strs,']');
     $Plus wit = ($Plus)$Plus$str$witness;
@@ -203,26 +258,24 @@ numpy$$ndarray numpy$$ndarray_copy(numpy$$ndarray a) {
 
 // basic slicing 
 
-numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray a, $list ix) {
+numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix) {
   // assert length of ix > 0
   int nulls = 0;
   int ints = 0;
   int slices = 0;
   // first analyze index list contents
   for (int i=0; i < ix->length; i++) {
-    $Initializable ixi = ($Initializable)ix->data[i];
-    if (!ixi)
-      nulls++;
-    else {
-      if ($ISINSTANCE(ixi,$int)->val)
-        ints++; 
+    numpy$$ndselect ixi = (numpy$$ndselect)ix->data[i];
+    if ($ISINSTANCE(ixi,numpy$$ndindex)->val) {
+      if (((numpy$$ndindex)ixi)->index==numpy$$newaxis)
+        nulls++;
       else
-        if ($ISINSTANCE(ixi,$Slice)->val)
-          slices++;
-        else {
-          fprintf(stderr,"internal error: unexpected type of ndarray index element\n");
-          exit(-1);
-        }
+        ints++;
+    } else if ($ISINSTANCE(ixi,numpy$$ndslice)->val)
+      slices++;
+    else {
+      fprintf(stderr,"internal error: unexpected type of ndarray index element\n");
+      exit(-1);
     }
   }
   if (ints+slices > a->ndim)
@@ -238,23 +291,24 @@ numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray a, $list ix) {
   int apos = a->ndim-1;
   int respos = ndim-1;
   int untouched = a->ndim - (ints + slices);
-  $Initializable currindex;
+  numpy$$ndselect currindex;
   long currstride = a->elem_size;
   while (ixpos>=0) {
     if (untouched-- > 0)
-      currindex =  ($Initializable)allSlice;
+      currindex = (numpy$$ndselect)numpy$$ndslice$new(allSlice);
     else
-      currindex = ($Initializable)ix->data[ixpos--];
-    if (!currindex) {
-      $list_setitem(res->strides,respos,to$int(0));
-      $list_setitem(res->shape,respos--,to$int(1));
-    } else {
-      if ($ISINSTANCE(currindex,$int)->val) {
+      currindex = (numpy$$ndselect)ix->data[ixpos--];
+    if ($ISINSTANCE(currindex,numpy$$ndindex)->val) {
+      if (((numpy$$ndindex)currindex)->index == numpy$$newaxis) {
+        $list_setitem(res->strides,respos,to$int(0));
+        $list_setitem(res->shape,respos--,to$int(1));
+      } else {
         currstride = $LONGELEM(a->strides,apos--);
-        offset += currstride * ((($int)currindex)->val);
-      } else if ($ISINSTANCE(currindex,$Slice)->val) {
+        offset += currstride * (((numpy$$ndindex)currindex)->index->val);
+      }
+    } else if ($ISINSTANCE(currindex,numpy$$ndslice)->val) {
         int slen,start,stop,step;
-        normalize_slice(($Slice)currindex,$LONGELEM(a->shape,apos),&slen,&start,&stop,&step);
+        normalize_slice(((numpy$$ndslice)currindex)->slc,$LONGELEM(a->shape,apos),&slen,&start,&stop,&step);
         currstride = $LONGELEM(a->strides,apos);
         offset += start * currstride;
         $list_setitem(res->strides,respos,to$int($LONGELEM(a->strides,apos--) * step));
@@ -262,7 +316,6 @@ numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray a, $list ix) {
       } else {
         fprintf(stderr,"internal error: unexpected type of ndarray index element\n");
         exit(-1);
-      }
     }
   }
   res->offset = offset;
@@ -270,7 +323,20 @@ numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray a, $list ix) {
   return res;
 }
 
-struct numpy$$ndarray$class numpy$$ndarray$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,numpy$$ndarray__init__,NULL,NULL,NULL,numpy$$ndarray__str__,numpy$$ndarray_reshape,numpy$$ndarray_transpose,numpy$$ndarray_copy,numpy$$ndarray_getslice};
+struct numpy$$ndarray$class numpy$$ndarray$methods = {
+    "numpy$$ndarray",
+    UNASSIGNED,
+    ($Super$class)&$struct$methods,
+    numpy$$ndarray__init__,
+    numpy$$ndarray$__serialize__,
+    numpy$$ndarray$__deserialize__,
+    numpy$$ndarray$__bool__,
+    numpy$$ndarray$__str__,
+    numpy$$ndarray_reshape,
+    numpy$$ndarray_transpose,
+    numpy$$ndarray_copy,
+    numpy$$ndarray$__ndgetslice__
+};
 
 // Iterating over an ndarray //////////////////////////////////////////////////////////////////////////////
 
@@ -470,12 +536,24 @@ numpy$$ndarray numpy$$ndarray_array(numpy$$Primitive wit, $list elems) {
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
   if (elems->length == 0)
-    RAISE(($BaseException)$NEW($ValueError,to$str("function array cannot create empty ndarray")));
+    RAISE(($BaseException)$NEW($ValueError,to$str("function numpy.array cannot create empty ndarray")));
   numpy$$ndarray res = $newarray(wit->$class->elem_type,1,elems->length,shape,strides,true);
   for (int i=0; i<elems->length; i++) 
     res->data[i] = wit->$class->from$obj($list_getitem(elems,i));
   return res;
 }
+
+// create an array with given shape and all elements of given value
+
+numpy$$ndarray numpy$$ndarray_full(numpy$$Primitive wit, $list shape, $WORD val) {
+  $list strides = $NEW($list,NULL,NULL);
+  for (int i= 0; i< shape->length; i++)
+    $list_append(strides,to$int(1));
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,shape->length,$prod(shape),shape,strides,true);
+  res->data[0] = wit->$class->from$obj(val);
+  return res;
+}
+
 
 
 // Functions over arrays /////////////////////////////////////////////////
@@ -646,6 +724,13 @@ void numpy$$Iterator$ndarray_init(numpy$$Iterator$ndarray self, numpy$$Primitive
   self->it = $mk_iterator(a);
 }
 
+numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive pwit, numpy$$ndarray a) {
+  numpy$$Iterator$ndarray res = malloc(sizeof(struct numpy$$Iterator$ndarray ));
+  res->$class = &numpy$$Iterator$ndarray$methods;
+  numpy$$Iterator$ndarray_init(res,pwit,a);
+  return res;
+}
+
 $bool numpy$$Iterator$ndarray_bool(numpy$$Iterator$ndarray self) {
   return $True;
 }
@@ -662,14 +747,15 @@ $WORD numpy$$Iterator$ndarray$__next__(numpy$$Iterator$ndarray self) {
 }
 
 void numpy$$Iterator$$ndarray_serialize(numpy$$Iterator$ndarray self,$Serial$state state) {
-  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
+  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
 }
 
 numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize($Serial$state state) {
-  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarrays")));
+  RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
    return NULL;
 }
 
 struct numpy$$Iterator$ndarray$class numpy$$Iterator$ndarray$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, numpy$$Iterator$ndarray_init,
                                                       numpy$$Iterator$$ndarray_serialize, numpy$$Iterator$ndarray$_deserialize,numpy$$Iterator$ndarray_bool,numpy$$Iterator$ndarray_str,numpy$$Iterator$ndarray$__next__};
 
+$int numpy$$newaxis;

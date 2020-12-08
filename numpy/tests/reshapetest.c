@@ -2,6 +2,8 @@
 #include "../numpy.h"
 
 int main() {
+  $register_builtin();
+  numpy$$__init__();
   numpy$$ndarray a = numpy$$ndarray_arange(to$int(0),to$int(60),to$int(1));
   $printobj("a.shape =",a->shape);
   $printobj("a.strides =",a->strides);
@@ -15,8 +17,8 @@ int main() {
   //$printobj("b.strides =",b->strides);
   $printobj("b =",b);
   $list ix = $NEW($list,NULL,NULL);
-  $list_append(ix,$NEW($Slice,to$int(2),NULL,to$int(3)));
-  numpy$$ndarray c = numpy$$ndarray_getslice(a,ix);
+  $list_append(ix,numpy$$ndslice$new($NEW($Slice,to$int(2),NULL,to$int(3))));
+  numpy$$ndarray c = numpy$$ndarray$__ndgetslice__(a,ix);
   $printobj("c.shape =",c->shape);
   $printobj("c.strides =",c->strides);
   $printobj("c =",c);

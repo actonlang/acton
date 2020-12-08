@@ -2,6 +2,8 @@
 #include "../numpy.h"
 
 int main(int argc, char *argv[]) {
+  $register_builtin();
+  numpy$$__init__();
   long n;
   sscanf(argv[1],"%ld",&n);
   numpy$$ndarray x = numpy$$ndarray_linspace(to$float(0.0),to$float(1.0), to$int(n*n*n*n));

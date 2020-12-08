@@ -11,10 +11,10 @@ int main(int argc, char *argv[]) {
     //printf("x=%s\n",x->$class->__str__(x)->str);
     $list ix = $NEW($list,NULL,NULL);
     $Slice s = $NEW($Slice,NULL,NULL,NULL);
-    $list_append(ix,s);
-    $list_append(ix,NULL);
+    $list_append(ix,numpy$$ndslice$new(s));
+    $list_append(ix,numpy$$ndindex$new(numpy$$newaxis));
     numpy$$Integral$ndarray wit = $NEW(numpy$$Integral$ndarray,(numpy$$Primitive)numpy$$Primitive$float$witness);
-    numpy$$ndarray r = wit->$class->__add__(wit,numpy$$ndarray_getslice(x,ix),x);
+    numpy$$ndarray r = wit->$class->__add__(wit,numpy$$ndarray$__ndgetslice__(x,ix),x);
     //printf("r->shape=%s\n",r->shape->$class->__str__(r->shape)->str);
     //printf("r->strides=%s\n",r->strides->$class->__str__(r->strides)->str);
     //printf("r=%s\n",r->$class->__str__(r)->str);

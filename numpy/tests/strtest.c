@@ -20,8 +20,8 @@ int main() {
   $printobj("b =",b);
   
   $list ix1 = $NEW($list,NULL,NULL);
-  $list_append(ix1,to$int(7));
-  numpy$$ndarray c = numpy$$ndarray_getslice(a,ix1);
+  $list_append(ix1,numpy$$ndindex$new(to$int(7)));
+  numpy$$ndarray c = numpy$$ndarray$__ndgetslice__(a,ix1);
   $printobj("a[7] =",c);
   numpy$$ndarray d = numpy$$ndarray_fromatom(to$float(3.5));
   $printobj("d =",d);

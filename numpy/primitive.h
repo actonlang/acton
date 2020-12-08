@@ -57,7 +57,7 @@ struct numpy$$Primitive$class {
   union $Bytes8 (*$mod)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$land)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lor)(union $Bytes8, union $Bytes8);
-  union $Bytes8 (*band)(union $Bytes8, union $Bytes8);
+  union $Bytes8 (*$band)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$bor)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$bxor)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lsh)(union $Bytes8, union $Bytes8);
