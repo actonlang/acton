@@ -33,6 +33,7 @@ long $prod($list lst) {
 }
 
 bool $is_contiguous(numpy$$ndarray a) {
+  if (a->offset != 0) return false;
   long size = $LONGELEM(a->strides,a->ndim-1);
   if (size != 1) return false;
   for (int i = a->ndim-2; i>=0; i--) {
@@ -58,7 +59,7 @@ $list $mk_strides($list shape) {
 
 // Superclass methods /////////////////////////////////////////////////////////////////////////
 
-void numpy$$_init__(numpy$$ndarray self, $WORD w) {
+void numpy$$ndarray$__init__(numpy$$ndarray self, $WORD w) {
     numpy$$ndarray r = numpy$$fromatom(w);
     memcpy(self,r,sizeof(struct numpy$$ndarray));
 }
@@ -145,7 +146,7 @@ $str numpy$$ndarray$__str__(numpy$$ndarray a) {
 
 // reshape attempts to present a new view, but may have to copy data.
 
-numpy$$ndarray numpy$$reshape(numpy$$ndarray a, $list newshape) {
+numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, $list newshape) {
   long size = $prod(newshape);
   if (a->size != size)
     RAISE(($BaseException)$NEW($ValueError,to$str("wrong number of array elements for reshape")));
@@ -204,7 +205,7 @@ numpy$$ndarray numpy$$reshape(numpy$$ndarray a, $list newshape) {
 // permutes axes in a to the order given by axes.
 // If second argument is NULL, reverse order of axes.
 // Does not copy data; returns a new view.
-numpy$$ndarray numpy$$transpose(numpy$$ndarray a, $list axes) {
+numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, $list axes) {
   $list newshape, newstrides;
   if (!axes) {
     newshape = $list_copy(a->shape);
@@ -236,23 +237,27 @@ numpy$$ndarray numpy$$transpose(numpy$$ndarray a, $list axes) {
   return res;
 }
 
-numpy$$ndarray numpy$$flatten(numpy$$ndarray a) {
+numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray a) {
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(a->size));
-  return numpy$$reshape(a,newshape);
+  return numpy$$ndarray$reshape(a,newshape);
 }
 
 // Makes a contiguous deep copy of its argument with stride of last dimension == 1.
 
-numpy$$ndarray numpy$$copy(numpy$$ndarray a) {
+numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray a) {
   numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
-  numpy$$array_iterator_state it = $mk_iterator(a);
-  union $Bytes8 *ixres, *ixa;
-  ixres = res->data;
-  while ((ixa = iter_next(it))) {
-    *ixres = *ixa;
-    ixres++;
-  }  
+  if ($is_contiguous(a))
+    memcpy(res->data,a->data,a->size*sizeof($WORD)); // Hackish; what is the proper size to use?
+  else {
+    numpy$$array_iterator_state it = $mk_iterator(a);
+    union $Bytes8 *ixres, *ixa;
+    ixres = res->data;
+    while ((ixa = iter_next(it))) {
+      *ixres = *ixa;
+      ixres++;
+    }
+  }
   return res;
 }
 
@@ -327,14 +332,14 @@ struct numpy$$ndarray$class numpy$$ndarray$methods = {
     "numpy$$ndarray",
     UNASSIGNED,
     ($Super$class)&$struct$methods,
-    numpy$$_init__,
+    numpy$$ndarray$__init__,
     numpy$$ndarray$__serialize__,
     numpy$$ndarray$__deserialize__,
     numpy$$ndarray$__bool__,
     numpy$$ndarray$__str__,
-    numpy$$reshape,
-    numpy$$transpose,
-    numpy$$copy,
+    numpy$$ndarray$reshape,
+    numpy$$ndarray$transpose,
+    numpy$$ndarray$copy,
     numpy$$ndarray$__ndgetslice__
 };
 
@@ -407,7 +412,7 @@ numpy$$ndarray numpy$$func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a) {
 
 // returns the common extended shape and, as outparams, iterators for the two extended operands
 
-numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, numpy$$array_iterator_state *it1, numpy$$array_iterator_state *it2) {
+static numpy$$ndarray numpy$$broadcast(numpy$$ndarray a1, numpy$$ndarray a2, numpy$$array_iterator_state *it1, numpy$$array_iterator_state *it2) {
   int len;
   $list resshape, shape1, shape2, strides1, strides2;
   shape1 = $list_copy(a1->shape);
@@ -536,7 +541,7 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems) {
     RAISE(($BaseException)$NEW($ValueError,to$str("function numpy.array cannot create empty ndarray")));
   numpy$$ndarray res = $newarray(wit->$class->elem_type,1,elems->length,shape,strides,true);
   for (int i=0; i<elems->length; i++) 
-    res->data[i] = wit->$class->from$obj($list_getitem(elems,i));
+    res->data[i] = wit->$class->from$obj(elems->data[i]);
   return res;
 }
 
@@ -558,7 +563,7 @@ numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val) {
 // Most of these are yet only defined with default parameters.
 
 numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k) {
-  numpy$$ndarray res = numpy$$copy(a);
+  numpy$$ndarray res = numpy$$ndarray$copy(a);
   res->ndim--;
   numpy$$array_iterator_state it = $mk_iterator(res); //gives an iterator that successively selects start of each last dimension column.
   res->ndim++;
@@ -570,7 +575,7 @@ numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k) 
 }
 
 numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
-  numpy$$ndarray res = numpy$$copy(a);
+  numpy$$ndarray res = numpy$$ndarray$copy(a);
   if (!axis) {
     quicksort(res->data,0,res->size-1,wit->$class->$lt);
     $list newshape = $list_new(1);
@@ -594,7 +599,7 @@ numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
 
 
 numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high) {
-  numpy$$ndarray res = numpy$$copy(a);
+  numpy$$ndarray res = numpy$$ndarray$copy(a);
   numpy$$array_iterator_state it = $mk_iterator(res);
   union $Bytes8 lo, hi, x, *ix, *ixres = res->data;
   if (low) lo = wit->$class->from$obj(low);
@@ -676,10 +681,15 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   numpy$$ndarray res;
   if(!axis) {
     union $Bytes8 resd = (union $Bytes8) 0L;
-   numpy$$array_iterator_state it = $mk_iterator(a);
-   union $Bytes8 *ixa;
-   while ((ixa = iter_next(it)))
-     wit->$class->$iadd(&resd,*ixa); 
+    if ($is_contiguous(a)) {
+      for (int i=0; i<a->size; i++)
+        wit->$class->$iadd(&resd,a->data[i]); 
+    } else {
+      numpy$$array_iterator_state it = $mk_iterator(a);
+      union $Bytes8 *ixa;
+      while ((ixa = iter_next(it)))
+        wit->$class->$iadd(&resd,*ixa);
+    }
    res = $newarray(a->elem_type,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
    res->data[0] = resd;
    return res;
