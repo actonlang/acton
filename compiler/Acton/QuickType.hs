@@ -179,6 +179,8 @@ instance QType PosArg where
       where (t, e')                 = qType env f e
     qType env f PosNil              = (posNil, PosNil)
 
+    qMatch f TVar{} r p             = p
+    qMatch f r TVar{} p             = p
     qMatch f r r' (PosArg e p)      = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
     qMatch f _ _ PosNil             = PosNil
 
@@ -190,6 +192,8 @@ instance QType KwdArg where
       where (t, e')                 = qType env f e
     qType env f KwdNil              = (kwdNil, KwdNil)
 
+    qMatch f TVar{} r k             = k
+    qMatch f r TVar{} k             = k
     qMatch f r r' (KwdArg n e k)    = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
     qMatch f _ _ KwdNil             = KwdNil
 
