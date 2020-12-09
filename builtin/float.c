@@ -275,6 +275,7 @@ struct $Real$float$class $Real$float$methods = {
     ($bool (*)($Real$float))$default__bool__,
     ($str (*)($Real$float))$default__str__,
     $Real$float$__add__,
+    ($float (*)($Real$float, $float, $float))$Plus$__iadd__,
     $Real$float$__fromatom__,
     $Real$float$__complx__,
     $Real$float$__mul__,

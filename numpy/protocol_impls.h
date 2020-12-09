@@ -29,7 +29,7 @@ struct numpy$$Integral$ndarray {
     numpy$$Integral$ndarray$class $class;
     $Logical w$Logical;
     $Minus w$Minus;
-    numpy$$Primitive w$Primitive$A$numpy;
+    numpy$$Primitive w$Primitive$A$Integral$ndarray;
 };
 
 struct numpy$$Integral$ndarray$class {
@@ -70,7 +70,7 @@ struct numpy$$Integral$ndarray$class {
     numpy$$ndarray (*__invert__)(numpy$$Integral$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Integral$ndarray$__init__ ($Integral);
+void numpy$$Integral$ndarray$__init__ (numpy$$Integral$ndarray, numpy$$Primitive);
 void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray,$Serial$state); 
 numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state);
 numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -153,9 +153,35 @@ void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray,$Serial$state);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__($Serial$state);
 numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 
+// numpy$$Sliceable$ndarray /////////////////////////////////////////////////////////////////
+
+struct numpy$$Sliceable$ndarray;
+typedef struct numpy$$Sliceable$ndarray *numpy$$Sliceable$ndarray;
+
+struct numpy$$Sliceable$ndarray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    void (*__init__) (numpy$$Sliceable$ndarray);
+    void (*__serialize__) (numpy$$Sliceable$ndarray, $Serial$state);
+    numpy$$Sliceable$ndarray (*__deserialize__) ($Serial$state);
+    $bool (*__bool__)(numpy$$Sliceable$ndarray);
+    $str (*__str__)(numpy$$Sliceable$ndarray);
+    numpy$$ndarray (*__getitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
+    void (*__setitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int, $WORD);
+    void (*__delitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
+    numpy$$ndarray (*__getslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Slice);
+    void (*__setslice__) (numpy$$Sliceable$ndarray, $Iterable, numpy$$ndarray, $Slice, $WORD);
+    void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Slice);
+};
+struct numpy$$Sliceable$ndarray {
+    struct numpy$$Sliceable$ndarray$class *$class;
+};
+extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
+
 // numpy$$Iterable$ndarray ////////////////////////////////////////////////////////////
 
-/*  Later (needs implementation of Iterator$ndarray)
 struct numpy$$Iterable$ndarray {
   numpy$$Iterable$ndarray$class $class;
   numpy$$Primitive pwit;
@@ -173,18 +199,17 @@ struct numpy$$Iterable$ndarray$class {
     $Iterator (*__iter__)(numpy$$Iterable$ndarray, numpy$$ndarray);
 };
 
-void numpy$$Iterable$ndarray$__init__ (numpy$$Iterable$ndarray);
+void numpy$$Iterable$ndarray$__init__ (numpy$$Iterable$ndarray, numpy$$Primitive);
 void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state); 
 numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
 $Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
-*/
-
 
 // method tables /////////////////////////////////////////////////////////////////
 
 extern struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods;
 extern struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods;
 extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
-// extern struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods;
+extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
+extern struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods;
 
 

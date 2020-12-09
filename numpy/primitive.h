@@ -57,7 +57,7 @@ struct numpy$$Primitive$class {
   union $Bytes8 (*$mod)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$land)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lor)(union $Bytes8, union $Bytes8);
-  union $Bytes8 (*band)(union $Bytes8, union $Bytes8);
+  union $Bytes8 (*$band)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$bor)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$bxor)(union $Bytes8, union $Bytes8);
   union $Bytes8 (*$lsh)(union $Bytes8, union $Bytes8);
@@ -196,7 +196,10 @@ struct numpy$$Primitive$float$class {
   union $Bytes8 (*$bnot)(union $Bytes8);              
 };
 
-// Witnesses ////////////////////////////////////////////////////////////////////////////
+// Witnesses and creation ////////////////////////////////////////////////////////////////////////////
+
+numpy$$Primitive$int numpy$$Primitive$int$new();
+numpy$$Primitive$float numpy$$Primitive$float$new();
 
 extern struct numpy$$Primitive$int$class  numpy$$Primitive$int$methods;
 extern struct numpy$$Primitive$float$class  numpy$$Primitive$float$methods;

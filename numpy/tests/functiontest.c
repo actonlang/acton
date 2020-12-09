@@ -2,6 +2,8 @@
 #include "../numpy.h"
 
 int main() {
+  $register_builtin();
+  numpy$$__init__();
   numpy$$ndarray v = numpy$$ndarray_arange(to$int(0),to$int(60),to$int(1));
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(3));

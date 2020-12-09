@@ -9,19 +9,19 @@ numpy$$ndarray $pow3(numpy$$Integral$ndarray wit, numpy$$ndarray x) {
 numpy$$ndarray loess_simple(numpy$$ndarray x, numpy$$ndarray y, numpy$$ndarray xin, $int win) {
   $list ix = $NEW($list,NULL,NULL);
   $Slice s = $NEW($Slice,NULL,NULL,NULL);
-  $list_append(ix,s);
-  $list_append(ix,NULL);
+  $list_append(ix,numpy$$ndslice$new(s));
+  $list_append(ix,numpy$$ndindex$new(numpy$$newaxis));
   numpy$$Primitive witp = (numpy$$Primitive)numpy$$Primitive$float$witness;
   numpy$$Integral$ndarray wit = $NEW(numpy$$Integral$ndarray,witp);
   numpy$$Minus$ndarray wit2 = (numpy$$Minus$ndarray)wit-> w$Minus;
-  numpy$$ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpy$$ndarray_getslice(x,ix));
+  numpy$$ndarray tmp1 = wit2->$class->__sub__(wit2,xin,numpy$$ndarray$__ndgetslice__(x,ix));
   numpy$$ndarray xd = numpy$$ndarray_abs(witp,tmp1);
   numpy$$ndarray tmp2 = numpy$$ndarray_partition(witp,xd,win);
   $list ix2 = $NEW($list,NULL,NULL);
-  $list_append(ix2,s);
-  $list_append(ix2,win);
-  numpy$$ndarray tmp3 = numpy$$ndarray_getslice(tmp2,ix2);
-  numpy$$ndarray tmp4 = numpy$$ndarray_getslice(tmp3,ix);
+  $list_append(ix2,numpy$$ndslice$new(s));
+  $list_append(ix2,numpy$$ndindex$new(win));
+  numpy$$ndarray tmp3 = numpy$$ndarray$__ndgetslice__(tmp2,ix2);
+  numpy$$ndarray tmp4 = numpy$$ndarray$__ndgetslice__(tmp3,ix);
   numpy$$ndarray tmp5 = wit->$class->__truediv__(wit,xd,tmp4);
   numpy$$ndarray w = numpy$$ndarray_clip(witp,tmp5,to$float(0.0),to$float(1.0));
   numpy$$ndarray tmp6 = $pow3(wit,w);
@@ -51,6 +51,8 @@ int main(int argc, char *argv[]) {
   sscanf(argv[1],"%ld",&n);
   numpy$$ndarray xx,yy;
   long win;
+  $register_builtin();
+  numpy$$__init__();
   if (n <= 21) {
     
     double xx0[] = {0.5578196, 2.0217271, 2.5773252, 3.4140288, 4.3014084,

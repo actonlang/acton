@@ -2,6 +2,8 @@
 #include "../numpy.h"
 
 int main() {
+  $register_builtin();
+  numpy$$__init__();
   numpy$$ndarray v = numpy$$ndarray_arange(to$int(0),to$int(60),to$int(1));
   $list newshape = $NEW($list,NULL,NULL);
   $list_append(newshape,to$int(3));
@@ -10,19 +12,19 @@ int main() {
   numpy$$ndarray a = numpy$$ndarray_reshape(v,newshape);
   $printobj("a=",a);
   $list ix = $NEW($list,NULL,NULL);
-  $list_append(ix,NULL);
+  $list_append(ix,numpy$$ndindex$new(numpy$$newaxis));
   $Slice s1 = $NEW($Slice,NULL,NULL,NULL);
-  $list_append(ix,s1);
-  $list_append(ix,to$int(2));
-  numpy$$ndarray b = numpy$$ndarray_getslice(a,ix);
+  $list_append(ix,numpy$$ndslice$new(s1));
+  $list_append(ix,numpy$$ndindex$new(to$int(2)));
+  numpy$$ndarray b = numpy$$ndarray$__ndgetslice__(a,ix);
   $printobj("b=",b);
   $list ix1 = $NEW($list,NULL,NULL);
-  $list_append(ix1,to$int(1));
+  $list_append(ix1,numpy$$ndindex$new(to$int(1)));
   $Slice s2 = $NEW($Slice,to$int(1),NULL,NULL);
-  $list_append(ix1,s2);
+  $list_append(ix1,numpy$$ndslice$new(s2));
   $Slice s3 = $NEW($Slice,to$int(-1),to$int(0),to$int(-1));
-  $list_append(ix1,s3);
-  numpy$$ndarray c = numpy$$ndarray_getslice(a,ix1);
+  $list_append(ix1,numpy$$ndslice$new(s3));
+  numpy$$ndarray c = numpy$$ndarray$__ndgetslice__(a,ix1);
   $printobj("c=",c);
   $list test = $list_copy(c->shape);
   numpy$$Primitive wit = (numpy$$Primitive)numpy$$Primitive$int$witness;

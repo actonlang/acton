@@ -2448,7 +2448,9 @@ struct $Plus$bytearray$class  $Plus$bytearray$methods = {
     $Plus$bytearray$__deserialize__,
     ($bool (*)($Plus$bytearray))$default__bool__,
     ($str (*)($Plus$bytearray))$default__str__,
-    $Plus$bytearray$__add__
+    $Plus$bytearray$__add__,
+    ($bytearray (*)($Plus$bytearray, $bytearray, $bytearray))$Plus$__iadd__,
+
 };
 struct $Plus$bytearray $Plus$bytearray_instance = {&$Plus$bytearray$methods};
 $Plus$bytearray $Plus$bytearray$witness = &$Plus$bytearray_instance;

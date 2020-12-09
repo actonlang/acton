@@ -59,7 +59,8 @@ struct $Plus$list$class $Plus$list$methods = {
     $Plus$list$__deserialize__,
     ($bool (*)($Plus$list))$default__bool__,
     ($str (*)($Plus$list))$default__str__,
-    $Plus$list$__add__
+    $Plus$list$__add__,
+    ($list (*)($Plus$list, $list, $list))$Plus$__iadd__,
 };
 struct $Plus$list $Plus$list_instance = {
     &$Plus$list$methods,

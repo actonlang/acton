@@ -13,7 +13,7 @@ struct numpy$$ndarray$class {
   numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
   numpy$$ndarray (*transpose)(numpy$$ndarray,$list);
   numpy$$ndarray (*copy)(numpy$$ndarray);
-  numpy$$ndarray (*__nd_getslice__)(numpy$$ndarray,$list);
+  numpy$$ndarray (*__ndgetslice__)(numpy$$ndarray,$list);
 };
 
 struct numpy$$ndarray {
@@ -70,33 +70,39 @@ struct numpy$$Iterator$ndarray {
 
 extern struct  numpy$$Iterator$ndarray$class  numpy$$Iterator$ndarray$methods;
 
-numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive);
+numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive,numpy$$ndarray);
 
 // Intended argument to constructor
 
-numpy$$ndarray numpy$$ndarray_fromatom($WORD a);
+numpy$$ndarray numpy$$fromatom($WORD a);
 
 //numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a);
 //numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), numpy$$ndarray a, numpy$$ndarray b);
 
 // Methods in ndarray class //////////////////////////////////////////////
 
-numpy$$ndarray numpy$$ndarray_reshape(numpy$$ndarray,$list);
-numpy$$ndarray numpy$$ndarray_transpose(numpy$$ndarray,$list);
-numpy$$ndarray numpy$$ndarray_copy(numpy$$ndarray);
-numpy$$ndarray numpy$$ndarray_getslice(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$reshape(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$transpose(numpy$$ndarray,$list);
+numpy$$ndarray numpy$$copy(numpy$$ndarray);
+numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray,$list);
 
 // Functions to create ndarrays /////////////////////////////////////////
 
-numpy$$ndarray numpy$$ndarray_linspace($float a, $float b, $int n);
-numpy$$ndarray numpy$$ndarray_arange($int start, $int stop, $int step);
-numpy$$ndarray numpy$$ndarray_array(numpy$$Primitive wit, $list elems);
+numpy$$ndarray numpy$$linspace($float a, $float b, $int n);
+numpy$$ndarray numpy$$arange($int start, $int stop, $int step);
+numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
+numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
 
 // Various utilities /////////////////////////////////////////////////////
 
-numpy$$ndarray numpy$$ndarray_sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
-numpy$$ndarray numpy$$ndarray_partition(numpy$$Primitive wit, numpy$$ndarray a, $int k);
-numpy$$ndarray numpy$$ndarray_sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
-numpy$$ndarray numpy$$ndarray_clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high);
-numpy$$ndarray numpy$$ndarray_dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b);
-numpy$$ndarray numpy$$ndarray_abs(numpy$$Primitive wit, numpy$$ndarray a);
+numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k);
+numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis);
+numpy$$ndarray numpy$$clip(numpy$$Primitive wit, numpy$$ndarray a, $WORD low, $WORD high);
+numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray b);
+numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a);
+$WORD numpy$$scalar(numpy$$Primitive wit, numpy$$ndarray a);
+
+// newaxis //////////////////////////////////////////////////////////
+
+extern $int numpy$$newaxis;
