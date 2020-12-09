@@ -159,3 +159,13 @@ numpy$$Primitive$int numpy$$Primitive$int$witness = &numpy$$Primitive$int_instan
 struct numpy$$Primitive$float numpy$$Primitive$float_instance = {&numpy$$Primitive$float$methods};
 numpy$$Primitive$float numpy$$Primitive$float$witness = &numpy$$Primitive$float_instance;
 
+numpy$$Primitive$int numpy$$Primitive$int$new() {
+  numpy$$Primitive$int res = malloc(sizeof(struct numpy$$Primitive$int));
+  res->$class = &numpy$$Primitive$int$methods;
+  return res;
+}
+numpy$$Primitive$float numpy$$Primitive$float$new() {
+  numpy$$Primitive$float res = malloc(sizeof(struct numpy$$Primitive$float));
+  res->$class = &numpy$$Primitive$float$methods;
+  return res;
+}

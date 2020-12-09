@@ -1,6 +1,6 @@
 // Integral$ndarray /////////////////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Integral$ndarray_init(numpy$$Integral$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
+void numpy$$Integral$init(numpy$$Integral$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
   wit->w$Logical = ($Logical)$NEW(numpy$$Logical$ndarray,($Integral)wit);
   wit->w$Minus = ($Minus)$NEW(numpy$$Minus$ndarray,($Integral)wit);
   wit->w$Primitive$A$Integral$ndarray = w$Primitive$A$numpy;
@@ -22,11 +22,11 @@ numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state st
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b){
-  return numpy$$ndarray_oper(wit->w$Primitive$A$Integral$ndarray->$class->$add,a,b);
+  return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$add,a,b);
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray wit,$WORD atom) {
-  return numpy$$ndarray_fromatom(($Super)atom);
+  return numpy$$fromatom(($Super)atom);
 }
 
 $complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
@@ -35,20 +35,20 @@ $complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray wit, numpy$$
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__mul__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$ndarray_oper(wit->w$Primitive$A$Integral$ndarray->$class->$mul,a,b);
+  return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$mul,a,b);
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__truediv__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$ndarray_oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
+    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
 }
 
 
 numpy$$ndarray numpy$$Integral$ndarray$__pow__(numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$ndarray_oper(wit->w$Primitive$A$Integral$ndarray->$class->$pow,a,b);
+    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$pow,a,b);
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__neg__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
-  return numpy$$ndarray_func(wit->w$Primitive$A$Integral$ndarray->$class->$neg,a);
+  return numpy$$func(wit->w$Primitive$A$Integral$ndarray->$class->$neg,a);
 }
 
 numpy$$ndarray numpy$$Integral$ndarray$__pos__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {
@@ -60,7 +60,7 @@ $WORD numpy$$Integral$ndarray$real(numpy$$Integral$ndarray wit, $Real wit2, nump
 }
 $WORD numpy$$Integral$ndarray$imag(numpy$$Integral$ndarray wit, $Real wit2, numpy$$ndarray a);
 $WORD numpy$$Integral$ndarray$__abs__(numpy$$Integral$ndarray wit, $Real wit2, numpy$$ndarray a) {
-    return numpy$$ndarray_func(wit->w$Primitive$A$Integral$ndarray->$class->$abs,a);
+    return numpy$$func(wit->w$Primitive$A$Integral$ndarray->$class->$abs,a);
 }
 numpy$$ndarray numpy$$Integral$ndarray$conjugate(numpy$$Integral$ndarray wit, numpy$$ndarray a);
 $float numpy$$Integral$ndarray$__float__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
@@ -74,7 +74,7 @@ numpy$$ndarray numpy$$Integral$ndarray$__int__ (numpy$$Integral$ndarray wit, num
 numpy$$ndarray numpy$$Integral$ndarray$__index__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
 $tuple numpy$$Integral$ndarray$__divmod__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Integral$ndarray$__floordiv__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$ndarray_oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
+    return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$div,a,b);
 }  
 numpy$$ndarray numpy$$Integral$ndarray$__mod__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
 numpy$$ndarray numpy$$Integral$ndarray$__lshift__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
@@ -83,7 +83,7 @@ numpy$$ndarray numpy$$Integral$ndarray$__invert__ (numpy$$Integral$ndarray wit, 
 
 // Logical$ndarray //////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Logical$ndarray_init(numpy$$Logical$ndarray wit, $Integral w$Integral) {
+void numpy$$Logical$init(numpy$$Logical$ndarray wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
 
@@ -98,18 +98,18 @@ numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__($Serial$state stat
 }
 
 numpy$$ndarray numpy$$Logical$ndarray$__and__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$ndarray_oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$band,a,b);
+  return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$band,a,b);
 }
 numpy$$ndarray numpy$$Logical$ndarray$__or__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$ndarray_oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bor,a,b);
+    return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bor,a,b);
 }
 numpy$$ndarray numpy$$Logical$ndarray$__xor__ (numpy$$Logical$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-    return numpy$$ndarray_oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bxor,a,b);
+    return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$bxor,a,b);
 }
 
 // Minus$ndarray /////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Minus$ndarray_init(numpy$$Minus$ndarray wit, $Integral w$Integral) {
+void numpy$$Minus$init(numpy$$Minus$ndarray wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
 
@@ -124,7 +124,7 @@ numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__($Serial$state state) {
 }
 
 numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray wit, numpy$$ndarray a, numpy$$ndarray b) {
-  return numpy$$ndarray_oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$sub,a,b);
+  return numpy$$oper(((numpy$$Integral$ndarray)wit->w$Integral)->w$Primitive$A$Integral$ndarray->$class->$sub,a,b);
 }
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
@@ -179,16 +179,16 @@ void numpy$$Sliceable$ndarray$__delslice__ (numpy$$Sliceable$ndarray wit, numpy$
   exit(-1);
 }
 
-struct numpy$$Integral$ndarray numpy$$Integral$ndarray_instance;
-struct numpy$$Logical$ndarray numpy$$Logical$ndarray_instance;
-struct numpy$$Minus$ndarray numpy$$Minus$ndarray_instance;
-struct numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray_instance;
+struct numpy$$Integral$ndarray numpy$$Integral$instance;
+struct numpy$$Logical$ndarray numpy$$Logical$instance;
+struct numpy$$Minus$ndarray numpy$$Minus$instance;
+struct numpy$$Sliceable$ndarray numpy$$Sliceable$instance;
 
 struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     "numpy$$Integral$ndarray",
     UNASSIGNED,
     ($Super$class)&$Integral$methods,
-    numpy$$Integral$ndarray_init,
+    numpy$$Integral$init,
     numpy$$Integral$ndarray$__serialize__,
     numpy$$Integral$ndarray$__deserialize__,
     ($bool (*)(numpy$$Integral$ndarray))$default__bool__,
@@ -226,7 +226,7 @@ struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods =  {
     "numpy$$Logical$ndarray",
     UNASSIGNED,
     ($Super$class)&$Logical$methods,
-    numpy$$Logical$ndarray_init,
+    numpy$$Logical$init,
     numpy$$Logical$ndarray$__serialize__,
     numpy$$Logical$ndarray$__deserialize__,
     ($bool (*)(numpy$$Logical$ndarray))$default__bool__,
@@ -236,22 +236,22 @@ struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods =  {
     numpy$$Logical$ndarray$__xor__
 };
 
-struct numpy$$Logical$ndarray numpy$$Logical$ndarray_instance = {&numpy$$Logical$ndarray$methods, ($Integral)&numpy$$Integral$ndarray_instance};
-numpy$$Logical$ndarray numpy$$Logical$ndarray$witness = &numpy$$Logical$ndarray_instance;
+struct numpy$$Logical$ndarray numpy$$Logical$instance = {&numpy$$Logical$ndarray$methods, ($Integral)&numpy$$Integral$instance};
+numpy$$Logical$ndarray numpy$$Logical$ndarray$witness = &numpy$$Logical$instance;
 
 struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     "numpy$$Minus$ndarray",
     UNASSIGNED,
     ($Super$class)&$Minus$methods,
-    numpy$$Minus$ndarray_init,
+    numpy$$Minus$init,
     numpy$$Minus$ndarray$__serialize__,
     numpy$$Minus$ndarray$__deserialize__,
     ($bool (*)(numpy$$Minus$ndarray))$default__bool__,
     ($str (*)(numpy$$Minus$ndarray))$default__str__,
     numpy$$Minus$ndarray$__sub__
 };
-struct numpy$$Minus$ndarray numpy$$Minus$ndarray_instance = {&numpy$$Minus$ndarray$methods,  ($Integral)&numpy$$Integral$ndarray_instance};
-numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$ndarray_instance;
+struct numpy$$Minus$ndarray numpy$$Minus$instance = {&numpy$$Minus$ndarray$methods,  ($Integral)&numpy$$Integral$instance};
+numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$instance;
 
 
 struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
@@ -270,8 +270,8 @@ struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods = {
     numpy$$Sliceable$ndarray$__setslice__,
     numpy$$Sliceable$ndarray$__delslice__,
 };
-struct numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray_instance = {&numpy$$Sliceable$ndarray$methods};
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$witness = &numpy$$Sliceable$ndarray_instance;
+struct numpy$$Sliceable$ndarray numpy$$Sliceable$instance = {&numpy$$Sliceable$ndarray$methods};
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$witness = &numpy$$Sliceable$instance;
 
 // numpy$$Iterable$ndarray ////////////////////////////////////////////////////////
 

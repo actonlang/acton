@@ -1,3 +1,5 @@
+# import math
+
 protocol Primitive: pass
 
 class ndselect(struct):
@@ -36,9 +38,11 @@ full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
 extension ndarray[A (Primitive)] (Iterable[A]): pass
+# extension ndarray[A (Primitive, math.Math)] (math.Math): pass
 
 extension int (Primitive): pass
 extension float (Primitive): pass
 
 newaxis : int  # unspecified value guaranteed not to be used for indexing (e.g. LONG_MIN)
+
 

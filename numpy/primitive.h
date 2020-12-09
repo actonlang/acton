@@ -196,7 +196,10 @@ struct numpy$$Primitive$float$class {
   union $Bytes8 (*$bnot)(union $Bytes8);              
 };
 
-// Witnesses ////////////////////////////////////////////////////////////////////////////
+// Witnesses and creation ////////////////////////////////////////////////////////////////////////////
+
+numpy$$Primitive$int numpy$$Primitive$int$new();
+numpy$$Primitive$float numpy$$Primitive$float$new();
 
 extern struct numpy$$Primitive$int$class  numpy$$Primitive$int$methods;
 extern struct numpy$$Primitive$float$class  numpy$$Primitive$float$methods;
