@@ -1,10 +1,17 @@
 // Integral$ndarray /////////////////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Integral$init(numpy$$Integral$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
+void numpy$$Integral$ndarray$__init__(numpy$$Integral$ndarray wit, numpy$$Primitive w$Primitive$A$numpy) {
   wit->w$Logical = ($Logical)$NEW(numpy$$Logical$ndarray,($Integral)wit);
   wit->w$Minus = ($Minus)$NEW(numpy$$Minus$ndarray,($Integral)wit);
   wit->w$Primitive$A$Integral$ndarray = w$Primitive$A$numpy;
 }; 
+
+numpy$$Integral$ndarray numpy$$Integral$ndarray$new(numpy$$Primitive pwit) {
+  numpy$$Integral$ndarray res = malloc(sizeof (struct numpy$$Integral$ndarray));
+  res->$class = &numpy$$Integral$ndarray$methods;
+  numpy$$Integral$ndarray$__init__(res, pwit);
+  return res;
+}
 
 
 void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray wit, $Serial$state state) {
@@ -83,10 +90,16 @@ numpy$$ndarray numpy$$Integral$ndarray$__invert__ (numpy$$Integral$ndarray wit, 
 
 // Logical$ndarray //////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Logical$init(numpy$$Logical$ndarray wit, $Integral w$Integral) {
+void numpy$$Logical$ndarray$__init__(numpy$$Logical$ndarray wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
 
+numpy$$Logical$ndarray numpy$$Logical$ndarray$new($Integral w$Integral) {
+  numpy$$Logical$ndarray res = malloc(sizeof (struct numpy$$Logical$ndarray));
+  res->$class = &numpy$$Logical$ndarray$methods;
+  numpy$$Logical$ndarray$__init__(res, w$Integral);
+  return res;
+}
 void numpy$$Logical$ndarray$__serialize__(numpy$$Logical$ndarray wit, $Serial$state state) {
     $step_serialize(wit->w$Integral, state);
 }
@@ -109,9 +122,16 @@ numpy$$ndarray numpy$$Logical$ndarray$__xor__ (numpy$$Logical$ndarray wit, numpy
 
 // Minus$ndarray /////////////////////////////////////////////////////////////////////////////////
 
-void numpy$$Minus$init(numpy$$Minus$ndarray wit, $Integral w$Integral) {
+void numpy$$Minus$ndarray$__init__(numpy$$Minus$ndarray wit, $Integral w$Integral) {
   wit->w$Integral =  w$Integral;
 };
+
+numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Integral w$Integral) {
+  numpy$$Minus$ndarray res = malloc(sizeof (struct numpy$$Minus$ndarray));
+  res->$class = &numpy$$Minus$ndarray$methods;
+  numpy$$Minus$ndarray$__init__(res, w$Integral);
+  return res;
+}
 
 void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray wit, $Serial$state state) {
     $step_serialize(wit->w$Integral, state);
@@ -129,17 +149,16 @@ numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray wit, numpy$$nd
 
 // Sliceable$ndarray ///////////////////////////////////////////////////////////////////////////////
 
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new() {
-    numpy$$Sliceable$ndarray $tmp = malloc(sizeof(struct numpy$$Sliceable$ndarray));
-    $tmp->$class = &numpy$$Sliceable$ndarray$methods;
-    //numpy$$Sliceable$ndarray$methods.__init__($tmp);
-    return $tmp;
-}
-
 void numpy$$Sliceable$ndarray$__init__ (numpy$$Sliceable$ndarray self) {
 }
 
 void numpy$$Sliceable$ndarray$__serialize__(numpy$$Sliceable$ndarray wit, $Serial$state state) {
+}
+
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new() {
+    numpy$$Sliceable$ndarray res = malloc(sizeof(struct numpy$$Sliceable$ndarray));
+    res->$class = &numpy$$Sliceable$ndarray$methods;
+    return res;
 }
 
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$__deserialize__($Serial$state state) {
@@ -163,18 +182,18 @@ void numpy$$Sliceable$ndarray$__delitem__ (numpy$$Sliceable$ndarray wit, numpy$$
   exit(-1);
 }
 
-numpy$$ndarray numpy$$Sliceable$ndarray$__getslice__ (numpy$$Sliceable$ndarray wit, numpy$$ndarray a, $Slice slc) {
+numpy$$ndarray numpy$$Sliceable$ndarray$__getslice__ (numpy$$Sliceable$ndarray wit, numpy$$ndarray a, $slice slc) {
   $list lst = $list$new(NULL, NULL);
   $list_append(lst, numpy$$ndslice$new(slc));
   return a->$class->__ndgetslice__(a, lst);
 }
 
-void numpy$$Sliceable$ndarray$__setslice__ (numpy$$Sliceable$ndarray wit, $Iterable wit2, numpy$$ndarray a, $Slice slc, $WORD iter) {
+void numpy$$Sliceable$ndarray$__setslice__ (numpy$$Sliceable$ndarray wit, $Iterable wit2, numpy$$ndarray a, $slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on ndarray");
   exit(-1);
 }
 
-void numpy$$Sliceable$ndarray$__delslice__ (numpy$$Sliceable$ndarray wit, numpy$$ndarray a, $Slice slc) {
+void numpy$$Sliceable$ndarray$__delslice__ (numpy$$Sliceable$ndarray wit, numpy$$ndarray a, $slice slc) {
   fprintf(stderr,"Internal error: call to mutating method delslice on ndarray");
   exit(-1);
 }
@@ -188,7 +207,7 @@ struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     "numpy$$Integral$ndarray",
     UNASSIGNED,
     ($Super$class)&$Integral$methods,
-    numpy$$Integral$init,
+    numpy$$Integral$ndarray$__init__,
     numpy$$Integral$ndarray$__serialize__,
     numpy$$Integral$ndarray$__deserialize__,
     ($bool (*)(numpy$$Integral$ndarray))$default__bool__,
@@ -226,7 +245,7 @@ struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods =  {
     "numpy$$Logical$ndarray",
     UNASSIGNED,
     ($Super$class)&$Logical$methods,
-    numpy$$Logical$init,
+    numpy$$Logical$ndarray$__init__,
     numpy$$Logical$ndarray$__serialize__,
     numpy$$Logical$ndarray$__deserialize__,
     ($bool (*)(numpy$$Logical$ndarray))$default__bool__,
@@ -243,7 +262,7 @@ struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     "numpy$$Minus$ndarray",
     UNASSIGNED,
     ($Super$class)&$Minus$methods,
-    numpy$$Minus$init,
+    numpy$$Minus$ndarray$__init__,
     numpy$$Minus$ndarray$__serialize__,
     numpy$$Minus$ndarray$__deserialize__,
     ($bool (*)(numpy$$Minus$ndarray))$default__bool__,
@@ -280,6 +299,11 @@ void numpy$$Iterable$ndarray$__init__(numpy$$Iterable$ndarray self, numpy$$Primi
   self->pwit = pwit;
 }
   
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new(numpy$$Primitive pwit) {
+  numpy$$Iterable$ndarray res = malloc(sizeof (struct numpy$$Iterable$ndarray));
+  numpy$$Iterable$ndarray$__init__(res, pwit);
+  return res;
+}
 
 void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray wit, $Serial$state state) {
 }

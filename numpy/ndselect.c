@@ -66,7 +66,7 @@ numpy$$ndindex numpy$$ndindex$new($int p$1) {
 
 
 
-void numpy$$ndslice$__init__(numpy$$ndslice self, $Slice slc) {
+void numpy$$ndslice$__init__(numpy$$ndslice self, $slice slc) {
     self->slc = slc;
 }
 
@@ -76,7 +76,7 @@ void numpy$$ndslice$__serialize__(numpy$$ndslice self, $Serial$state state) {
 
 numpy$$ndslice numpy$$ndslice$__deserialize__($Serial$state state) {
     numpy$$ndslice res = $DNEW(numpy$$ndslice,state);
-    res->slc = ($Slice)$step_deserialize(state);
+    res->slc = ($slice)$step_deserialize(state);
     return res;
 }
 
@@ -91,7 +91,7 @@ struct numpy$$ndslice$class numpy$$ndslice$methods = {
     ($str (*)(numpy$$ndslice))$default__str__,
 };
 
-numpy$$ndslice numpy$$ndslice$new($Slice p$1) {
+numpy$$ndslice numpy$$ndslice$new($slice p$1) {
     numpy$$ndslice $tmp = malloc(sizeof(struct numpy$$ndslice));
     $tmp->$class = &numpy$$ndslice$methods;
     numpy$$ndslice$methods.__init__($tmp, p$1);

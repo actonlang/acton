@@ -41,7 +41,7 @@ struct numpy$$ndslice$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    void (*__init__) (numpy$$ndslice, $Slice);
+    void (*__init__) (numpy$$ndslice, $slice);
     void (*__serialize__) (numpy$$ndslice, $Serial$state);
     numpy$$ndslice (*__deserialize__) ($Serial$state);
     $bool (*__bool__) (numpy$$ndslice);
@@ -49,8 +49,8 @@ struct numpy$$ndslice$class {
 };
 struct numpy$$ndslice {
     struct numpy$$ndslice$class *$class;
-    $Slice slc;
+    $slice slc;
 };
 extern struct numpy$$ndslice$class numpy$$ndslice$methods;
-numpy$$ndslice numpy$$ndslice$new($Slice);
+numpy$$ndslice numpy$$ndslice$new($slice);
 

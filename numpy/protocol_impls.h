@@ -170,15 +170,14 @@ struct numpy$$Sliceable$ndarray$class {
     numpy$$ndarray (*__getitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
     void (*__setitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int, $WORD);
     void (*__delitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
-    numpy$$ndarray (*__getslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Slice);
-    void (*__setslice__) (numpy$$Sliceable$ndarray, $Iterable, numpy$$ndarray, $Slice, $WORD);
-    void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Slice);
+    numpy$$ndarray (*__getslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
+    void (*__setslice__) (numpy$$Sliceable$ndarray, $Iterable, numpy$$ndarray, $slice, $WORD);
+    void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
 };
 struct numpy$$Sliceable$ndarray {
     struct numpy$$Sliceable$ndarray$class *$class;
 };
-extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
+
 
 // numpy$$Iterable$ndarray ////////////////////////////////////////////////////////////
 
@@ -204,6 +203,7 @@ void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state
 numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
 $Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
 
+
 // method tables /////////////////////////////////////////////////////////////////
 
 extern struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods;
@@ -212,4 +212,9 @@ extern struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods;
 extern struct numpy$$Sliceable$ndarray$class numpy$$Sliceable$ndarray$methods;
 extern struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods;
 
+numpy$$Integral$ndarray numpy$$Integral$ndarray$new();
+numpy$$Logical$ndarray numpy$$Logical$ndarray$new($Integral);
+numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Integral);
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new();
 

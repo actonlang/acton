@@ -171,7 +171,7 @@ void $Sliceable$tuple$__delitem__ ($Sliceable$tuple wit, $tuple self, $int ix) {
 }
   
 
-$tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $Slice slc) {
+$tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $slice slc) {
   int size = self->size;
   int start, stop, step, slen;
   normalize_slice(slc, size, &slen, &start, &stop, &step);
@@ -189,12 +189,12 @@ $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $Slice 
   return res;
 }
 
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $Iterable wit2, $tuple self, $Slice slc, $WORD iter) {
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $Iterable wit2, $tuple self, $slice slc, $WORD iter) {
     fprintf(stderr,"%s\n","internal error: setslice on immutable tuple");
   exit(-1);
 }
 
-void $Sliceable$tuple$__delslice__ ($Sliceable$tuple wit, $tuple self, $Slice slc) {
+void $Sliceable$tuple$__delslice__ ($Sliceable$tuple wit, $tuple self, $slice slc) {
     fprintf(stderr,"%s\n","internal error: delslice on immutable tuple");
   exit(-1);
 }
