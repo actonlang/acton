@@ -1,0 +1,67 @@
+protocol RealFuns:
+    @staticmethod
+    sqrt       : (Self) -> Self
+    @staticmethod
+    exp        : (Self) -> Self
+    @staticmethod
+    log        : (Self) -> Self
+    @staticmethod
+    sin        : (Self) -> Self
+    @staticmethod
+    cos        : (Self) -> Self
+    @staticmethod
+    tan        : (Self) -> Self
+    @staticmethod
+    asin       : (Self) -> Self
+    @staticmethod
+    acos       : (Self) -> Self
+    @staticmethod
+    atan       : (Self) -> Self
+    @staticmethod
+    sinh       : (Self) -> Self
+    @staticmethod
+    cosh       : (Self) -> Self
+    @staticmethod
+    tanh       : (Self) -> Self
+    @staticmethod
+    asinh       : (Self) -> Self
+    @staticmethod
+    acosh       : (Self) -> Self
+    @staticmethod
+    atanh       : (Self) -> Self
+
+extension float (RealFuns): pass
+
+def sqrt(x : RealFuns):
+   return x.sqrt(x)
+def exp(x : RealFuns):
+   return x.exp(x)
+def log(x : RealFuns):
+   return x.log(x)
+def sin(x : RealFuns):
+   return x.sin(x)
+def cos(x : RealFuns):
+   return x.cos(x)
+def tan(x : RealFuns):
+   return x.tan(x)
+def asin(x : RealFuns):
+   return x.asin(x)
+def acos(x : RealFuns):
+   return x.acos(x)
+def atan(x : RealFuns):
+   return x.atan(x)
+def sinh(x : RealFuns):
+   return x.sinh(x)
+def cosh(x : RealFuns):
+   return x.cosh(x)
+def tanh(x : RealFuns):
+   return x.tanh(x)
+def asinh(x : RealFuns):
+   return x.asinh(x)
+def acosh(x : RealFuns):
+   return x.acosh(x)
+def atanh(x : RealFuns):
+   return x.atanh(x)
+   
+
+
