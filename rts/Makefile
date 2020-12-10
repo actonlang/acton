@@ -1,4 +1,4 @@
-all: rts.o pingpong # rts2.o pingpong2
+all: rts.o
 
 rts.o: rts.c rts.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
