@@ -213,6 +213,7 @@ struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     ($bool (*)(numpy$$Integral$ndarray))$default__bool__,
     ($str (*)(numpy$$Integral$ndarray))$default__str__,
     numpy$$Integral$ndarray$__add__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Plus$__iadd__,    
     numpy$$Integral$ndarray$__fromatom__,
     NULL,
     numpy$$Integral$ndarray$__mul__,

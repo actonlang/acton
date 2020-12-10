@@ -21,7 +21,7 @@ class ndarray[A] ():
     __ndgetslice__  : (list[ndselect]) -> Self
 
 
-partition           : [A (Primitive)] => (ndarray[A],int,?int)   -> ndarray[A]
+partition           : [A (Primitive)] => (ndarray[A],int)        -> ndarray[A]
 clip                : [A (Primitive)] => (ndarray[A],?A,?A)      -> ndarray[A]
 dot                 : [A (Primitive)] => (ndarray[A],ndarray[A]) -> ndarray[A]
 sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
@@ -34,6 +34,7 @@ arange              :                    (?int,int,?int)         -> ndarray[int]
 linspace            :                    (float, float, int)     -> ndarray[float]
 array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
 full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]           
+unirand             :                    (float, float, int)     -> ndarray[float] #uniformly distributed pseudo-random numbers without seeding 
 
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
