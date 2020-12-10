@@ -585,6 +585,8 @@ findQName (NoQ n) env       = case lookup n (names env) of
                                 Nothing -> nameNotFound n
 findQName (GName m n) env
   | Just m == thismod env   = findQName (NoQ n) env
+  | inBuiltin env,
+    m==mBuiltin             = findQName (NoQ n) env
   | otherwise               = case lookupMod m env of
                                 Just te -> case lookup n te of
                                     Just i -> i

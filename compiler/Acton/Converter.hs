@@ -48,7 +48,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p inh        = TC (modOf (head ws') $ baseName ws') (tSelf' : tcargs p)
+          where sibBase ws p inh        = TC (modOf (head ws') $ baseName ws') (tSelf' : tcargs (if inh then p0 else p))
                   where ws'             = path ws inh
                 path ws inh             = if inh then tcname (head main) : ws else ws
 
