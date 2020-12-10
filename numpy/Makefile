@@ -7,4 +7,4 @@ numpy.o: numpy.h numpy.c init.h init.c ndarray.h ndarray.c ndselect.h ndselect.c
 	cp numpy.h ../modules
 
 clean:
-	rm numpy.o
+	rm -f numpy.o

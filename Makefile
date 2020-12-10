@@ -7,7 +7,7 @@ all:
 	cd numpy && $(MAKE)
 
 clean:
-	rm actonc
+	rm -f actonc
 	cd compiler && $(MAKE) clean
 	cd modules && $(MAKE) clean
 	cd builtin && $(MAKE) clean
