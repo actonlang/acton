@@ -20,7 +20,7 @@ int main() {
   $str text = wit1->$class->__add__(wit1,prefix,wit1->$class->__add__(wit1,message,suffix));
   $bool a = text->$class->startswith(text,prefix,NULL,NULL);
   if (a && text->$class->endswith(text,suffix,NULL,NULL)) {
-    struct $Slice slc;
+    struct $slice slc;
     $Container$str wit2 = $Container$str$witness;
     slc.start = slcel(wit2->$class->__len__(wit2,prefix));
     slc.stop =  slcel(neg(wit2->$class->__len__(wit2,suffix)));

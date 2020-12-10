@@ -80,7 +80,7 @@ int $str_contains ($str, $str);
 int $str_containsnot ($str, $str);
 
 $str $str_getitem($str, int);
-$str $str_getslice($str, $Slice);
+$str $str_getslice($str, $slice);
  
 $str $str_add($str, $str);
 
@@ -180,16 +180,16 @@ void $Sliceable$str$__delitem__ ($Sliceable$str wit, $str str, $int i) {
   exit(-1);
 }
 
-$str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $Slice slc) {
+$str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $slice slc) {
   return $str_getslice(str,slc);
 }
 
-void $Sliceable$str$__setslice__ ($Sliceable$str wit, $Iterable wit2, $str str, $Slice slc, $WORD iter) {
+void $Sliceable$str$__setslice__ ($Sliceable$str wit, $Iterable wit2, $str str, $slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on string");
   exit(-1);
 }
 
-void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $Slice slc) {
+void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $slice slc) {
   fprintf(stderr,"Internal error: call to mutating method delslice on string");
   exit(-1);
 }
@@ -732,7 +732,7 @@ $str $str_getitem($str s, int i) {
  
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$str $str_getslice($str s, $Slice slc) {
+$str $str_getslice($str s, $slice slc) {
   int isascii = s->nchars == s->nbytes;
   int nchars = s->nchars;
   int nbytes = 0;
@@ -2168,9 +2168,9 @@ int $bytearray_ge($bytearray,$bytearray);
 $int $bytearray_getitem($bytearray, int);
 void $bytearray_setitem($bytearray, int, int);
 void $bytearray_delitem($bytearray, int);
-$bytearray $bytearray_getslice($bytearray, $Slice);
-void $bytearray_setslice($bytearray, $Slice, $Iterator);
-void $bytearray_delslice($bytearray, $Slice);
+$bytearray $bytearray_getslice($bytearray, $slice);
+void $bytearray_setslice($bytearray, $slice, $Iterator);
+void $bytearray_delslice($bytearray, $slice);
 $Iterator $bytearray_reversed($bytearray);
 void $bytearray_insert($bytearray, int, $int);
 void $bytearray_append($bytearray, $int);
@@ -2259,15 +2259,15 @@ void $Sequence$bytearray$__delitem__ ($Sequence$bytearray wit, $bytearray self, 
   $bytearray_delitem(self,from$int(ix));
 }
 
-$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc) {
+$bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray self, $slice slc) {
   return $bytearray_getslice(self,slc);
 }
 
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $Iterable wit2, $bytearray self, $Slice slc, $WORD iter) {
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $Iterable wit2, $bytearray self, $slice slc, $WORD iter) {
   $bytearray_setslice(self,slc,wit2->$class->__iter__(wit2,iter));
 }
 
-void $Sequence$bytearray$__delslice__ ($Sequence$bytearray wit, $bytearray self, $Slice slc) {
+void $Sequence$bytearray$__delslice__ ($Sequence$bytearray wit, $bytearray self, $slice slc) {
   $bytearray_delslice(self,slc);
 }
 
@@ -2551,7 +2551,7 @@ void $bytearray_delitem($bytearray self, int ix) {
 
 // Sliceable
 
-$bytearray $bytearray_getslice($bytearray self, $Slice slc) {
+$bytearray $bytearray_getslice($bytearray self, $slice slc) {
   int len = self->nbytes;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -2567,7 +2567,7 @@ $bytearray $bytearray_getslice($bytearray self, $Slice slc) {
   return res;
 }
 
-void $bytearray_setslice($bytearray self, $Slice slc, $Iterator it) {
+void $bytearray_setslice($bytearray self, $slice slc, $Iterator it) {
   int len = self->nbytes;
   $bytearray other;
   NEW_UNFILLED_BYTEARRAY(other,0);
@@ -2608,7 +2608,7 @@ void $bytearray_setslice($bytearray self, $Slice slc, $Iterator it) {
   }
 }
 
-void $bytearray_delslice($bytearray self, $Slice slc) {
+void $bytearray_delslice($bytearray self, $slice slc) {
   int len = self->nbytes;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);

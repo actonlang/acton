@@ -291,7 +291,7 @@ numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix) {
   res->strides->length = ndim;
   res->data = a->data;
   int offset = a->offset;
-  $Slice allSlice = $NEW($Slice,NULL,NULL,NULL);
+  $slice allslice = $NEW($slice,NULL,NULL,NULL);
   int ixpos = ix->length-1;
   int apos = a->ndim-1;
   int respos = ndim-1;
@@ -300,7 +300,7 @@ numpy$$ndarray numpy$$ndarray$__ndgetslice__(numpy$$ndarray a, $list ix) {
   long currstride = a->elem_size;
   while (ixpos>=0) {
     if (untouched-- > 0)
-      currindex = (numpy$$ndselect)numpy$$ndslice$new(allSlice);
+      currindex = (numpy$$ndselect)numpy$$ndslice$new(allslice);
     else
       currindex = (numpy$$ndselect)ix->data[ixpos--];
     if ($ISINSTANCE(currindex,numpy$$ndindex)->val) {
@@ -548,15 +548,29 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems) {
 // create an array with given shape and all elements of given value
 
 numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val) {
-  $list strides = $NEW($list,NULL,NULL);
-  for (int i= 0; i< shape->length; i++)
-    $list_append(strides,to$int(1));
-  numpy$$ndarray res = $newarray(wit->$class->elem_type,shape->length,$prod(shape),shape,strides,true);
-  res->data[0] = wit->$class->from$obj(val);
+  $list strides = $mk_strides(shape);
+  long size = $prod(shape);
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,shape->length,size,shape,strides,true);
+  for (int i=0; i<size; i++)
+    res->data[i] = wit->$class->from$obj(val);
   return res;
 }
 
-
+#define MAX 1000000000
+// This is a simpleminded pseudo-random number generator; should be replaced. (srand is called in numpy$$__init__)
+numpy$$ndarray numpy$$unirand($float a, $float b, $int n) {
+  if (a->val >= b->val)
+     RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
+  $list shape = $NEW($list,NULL,NULL);
+  $list_append(shape,n);
+  $list strides = $NEW($list,NULL,NULL);
+  $list_append(strides,to$int(1));
+  double s = (b->val - a->val);
+  numpy$$ndarray res = $newarray(DblType,1,n->val,shape,strides,true);
+  for (int i = 0; i<n->val; i++)
+    res->data[i].d = a->val + s * (double)arc4random_uniform(MAX)/(double)MAX;
+  return res;
+}
 
 // Functions over arrays /////////////////////////////////////////////////
 
@@ -644,7 +658,7 @@ numpy$$ndarray numpy$$dot(numpy$$Primitive wit, numpy$$ndarray a, numpy$$ndarray
       RAISE(($BaseException)$NEW($ValueError,to$str("array sizes in numpy.dot do not match")));
     long stridea = $LONGELEM(a->strides,a->ndim-1);
     long strideb = $LONGELEM(b->strides,0);
-    $list newshape = $list_getslice(a->shape,$NEW($Slice,NULL,to$int(-1),NULL));
+    $list newshape = $list_getslice(a->shape,$NEW($slice,NULL,to$int(-1),NULL));
     res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
     if (a->ndim==1) {
       res->data[0] = $dot1dim(wit, &a->data[a->offset],&b->data[b->offset],len,stridea,strideb);
@@ -697,7 +711,7 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
     // for now, assume summing along last axis
     long len = $LONGELEM(a->shape,a->ndim-1);
     long stridea = $LONGELEM(a->strides,a->ndim-1);
-    $list newshape = $list_getslice(a->shape,$NEW($Slice,NULL,to$int(-1),NULL));
+    $list newshape = $list_getslice(a->shape,$NEW($slice,NULL,to$int(-1),NULL));
     res = $newarray(a->elem_type,a->ndim-1,$prod(newshape),newshape,$mk_strides(newshape),true);
     a->ndim--;
     numpy$$array_iterator_state ita = $mk_iterator(a);

@@ -8,7 +8,7 @@ int main() {
   int start = 0;
   int stop = 3;
   int step = 2;
-  struct $Slice slc;
+  struct $slice slc;
   slc.start = &start;
   slc.stop = &stop;
   slc.step = &step;

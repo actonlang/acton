@@ -233,7 +233,7 @@ void $list_delitem($list lst,int ix) {
 
 // Sliceable //////////////////////////////////////////////////////////////////////////////////////
 
-$list $list_getslice($list lst, $Slice slc) {
+$list $list_getslice($list lst, $slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);
@@ -250,7 +250,7 @@ $list $list_getslice($list lst, $Slice slc) {
   return rlst;
 }
 
-void $list_setslice($list lst, $Slice slc, $Iterator it) {
+void $list_setslice($list lst, $slice slc, $Iterator it) {
   int len = lst->length;
   $list other = $list_new(0);
   $WORD w;
@@ -290,7 +290,7 @@ void $list_setslice($list lst, $Slice slc, $Iterator it) {
   }
 }
 
-void $list_delslice($list lst, $Slice slc) {
+void $list_delslice($list lst, $slice slc) {
   int len = lst->length;
   int start, stop, step, slen;
   normalize_slice(slc, len, &slen, &start, &stop, &step);

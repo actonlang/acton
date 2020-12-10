@@ -92,6 +92,7 @@ numpy$$ndarray numpy$$linspace($float a, $float b, $int n);
 numpy$$ndarray numpy$$arange($int start, $int stop, $int step);
 numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
 numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
+numpy$$ndarray numpy$$unirand($float a, $float b, $int n);
 
 // Various utilities /////////////////////////////////////////////////////
 

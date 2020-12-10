@@ -145,15 +145,15 @@ void $Sequence$list$__delitem__($Sequence$list wit, $list self, $int ix) {
   $list_delitem(self,from$int(ix));
 }
 
-$list $Sequence$list$__getslice__($Sequence$list wit, $list self, $Slice slice) {
+$list $Sequence$list$__getslice__($Sequence$list wit, $list self, $slice slice) {
   return $list_getslice(self,slice);
 }
 
-void $Sequence$list$__setslice__($Sequence$list wit, $Iterable wit2, $list self, $Slice slice, $WORD iter) {
+void $Sequence$list$__setslice__($Sequence$list wit, $Iterable wit2, $list self, $slice slice, $WORD iter) {
   $list_setslice(self,slice,wit2->$class->__iter__(wit2,iter));
 }
 
-void $Sequence$list$__delslice__($Sequence$list wit, $list self, $Slice slice) {
+void $Sequence$list$__delslice__($Sequence$list wit, $list self, $slice slice) {
   $list_delslice(($list)self,slice);
 }  
 

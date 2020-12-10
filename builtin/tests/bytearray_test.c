@@ -34,7 +34,7 @@ int main() {
   int start = 1;
   int stop = 6;
   int step = 2;
-  struct $Slice slc;
+  struct $slice slc;
   slc.start = &start;
   slc.stop = &stop;
   slc.step = &step;
