@@ -8,11 +8,11 @@ builtin.o: builtin.c builtin.h Iterator.h Iterator.c __builtin__.h __builtin__.c
 	cc -c -O3 builtin.c
 	ar cr ../lib/libActon.a builtin.o
 
-minienv.o: minienv.c minienv.h
+minienv.o: minienv.c minienv.h builtin.o
 	cc -c -O3 minienv.c
 	ar cr ../lib/libActon.a minienv.o
 
 clean:
-	rm builtin.o minienv.o
+	rm -f builtin.o minienv.o
 
 

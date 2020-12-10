@@ -6,4 +6,4 @@ math.o: math.h math.c
 	cp math.h ../modules
 
 clean:
-	rm math.o
+	rm -f math.o
