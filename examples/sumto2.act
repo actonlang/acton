@@ -1,8 +1,8 @@
-import numpy as np
+import numpy
 
 def sumto(n):
-    a = np.arange(0,n,1)
-    return np.sum(a,None)
+    a = numpy.arange(0,n,1)
+    return numpy.sum(a,None)
     
 actor main(env):
   print(sumto(int(env.args[1])))

@@ -1,0 +1,16 @@
+import numpy
+
+# Here we do not prune arrays to the current window size, but keep full-size arrays.
+# This seems faster for length of x and y up to ca 3-400, depending on window size.
+def loess(x, y, xin, win):
+    win1 = win-1       # to be compatible with Loess.py and Loess_with_np.py
+    xd  = numpy.abs(xin[:,numpy.newaxis] - x)
+#    w   = numpy.clip(xd/numpy.partition(xd,win1,None)[:,win1][:,numpy.newaxis], 0.0, 1.0)
+#    ws  = (1 - w ** 3) ** 3
+#    a00 = numpy.sum(ws,1)
+#    a01 = numpy.dot(ws, x)
+#    a11 = numpy.dot(ws, x*x)
+#    b0  = numpy.dot(ws, y)
+#    b1  = numpy.dot(ws, x*y)
+#    det = a00*a11-a01*a01
+#    return ((a11*b0 - a01*b1) + (-a01*b0 + a00*b1)*xin)/det
