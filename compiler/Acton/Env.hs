@@ -585,6 +585,8 @@ findQName (NoQ n) env       = case lookup n (names env) of
                                 Nothing -> nameNotFound n
 findQName (GName m n) env
   | Just m == thismod env   = findQName (NoQ n) env
+  | inBuiltin env,
+    m==mBuiltin             = findQName (NoQ n) env
   | otherwise               = case lookupMod m env of
                                 Just te -> case lookup n te of
                                     Just i -> i
@@ -664,6 +666,11 @@ implProto env p w           = case w of
                                 WClass{} -> qualEq env (tcname p) (tcname p')
                                 WInst{}  -> qualEq env p p'
   where p'                  = proto w
+
+implProto'                  :: EnvF x -> QName -> Witness -> Bool
+implProto' env pn w         = case w of
+                                WClass{} -> qualEq env pn (tcname $ proto w)
+                                WInst{}  -> qualEq env pn (tcname $ proto w)
 
 hasAttr                     :: EnvF x -> Name -> Witness -> Bool
 hasAttr env n w             = n `elem` conAttrs env (tcname $ proto w)

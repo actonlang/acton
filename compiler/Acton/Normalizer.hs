@@ -15,7 +15,7 @@ import Debug.Trace
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
 normalize env0 m                    = return (evalState (norm env m) 0, env0')
   where env                         = normEnv env0
-        env0'                       = mapModules1 conv env0
+        env0'                       = mapModules convEnv env0
         
 
 --  Normalization:
@@ -30,6 +30,7 @@ normalize env0 m                    = return (evalState (norm env m) 0, env0')
 --  X The raise statement is replaced by one of prim calls RAISE, RAISEFROM or RERAISE
 --  X Return without argument is replaced by return None
 --  - The else branch of a while loop is replaced by an explicit if statement enclosing the loop
+--  X Superclass lists are transitively closed
 
 
 -- Normalizing monad
@@ -120,8 +121,9 @@ instance Norm Stmt where
     norm env (Data l mbt ss)        = Data l <$> norm env mbt <*> norm env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
-    norm env (Decl l ds)            = Decl l <$> norm env1 ds
-      where env1                    = define (envOf ds) env
+    norm env (Decl l ds)            = Decl l <$> norm env1 ds1
+      where env1                    = define (envOf ds1) env
+            ds1                     = superClose env ds
     norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)    
 
@@ -175,6 +177,12 @@ normItem env (WithItem e (Just p))  = do e' <- norm env e
                                          (p',ss) <- normPat env p
                                          return (e', Just p', ss)
 
+superClose env []                   = []
+superClose env (d@Class{} : ds)     = d1 : superClose env1 ds
+  where d1                          = d{ bounds = map snd $ mro1 env (bounds d) }
+        env1                        = define (envOf d1) env
+superClose env (d : ds)             = d : superClose env1 ds
+  where env1                        = define (envOf d) env
 
 instance Norm Decl where
     norm env (Def l n q p k t b d x)= do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
@@ -336,6 +344,10 @@ instance Norm Elem where
 
 
 -- Convert function types ---------------------------------------------------------------------------------
+
+convEnv env (n, NClass q ps te)     = [(n, NClass q (mro1 env $ map snd ps) te)]
+convEnv env (n, i)                  = [(n, conv i)]
+
 
 class Conv a where
     conv                            :: a -> a

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 module Acton.Converter where
 
 import Pretty
@@ -31,24 +32,25 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         p0                              = TC (NoQ n0) $ map tVar $ tybound q
         t0                              = tCon $ convProto p0
         w0                              = witAttr (NoQ n0)
-        main                            = [ convProto p | ([],p,_) <- ps ]         -- may be empty!
+        main                            = if null ps then cStruct else head [ convProto p | ([],p,_) <- ps ]
 
         immsibs                         = [ (witAttr w, tCon $ convProto p, inh) | ([w],p,inh) <- ps ]
 
-        mainClass                       = Class NoLoc n0 q1 main mainClassBody
+        mainClass                       = Class NoLoc n0 q1 [main] mainClassBody
           where mainClassBody           = qsigs ++ psigs ++ Decl NoLoc [mainInit] : pruneDefs env (NoQ n0) (convStmts tSelf' eq1 b)
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
-                mainInitBody            = bindWits eq0 ++ map (initCall (tcargs $ head main) mainArgs) main ++ mainCopies
-                mainArgs                = witArgs (map tcname main) wmap ++ [ eVar n | (n,_,True) <- immsibs ]
+                mainInitBody            = bindWits eq0 ++ initCall (tcargs main) mainArgs main : mainCopies
+                mainArgs                = witArgs [tcname main] wmap ++ [ eVar n | (n,_,True) <- immsibs ]
                 mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
                 eq0                     = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
                 eq1                     = (tvarWit tvSelf p0, t0, eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p inh        = TC (modOf (tcname p) $ baseName (path ws inh)) (tSelf' : tcargs p)
-                path ws inh             = if inh then tcname (head main) : ws else ws
+          where sibBase ws p inh        = TC (modOf (head ws') $ baseName ws') (tSelf' : tcargs (if inh then p0 else p))
+                  where ws'             = path ws inh
+                path ws inh             = if inh then tcname main : ws else ws
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
 
@@ -88,7 +90,8 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
                 eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
 
         allsibs                         = [ (ws, tcname p, sibBase ws p inh, witArgs (path ws inh) wmap, inh) | (ws,p,inh) <- ps, not (null ws) ]
-          where sibBase ws p inh        = TC (modOf (tcname main) $ baseName (path ws inh)) ts
+          where sibBase ws p inh        = TC (modOf (tcname main) $ baseName ws') ts
+                  where ws'             = path ws inh
                 path ws inh             = if inh then tcname main : ws else ws
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 [p] (sibClassBody ws n p wes inh) | (ws,n,p,wes,inh) <- allsibs ]
@@ -129,6 +132,7 @@ initCall ts args p                      = Expr NoLoc (eCall (tApp (eDot (eQVar (
 
 witArgs ws wmap                         = case lookup (head ws) wmap of
                                             Just es -> es
+                                            Nothing -> []   -- must be 'struct'
                                             -- Nothing -> trace ("##### wmap empty for " ++ prstrs ws) []
 
 noqual env q                            = [ Quant v (filter (not . isProto env . tcname) us) | Quant v us <- q ]
