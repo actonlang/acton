@@ -20,9 +20,9 @@
     X Print generated C code with precedences                               2d      3d
     X Typecheck and convert formatted string literals                       1d      2d
     X Fully defer ASYNC/AWAIT wrapping to the deactorizer pass              1d      2d
-    - Integrate DB sources in build                                         1d      2d
-    - Set up dedicated rts thread for DB protocol daemon                    1d      2d
-    - Add serialization calls to rts                                        3h      8h
+    / Integrate DB sources in build                                         1d      2d
+    / Set up dedicated rts thread for DB protocol daemon                    1d      2d
+    / Add serialization calls to rts                                        3h      8h
 
     - Build demo app                                                        2w      4w
     - Presentation slides                                                   1w      1w
