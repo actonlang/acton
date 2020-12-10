@@ -1,0 +1,11 @@
+protocol Apa(Eq, Plus):
+    pass
+
+protocol Bepa(Apa, Logical):
+    pass
+
+protocol Cepa(Minus, Bepa):
+    pass
+
+protocol Realistic(Real):
+    pass
