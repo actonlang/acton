@@ -144,7 +144,7 @@ deactSuite env (s : ss)             = do s' <- deact (setSampled ns env) s
 
 
 instance Deact Stmt where
-    deact env (Expr l e)            = Expr l <$> deactExp env tWild e
+    deact env (Expr l e)            = Expr l <$> deactExpTop env e
     deact env (Assign l [p@(PVar _ n _)] e)
       | n `elem` stvars env         = MutAssign l (selfRef n) <$> deactExp env t e
       | n `elem` locals env         = MutAssign l (selfRef n) <$> deactExp env t e
@@ -286,10 +286,18 @@ adapt env t0@(TFun _ fx@(TFX _ x) p _ t) (TFun _ fx'@(TFX _ x') p' _ t') e
 adapt env t0 t1 e
   | all (`elem`[FXPure,FXMut]) fxs  = e
   | all (`elem`[FXAction]) fxs      = e
-  | TCon _ tc <- t0                 = undefined                                 -- Continue here...
+  | TCon _ tc <- t0                 = notYet (loc e) "Methods embedded in data structures"
   where fxs                         = fxfree t0 ++ fxfree t1
 
 
+deactExpTop env e                   = deact env $ qMatch (adapt env) t' tWild e'
+  where (t',e')                     = qType env (adapt env) e
+
+deactExp env t (Call l e p KwdNil)
+  | TFX _ FXAsync <- fx             = do e1 <- deact env $ qMatch (adapt env) t' t $ Call l e' (qMatch (adapt env) r r' p) KwdNil
+                                         return $ Call l (tApp (eQVar primAWAITf) [t]) (PosArg e1 PosNil) KwdNil
+  where (TFun _ fx r' _ t', e')     = qType env (adapt env) e
+        (r,p')                      = qType env (adapt env) p
 deactExp env t e                    = deact env $ qMatch (adapt env) t' t e'
   where (t',e')                     = qType env (adapt env) e
 
