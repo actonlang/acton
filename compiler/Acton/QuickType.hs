@@ -72,7 +72,7 @@ qSchema env f e@(Var _ n)           = case findQName n env of
                                             in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] t', Just NoDec, e)
                                         NAct q p k _ ->
                                             (tSchema q (tFun fxAction p k (tCon0 n q)), Just NoDec, e)
-                                        i -> error ("### schemaOf Var unexpected " ++ prstr (noq n,i))
+                                        i -> error ("### qSchema Var unexpected " ++ prstr (noq n,i))
 qSchema env f e@(Dot _ (Var _ x) n)
   | NClass q _ _ <- info            = let tc = TC x (map tVar $ tybound q)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
@@ -82,7 +82,7 @@ qSchema env f e0@(Dot l e n)        = case t of
                                         TCon _ c -> addE $ findAttr' env c n
                                         TTuple _ p k -> addE $ (monotype $ pick n k, Nothing)
                                         TVar _ v  -> addE $ findAttr' env (findTVBound env v) n
-                                        t -> error ("### schemaOf Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
+                                        t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, e')                     = qType env f e
         addE (sc, dec)              = (sc, dec, Dot l e' n)
         pick n (TRow l k x t r)     = if x == n then t else pick n r

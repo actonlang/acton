@@ -1269,7 +1269,7 @@ inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              return (cs1++cs2++cs3, Sliz l e1' e2' e3')
 
 inferNDSlice env (NDExpr e)             = do (cs, e') <- inferSub env tInt e
-                                             return (cs, eCall (eQVar qnNDIndex) [e])
+                                             return (cs, eCall (eQVar qnNDIndex) [e'])
 inferNDSlice env (NDSliz sl)            = do (cs, sl') <- inferSlice env sl
                                              return (cs, eCall (eQVar qnNDSlice) [sliz2exp sl'])
 
