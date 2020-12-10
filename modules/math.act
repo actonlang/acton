@@ -33,35 +33,35 @@ protocol RealFuns:
 extension float (RealFuns): pass
 
 def sqrt(x : RealFuns):
-   return x.sqrt(x)
+   return RealFuns.sqrt(x)
 def exp(x : RealFuns):
-   return x.exp(x)
+   return RealFuns.exp(x)
 def log(x : RealFuns):
-   return x.log(x)
+   return RealFuns.log(x)
 def sin(x : RealFuns):
-   return x.sin(x)
+   return RealFuns.sin(x)
 def cos(x : RealFuns):
-   return x.cos(x)
+   return RealFuns.cos(x)
 def tan(x : RealFuns):
-   return x.tan(x)
+   return RealFuns.tan(x)
 def asin(x : RealFuns):
-   return x.asin(x)
+   return RealFuns.asin(x)
 def acos(x : RealFuns):
-   return x.acos(x)
+   return RealFuns.acos(x)
 def atan(x : RealFuns):
-   return x.atan(x)
+   return RealFuns.atan(x)
 def sinh(x : RealFuns):
-   return x.sinh(x)
+   return RealFuns.sinh(x)
 def cosh(x : RealFuns):
-   return x.cosh(x)
+   return RealFuns.cosh(x)
 def tanh(x : RealFuns):
-   return x.tanh(x)
+   return RealFuns.tanh(x)
 def asinh(x : RealFuns):
-   return x.asinh(x)
+   return RealFuns.asinh(x)
 def acosh(x : RealFuns):
-   return x.acosh(x)
+   return RealFuns.acosh(x)
 def atanh(x : RealFuns):
-   return x.atanh(x)
+   return RealFuns.atanh(x)
    
 
 
