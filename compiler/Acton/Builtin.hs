@@ -93,6 +93,7 @@ nPrint                              = name "print"
 nDict                               = name "dict"
 nList                               = name "list"
 nSetT                               = name "set"
+nSlice                              = name "slice"
 ---
 nSequence                           = name "Sequence"
 nMapping                            = name "Mapping"
@@ -136,6 +137,7 @@ qnPrint                             = gBuiltin nPrint
 qnDict                              = gBuiltin nDict
 qnList                              = gBuiltin nList
 qnSetT                              = gBuiltin nSetT
+qnSlice                             = gBuiltin nSlice
 ---
 qnSequence                          = gBuiltin nSequence
 qnMapping                           = gBuiltin nMapping
@@ -172,6 +174,7 @@ cMsg a                              = TC qnMsg [a]
 cList a                             = TC qnList [a]
 cDict a b                           = TC qnDict [a,b]
 cSet a                              = TC qnSetT [a]
+cSlice                              = TC qnSlice []
 cException                          = TC qnException []
 cStopIteration                      = TC qnStopIteration []
 cValueError                         = TC qnValueError []
@@ -212,6 +215,7 @@ tMsg a                              = tCon (cMsg a)
 tList a                             = tCon (cList a)
 tDict a b                           = tCon (cDict a b)
 tSet a                              = tCon (cSet a)
+tSlice                              = tCon cSlice
 tException                          = tCon cException
 tStopIteration                      = tCon cStopIteration
 tValueError                         = tCon cValueError
@@ -226,5 +230,31 @@ uInt                                = UCon qnInt
 uFloat                              = UCon qnFloat
 uBool                               = UCon qnBool
 uStr                                = UCon qnStr
+
+nNumpy                              = name "numpy"
+mNumpy                              = ModName [nNumpy]
+gNumpy n                            = GName mNumpy n
+
+ndgetsliceKW                        = name "__ndgetslice__"
+
+nNDArray                            = name "ndarray"
+nNDSelect                           = name "ndselect"
+nNDIndex                            = name "ndindex"
+nNDSlice                            = name "ndslice"
+
+qnNDArray                           = gNumpy nNDArray
+qnNDSelect                          = gNumpy nNDSelect
+qnNDIndex                           = gNumpy nNDIndex
+qnNDSlice                           = gNumpy nNDSlice
+
+cNDArray a                          = TC qnNDArray [a]
+cNDSelect                           = TC qnNDSelect []
+cNDIndex                            = TC qnNDIndex []
+cNDSlice                            = TC qnNDSlice []
+
+tNDArray a                          = tCon (cNDArray a)
+tNDSelect                           = tCon cNDSelect
+tNDIndex                            = tCon cNDIndex
+tNDSlice                            = tCon cNDSlice
 
 witSequenceList                     = gBuiltin (Derived (Derived nSequence nList) (name "witness"))

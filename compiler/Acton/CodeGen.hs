@@ -301,11 +301,16 @@ instance Gen QName where
       | m == mBuiltin               = char '$' <> text (nstr n)
       | otherwise                   = gen env m <> text "$$" <> text (mkCident $ nstr n)
     gen env (NoQ n)                 = gen env n
-    gen env (QName m n)             = error ("Unexpected QName in CodeGen: " ++ prstr (QName m n))
+    gen env n@QName{}               = trace ("### Globalizing " ++ prstr n) $ gen env (globalize env n)
 
 instance Gen Name where
     gen env nm                      = text $ unCkeyword $ mkCident $ nstr nm
 
+
+mkCident "complex"                  = "complx"
+mkCident "__complex__"              = "__complx__"
+mkCident "complx"                   = "complex$"
+mkCident "__complx__"               = "__complex$__"
 mkCident str
   | isCident str                    = str
   | otherwise                       = preEscape $ concat $ map esc str
