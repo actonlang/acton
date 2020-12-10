@@ -112,7 +112,7 @@ methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classn
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env Def{}                  = empty
 
-fields env c                        = map field te
+fields env c                        = map field (subst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
         field (n, NDef sc Static)   = funsig env n (sctype sc) <> semi
         field (n, NDef sc NoDec)    = methsig env c n (sctype sc) <> semi

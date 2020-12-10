@@ -144,8 +144,8 @@ reduce' env eq c                            = noRed c
 
 
 solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env sc
-                                                 -- when (tvSelf `elem` contrafree t) (err1 n "Contravariant Self attribute not selectable by instance")
-                                                 when (d == Just Static) (err1 n "Static method not selectable by instance:")
+                                                 when (tvSelf `elem` snd (polvars t)) (err1 n "Contravariant Self attribute not selectable by instance")
+--                                                 when (d == Just Static) (err1 n "Static method not selectable by instance:")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf $ eVar px0) n) tvs) $ witsOf cs1)
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1
 --                                                 traceM ("### solveSelAttr unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
@@ -156,8 +156,9 @@ solveSelAttr env (wf,sc,d) (Sel w t1 n t2)  = do (cs1,tvs,t) <- instantiate env 
 solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c -> tcargs c; _ -> []
                                                  (cs1,p,we) <- instWitness env ts wit
                                                  let Just (wf,sc,d) = findAttr env p n
-                                                 when (d == Just Static) (err1 n "Static method not selectable by instance:")
                                                  (cs2,tvs,t) <- instantiate env sc
+                                                 when (tvSelf `elem` snd (polvars t)) (err1 n "Contravariant Self attribute not selectable by instance")
+--                                                 when (d == Just Static) (err1 n "Static method not selectable by instance:")
                                                  let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar px0])
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
 --                                                 traceM ("### solveSelWit unify " ++ prstr (subst [(tvSelf,t1)] t) ++ " " ++ prstr t2)
