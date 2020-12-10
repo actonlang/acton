@@ -311,7 +311,7 @@ instance Unalias ModName where
                                         _ -> noModule (ModName ns0)
 
 instance Unalias QName where
-    unalias env (QName m n)         = case lookupMod m env of
+    unalias env (QName m n)         = case findMod m env of
                                         Just te -> case lookup n te of
                                                       Just (NAlias qn) -> qn
                                                       Just _ -> GName m' n
@@ -596,6 +596,7 @@ findQName (GName m n) env
 
 findName n env              = findQName (NoQ n) env
 
+findMod                     :: ModName -> EnvF x -> Maybe TEnv
 findMod m env | inBuiltin env, m==mBuiltin
                             = Just (names env)
 findMod (ModName (n:ns)) env = case lookup n (names env) of
