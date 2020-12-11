@@ -332,3 +332,121 @@ struct numpy$$Iterable$ndarray$class numpy$$Iterable$ndarray$methods = {
 };
 
 
+// numpy$$RealFuns$math$ndarray ///////////////////////////////////////////////////////////
+
+$NoneType numpy$$RealFuns$math$ndarray$__init__ (numpy$$RealFuns$math$ndarray w$self, numpy$$Primitive w$Primitive, math$$RealFuns w$RealFuns) {
+    w$self->w$Primitive$A$RealFuns$math$ndarray = w$Primitive;
+    w$self-> w$RealFuns$math$A$RealFuns$math$ndarray = w$RealFuns;
+    return $None;
+}
+
+$NoneType numpy$$RealFuns$math$ndarray$__serialize__(numpy$$RealFuns$math$ndarray wit, $Serial$state state) {
+    $step_serialize(wit->w$Primitive$A$RealFuns$math$ndarray, state);
+    $step_serialize(wit->w$RealFuns$math$A$RealFuns$math$ndarray, state);
+    return $None;
+}
+
+numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$__deserialize__($Serial$state state) {
+    numpy$$RealFuns$math$ndarray res = $DNEW(numpy$$RealFuns$math$ndarray,state);
+    res->w$Primitive$A$RealFuns$math$ndarray = (numpy$$Primitive)$step_deserialize(state);
+    res->w$RealFuns$math$A$RealFuns$math$ndarray = (math$$RealFuns)$step_deserialize(state);
+    return res;
+}
+
+#define B8Fun(f,fB)  static union $Bytes8 fB(union $Bytes8 a) {union $Bytes8 res; res.d = f(a.d); return res;}
+
+B8Fun(sqrt,sqrtB)
+B8Fun(exp,expB)
+B8Fun(log,logB)
+B8Fun(sin,sinB)
+B8Fun(cos,cosB)
+B8Fun(tan,tanB)
+B8Fun(asin,asinB)
+B8Fun(acos,acosB)
+B8Fun(atan,atanB)
+B8Fun(sinh,sinhB)
+B8Fun(cosh,coshB)
+B8Fun(tanh,tanhB)
+B8Fun(asinh,asinhB)
+B8Fun(acosh,acoshB)
+B8Fun(atanh,atanhB)
+  
+numpy$$ndarray numpy$$RealFuns$math$ndarray$sqrt(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(sqrtB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$exp(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(expB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$log(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(logB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$sin(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(sinB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$cos(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(cosB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$tan(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(tanB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$asin(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(asinB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$acos(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(acosB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$atan(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(atanB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$sinh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(sinhB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$cosh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(coshB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$tanh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(tanhB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$asinh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(asinhB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$acosh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(acoshB,a);
+}
+numpy$$ndarray numpy$$RealFuns$math$ndarray$atanh(numpy$$RealFuns$math$ndarray wit, numpy$$ndarray a) {
+  return numpy$$func(atanhB,a);
+}
+
+                      
+numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$new(numpy$$Primitive w$Primitive, math$$RealFuns w$RealFuns) {
+    numpy$$RealFuns$math$ndarray $tmp = malloc(sizeof(struct numpy$$RealFuns$math$ndarray));
+    $tmp->$class = &numpy$$RealFuns$math$ndarray$methods;
+    numpy$$RealFuns$math$ndarray$methods.__init__($tmp, w$Primitive, w$RealFuns);
+    return $tmp;
+}
+struct numpy$$RealFuns$math$ndarray$class numpy$$RealFuns$math$ndarray$methods = {
+    "numpy$$RealFuns$math$ndarray",
+    UNASSIGNED,
+    ($Super$class)&math$$RealFuns$methods,
+    numpy$$RealFuns$math$ndarray$__init__,
+    numpy$$RealFuns$math$ndarray$__serialize__,
+    numpy$$RealFuns$math$ndarray$__deserialize__,
+    ($bool (*)(numpy$$RealFuns$math$ndarray))$default__bool__,
+    ($str (*)(numpy$$RealFuns$math$ndarray))$default__str__,
+    numpy$$RealFuns$math$ndarray$sqrt,        
+    numpy$$RealFuns$math$ndarray$exp,        
+    numpy$$RealFuns$math$ndarray$log,        
+    numpy$$RealFuns$math$ndarray$sin,        
+    numpy$$RealFuns$math$ndarray$cos,        
+    numpy$$RealFuns$math$ndarray$tan,        
+    numpy$$RealFuns$math$ndarray$asin,        
+    numpy$$RealFuns$math$ndarray$acos,        
+    numpy$$RealFuns$math$ndarray$atan,        
+    numpy$$RealFuns$math$ndarray$sinh,        
+    numpy$$RealFuns$math$ndarray$cosh,        
+    numpy$$RealFuns$math$ndarray$tanh,        
+    numpy$$RealFuns$math$ndarray$asinh,        
+    numpy$$RealFuns$math$ndarray$acosh,        
+    numpy$$RealFuns$math$ndarray$atanh     
+};
+ 

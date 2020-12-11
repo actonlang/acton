@@ -397,13 +397,17 @@ union $Bytes8 *iter_next(numpy$$array_iterator_state it) {
 
 numpy$$ndarray numpy$$func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a) {
   $list resstrides = $mk_strides(a->shape);
-  numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true); 
-  union $Bytes8 *ixres = res->data;
-  union $Bytes8 *ixa;
-  numpy$$array_iterator_state it = $mk_iterator(a);
-  while ((ixa = iter_next(it))) {
-    *ixres = f(*ixa);
-    ixres++;
+  numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,resstrides,true);
+  if (res->ndim == 0) 
+    res->data[0] = f(a->data[a->offset]);
+  else {
+    union $Bytes8 *ixres = res->data;
+    union $Bytes8 *ixa;
+    numpy$$array_iterator_state it = $mk_iterator(a);
+    while ((ixa = iter_next(it))) {
+      *ixres = f(*ixa);
+      ixres++;
+    }
   }
   return res;
 }
@@ -557,7 +561,6 @@ numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val) {
 }
 
 #define MAX 1000000000
-// This is a simpleminded pseudo-random number generator; should be replaced. (srand is called in numpy$$__init__)
 numpy$$ndarray numpy$$unirand($float a, $float b, $int n) {
   if (a->val >= b->val)
      RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
@@ -685,7 +688,7 @@ union $Bytes8 $sum1dim(numpy$$Primitive wit, union $Bytes8 *a, long size, long s
   ixaend = ixa + size*stridea;
    while (ixa < ixaend) {
      wit->$class->$iadd(&res,*ixa);
-    ixa += stridea;
+     ixa += stridea;
   }
   return res;
 }
@@ -734,7 +737,7 @@ numpy$$ndarray numpy$$abs(numpy$$Primitive wit, numpy$$ndarray a) {
 $WORD numpy$$scalar (numpy$$Primitive wit, numpy$$ndarray a) {
   if (a->ndim > 0)
      RAISE(($BaseException)$NEW($ValueError,to$str("scalar only for zero-dim arrays")));
-  return wit->$class->to$obj(a->data[0]);
+  return wit->$class->to$obj(a->data[a->offset]);
 }
 
 
