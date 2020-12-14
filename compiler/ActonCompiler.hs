@@ -167,6 +167,7 @@ chaseImportsAndCompile args paths task
                                      env1 <- foldM (doTask args paths) env0 [t | AcyclicSCC t <- as]
                                      buildExecutable env1 args paths task
                                          `catch` handle Acton.Env.compilationError (src task) paths (name task)
+                                         `catch` handle Acton.Types.typeError (src task) paths (name task)
                                      return ()
                               else do error ("********************\nCyclic imports:"++concatMap showCycle cs)
                                       System.Exit.exitFailure
@@ -218,6 +219,7 @@ doTask args paths env t@(ActonTask mn src m)
                                           (env',te) <- runRestPasses args paths env m
                                                            `catch` handle generalError src paths mn
                                                            `catch` handle Acton.Env.compilationError src paths mn
+                                                           `catch` handle Acton.Types.typeError src paths mn
                                           iff (verbose args) (putStrLn "Done.")
                                           return (Acton.Env.addMod mn te env')
   where Just actFile        = srcFile paths mn

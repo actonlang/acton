@@ -208,7 +208,7 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
-                | TUnion    { tloc::SrcLoc, alts::[UType] }
+                | TUnion    { tloc::SrcLoc, ualts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }

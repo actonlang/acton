@@ -62,7 +62,6 @@ sampled env                         = sampledX $ envX env
 
 ret env                             = fromJust $ retX $ envX env
 
-
 setActor id acts stvars locals env  = modX env $ \x -> x{ actionsX = acts, stvarsX = stvars, localsX = locals, sampledX = [] }
 
 setSampled ns env                   = modX env $ \x -> x{ sampledX = ns ++ sampled env }
@@ -211,10 +210,10 @@ instance Deact Decl where
 
             deactMeths (Decl l ds)  = Decl l <$> mapM deactMeth ds
 
-            deactMeth (Def l n q p KwdNIL t b d fx)
+            deactMeth (Def l n q p KwdNIL (Just t) b d fx)
                                     = do b <- deactSuite env' b
-                                         return $ Def l n' q (addSelfPar p) KwdNIL t b d fx
-              where env'            = extendAndShadow (envOf p) env2
+                                         return $ Def l n' q (addSelfPar p) KwdNIL (Just t) b d fx
+              where env'            = extendAndShadow (envOf p) $ setRet t $ defineTVars q env2
                     n'              = if n `elem` actions then localName n else n
 
             wrapMeth (Def l n q p KwdNIL (Just t) b d fx)

@@ -9,7 +9,7 @@ def loess(x, y, xin, win):
     p = numpy.partition(xd,win1)[:,win1]
     p1 = p[:,numpy.newaxis]
     q = xd/p1
-    w : numpy.ndarray[float]
+#    w : numpy.ndarray[float]
     w  = numpy.clip(q, 0.0, 1.0)
     ws  = (1.0 - w ** 3.0) ** 3.0
     a00 = numpy.sum(ws,1)

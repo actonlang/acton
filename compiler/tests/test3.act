@@ -19,4 +19,4 @@ actor Bepa():
     meth = bepa
     def cepa():
         a = Apa()
-        x = await a.m()
+        x = await async a.m()
