@@ -1,4 +1,4 @@
-# import math
+import math
 
 protocol Primitive: pass
 
@@ -39,7 +39,7 @@ unirand             :                    (float, float, int)     -> ndarray[floa
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
 extension ndarray[A (Primitive)] (Iterable[A]): pass
-# extension ndarray[A (Primitive, math.Math)] (math.Math): pass
+extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
 
 extension int (Primitive): pass
 extension float (Primitive): pass

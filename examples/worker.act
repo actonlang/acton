@@ -1,0 +1,10 @@
+actor worker(report):
+    report()
+   
+actor main(env):
+    def report():
+        print('Done!')
+        env.exit(0)
+
+    worker(report)
+

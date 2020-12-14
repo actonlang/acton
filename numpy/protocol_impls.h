@@ -1,3 +1,5 @@
+#include "../modules/math.h"
+
 
 struct numpy$$Integral$ndarray;
 typedef struct numpy$$Integral$ndarray *numpy$$Integral$ndarray;
@@ -205,6 +207,42 @@ void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state
 numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
 $Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
 
+// numpy$$RealFuns$math$ndarray ////////////////////////////////////////////////////
+
+struct numpy$$RealFuns$math$ndarray;
+typedef struct numpy$$RealFuns$math$ndarray *numpy$$RealFuns$math$ndarray;
+struct numpy$$RealFuns$math$ndarray$class {
+    char *$GCINFO;
+    int $class_id;
+    $Super$class $superclass;
+    $NoneType (*__init__) (numpy$$RealFuns$math$ndarray, numpy$$Primitive, math$$RealFuns);
+    $NoneType (*__serialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
+    numpy$$RealFuns$math$ndarray (*__deserialize__) ($Serial$state);
+    $bool (*__bool__)(numpy$$RealFuns$math$ndarray);
+    $str (*__str__)(numpy$$RealFuns$math$ndarray);
+    numpy$$ndarray (*sqrt) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*exp) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*log) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*sin) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*cos) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*tan) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*asin) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*acos) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*atan) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*sinh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*cosh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*tanh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*asinh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*acosh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*atanh) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);
+};
+struct numpy$$RealFuns$math$ndarray {
+    struct numpy$$RealFuns$math$ndarray$class *$class;
+    numpy$$Primitive w$Primitive$A$RealFuns$math$ndarray;
+  math$$RealFuns w$RealFuns$math$A$RealFuns$math$ndarray;
+};
+extern struct numpy$$RealFuns$math$ndarray$class numpy$$RealFuns$math$ndarray$methods;
+
 
 // method tables /////////////////////////////////////////////////////////////////
 
@@ -218,5 +256,6 @@ numpy$$Integral$ndarray numpy$$Integral$ndarray$new();
 numpy$$Logical$ndarray numpy$$Logical$ndarray$new($Integral);
 numpy$$Minus$ndarray numpy$$Minus$ndarray$new($Integral);
 numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new();
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new();
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new(numpy$$Primitive);
+numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$new(numpy$$Primitive, math$$RealFuns);
 
