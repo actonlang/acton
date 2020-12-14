@@ -1,0 +1,32 @@
+protocol Primitive: pass
+
+class ndarray[A]: 
+    shape           : list[int]                      # should be a method? (at least until we have immutable lists)
+    strides         : list[int]                      #      -"-
+    reshape         : (list[int]) -> Self
+    transpose       : (?list[int]) -> Self
+    flatten         : () -> Self                     # the same as reshape([-1])
+    copy            : () -> Self                     # makes a contiguous deep copy
+#    __nd_getslice__ : (list[?(int|slice)]) -> Self
+
+
+partition           : [A (Primitive)] => (ndarray[A],int,?int)   -> ndarray[A]
+clip                : [A (Primitive)] => (ndarray[A],?A,?A)      -> ndarray[A]
+dot                 : [A (Primitive)] => (ndarray[A],ndarray[A]) -> ndarray[A]
+sum                 : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
+sort                : [A (Primitive)] => (ndarray[A],?int)       -> ndarray[A]
+abs                 : [A (Primitive)] => (ndarray[A])            -> ndarray[A]
+scalar              : [A (Primitive)] => (ndarray[A])            -> A           #only for 0-dim array
+    
+
+arange              :                    (?int,int,?int)         -> ndarray[int]       
+linspace            :                    (float, float, int)     -> ndarray[float]
+array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
+
+
+extension ndarray[A (Primitive)] (Integral): pass
+
+extension ndarray[A (Primitive)] (Iterable[A]): pass
+
+extension int (Primitive): pass
+extension float (Primitive): pass

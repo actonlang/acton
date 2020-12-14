@@ -22,7 +22,7 @@ def loess(x, y, xin, win):
 
 def sample():
     x = numpy.linspace(0.0,10.0,101)
-    y = numpy.unirand(1.0,3.0,101) + math.sin(x)
+    y = numpy.unirandfloat(1.0,3.0,101) + math.sin(x)
     z = loess(x,y,x,40)
     print("clear\n$data <<EOD");
     for i in range(0,101,1):
