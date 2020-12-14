@@ -403,7 +403,7 @@ uniUnion env us1 us2        = sort $ uniNub env $ us1++us2
 uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
   where nss                             = [ catMaybes [i,f,b,s] | s <- mbStr, b <- mb qnBool, f <- mb qnFloat, i <- mb qnInt ]
         mb c | uniElem env us (UCon c)  = [Just c]
-             | otherwise                = [Nothing, Just c]
+             | otherwise                = [Just c, Nothing]
         mbStr | not $ null lits         = [Just qnStr]
               | otherwise               = mb qnStr
           where lits                    = filter uniLit us
@@ -662,6 +662,10 @@ findWitness env cn f        = listToMaybe $ filter f $ allWitnesses env cn
 allWitnesses                :: EnvF x -> QName -> [Witness]
 allWitnesses env cn         = [ w | (c,w) <- witnesses env, qualEq env c cn ]
 
+allImpls                    :: EnvF x -> QName -> [TCon]
+allImpls env qn             = reverse $ [ sat c | (c,w) <- witnesses env, qualEq env qn (tcname $ proto w) ]
+  where sat c               = let (q,_,_) = findConName c env in TC c [ tWild | _ <- q ]
+
 implProto                   :: EnvF x -> TCon -> Witness -> Bool
 implProto env p w           = case w of
                                 WClass{} -> qualEq env (tcname p) (tcname p')
@@ -730,12 +734,19 @@ directAncestors             :: EnvF x -> QName -> [QName]
 directAncestors env qn      = [ tcname p | (ws,p) <- us, null $ catMaybes ws ]
   where (q,us,te)           = findConName qn env
 
-allAncestors                :: EnvF x -> QName -> [QName]
-allAncestors env qn         = map (tcname . snd) us
+allAncestors                :: EnvF x -> TCon -> [TCon]
+allAncestors env tc         = [ TC n (map (const tWild) ts) | (_, TC n ts) <- us ]
+  where (us,te)             = findCon env tc
+
+allAncestors'               :: EnvF x -> QName -> [QName]
+allAncestors' env qn        = map (tcname . snd) us
   where (q,us,te)           = findConName qn env
 
-allDescendants              :: EnvF x -> QName -> [QName]
-allDescendants env qn       = [ n | n <- allCons env, hasAncestor' env n qn ]
+allDescendants              :: EnvF x -> TCon -> [TCon]
+allDescendants env tc       = [ c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
+
+allDescendants'             :: EnvF x -> QName -> [QName]
+allDescendants' env qn      = [ n | n <- allCons' env, hasAncestor' env n qn ]
 
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
@@ -761,7 +772,7 @@ directAttrs                 :: EnvF x -> QName -> [Name]
 directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncestors env qn, let (_,_,te) = findConName qn' env ]
 
 allAttrs                    :: EnvF x -> QName -> [Name]
-allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors env qn ]
+allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors' env qn ]
 
 attrEnv                     :: EnvF x -> TCon -> TEnv
 attrEnv env c               = snd $ findCon env c
@@ -782,18 +793,29 @@ inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
                 (_,_,te)    = findConName c env
                 ns1         = (dom $ snd $ splitSigs te) \\ ns0
 
-allCons                     :: EnvF x -> [QName]
-allCons env                 = [ NoQ n | (n,i) <- names env, con i ] ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
-  where con NClass{}        = True
+allCons                     :: EnvF x -> [TCon]
+allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, con i ]
+        con NClass{}        = True
         con NAct{}          = True
         con _               = False
-        cons m (Just te)    = [ GName m n | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
+        cons m (Just te)    = [ TC (GName m n) (args i) | (n,i) <- te, con i ] ++ concat [ cons (modCat m n) (Just te') | (n,NModule te') <- te ]
+        args (NClass q _ _) = [ tWild | _ <- q ]
+        args (NAct q _ _ _) = [ tWild | _ <- q ]
 
-allProtos                   :: EnvF x -> [QName]
-allProtos env               = [ NoQ n | (n,i) <- names env, proto i ] ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
-  where proto NProto{}      = True
+allCons'                    :: EnvF x -> [QName]
+allCons' env                = map tcname $ allCons env
+
+allProtos                   :: EnvF x -> [TCon]
+allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+  where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, proto i ]
+        proto NProto{}      = True
         proto _             = False
-        protos m (Just te)  = [ GName m n | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
+        protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
+        args (NProto q _ _) = [ tWild | _ <- q ]
+
+allProtos'                  :: EnvF x -> [QName]
+allProtos' env              = map tcname $ allProtos env
 
 allVars                     :: EnvF x -> Kind -> [TVar]
 allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
@@ -973,23 +995,8 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | NoItem ModName Name
                                     | NoModule ModName
                                     | NoClassOrProto QName
-                                    | OtherError SrcLoc String
-
-                                    | RigidVariable TVar
-                                    | InfiniteType TVar
-                                    | ConflictingRow TVar
-                                    | KwdNotFound Name
-                                    | PosElemNotFound
                                     | DecorationMismatch Name TSchema Deco
-                                    | EscapingVar [TVar] TSchema
-                                    | NoSelStatic Name TCon
-                                    | NoSelInstByClass Name TCon
-                                    | NoMut Name
-                                    | LackSig Name
-                                    | LackDef Name
-                                    | NoRed Constraint
-                                    | NoSolve [Constraint]
-                                    | NoUnify Type Type
+                                    | OtherError SrcLoc String
                                     deriving (Show)
 
 instance Control.Exception.Exception CompilationError
@@ -997,22 +1004,6 @@ instance Control.Exception.Exception CompilationError
 instance HasLoc CompilationError where
     loc (KindError l _ _)           = l
     loc (InfiniteKind l _ _)        = l
-
-    loc (RigidVariable tv)          = loc tv
-    loc (InfiniteType tv)           = loc tv
-    loc (ConflictingRow tv)         = loc tv
-    loc (KwdNotFound n)             = loc n
-    loc (PosElemNotFound)           = NoLoc     -- TODO: supply position
-    loc (DecorationMismatch n t d)  = loc n
-    loc (EscapingVar tvs t)         = loc tvs
-    loc (NoSelStatic n u)           = loc n
-    loc (NoSelInstByClass n u)      = loc n
-    loc (NoMut n)                   = loc n
-    loc (LackSig n)                 = loc n
-    loc (LackDef n)                 = loc n
-    loc (NoRed c)                   = loc c
-    loc (NoSolve cs)                = loc cs
-    loc (NoUnify t1 t2)             = loc t1
 
     loc (FileNotFound n)            = loc n
     loc (NameNotFound n)            = loc n
@@ -1028,30 +1019,15 @@ instance HasLoc CompilationError where
     loc (NoModule m)                = loc m
     loc (NoItem m n)                = loc n
     loc (NoClassOrProto n)          = loc n
+    loc (DecorationMismatch n t d)  = loc n
     loc (OtherError l str)          = l
+
 
 compilationError                    :: CompilationError -> (SrcLoc, String)
 compilationError err                = (loc err, render (expl err))
   where
     expl (KindError l k1 k2)        = text "Expected a" <+> pretty k2 <> comma <+> text "actual kind is" <+> pretty k1
     expl (InfiniteKind l v k)       = text "Infinite kind inferred:" <+> pretty v <+> equals <+> pretty k
-
-    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
-    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
-    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
-    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
-    expl (PosElemNotFound)          = text "Positional element is not found"
-    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty d
-    expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
-                                      pretty (head tvs) <+> text "escapes"
-    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
-    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
-    expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
-    expl (LackSig n)                = text "Declaration lacks accompanying signature"
-    expl (LackDef n)                = text "Signature lacks accompanying definition"
-    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
-    expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
-    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
 
     expl (FileNotFound n)           = text "Type interface file not found for" <+> pretty n
     expl (NameNotFound n)           = text "Name" <+> pretty n <+> text "is not in scope"
@@ -1067,6 +1043,7 @@ compilationError err                = (loc err, render (expl err))
     expl (NoModule m)               = text "Module" <+> pretty m <+> text "does not exist"
     expl (NoItem m n)               = text "Module" <+> pretty m <+> text "does not export" <+> pretty n
     expl (NoClassOrProto n)         = text "Class or protocol name expected, got" <+> pretty n
+    expl (DecorationMismatch n t d) = text "Decoration for" <+> pretty n <+> text "does not match signature" <+> pretty d
     expl (OtherError l str)         = text str
 
 
@@ -1087,7 +1064,7 @@ duplicateImport n                   = Control.Exception.throw $ DuplicateImport 
 noItem m n                          = Control.Exception.throw $ NoItem m n
 noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
-
+decorationMismatch n t d            = Control.Exception.throw $ DecorationMismatch n t d
 err l s                             = Control.Exception.throw $ OtherError l s
 
 err0 xs s                           = err (loc $ head xs) s
@@ -1097,18 +1074,3 @@ err3 l xs s                         = err l (s ++ " " ++ prstrs xs)
 
 notYetExpr e                        = notYet (loc e) e
 
-rigidVariable tv                    = Control.Exception.throw $ RigidVariable tv
-infiniteType tv                     = Control.Exception.throw $ InfiniteType tv
-conflictingRow tv                   = Control.Exception.throw $ ConflictingRow tv
-kwdNotFound n | n == name "_"       = Control.Exception.throw $ PosElemNotFound
-              | otherwise           = Control.Exception.throw $ KwdNotFound n
-decorationMismatch n t d            = Control.Exception.throw $ DecorationMismatch n t d
-escapingVar tvs t                   = Control.Exception.throw $ EscapingVar tvs t
-noSelStatic n u                     = Control.Exception.throw $ NoSelStatic n u
-noSelInstByClass n u                = Control.Exception.throw $ NoSelInstByClass n u
-noMut n                             = Control.Exception.throw $ NoMut n
-lackSig ns                          = Control.Exception.throw $ LackSig (head ns)
-lackDef ns                          = Control.Exception.throw $ LackDef (head ns)
-noRed c                             = Control.Exception.throw $ NoRed c
-noSolve cs                          = Control.Exception.throw $ NoSolve cs
-noUnify t1 t2                       = Control.Exception.throw $ NoUnify t1 t2

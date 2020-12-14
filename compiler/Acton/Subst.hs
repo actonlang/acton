@@ -43,10 +43,10 @@ closeDepVarsQ vs q
 
 subst                               :: Subst a => Substitution -> a -> a
 subst s x0
-  | null clash                      = evalState (msubst x0) (initTypeState $ Map.fromList s)
+  | null clash                      = runTypeM' s (msubst x0)
   | otherwise                       = x2
-  where x1                          = evalState (msubst x0) (initTypeState $ Map.fromList (s1 ++ clash `zip` map tVar tmp))
-        x2                          = evalState (msubst x1) (initTypeState $ Map.fromList (s1 ++ tmp `zip` rng s0))
+  where x1                          = runTypeM' (s1 ++ clash `zip` map tVar tmp) (msubst x0)
+        x2                          = runTypeM' (s1 ++ tmp `zip` rng s0) (msubst x1)
         (s0,s1)                     = partition ((`elem` clash) . fst) s
         clash                       = dom s `intersect` tyfree (rng s)
         used                        = dom s ++ tyfree (rng s)                             

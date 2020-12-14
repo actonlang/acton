@@ -1,8 +1,11 @@
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 module Acton.TypeM where
 
 import Control.Monad.State.Strict
+import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Control.Exception
 
 import Acton.Syntax
 import Acton.Printer
@@ -21,48 +24,52 @@ data TypeState                          = TypeState {
 
 initTypeState s                         = TypeState { nextint = 1, effectstack = [], deferred = [], currsubst = s }
 
-type TypeM a                            = State TypeState a
-
-runTypeM                                :: TypeM a -> a
-runTypeM m                              = evalState m (initTypeState Map.empty)
-{-
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
 runTypeM                                :: TypeM a -> a
-runTypeM m                              = case evalState (runExceptT m) (initTypeState Map.empty) of
-                                            Right x -> x
-                                            Left err -> internal ("Unhandled TypeM error: " ++ show err)
--}
+runTypeM m                              = runTypeM' [] m
+
+runTypeM'                               :: Substitution -> TypeM a -> a
+runTypeM' s m                           = case evalState (runExceptT m) (initTypeState $ Map.fromList s) of
+                                            Right x  -> x
+                                            Left cs -> error "Unhandled TypeM exception"
+
+currentState                            :: TypeM TypeState
+currentState                            = lift $ state $ \st -> (st, st)
+
+rollbackState                           :: TypeState -> TypeM ()
+rollbackState st                        = lift $ state $ \_ -> ((), st)
+
 newUnique                               :: TypeM Int
-newUnique                               = state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
+newUnique                               = lift $ state $ \st -> (nextint st, st{ nextint = nextint st + 1 })
 
 pushFX                                  :: TFX -> Type -> TypeM ()
-pushFX fx ret                           = state $ \st -> ((), st{ effectstack = (fx,ret) : effectstack st })
+pushFX fx ret                           = lift $ state $ \st -> ((), st{ effectstack = (fx,ret) : effectstack st })
 
 currFX                                  :: TypeM TFX
-currFX                                  = state $ \st -> (fst $ head $ effectstack st, st)
+currFX                                  = lift $ state $ \st -> (fst $ head $ effectstack st, st)
 
 currRet                                 :: TypeM Type
-currRet                                 = state $ \st -> (snd $ head $ effectstack st, st)
+currRet                                 = lift $ state $ \st -> (snd $ head $ effectstack st, st)
 
 popFX                                   :: TypeM ()
-popFX                                   = state $ \st -> ((), st{ effectstack = tail (effectstack st) })
+popFX                                   = lift $ state $ \st -> ((), st{ effectstack = tail (effectstack st) })
 
 defer                                   :: Constraints -> TypeM ()
-defer cs                                = state $ \st -> ((), st{ deferred = cs ++ deferred st })
+defer cs                                = lift $ state $ \st -> ((), st{ deferred = cs ++ deferred st })
 
 collectDeferred                         :: TypeM Constraints
-collectDeferred                         = state $ \st -> (deferred st, st{ deferred = [] })
+collectDeferred                         = lift $ state $ \st -> (deferred st, st{ deferred = [] })
 
 substitute                              :: TVar -> Type -> TypeM ()
-substitute tv t                         = trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $ 
+substitute tv t                         = lift $ trace ("  #substitute " ++ prstr tv ++ " ~ " ++ prstr t) $ 
                                           state $ \st -> ((), st{ currsubst = Map.insert tv t (currsubst st)})
 
 getSubstitution                         :: TypeM (Map TVar Type)
-getSubstitution                         = state $ \st -> (currsubst st, st)
+getSubstitution                         = lift $ state $ \st -> (currsubst st, st)
 
 setSubstitution                         :: Map TVar Type -> TypeM ()
-setSubstitution s                       = state $ \st -> ((), st{ currsubst = s })
+setSubstitution s                       = lift $ state $ \st -> ((), st{ currsubst = s })
 
 
 -- Name generation ------------------------------------------------------------------------------------------------------------------
@@ -83,3 +90,78 @@ newTVarOfKind k                         = TVar NoLoc <$> TV k <$> Internal Typev
 newTVars ks                             = mapM newTVarOfKind ks
 
 newTVar                                 = newTVarOfKind KType
+
+-- Type errors ---------------------------------------------------------------------------------------------------------------------
+
+data TypeError                      = TypeError SrcLoc String
+                                    | RigidVariable TVar
+                                    | InfiniteType TVar
+                                    | ConflictingRow TVar
+                                    | KwdNotFound Name
+                                    | PosElemNotFound
+                                    | EscapingVar [TVar] TSchema
+                                    | NoSelStatic Name TCon
+                                    | NoSelInstByClass Name TCon
+                                    | NoMut Name
+                                    | LackSig Name
+                                    | LackDef Name
+                                    | NoRed Constraint
+                                    | NoSolve [Constraint]
+                                    | NoUnify Type Type
+                                    deriving (Show)
+
+instance Control.Exception.Exception TypeError
+
+instance HasLoc TypeError where
+    loc (TypeError l str)           = l
+    loc (RigidVariable tv)          = loc tv
+    loc (InfiniteType tv)           = loc tv
+    loc (ConflictingRow tv)         = loc tv
+    loc (KwdNotFound n)             = loc n
+    loc (PosElemNotFound)           = NoLoc     -- TODO: supply position
+    loc (EscapingVar tvs t)         = loc tvs
+    loc (NoSelStatic n u)           = loc n
+    loc (NoSelInstByClass n u)      = loc n
+    loc (NoMut n)                   = loc n
+    loc (LackSig n)                 = loc n
+    loc (LackDef n)                 = loc n
+    loc (NoRed c)                   = loc c
+    loc (NoSolve cs)                = loc cs
+    loc (NoUnify t1 t2)             = loc t1
+
+typeError                           :: TypeError -> (SrcLoc, String)
+typeError err                       = (loc err, render (expl err))
+  where
+    expl (TypeError l str)          = text str
+    expl (RigidVariable tv)         = text "Type" <+> pretty tv <+> text "is rigid"
+    expl (InfiniteType tv)          = text "Type" <+> pretty tv <+> text "is infinite"
+    expl (ConflictingRow tv)        = text "Row" <+> pretty tv <+> text "has conflicting extensions"
+    expl (KwdNotFound n)            = text "Keyword element" <+> quotes (pretty n) <+> text "is not found"
+    expl (PosElemNotFound)          = text "Positional element is not found"
+    expl (EscapingVar tvs t)        = text "Type annotation" <+> pretty t <+> text "is too general, type variable" <+>
+                                      pretty (head tvs) <+> text "escapes"
+    expl (NoSelStatic n u)          = text "Static method" <+> pretty n <+> text "cannot be selected from" <+> pretty u <+> text "instance"
+    expl (NoSelInstByClass n u)     = text "Instance attribute" <+> pretty n <+> text "cannot be selected from class" <+> pretty u
+    expl (NoMut n)                  = text "Non @property attribute" <+> pretty n <+> text "cannot be mutated"
+    expl (LackSig n)                = text "Declaration lacks accompanying signature"
+    expl (LackDef n)                = text "Signature lacks accompanying definition"
+    expl (NoRed c)                  = text "Cannot infer" <+> pretty c
+    expl (NoSolve cs)               = text "Cannot solve" <+> commaSep pretty cs
+    expl (NoUnify t1 t2)            = text "Cannot unify" <+> pretty t1 <+> text "and" <+> pretty t2
+
+tyerr x s                           = throwError $ TypeError (loc x) (s ++ " " ++ prstr x)
+tyerrs xs s                         = throwError $ TypeError (loc $ head xs) (s ++ " " ++ prstrs xs)
+rigidVariable tv                    = throwError $ RigidVariable tv
+infiniteType tv                     = throwError $ InfiniteType tv
+conflictingRow tv                   = throwError $ ConflictingRow tv
+kwdNotFound n | n == name "_"       = throwError $ PosElemNotFound
+              | otherwise           = throwError $ KwdNotFound n
+escapingVar tvs t                   = throwError $ EscapingVar tvs t
+noSelStatic n u                     = throwError $ NoSelStatic n u
+noSelInstByClass n u                = throwError $ NoSelInstByClass n u
+noMut n                             = throwError $ NoMut n
+lackSig ns                          = throwError $ LackSig (head ns)
+lackDef ns                          = throwError $ LackDef (head ns)
+noRed c                             = throwError $ NoRed c
+noSolve cs                          = throwError $ NoSolve cs
+noUnify t1 t2                       = throwError $ NoUnify t1 t2
