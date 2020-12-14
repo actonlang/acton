@@ -2,6 +2,9 @@
 
 #include "common.h"
 
+struct $atom;
+typedef struct $atom *$atom;
+
 struct $list;
 typedef struct $list *$list;
 
@@ -844,7 +847,7 @@ struct $Number$class {
     $str (*__str__)($Number);
     $WORD (*__add__)($Number, $WORD, $WORD);
     $WORD (*__iadd__)($Number, $WORD, $WORD);
-    $WORD (*__fromatom__)($Number,$WORD);
+    $WORD (*__fromatom__)($Number,$atom);
     $complex (*__complx__)($Number, $WORD);
     $WORD (*__mul__)($Number, $WORD, $WORD);
     $WORD (*__truediv__)($Number, $WORD, $WORD);
@@ -878,7 +881,7 @@ struct $Real$class {
     $str (*__str__)($Real);
     $WORD (*__add__)($Real, $WORD, $WORD);
     $WORD (*__iadd__)($Real, $WORD, $WORD);
-    $WORD (*__fromatom__)($Real,$WORD);
+    $WORD (*__fromatom__)($Real,$atom);
     $complex (*__complx__)($Real, $WORD);
     $WORD (*__mul__)($Real, $WORD, $WORD);
     $WORD (*__truediv__)($Real, $WORD, $WORD);
@@ -916,7 +919,7 @@ struct $Rational$class {
     $str (*__str__)($Rational);
     $WORD (*__add__)($Rational, $WORD, $WORD);
     $WORD (*__iadd__)($Rational, $WORD, $WORD);
-    $WORD (*__fromatom__)($Rational,$WORD);
+    $WORD (*__fromatom__)($Rational,$atom);
     $complex (*__complx__)($Rational, $WORD);
     $WORD (*__mul__)($Rational, $WORD, $WORD);
     $WORD (*__truediv__)($Rational, $WORD, $WORD);
@@ -958,7 +961,7 @@ struct $Integral$class {
     $str (*__str__)($Integral);
     $WORD (*__add__)($Integral, $WORD, $WORD);
     $WORD (*__iadd__)($Integral, $WORD, $WORD);
-    $WORD (*__fromatom__)($Integral,$WORD);
+    $WORD (*__fromatom__)($Integral,$atom);
     $complex (*__complx__)($Integral, $WORD);
     $WORD (*__mul__)($Integral, $WORD, $WORD);
     $WORD (*__truediv__)($Integral, $WORD, $WORD);
@@ -1517,7 +1520,7 @@ struct $Integral$int$class {
     $str (*__str__)($Integral$int);
     $int (*__add__)($Integral$int, $int, $int);
     $int (*__iadd__)($Integral$int, $int, $int);
-    $int (*__fromatom__)($Integral$int,$WORD);
+    $int (*__fromatom__)($Integral$int,$atom);
     $complex (*__complx__)($Integral$int, $int);
     $int (*__mul__)($Integral$int, $int, $int);
     $int (*__truediv__)($Integral$int, $int, $int);
@@ -1549,7 +1552,7 @@ void $Integral$int$__init__ ($Integral$int);
 void $Integral$int$__serialize__($Integral$int, $Serial$state);
 $Integral$int $Integral$int$__deserialize__( $Serial$state);
 $int $Integral$int$__add__($Integral$int, $int, $int);
-$int $Integral$int$__fromatom__($Integral$int,$WORD);
+$int $Integral$int$__fromatom__($Integral$int,$atom);
 $complex $Integral$int$__complx__($Integral$int, $int);
 $int $Integral$int$__mul__($Integral$int, $int, $int);
 $int $Integral$int$__truediv__($Integral$int, $int, $int);
@@ -1707,7 +1710,7 @@ struct $Real$float$class {
     $str (*__str__)($Real$float);
     $float (*__add__)($Real$float, $float, $float);
     $float (*__iadd__)($Real$float, $float, $float);
-    $float (*__fromatom__)($Real$float,$WORD);
+    $float (*__fromatom__)($Real$float,$atom);
     $complex (*__complx__)($Real$float, $float);
     $float (*__mul__)($Real$float, $float, $float);
     $float (*__truediv__)($Real$float, $float, $float);
@@ -1729,7 +1732,7 @@ void $Real$float$__init__ ($Real$float);
 void $Real$float$__serialize__($Real$float, $Serial$state);
 $Real$float $Real$float$__deserialize__( $Serial$state);
 $float $Real$float$__add__($Real$float, $float, $float);
-$float $Real$float$__fromatom__($Real$float,$WORD);
+$float $Real$float$__fromatom__($Real$float,$atom);
 $complex $Real$float$__complx__($Real$float, $float);
 $float $Real$float$__mul__($Real$float, $float, $float);
 $float $Real$float$__truediv__($Real$float, $float, $float);
@@ -1848,7 +1851,7 @@ struct $Number$complex$class {
     $str (*__str__)($Number$complex);
     $complex (*__add__)($Number$complex, $complex, $complex);
     $complex (*__iadd__)($Number$complex, $complex, $complex);
-    $complex (*__fromatom__)($Number$complex,$WORD);
+    $complex (*__fromatom__)($Number$complex,$atom);
     $complex (*__complx__)($Number$complex, $complex);
     $complex (*__mul__)($Number$complex, $complex, $complex);
     $complex (*__truediv__)($Number$complex, $complex, $complex);
@@ -1865,7 +1868,7 @@ void $Number$complex$__init__ ($Number$complex);
 void $Number$complex$__serialize__($Number$complex, $Serial$state);
 $Number$complex $Number$complex$__deserialize__( $Serial$state);
 $complex $Number$complex$__add__ ($Number$complex, $complex, $complex);
-$complex $Number$complex$__fromatom__($Number$complex,$WORD);
+$complex $Number$complex$__fromatom__($Number$complex,$atom);
 $complex $Number$complex$__complx__ ($Number$complex, $complex);
 $complex $Number$complex$__mul__ ($Number$complex, $complex, $complex);
 $complex $Number$complex$__truediv__ ($Number$complex, $complex, $complex);

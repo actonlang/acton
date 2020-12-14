@@ -11,5 +11,5 @@ int main() {
   printf("floor(7/5)=%ld\n",from$int(d));
   printf("round(1234567.14,-5)=%f\n",$Real$float$__round__($Real$float$witness,to$float(1234567.14),to$int(-5))->val);
   printf("round(1.2345678,5)=%f\n",$Real$float$__round__($Real$float$witness,to$float(1.2345678),to$int(5))->val);
-  printf("%f\n",from$float(wit->$class->__fromatom__(wit,$Plus$str$witness->$class->__add__($Plus$str$witness,to$str("3."),to$str("14")))));
+  printf("%f\n",from$float(wit->$class->__fromatom__(wit,($atom)$Plus$str$witness->$class->__add__($Plus$str$witness,to$str("3."),to$str("14")))));
 }

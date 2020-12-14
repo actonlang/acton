@@ -4,6 +4,7 @@
 #include "__builtin__.c"
 #include "class_hierarchy.c"
 #include "none.c"
+#include "atom.c"
 #include "int.c"
 #include "float.c"
 #include "bool.c"

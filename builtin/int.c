@@ -10,12 +10,25 @@ long longpow(long a, long e) {
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$int $int$new($WORD s) {
-  return $NEW($int,s);
+$int $int$new($atom a) {
+  if ($ISINSTANCE(a,$int)->val) return ($int)a;
+  if ($ISINSTANCE(a,$float)->val) return to$int(round((($float)a)->val));
+  if ($ISINSTANCE(a,$bool)->val) return to$int((($bool)a)->val);
+  if ($ISINSTANCE(a,$str)->val) {
+    long x;
+    int c;
+    sscanf((char *)(($str)a)->str,"%ld%n",&x,&c);
+    if (c==(($str)a)->nbytes)
+      return to$int(x);
+    else 
+      RAISE(($BaseException)$NEW($ValueError,to$str("int(): invalid str value for type int")));
+  }
+  fprintf(stderr,"internal error: $int$new: argument not of atomic type");
+  exit(-1);
 }
 
-void $int_init($int self, $WORD a){
-  self->val = $int_fromatom(a)->val;
+void $int_init($int self, $atom a){
+  self->val = $int$new(a)->val;
 }
 
 void $int_serialize($int n,$Serial$state state) {
@@ -36,7 +49,16 @@ $str $int_str($int n) {
   return to$str(s);
 }
   
-struct $int$class $int$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$int_init,$int_serialize,$int_deserialize,$int_bool,$int_str};
+struct $int$class $int$methods = {
+    "$int",
+    UNASSIGNED,
+    ($Super$class)&$atom$methods,
+    $int_init,
+    $int_serialize,
+    $int_deserialize,
+    $int_bool,
+    $int_str
+};
 
 $int to$int(long i) {
   $int res = malloc(sizeof(struct $int));
@@ -49,22 +71,6 @@ long from$int($int w) {
   return w->val;
 }
 
-$int $int_fromatom($WORD a) {
-  if ($ISINSTANCE(a,$int)->val) return ($int)a;
-  if ($ISINSTANCE(a,$float)->val) return to$int(round((($float)a)->val));
-  if ($ISINSTANCE(a,$bool)->val) return to$int((($bool)a)->val);
-  if ($ISINSTANCE(a,$str)->val) {
-    long x;
-    int c;
-    sscanf((char *)(($str)a)->str,"%ld%n",&x,&c);
-    if (c==(($str)a)->nbytes)
-      return to$int(x);
-    else 
-      RAISE(($BaseException)$NEW($ValueError,to$str("int_fromatom(): invalid str value for type int")));
-  }
-  fprintf(stderr,"internal error: int_fromatom: argument not of atomic type");
-  exit(-1);
-}
                   
 
 // $Integral$int /////////////////////////////////////////////////////////////////////////
@@ -84,13 +90,14 @@ $Integral$int $Integral$int$__deserialize__($Serial$state state) {
 $int $Integral$int$__add__($Integral$int wit,  $int a, $int b) {
   return to$int(a->val + b->val);
 }  
-$int $Integral$int$__fromatom__($Integral$int wit,$WORD w) {
-  return $int_fromatom(w);
-}
 
 $complex $Integral$int$__complx__($Integral$int wit, $int a) {
   return to$complex((double)a->val);
-                                                 }
+}
+
+$int $Integral$int$__fromatom__($Integral$int wit, $atom a) {
+  return $int$new(a);
+}
 
 $int $Integral$int$__mul__($Integral$int wit,  $int a, $int b) {
   return to$int(a->val * b->val);
@@ -120,15 +127,15 @@ $int $Integral$int$__pos__($Integral$int wit,  $int a) {
 }
 
 $WORD $Integral$int$real($Integral$int wit, $Real wit2, $int a) {
-  return wit2->$class->__fromatom__(wit2,a);
+  return wit2->$class->__fromatom__(wit2,($atom)a);
 }
 
 $WORD $Integral$int$imag($Integral$int wit, $Real wit2,  $int a) {
-  return wit2->$class->__fromatom__(wit2,to$int(0L));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int(0L));
 }
 
 $WORD $Integral$int$__abs__($Integral$int wit, $Real wit2,  $int a) {
-  return wit2->$class->__fromatom__(wit2,to$int(labs(a->val)));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int(labs(a->val)));
 }
 
 $int $Integral$int$__conjugate__($Integral$int wit,  $int a) {
@@ -140,15 +147,15 @@ $float $Integral$int$__float__ ($Integral$int wit, $int n) {
 }
 
 $WORD $Integral$int$__trunc__ ($Integral$int wit, $Integral wit2, $int n) {
-  return wit2->$class->__fromatom__(wit2,n);
+  return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
 $WORD $Integral$int$__floor__ ($Integral$int wit, $Integral wit2, $int n) {
-  return wit2->$class->__fromatom__(wit2,n);
+  return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
 $WORD $Integral$int$__ceil__ ($Integral$int wit, $Integral wit2, $int n) {
-  return wit2->$class->__fromatom__(wit2,n);
+  return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
 $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
@@ -166,11 +173,11 @@ $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
 }
   
 $WORD $Integral$int$numerator ($Integral$int wit, $Integral wit2, $int n) {
-  return wit2->$class->__fromatom__(wit2,n);
+  return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
 $WORD $Integral$int$denominator ($Integral$int wit, $Integral wit2, $int n) {
-  return wit2->$class->__fromatom__(wit2,to$int(1L));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int(1L));
 }
   
 $int $Integral$int$__int__ ($Integral$int wit, $int n) {

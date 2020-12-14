@@ -12,7 +12,7 @@ union $Bytes8 *iter_next(numpy$$array_iterator_state it);
 // method for creating ndarray structs.
 // res->offset gets default value 0 (may be unsuitable when allocate_data = false)
 
-static numpy$$ndarray $newarray(enum ElemType typ, long ndim,long size,$list shape,$list strides,bool allocate_data) {
+static numpy$$ndarray $newarray(enum ElemType typ, long ndim,$int size,$list shape,$list strides,bool allocate_data) {
   numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
   res->$class = &numpy$$ndarray$methods;
   res->elem_type = typ;
@@ -21,15 +21,15 @@ static numpy$$ndarray $newarray(enum ElemType typ, long ndim,long size,$list sha
   res->offset = 0;
   res->shape = shape;
   res->strides = strides;
-  if (allocate_data) res->data = malloc(size * $elem_size(typ) * sizeof(union $Bytes8));
+  if (allocate_data) res->data = malloc(size->val * $elem_size(typ) * sizeof(union $Bytes8));
   return res;
 }
 
-long $prod($list lst) {
+$int $prod($list lst) {
   long res = 1;
   for (int i = 0; i<lst->length; i++)
     res *= $LONGELEM(lst,i);
-  return res;
+  return to$int(res);
 }
 
 bool $is_contiguous(numpy$$ndarray a) {
@@ -71,14 +71,14 @@ void  numpy$$ndarray$__serialize__(numpy$$ndarray self, $Serial$state state) {
     return;
   }
   $dict_setitem(state->done,($Hashable)$Hashable$WORD$witness,self,to$int(state->row_no));
-  int blobsize = 5 + self->size;
+  int blobsize = 5 + self->size->val;
   $ROW row = $add_header(self->$class->$class_id,blobsize,state);
   row->blob[0] = ($WORD)self->elem_type;
   row->blob[1] = ($WORD)self->ndim;
-  row->blob[2] = ($WORD)self->size;
+  row->blob[2] = ($WORD)self->size->val;
   row->blob[3] = ($WORD)self->offset;
   row->blob[4] = ($WORD)self->elem_size;
-  memcpy(&row->blob[5],self->data,self->size*sizeof($WORD));
+  memcpy(&row->blob[5],self->data,self->size->val*sizeof($WORD));
   $step_serialize(self->shape, state);
   $step_serialize(self->strides, state);
 }
@@ -95,11 +95,11 @@ numpy$$ndarray numpy$$ndarray$__deserialize__($Serial$state state) {
     res->$class = &numpy$$ndarray$methods;
     res->elem_type = (enum ElemType)this->blob[0];
     res->ndim = (long)this->blob[1];
-    res->size = (long)this->blob[2];
+    res->size = to$int((long)this->blob[2]);
     res->offset = (long)this->blob[3];
     res->elem_size = (long)this->blob[4];
-    res->data = malloc(res->size*sizeof($WORD));
-    memcpy(res->data, &this->blob[5],res->size*sizeof($WORD));
+    res->data = malloc(res->size->val*sizeof($WORD));
+    memcpy(res->data, &this->blob[5],res->size->val*sizeof($WORD));
     res->shape = $step_deserialize(state);
     res->strides= $step_deserialize(state);
     return res;
@@ -107,7 +107,7 @@ numpy$$ndarray numpy$$ndarray$__deserialize__($Serial$state state) {
 }
 
 $bool  numpy$$ndarray$__bool__(numpy$$ndarray a) {
-  if (a->size > 1) 
+  if (a->size->val > 1) 
     RAISE(($BaseException)$NEW($ValueError,to$str("__bool__ undefined for ndarrays with more than one element")));
   switch (a->elem_type) {
   case LongType:
@@ -147,8 +147,8 @@ $str numpy$$ndarray$__str__(numpy$$ndarray a) {
 // reshape attempts to present a new view, but may have to copy data.
 
 numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, $list newshape) {
-  long size = $prod(newshape);
-  if (a->size != size)
+  long newsize = $prod(newshape)->val;
+  if (a->size->val != newsize)
     RAISE(($BaseException)$NEW($ValueError,to$str("wrong number of array elements for reshape")));
   if (a->shape->length == newshape->length) {
     // Check if newshape is actually equal to a->shape.
@@ -190,7 +190,7 @@ numpy$$ndarray numpy$$ndarray$reshape(numpy$$ndarray a, $list newshape) {
     res->data = a->data;
     return res;
   } else {
-    res->data = malloc(size * sizeof(union $Bytes8));
+    res->data = malloc(newsize * sizeof(union $Bytes8));
     union $Bytes8 *ixres = res->data;
     union $Bytes8 *ixa;
     numpy$$array_iterator_state ita = $mk_iterator(a);
@@ -239,7 +239,7 @@ numpy$$ndarray numpy$$ndarray$transpose(numpy$$ndarray a, $list axes) {
 
 numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray a) {
   $list newshape = $NEW($list,NULL,NULL);
-  $list_append(newshape,to$int(a->size));
+  $list_append(newshape,a->size);
   return numpy$$ndarray$reshape(a,newshape);
 }
 
@@ -248,7 +248,7 @@ numpy$$ndarray numpy$$ndarray$flatten(numpy$$ndarray a) {
 numpy$$ndarray numpy$$ndarray$copy(numpy$$ndarray a) {
   numpy$$ndarray res = $newarray(a->elem_type,a->ndim,a->size,a->shape,$mk_strides(a->shape),true);
   if ($is_contiguous(a))
-    memcpy(res->data,a->data,a->size*sizeof($WORD)); // Hackish; what is the proper size to use?
+    memcpy(res->data,a->data,a->size->val*sizeof($WORD)); // Hackish; what is the proper size to use?
   else {
     numpy$$array_iterator_state it = $mk_iterator(a);
     union $Bytes8 *ixres, *ixa;
@@ -466,7 +466,13 @@ numpy$$ndarray numpy$$oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),nump
   union $Bytes8 *ix1, *ix2, *ixres;
   long stride1, stride2, len;
   numpy$$array_iterator_state it1, it2;
-  numpy$$ndarray res = numpy$$broadcast(a,b,&it1,&it2);
+  numpy$$ndarray res;
+  if (a->ndim == 0 && b->ndim == 0) {
+    res = $newarray(a->elem_type,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+    res->data[0] = f(a->data[a->offset],b->data[b->offset]);
+    return res;
+  }
+  res = numpy$$broadcast(a,b,&it1,&it2);
   ixres = res->data;
   while ((ix1 = iter_next(it1))) {
       ix2 = iter_next(it2);
@@ -482,19 +488,19 @@ numpy$$ndarray numpy$$oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8),nump
 
 // The ndarray constructor takes an atomic argument and builds a 0-dimensional array.
 
-numpy$$ndarray numpy$$fromatom($WORD a) {
-  if ($ISINSTANCE(($Super)a,$int)->val) {
-    numpy$$ndarray res = $newarray(LongType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+numpy$$ndarray numpy$$fromatom($atom a) {
+  if ($ISINSTANCE(a,$int)->val) {
+    numpy$$ndarray res = $newarray(LongType,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->l = (($int)a)->val;
     return res;
   }
-  if ($ISINSTANCE(($Super)a,$float)->val) {
-    numpy$$ndarray res = $newarray(DblType,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+  if ($ISINSTANCE(a,$float)->val) {
+    numpy$$ndarray res = $newarray(DblType,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
     res->data->d = (($float)a)->val;
     return res;
   }
-  if ($ISINSTANCE(($Super)a,$bool)->val) return NULL;
-  if ($ISINSTANCE(($Super)a,$str)->val) return NULL;
+  if ($ISINSTANCE(a,$bool)->val) return NULL;
+  if ($ISINSTANCE(a,$str)->val) return NULL;
   fprintf(stderr,"internal error: fromatom: argument not of atomic type");
   exit(-1);
 }
@@ -508,7 +514,7 @@ numpy$$ndarray numpy$$linspace($float a, $float b, $int n) {
   $list_append(shape,n);
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
-  numpy$$ndarray res = $newarray(DblType,1,n->val,shape,strides,true);
+  numpy$$ndarray res = $newarray(DblType,1,n,shape,strides,true);
   double step = (b->val - a->val)/(n->val-1);
   for (long i = 0; i<n->val; i++) {
     res->data[i].d = a->val + i * step;
@@ -525,7 +531,7 @@ numpy$$ndarray numpy$$arange($int start, $int stop, $int step) {
   $list_append(shape,to$int(len));
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
-  numpy$$ndarray res = $newarray(LongType,1,len,shape,strides,true);
+  numpy$$ndarray res = $newarray(LongType,1,to$int(len),shape,strides,true);
   long elem = r->start;
   for (int i=0; i < len; i++) {
     res->data[i].l = elem;
@@ -543,7 +549,7 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems) {
   $list_append(strides,to$int(1));
   if (elems->length == 0)
     RAISE(($BaseException)$NEW($ValueError,to$str("function numpy.array cannot create empty ndarray")));
-  numpy$$ndarray res = $newarray(wit->$class->elem_type,1,elems->length,shape,strides,true);
+  numpy$$ndarray res = $newarray(wit->$class->elem_type,1,to$int(elems->length),shape,strides,true);
   for (int i=0; i<elems->length; i++) 
     res->data[i] = wit->$class->from$obj(elems->data[i]);
   return res;
@@ -553,15 +559,29 @@ numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems) {
 
 numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val) {
   $list strides = $mk_strides(shape);
-  long size = $prod(shape);
+  $int size = $prod(shape);
   numpy$$ndarray res = $newarray(wit->$class->elem_type,shape->length,size,shape,strides,true);
-  for (int i=0; i<size; i++)
+  for (int i=0; i<size->val; i++)
     res->data[i] = wit->$class->from$obj(val);
   return res;
 }
 
+numpy$$ndarray numpy$$unirandint($int a, $int b, $int n) {
+  if (a->val >= b->val)
+     RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
+  $list shape = $NEW($list,NULL,NULL);
+  $list_append(shape,n);
+  $list strides = $NEW($list,NULL,NULL);
+  $list_append(strides,to$int(1));
+  long s = (b->val - a->val);
+  numpy$$ndarray res = $newarray(DblType,1,n,shape,strides,true);
+  for (int i = 0; i<n->val; i++)
+    res->data[i].l = a->val + arc4random_uniform(s);
+  return res;
+}
+
 #define MAX 1000000000
-numpy$$ndarray numpy$$unirand($float a, $float b, $int n) {
+numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n) {
   if (a->val >= b->val)
      RAISE(($BaseException)$NEW($ValueError,to$str("lower limit not smaller than upper in numpy.unirand")));
   $list shape = $NEW($list,NULL,NULL);
@@ -569,7 +589,7 @@ numpy$$ndarray numpy$$unirand($float a, $float b, $int n) {
   $list strides = $NEW($list,NULL,NULL);
   $list_append(strides,to$int(1));
   double s = (b->val - a->val);
-  numpy$$ndarray res = $newarray(DblType,1,n->val,shape,strides,true);
+  numpy$$ndarray res = $newarray(DblType,1,n,shape,strides,true);
   for (int i = 0; i<n->val; i++)
     res->data[i].d = a->val + s * (double)arc4random_uniform(MAX)/(double)MAX;
   return res;
@@ -594,9 +614,9 @@ numpy$$ndarray numpy$$partition(numpy$$Primitive wit, numpy$$ndarray a, $int k) 
 numpy$$ndarray numpy$$sort(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   numpy$$ndarray res = numpy$$ndarray$copy(a);
   if (!axis) {
-    quicksort(res->data,0,res->size-1,wit->$class->$lt);
+    quicksort(res->data,0,res->size->val-1,wit->$class->$lt);
     $list newshape = $list_new(1);
-    $list_append(newshape,to$int(a->size));
+    $list_append(newshape,a->size);
     $list newstrides = $list_new(1);
     $list_append(newstrides,to$int(1));
     res->shape = newshape;
@@ -699,7 +719,7 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
   if(!axis) {
     union $Bytes8 resd = (union $Bytes8) 0L;
     if ($is_contiguous(a)) {
-      for (int i=0; i<a->size; i++)
+      for (int i=0; i<a->size->val; i++)
         wit->$class->$iadd(&resd,a->data[i]); 
     } else {
       numpy$$array_iterator_state it = $mk_iterator(a);
@@ -707,7 +727,7 @@ numpy$$ndarray numpy$$sum(numpy$$Primitive wit, numpy$$ndarray a, $int axis) {
       while ((ixa = iter_next(it)))
         wit->$class->$iadd(&resd,*ixa);
     }
-   res = $newarray(a->elem_type,0,1,$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
+    res = $newarray(a->elem_type,0,to$int(1),$NEW($list,NULL,NULL),$NEW($list,NULL,NULL),true);
    res->data[0] = resd;
    return res;
    } else if (axis->val == -1 || axis->val == a->ndim-1) {

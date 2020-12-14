@@ -25,7 +25,16 @@ $bool $bool_deserialize($Serial$state state) {
   return to$bool((long)$val_deserialize(state));
 }
 
-struct $bool$class $bool$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$bool_init, $bool_serialize, $bool_deserialize, $bool_bool, $bool_str};
+struct $bool$class $bool$methods = {
+    "$bool",
+    UNASSIGNED,
+    ($Super$class)&$atom$methods,
+    $bool_init,
+    $bool_serialize,
+    $bool_deserialize,
+    $bool_bool,
+    $bool_str
+};
 
 $bool $bool$new($struct s) {
     return $NEW($bool, s);

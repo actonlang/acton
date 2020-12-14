@@ -14,6 +14,7 @@
 #include "Iterator.h"
 #include "complx.h"
 #include "none.h"
+#include "atom.h"
 #include "int.h"
 #include "slice.h"
 #include "float.h"

@@ -20,7 +20,7 @@ struct numpy$$ndarray {
   struct numpy$$ndarray$class *$class;
   enum ElemType elem_type;
   long ndim;
-  long size;         // # of elements; equal to product of elements in shape.
+  $int size;         // # of elements; equal to product of elements in shape.
   long offset;
   long elem_size;
   $list shape;
@@ -74,7 +74,7 @@ numpy$$Iterator$ndarray numpy$$Iterator$ndarray$new(numpy$$Primitive,numpy$$ndar
 
 // Intended argument to constructor
 
-numpy$$ndarray numpy$$fromatom($WORD a);
+numpy$$ndarray numpy$$fromatom($atom a);
 
 //numpy$$ndarray numpy$$ndarray_func(union $Bytes8(*f)(union $Bytes8),numpy$$ndarray a);
 //numpy$$ndarray numpy$$ndarray_oper(union $Bytes8 (*f)(union $Bytes8, union $Bytes8), numpy$$ndarray a, numpy$$ndarray b);
@@ -92,7 +92,8 @@ numpy$$ndarray numpy$$linspace($float a, $float b, $int n);
 numpy$$ndarray numpy$$arange($int start, $int stop, $int step);
 numpy$$ndarray numpy$$array(numpy$$Primitive wit, $list elems);
 numpy$$ndarray numpy$$full(numpy$$Primitive wit, $list shape, $WORD val);
-numpy$$ndarray numpy$$unirand($float a, $float b, $int n);
+numpy$$ndarray numpy$$unirandint($int a, $int b, $int n);
+numpy$$ndarray numpy$$unirandfloat($float a, $float b, $int n);
 
 // Various utilities /////////////////////////////////////////////////////
 

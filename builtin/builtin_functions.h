@@ -159,3 +159,5 @@ $WORD $next ($Iterator);
 $WORD $pow ($Number, $WORD, $WORD);
 $Iterator $reversed ($Sequence, $WORD);
 $WORD $round ($Real, $WORD, $int);
+
+$list $replicate($int, $WORD);

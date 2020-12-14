@@ -45,7 +45,7 @@ struct numpy$$Integral$ndarray$class {
     $str (*__str__)(numpy$$Integral$ndarray);
     numpy$$ndarray (*__add__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__iadd__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
-    numpy$$ndarray (*__fromatom__)(numpy$$Integral$ndarray,$WORD);
+    numpy$$ndarray (*__fromatom__)(numpy$$Integral$ndarray,$atom);
     $complex (*__complx__)(numpy$$Integral$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__mul__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__truediv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -78,7 +78,7 @@ void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray,$Serial$state
 numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state);
 numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Integral$ndarray$__iadd__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
-numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray,$WORD);
+numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray,$atom);
 $complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Integral$ndarray$__mul__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Integral$ndarray$__truediv__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);

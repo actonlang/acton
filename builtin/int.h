@@ -2,7 +2,7 @@ struct $int$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($int, $WORD);
+  void (*__init__)($int, $atom);
   void (*__serialize__)($int,$Serial$state);
   $int (*__deserialize__)($Serial$state);
   $bool (*__bool__)($int);
@@ -15,7 +15,7 @@ struct $int {
 };
 
 extern struct $int$class $int$methods;
-$int $int$new($WORD);
+$int $int$new($atom);
 
 extern struct $Integral$int$class $Integral$int$methods;
 $Integral$int $Integral$int$new();
@@ -47,7 +47,7 @@ long from$int($int n);
 #define from$int(n)  ((($int)n)->val)
 */
 
-$int $int_fromatom($WORD a);
+$int $int$new($atom a);
 
 // only called with e>=0.
 long longpow(long a, long e); // used also for ndarrays

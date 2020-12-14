@@ -32,8 +32,8 @@ numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray wit, nump
   return numpy$$oper(wit->w$Primitive$A$Integral$ndarray->$class->$add,a,b);
 }
 
-numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray wit,$WORD atom) {
-  return numpy$$fromatom(($Super)atom);
+numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray wit,$atom a) {
+  return numpy$$fromatom(a);
 }
 
 $complex numpy$$Integral$ndarray$__complx__(numpy$$Integral$ndarray wit, numpy$$ndarray a) {

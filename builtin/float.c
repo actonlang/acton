@@ -2,12 +2,26 @@
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-$float $float$new($WORD s) {
-  return $NEW($float,s);
+$float $float$new($atom a) {
+  if ($ISINSTANCE(a,$int)->val) return to$float((double)(($int)a)->val);
+  if ($ISINSTANCE(a,$float)->val) return ($float)a;
+  if ($ISINSTANCE(a,$bool)->val) return to$float((double)(($bool)a)->val);
+  if ($ISINSTANCE(a,$str)->val) {
+    double x;
+    int c;
+    sscanf((char *)(($str)a)->str,"%lf%n",&x,&c);
+    if (c==(($str)a)->nbytes)
+      return to$float(x);
+    else
+      RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
+  }
+  fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
+  exit(-1);
+
 }
 
-void $float_init($float self, $WORD x){
-  self->val = $float_fromatom(x)->val;
+void $float_init($float self, $atom a){
+  self->val = $float$new(a)->val;
 }
 
 void $float_serialize($float self, $Serial$state state) {
@@ -53,22 +67,6 @@ double from$float($float x) {
   return x->val;
 }
 
-$float $float_fromatom($WORD a) {
-  if ($ISINSTANCE(a,$int)->val) return to$float((double)(($int)a)->val);
-  if ($ISINSTANCE(a,$float)->val) return ($float)a;
-  if ($ISINSTANCE(a,$bool)->val) return to$float((double)(($bool)a)->val);
-  if ($ISINSTANCE(a,$str)->val) {
-    double x;
-    int c;
-    sscanf((char *)(($str)a)->str,"%lf%n",&x,&c);
-    if (c==(($str)a)->nbytes)
-      return to$float(x);
-    else
-      RAISE(($BaseException)$NEW($ValueError,to$str("float_fromatom(): invalid str literal for type float")));
-  }
-  fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
-  exit(-1);
-}
 
 // $Real$float /////////////////////////////////////////////////////////////////////////
 
@@ -87,8 +85,8 @@ $float $Real$float$__add__($Real$float wit,  $float a, $float b) {
   return to$float(from$float(a) + from$float(b));
 }  
 
-$float $Real$float$__fromatom__($Real$float wit, $WORD w) {
-  return $float_fromatom(w);
+$float $Real$float$__fromatom__($Real$float wit, $atom a) {
+  return $float$new(a);
 }
 
 $complex $Real$float$__complx__($Real$float wit, $float a) {
@@ -116,15 +114,15 @@ $float $Real$float$__pos__($Real$float wit, $float a) {
 }
 
 $WORD $Real$float$real($Real$float wit, $Real wit2, $float a) {
-  return wit2->$class->__fromatom__(wit2,a);
+  return wit2->$class->__fromatom__(wit2,($atom)a);
 }
 
 $WORD $Real$float$imag($Real$float wit, $Real wit2,  $float a) {
-  return wit2->$class->__fromatom__(wit2,to$float(0.0));
+  return wit2->$class->__fromatom__(wit2,($atom)to$float(0.0));
 }
 
 $WORD $Real$float$__abs__($Real$float wit, $Real wit2,  $float a) {
-  return wit2->$class->__fromatom__(wit2,to$float(fabs(from$float(a))));
+  return wit2->$class->__fromatom__(wit2,($atom)to$float(fabs(from$float(a))));
 }
 
 $float $Real$float$conjugate($Real$float wit,  $float a) {
@@ -135,15 +133,15 @@ $float $Real$float$__float__ ($Real$float wit, $float x) {
 }
 
 $WORD $Real$float$__trunc__ ($Real$float wit, $Integral wit2, $float x) {
-  return wit2->$class->__fromatom__(wit2,to$int((long)trunc(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int((long)trunc(from$float(x))));
 }
   
 $WORD $Real$float$__floor__ ($Real$float wit, $Integral wit2, $float x) {
-  return wit2->$class->__fromatom__(wit2,to$int((long)floor(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int((long)floor(from$float(x))));
 }
   
 $WORD $Real$float$__ceil__ ($Real$float wit, $Integral wit2, $float x) {
-  return wit2->$class->__fromatom__(wit2,to$int((long)ceil(from$float(x))));
+  return wit2->$class->__fromatom__(wit2,($atom)to$int((long)ceil(from$float(x))));
 }
   
 $float $Real$float$__round__ ($Real$float wit, $float x, $int p) {

@@ -56,7 +56,7 @@ $str $str_upper($str s);
 $str $str_zfill($str s, $int width);
 
 struct $str$class $str$methods =
-  {"$str",UNASSIGNED,($Super$class)&$struct$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
+  {"$str",UNASSIGNED,($Super$class)&$atom$methods, $str_init, $str_serialize, $str_deserialize, $str_bool, $str_str, $str_capitalize, $str_center, $str_count, $str_encode, $str_endswith,
    $str_expandtabs, $str_find, $str_index, $str_isalnum, $str_isalpha, $str_isascii, $str_isdecimal, $str_islower, $str_isprintable, $str_isspace,
    $str_istitle, $str_isupper, $str_join, $str_ljust, $str_lower, $str_lstrip, $str_partition, $str_replace, $str_rfind, $str_rindex, $str_rjust,
    $str_rpartition, $str_rstrip, $str_split, $str_splitlines, $str_startswith, $str_strip, $str_upper, $str_zfill};
