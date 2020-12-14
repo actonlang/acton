@@ -745,9 +745,6 @@ allAncestors' env qn        = map (tcname . snd) us
 allDescendants              :: EnvF x -> TCon -> [TCon]
 allDescendants env tc       = [ c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
-allDescendants'             :: EnvF x -> QName -> [QName]
-allDescendants' env qn      = [ n | n <- allCons' env, hasAncestor' env n qn ]
-
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
@@ -803,9 +800,6 @@ allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env
         args (NClass q _ _) = [ tWild | _ <- q ]
         args (NAct q _ _ _) = [ tWild | _ <- q ]
 
-allCons'                    :: EnvF x -> [QName]
-allCons' env                = map tcname $ allCons env
-
 allProtos                   :: EnvF x -> [TCon]
 allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
   where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, proto i ]
@@ -813,12 +807,6 @@ allProtos env               = reverse locals ++ concat [ protos m (lookupMod m e
         proto _             = False
         protos m (Just te)  = [ TC (GName m n) (args i) | (n,i) <- te, proto i ] ++ concat [ protos (modCat m n) (Just te') | (n,NModule te') <- te ]
         args (NProto q _ _) = [ tWild | _ <- q ]
-
-allProtos'                  :: EnvF x -> [QName]
-allProtos' env              = map tcname $ allProtos env
-
-allVars                     :: EnvF x -> Kind -> [TVar]
-allVars env k               = [ TV k n | (n,NTVar k' _) <- names env, k == k' ]
 
 wexpr                       :: [Maybe QName] -> Expr -> Expr
 wexpr []                    = id

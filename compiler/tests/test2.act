@@ -34,7 +34,7 @@ def rev3(seq):
   return seq.__reversed__()
 
 def fake [A(Real)] () -> A:
-    raise ValueError()
+    raise ValueError("fake")
 
 def dflt():
     x = fake()
