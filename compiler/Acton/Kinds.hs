@@ -480,7 +480,6 @@ instance KInfer Type where
     kinfer env (TTuple l p k)       = do p <- kexp PRow env p
                                          k <- kexp KRow env k
                                          return (KType, TTuple l p k)
-    kinfer env (TUnion l us)        = return (KType, TUnion l (unalias env us))
     kinfer env (TOpt _ t@TOpt{})    = kinfer env t
     kinfer env (TOpt l t)           = do t <- kexp KType env t
                                          return (KType, TOpt l t)
@@ -559,7 +558,6 @@ instance KSubst Type where
     ksubst g (TCon l c)             = TCon l <$> ksubst g c
     ksubst g (TFun l fx p k t)      = TFun l <$> ksubst g fx <*> ksubst g p <*> ksubst g k<*> ksubst g t
     ksubst g (TTuple l p k)         = TTuple l <$> ksubst g p <*> ksubst g k
-    ksubst g (TUnion l as)          = return $ TUnion l as
     ksubst g (TOpt l t)             = TOpt l <$> ksubst g t
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s

@@ -194,8 +194,6 @@ data TVar       = TV { tvkind::Kind, tvname::Name } deriving (Ord,Show,Read,Gene
 
 data TCon       = TC { tcname::QName, tcargs::[Type] } deriving (Eq,Show,Read,Generic)
 
-data UType      = UCon QName | ULit String deriving (Eq,Show,Read,Generic)
-
 data FX         = FXPure | FXMut | FXAction | FXAsync deriving (Eq,Show,Read,Generic)
 
 data QBind      = Quant TVar [TCon] deriving (Eq,Show,Read,Generic)
@@ -208,7 +206,6 @@ data Type       = TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
                 | TFun      { tloc::SrcLoc, fx::TFX, posrow::PosRow, kwdrow::KwdRow, restype::Type }
                 | TTuple    { tloc::SrcLoc, posrow::PosRow, kwdrow::KwdRow }
-                | TUnion    { tloc::SrcLoc, ualts::[UType] }
                 | TOpt      { tloc::SrcLoc, opttype::Type }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
@@ -284,7 +281,6 @@ tTuple p k      = TTuple NoLoc p k
 tTupleP p       = TTuple NoLoc p kwdNil
 tTupleK k       = TTuple NoLoc posNil k
 tUnit           = tTuple posNil kwdNil
-tUnion us       = TUnion NoLoc (sort us)
 tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
@@ -373,7 +369,6 @@ instance Data.Binary.Binary Deco
 instance Data.Binary.Binary TSchema
 instance Data.Binary.Binary TVar
 instance Data.Binary.Binary TCon
-instance Data.Binary.Binary UType
 instance Data.Binary.Binary QBind
 instance Data.Binary.Binary Type
 instance Data.Binary.Binary Kind
@@ -571,7 +566,6 @@ instance Eq Type where
     TCon _ c1           == TCon _ c2            = c1 == c2
     TFun _ e1 p1 r1 t1  == TFun _ e2 p2 r2 t2   = e1 == e2 && p1 == p2 && r1 == r2 && t1 == t2
     TTuple _ p1 r1      == TTuple _ p2 r2       = p1 == p2 && r1 == r2
-    TUnion _ u1         == TUnion _ u2          = all (`elem` u2) u1 && all (`elem` u1) u2
     TOpt _ t1           == TOpt _ t2            = t1 == t2
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
@@ -579,12 +573,6 @@ instance Eq Type where
     TRow _ s1 n1 t1 r1  == TRow _ s2 n2 t2 r2   = s1 == s2 && n1 == n2 && t1 == t2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     _                   == _                    = False
-
-instance Ord UType where
-    UCon a              <= UCon b               = a <= b
-    UCon a              <= ULit b               = True
-    ULit a              <= ULit b               = a <= b
-    _                   <= _                    = False
 
 -- Show & Read ----------------
 
@@ -652,7 +640,6 @@ kindOf (TVar _ tv)                  = tvkind tv
 kindOf TCon{}                       = KType
 kindOf TFun{}                       = KType
 kindOf TTuple{}                     = KType
-kindOf TUnion{}                     = KType
 kindOf TOpt{}                       = KType
 kindOf TNone{}                      = KType
 kindOf TWild{}                      = KWild

@@ -217,7 +217,6 @@ instance Relabel Type where
     relabel (TFun _ es p k t) = TFun <$> newLoc <*> relabel es <*> relabel p <*> relabel k <*> relabel t
     relabel (TTuple _ p k) = TTuple <$> newLoc <*> relabel p <*> relabel k
     relabel (TOpt _ t) = TOpt <$> newLoc <*> relabel t
-    relabel (TUnion _ as) = TUnion <$> newLoc <*> return as
     relabel (TCon  _ c) = TCon <$> newLoc <*> relabel c
     relabel (TNone _) = TNone <$> newLoc
     relabel (TWild _) = TWild <$> newLoc

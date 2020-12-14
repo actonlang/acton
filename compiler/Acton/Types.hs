@@ -845,16 +845,15 @@ instance Infer Expr where
                                             _ -> nameUnexpected n
     infer env e@(Int _ val s)           = do t <- newTVar
                                              w <- newWitness
-                                             return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Impl w t pIntegral], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@(Float _ val s)         = do t <- newTVar
                                              w <- newWitness
-                                             return ([Impl w t pNumber], t, eCall (eDot (eVar w) fromatomKW) [e])
+                                             return ([Impl w t pReal], t, eCall (eDot (eVar w) fromatomKW) [e])
     infer env e@Imaginary{}             = notYetExpr e
     infer env e@(Bool _ val)            = return ([], tBool, e)
     infer env e@(None _)                = return ([], tNone, e)
     infer env e@(NotImplemented _)      = notYetExpr e
     infer env e@(Ellipsis _)            = notYetExpr e
-    infer env e@(Strings _ [s])         = return ([], tUnion [ULit s], e)
     infer env e@(Strings _ ss)          = return ([], tStr, e)
     infer env e@(BStrings _ ss)         = return ([], tBytes, e)
     infer env (Call l e ps ks)          = do (cs1,t,e') <- infer env e

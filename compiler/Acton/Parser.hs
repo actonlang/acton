@@ -1157,9 +1157,6 @@ ttype    =  addLoc (
         <|> braces (do t <- ttype
                        mbt <- optional (colon *> ttype)
                        return (maybe (Builtin.tSetExist t) (Builtin.tMapping t) mbt))
-        <|> try (parens (do alts <- some (try (utype <* vbar))
-                            alt <- utype
-                            return $ S.TUnion NoLoc (alts++[alt])))
         <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows
                     arrow
@@ -1174,9 +1171,3 @@ ttype    =  addLoc (
         <|> try (S.TVar NoLoc <$> tvar)
         <|> rword "_" *> return (S.TWild NoLoc)
         <|> S.TCon NoLoc <$> tcon)
-                
-
-utype :: Parser S.UType
-utype    =  S.UCon <$> qual_name
-        <|> (\str -> S.ULit str) <$> shortString []
-

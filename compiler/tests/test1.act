@@ -22,12 +22,6 @@ def f6(x : ?(?int)):
 def f7a(x : ?int):
     return x == 7
 
-def f7b(x : (int | str)):
-    return x == 7
-
-def f8(x : (int | str)):
-    return x == "hello"
-
 def f9(x : str):
     return x == True
 
@@ -40,7 +34,7 @@ def f11():
 def f12(x : Exception):
     return 1 if isinstance(x, NotImplementedError) else 2
 
-def f13(x : (int | bool)):
+def f13(x : atom):
     return x if isinstance(x, int) else -1
 
 def f14():

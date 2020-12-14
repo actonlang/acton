@@ -226,11 +226,6 @@ tMapping a b                        = tCon (pMapping a b)
 tSetExist a                         = tCon (pSet a)
 tCollection a                       = tCon (pCollection a)
 
-uInt                                = UCon qnInt
-uFloat                              = UCon qnFloat
-uBool                               = UCon qnBool
-uStr                                = UCon qnStr
-
 nNumpy                              = name "numpy"
 mNumpy                              = ModName [nNumpy]
 gNumpy n                            = GName mNumpy n

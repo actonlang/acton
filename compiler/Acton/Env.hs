@@ -137,7 +137,6 @@ instance QualEq Type where
     qualEq env (TCon _ c1) (TCon _ c2)                      = qualEq env c1 c2
     qualEq env (TFun _ e1 p1 r1 t1) (TFun _ e2 p2 r2 t2)    = qualEq env e1 e2 && qualEq env p1 p2 && qualEq env r1 r2 && qualEq env t1 t2
     qualEq env (TTuple _ p1 r1) (TTuple _ p2 r2)            = qualEq env p1 p2 && qualEq env r1 r2
-    qualEq env (TUnion _ u1) (TUnion _ u2)                  = qualEq env u1 u2
     qualEq env (TOpt _ t1) (TOpt _ t2)                      = qualEq env t1 t2
     qualEq env (TNone _) (TNone _)                          = True
     qualEq env (TWild _) (TWild _)                          = True
@@ -145,14 +144,6 @@ instance QualEq Type where
     qualEq env (TRow _ s1 n1 t1 r1) (TRow _ s2 n2 t2 r2)    = s1 == s2 && n1 == n2 && qualEq env t1 t2 && qualEq env r1 r2
     qualEq env (TFX _ fx1) (TFX _ fx2)                      = fx1 == fx2
     qualEq env _ _                                          = False
-
-instance QualEq [UType] where
-    qualEq env as bs                = and [ any (qualEq env a) bs | a <- as ] && and [ any (qualEq env b) as | b <- bs ]
-
-instance QualEq UType where
-    qualEq env (UCon a) (UCon b)    = qualEq env a b
-    qualEq env (ULit a) (ULit b)    = a == b
-    qualEq env _ _                  = False
 
 instance Pretty (QName,Witness) where
     pretty (n, WClass q p w ws) = text "WClass" <+> pretty n <+> nonEmpty brackets commaList q <+> parens (pretty p) <+>
@@ -340,12 +331,7 @@ instance Unalias Type where
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
     unalias env (TRow l k n t r)    = TRow l k n (unalias env t) (unalias env r)
-    unalias env (TUnion l us)       = TUnion l (sort $ nub $ unalias env us)
     unalias env t                   = t
-
-instance Unalias UType where
-    unalias env (ULit l)            = ULit l
-    unalias env (UCon c)            = UCon (unalias env c)
 
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
@@ -372,46 +358,6 @@ instance Unalias WTCon where
 
 globalize env                       = unalias env
 
-
--- Union type handling -------------------------------------------------------------------------------------------------
-
-uniLit (ULit l)             = True
-uniLit _                    = False
-
-uniCon env (TC c ts)        = null ts && unalias env c `elem` uniCons
-
-uniCons                     = [qnInt, qnFloat, qnBool, qnStr]
-                              ++ map NoQ [ nInt, nFloat, nBool, nStr]       -- TODO: remove once global unaliased names are in place
-
-uniElem env us u            = unalias env u `elem` us1 || uniLit u && uStr `elem` us1
-  where us1                 = unalias env us
-
-uniConElem env (TC c ts) us = null ts && uniElem env us (UCon c)
-
-uniNub env []               = []
-uniNub env (u:us)
-  | uniElem env us u        = uniNub env us
-  | otherwise               = u : uniNub env us
-
-uniIntersect env us1 us2
-  | uniElem env us1 uStr    = [ u | u <- us2, uniElem env us1 u ]
-  | otherwise               = [ u | u <- us1, uniElem env us2 u ]
-
-uniUnion env us1 us2        = sort $ uniNub env $ us1++us2
-
-
-uniAbove env us                         = [ ns | ns <- nss, length ns > 1 ]
-  where nss                             = [ catMaybes [i,f,b,s] | s <- mbStr, b <- mb qnBool, f <- mb qnFloat, i <- mb qnInt ]
-        mb c | uniElem env us (UCon c)  = [Just c]
-             | otherwise                = [Just c, Nothing]
-        mbStr | not $ null lits         = [Just qnStr]
-              | otherwise               = mb qnStr
-          where lits                    = filter uniLit us
-
-uniBelow env us                         = [ ns | ns <- nss, length ns > 1 ]
-  where nss                             = [ catMaybes [i,f,b,s] | s <- mb qnStr, b <- mb qnBool, f <- mb qnFloat, i <- mb qnInt ]
-        mb c | uniElem env us (UCon c)  = [Nothing, Just c]
-             | otherwise                = [Nothing]
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 

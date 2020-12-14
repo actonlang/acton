@@ -86,10 +86,6 @@ instance WellFormed Type where
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
     wf env (TRow _ _ _ t r) = wf env t ++ wf env r
-    wf env (TUnion _ us)
-      | not $ null bad      = err2 bad "Illegal union element:"
-      | otherwise           = []
-      where bad             = [ c | UCon c <- us, not $ uniCon env (TC c []) ]
     wf env _                = []
 
 

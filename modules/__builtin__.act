@@ -12,17 +12,20 @@ class struct:
 class object:
   pass
 
-class int:
-  __init__ : ((int|float|bool|str)) -> None
+class atom (struct):
+ pass
 
-class float:
-  __init__ : ((int|float|bool|str)) -> None
+class int (atom):
+ __init__ : (atom) -> None
+
+class float (atom):
+ __init__ : (atom) -> None
 
 class complex:
   __init__ : (Number) -> None
 
-class bool:
-  __init__ : (struct) -> None
+class bool (atom):
+ __init__ : (struct) -> None
 
 class BaseException:
   __init__ : (str) -> None
@@ -79,7 +82,7 @@ class Iterator[A] (object):
 protocol Iterable[A]:
   __iter__     : () -> Iterator[A]
   
-class str:
+class str (atom):
   __init__     : (struct) -> None
   capitalize   : () -> str
   center       : (int,?str) -> str
@@ -252,7 +255,7 @@ class set[A(Hashable)] (object):
 
 protocol Number (Plus,Minus):
   @staticmethod
-  __fromatom__ : ((int|float|bool|str)) -> Self
+  __fromatom__ : (atom) -> Self
 
   __complex__  : () -> complex
 

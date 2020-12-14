@@ -104,7 +104,6 @@ instance Seal Type where
       | fx == fxAction              = TFun l (seal fx) (seal p) (seal k) (tMsg (seal t))
       | otherwise                   = TFun l (seal fx) (seal p) (seal k) (seal t)
     seal (TTuple l p k)             = TTuple l (seal p) (seal k)
-    seal (TUnion l us)              = TUnion l us
     seal (TOpt l t)                 = TOpt l (seal t)
     seal (TNone l)                  = TNone l
     seal (TWild l)                  = TWild l
@@ -257,7 +256,6 @@ fxfree (TVar _ v)                   = []
 fxfree (TCon _ c)                   = concat $ map fxfree $ tcargs c
 fxfree (TFun _ fx p k t)            = fxfree fx ++ fxfree p ++ fxfree k ++ fxfree t
 fxfree (TTuple _ p k)               = fxfree p ++ fxfree k
-fxfree (TUnion _ as)                = []
 fxfree (TOpt _ t)                   = fxfree t
 fxfree (TNone _)                    = []
 fxfree (TWild _)                    = []

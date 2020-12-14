@@ -402,10 +402,6 @@ instance Pretty QBind where
     pretty (Quant v [])             = pretty v
     pretty (Quant v cs)             = pretty v <> parens (commaList cs)
 
-instance Pretty UType where
-    pretty (UCon n)                 = pretty n
-    pretty (ULit str)               = text str
-
 prettyPosRow (TRow _ _ _ t (TNil _ _))
                                     = pretty t
 prettyPosRow (TRow _ _ _ t p)       = pretty t <> comma <+> prettyPosRow p
@@ -432,8 +428,6 @@ instance Pretty Type where
     pretty (TTuple _ (TRow _ _ _ t (TNil _ _)) (TNil _ _))
                                     = parens (pretty t <> comma)
     pretty (TTuple _ p k)           = parens (prettyFunRow p k)
-    pretty (TUnion _ as)            = parens (vbarSep pretty as)
-      where vbarSep f               = hsep . punctuate (space <> char '|') . map f
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"

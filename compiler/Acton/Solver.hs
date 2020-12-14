@@ -172,9 +172,6 @@ univars cs                              = concat $ map uni cs
 allAbove env (TCon _ tc)                = tOpt tWild : map tCon tcons
   where n                               = unalias env (tcname tc)
         tcons                           = allAncestors env tc ++ [tc]
-allAbove env (TUnion _ us)
-  | all uniLit us                       = tOpt tWild : tStr : [ tUnion (map UCon ns) | ns <- uniAbove env [UCon qnStr] ]
-  | otherwise                           = tOpt tWild : [ tUnion (map UCon ns) | ns <- uniAbove env us ]
 allAbove env (TVar _ tv)
   | not $ univar tv                     = [tOpt tWild, tCon tc, tVar tv]
   where tc                              = findTVBound env tv
@@ -189,7 +186,6 @@ allAbove env (TFX _ FXMut)              = [fxAction, fxMut]
 allAbove env (TFX _ FXPure)             = [fxAction, fxMut, fxPure]
 
 allBelow env (TCon _ tc)                = map tCon $ tc : allDescendants env tc
-allBelow env (TUnion _ us)              = [ tUnion (map UCon ns) | ns <- uniBelow env us ] ++ [ tCon $ TC n [] | UCon n <- us ]
 allBelow env (TVar _ tv)                = [tVar tv]
 allBelow env (TOpt _ t)                 = tOpt tWild : allBelow env t ++ [tNone]
 allBelow env (TNone _)                  = [tNone]
@@ -262,10 +258,6 @@ reduce' env eq c@(Impl w t@(TNone _) p)
   | qualEq env (tcname p) qnIdentity        = return ((w, impl2type t p, eQVar primWIdentityNone):eq)
   | qualEq env (tcname p) qnEq              = return ((w, impl2type t p, eQVar primWEqNone):eq)
 
-reduce' env eq c@(Impl w t@(TUnion _ us) p)
-  | qualEq env (tcname p) qnEq              = do let e = eQVar primWEqUnion
-                                                 return ((w, impl2type t p, e):eq)
-
 reduce' env eq c@(Sel w (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
   | Just wsc <- attrSearch                  = do (eq',cs) <- solveSelAttr env wsc c
@@ -289,13 +281,6 @@ reduce' env eq (Sel w t1@(TTuple _ p r) n t2)
                                             = do let e = eLambda [(px0,t1)] (eDot (eVar px0) n)
                                                      cs' = [Cast r (kwdRow n t2 tWild)]
                                                  reduce env ((w, wFun t1 t2, e):eq) cs'
-
-reduce' env eq (Sel w t1@(TUnion _ us) n t2)
-                                            = do t <- newTVar
-                                                 let cs' = [ Cast (mkTCon u) t | u <- us ] ++ [Sel w t n t2]
-                                                 reduce env eq cs'
-  where mkTCon (ULit _)                     = tStr
-        mkTCon (UCon c)                     = tCon (TC c [])
 
 reduce' env eq c@(Mut (TVar _ tv) n _)
   | univar tv                               = do defer [c]; return eq
@@ -363,11 +348,6 @@ cast' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do cast env p1 p2
                                                  cast env k1 k2
 
-cast' env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem env us2) us1               = return ()
-cast' env (TCon _ c1) (TUnion _ us2)
-  | uniConElem env c1 us2                   = return ()
-
 cast' env (TOpt _ t1@TOpt{}) t2             = cast env t1 t2
 cast' env t1 (TOpt _ t2@TOpt{})             = cast env t1 t2
 cast' env (TOpt _ t1) (TOpt _ t2)           = cast env t1 t2
@@ -434,9 +414,6 @@ cast' env t1@(TVar _ tv) t2                 = cast' env (tCon tc) t2
 
 cast' env t1 t2@(TVar _ tv)                 = noRed (Cast t1 t2)
 
-cast' env (TUnion _ us1) t2
-  | all uniLit us1                          = cast env tStr t2              -- Only matches when t2 is NOT a variable
-
 cast' env t1 (TOpt _ t2)                    = cast env t1 t2                -- Only matches when t1 is NOT a variable
 
 cast' env t1 t2                             = noRed (Cast t1 t2)
@@ -470,10 +447,6 @@ unify' env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
 unify' env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = do unify env p1 p2
                                                  unify env k1 k2
-
-unify' env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem env us2) us1,
-    all (uniElem env us1) us2               = return ()
 
 unify' env (TOpt _ t1) (TOpt _ t2)          = unify env t1 t2
 unify' env (TNone _) (TNone _)              = return ()
@@ -800,17 +773,6 @@ glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)                               
 glb env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple (glb env p1 p2) (glb env k1 k2)
 
-glb env (TUnion _ us1) (TUnion _ us2)
-  | [UCon qn] <- us                     = tCon (TC qn [])
-  | not $ null us                       = tUnion us
-  where us                              = uniIntersect env us1 us2
-glb env t1@(TUnion _ us) t2@(TCon _ c)
-  | uniConElem env c us                 = t2
-  | all uniLit us && isStr env t2       = t1
-glb env t1@(TCon _ c) t2@(TUnion _ us)
-  | uniConElem env c us                 = t1
-  | all uniLit us && isStr env t1       = t2
-  
 glb env (TOpt _ t1) (TOpt _ t2)         = tOpt (glb env t1 t2)
 glb env (TNone _) t2                    = tNone
 glb env t1 (TNone _)                    = tNone
@@ -854,7 +816,6 @@ lub env _ TVar{}                        = tWild        -- (Might occur in recurs
 
 lub env (TCon _ c1) (TCon _ c2)
   | qualEq env (tcname c1) (tcname c2)  = tCon c1
-  | uniCon env c1 && uniCon env c2      = tUnion [UCon $ tcname c1, UCon $ tcname c2]
   | hasAncestor env c1 c2               = tCon c2
   | hasAncestor env c2 c1               = tCon c1
   | not $ null common                   = tCon $ head common
@@ -865,14 +826,6 @@ lub env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
 lub env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                         = tTuple (lub env p1 p2) (lub env k1 k2)
 
-lub env (TUnion _ us1) (TUnion _ us2)   = tUnion $ uniUnion env us1 us2
-lub env t1@(TUnion _ us) t2@(TCon _ c)
-  | all uniLit us && t2 == tStr         = t2
-  | uniCon env c                        = tUnion $ uniUnion env us [UCon $ tcname c]
-lub env t1@(TCon _ c) t2@(TUnion _ us)
-  | all uniLit us && t1 == tStr         = t1
-  | uniCon env c                        = tUnion $ uniUnion env us [UCon $ tcname c]
-  
 lub env (TOpt _ t1) (TOpt _ t2)         = tOpt (lub env t1 t2)
 lub env (TNone _) t2@TOpt{}             = t2
 lub env t1@TOpt{} (TNone _)             = t1
@@ -911,7 +864,7 @@ noLUB t1 t2                             = tyerr t1 ("No common supertype: " ++ p
 
 -- After improvement:
 --  headvar is defined
---  Cast/Sub bound is either TVar (upper), TCon, TUnion, TNone (lower), TOpt (upper) or TFX
+--  Cast/Sub bound is either TVar (upper), TCon, TNone (lower), TOpt (upper) or TFX
 --  acyclic
 --  G-minimal (constrained vars are observable)
 --  S-minimal (constrained vars are invariant)
@@ -996,8 +949,6 @@ dnClosed env (TNone _)                  = True
 dnClosed env (TNil _ _)                 = True
 dnClosed env _                          = False
 
---upClosed env (TUnion _ us)                                    -- TODO: sort this out
---  | uniMax env us                       = True
 upClosed env (TOpt _ _)                 = True
 upClosed env (TNil _ _)                 = True
 upClosed env _                          = False
@@ -1012,7 +963,6 @@ findWitAttrs env attrs bounds           = [ ((v,n), WInst p (NoQ w) ws) | (v,ns)
 implAll env [] t                        = True
 implAll env ps (TCon _ c)               = and [ hasWitness env (tcname c) (tcname p) | (w,p) <- ps ]
 implAll env ps (TOpt _ _)               = all (\(_,p) -> any (qualEq env $ tcname p) [qnIdentity,qnEq]) ps
-implAll env ps TUnion{}                 = all (qualEq env qnEq . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots env vi v                         = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)

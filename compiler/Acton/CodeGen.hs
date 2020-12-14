@@ -634,7 +634,6 @@ instance Gen Type where
     gen env (TCon  _ c)             = gen env c
     gen env (TFun _ _ p _ t)        = gen env t <+> parens (char '*') <+> parens (gen env p)
     gen env (TTuple _ pos _)        = gen env primTuple
-    gen env (TUnion _ as)           = word
     gen env (TOpt _ t)              = gen env t
     gen env (TNone _)               = gen env primNoneType
     gen env (TWild _)               = word

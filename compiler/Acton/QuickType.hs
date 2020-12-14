@@ -355,13 +355,6 @@ castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
 castable env (TTuple _ p1 k1) (TTuple _ p2 k2)
                                             = castable env p1 p2 && castable env k1 k2
 
-castable env (TUnion _ us1) (TUnion _ us2)
-  | all (uniElem env us2) us1               = True
-castable env (TUnion _ us1) t2
-  | all uniLit us1                          = t2 == tStr
-castable env (TCon _ c1) (TUnion _ us2)
-  | uniConElem env c1 us2                   = True
-
 castable env (TOpt _ t1) (TOpt _ t2)        = castable env t1 t2
 castable env (TNone _) (TOpt _ t)           = True
 castable env (TNone _) (TNone _)            = True
