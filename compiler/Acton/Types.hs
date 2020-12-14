@@ -461,12 +461,12 @@ toSigs te                               = map makeSig te
 solveAll env te tt cs                   = do traceM ("\n\n### solveAll " ++ prstrs cs)
                                              (cs,eq) <- simplify env te tt cs
                                              (_,cs,_,eq) <- refine env cs te eq
-                                             snd <$> newsolve env (const True) te tt eq cs
+                                             snd <$> solve env (const True) te tt eq cs
 
 solveScoped env [] te tt cs             = simplify env te tt cs
 solveScoped env vs te tt cs             = do traceM ("\n\n### solveScoped " ++ prstrs vs)
                                              (cs,eq) <- simplify env te tt cs
-                                             newsolve env (any (`elem` vs) . tyfree) te tt eq cs
+                                             solve env (any (`elem` vs) . tyfree) te tt eq cs
 
 checkNoEscape env []                    = return ()
 checkNoEscape env vs                    = do fvs <- tyfree <$> msubst env
@@ -704,43 +704,26 @@ instance Check Branch where
 
 --------------------------------------------------------------------------------------------------------------------------
 
-refine                                  :: Env -> Constraints -> TEnv -> Equations 
-                                           -> TypeM ([TVar], Constraints, TEnv, Equations)
+refine                                  :: Env -> Constraints -> TEnv -> Equations -> TypeM ([TVar], Constraints, TEnv, Equations)
 refine env cs te eq
-  | not $ null solve_vs                 = do traceM ("\n\n  #solving vs : " ++ prstrs solve_vs)
-                                             traceM ("           cs : " ++ prstrs cs)
---                                             (cs',eq') <- solve (define te env) te tNone eq solve_vs cs
-                                             (cs',eq') <- newsolve (define te env) (not . canQual) te tNone eq cs
+  | not $ null solve_vs                 = do traceM ("  #solving cs : " ++ prstrs cs)
+                                             (cs',eq') <- solve (define te env) (not . canQual) te tNone eq cs
                                              refineAgain cs' eq'
---  | not $ null collapse_vs              = do traceM ("  #collapsing vs : " ++ prstrs collapse_vs)
---                                             traceM ("              cs : " ++ prstrs cs)
---                                             (cs',eq') <- collapse env eq collapse_vs cs
---                                             refineAgain cs' eq'
   | not $ null ambig_vs                 = do traceM ("  #defaulting vs : " ++ prstrs ambig_vs)
                                              traceM ("              cs : " ++ prstrs cs)
---                                             (cs',eq') <- solve env te tNone eq ambig_vs cs
-                                             (cs',eq') <- newsolve env ambig te tNone eq cs
+                                             (cs',eq') <- solve env ambig te tNone eq cs
                                              refineAgain cs' eq'
   | otherwise                           = do eq <- msubst eq
-                                             traceM ("  #returning vs : " ++ prstrs gen_vs)
-                                             traceM ("             cs : " ++ prstrs cs)
-                                             traceM ("             te : " ++ prstr te)
                                              return (gen_vs, cs, te, eq)
-  where solve_vs                        = [ headvar c | c <- cs, not (canQual c) ] -- \\ collapse_vs
---        collapse_vs                     = concat [ tyfree c | c <- cs, mustCollapse c ]
+  where solve_vs                        = [ headvar c | c <- cs, not (canQual c) ]
         ambig_vs                        = tyfree cs \\ closeDepVars safe_vs cs
 
         safe_vs                         = if null def_vss then [] else nub $ foldr1 intersect def_vss
         def_vss                         = [ nub $ tyfree sc | (_, NDef sc _) <- te, null $ scbind sc ]
         gen_vs                          = nub (foldr union (tyfree cs) def_vss)
         
---        canQual (Cast (TVar _ v) TCon{})   = univar v
-        canQual (Impl _ (TVar _ v) _)      = univar v
-        canQual _                          = False
-
---        mustCollapse (Cast TVar{} TVar{})  = True
---        mustCollapse (Sub _ TVar{} TVar{}) = True
---        mustCollapse _                     = False
+        canQual (Impl _ (TVar _ v) _)   = univar v
+        canQual _                       = False
 
         ambig c                         = any (`elem` ambig_vs) (tyfree c)
 
