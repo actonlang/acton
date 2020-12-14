@@ -14,6 +14,7 @@ class ndslice(ndselect):
 class ndarray[A] ():
     shape           : list[int]                      # should be a method? (at least until we have immutable lists)
     strides         : list[int]                      #      -"-
+    size            : int
     reshape         : (list[int]) -> Self
     transpose       : (?list[int]) -> Self
     flatten         : () -> Self                     # the same as reshape([-1])
@@ -34,7 +35,8 @@ arange              :                    (?int,int,?int)         -> ndarray[int]
 linspace            :                    (float, float, int)     -> ndarray[float]
 array               : [A (Primitive)] => (list[A])               -> ndarray[A]            
 full                : [A (Primitive)] => (list[int],A)           -> ndarray[A]           
-unirand             :                    (float, float, int)     -> ndarray[float] #uniformly distributed pseudo-random numbers without seeding 
+unirandint          :                    (int, int, int)         -> ndarray[int]
+unirandfloat        :                    (float, float, int)     -> ndarray[float]
 
 extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
