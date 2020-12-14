@@ -807,7 +807,7 @@ int main(int argc, char **argv) {
 #else
     long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 #endif
-    printf("%ld worker threads\n", num_cores);
+    //    printf("%ld worker threads\n", num_cores);
     kq = kqueue();
     $register_builtin();
     $register_rts();
