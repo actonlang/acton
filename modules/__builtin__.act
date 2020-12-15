@@ -70,7 +70,7 @@ class slice:
   __init__     : (?int,?int,?int) -> None
   
 class list[A] (object):
-  __init__     : (Sequence[A]) -> None
+  __init__     : (Iterable[A]) -> None
   copy         : () -> list[A]
 
 class range:
@@ -534,6 +534,10 @@ sorted : [A(Ord)] => (Iterable[A]) -> list[A]
 sum : [A(Plus)] => (Iterable[A],?A) -> A
 
 zip : (Iterable[A], Iterable[B]) -> Iterator[(A,B)]
+
+
+
+replicate : (int, A) -> list[A]
 
 ## Environment ################################################
 

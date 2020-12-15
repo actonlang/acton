@@ -1,27 +1,20 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
-$list $list$new($Sequence wit, $WORD seq) {
-  return $NEW($list, wit, seq);
+$list $list$new($Iterable wit, $WORD iter) {
+  return $NEW($list, wit, iter);
 }
 
-void $list_init($list lst, $Sequence wit, $WORD seq) {
-  if (!seq) {
+void $list_init($list lst, $Iterable wit, $WORD iter) {
     lst->length = 0;
     lst->capacity = 0;
     lst->data = NULL;
-    return;
-  }
-  $Collection wit2 = wit->w$Collection;
-  int len = wit2->$class->__len__(wit2,seq)->val;
-  lst->data = malloc(len*sizeof($WORD));
-  if (lst->data == NULL) {
-    RAISE(($BaseException)$NEW($MemoryError,to$str("memory allocation failed")));
-  }
-  lst->length = len;
-  lst->capacity = len;
-  $Iterator it = wit2->$class->__iter__(wit2,seq);
-  for (int i=0; i<len; i++)
-    $list_setitem(lst,i,it->$class->__next__(it));
+    if (!iter) {
+        return;
+    }
+    $WORD w;
+    $Iterator it = wit->$class->__iter__(wit,iter);
+    while((w = it->$class->__next__(it)))
+        $list_append(lst,w);
 }
   
 $bool $list_bool($list self) {

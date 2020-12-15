@@ -1,5 +1,5 @@
 
-void $list_init($list lst, $Sequence wit, $WORD seq);
+void $list_init($list lst, $Iterable wit, $WORD seq);
 
 $list $list_copy($list lst);
 

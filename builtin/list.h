@@ -2,7 +2,7 @@ struct $list$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($list, $Sequence, $WORD);
+  void (*__init__)($list, $Iterable, $WORD);
   void (*__serialize__)($list,$Serial$state);
   $list (*__deserialize__)($Serial$state);
   $bool (*__bool__)($list);
@@ -19,7 +19,7 @@ struct $list {
 };
 
 extern struct $list$class $list$methods;
-$list $list$new($Sequence, $WORD);
+$list $list$new($Iterable, $WORD);
 
 extern struct $Sequence$list$class $Sequence$list$methods;
 $Sequence$list $Sequence$list$new();
