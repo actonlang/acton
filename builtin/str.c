@@ -319,6 +319,10 @@ struct $Hashable$str$class  $Hashable$str$methods = {
 struct $Hashable$str $Hashable$str_instance = {&$Hashable$str$methods};
 $Hashable$str $Hashable$str$witness = &$Hashable$str_instance;
 
+$Hashable$str $Hashable$str$new() {
+  return $NEW($Hashable$str);
+}
+
 void $Container$str$__init__ ($Container$str wit, $Eq w$Eq$A$Container$str) {
   wit->w$Eq$A$Container$str = w$Eq$A$Container$str;
 }
