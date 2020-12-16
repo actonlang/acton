@@ -2770,10 +2770,34 @@ void $bytearray_init($bytearray self, $struct s) {
     self->str = NULL;
     return;
   }
-  $str e = $NEW($str,s);
-  $bytearray b = e->$class->encode(e);
-  self->nbytes = b->nbytes;
-  self->str = b->str;
+  if ($ISINSTANCE(s, $str)->val) {
+    $str str = ($str)s;
+    $bytearray b = str->$class->encode(str);
+    self->nbytes = b->nbytes;
+    self->str = b->str;
+  } else if ($ISINSTANCE(s, $list)->val) {  // must be a list of ints in range 0..255
+    $list lst = ($list)s;
+    int len = lst->length;
+    self->nbytes = len;
+    self->str = malloc(len+1);
+    self->str[len] = 0;
+    if (len > 0 && !($ISINSTANCE(lst->data[0],$int)->val))
+      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+    for (int i = 0; i<len; i++) {
+      long v = (($int)lst->data[i])->val;
+      if (v < 0 || v > 255)
+        RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+      self->str[i] = v;
+    }
+  } else if ($ISINSTANCE(s, $int)->val) {
+    $int n = ($int)s;
+    if (n->val < 0) 
+      RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
+    self->nbytes = n->val;
+    self->str = malloc(n->val);
+    memset(self->str, 0, n->val);
+  } else
+    RAISE(($BaseException)$NEW($ValueError,to$str("illegal argument to bytearray constructor")));
 }
 
 

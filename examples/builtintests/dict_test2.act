@@ -1,0 +1,28 @@
+actor main(env):
+    dict = {}
+    for i in range(1,1000000,1):
+        dict[str(i)] = str(i+1)
+    r = 17
+    s = 0
+    for j in range(1,100000,1):
+       r = r*r % 100000
+       s += int(dict[str(r)])
+    print('Sum of 100000 values is %d (should be 5000098046)' % s)
+    print ('"str(678) in dict" yields', str(678) in dict, '(should be True)')
+    print ('"str(-1) in dict" yields', str(-1) in dict, '(should be False)')
+    for i in range(1,1000000,1):
+        if i%100 > 0:
+            del dict[str(i)]
+    print('Size of dict after popping is %d (should be 9999)' % len(dict))
+#    t = 0
+#    for k in dict:
+#        t += int(k)
+#    print('Sum of remaining keys is %d (should be 4999500000)' % t)
+#    deflt = '666'
+#    w = dict.get('100',deflt)
+#    w2 = dict.get('37',deflt)
+#    print('dict_get on existing key "100"; should return "101". Returned',w)    
+#    print('dict_get on non-existing key "37"; should return "666". Returned',w2)    
+    env.exit(0)
+    
+    

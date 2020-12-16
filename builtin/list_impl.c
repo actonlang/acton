@@ -60,7 +60,7 @@ $list $list_deserialize($Serial$state state) {
   }
 }
 
-struct $list$class $list$methods = {"",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
+struct $list$class $list$methods = {"$list",UNASSIGNED,($Super$class)&$object$methods, $list_init, $list_serialize,$list_deserialize, $list_bool, $list_str, $list_copy};
 
 // Auxiliary functions /////////////////////////////////////////////////////////////////////////////////////////////////////
  
