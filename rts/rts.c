@@ -206,29 +206,7 @@ $Catcher $Catcher$__deserialize__($Serial$state state) {
     res->cont = $step_deserialize(state);
     return res;
 }
-////////////////////////////////////////////////////////////////////////////////////////
-
-void $function$__init__($function $this) { }
-
-$bool $function$__bool__($function self) {
-  return $True;
-}
-
-$str $function$__str__($function self) {
-  char *s;
-  asprintf(&s,"<function object at %p>",self);
-  return to$str(s);
-}
-
-void $function$__serialize__($function self, $Serial$state state) {
-    // TBD
-}
-
-$function $function$__deserialize__($Serial$state state) {
-    // TBD
-    return NULL;
-}
-////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
 
 void $Cont$__init__($Cont $this) { }
 
@@ -325,18 +303,6 @@ struct $Catcher$class $Catcher$methods = {
     $Catcher$__deserialize__,
     $Catcher$__bool__,
     $Catcher$__str__
-};
-
-struct $function$class $function$methods = {
-    CLOS_HEADER,
-    UNASSIGNED,
-    NULL,
-    $function$__init__,
-    $function$__serialize__,
-    $function$__deserialize__,
-    $function$__bool__,
-    $function$__str__,
-    NULL
 };
 
 struct $Cont$class $Cont$methods = {
@@ -653,6 +619,9 @@ $Msg $ASYNC($Actor to, $Cont cont) {
            ENQ_ready(to);
         }
     }
+    pthread_mutex_lock(&sleep_lock);
+    pthread_cond_signal(&work_to_do);
+    pthread_mutex_unlock(&sleep_lock);
     return m;
 }
 
@@ -764,8 +733,8 @@ void *main_loop(void *arg) {
                   pthread_mutex_lock(&sleep_lock);
                   pthread_cond_wait(&work_to_do, &sleep_lock);
                   pthread_mutex_unlock(&sleep_lock);
-                  //static struct timespec idle_wait = { 0, 50000000 };  // 500ms
-                  //nanosleep(&idle_wait, NULL);
+                  // static struct timespec idle_wait = { 0, 50000000 };  // 500ms
+                  // nanosleep(&idle_wait, NULL);
                 }
             }
         }
