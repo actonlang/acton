@@ -14,15 +14,13 @@ actor main(env):
         if i%100 > 0:
             del dict[str(i)]
     print('Size of dict after popping is %d (should be 9999)' % len(dict))
-#    t = 0
-#    for k in dict:
-#        t += int(k)
-#    print('Sum of remaining keys is %d (should be 4999500000)' % t)
-#    deflt = '666'
-#    w = dict.get('100',deflt)
-#    w2 = dict.get('37',deflt)
-#    print('dict_get on existing key "100"; should return "101". Returned',w)    
-#    print('dict_get on non-existing key "37"; should return "666". Returned',w2)    
+    t = 0
+    for k in dict:
+        t += int(k)
+    print('Sum of remaining keys is %d (should be 4999500000)' % t)
+    deflt = '666'
+    w = dict.get('100',deflt)
+    w2 = dict.get('37',deflt)
+    print('dict_get on existing key "100"; should return "101". Returned',w)
+    print('dict_get on non-existing key "37"; should return "666". Returned',w2)
     env.exit(0)
-    
-    

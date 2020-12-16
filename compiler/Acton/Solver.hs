@@ -97,11 +97,12 @@ solve' env select hist te tt eq cs
         condense (RTry v as r : rs)         = RTry v (if rev' then reverse ts' else ts') rev'
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if v `elem` optvs then ts \\ [tOpt tWild] else ts
-                rev'                        = and $ r : map rev rs
+                rev'                        = (or $ r : map rev rs) || v `elem` posvs
         condense (RUni v as : rs)           = RUni v (foldr union as $ map alts rs)
         optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
         univs                               = univars cs
+        (posvs, negvs)                      = polvars te `polcat` polvars tt
 
         deco (RTry v as r)                  = (0, length $ filter (==v) embvs, length $ filter (==v) univs, length as)
         deco (RUni v as)                    = (1, 0, 0, length as)
@@ -121,10 +122,10 @@ rank env (Cast t1 (TVar _ tv))
 rank env (Impl _ (TVar _ tv) p)
   | univar tv                               = RTry tv (allExtProto env p) False
 rank env (Sel _ (TVar _ tv) n _)
-  | univar tv                               = RTry tv (allConAttr env n ++ allProtoAttr env n) False
+  | univar tv                               = RTry tv (allConAttr env n ++ allProtoAttr env n ++ allExtProtoAttr env n) False
 rank env (Mut (TVar _ tv) n _)
   | univar tv                               = RTry tv (allConAttr env n `intersect` allBelow env tObject) False
-rank env c = error ("### rank " ++ prstr c)
+
 
 class OptVars a where
     optvars                             :: a -> [TVar]
@@ -210,9 +211,11 @@ allBelow env (TFX _ FXPure)             = [fxPure]
 
 allExtProto env p                       = [ tCon tc | tc <- allImpls env (tcname p ) ]
 
-allConAttr env n                        = [ tCon tc | tc <- allCons env, n `elem` allAttrs env (tcname tc) ]
+allConAttr env n                        = [ tCon tc | tc <- allCons env, n `elem` allAttrs env tc ]
 
-allProtoAttr env n                      = [ tCon p | p <- allProtos env, n `elem` allAttrs env (tcname p) ]
+allProtoAttr env n                      = [ tCon p | p <- allProtos env, n `elem` allAttrs env p ]
+
+allExtProtoAttr env n                   = [ tCon tc | tc <- allCons env, any ((n `elem`) . allAttrs env . proto) (allWitnesses env $ tcname tc) ]
 
 
 ----------------------------------------------------------------------------------------------------------------------

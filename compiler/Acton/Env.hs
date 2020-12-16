@@ -714,8 +714,9 @@ conAttrs env qn             = dom te
 directAttrs                 :: EnvF x -> QName -> [Name]
 directAttrs env qn          = concat [ dom (nSigs te) | qn' <- qn : directAncestors env qn, let (_,_,te) = findConName qn' env ]
 
-allAttrs                    :: EnvF x -> QName -> [Name]
-allAttrs env qn             = concat [ conAttrs env qn' | qn' <- qn : allAncestors' env qn ]
+allAttrs                    :: EnvF x -> TCon -> [Name]
+allAttrs env c              = concat [ conAttrs env qn' | qn' <- qn : allAncestors' env qn ]
+  where qn                  = tcname c
 
 attrEnv                     :: EnvF x -> TCon -> TEnv
 attrEnv env c               = snd $ findCon env c
@@ -737,7 +738,7 @@ inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
                 ns1         = (dom $ snd $ splitSigs te) \\ ns0
 
 allCons                     :: EnvF x -> [TCon]
-allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env) ]
+allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
   where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, con i ]
         con NClass{}        = True
         con NAct{}          = True
@@ -747,7 +748,7 @@ allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env
         args (NAct q _ _ _) = [ tWild | _ <- q ]
 
 allProtos                   :: EnvF x -> [TCon]
-allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env) ]
+allProtos env               = reverse locals ++ concat [ protos m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]
   where locals              = [ TC (NoQ n) (args i) | (n,i) <- names env, proto i ]
         proto NProto{}      = True
         proto _             = False
