@@ -370,7 +370,7 @@ instance Gen Stmt where
       | otherwise                   = vcat [ varsig env n (sctype sc) <> semi | n <- ns ]
     gen env _                       = empty
 
-genBranch env kw (Branch e b)       = (text kw <+> parens (gen env e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
+genBranch env kw (Branch e b)       = (text kw <+> parens (genExp env tBool e <> text "->val") <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
 
 genElse env []                      = empty
 genElse env b                       = (text "else" <+> char '{') $+$ nest 4 (genSuite env b) $+$ char '}'
@@ -446,7 +446,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
 
 genCall env t0 [] (TApp _ e ts) p   = genCall env t0 ts e p
 genCall env t0 [_,t] (Var _ n) (PosArg e PosNil)
-  | n == primCAST                   = parens (gen env t) <> gen env e
+  | n == primCAST                   = parens (parens (gen env t) <> gen env e)
 genCall env t0 [row] (Var _ n) p
   | qn == qnPrint                   = gen env qn <> parens (pretty i <> if i > 0 then comma <+> gen env p else empty)
   where i                           = nargs p
@@ -523,12 +523,16 @@ genEnter env ts e n p               = cast (gen env e) <> text "->" <> gen env c
 genInst env ts e@Var{}              = gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
 
-adjust TVar{} TVar{} e              = e
-adjust TNone{} t' e                 = e
-adjust (TCon _ c) (TCon _ c') e
-  | tcname c == tcname c'           = e
+adjust t t' e
+  | t == t'                         = e
 adjust (TOpt _ t) t' e              = adjust t t' e
 adjust t (TOpt _ t') e              = adjust t t' e
+adjust TNone{} t' e                 = e
+adjust t t'@TVar{} e                = e
+adjust (TCon _ c) (TCon _ c') e
+  | tcname c == tcname c'           = e
+adjust TFun{} _ e                   = e
+adjust _ TFun{} e                   = e
 adjust t t' e                       = typecast t t' e
 
 genExp env t' e                     = gen env (adjust t t' e')
@@ -551,8 +555,7 @@ instance Gen Expr where
     gen env (None _)                = gen env primNone
     gen env e@Strings{}             = gen env primToStr <> parens (genStr env e)
     gen env e@BStrings{}            = gen env primToBytearray <> parens (genStr env e)
-    gen env e0@Call{}               = genCall env t0 [] e p
-      where (t0, Call _ e p _)      = qType env typecast e0
+    gen env (Call _ e p _)          = genCall env tNone [] e p
     gen env (TApp _ e ts)           = genInst env ts e
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> gen env (globalize env c))
     gen env (Dot _ e n)             = genDot env [] e n

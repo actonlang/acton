@@ -3,7 +3,7 @@ import numpy
 
 actor main(env):
     print(sqrt(0.3))
-#    print(sqrt(0.3).shape)
+    print(sqrt(0.3).shape)
     print(sqrt(float(0.3)))
     print(cos(float(2.0)))
     print(log(sin(exp(float(1)))))

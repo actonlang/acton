@@ -74,6 +74,7 @@ mBuiltin                            = ModName [nBuiltin]
 gBuiltin n                          = GName mBuiltin n
 
 nStruct                             = name "struct"
+nAtom                               = name "atom"
 nObject                             = name "object"
 nInt                                = name "int"
 nFloat                              = name "float"
@@ -119,6 +120,7 @@ nContextManager                     = name "ContextManager"
 nShow                               = name "Show"
 
 qnStruct                            = gBuiltin nStruct
+qnAtom                              = gBuiltin nAtom
 qnObject                            = gBuiltin nObject
 qnInt                               = gBuiltin nInt
 qnFloat                             = gBuiltin nFloat
@@ -163,6 +165,7 @@ qnContextManager                    = gBuiltin nContextManager
 qnShow                              = gBuiltin nShow
 
 cStruct                             = TC qnStruct []
+cAtom                               = TC qnAtom []
 cObject                             = TC qnObject []
 cInt                                = TC qnInt []
 cFloat                              = TC qnFloat []
@@ -204,6 +207,7 @@ pContextManager                     = TC qnContextManager []
 pShow                               = TC qnShow []
 
 tStruct                             = tCon cStruct
+tAtom                               = tCon cAtom
 tObject                             = tCon cObject
 tInt                                = tCon cInt
 tFloat                              = tCon cFloat

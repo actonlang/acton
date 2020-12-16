@@ -21,14 +21,13 @@ accept t t' e                       = e
 typecast                            :: Checker
 typecast t t' e
   | t == t'                         = e
-  | TFun{} <- t                     = e
-  | TFun{} <- t'                    = e
   | otherwise                       = eCall (tApp (eQVar primCAST) [t,t']) [e]
 
 
 typeOf env x                        = fst $ qType env accept x
 
-typeInstOf env ts e                 = fst $ qInst env accept ts e
+typeInstOf env ts e                 = t
+  where (t0, t, e')                 = qInst env accept ts e
 
 schemaOf env e                      = (sc, dec)
   where (sc, dec, e')               = qSchema env accept e
@@ -89,16 +88,17 @@ qSchema env f e0@(Dot l e n)        = case t of
 qSchema env f e                     = (monotype t, Nothing, e')
   where (t, e')                     = qType env f e
 
-qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (Type, Expr)
+qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (Type, Type, Expr)
+qInst env f [] (TApp _ e ts)        = qInst env f ts e
 qInst env f ts e                    = case qSchema env f e of
-                                        (TSchema _ q t, _, e') | length q == length ts -> (t', qMatch f t t' (tApp e' ts))
+                                        (TSchema _ q t, _, e') | length q == length ts -> (t, t', tApp e' ts)
                                            where t' = subst (tybound q `zip` ts) t
                                         (sc, _, _) -> error ("###### qInst [" ++ prstrs ts ++ "] " ++ prstr e ++ " is " ++ prstr sc)
 
 instance QType Expr where
-    qType env f e@Var{}             = qInst env f [] e
-    qType env f e@Dot{}             = qInst env f [] e
-    qType env f (TApp _ e ts)       = qInst env f ts e
+    qType env f e@Var{}             = let (_,t,e') = qInst env f [] e in (t, e')
+    qType env f e@Dot{}             = let (_,t,e') = qInst env f [] e in (t, e')
+    qType env f (TApp _ e ts)       = let (_,t,e') = qInst env f ts e in (t, e')
     qType env f e@(Int _ _ _)       = (tInt, e)
     qType env f e@(Float _ _ s)     = (tFloat, e)
     qType env f e@(Bool _ _)        = (tBool, e)
@@ -108,10 +108,10 @@ instance QType Expr where
 --  qType env f (Imaginary _ i s)   = undefined
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined
-    qType env f (Call l e ps ks)    = case t of
-                                        TFun _ fx p' k' t' -> (t', Call l e' (qMatch f p p' ps) (qMatch f k k' ks))
-                                        t -> error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
-      where (t, e')                 = qType env f e
+    qType env f (Call l e ps ks)
+      | TFun{} <- t, TFun{} <- t'   = (restype t', qMatch f (restype t) (restype t') $ Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
+      | otherwise                   = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
+      where (t, t', e')             = qInst env f [] e
             (p, ps')                = qType env f ps
             (k, ks')                = qType env f ks
     qType env f (Async l e)         = (tMsg t, Async l e')

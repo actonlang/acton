@@ -20,7 +20,6 @@ deactorize env0 (Module m imps b)   = return (Module m imps (runDeactM $ deactTo
 
 deactTop env []                     = return []
 deactTop env (s : ss)               = do s' <- deact env s
-                                         traceM ("### sealed:\n" ++ render (nest 4 $ vcat $ map pretty (map sealActors $ envOf s)))
                                          ss' <- deactTop env1 ss
                                          return (s' : ss')
   where env1                        = extend (map sealActors $ envOf s) env
