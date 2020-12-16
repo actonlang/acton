@@ -58,9 +58,9 @@ solve                                       :: (Polarity a, Pretty a) => Env -> 
                                                TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
 solve env select te tt eq []                = return ([], eq)
 solve env select te tt eq cs                = trace ("\n\n######### solve") $
-                                              solve' env select te tt eq cs `catchError` \err -> Control.Exception.throw err
+                                              solve' env select [] te tt eq cs `catchError` \err -> Control.Exception.throw err
 
-solve' env select te tt eq cs
+solve' env select hist te tt eq cs
   | null solve_cs                           = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
                                                  traceM ("## keep: " ++ prstrs keep_cs)
@@ -74,32 +74,32 @@ solve' env select te tt eq cs
                                                         tryAlts st v (alts)
                                                     RUni v alts       ->
                                                         trace ("### goal " ++ prstr v ++ ", unifying with " ++ prstrs alts) $
-                                                        unifyM env (repeat $ tVar v) alts >> proceed
+                                                        unifyM env (repeat $ tVar v) alts >> proceed hist cs
   where (solve_cs, keep_cs)                 = partition select cs
         goals                               = sortOn deco $ map condense $ group $ map (rank env) solve_cs
-        tryAlts st tv []                    = trace ("### Out of alternatives for " ++ prstr tv) $ noSolve solve_cs
+        tryAlts st tv []                    = trace ("### Out of alternatives for " ++ prstr tv) $ noSolve cs
         tryAlts st tv (t:ts)                = tryAlt tv t `catchError` const (traceM ("### ROLLBACK " ++ prstr tv) >> rollbackState st >> tryAlts st tv ts)
         tryAlt tv (TCon _ c)
           | isProto env (tcname c)          = do p <- instwildcon env c
                                                  w <- newWitness
                                                  traceM ("  # trying " ++ prstr tv ++ " (" ++ prstr p ++ ")")
-                                                 (cs,eq) <- simplify' env te tt eq (Impl w (tVar tv) p : cs)
-                                                 solve' env select te tt eq cs
+                                                 proceed hist (Impl w (tVar tv) p : cs)
         tryAlt tv t                         = do t <- instwild env (tvkind tv) t
                                                  traceM ("  # trying " ++ prstr tv ++ " = " ++ prstr t)
                                                  substitute tv t
-                                                 proceed
-        proceed                             = do cs <- msubst cs
+                                                 proceed (t:hist) cs
+        proceed hist cs                     = do cs <- msubst cs
                                                  te <- msubst te
                                                  tt <- msubst tt
                                                  (cs,eq) <- simplify' env te tt eq cs
-                                                 solve' env select te tt eq cs
+                                                 hist <- msubst hist
+                                                 solve' env select hist te tt eq cs
         condense (RTry v as r : rs)         = RTry v (if rev' then reverse ts' else ts') rev'
           where ts                          = foldr intersect as $ map alts rs
                 ts'                         = if v `elem` optvs then ts \\ [tOpt tWild] else ts
                 rev'                        = and $ r : map rev rs
         condense (RUni v as : rs)           = RUni v (foldr union as $ map alts rs)
-        optvs                               = optvars cs
+        optvs                               = optvars cs ++ optvars hist
         embvs                               = embvars cs
         univs                               = univars cs
 
@@ -126,20 +126,30 @@ rank env (Mut (TVar _ tv) n _)
   | univar tv                               = RTry tv (allConAttr env n `intersect` allBelow env tObject) False
 rank env c = error ("### rank " ++ prstr c)
 
-optvars cs                              = concat $ map optc cs
-  where optc (Cast t1 t2)               = opt t1 ++ opt t2
-        optc (Sub w t1 t2)              = opt t1 ++ opt t2
-        optc (Impl w t p)               = opt t ++ concat (map opt $ tcargs p)
-        optc (Sel w t1 n t2)            = opt t1 ++ opt t2
-        optc (Mut t1 n t2)              = opt t1 ++ opt t2
-        opt (TOpt _ (TVar _ v))         = [v]
-        opt (TOpt _ t)                  = opt t
-        opt (TCon _ c)                  = concat (map opt $ tcargs c)
-        opt (TFun _ fx p k t)           = opt p ++ opt k ++ opt t
-        opt (TTuple _ p k)              = opt p ++ opt k
-        opt (TRow _ _ _ t r)            = opt t ++ opt r
-        opt _                           = []
+class OptVars a where
+    optvars                             :: a -> [TVar]
 
+instance (OptVars a) => OptVars [a] where
+    optvars                             = concat . map optvars
+
+instance OptVars Constraint where
+    optvars (Cast t1 t2)               = optvars [t1, t2]
+    optvars (Sub w t1 t2)              = optvars [t1, t2]
+    optvars (Impl w t p)               = optvars t ++ optvars p
+    optvars (Sel w t1 n t2)            = optvars [t1, t2]
+    optvars (Mut t1 n t2)              = optvars [t1, t2]
+
+instance OptVars Type where
+    optvars (TOpt _ (TVar _ v))        = [v]
+    optvars (TOpt _ t)                 = optvars t
+    optvars (TCon _ c)                 = optvars c
+    optvars (TFun _ fx p k t)          = optvars [p, k, t]
+    optvars (TTuple _ p k)             = optvars [p, k]
+    optvars (TRow _ _ _ t r)           = optvars [t, r]
+    optvars _                          = []
+
+instance OptVars TCon where
+    optvars (TC n ts)                   = optvars ts
 
 embvars cs                              = concat $ map emb cs
   where emb (Cast (TVar _ v) (TVar _ v'))
