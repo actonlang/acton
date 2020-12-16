@@ -23,7 +23,7 @@ def f7a(x : ?int):
     return x == 7
 
 #def f9(x : str):
-#    return x == True
+#    return x == True       # Cannot solve: atom < T, T(Eq)
 
 def f10(x : bool):
     return 'A' if x else 'B'
