@@ -298,7 +298,9 @@ struct $Plus$str$class  $Plus$str$methods = {
     $Plus$str$__deserialize__,
     ($bool (*)($Plus$str))$default__bool__,
     ($str (*)($Plus$str))$default__str__,
-    $Plus$str$__add__
+    $Plus$str$__add__,
+    ($str (*)($Plus$str, $str, $str))$Plus$__iadd__,
+
 };
 struct $Plus$str $Plus$str_instance = {&$Plus$str$methods};
 $Plus$str $Plus$str$witness = &$Plus$str_instance;
@@ -660,8 +662,8 @@ $int $str_len($str s) {
 
 // $Container ///////////////////////////////////////////////////////////////////////////
 
-$Container$str $Container$str$new($Eq wit) {
-  return $NEW($Container$str,wit);
+$Container$str $Container$str$new() {
+  return $NEW($Container$str,($Eq)$Ord$str$witness);
 }
 
 int $str_contains($str s, $str sub) {
