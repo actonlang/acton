@@ -789,7 +789,7 @@ struct $Mapping$class {
     $Iterator (*keys)($Mapping, $WORD);
     $Iterator (*values)($Mapping, $WORD);
     $Iterator (*items)($Mapping, $WORD);
-    void (*update)($Mapping, $Iterable, $WORD, $WORD);
+    void (*update)($Mapping, $WORD, $Iterable, $WORD);
     $tuple (*popitem)($Mapping, $WORD);
     void (*setdefault)($Mapping, $WORD, $WORD, $WORD);
 };
@@ -1146,7 +1146,7 @@ struct $Mapping$dict$class {
     $Iterator (*keys)($Mapping$dict, $dict);
     $Iterator (*values)($Mapping$dict, $dict);
     $Iterator (*items)($Mapping$dict, $dict);
-    void (*update)($Mapping$dict, $Iterable, $dict, $WORD);
+    void (*update)($Mapping$dict, $dict, $Iterable, $WORD);
     $tuple (*popitem)($Mapping$dict, $dict);
     void (*setdefault)($Mapping$dict, $dict, $WORD, $WORD);
 };
@@ -1163,7 +1163,7 @@ $WORD $Mapping$dict$get ($Mapping$dict, $dict, $WORD, $WORD);
 $Iterator $Mapping$dict$keys ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$values ($Mapping$dict, $dict);
 $Iterator $Mapping$dict$items ($Mapping$dict, $dict);
-void $Mapping$dict$update ($Mapping$dict, $Iterable, $dict, $WORD);
+void $Mapping$dict$update ($Mapping$dict, $dict, $Iterable, $WORD);
 $tuple $Mapping$dict$popitem ($Mapping$dict, $dict);
 void $Mapping$dict$setdefault ($Mapping$dict, $dict, $WORD, $WORD);
 

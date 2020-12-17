@@ -86,7 +86,7 @@ $Iterator $Mapping$dict$items ($Mapping$dict wit, $dict dict) {
   return $dict_items(dict);
 }
 
-void $Mapping$dict$update ($Mapping$dict wit, $Iterable wit2, $dict dict, $WORD other) {
+void $Mapping$dict$update ($Mapping$dict wit, $dict dict, $Iterable wit2, $WORD other) {
   $dict_update(dict,wit->w$Hashable$A$Mapping$dict,wit2->$class->__iter__(wit2,other));
 }
 
