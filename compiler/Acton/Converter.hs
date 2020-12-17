@@ -41,7 +41,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 psigs                   = [ Signature NoLoc [n] (monotype t) Property | (n,t,False) <- immsibs ]
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars ++ [ (n,t) | (n,t,_) <- immsibs ]) PosNIL
-                mainInitBody            = bindWits eq0 ++ initCall (tcargs main) mainArgs main : mainCopies
+                mainInitBody            = bindWits eq0 ++ initCall (tcargs main) mainArgs main ++ mainCopies
                 mainArgs                = witArgs [tcname main] wmap ++ [ eVar n | (n,_,True) <- immsibs ]
                 mainCopies              = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') n) (eVar n) | (n,t,False) <- immsibs ]
                 eq0                     = (tvarWit tvSelf p0, t0, eVar selfKW') : eq
@@ -59,7 +59,7 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
                 sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibSubParams ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,t0)]
-                sibInitBody             = bindWits eq0 ++ [initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p] ++ sibCopies
+                sibInitBody             = bindWits eq0 ++ initCall (tcargs p) (wes ++ sibSubArgs ++ sibCtxtArgs) p ++ sibCopies
                 sibCopies               = qcopies ++ [ MutAssign NoLoc (eDot (eVar selfKW') w0) (eVar w0) ]
                 sibSubParams            = [ (witAttr (last ws'), tCon $ convProto p') | (ws',p',_) <- ps, truePrefix ws ws' ]
                 sibSubArgs              = [ eVar (witAttr (last ws')) | (ws',p',_) <- ps, truePrefix ws ws' ]
@@ -85,7 +85,7 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
           where mainClassBody           = qsigs ++ Decl NoLoc [mainInit] : pruneDefs env (tcname main) (convStmts t0 eq1 b)
                 mainInit                = Def NoLoc initKW [] mainParams KwdNIL (Just tNone) (mkBody mainInitBody) NoDec fxPure
                 mainParams              = wit2par ((selfKW',tSelf) : qpars) PosNIL
-                mainInitBody            = bindWits eq0 ++ initCall ts (witArgs [tcname main] wmap ++ sibSubs []) main : qcopies
+                mainInitBody            = bindWits eq0 ++ initCall ts (witArgs [tcname main] wmap ++ sibSubs []) main ++ qcopies
                 eq0                     = (thisKW', tCon main, eVar selfKW') : eq
                 eq1                     = (thisKW', tCon main, eVar selfKW') : qcopies' ++ eq
 
@@ -100,7 +100,7 @@ convExtension env n1 n0 q ps0 eq wmap b = mainClass : sibClasses
           where sibInit                 = Def NoLoc initKW [] sibParams KwdNIL (Just tNone) (mkBody sibInitBody) NoDec fxPure
                 sibParams               = wit2par ((selfKW',tSelf) : qpars ++ sibCtxt) PosNIL
                 sibCtxt                 = witCtxt ps ws ++ [(w0,tCon main)]
-                sibInitBody             = bindWits eq0 ++ [initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p] ++ qcopies
+                sibInitBody             = bindWits eq0 ++ initCall ts (wes ++ sibSubs ws ++ sibArgs ws) p ++ qcopies
                 eq0                     = (thisKW', tCon main, eVar  w0) : eq
                 eq1                     = (thisKW', tCon main, eDot (eVar selfKW') w0) : qcopies' ++ eq
 
@@ -128,7 +128,9 @@ witCtxt ps ws                           = ctxt $ tail $ reverse ws
         ctxt (w:ws)                     = (witAttr w, fromJust $ lookup (w:ws) typemap) : ctxt ws
         typemap                         = [ (reverse ws, tCon $ convProto p) | (ws,p,_) <- ps ]
 
-initCall ts args p                      = Expr NoLoc (eCall (tApp (eDot (eQVar (tcname p)) initKW) ts) (eVar selfKW' : args))
+initCall ts args p
+  | tcname p == qnStruct                = []
+  | otherwise                           = [Expr NoLoc (eCall (tApp (eDot (eQVar (tcname p)) initKW) ts) (eVar selfKW' : args))]
 
 witArgs ws wmap                         = case lookup (head ws) wmap of
                                             Just es -> es
