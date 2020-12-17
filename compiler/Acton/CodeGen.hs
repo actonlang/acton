@@ -144,7 +144,7 @@ stdprefix env                       = [gcinfo env, classid env, superlink env]
 
 gcinfo env                          = text "char" <+> text "*" <> gen env gcinfoKW <> semi
 
-classid env                         = gen env tInt <+> gen env classidKW <> semi
+classid env                         = text "int" <+> gen env classidKW <> semi
 
 superlink env                       = gen env tSuperclass <+> gen env superclassKW <> semi
   where tSuperclass                 = tCon $ TC qnSuperClass []
