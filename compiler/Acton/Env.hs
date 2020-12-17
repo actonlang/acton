@@ -608,10 +608,6 @@ findWitness env cn f        = listToMaybe $ filter f $ allWitnesses env cn
 allWitnesses                :: EnvF x -> QName -> [Witness]
 allWitnesses env cn         = [ w | (c,w) <- witnesses env, qualEq env c cn ]
 
-allImpls                    :: EnvF x -> QName -> [TCon]
-allImpls env qn             = reverse $ [ sat c | (c,w) <- witnesses env, qualEq env qn (tcname $ proto w) ]
-  where sat c               = let (q,_,_) = findConName c env in TC c [ tWild | _ <- q ]
-
 implProto                   :: EnvF x -> TCon -> Witness -> Bool
 implProto env p w           = case w of
                                 WClass{} -> qualEq env (tcname p) (tcname p')
