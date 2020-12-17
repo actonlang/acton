@@ -211,6 +211,9 @@ struct $Number$complex$class $Number$complex$methods = {
     $Number$complex$__mul__,
     $Number$complex$__truediv__,
     $Number$complex$__pow__,
+    ($complex (*)($Number$complex, $complex, $complex))$Number$__ipow__,
+    ($complex (*)($Number$complex, $complex, $complex))$Number$__itruediv__,
+    ($complex (*)($Number$complex, $complex, $complex))$Number$__imul__,
     $Number$complex$__neg__,
     $Number$complex$__pos__,
     $Number$complex$real,
@@ -230,7 +233,8 @@ struct $Minus$complex$class $Minus$complex$methods = {
     $Minus$complex$__deserialize__,
     ($bool (*)($Minus$complex))$default__bool__,
     ($str (*)($Minus$complex))$default__str__,
-    $Minus$complex$__sub__
+    $Minus$complex$__sub__,
+    ($complex (*)($Minus$complex, $complex, $complex))$Minus$__isub__
 };
 struct $Minus$complex $Minus$complex_instance = {&$Minus$complex$methods, ($Number)&$Number$complex_instance};
 $Minus$complex $Minus$complex$witness = &$Minus$complex_instance;

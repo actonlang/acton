@@ -2,7 +2,7 @@ struct $set$class {
   char *$GCINFO;
   int $class_id;
   $Super$class $superclass;
-  void (*__init__)($set, $Hashable, $Set, $WORD);
+  void (*__init__)($set, $Hashable, $Iterable, $WORD);
   void (*__serialize__)($set, $Serial$state);
   $set (*__deserialize__)($Serial$state);
   $bool (*__bool__)($set);
@@ -26,7 +26,7 @@ typedef struct $set {
 
 
 extern struct $set$class $set$methods;
-$set $set$new($Hashable, $Set, $WORD);
+$set $set$new($Hashable, $Iterable, $WORD);
 
 extern struct $Set$set$class $Set$set$methods;
 $Set$set $Set$set$new($Hashable);

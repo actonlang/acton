@@ -34,19 +34,19 @@ struct $table_struct {
 
 // General methods /////////////////////////////////////////////////////////////////////////
 
-$dict $dict$new($Hashable wit1, $Mapping wit2, $WORD m) {
-  return $NEW($dict,wit1, wit2, m);
+$dict $dict$new($Hashable hashwit, $Iterable wit, $WORD iter) {
+  return $NEW($dict,hashwit, wit, iter);
 }
 
-void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping) { 
+void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iter) { 
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  if (mapping) {
-    $Iterator iter = mwit->$class->__iter__(mwit,mapping);
+  if (wit) {
+    $Iterator iter = wit->$class->__iter__(wit,iter);
     $tuple nxt;
     while((nxt = ($tuple)iter->$class->__next__(iter))) {
       $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);

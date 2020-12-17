@@ -1,4 +1,4 @@
-void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping);
+//void $dict_init($dict dict, $Hashable hashwit, $Mapping mwit, $WORD mapping);
 $Iterator $dict_iter($dict dict);
 
 void $dict_setitem($dict dict, $Hashable hashwit, $WORD key, $WORD value);
