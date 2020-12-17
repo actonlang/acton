@@ -174,7 +174,11 @@ protocol Eq:
   @staticmethod
   __eq__       : (Self,Self) -> bool
   @staticmethod
-  __ne__       : (Self,Self) -> bool            # has default defn
+  __ne__       : (Self,Self) -> bool
+  def __ne__(a,b):
+      return not (a == b)
+      
+  
 
 protocol Ord (Eq):
   @staticmethod
@@ -182,9 +186,14 @@ protocol Ord (Eq):
   @staticmethod
   __le__       : (Self,Self) -> bool
   @staticmethod
-  __gt__       : (Self,Self) -> bool            # has default defn
+  __gt__       : (Self,Self) -> bool 
   @staticmethod
-  __ge__       : (Self,Self) -> bool            # has default defn
+  __ge__       : (Self,Self) -> bool 
+
+  def __gt__(a,b):
+      return b < a
+  def __ge__(a,b):
+      return b <= a
       
 protocol Logical:
   @staticmethod

@@ -279,6 +279,9 @@ struct $Real$float$class $Real$float$methods = {
     $Real$float$__mul__,
     $Real$float$__truediv__,
     $Real$float$__pow__,
+    ($float (*)($Real$float, $float, $float))$Number$__ipow__,
+    ($float (*)($Real$float, $float, $float))$Number$__itruediv__,
+    ($float (*)($Real$float, $float, $float))$Number$__imul__,
     $Real$float$__neg__,
     $Real$float$__pos__,
     $Real$float$real,
@@ -303,7 +306,9 @@ struct $Minus$float$class $Minus$float$methods = {
     $Minus$float$__deserialize__,
     ($bool (*)($Minus$float))$default__bool__,
     ($str (*)($Minus$float))$default__str__,
-    $Minus$float$__sub__
+    $Minus$float$__sub__,
+    ($float (*)($Minus$float, $float, $float))$Minus$__isub__,
+
 };
 struct $Minus$float $Minus$float_instance = {&$Minus$float$methods, ($Real)&$Real$float_instance};
 $Minus$float $Minus$float$witness = &$Minus$float_instance;

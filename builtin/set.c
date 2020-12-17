@@ -55,7 +55,9 @@ struct $Minus$set$class $Minus$set$methods = {
     $Minus$set$__deserialize__,
     ($bool (*)($Minus$set))$default__bool__,
     ($str (*)($Minus$set))$default__str__,
-    $Minus$set$__sub__
+    $Minus$set$__sub__,
+    ($set (*)($Minus$set, $set, $set))$Minus$__isub__,
+
 };
 
 struct $Logical$set$class $Logical$set$methods = {
@@ -69,7 +71,10 @@ struct $Logical$set$class $Logical$set$methods = {
     ($str (*)($Logical$set))$default__str__,
     $Logical$set$__and__,
     $Logical$set$__or__,
-    $Logical$set$__xor__
+    $Logical$set$__xor__,
+    ($set (*)($Logical$set, $set, $set))$Logical$__iand__,
+    ($set (*)($Logical$set, $set, $set))$Logical$__ior__,
+    ($set (*)($Logical$set, $set, $set))$Logical$__ixor__
 };
 
 // $Set

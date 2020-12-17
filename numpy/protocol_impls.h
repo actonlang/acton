@@ -50,6 +50,9 @@ struct numpy$$Integral$ndarray$class {
     numpy$$ndarray (*__mul__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__truediv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__pow__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__imul__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__itruediv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ipow__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__neg__)(numpy$$Integral$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__pos__)(numpy$$Integral$ndarray, numpy$$ndarray);
     $WORD (*real)(numpy$$Integral$ndarray, $Real, numpy$$ndarray);
@@ -70,6 +73,10 @@ struct numpy$$Integral$ndarray$class {
     numpy$$ndarray (*__mod__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__lshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__rshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ifloordiv__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__imod__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ilshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__irshift__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__invert__)(numpy$$Integral$ndarray, numpy$$ndarray);
 };
 
@@ -124,6 +131,9 @@ struct numpy$$Logical$ndarray$class {
     numpy$$ndarray (*__and__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__or__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
     numpy$$ndarray (*__xor__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__iand__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ior__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__ixor__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
 void numpy$$Logical$ndarray$__init__ (numpy$$Logical$ndarray, $Integral);
@@ -150,6 +160,7 @@ struct numpy$$Minus$ndarray$class {
     $bool (*__bool__)(numpy$$Minus$ndarray);
     $str (*__str__)(numpy$$Minus$ndarray);
     numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
+    numpy$$ndarray (*__isub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 };
 
 void numpy$$Minus$ndarray$__init__ (numpy$$Minus$ndarray, $Integral);
