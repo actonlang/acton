@@ -70,7 +70,7 @@ $Plus$str $Plus$str$new();
 extern struct $Sliceable$str$class $Sliceable$str$methods;
 $Sliceable$str $Sliceable$str$new();
 extern struct $Container$str$class $Container$str$methods;
-$Container$str $Container$str$new($Eq);
+$Container$str $Container$str$new();
 
 extern struct $Ord$str *$Ord$str$witness;
 extern struct $Hashable$str *$Hashable$str$witness;
