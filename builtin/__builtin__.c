@@ -1,7 +1,63 @@
 #include "builtin.h"
 
+$WORD $Eq$__ne__($Eq wit, $WORD a, $WORD b) {
+  return to$bool(!wit->$class->__eq__(wit,a,b)->val);
+}
+
+$WORD $Ord$__gt__($Ord wit, $WORD a, $WORD b) {
+  return wit->$class->__lt__(wit,b,a);
+}
+
+$WORD $Ord$__ge__($Ord wit, $WORD a, $WORD b) {
+  return wit->$class->__le__(wit,b,a);
+}
+
 $WORD $Plus$__iadd__ ($Plus wit, $WORD a, $WORD b) {
     return wit->$class->__add__(wit, a, b);
+}
+
+$WORD $Minus$__isub__ ($Minus wit, $WORD a, $WORD b) {
+    return wit->$class->__sub__(wit, a, b);
+}
+
+$WORD $Logical$__iand__ ($Logical wit, $WORD a, $WORD b) {
+    return wit->$class->__and__(wit, a, b);
+}
+
+$WORD $Logical$__ior__ ($Logical wit, $WORD a, $WORD b) {
+    return wit->$class->__or__(wit, a, b);
+}
+
+$WORD $Logical$__ixor__ ($Logical wit, $WORD a, $WORD b) {
+    return wit->$class->__xor__(wit, a, b);
+}
+
+$WORD $Number$__imul__ ($Number wit, $WORD a, $WORD b) {
+    return wit->$class->__mul__(wit, a, b);
+}
+
+$WORD $Number$__itruediv__ ($Number wit, $WORD a, $WORD b) {
+    return wit->$class->__truediv__(wit, a, b);
+}
+
+$WORD $Number$__ipow__ ($Number wit, $WORD a, $WORD b) {
+    return wit->$class->__pow__(wit, a, b);
+}
+
+$WORD $Integral$__ifloordiv__ ($Integral wit, $WORD a, $WORD b) {
+    return wit->$class->__floordiv__(wit, a, b);
+}
+
+$WORD $Integral$__imod__ ($Integral wit, $WORD a, $WORD b) {
+    return wit->$class->__mod__(wit, a, b);
+}
+
+$WORD $Integral$__ilshift__ ($Integral wit, $WORD a, $int b) {
+    return wit->$class->__lshift__(wit, a, b);
+}
+
+$WORD $Integral$__irshift__ ($Integral wit, $WORD a, $int b) {
+    return wit->$class->__rshift__(wit, a, b);
 }
 
 struct $Eq$class $Eq$methods = {"$Eq$class", UNASSIGNED, NULL, (void (*)($Eq))$default__init__, NULL, NULL, ($bool (*)($Eq))$default__bool__,  ($str (*)($Eq))$default__str__,

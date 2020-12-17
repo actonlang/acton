@@ -380,6 +380,9 @@ struct $Integral$int$class $Integral$int$methods = {
     $Integral$int$__mul__,
     $Integral$int$__truediv__,
     $Integral$int$__pow__,
+    ($int (*)($Integral$int, $int, $int))$Number$__ipow__,
+    ($int (*)($Integral$int, $int, $int))$Number$__itruediv__,
+    ($int (*)($Integral$int, $int, $int))$Number$__imul__,
     $Integral$int$__neg__,
     $Integral$int$__pos__,
     $Integral$int$real,
@@ -397,8 +400,14 @@ struct $Integral$int$class $Integral$int$methods = {
     $Integral$int$__index__,
     $Integral$int$__divmod__,
     $Integral$int$__floordiv__,
-    $Integral$int$__mod__,$Integral$int$__lshift__,
-    $Integral$int$__rshift__,$Integral$int$__invert__
+    $Integral$int$__mod__,
+    $Integral$int$__lshift__,
+    $Integral$int$__rshift__,
+    ($int (*)($Integral$int, $int, $int))$Integral$__ifloordiv__,
+    ($int (*)($Integral$int, $int, $int))$Integral$__imod__,
+    ($int (*)($Integral$int, $int, $int))$Integral$__ilshift__,
+    ($int (*)($Integral$int, $int, $int))$Integral$__irshift__,
+    $Integral$int$__invert__
 };
 
 struct $Integral$int $Integral$int_instance = {&$Integral$int$methods, ($Logical)&$Logical$int_instance, ($Minus)&$Minus$int_instance};
@@ -415,7 +424,10 @@ struct $Logical$int$class $Logical$int$methods =  {
     ($str (*)($Logical$int))$default__str__,
     $Logical$int$__and__,
     $Logical$int$__or__,
-    $Logical$int$__xor__
+    $Logical$int$__xor__,
+    ($int (*)($Logical$int, $int, $int))$Logical$__iand__,
+    ($int (*)($Logical$int, $int, $int))$Logical$__ior__,
+    ($int (*)($Logical$int, $int, $int))$Logical$__ixor__
 };
 
 struct $Logical$int $Logical$int_instance = {&$Logical$int$methods, ($Integral)&$Integral$int_instance};
@@ -430,7 +442,9 @@ struct $Minus$int$class $Minus$int$methods = {
     $Minus$int$__deserialize__,
     ($bool (*)($Minus$int))$default__bool__,
     ($str (*)($Minus$int))$default__str__,
-    $Minus$int$__sub__
+    $Minus$int$__sub__,
+    ($int (*)($Minus$int, $int, $int))$Minus$__isub__,
+
 };
 struct $Minus$int $Minus$int_instance = {&$Minus$int$methods, ($Integral)&$Integral$int_instance};
 $Minus$int $Minus$int$witness = &$Minus$int_instance;

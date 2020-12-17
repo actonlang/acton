@@ -219,6 +219,9 @@ struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     numpy$$Integral$ndarray$__mul__,
     numpy$$Integral$ndarray$__truediv__,
     numpy$$Integral$ndarray$__pow__,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__imul__ ,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__itruediv__ ,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Number$__ipow__ ,
     numpy$$Integral$ndarray$__neg__,
     numpy$$Integral$ndarray$__pos__,
     NULL,
@@ -239,6 +242,10 @@ struct numpy$$Integral$ndarray$class numpy$$Integral$ndarray$methods = {
     NULL,
     NULL,
     NULL,
+    (numpy$$ndarray (*)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray))$Integral$__ifloordiv__,
+    NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -253,7 +260,10 @@ struct numpy$$Logical$ndarray$class numpy$$Logical$ndarray$methods =  {
     ($str (*)(numpy$$Logical$ndarray))$default__str__,
     numpy$$Logical$ndarray$__and__,
     numpy$$Logical$ndarray$__or__,
-    numpy$$Logical$ndarray$__xor__
+    numpy$$Logical$ndarray$__xor__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__iand__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__ior__,
+    (numpy$$ndarray (*)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray))$Logical$__ixor__
 };
 
 struct numpy$$Logical$ndarray numpy$$Logical$instance = {&numpy$$Logical$ndarray$methods, ($Integral)&numpy$$Integral$instance};
@@ -268,7 +278,8 @@ struct numpy$$Minus$ndarray$class numpy$$Minus$ndarray$methods = {
     numpy$$Minus$ndarray$__deserialize__,
     ($bool (*)(numpy$$Minus$ndarray))$default__bool__,
     ($str (*)(numpy$$Minus$ndarray))$default__str__,
-    numpy$$Minus$ndarray$__sub__
+    numpy$$Minus$ndarray$__sub__,
+    (numpy$$ndarray (*)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray))$Minus$__isub__
 };
 struct numpy$$Minus$ndarray numpy$$Minus$instance = {&numpy$$Minus$ndarray$methods,  ($Integral)&numpy$$Integral$instance};
 numpy$$Minus$ndarray numpy$$Minus$ndarray$witness = &numpy$$Minus$instance;

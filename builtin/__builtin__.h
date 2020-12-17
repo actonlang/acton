@@ -539,7 +539,14 @@ struct $Logical$class {
     $WORD (*__and__)($Logical, $WORD, $WORD);
     $WORD (*__or__)($Logical, $WORD, $WORD);
     $WORD (*__xor__)($Logical, $WORD, $WORD);
+    $WORD (*__iand__)($Logical, $WORD, $WORD);
+    $WORD (*__ior__)($Logical, $WORD, $WORD);
+    $WORD (*__ixor__)($Logical, $WORD, $WORD);
 };
+
+$WORD $Logical$__iand__($Logical, $WORD, $WORD);
+$WORD $Logical$__ior__($Logical, $WORD, $WORD);
+$WORD $Logical$__ixor__($Logical, $WORD, $WORD);
 
 extern struct $Logical$class $Logical$methods;
 $Logical $Logical$new();
@@ -584,7 +591,10 @@ struct $Minus$class {
     $bool (*__bool__)($Minus);
     $str (*__str__)($Minus);
     $WORD (*__sub__)($Minus, $WORD, $WORD);
+    $WORD (*__isub__)($Minus, $WORD, $WORD);
 };
+
+$WORD $Minus$__isub__ ($Minus, $WORD, $WORD);
 
 extern struct $Minus$class $Minus$methods;
 $Minus $Minus$new();
@@ -852,6 +862,9 @@ struct $Number$class {
     $WORD (*__mul__)($Number, $WORD, $WORD);
     $WORD (*__truediv__)($Number, $WORD, $WORD);
     $WORD (*__pow__)($Number, $WORD, $WORD);
+    $WORD (*__imul__)($Number, $WORD, $WORD);
+    $WORD (*__itruediv__)($Number, $WORD, $WORD);
+    $WORD (*__ipow__)($Number, $WORD, $WORD);
     $WORD (*__neg__)($Number, $WORD);
     $WORD (*__pos__)($Number, $WORD);
     $WORD (*real)($Number, $Real, $WORD);
@@ -859,6 +872,10 @@ struct $Number$class {
     $WORD (*__abs__)($Number, $Real, $WORD);
     $WORD (*conjugate)($Number, $WORD);
 };
+
+$WORD $Number$__imul__($Number, $WORD, $WORD);
+$WORD $Number$__itruediv__($Number, $WORD, $WORD);
+$WORD $Number$__ipow__($Number, $WORD, $WORD);
 
 extern struct $Number$class $Number$methods;
 $Number $Number$new();
@@ -886,6 +903,9 @@ struct $Real$class {
     $WORD (*__mul__)($Real, $WORD, $WORD);
     $WORD (*__truediv__)($Real, $WORD, $WORD);
     $WORD (*__pow__)($Real, $WORD, $WORD);
+    $WORD (*__imul__)($Real, $WORD, $WORD);
+    $WORD (*__itruediv__)($Real, $WORD, $WORD);
+    $WORD (*__ipow__)($Real, $WORD, $WORD);
     $WORD (*__neg__)($Real, $WORD);
     $WORD (*__pos__)($Real, $WORD);
     $WORD (*real)($Real, $Real, $WORD);
@@ -924,6 +944,9 @@ struct $Rational$class {
     $WORD (*__mul__)($Rational, $WORD, $WORD);
     $WORD (*__truediv__)($Rational, $WORD, $WORD);
     $WORD (*__pow__)($Rational, $WORD, $WORD);
+    $WORD (*__imul__)($Rational, $WORD, $WORD);
+    $WORD (*__itruediv__)($Rational, $WORD, $WORD);
+    $WORD (*__ipow__)($Rational, $WORD, $WORD);
     $WORD (*__neg__)($Rational, $WORD);
     $WORD (*__pos__)($Rational, $WORD);
     $WORD (*real)($Rational, $Real, $WORD);
@@ -966,6 +989,9 @@ struct $Integral$class {
     $WORD (*__mul__)($Integral, $WORD, $WORD);
     $WORD (*__truediv__)($Integral, $WORD, $WORD);
     $WORD (*__pow__)($Integral, $WORD, $WORD);
+    $WORD (*__imul__)($Integral, $WORD, $WORD);
+    $WORD (*__itruediv__)($Integral, $WORD, $WORD);
+    $WORD (*__ipow__)($Integral, $WORD, $WORD);
     $WORD (*__neg__)($Integral, $WORD);
     $WORD (*__pos__)($Integral, $WORD);
     $WORD (*real)($Integral, $Real, $WORD);
@@ -986,8 +1012,17 @@ struct $Integral$class {
     $WORD (*__mod__)($Integral, $WORD, $WORD);
     $WORD (*__lshift__)($Integral, $WORD, $int);
     $WORD (*__rshift__)($Integral, $WORD, $int);
+    $WORD (*__ifloordiv__)($Integral, $WORD, $WORD);
+    $WORD (*__imod__)($Integral, $WORD, $WORD);
+    $WORD (*__ilshift__)($Integral, $WORD, $int);
+    $WORD (*__irshift__)($Integral, $WORD, $int);
     $WORD (*__invert__)($Integral, $WORD);
 };
+
+$WORD $Integral$__ifloordiv__($Integral, $WORD, $WORD);
+$WORD $Integral$__imod__($Integral, $WORD, $WORD);
+$WORD $Integral$__ilshift__($Integral, $WORD, $int);
+$WORD $Integral$__irshift__($Integral, $WORD, $int);
 
 extern struct $Integral$class $Integral$methods;
 
@@ -1294,6 +1329,9 @@ struct $Logical$set$class {
     $set (*__and__)($Logical$set, $set, $set);
     $set (*__or__)($Logical$set, $set, $set);
     $set (*__xor__)($Logical$set, $set, $set);
+    $set (*__iand__)($Logical$set, $set, $set);
+    $set (*__ior__)($Logical$set, $set, $set);
+    $set (*__ixor__)($Logical$set, $set, $set);
 };
 
 void $Logical$set$__init__ ($Logical$set, $Set);
@@ -1320,6 +1358,7 @@ struct $Minus$set$class {
     $bool (*__bool__)($Minus$set);
     $str (*__str__)($Minus$set);
     $set (*__sub__)($Minus$set, $set, $set);
+    $set (*__isub__)($Minus$set, $set, $set);
 };
 
 void $Minus$set$__init__ ($Minus$set, $Set);
@@ -1525,6 +1564,9 @@ struct $Integral$int$class {
     $int (*__mul__)($Integral$int, $int, $int);
     $int (*__truediv__)($Integral$int, $int, $int);
     $int (*__pow__)($Integral$int, $int, $int);
+    $int (*__imul__)($Integral$int, $int, $int);
+    $int (*__itruediv__)($Integral$int, $int, $int);
+    $int (*__ipow__)($Integral$int, $int, $int);
     $int (*__neg__)($Integral$int, $int);
     $int (*__pos__)($Integral$int, $int);
     $WORD (*real)($Integral$int, $Real, $int);
@@ -1545,6 +1587,10 @@ struct $Integral$int$class {
     $int (*__mod__)($Integral$int, $int, $int);
     $int (*__lshift__)($Integral$int, $int, $int);
     $int (*__rshift__)($Integral$int, $int, $int);
+    $int (*__ifloordiv__)($Integral$int, $int, $int);
+    $int (*__imod__)($Integral$int, $int, $int);
+    $int (*__ilshift__)($Integral$int, $int, $int);
+    $int (*__irshift__)($Integral$int, $int, $int);
     $int (*__invert__)($Integral$int, $int);
 };
 
@@ -1598,6 +1644,9 @@ struct $Logical$int$class {
     $int (*__and__)($Logical$int, $int, $int);
     $int (*__or__)($Logical$int, $int, $int);
     $int (*__xor__)($Logical$int, $int, $int);
+    $int (*__iand__)($Logical$int, $int, $int);
+    $int (*__ior__)($Logical$int, $int, $int);
+    $int (*__ixor__)($Logical$int, $int, $int);
 };
 
 void $Logical$int$__init__ ($Logical$int, $Integral);
@@ -1624,6 +1673,7 @@ struct $Minus$int$class {
     $bool (*__bool__)($Minus$int);
     $str (*__str__)($Minus$int);
     $int (*__sub__)($Minus$int, $int, $int);
+    $int (*__isub__)($Minus$int, $int, $int);
 };
 
 void $Minus$int$__init__ ($Minus$int, $Integral);
@@ -1715,6 +1765,9 @@ struct $Real$float$class {
     $float (*__mul__)($Real$float, $float, $float);
     $float (*__truediv__)($Real$float, $float, $float);
     $float (*__pow__)($Real$float, $float, $float);
+    $float (*__imul__)($Real$float, $float, $float);
+    $float (*__itruediv__)($Real$float, $float, $float);
+    $float (*__ipow__)($Real$float, $float, $float);
     $float (*__neg__)($Real$float, $float);
     $float (*__pos__)($Real$float, $float);
     $WORD (*real)($Real$float, $Real, $float);
@@ -1766,6 +1819,7 @@ struct $Minus$float$class {
     $bool (*__bool__)($Minus$float);
     $str (*__str__)($Minus$float);
     $float (*__sub__)($Minus$float, $float, $float);
+    $float (*__isub__)($Minus$float, $float, $float);
 };
 
 void $Minus$float$__init__ ($Minus$float, $Real);
@@ -1856,6 +1910,9 @@ struct $Number$complex$class {
     $complex (*__mul__)($Number$complex, $complex, $complex);
     $complex (*__truediv__)($Number$complex, $complex, $complex);
     $complex (*__pow__)($Number$complex, $complex, $complex);
+    $complex (*__imul__)($Number$complex, $complex, $complex);
+    $complex (*__itruediv__)($Number$complex, $complex, $complex);
+    $complex (*__ipow__)($Number$complex, $complex, $complex);
     $complex (*__neg__)($Number$complex, $complex);
     $complex (*__pos__)($Number$complex, $complex);
     $WORD (*real)($Number$complex, $Real, $complex);
@@ -1897,6 +1954,7 @@ struct $Minus$complex$class {
     $bool (*__bool__)($Minus$complex);
     $str (*__str__)($Minus$complex);
     $complex (*__sub__)($Minus$complex, $complex, $complex);
+    $complex (*__isub__)($Minus$complex, $complex, $complex);
 };
 
 void $Minus$complex$__init__ ($Minus$complex, $Number);
