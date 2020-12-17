@@ -78,12 +78,12 @@ qSchema env f e@(Dot _ (Var _ x) n)
                                       in (tSchema (q++q') $ subst [(tvSelf,tCon tc)] (addSelf t mbdec), mbdec, e)
   where info                        = findQName x env
 qSchema env f e0@(Dot l e n)        = case t of
-                                        TCon _ c -> addE $ findAttr' env c n
-                                        TTuple _ p k -> addE $ (monotype $ pick n k, Nothing)
-                                        TVar _ v  -> addE $ findAttr' env (findTVBound env v) n
+                                        TCon _ c -> addE t $ findAttr' env c n
+                                        TTuple _ p k -> addE t $ (monotype $ pick n k, Nothing)
+                                        TVar _ v  -> addE t $ findAttr' env (findTVBound env v) n
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, e')                     = qType env f e
-        addE (sc, dec)              = (sc, dec, Dot l e' n)
+        addE t (sc, dec)            = (subst [(tvSelf,t)] sc, dec, Dot l e' n)
         pick n (TRow l k x t r)     = if x == n then t else pick n r
 qSchema env f e                     = (monotype t, Nothing, e')
   where (t, e')                     = qType env f e
