@@ -322,7 +322,7 @@ solveSelWit env wit (Sel w t1 n t2)         = do let ts = case t1 of TCon _ c ->
                                                  let Just (wf,sc,d) = findAttr env p n
                                                  (cs2,tvs,t) <- instantiate env sc
                                                  when (tvSelf `elem` snd (polvars t)) (tyerr n "Contravariant Self attribute not selectable by instance")
-                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ witsOf cs2 ++ [eVar px0])
+                                                 let e = eLambda [(px0,t1)] (app t (tApp (eDot (wf we) n) tvs) $ eVar px0 : witsOf cs2)
                                                      cs = Cast (subst [(tvSelf,t1)] t) t2 : cs1 ++ cs2
                                                  return ([(w, wFun t1 t2, e)], cs)
 
