@@ -362,7 +362,7 @@ globalize env                       = unalias env
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
 nSigs                       :: TEnv -> TEnv
-nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te ]
+nSigs te                    = [ (n,i) | (n, i@(NSig sc dec)) <- te, not $ isProp dec sc ]
 
 splitSigs                   :: TEnv -> (TEnv, TEnv)
 splitSigs te                = partition isSig te
@@ -736,6 +736,11 @@ inheritedAttrs env n        = inh (dom $ snd $ splitSigs te) us
           where c           = tcname (snd u)
                 (_,_,te)    = findConName c env
                 ns1         = (dom $ snd $ splitSigs te) \\ ns0
+
+abstractAttrs               :: EnvF x -> QName -> [Name]
+abstractAttrs env n         = (initKW : dom sigs) \\ dom terms
+  where (_,us,te)           = findConName n env
+        (sigs,terms)        = sigTerms $ concat $ te : [ te | (w,u) <- us, let (_,_,te) = findConName (tcname u) env ]
 
 allCons                     :: EnvF x -> [TCon]
 allCons env                 = reverse locals ++ concat [ cons m (lookupMod m env) | m <- moduleRefs (names env), m /= mPrim ]

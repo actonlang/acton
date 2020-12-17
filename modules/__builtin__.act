@@ -1,32 +1,29 @@
 ## Built-in types ##################################################################################
 
 class struct:
+  __init__ : () -> None
   __bool__ : () -> bool
   __str__ : () -> str
-  def __bool__(self):
-      return True
-  def __str__(self):
-      return ''
 
-class object:
+class object (struct):
   pass
 
 class atom (struct):
- pass
+  pass
 
 class int (atom):
- __init__ : (atom) -> None
+  __init__ : (atom) -> None
 
 class float (atom):
- __init__ : (atom) -> None
+  __init__ : (atom) -> None
 
-class complex:
+class complex (struct):
   __init__ : (Number) -> None
 
 class bool (atom):
- __init__ : (struct) -> None
+  __init__ : (struct) -> None
 
-class BaseException:
+class BaseException (struct):
   __init__ : (str) -> None
 
 class SystemExit (BaseException):
@@ -65,14 +62,14 @@ class NotImplementedError (RuntimeError):
 class ValueError (Exception):
   pass
 
-class slice:
+class slice (struct):
   __init__     : (?int,?int,?int) -> None
   
 class list[A] (object):
-  __init__     : (Iterable[A]) -> None
+  __init__     : (?Iterable[A]) -> None
   copy         : () -> list[A]
 
-class range:
+class range (struct):
   __init__     : (int,?int,?int) -> None
 
 class Iterator[A] (object):
@@ -158,7 +155,7 @@ class bytearray (object):
 class function[X,P,K,A] (struct):
     __call__   : X(*P,**K) -> A
 
-class Msg[A] ():
+class Msg[A] (struct):
   pass
     
 ## General protocols ###############################################################################
@@ -240,10 +237,10 @@ protocol Hashable (Eq):
   __hash__     : () -> int
 
 class dict[A(Hashable),B] (object):
-  pass
+  __init__     : (?Iterable[(A,B)]) -> None
 
 class set[A(Hashable)] (object):
-  pass
+  __init__     : (?Iterable[A]) -> None
 
 ## Number protocols ################################################################################
 

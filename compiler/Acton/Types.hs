@@ -383,7 +383,8 @@ instance InfEnv Decl where
                                                  (cs1,eq1) <- solveScoped env1 (tybound q) te tNone cs
                                                  checkNoEscape env (tybound q)
                                                  (nterms,_,_) <- checkAttributes [] te' te
-                                                 return (cs1, [(n, NClass q' as' (te0++te))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
+                                                 let te1 = stubAttributes env te
+                                                 return (cs1, [(n, NClass q' as' (te0++te1))], Class l n q us (bindWits eq1 ++ props te0 ++ b'))
                                              _ -> illegalRedef n
       where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (bound b) $ defineSelfOpaque $ defineTVars (stripQual q) env
             (as,ps)                     = mro2 env (unalias env us)
@@ -439,7 +440,7 @@ checkAttributes final te' te
   | not $ null osigs                    = err2 osigs "Inherited signatures cannot be overridden:"
   | not $ null props                    = err2 props "Property attributes cannot have class-level definitions:"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden:"
-  | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
+--  | not $ null nself                    = err0 nself "Negative Self in non-static method signature"
   | otherwise                           = return (nterms, abssigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
@@ -457,6 +458,16 @@ toSigs te                               = map makeSig te
   where makeSig (n, NDef sc dec)        = (n, NSig sc dec)
         makeSig (n, NVar t)             = (n, NSig (monotype t) Static)
         makeSig (n, i)                  = (n,i)
+
+
+stubAttributes env te
+  | stub env                            = te ++ stubSigs te
+  | otherwise                           = te
+
+stubSigs te                             = [ makeDef n sc dec | (n, NSig sc dec) <- te, dec /= Property ]
+  where makeDef n (TSchema l q t) dec
+          | TFun{} <- t                 = (n, NDef (TSchema l q $ addSelf t (Just dec)) dec)
+          | otherwise                   = (n, NVar t)
 
 
 --------------------------------------------------------------------------------------------------------------------------
@@ -833,12 +844,18 @@ instance Infer Expr where
                                             NClass q _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 traceM ("## Instantiating " ++ prstr n)
+                                                when (not $ null $ abstractAttrs env n) (err1 n "Abstract class cannot be instantiated:")
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_,sc,_) -> do
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        return (cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
+                                                        traceM ("### infer NClass " ++ prstr n)
+                                                        traceM ("    q = " ++ prstrs q)
+                                                        traceM ("    __init__: " ++ prstr sc)
+                                                        traceM ("    cs0: " ++ prstrs cs0)
+                                                        traceM ("    cs1: " ++ prstrs cs1)
+                                                        return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 (unalias env n) q)))
                                                 return (cs, t, app t (tApp x tvs) $ witsOf cs)
