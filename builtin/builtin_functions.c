@@ -61,7 +61,7 @@ $WORD $Iterator$enumerate_next($Iterator$enumerate it) {
     return NULL;
 }
 
-struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$enumerate_init,
+struct $Iterator$enumerate$class $Iterator$enumerate$methods = {"$Iterator$enumerate",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$enumerate_init,
                                                                 $Iterator$enumerate_serialize, $Iterator$enumerate$_deserialize, 
                                                                 $Iterator$enumerate_bool,$Iterator$enumerate_str, $Iterator$enumerate_next};
 
@@ -112,7 +112,7 @@ $WORD $Iterator$filter_next($Iterator$filter it) {
   return w;
 }
 
-struct $Iterator$filter$class $Iterator$filter$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$filter_init,
+struct $Iterator$filter$class $Iterator$filter$methods = {"$Iterator$filter",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$filter_init,
                                                           $Iterator$filter_serialize, $Iterator$filter$_deserialize, 
                                                           $Iterator$filter_bool,$Iterator$filter_str, $Iterator$filter_next};
 
@@ -160,7 +160,7 @@ $WORD $Iterator$map_next($Iterator$map it) {
     return NULL;
 }
 
-struct $Iterator$map$class $Iterator$map$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$map_init,
+struct $Iterator$map$class $Iterator$map$methods = {"$Iterator$map",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$map_init,
                                                                 $Iterator$map_serialize, $Iterator$map$_deserialize,  
                                                                 $Iterator$map_bool,$Iterator$map_str, $Iterator$map_next};
 
@@ -257,7 +257,7 @@ $WORD $Iterator$zip_next($Iterator$zip it) {
     return NULL;
 }
 
-struct $Iterator$zip$class $Iterator$zip$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
+struct $Iterator$zip$class $Iterator$zip$methods = {" $Iterator$zip",UNASSIGNED,($Super$class)&$Iterator$methods,$Iterator$zip_init,
                                                     $Iterator$zip_serialize, $Iterator$zip$_deserialize, 
                                                     $Iterator$zip_bool,$Iterator$zip_str, $Iterator$zip_next};
 
@@ -289,7 +289,7 @@ $bool $EqOpt$__ne__($EqOpt wit, $WORD a, $WORD b) {
     return (!a && !b) ? $False : $True;
 }
 
-struct $EqOpt$class $EqOpt$methods = {"", UNASSIGNED, NULL, $EqOpt$__init__, $EqOpt$__eq__, $EqOpt$__ne__};
+struct $EqOpt$class $EqOpt$methods = {"$EqOpt", UNASSIGNED, NULL, $EqOpt$__init__, $EqOpt$__eq__, $EqOpt$__ne__};
 
 
 $EqOpt $EqOpt$new($Eq w$Eq$A) {

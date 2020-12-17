@@ -63,4 +63,4 @@ void $slice__init__($slice s, $int start, $int stop, $int step) {
    s->step = NULL;
 }
 
-struct $slice$class $slice$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$slice__init__,NULL,NULL,NULL,NULL};
+struct $slice$class $slice$methods = {"$slice",UNASSIGNED,($Super$class)&$struct$methods,$slice__init__,NULL,NULL,NULL,NULL};

@@ -101,7 +101,7 @@ $set $set_deserialize ($Serial$state state) {
 }
 
 // Maybe we should  offer union, intersection and symmetric difference under those names.
-struct $set$class $set$methods = {"",UNASSIGNED,($Super$class)&$object$methods,$set_init,$set_serialize,$set_deserialize,$set_bool,$set_str,$set_copy}; 
+struct $set$class $set$methods = {"$set",UNASSIGNED,($Super$class)&$object$methods,$set_init,$set_serialize,$set_deserialize,$set_bool,$set_str,$set_copy}; 
 
 
 static void $set_insert_clean($setentry *table, long mask, $WORD *key, long hash) {
@@ -526,7 +526,7 @@ $Iterator$set $Iterator$set$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$set$class $Iterator$set$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,
+struct $Iterator$set$class $Iterator$set$methods = {"$Iterator$set",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$set_init,
                                                       $Iterator$set_serialize, $Iterator$set$_deserialize,$Iterator$set_bool,$Iterator$set_str, $Iterator$set_next};
 
 

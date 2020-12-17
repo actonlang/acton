@@ -184,7 +184,7 @@ $Iterator$list $Iterator$list$_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$list$class $Iterator$list$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
+struct $Iterator$list$class $Iterator$list$methods = {"$Iterator$list",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$list_init,
                                                       $Iterator$list_serialize, $Iterator$list$_deserialize,$Iterator$list_bool,$Iterator$list_str,$Iterator$list_next};
 
 $Iterator $list_iter($list lst) {

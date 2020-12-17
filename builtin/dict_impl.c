@@ -131,7 +131,7 @@ $dict $dict_deserialize($Serial$state state) {
   }
 }
 
-struct $dict$class $dict$methods = {"", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
+struct $dict$class $dict$methods = {"$dict", UNASSIGNED,($Super$class)&$object$methods, $dict_init, $dict_serialize,$dict_deserialize, $dict_bool, $dict_str}; 
 
 // Internal routines //////////////////////////////////////////////////////////////////
 
@@ -339,7 +339,7 @@ $Iterator$dict $Iterator$dict$_deserialize($Serial$state state) {
 }
 
 
-struct $Iterator$dict$class $Iterator$dict$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
+struct $Iterator$dict$class $Iterator$dict$methods = {"$Iterator$dict",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict_init,
                                                       $Iterator$dict_serialize, $Iterator$dict$_deserialize, $Iterator$dict_bool,$Iterator$dict_str, $Iterator$dict_next};
 
 $Iterator $dict_iter($dict dict) {
@@ -465,7 +465,7 @@ $Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
    return res;
 }
 
-struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
+struct $Iterator$dict$values$class $Iterator$dict$values$methods = {"$Iterator$dict$values",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$values_init,
                                                                     $Iterator$dict$values_serialize, $Iterator$dict$values_deserialize, $Iterator$dict$values_bool, $Iterator$dict$values_str,
                                                                     $Iterator$dict$values_next};
 
@@ -520,7 +520,7 @@ $Iterator$dict$items $Iterator$dict$items_deserialize($Serial$state state) {
 
 
 
-struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
+struct $Iterator$dict$items$class $Iterator$dict$items$methods = {"$Iterator$dict$items",UNASSIGNED,($Super$class)&$Iterator$methods, $Iterator$dict$items_init,
                                                                   $Iterator$dict$items_serialize, $Iterator$dict$items_deserialize,$Iterator$dict$items_bool, $Iterator$dict$items_str, $Iterator$dict$items_next};
 
 

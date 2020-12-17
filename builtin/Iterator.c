@@ -22,7 +22,7 @@ struct $Iterable$Iterator $Iterable$Iterator_instance = {&$Iterable$Iterator$met
 $Iterable$Iterator $Iterable$Iterator$witness = &$Iterable$Iterator_instance;
 
 
-struct $Iterator$class $Iterator$methods = {"",UNASSIGNED,NULL,NULL,NULL,NULL,NULL,NULL,NULL}; // $Iterator is an abstract class
+struct $Iterator$class $Iterator$methods = {"$Iterator",UNASSIGNED,NULL,NULL,NULL,NULL,NULL,NULL,NULL}; // $Iterator is an abstract class
 struct $Iterator $Iterator_instance = {&$Iterator$methods};
 struct $Iterator *$Iterator$witness = &$Iterator_instance;
 

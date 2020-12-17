@@ -24,10 +24,10 @@ void $object$__init__ ($object self) {
 
 
 
-struct $Initializable$class $Initializable$methods = {"",UNASSIGNED,NULL,NULL};
+struct $Initializable$class $Initializable$methods = {"$Initializable",UNASSIGNED,NULL,NULL};
 
-struct $Serializable$class $Serializable$methods = {"",UNASSIGNED,($Super$class)&$Initializable$methods, $Serializable$__init__,NULL,NULL};
+struct $Serializable$class $Serializable$methods = {"$Serializable",UNASSIGNED,($Super$class)&$Initializable$methods, $Serializable$__init__,NULL,NULL};
 
-struct $struct$class $struct$methods = {"",UNASSIGNED,($Super$class)&$Serializable$methods,$struct$__init__,NULL,NULL,NULL,NULL};
+struct $struct$class $struct$methods = {"$struct",UNASSIGNED,($Super$class)&$Serializable$methods,$struct$__init__,NULL,NULL,NULL,NULL};
 
-struct $object$class $object$methods = {"",UNASSIGNED,($Super$class)&$struct$methods,$object$__init__,NULL,NULL,NULL,NULL};
+struct $object$class $object$methods = {"$value",UNASSIGNED,($Super$class)&$struct$methods,$object$__init__,NULL,NULL,NULL,NULL};
