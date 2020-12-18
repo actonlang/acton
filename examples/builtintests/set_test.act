@@ -1,0 +1,28 @@
+actor main(env):
+    s = {400}
+    print(s)
+    for i in range(13,1000,1):
+        s.add(i*i)
+#    print(s)
+    s.discard(64)
+    s.discard(225)
+    s.discard(10000)
+    n = 0
+    for k in range(0,1000,1):
+        if k in s: n += 1
+    print('#elements in s < 1000 is %d (should be 21)' % n)
+    s2 = {1}
+    for i in range(0,500,1):
+        s2.add(i*i*i*i)
+    print('size of s is %d (should be 985)' % len(s))
+    print('size of s2 is %d (should be 500)' % len(s2))
+    s3 = s & s2
+    print('s & s2 =', s3)
+    print('size of intersection is %d (should be 27)' % len(s3))
+    print('size of union is %d (should be 1458)' % len(s | s2))
+    print('is intersection subset of both operands?', s3 < s, s3 < s2)
+    print('len(s ^ s2) =',len(s ^ s2),'(should be 1431)')
+    while s3:
+       print(s3.pop())
+    env.exit(0)
+  
