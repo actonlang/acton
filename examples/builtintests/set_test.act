@@ -10,7 +10,7 @@ actor main(env):
     n = 0
     for k in range(0,1000,1):
         if k in s: n += 1
-    print('#elements in s < 1000 is %d (should be 21)' % n)
+    print('#elements in s < 1000 is %d (should be 18)' % n)
     s2 = {1}
     for i in range(0,500,1):
         s2.add(i*i*i*i)
