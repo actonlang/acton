@@ -665,7 +665,7 @@ struct $Sliceable$class {
     void (*__setitem__)($Sliceable, $WORD, $int, $WORD);
     void (*__delitem__)($Sliceable, $WORD, $int);
     $WORD (*__getslice__)($Sliceable, $WORD, $slice);
-   void (*__setslice__)($Sliceable, $Iterable, $WORD, $slice, $WORD);
+   void (*__setslice__)($Sliceable, $WORD, $slice, $Iterable, $WORD);
     void (*__delslice__)($Sliceable, $WORD, $slice);
 };
 
@@ -1047,7 +1047,7 @@ struct $Sequence$list$class {
     void (*__setitem__)($Sequence$list, $list, $int, $WORD);
     void (*__delitem__)($Sequence$list, $list, $int);
     $list (*__getslice__)($Sequence$list, $list, $slice);
-    void (*__setslice__)($Sequence$list, $Iterable, $list, $slice, $WORD);
+    void (*__setslice__)($Sequence$list, $list, $slice, $Iterable, $WORD);
     void (*__delslice__)($Sequence$list, $list, $slice);
     $Iterator (*__reversed__)($Sequence$list, $list);
     void (*insert)($Sequence$list, $list, $int, $WORD);
@@ -1062,7 +1062,7 @@ $WORD $Sequence$list$__getitem__ ($Sequence$list, $list, $int);
 void $Sequence$list$__setitem__ ($Sequence$list, $list, $int, $WORD);
 void $Sequence$list$__delitem__ ($Sequence$list, $list, $int);
 $list $Sequence$list$__getslice__ ($Sequence$list, $list, $slice);
-void $Sequence$list$__setslice__ ($Sequence$list, $Iterable, $list, $slice, $WORD);
+void $Sequence$list$__setslice__ ($Sequence$list, $list, $slice, $Iterable, $WORD);
 void $Sequence$list$__delslice__ ($Sequence$list, $list, $slice);
 $Iterator $Sequence$list$__reversed__ ($Sequence$list, $list);
 void $Sequence$list$insert ($Sequence$list, $list, $int, $WORD);
@@ -1473,7 +1473,7 @@ struct $Sliceable$str$class {
     void (*__setitem__)($Sliceable$str, $str, $int, $str);
     void (*__delitem__)($Sliceable$str, $str, $int);
     $str (*__getslice__)($Sliceable$str, $str, $slice);
-    void (*__setslice__)($Sliceable$str, $Iterable, $str, $slice, $WORD);
+    void (*__setslice__)($Sliceable$str, $str, $slice, $Iterable, $WORD);
     void (*__delslice__)($Sliceable$str, $str, $slice);
 };
 
@@ -1484,7 +1484,7 @@ $str $Sliceable$str$__getitem__ ($Sliceable$str, $str, $int);
 void $Sliceable$str$__setitem__ ($Sliceable$str, $str, $int, $str);
 void $Sliceable$str$__delitem__ ($Sliceable$str, $str, $int);
 $str $Sliceable$str$__getslice__ ($Sliceable$str, $str, $slice);
-void $Sliceable$str$__setslice__ ($Sliceable$str, $Iterable, $str, $slice, $WORD);
+void $Sliceable$str$__setslice__ ($Sliceable$str, $str, $slice, $Iterable, $WORD);
 void $Sliceable$str$__delslice__ ($Sliceable$str, $str, $slice);
 
 // $Plus$str ////////////////////////////////////////////////////////////
@@ -2083,7 +2083,7 @@ struct $Sliceable$tuple$class {
     void (*__setitem__)($Sliceable$tuple, $tuple, $int, $WORD);
     void (*__delitem__)($Sliceable$tuple, $tuple, $int);
     $tuple (*__getslice__)($Sliceable$tuple, $tuple, $slice);
-    void (*__setslice__)($Sliceable$tuple, $Iterable, $tuple, $slice, $WORD);
+    void (*__setslice__)($Sliceable$tuple, $tuple, $slice, $Iterable, $WORD);
     void (*__delslice__)($Sliceable$tuple, $tuple, $slice);
 };
 
@@ -2094,7 +2094,7 @@ $WORD $Sliceable$tuple$__getitem__ ($Sliceable$tuple, $tuple, $int);
 void $Sliceable$tuple$__setitem__ ($Sliceable$tuple, $tuple, $int, $WORD);
 void $Sliceable$tuple$__delitem__ ($Sliceable$tuple, $tuple, $int);
 $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple, $tuple, $slice);
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $Iterable, $tuple, $slice, $WORD);
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple, $tuple, $slice, $Iterable, $WORD);
 void $Sliceable$tuple$__delslice__ ($Sliceable$tuple, $tuple, $slice);
 
 // $Hashable$tuple ////////////////////////////////////////////////////////////
@@ -2182,7 +2182,7 @@ struct $Sequence$bytearray$class {
     void (*__setitem__)($Sequence$bytearray, $bytearray, $int, $int);
     void (*__delitem__)($Sequence$bytearray, $bytearray, $int);
     $bytearray (*__getslice__)($Sequence$bytearray, $bytearray, $slice);
-    void (*__setslice__)($Sequence$bytearray, $Iterable, $bytearray, $slice, $WORD);
+    void (*__setslice__)($Sequence$bytearray, $bytearray, $slice, $Iterable, $WORD);
     void (*__delslice__)($Sequence$bytearray, $bytearray, $slice);
     $Iterator (*__reversed__)($Sequence$bytearray, $bytearray);
     void (*insert)($Sequence$bytearray, $bytearray, $int, $int);
@@ -2199,7 +2199,7 @@ $int $Sequence$bytearray$__getitem__ ($Sequence$bytearray, $bytearray, $int);
 void $Sequence$bytearray$__setitem__ ($Sequence$bytearray, $bytearray, $int, $int);
 void $Sequence$bytearray$__delitem__ ($Sequence$bytearray, $bytearray, $int);
 $bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray, $bytearray, $slice);
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $Iterable, $bytearray, $slice, $WORD);
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray, $bytearray, $slice, $Iterable, $WORD);
 void $Sequence$bytearray$__delslice__ ($Sequence$bytearray, $bytearray, $slice);
 $Iterator $Sequence$bytearray$__reversed__ ($Sequence$bytearray, $bytearray);
 void $Sequence$bytearray$insert ($Sequence$bytearray, $bytearray, $int, $int);

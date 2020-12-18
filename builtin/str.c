@@ -184,7 +184,7 @@ $str $Sliceable$str$__getslice__ ($Sliceable$str wit, $str str, $slice slc) {
   return $str_getslice(str,slc);
 }
 
-void $Sliceable$str$__setslice__ ($Sliceable$str wit, $Iterable wit2, $str str, $slice slc, $WORD iter) {
+void $Sliceable$str$__setslice__ ($Sliceable$str wit, $str str, $slice slc, $Iterable wit2, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on string");
   exit(-1);
 }
@@ -2269,7 +2269,7 @@ $bytearray $Sequence$bytearray$__getslice__ ($Sequence$bytearray wit, $bytearray
   return $bytearray_getslice(self,slc);
 }
 
-void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit, $Iterable wit2, $bytearray self, $slice slc, $WORD iter) {
+void $Sequence$bytearray$__setslice__ ($Sequence$bytearray wit,  $bytearray self, $slice slc, $Iterable wit2, $WORD iter) {
   $bytearray_setslice(self,slc,wit2->$class->__iter__(wit2,iter));
 }
 
