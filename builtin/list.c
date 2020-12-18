@@ -149,7 +149,7 @@ $list $Sequence$list$__getslice__($Sequence$list wit, $list self, $slice slice) 
   return $list_getslice(self,slice);
 }
 
-void $Sequence$list$__setslice__($Sequence$list wit, $list self, $slice slice, $Iterable wit2, $WORD iter) {
+void $Sequence$list$__setslice__($Sequence$list wit, $list self, $Iterable wit2, $slice slice, $WORD iter) {
   $list_setslice(self,slice,wit2->$class->__iter__(wit2,iter));
 }
 

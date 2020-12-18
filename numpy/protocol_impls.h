@@ -186,7 +186,7 @@ struct numpy$$Sliceable$ndarray$class {
     void (*__setitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int, $WORD);
     void (*__delitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
     numpy$$ndarray (*__getslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
-    void (*__setslice__) (numpy$$Sliceable$ndarray, $Iterable, numpy$$ndarray, $slice, $WORD);
+    void (*__setslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $Iterable, $slice, $WORD);
     void (*__delslice__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $slice);
 };
 struct numpy$$Sliceable$ndarray {

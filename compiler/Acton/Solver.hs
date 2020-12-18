@@ -25,8 +25,8 @@ import Acton.TypeEnv
 simplify                                    :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Constraints -> TypeM (Constraints,Equations)
 simplify env te tt cs                       = do cs <- msubst cs
                                                  te <- msubst te
-                                                 traceM ("  -simplify: " ++ prstrs cs)
-                                                 traceM ("  -for: " ++ prstr te)
+                                                 traceM ("  -simplify:\n" ++ render (nest 8 $ vcat $ map pretty cs))
+                                                 traceM ("  -for:\n" ++ render (nest 8 $ vcat $ map pretty te))
                                                  simplify' env te tt [] cs `catchError` \err -> Control.Exception.throw err
 
 simplify'                                   :: (Polarity a, Pretty a) => Env -> TEnv -> a -> Equations -> Constraints -> TypeM (Constraints,Equations)
@@ -63,8 +63,8 @@ solve env select te tt eq cs                = trace ("\n\n######### solve") $
 solve' env select hist te tt eq cs
   | null solve_cs                           = return (keep_cs, eq)
   | otherwise                               = do st <- currentState
-                                                 traceM ("## keep: " ++ prstrs keep_cs)
-                                                 traceM ("## solve: " ++ prstrs solve_cs)
+                                                 traceM ("## keep:\n" ++ render (nest 8 $ vcat $ map pretty keep_cs))
+                                                 traceM ("## solve: " ++ render (nest 8 $ vcat $ map pretty solve_cs))
                                                  case head goals of
                                                     RTry v alts False ->
                                                         trace ("### goal " ++ prstr v ++ ", candidates: " ++ prstrs alts) $

@@ -188,7 +188,7 @@ numpy$$ndarray numpy$$Sliceable$ndarray$__getslice__ (numpy$$Sliceable$ndarray w
   return a->$class->__ndgetslice__(a, lst);
 }
 
-void numpy$$Sliceable$ndarray$__setslice__ (numpy$$Sliceable$ndarray wit, $Iterable wit2, numpy$$ndarray a, $slice slc, $WORD iter) {
+void numpy$$Sliceable$ndarray$__setslice__ (numpy$$Sliceable$ndarray wit, numpy$$ndarray a, $Iterable wit2, $slice slc, $WORD iter) {
   fprintf(stderr,"Internal error: call to mutating method setslice on ndarray");
   exit(-1);
 }

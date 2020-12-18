@@ -189,7 +189,7 @@ $tuple $Sliceable$tuple$__getslice__ ($Sliceable$tuple wit, $tuple self, $slice 
   return res;
 }
 
-void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $tuple self, $slice slc, $Iterable wit2, $WORD iter) {
+void $Sliceable$tuple$__setslice__ ($Sliceable$tuple wit, $tuple self, $Iterable wit2, $slice slc, $WORD iter) {
     fprintf(stderr,"%s\n","internal error: setslice on immutable tuple");
   exit(-1);
 }

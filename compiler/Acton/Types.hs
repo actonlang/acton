@@ -155,21 +155,42 @@ instance InfEnv Stmt where
                                              (cs2,e') <- inferSub env t e
                                              return (cs1++cs2, te, Assign l pats' e')
 
-    infEnv env (MutAssign l tg e)       = do (cs1,t,w,tg') <- infTarget env tg
+
+--infTarget env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
+--                                             (cs2,t,e') <- infer env e
+--                                             t0 <- newTVar
+--                                             w <- newWitness
+--                                             return (Impl w t (pSliceable t0) :
+--                                                     Cast t tObject :
+--                                                     cs1++cs2, t, w, Slice l e' sl')
+
+    infEnv env (MutAssign l tg e)
+      | Slice _ e1 sl <- tg             = do cs0 <- targetFX tg
+                                             (cs11,t,e1') <- infer env e1
+                                             (cs12,sl') <- inferSlice env sl
+                                             t0 <- newTVar
+                                             w <- newWitness
+                                             (cs2,t',e') <- infer env e
+                                             w' <- newWitness
+                                             let e2 = eCall (tApp (eDot (eVar w) setsliceKW) [t']) [e1', eVar w', sliz2exp sl, e']
+                                             return ( Impl w t (pSliceable t0) :
+                                                      Impl w' t' (pIterable t0) :
+                                                      Cast t tObject :
+                                                      cs0++cs11++cs12++cs2, [], Expr l e2 )
+      | otherwise                       = do cs0 <- targetFX tg
+                                             (cs1,t,w,tg') <- infTarget env tg
                                              (cs2,e') <- inferSub env t e
-                                             cs3 <- targetFX tg
-                                             return (cs1++cs2++cs3, [], assign w tg' e')
+                                             return (cs0++cs1++cs2, [], assign w tg' e')
       where assign w (Index _ e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
-            assign w (Slice _ e sl) r   = Expr l $ eCall (eDot (eVar w) setsliceKW) [e, sliz2exp sl, r]
             assign _ tg r               = MutAssign l tg r
 
-    infEnv env (AugAssign l tg o e)     = do (cs1,t,w,lval) <- infTarget env tg
+    infEnv env (AugAssign l tg o e)     = do cs0 <- targetFX tg
+                                             (cs1,t,w,lval) <- infTarget env tg
                                              (cs2,rval) <- inferSub env t tg
                                              (cs3,e') <- inferSub env t e
-                                             cs4 <- targetFX tg
                                              w' <- newWitness
                                              return ( Impl w' t (protocol o) : 
-                                                      cs1++cs2++cs3++cs4, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
+                                                      cs0++cs1++cs2++cs3, [], assign w lval $ eCall (eDot (eVar w') (method o)) [rval,e'])
       where assign _ (Var l (NoQ n)) r  = Assign l [PVar NoLoc n Nothing] r
             assign w (Index l e ix) r   = Expr l $ eCall (eDot (eVar w) setitemKW) [e, ix, r]
             assign w (Slice l e sl) r   = Expr l $ eCall (eDot (eVar w) setsliceKW) [e, sliz2exp sl, r]
@@ -206,9 +227,9 @@ instance InfEnv Stmt where
                                              (cs2,e2') <- inferSub env tStr e2
                                              return (cs1++cs2, [], Assert l e1' e2')
     infEnv env s@(Pass l)               = return ([], [], s)
-    infEnv env (Delete l tg)            = do (cs1,t,w,tg') <- infTarget env tg
-                                             cs2 <- targetFX tg
-                                             return (constr tg' t ++ cs1 ++ cs2, [], delete w tg')
+    infEnv env (Delete l tg)            = do cs0 <- targetFX tg
+                                             (cs1,t,w,tg') <- infTarget env tg
+                                             return (constr tg' t ++ cs0 ++ cs1, [], delete w tg')
       where delete _ (Var _ (NoQ n))    = Assign l [PVar NoLoc n Nothing] eNone
             delete w (Index _ e ix)     = Expr l $ eCall (eDot (eVar w) delitemKW) [e, ix]
             delete w (Slice _ e sl)     = Expr l $ eCall (eDot (eVar w) delsliceKW) [e, sliz2exp sl]
@@ -850,11 +871,6 @@ instance Infer Expr where
                                                         (cs1,tvs,t) <- instantiate env sc
                                                         let t0 = tCon $ TC (unalias env n) ts
                                                             t' = subst [(tvSelf,t0)] t{ restype = tSelf }
-                                                        traceM ("### infer NClass " ++ prstr n)
-                                                        traceM ("    q = " ++ prstrs q)
-                                                        traceM ("    __init__: " ++ prstr sc)
-                                                        traceM ("    cs0: " ++ prstrs cs0)
-                                                        traceM ("    cs1: " ++ prstrs cs1)
                                                         return (cs0++cs1, t', app t' (tApp x (ts++tvs)) $ witsOf (cs0++cs1))
                                             NAct q p k _ -> do
                                                 (cs,tvs,t) <- instantiate env (tSchema q (tFun fxAction p k (tCon0 (unalias env n) q)))
