@@ -304,6 +304,9 @@ protocol Real (Number):
 
   __round__    : (?int) -> Self
 
+protocol RealFloat (Real):
+  pass
+
 protocol Rational (Real):
   numerator    : () -> Integral
   denominator  : () -> Integral
@@ -353,7 +356,7 @@ extension int (Integral):pass
 extension int (Ord):pass
 extension int (Hashable):pass
 
-extension float (Real):pass
+extension float (RealFloat):pass
 extension float (Ord):pass
 extension float (Hashable):pass
 

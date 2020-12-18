@@ -42,6 +42,7 @@ extension ndarray[A (Primitive)] (Integral): pass
 extension ndarray[A (Primitive)] (Sliceable[ndarray[A]]): pass
 extension ndarray[A (Primitive)] (Iterable[A]): pass
 extension ndarray[A (Primitive, math.RealFuns)] (math.RealFuns): pass
+extension ndarray[A (Primitive, RealFloat)] (RealFloat): pass
 
 extension int (Primitive): pass
 extension float (Primitive): pass
