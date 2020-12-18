@@ -922,6 +922,11 @@ struct $Real$class {
 extern struct $Real$class $Real$methods;
 $Real $Real$new();
 
+// $RealFloat ///////////////////////////////////////////////////////////
+
+#define $RealFloat $Real
+#define $RealFloat$new(...) $Real$new(__VA_ARGS__)
+
 // $Rational ////////////////////////////////////////////////////////////
 
 struct $Rational {

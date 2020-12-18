@@ -218,6 +218,11 @@ void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state
 numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
 $Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
 
+// numpy$$RealFloat$ndarray ////////////////////////////////////////////////////////
+
+#define numpy$$RealFloat$ndarray (($Real)numpy$$Integral$ndarray)
+#define numpy$$RealFloat$ndarray$new(...) ($Real)numpy$$Integral$ndarray$new(__VA_ARGS__)
+
 // numpy$$RealFuns$math$ndarray ////////////////////////////////////////////////////
 
 struct numpy$$RealFuns$math$ndarray;

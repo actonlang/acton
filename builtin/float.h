@@ -20,6 +20,9 @@ $float $float$new($atom);
 
 extern struct $Real$float$class $Real$float$methods;
 $Real$float $Real$float$new();
+
+#define $RealFloat$float$new(...) $Real$float$new(__VA_ARGS__)
+
 extern struct $Minus$float$class $Minus$float$methods;
 $Minus$float $Minus$float$new($Real);
 extern struct $Ord$float$class $Ord$float$methods;
