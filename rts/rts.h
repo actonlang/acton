@@ -158,6 +158,9 @@ void $POP();
 
 //typedef $int $Env;
 
+void $Actor$serialize($Actor, $Serial$state);
+void $Actor$deserialize($Actor, $Serial$state);
+
 $ROW $serialize_rts();
 void $deserialize_rts($ROW);
 

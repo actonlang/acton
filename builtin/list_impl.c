@@ -1,18 +1,18 @@
 // General methods //////////////////////////////////////////////////////////////////////////
 
-$list $list$new($Iterable wit, $WORD iter) {
-  return $NEW($list, wit, iter);
+$list $list$new($Iterable wit, $WORD iterable) {
+  return $NEW($list, wit, iterable);
 }
 
-void $list_init($list lst, $Iterable wit, $WORD iter) {
+void $list_init($list lst, $Iterable wit, $WORD iterable) {
     lst->length = 0;
     lst->capacity = 0;
     lst->data = NULL;
-    if (!iter) {
+    if (!iterable || !wit) {
         return;
     }
     $WORD w;
-    $Iterator it = wit->$class->__iter__(wit,iter);
+    $Iterator it = wit->$class->__iter__(wit,iterable);
     while((w = it->$class->__next__(it)))
         $list_append(lst,w);
 }

@@ -15,7 +15,7 @@ actor Act(i):
             print("Actor %d: count=%d, src=%d, dst=%d" % (i,count,src,dst))
             table[dst].work(i, table)
 
-actor Root(_ignore:int):
+actor Root(_ignore:Env):
     table = []
 
     for i in range(no_actors,None,None):

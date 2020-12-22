@@ -101,10 +101,11 @@ decl env (Class _ n q a b)          = (text "struct" <+> classname env n <+> cha
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
                                       (text "struct" <+> genTopName env n <+> char '{') $+$ 
-                                      nest 4 (classlink env n $+$ properties env tc) $+$ 
+                                      nest 4 (classlink env n $+$ vcat properties) $+$
                                       char '}' <> semi
   where tc                          = TC (NoQ n) [ tVar v | Quant v _ <- q ]
         initdef : meths             = fields env tc
+        properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property) <- fullAttrEnv env tc ]
 decl env (Def _ n q p _ a b _ fx)   = gen env (fromJust a) <+> genTopName env n <+> parens (params env $ prowOf p) <> semi
 
 methstub env (Class _ n q a b)      = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
@@ -135,11 +136,6 @@ params env t                        = error ("codegen unexpected row: " ++ prstr
 
 varsig env n t                      = gen env t <+> gen env n
 
-properties env c                    = vmap prop te
-  where te                          = fullAttrEnv env c
-        prop (n, NSig sc Property)  = varsig env n (sctype sc) <> semi
-        prop _                      = empty
-
 stdprefix env                       = [gcinfo env, classid env, superlink env]
 
 gcinfo env                          = text "char" <+> text "*" <> gen env gcinfoKW <> semi
@@ -151,12 +147,9 @@ superlink env                       = gen env tSuperclass <+> gen env superclass
 
 qnSuperClass                        = GName mPrim (Derived (name "Super") (name "class"))
 
-serialize env c                     = methsig env c (name "__serialize__") (TFun l0 fxPure serialstate kwdNil tNone) <> semi
+serialize env c                     = text "void" <+> parens (char '*' <> gen env serializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
-deserialize env c                   = funsig env (name "__deserialize__") (TFun l0 fxPure serialstate kwdNil (tCon c)) <> semi
-
-serialstate                         = posRow tSerialstate posNil
-  where tSerialstate                = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
+deserialize env c                   = gen env (tCon c) <+> parens (char '*' <> gen env deserializeKW) <+> parens (gen env tSerialstate) <> semi
 
 classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env classKW <> semi
 
@@ -177,12 +170,17 @@ newcon' env n                       = gen env $ conName n
 
 conName (GName m n)                 = GName m (Derived n $ name "new")
 
+serializeFun (GName m n)            = GName m (Derived n $ name "serialize")
+deserializeFun (GName m n)          = GName m (Derived n $ name "deserialize")
+
 
 classKW                             = primKW "class"
 gcinfoKW                            = primKW "GCINFO"
 classidKW                           = primKW "class_id"
 superclassKW                        = primKW "superclass"
 componentsKW                        = name "components"
+serializeKW                         = name "__serialize__"
+deserializeKW                       = name "__deserialize__"
 
 primTuple                           = gPrim "tuple"
 primNoneType                        = gPrim "NoneType"
@@ -202,6 +200,11 @@ primToStr                           = name "to$str"
 primToBytearray                     = name "to$bytearray"
 
 tmpV                                = primKW "tmp"
+
+tSerialstate                        = tCon $ TC (GName mPrim (Derived (name "Serial") (name "state"))) []
+primStepSerialize                   = gPrim "step_serialize"
+primStepDeserialize                 = gPrim "step_deserialize"
+primDNEW                            = gPrim "DNEW"
 
 
 -- Implementation -----------------------------------------------------------------------------------
@@ -235,12 +238,43 @@ declDecl env (Def _ n q p KwdNIL (Just t) b d m)
   where env1                        = setRet t $ ldefine (envOf p) $ defineTVars q env
         ret | fallsthru b           = text "return" <+> gen env primNone <> semi
             | otherwise             = empty
+
 declDecl env (Class _ n q as b)     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      declSerialize env1 n c props sup_c $+$
+                                      declDeserialize env1 n c props sup_c $+$
                                       declCon env1 n q $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-  where b'                          = subst [(tvSelf, tCon $ TC (NoQ n) (map tVar $ tybound q))] b
+  where b'                          = subst [(tvSelf, tCon c)] b
+        c                           = TC (NoQ n) (map tVar $ tybound q)
         env1                        = defineTVars q env
+        props                       = [ n | (n, NSig sc Property) <- fullAttrEnv env c ]
+        sup_c                       = filter ((`elem` special_repr) . unalias env . tcname) as
+        special_repr                = [primActor]                                               -- To be extended...
 
+declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodname n serializeKW) <+> parens (gen env pars) <+> char '{') $+$
+                                      nest 4 (super_step $+$ vcat [ step i | i <- props \\ super_props ]) $+$
+                                      char '}'
+  where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
+        st                          = name "state"
+        self                        = name "self"
+        super_step | [c] <- sup_c   = gen env (serializeFun $ tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
+                   | otherwise      = empty
+        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        step i                      = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
+
+declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (methodname n deserializeKW) <+> parens (gen env pars) <+> char '{') $+$
+                                      nest 4 (create $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
+                                      char '}'
+  where pars                        = PosPar st (Just tSerialstate) Nothing PosNIL
+        st                          = name "state"
+        self                        = name "self"
+        env1                        = ldefine [(st, NVar tSerialstate)] env
+        create                      = genTopName env n <+> gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
+        super_step | [c] <- sup_c   = gen env (deserializeFun $ tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
+                   | otherwise      = empty
+        super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
+        step i                      = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
+        ret                         = text "return" <+> gen env self <> semi
 
 
 initModule env []                   = empty
@@ -266,7 +300,8 @@ initClassBase env c q as            = methodtable env c <> dot <> gen env gcinfo
         cast (NVar t)               = parens (gen env $ selfsubst t)
         te                          = fullAttrEnv env $ TC (NoQ c) [ tVar v | Quant v _ <- q ]
 
-initClass env c []                  = gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
+initClass env c []                  = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
+                                      gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
 initClass env c (Decl _ ds : ss)    = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
                                       initClass env1 c ss
   where env1                        = gdefine (envOf ds) env

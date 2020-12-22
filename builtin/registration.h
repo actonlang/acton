@@ -88,6 +88,6 @@ void $register_force(int classid, $WORD meths);
 
 // list of method tables indexed by class_id. Only accessed via GET_METHODS above
 
-$list $methods;
+extern $list $methods;
 
 $bool issubtype(int sub_id, int ancestor_id); 

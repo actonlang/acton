@@ -19,19 +19,19 @@ static $Iterator $set_iter_entry($set set);
 
 // General methods ///////////////////////////////////////////////////////////////////////////////////
 
-$set $set$new($Hashable hashwit, $Iterable wit, $WORD iter) {
-  return $NEW($set, hashwit, wit, iter);
+$set $set$new($Hashable hashwit, $Iterable wit, $WORD iterable) {
+  return $NEW($set, hashwit, wit, iterable);
 }
 
-void $set_init($set set, $Hashable hashwit, $Iterable wit, $WORD iter) {
+void $set_init($set set, $Hashable hashwit, $Iterable wit, $WORD iterable) {
   set->numelements = 0;
   set->fill = 0;
   set->mask = MIN_SIZE-1;
   set->finger = 0;
   set->table = malloc(MIN_SIZE*sizeof($setentry));
   memset(set->table,0,MIN_SIZE*sizeof($setentry));
-  if (wit) {
-    $Iterator it = wit->$class->__iter__(wit,iter);
+  if (wit && iterable) {
+    $Iterator it = wit->$class->__iter__(wit,iterable);
     $WORD nxt;
     while((nxt = it->$class->__next__(it))) {
       $set_add(set,hashwit,nxt);

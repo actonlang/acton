@@ -34,21 +34,21 @@ struct $table_struct {
 
 // General methods /////////////////////////////////////////////////////////////////////////
 
-$dict $dict$new($Hashable hashwit, $Iterable wit, $WORD iter) {
-  return $NEW($dict,hashwit, wit, iter);
+$dict $dict$new($Hashable hashwit, $Iterable wit, $WORD iterable) {
+  return $NEW($dict,hashwit, wit, iterable);
 }
 
-void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iter) { 
+void $dict_init($dict dict, $Hashable hashwit, $Iterable wit, $WORD iterable) {
   dict->numelements = 0;
   dict->table = malloc(sizeof(char*)+3*sizeof(long) + 8*sizeof(int) + 5*sizeof(struct $entry_struct));
   dict->table->tb_size = 8;
   dict->table->tb_usable = 5;
   dict->table->tb_nentries = 0;
   memset(&(dict->table->tb_indices[0]), 0xff, 8*sizeof(int));
-  if (wit) {
-    $Iterator iter = wit->$class->__iter__(wit,iter);
+  if (wit && iterable) {
+    $Iterator it = wit->$class->__iter__(wit,iterable);
     $tuple nxt;
-    while((nxt = ($tuple)iter->$class->__next__(iter))) {
+    while((nxt = ($tuple)it->$class->__next__(it))) {
       $dict_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
     }
   }

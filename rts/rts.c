@@ -163,18 +163,26 @@ $str $Actor$__str__($Actor self) {
   return to$str(s);
 }
 
-void $Actor$__serialize__($Actor self, $Serial$state state) {
+void $Actor$serialize($Actor self, $Serial$state state) {
     $step_serialize(self->next,state);
     $step_serialize(self->msg,state);
     $step_serialize(self->catcher,state);
 }
 
+void $Actor$deserialize($Actor self, $Serial$state state) {
+    self->next = $step_deserialize(state);
+    self->msg = $step_deserialize(state);
+    self->catcher = $step_deserialize(state);
+    atomic_flag_clear(&self->msg_lock);
+}
+
+void $Actor$__serialize__($Actor self, $Serial$state state) {
+    $Actor$serialize(self, state);
+}
+
 $Actor $Actor$__deserialize__($Serial$state state) {
-  $Actor res = $DNEW($Actor,state);
-    res->next = $step_deserialize(state);
-    res->msg = $step_deserialize(state);
-    res->catcher = $step_deserialize(state);
-    atomic_flag_clear(&res->msg_lock);
+    $Actor res = $DNEW($Actor,state);
+    $Actor$deserialize(res, state);
     return res;
 }
 
