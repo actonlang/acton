@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../../rts/rts.h"
+#include "builtin/builtin.h"
+#include "builtin/minienv.h"
+#include "rts/rts.h"
 
 struct lambda$1;
 struct lambda$2;
@@ -111,7 +113,7 @@ struct Root$class {
     char *$GCINFO;
     int $class_id;
     $Super$class $superclass;
-    $R (*__init__)(Root, $int, $Cont);
+    $R (*__init__)(Root, $Env, $Cont);
     void (*__serialize__)(Root, $Serial$state);
     Root (*__deserialize__)($Serial$state);
     $bool (*__bool__)(Root);

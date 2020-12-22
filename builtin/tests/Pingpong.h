@@ -1,6 +1,8 @@
 #pragma once
 
-#include "../../rts/rts.h"
+#include "builtin/builtin.h"
+#include "builtin/minienv.h"
+#include "rts/rts.h"
 
 struct lambda$1;
 struct lambda$2;
@@ -46,7 +48,7 @@ struct lambda$2 {
 struct Pingpong$class {
     char *$GCINFO;
     $Super$class $superclass;
-    $R (*__init__)(Pingpong, $int, $Cont);
+    $R (*__init__)(Pingpong, $Env, $Cont);
     void (*__serialize__)(Pingpong, $Serial$state);
     Pingpong (*__deserialize__)($Serial$state);
     $R (*ping)(Pingpong, $Cont);

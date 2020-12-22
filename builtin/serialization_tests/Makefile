@@ -9,9 +9,11 @@ all:
 
 ActorRing: ActorRing.c ActorRing.h
 	cc 	-Wall -Werror -Wno-int-to-void-pointer-cast \
+		-I../../ \
 		-lutf8proc \
 		../../rts/rts.o \
 		../builtin.o \
+		../minienv.o \
 		ActorRing.c \
 		-o ActorRing
 

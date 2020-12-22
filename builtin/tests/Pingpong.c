@@ -3,6 +3,7 @@
 void lambda$1$__init__(lambda$1 $this, Pingpong self, $int count) {
     $this->self = self;
     $this->count = count;
+    printf("BBB\n");
 }
 void lambda$1$__serialize__(lambda$1 $this, $Serial$state state) {
     $step_serialize($this->self,state);
@@ -18,7 +19,7 @@ lambda$1 lambda$1$__deserialize__($Serial$state state) {
 $R lambda$1$__call__(lambda$1 $this, $Cont then) {
     Pingpong self = $this->self;
     $int count = $this->count;
-    return self->$class->pong(self, $Complex$int$witness->$class->__neg__($Complex$int$witness, count), then);
+    return self->$class->pong(self, $Integral$int$witness->$class->__neg__($Integral$int$witness, count), then);
 }
 
 void lambda$2$__init__(lambda$2 $this, Pingpong self) {
@@ -37,16 +38,17 @@ $R lambda$2$__call__(lambda$2 $this, $Cont then) {
     return self->$class->ping(self, then);
 }
 
-$R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
+$R Pingpong$__init__(Pingpong self, $Env env, $Cont then) {
     $Actor$methods.__init__(($Actor)self);
-    self->i = i;
+    self->i = to$int(7);
     self->count = to$int(0);
     return self->$class->ping(self, then);
 }
 $R Pingpong$ping(Pingpong self, $Cont then) {
-    self->count = $Plus$int$witness->$class->__add__($Plus$int$witness, self->count, to$int(1));
+    self->count = $Integral$int$witness->$class->__add__($Integral$int$witness, self->count, to$int(1));
     printf("%ld Ping %ld\n", self->i->val, self->count->val);
     $AFTER(to$int(1), ($Cont)$NEW(lambda$1, self, self->count));
+    printf("AAA\n");
     return $R_CONT(then, $None);
 }
 void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
@@ -91,9 +93,15 @@ struct Pingpong$class Pingpong$methods = {
     Pingpong$pong
 };
 
-$R $ROOT($Env env, $Cont then) {
+$R Pingpong$new($Env env, $Cont cont) {
+    Pingpong $tmp = malloc(sizeof(struct Pingpong));
+    $tmp->$class = &Pingpong$methods;
+    return Pingpong$methods.__init__($tmp, env, $CONSTCONT($tmp, cont));
+}
+
+$R $ROOT ($Env env, $Cont cont) {
     $register(&lambda$1$methods);
     $register(&lambda$2$methods);
     $register(&Pingpong$methods);
-    return $NEWCC(Pingpong, then, to$int(env));
+    return Pingpong$new(env, cont);
 }
