@@ -16,7 +16,7 @@ endif
 CFLAGS:=$(JEM_FLAGS) -Wno-int-to-pointer-cast -Wno-pointer-to-int-cast -g -O0
 LIBS:=$(JEM_LIBS)
 
-LFLAGS=-luuid#-latomic -lm
+LFLAGS=#-luuid#-latomic -lm
 
 LIBDIR=../lib
 

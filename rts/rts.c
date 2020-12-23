@@ -5,6 +5,7 @@
 
 #include "rts.h"
 #include "../builtin/minienv.h"
+#include "../backend/client_api.h"
 
 #ifdef __gnu_linux__
     #define IS_GNU_LINUX
@@ -788,6 +789,13 @@ int main(int argc, char **argv) {
     kq = kqueue();
     $register_builtin();
     $register_rts();
+
+//    int primary_key_idx = 0;
+//    int clustering_key_idxs[2] = {1, 2};
+//    int index_key_idx=3;
+//    db_schema_t* db_schema = db_create_schema(NULL, 3, &primary_key_idx, 1, clustering_key_idxs, 1, &index_key_idx, 1);
+//    printf("db_create_schema returns %p\n", db_schema);
+
 
     args = $list$new(NULL,NULL);
     for (int i=0; i< argc; i++)

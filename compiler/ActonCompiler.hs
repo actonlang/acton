@@ -331,7 +331,7 @@ buildExecutable env args paths task
         (sc,_)              = Acton.QuickType.schemaOf env (A.eQVar qn)
         outbase             = sysFile paths mn
         rootFile            = outbase ++ ".root.c"
-        libFiles            = " -lutf8proc " ++ joinPath [sysPath paths,"lib","libActon.a"] ++ " "
+        libFiles            = " -L " ++ joinPath [sysPath paths,"lib"] ++ " -lutf8proc -ldbclient -lremote -lcomm -ldb -lvc -lprotobuf-c -lActon "
         binFile             = dropExtension srcbase
         Just srcbase        = srcFile paths mn
         gccCmd              = "gcc -I" ++ sysPath paths ++ libFiles ++ rootFile ++ " -o" ++ binFile

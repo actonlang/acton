@@ -17,7 +17,7 @@ struct $function;
 struct $Cont;
 struct $ConstCont;
 
-pthread_key_t self_key;
+extern pthread_key_t self_key;
 extern pthread_mutex_t sleep_lock;
 extern pthread_cond_t work_to_do;
 
