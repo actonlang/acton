@@ -88,6 +88,7 @@ $Lock timerQ_lock;
 
 $list args = NULL;
 
+pthread_key_t self_key;
 pthread_mutex_t sleep_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t work_to_do = PTHREAD_COND_INITIALIZER;
 
@@ -677,7 +678,7 @@ void *main_loop(void *arg) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
                     m->value = r.value;
-                    $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL
+                    $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL now that m->value holds the response
                     while (b) {
                         b->msg->value = r.value;
                         ENQ_ready(b);
@@ -705,7 +706,7 @@ void *main_loop(void *arg) {
                     FLUSH_outgoing(current);
                     m->cont = r.cont;
                     $Msg x = ($Msg)r.value;
-                    if (!ADD_waiting(current, x)) {
+                    if (!ADD_waiting(current, x)) {     // If x->cont == NULL then x->value holds the response
                         m->value = x->value;
                         ENQ_ready(current);
                     }

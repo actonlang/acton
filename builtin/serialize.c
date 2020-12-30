@@ -159,7 +159,7 @@ void $write_serialized($ROW row, char *file) {
  
 $ROW $serialize($Serializable s) {
   $Serial$state state = malloc(sizeof(struct $Serial$state));
-  state-> done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
+  state->done = $NEW($dict,($Hashable)$Hashable$WORD$witness,NULL,NULL);
   state->row_no=0;
   state->row = NULL;
   state->fst = NULL;
@@ -177,7 +177,6 @@ $Serializable $deserialize($ROW row) {
   state->row_no=0;
   state->row = row;
   state->fst = NULL;
-  $dict done = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
   return $step_deserialize(state);
 }
 
