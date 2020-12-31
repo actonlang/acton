@@ -263,14 +263,20 @@ declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodnam
         step i                      = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
 
 declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (methodname n deserializeKW) <+> parens (gen env pars) <+> char '{') $+$
-                                      nest 4 (create $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
+                                      nest 4 (optcreate $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
                                       char '}'
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
         self                        = name "self"
         env1                        = ldefine [(st, NVar tSerialstate)] env
-        create                      = text "if" <+> parens (text "!" <> gen env self) $+$
-                                      nest 4 (gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi)
+        optcreate                   = text "if" <+> parens (text "!" <> gen env self) $+$
+                                      nest 4 ((text "if" <+> parens (text "!" <> gen env st) <+> char '{') $+$
+                                              nest 4 (alloc $+$ text "return" <+> gen env self <> semi) $+$
+                                              char '}' $+$
+                                              create)
+        create                      = gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
+        alloc                       = gen env self <+> equals <+> malloc env (gname env n) <> semi $+$
+                                      gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi
         super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
         super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]

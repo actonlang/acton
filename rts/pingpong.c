@@ -109,6 +109,7 @@ $str Pingpong$__str__(Pingpong self) {
     return to$str(s);
 }
 void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
+    $Actor$methods.__serialize__(($Actor)self, state);
     $step_serialize(self->i,state);
     $step_serialize(self->count,state);
 }
@@ -116,6 +117,7 @@ void Pingpong$__serialize__(Pingpong self, $Serial$state state) {
 Pingpong Pingpong$__deserialize__(Pingpong res, $Serial$state state) {
     if (!res)
         res = $DNEW(Pingpong,state);
+    $Actor$methods.__deserialize__(($Actor)res, state);
     res->i = $step_deserialize(state);
     res->count = $step_deserialize(state);
     return res;
