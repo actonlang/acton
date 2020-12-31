@@ -4,7 +4,7 @@ void numpy$$ndselect$__init__(numpy$$ndselect self) {
 void numpy$$ndselect$__serialize__(numpy$$ndselect wit, $Serial$state state) {
 }
 
-numpy$$ndselect numpy$$ndselect$__deserialize__($Serial$state state) {
+numpy$$ndselect numpy$$ndselect$__deserialize__(numpy$$ndselect wit, $Serial$state state) {
     numpy$$ndselect res = $DNEW(numpy$$ndselect,state);
     return res;
 }
@@ -39,7 +39,7 @@ void numpy$$ndindex$__serialize__(numpy$$ndindex self, $Serial$state state) {
     $step_serialize(self->index, state);
 }
 
-numpy$$ndindex numpy$$ndindex$__deserialize__($Serial$state state) {
+numpy$$ndindex numpy$$ndindex$__deserialize__(numpy$$ndindex self, $Serial$state state) {
     numpy$$ndindex res = $DNEW(numpy$$ndindex,state);
     res->index = ($int)$step_deserialize(state);
     return res;
@@ -74,7 +74,7 @@ void numpy$$ndslice$__serialize__(numpy$$ndslice self, $Serial$state state) {
     $step_serialize(self->slc, state);
 }
 
-numpy$$ndslice numpy$$ndslice$__deserialize__($Serial$state state) {
+numpy$$ndslice numpy$$ndslice$__deserialize__(numpy$$ndslice self, $Serial$state state) {
     numpy$$ndslice res = $DNEW(numpy$$ndslice,state);
     res->slc = ($slice)$step_deserialize(state);
     return res;

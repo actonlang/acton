@@ -73,14 +73,15 @@ void $set_serialize($set self, $Serial$state state) {
   }
 }
  
-$set $set_deserialize ($Serial$state state) {
+$set $set_deserialize ($set res, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
   if (this->class_id < 0) {
     return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    $set res = malloc(sizeof(struct $set));
+    if (!res)
+       res = malloc(sizeof(struct $set));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &$set$methods;
     res->numelements = (long)this->blob[0];
@@ -519,8 +520,9 @@ void $Iterator$set_serialize($Iterator$set self, $Serial$state state) {
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$set $Iterator$set$_deserialize($Serial$state state) {
-   $Iterator$set res = $DNEW($Iterator$set,state);
+$Iterator$set $Iterator$set$_deserialize($Iterator$set res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$set,state);
    res->src = ($set)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;

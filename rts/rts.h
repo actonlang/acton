@@ -65,7 +65,7 @@ struct $Msg$class {
     $Super$class $superclass;
     void (*__init__)($Msg, $Actor, $Cont, time_t, $WORD);
     void (*__serialize__)($Msg, $Serial$state);
-    $Msg (*__deserialize__)($Serial$state);
+    $Msg (*__deserialize__)($Msg, $Serial$state);
     $bool (*__bool__)($Msg);
     $str (*__str__)($Msg);
 };
@@ -86,7 +86,7 @@ struct $Actor$class {
     $Super$class $superclass;
     void (*__init__)($Actor);
     void (*__serialize__)($Actor, $Serial$state);
-    $Actor (*__deserialize__)($Serial$state);
+    $Actor (*__deserialize__)($Actor, $Serial$state);
     $bool (*__bool__)($Actor);
     $str (*__str__)($Actor);
 };
@@ -105,7 +105,7 @@ struct $Catcher$class {
     $Super$class $superclass;
     void (*__init__)($Catcher, $Cont);
     void (*__serialize__)($Catcher, $Serial$state);
-    $Catcher (*__deserialize__)($Serial$state);
+    $Catcher (*__deserialize__)($Catcher, $Serial$state);
     $bool (*__bool__)($Catcher);
     $str (*__str__)($Catcher);
 };
@@ -122,7 +122,7 @@ struct $Cont$class {
     $Super$class $superclass;
     void (*__init__)($Cont);
     void (*__serialize__)($Cont, $Serial$state);
-    $Cont (*__deserialize__)($Serial$state);
+    $Cont (*__deserialize__)($Cont, $Serial$state);
     $bool (*__bool__)($Cont);
     $str (*__str__)($Cont);
     $R (*__call__)($Cont, ...);
@@ -137,7 +137,7 @@ struct $ConstCont$class {
     $Super$class $superclass;
     void (*__init__)($ConstCont, $WORD, $Cont);
     void (*__serialize__)($ConstCont, $Serial$state);
-    $ConstCont (*__deserialize__)($Serial$state);
+    $ConstCont (*__deserialize__)($ConstCont, $Serial$state);
     $bool (*__bool__)($ConstCont);
     $str (*__str__)($ConstCont);
     $R (*__call__)($ConstCont, $WORD);

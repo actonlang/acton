@@ -4,7 +4,7 @@ struct $range$class {
   $Super$class $superclass;
   void (*__init__)($range, $int, $int, $int);
   void (*__serialize__)($range,$Serial$state);
-  $range (*__deserialize__)($Serial$state);
+  $range (*__deserialize__)($range,$Serial$state);
   $bool (*__bool__)($range);
   $str (*__str__)($range);
 };
@@ -34,7 +34,7 @@ struct $Iterator$range$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$range, $range);
   void (*__serialize__)($Iterator$range,$Serial$state);
-  $Iterator$range (*__deserialize__)($Serial$state);
+  $Iterator$range (*__deserialize__)($Iterator$range,$Serial$state);
   $bool (*__bool__)($Iterator$range);
   $str (*__str__)($Iterator$range);
   $WORD(*__next__)($Iterator$range);

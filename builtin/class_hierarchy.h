@@ -53,7 +53,7 @@ struct $Serializable$class {
   $Super$class $superclass;                   // = Initializable$methods
   void (*__init__)($Serializable);
   void (*__serialize__)($Serializable, $Serial$state);
-  $Serializable (*__deserialize__)($Serial$state);
+  $Serializable (*__deserialize__)($Serializable, $Serial$state);
 };
 
 struct $Serializable {
@@ -80,7 +80,7 @@ struct $struct$class {
   $Super$class $superclass;                      // = Serializable$methods
   void (*__init__)($struct);
   void (*__serialize__)($struct, $Serial$state);
-  $struct (*__deserialize__)($Serial$state);
+  $struct (*__deserialize__)($struct, $Serial$state);
   $bool (*__bool__)($struct);
   $str (*__str__)($struct);
 };
@@ -107,7 +107,7 @@ struct $object$class {
   $Super$class $superclass;                      // = $struct$methods
   void (*__init__)($object);
   void (*__serialize__)($object, $Serial$state);
-  $object (*__deserialize__)($Serial$state);
+  $object (*__deserialize__)($object, $Serial$state);
   $bool (*__bool__)($object);
   $str (*__str__)($object);
 };

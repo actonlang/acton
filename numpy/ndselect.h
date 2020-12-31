@@ -6,7 +6,7 @@ struct numpy$$ndselect$class {
     $Super$class $superclass;
     void (*__init__) (numpy$$ndselect);
     void (*__serialize__) (numpy$$ndselect, $Serial$state);
-    numpy$$ndselect (*__deserialize__) ($Serial$state);
+    numpy$$ndselect (*__deserialize__) (numpy$$ndselect, $Serial$state);
     $bool (*__bool__) (numpy$$ndselect);
     $str (*__str__) (numpy$$ndselect);
 };
@@ -23,7 +23,7 @@ struct numpy$$ndindex$class {
     $Super$class $superclass;
     void (*__init__) (numpy$$ndindex, $int);
     void (*__serialize__) (numpy$$ndindex, $Serial$state);
-    numpy$$ndindex (*__deserialize__) ($Serial$state);
+    numpy$$ndindex (*__deserialize__) (numpy$$ndindex, $Serial$state);
     $bool (*__bool__) (numpy$$ndindex);
     $str (*__str__) (numpy$$ndindex);
 };
@@ -43,7 +43,7 @@ struct numpy$$ndslice$class {
     $Super$class $superclass;
     void (*__init__) (numpy$$ndslice, $slice);
     void (*__serialize__) (numpy$$ndslice, $Serial$state);
-    numpy$$ndslice (*__deserialize__) ($Serial$state);
+    numpy$$ndslice (*__deserialize__) (numpy$$ndslice, $Serial$state);
     $bool (*__bool__) (numpy$$ndslice);
     $str (*__str__) (numpy$$ndslice);
 };

@@ -42,7 +42,7 @@ void $Mapping$dict$__serialize__($Mapping$dict self, $Serial$state state) {
   $step_serialize(self->w$Hashable$A$Mapping$dict, state);
 }
 
-$Mapping$dict $Mapping$dict$__deserialize__($Serial$state state) {
+$Mapping$dict $Mapping$dict$__deserialize__($Mapping$dict self, $Serial$state state) {
    $Mapping$dict res = $DNEW($Mapping$dict,state);
    res->w$Indexed = ($Indexed)$step_deserialize(state);
    res->w$Eq$A$Mapping$dict = ($Eq)$step_deserialize(state);
@@ -104,7 +104,7 @@ void $Indexed$dict$__serialize__($Indexed$dict self, $Serial$state state) {
   $step_serialize(self->w$Hashable$A$Mapping$dict, state);
 }
 
-$Indexed$dict $Indexed$dict$__deserialize__($Serial$state state) {
+$Indexed$dict $Indexed$dict$__deserialize__($Indexed$dict self, $Serial$state state) {
    $Indexed$dict res = $DNEW($Indexed$dict,state);
    res->w$Mapping = ($Mapping)$step_deserialize(state);
    res->w$Eq$A$Mapping$dict = ($Eq)$step_deserialize(state);

@@ -13,7 +13,7 @@ struct $Iterator$enumerate$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$enumerate, $Iterator,$int);
   void (*__serialize__)($Iterator$enumerate,$Serial$state);
-  $Iterator$enumerate (*__deserialize__)($Serial$state);
+  $Iterator$enumerate (*__deserialize__)($Iterator$enumerate,$Serial$state);
   $bool (*__bool__)($Iterator$enumerate);
   $str (*__str__)($Iterator$enumerate);
   $WORD(*__next__)($Iterator$enumerate);
@@ -41,7 +41,7 @@ struct $Iterator$filter$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$filter, $Iterator, $function);
   void (*__serialize__)($Iterator$filter,$Serial$state);
-  $Iterator$filter (*__deserialize__)($Serial$state);
+  $Iterator$filter (*__deserialize__)($Iterator$filter,$Serial$state);
   $bool (*__bool__)($Iterator$filter);
   $str (*__str__)($Iterator$filter);
   $WORD(*__next__)($Iterator$filter);
@@ -69,7 +69,7 @@ struct $Iterator$map$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$map, $Iterator, $function);
   void (*__serialize__)($Iterator$map,$Serial$state);
-  $Iterator$map (*__deserialize__)($Serial$state);
+  $Iterator$map (*__deserialize__)($Iterator$map,$Serial$state);
   $bool (*__bool__)($Iterator$map);
   $str (*__str__)($Iterator$map);
   $WORD(*__next__)($Iterator$map);
@@ -98,7 +98,7 @@ struct $Iterator$zip$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$zip, $Iterator, $Iterator);
   void (*__serialize__)($Iterator$zip,$Serial$state);
-  $Iterator$zip (*__deserialize__)($Serial$state);
+  $Iterator$zip (*__deserialize__)($Iterator$zip,$Serial$state);
   $bool (*__bool__)($Iterator$zip);
   $str (*__str__)($Iterator$zip);
   $WORD(*__next__)($Iterator$zip);

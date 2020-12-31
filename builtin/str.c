@@ -14,7 +14,7 @@ void $str_init($str, $struct);
 $bool $str_bool($str);
 $str $str_str($str);
 void $str_serialize($str,$Serial$state);
-$str $str_deserialize($Serial$state);
+$str $str_deserialize($str,$Serial$state);
 
 // String-specific methods
 $str $str_capitalize($str s);
@@ -91,7 +91,7 @@ $str $str_add($str, $str);
 void $Ord$str$__serialize__($Ord$str self, $Serial$state state) {
 }
 
-$Ord$str $Ord$str$__deserialize__($Serial$state state) {
+$Ord$str $Ord$str$__deserialize__($Ord$str self, $Serial$state state) {
    $Ord$str res = $DNEW($Ord$str,state);
    return res;
 }
@@ -130,7 +130,7 @@ void $Container$str$__serialize__($Container$str self, $Serial$state state) {
   $step_serialize(self-> w$Eq$A$Container$str, state);
 }
 
-$Container$str $Container$str$__deserialize__($Serial$state state) {
+$Container$str $Container$str$__deserialize__($Container$str self, $Serial$state state) {
    $Container$str res = $DNEW($Container$str,state);
    res->w$Eq$A$Container$str = ($Eq)$step_deserialize(state);
    return res;
@@ -161,7 +161,7 @@ $bool $Container$str$__containsnot__ ($Container$str wit, $str str, $str sub) {
 void $Sliceable$str$__serialize__($Sliceable$str self, $Serial$state state) {
 }
 
-$Sliceable$str $Sliceable$str$__deserialize__($Serial$state state) {
+$Sliceable$str $Sliceable$str$__deserialize__($Sliceable$str self, $Serial$state state) {
    $Sliceable$str res = $DNEW($Sliceable$str,state);
    return res;
 }
@@ -199,7 +199,7 @@ void $Sliceable$str$__delslice__ ($Sliceable$str wit, $str str, $slice slc) {
 void $Plus$str$__serialize__($Plus$str self, $Serial$state state) {
 }
 
-$Plus$str $Plus$str$__deserialize__($Serial$state state) {
+$Plus$str $Plus$str$__deserialize__($Plus$str self, $Serial$state state) {
    $Plus$str res = $DNEW($Plus$str,state);
    return res;
 }
@@ -213,7 +213,7 @@ $str $Plus$str$__add__ ($Plus$str wit, $str a, $str b) {
 void $Hashable$str$__serialize__($Hashable$str self, $Serial$state state) {
 }
 
-$Hashable$str $Hashable$str$__deserialize__($Serial$state state) {
+$Hashable$str $Hashable$str$__deserialize__($Hashable$str self, $Serial$state state) {
    $Hashable$str res = $DNEW($Hashable$str,state);
    return res;
 }
@@ -691,8 +691,9 @@ void $Iterator$str_serialize($Iterator$str self,$Serial$state state) {
 }
 
 
-$Iterator$str $Iterator$str$_deserialize($Serial$state state) {
-   $Iterator$str res = $DNEW($Iterator$str,state);
+$Iterator$str $Iterator$str$_deserialize($Iterator$str res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$str,state);
    res->src = ($str)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -797,7 +798,7 @@ void $str_serialize($str str,$Serial$state state) {
   memcpy(row->blob+2,str->str,nbytes+1);
 }
 
-$str $str_deserialize($Serial$state state) {
+$str $str_deserialize($str self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
@@ -1521,7 +1522,7 @@ void $bytearray_init($bytearray, $struct);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 void $bytearray_serialize($bytearray,$Serial$state);
-$bytearray $bytearray_deserialize($Serial$state);
+$bytearray $bytearray_deserialize($bytearray,$Serial$state);
 
 
 // bytearray methods, prototypes
@@ -2202,7 +2203,7 @@ int $bytearray_containsnot ($bytearray, $int);
 void $Ord$bytearray$__serialize__($Ord$bytearray self, $Serial$state state) {
 }
 
-$Ord$bytearray $Ord$bytearray$__deserialize__($Serial$state state) {
+$Ord$bytearray $Ord$bytearray$__deserialize__($Ord$bytearray self, $Serial$state state) {
    $Ord$bytearray res = $DNEW($Ord$bytearray,state);
    return res;
 }
@@ -2242,7 +2243,7 @@ void $Sequence$bytearray$__serialize__($Sequence$bytearray self, $Serial$state s
     $step_serialize(self->w$Plus, state);
 }
 
-$Sequence$bytearray $Sequence$bytearray$__deserialize__($Serial$state state) {
+$Sequence$bytearray $Sequence$bytearray$__deserialize__($Sequence$bytearray self, $Serial$state state) {
    $Sequence$bytearray res = $DNEW($Sequence$bytearray,state);
    res->w$Collection = ($Collection)$step_deserialize(state);
    res->w$Plus = ($Plus)$step_deserialize(state);
@@ -2300,7 +2301,7 @@ void $Collection$bytearray$__serialize__($Collection$bytearray self, $Serial$sta
   $step_serialize(self->w$Sequence, state);
 }
 
-$Collection$bytearray $Collection$bytearray$__deserialize__($Serial$state state) {
+$Collection$bytearray $Collection$bytearray$__deserialize__($Collection$bytearray self, $Serial$state state) {
    $Collection$bytearray res = $DNEW($Collection$bytearray,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
@@ -2328,7 +2329,7 @@ void $Plus$bytearray$__serialize__($Plus$bytearray self, $Serial$state state) {
   $step_serialize(self->w$Sequence, state);
 }
 
-$Plus$bytearray $Plus$bytearray$__deserialize__($Serial$state state) {
+$Plus$bytearray $Plus$bytearray$__deserialize__($Plus$bytearray self, $Serial$state state) {
    $Plus$bytearray res = $DNEW($Plus$bytearray,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
@@ -2348,7 +2349,7 @@ void $Container$bytearray$__serialize__($Container$bytearray self, $Serial$state
   $step_serialize(self->w$Eq$A$Container$bytearray, state);
 }
 
-$Container$bytearray $Container$bytearray$__deserialize__($Serial$state state) {
+$Container$bytearray $Container$bytearray$__deserialize__($Container$bytearray self, $Serial$state state) {
    $Container$bytearray res = $DNEW($Container$bytearray,state);
    res->w$Eq$A$Container$bytearray = ($Eq)$step_deserialize(state);
    return res;
@@ -2689,8 +2690,9 @@ void $Iterator$bytearray_serialize($Iterator$bytearray self,$Serial$state state)
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$bytearray $Iterator$bytearray$_deserialize($Serial$state state) {
-   $Iterator$bytearray res = $DNEW($Iterator$bytearray,state);
+$Iterator$bytearray $Iterator$bytearray$_deserialize($Iterator$bytearray res, $Serial$state state) {
+   if(!res)
+      res = $DNEW($Iterator$bytearray,state);
    res->src = ($bytearray)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -2758,7 +2760,7 @@ int $bytearray_containsnot ($bytearray self, $int c) {
 
 void $bytearray_init($bytearray, $struct);
 void $bytearray_serialize($bytearray,$Serial$state);
-$bytearray $bytearray_deserialize($Serial$state);
+$bytearray $bytearray_deserialize($bytearray,$Serial$state);
 $bool $bytearray_bool($bytearray);
 $str $bytearray_str($bytearray);
 
@@ -2830,11 +2832,12 @@ void $bytearray_serialize($bytearray str,$Serial$state state) {
   memcpy(row->blob+1,str->str,nbytes+1);
 }
 
-$bytearray $bytearray_deserialize($Serial$state state) {
+$bytearray $bytearray_deserialize($bytearray res, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
-  $bytearray res = malloc(sizeof(struct $bytearray));
+  if(!res)
+    res = malloc(sizeof(struct $bytearray));
   long nbytes;
   memcpy(&nbytes,this->blob,sizeof($WORD));
   res->$class = &$bytearray$methods;

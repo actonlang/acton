@@ -65,7 +65,7 @@ struct minienv$$l$1lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$1lambda, $Env, $str);
     $NoneType (*__serialize__) (minienv$$l$1lambda, $Serial$state);
-    minienv$$l$1lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$1lambda (*__deserialize__) (minienv$$l$1lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$1lambda);
     $str (*__str__) (minienv$$l$1lambda);
     $R (*__call__) (minienv$$l$1lambda, $Cont);
@@ -81,7 +81,7 @@ struct minienv$$l$2lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$2lambda, $Env, $function);
     $NoneType (*__serialize__) (minienv$$l$2lambda, $Serial$state);
-    minienv$$l$2lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$2lambda (*__deserialize__) (minienv$$l$2lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$2lambda);
     $str (*__str__) (minienv$$l$2lambda);
     $R (*__call__) (minienv$$l$2lambda, $Cont);
@@ -97,7 +97,7 @@ struct minienv$$l$3lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$3lambda, $Env, $str, $int, $function);
     $NoneType (*__serialize__) (minienv$$l$3lambda, $Serial$state);
-    minienv$$l$3lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$3lambda (*__deserialize__) (minienv$$l$3lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$3lambda);
     $str (*__str__) (minienv$$l$3lambda);
     $R (*__call__) (minienv$$l$3lambda, $Cont);
@@ -115,7 +115,7 @@ struct minienv$$l$4lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$4lambda, $Env, $int, $function);
     $NoneType (*__serialize__) (minienv$$l$4lambda, $Serial$state);
-    minienv$$l$4lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$4lambda (*__deserialize__) (minienv$$l$4lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$4lambda);
     $str (*__str__) (minienv$$l$4lambda);
     $R (*__call__) (minienv$$l$4lambda, $Cont);
@@ -132,7 +132,7 @@ struct minienv$$l$5lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$5lambda, $Env, $int);
     $NoneType (*__serialize__) (minienv$$l$5lambda, $Serial$state);
-    minienv$$l$5lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$5lambda (*__deserialize__) (minienv$$l$5lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$5lambda);
     $str (*__str__) (minienv$$l$5lambda);
     $R (*__call__) (minienv$$l$5lambda, $Cont);
@@ -148,7 +148,7 @@ struct minienv$$l$6lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$6lambda, $Connection, $str);
     $NoneType (*__serialize__) (minienv$$l$6lambda, $Serial$state);
-    minienv$$l$6lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$6lambda (*__deserialize__) (minienv$$l$6lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$6lambda);
     $str (*__str__) (minienv$$l$6lambda);
     $R (*__call__) (minienv$$l$6lambda, $Cont);
@@ -164,7 +164,7 @@ struct minienv$$l$7lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$7lambda, $Connection);
     $NoneType (*__serialize__) (minienv$$l$7lambda, $Serial$state);
-    minienv$$l$7lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$7lambda (*__deserialize__) (minienv$$l$7lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$7lambda);
     $str (*__str__) (minienv$$l$7lambda);
     $R (*__call__) (minienv$$l$7lambda, $Cont);
@@ -179,7 +179,7 @@ struct minienv$$l$8lambda$class {
     $Super$class $superclass;
     $NoneType (*__init__) (minienv$$l$8lambda, $Connection, $function, $function);
     $NoneType (*__serialize__) (minienv$$l$8lambda, $Serial$state);
-    minienv$$l$8lambda (*__deserialize__) ($Serial$state);
+    minienv$$l$8lambda (*__deserialize__) (minienv$$l$8lambda, $Serial$state);
     $bool (*__bool__) (minienv$$l$8lambda);
     $str (*__str__) (minienv$$l$8lambda);
     $R (*__call__) (minienv$$l$8lambda, $Cont);
@@ -196,7 +196,7 @@ struct $Env$class {
     $Super$class $superclass;
     $R (*__init__) ($Env, $list, $Cont);
     $NoneType (*__serialize__) ($Env, $Serial$state);
-    $Env (*__deserialize__) ($Serial$state);
+    $Env (*__deserialize__) ($Env, $Serial$state);
     $bool (*__bool__) ($Env);
     $str (*__str__) ($Env);
     $R (*stdout_write$local) ($Env, $str, $Cont);
@@ -225,7 +225,7 @@ struct $Connection$class {
     $Super$class $superclass;
     $R (*__init__) ($Connection, int, $Cont);
     $NoneType (*__serialize__) ($Connection, $Serial$state);
-    $Connection (*__deserialize__) ($Serial$state);
+    $Connection (*__deserialize__) ($Connection, $Serial$state);
     $bool (*__bool__) ($Connection);
     $str (*__str__) ($Connection);
     $R (*write$local) ($Connection, $str, $Cont);

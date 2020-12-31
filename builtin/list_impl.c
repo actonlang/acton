@@ -44,14 +44,15 @@ void $list_serialize($list self,$Serial$state state) {
   }
 }
  
-$list $list_deserialize($Serial$state state) {
+$list $list_deserialize($list res, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
   if (this->class_id < 0) {
     return ($list)$dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    $list res = $list_new((int)(long)this->blob[0]);
+    if (!res)
+       res = $list_new((int)(long)this->blob[0]);
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->length = res->capacity;
     for (int i = 0; i < res->length; i++) 
@@ -177,8 +178,9 @@ void $Iterator$list_serialize($Iterator$list self,$Serial$state state) {
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$list $Iterator$list$_deserialize($Serial$state state) {
-   $Iterator$list res = $DNEW($Iterator$list,state);
+$Iterator$list $Iterator$list$_deserialize($Iterator$list res, $Serial$state state) {
+   if(!res)
+      res = $DNEW($Iterator$list,state);
    res->src = ($list)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;

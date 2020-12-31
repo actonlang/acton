@@ -7,7 +7,7 @@ struct numpy$$ndarray$class {
   $Super$class $superclass;
   void (*__init__)(numpy$$ndarray,$WORD);
   void (*__serialize__)(numpy$$ndarray,$Serial$state); 
-  numpy$$ndarray (*__deserialize__)($Serial$state);
+  numpy$$ndarray (*__deserialize__)(numpy$$ndarray,$Serial$state);
   $bool (*__bool__)(numpy$$ndarray);
   $str (*__str__)(numpy$$ndarray);
   numpy$$ndarray (*reshape)(numpy$$ndarray,$list);
@@ -56,7 +56,7 @@ struct numpy$$Iterator$ndarray$class {
   $Super$class $superclass;
   void (*__init__)(numpy$$Iterator$ndarray, numpy$$Primitive, numpy$$ndarray);
   void (*__serialize__)(numpy$$Iterator$ndarray,$Serial$state);
-  numpy$$Iterator$ndarray (*__deserialize__)($Serial$state);
+  numpy$$Iterator$ndarray (*__deserialize__)(numpy$$Iterator$ndarray,$Serial$state);
   $bool (*__bool__)(numpy$$Iterator$ndarray);
   $str (*__str__)(numpy$$Iterator$ndarray);
   $WORD (*__next__)(numpy$$Iterator$ndarray);

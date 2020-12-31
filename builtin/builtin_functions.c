@@ -46,8 +46,9 @@ void $Iterator$enumerate_serialize($Iterator$enumerate self,$Serial$state state)
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$enumerate $Iterator$enumerate$_deserialize($Serial$state state) {
-   $Iterator$enumerate res = $DNEW($Iterator$enumerate,state);
+$Iterator$enumerate $Iterator$enumerate$_deserialize($Iterator$enumerate res,$Serial$state state) {
+    if (!res)
+       res = $DNEW($Iterator$enumerate,state);
    res->it = $step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -98,8 +99,9 @@ void $Iterator$filter_serialize($Iterator$filter self,$Serial$state state) {
   $step_serialize(self->it,state);
 }
 
-$Iterator$filter $Iterator$filter$_deserialize($Serial$state state) {
-   $Iterator$filter res = $DNEW($Iterator$filter,state);
+$Iterator$filter $Iterator$filter$_deserialize($Iterator$filter res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$filter,state);
    res->it = $step_deserialize(state);
    return res;
 }
@@ -146,8 +148,9 @@ void $Iterator$map_serialize($Iterator$map self,$Serial$state state) {
   $step_serialize(self->it,state);
 }
 
-$Iterator$map $Iterator$map$_deserialize($Serial$state state) {
-   $Iterator$map res = $DNEW($Iterator$map,state);
+$Iterator$map $Iterator$map$_deserialize($Iterator$map res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$map,state);
    res->it = $step_deserialize(state);
    return res;
 }
@@ -241,8 +244,9 @@ void $Iterator$zip_serialize($Iterator$zip self,$Serial$state state) {
   $step_serialize(self->it2,state);
 }
 
-$Iterator$zip $Iterator$zip$_deserialize($Serial$state state) {
-   $Iterator$zip res = $DNEW($Iterator$zip,state);
+$Iterator$zip $Iterator$zip$_deserialize($Iterator$zip res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$zip,state);
    res->it1 = $step_deserialize(state);
    res->it2 = $step_deserialize(state);
    return res;

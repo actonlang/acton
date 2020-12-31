@@ -21,7 +21,7 @@ void $bool_serialize($bool self, $Serial$state state) {
   $val_serialize(BOOL_ID,&self->val,state);
 }
 
-$bool $bool_deserialize($Serial$state state) {
+$bool $bool_deserialize($bool self, $Serial$state state) {
   return to$bool((long)$val_deserialize(state));
 }
 

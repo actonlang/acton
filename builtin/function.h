@@ -7,7 +7,7 @@ struct $function$class {
     $Super$class $superclass;
     void (*__init__)($function);
     void (*__serialize__)($function, $Serial$state);
-    $function (*__deserialize__)($Serial$state);
+    $function (*__deserialize__)($function, $Serial$state);
     $bool (*__bool__)($function);
     $str (*__str__)($function);
     $WORD (*__call__)($function, ...);

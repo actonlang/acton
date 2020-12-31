@@ -4,7 +4,7 @@ struct $BaseException$class {
   $Super$class $superclass;
   void (*__init__)($BaseException,$str);
   void (*__serialize__)($BaseException, $Serial$state);
-  $BaseException (*__deserialize__)($Serial$state);
+  $BaseException (*__deserialize__)($BaseException, $Serial$state);
   $bool (*__bool__)($BaseException);
   $str (*__str__)($BaseException);
 };
@@ -25,7 +25,7 @@ struct $SystemExit$class {
   $Super$class $superclass;
   void (*__init__)($SystemExit,$str);
   void (*__serialize__)($SystemExit,$Serial$state);
-  $SystemExit (*__deserialize__)($Serial$state);
+  $SystemExit (*__deserialize__)($SystemExit,$Serial$state);
   $bool (*__bool__)($SystemExit);
   $str (*__str__)($SystemExit);
 };
@@ -46,7 +46,7 @@ struct $KeyboardInterrupt$class {
   $Super$class $superclass;
   void (*__init__)($KeyboardInterrupt,$str);
   void (*__serialize__)($KeyboardInterrupt,$Serial$state);
-  $KeyboardInterrupt (*__deserialize__)($Serial$state);
+  $KeyboardInterrupt (*__deserialize__)($KeyboardInterrupt,$Serial$state);
   $bool (*__bool__)($KeyboardInterrupt);
   $str (*__str__)($KeyboardInterrupt);
 };
@@ -67,7 +67,7 @@ struct $Exception$class {
   $Super$class $superclass;
   void (*__init__)($Exception,$str);
   void (*__serialize__)($Exception,$Serial$state);
-  $Exception (*__deserialize__)($Serial$state);
+  $Exception (*__deserialize__)($Exception,$Serial$state);
   $bool (*__bool__)($Exception);
   $str (*__str__)($Exception);
 };
@@ -88,7 +88,7 @@ struct $AssertionError$class {
   $Super$class $superclass;
   void (*__init__)($AssertionError,$str);
   void (*__serialize__)($AssertionError,$Serial$state);
-  $AssertionError (*__deserialize__)($Serial$state);
+  $AssertionError (*__deserialize__)($AssertionError,$Serial$state);
   $bool (*__bool__)($AssertionError);
   $str (*__str__)($AssertionError);
 };
@@ -109,7 +109,7 @@ struct $LookupError$class {
   $Super$class $superclass;
   void (*__init__)($LookupError,$str);
   void (*__serialize__)($LookupError,$Serial$state);
-  $LookupError (*__deserialize__)($Serial$state);
+  $LookupError (*__deserialize__)($LookupError,$Serial$state);
   $bool (*__bool__)($LookupError);
   $str (*__str__)($LookupError);
 };
@@ -130,7 +130,7 @@ struct $IndexError$class {
   $Super$class $superclass;
   void (*__init__)($IndexError,$str);
   void (*__serialize__)($IndexError, $Serial$state);
-  $IndexError (*__deserialize__)($Serial$state);
+  $IndexError (*__deserialize__)($IndexError, $Serial$state);
   $bool (*__bool__)($IndexError);
   $str (*__str__)($IndexError);
 };
@@ -151,7 +151,7 @@ struct $KeyError$class {
   $Super$class $superclass;
   void (*__init__)($KeyError,$str);
   void (*__serialize__)($KeyError,$Serial$state);
-  $KeyError (*__deserialize__)($Serial$state);
+  $KeyError (*__deserialize__)($KeyError,$Serial$state);
   $bool (*__bool__)($KeyError);
   $str (*__str__)($KeyError);
 };
@@ -172,7 +172,7 @@ struct $MemoryError$class {
   $Super$class $superclass;
   void (*__init__)($MemoryError,$str);
   void (*__serialize__)($MemoryError, $Serial$state);
-  $MemoryError (*__deserialize__)($Serial$state);
+  $MemoryError (*__deserialize__)($MemoryError, $Serial$state);
   $bool (*__bool__)($MemoryError);
   $str (*__str__)($MemoryError);
 };
@@ -193,7 +193,7 @@ struct $OSError$class {
   $Super$class $superclass;
   void (*__init__)($OSError,$str);
   void (*__serialize__)($OSError, $Serial$state);
-  $OSError (*__deserialize__)($Serial$state);
+  $OSError (*__deserialize__)($OSError, $Serial$state);
   $bool (*__bool__)($OSError);
   $str (*__str__)($OSError);
 };
@@ -214,7 +214,7 @@ struct $RuntimeError$class {
   $Super$class $superclass;
   void (*__init__)($RuntimeError,$str);
   void (*__serialize__)($RuntimeError, $Serial$state);
-  $RuntimeError (*__deserialize__)($Serial$state);
+  $RuntimeError (*__deserialize__)($RuntimeError, $Serial$state);
   $bool (*__bool__)($RuntimeError);
   $str (*__str__)($RuntimeError);
 };
@@ -235,7 +235,7 @@ struct $NotImplementedError$class {
   $Super$class $superclass;
   void (*__init__)($NotImplementedError,$str);
   void (*__serialize__)($NotImplementedError,$Serial$state);
-  $NotImplementedError (*__deserialize__)($Serial$state);
+  $NotImplementedError (*__deserialize__)($NotImplementedError,$Serial$state);
   $bool (*__bool__)($NotImplementedError);
   $str (*__str__)($NotImplementedError);
 };
@@ -256,7 +256,7 @@ struct $ValueError$class {
   $Super$class $superclass;
   void (*__init__)($ValueError,$str);
   void (*__serialize__)($ValueError, $Serial$state);
-  $ValueError (*__deserialize__)($Serial$state);
+  $ValueError (*__deserialize__)($ValueError, $Serial$state);
   $bool (*__bool__)($ValueError);
   $str (*__str__)($ValueError);
 };

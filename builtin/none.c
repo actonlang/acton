@@ -7,7 +7,7 @@ void $NoneType__serialize__($NoneType self, $Serial$state state) {
   $add_header(NONE_ID,0,state);
 }
 
-$NoneType $NoneType__deserialize__( $Serial$state state) {
+$NoneType $NoneType__deserialize__($NoneType self, $Serial$state state) {
   state->row = state->row->next;
   state->row_no++;
   return NULL;

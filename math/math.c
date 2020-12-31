@@ -20,7 +20,7 @@ $NoneType math$$RealFuns$float$__serialize__(math$$RealFuns$float wit, $Serial$s
     return $None;
 }
 
-math$$RealFuns$float math$$RealFuns$float$__deserialize__($Serial$state state) {
+math$$RealFuns$float math$$RealFuns$float$__deserialize__(math$$RealFuns$float wit, $Serial$state state) {
     math$$RealFuns$float res = $DNEW(math$$RealFuns$float,state);
     return res;
 }

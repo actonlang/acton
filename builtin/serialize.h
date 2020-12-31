@@ -63,7 +63,7 @@ struct $Hashable$WORD$class {
     $Super$class superclass;
     void (*__init__)($Hashable$WORD);
     void (*__serialize__)($Hashable$WORD,$Serial$state);
-    $Hashable$WORD (*__deserialize__)($Serial$state);
+    $Hashable$WORD (*__deserialize__)($Hashable$WORD,$Serial$state);
     $bool (*__bool__)($Hashable$WORD);
     $str (*__str__)($Hashable$WORD);
     $bool (*__eq__)($Hashable$WORD, $WORD, $WORD);

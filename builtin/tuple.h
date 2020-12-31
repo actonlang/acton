@@ -4,7 +4,7 @@ struct $tuple$class {
   $Super$class $superclass;
   void (*__init__)($tuple,int,...);
   void (*__serialize__)($tuple,$Serial$state); 
-  $tuple (*__deserialize__)($Serial$state);
+  $tuple (*__deserialize__)($tuple,$Serial$state);
   $bool (*__bool__)($tuple);
   $str (*__str__)($tuple);
 };
@@ -44,7 +44,7 @@ struct $Iterator$tuple$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$tuple, $tuple);
   void (*__serialize__)($Iterator$tuple,$Serial$state);
-  $Iterator$tuple (*__deserialize__)($Serial$state);
+  $Iterator$tuple (*__deserialize__)($Iterator$tuple,$Serial$state);
   $bool (*__bool__)($Iterator$tuple);
   $str (*__str__)($Iterator$tuple);
   $WORD(*__next__)($Iterator$tuple);

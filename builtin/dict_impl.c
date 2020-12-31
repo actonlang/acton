@@ -104,14 +104,15 @@ void $dict_serialize($dict self,$Serial$state state) {
   }
 }
 
-$dict $dict_deserialize($Serial$state state) {
+$dict $dict_deserialize($dict res, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
   if (this->class_id < 0) {
     return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    $dict res = malloc(sizeof(struct $dict));
+    if (!res)
+       res = malloc(sizeof(struct $dict));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &$dict$methods;
     res->numelements = (long)this->blob[0];
@@ -331,8 +332,9 @@ void $Iterator$dict_serialize($Iterator$dict self, $Serial$state state) {
 }
 
 
-$Iterator$dict $Iterator$dict$_deserialize($Serial$state state) {
-   $Iterator$dict res = $DNEW( $Iterator$dict,state);
+$Iterator$dict $Iterator$dict$_deserialize($Iterator$dict res, $Serial$state state) {
+   if (!res)
+      res = $DNEW( $Iterator$dict,state);
    res->src = ($dict)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -458,8 +460,9 @@ void $Iterator$dict$values_serialize($Iterator$dict$values self, $Serial$state s
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$dict$values $Iterator$dict$values_deserialize($Serial$state state) {
-   $Iterator$dict$values res = $DNEW($Iterator$dict$values,state);
+$Iterator$dict$values $Iterator$dict$values_deserialize($Iterator$dict$values res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$dict$values,state);
    res->src = ($dict)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -511,8 +514,9 @@ void $Iterator$dict$items_serialize($Iterator$dict$items self, $Serial$state sta
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$dict$items $Iterator$dict$items_deserialize($Serial$state state) {
-   $Iterator$dict$items res = $DNEW($Iterator$dict$items,state);
+$Iterator$dict$items $Iterator$dict$items_deserialize($Iterator$dict$items res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$dict$items,state);
    res->src = ($dict)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;

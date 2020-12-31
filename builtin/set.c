@@ -3,7 +3,7 @@
  
 
 void $set_serialize($set, $Serial$state);
-$set $set_deserialize($Serial$state);
+$set $set_deserialize($set, $Serial$state);
 
 struct $Ord$set $Ord$set_instance;
 struct $Minus$set $Minus$set_instance;
@@ -87,7 +87,7 @@ void $Set$set$__serialize__($Set$set self, $Serial$state state) {
   $step_serialize(self->w$Hashable$A$Set$set, state);
 }
 
-$Set$set $Set$set$__deserialize__($Serial$state state) {
+$Set$set $Set$set$__deserialize__($Set$set self, $Serial$state state) {
    $Set$set res = $DNEW($Set$set,state);
    res->w$Ord = ($Ord)$step_deserialize(state);
    res->w$Logical = ($Logical)$step_deserialize(state);
@@ -139,7 +139,7 @@ void $Ord$set$__serialize__($Ord$set self, $Serial$state state) {
   $step_serialize(self->w$Set, state);
 }
 
-$Ord$set $Ord$set$__deserialize__($Serial$state state) {
+$Ord$set $Ord$set$__deserialize__($Ord$set self, $Serial$state state) {
    $Ord$set res = $DNEW($Ord$set,state);
    res->w$Set = ($Set)$step_deserialize(state);
    return res;
@@ -175,7 +175,7 @@ void $Logical$set$__serialize__($Logical$set self, $Serial$state state) {
   $step_serialize(self->w$Set, state);
 }
 
-$Logical$set $Logical$set$__deserialize__($Serial$state state) {
+$Logical$set $Logical$set$__deserialize__($Logical$set self, $Serial$state state) {
    $Logical$set res = $DNEW($Logical$set,state);
    res->w$Set = ($Set)$step_deserialize(state);
    return res;
@@ -191,7 +191,7 @@ void $Minus$set$__serialize__($Minus$set self, $Serial$state state) {
   $step_serialize(self->w$Set, state);
 }
 
-$Minus$set $Minus$set$__deserialize__($Serial$state state) {
+$Minus$set $Minus$set$__deserialize__($Minus$set self, $Serial$state state) {
    $Minus$set res = $DNEW($Minus$set,state);
    res->w$Set = ($Set)$step_deserialize(state);
    return res;

@@ -13,7 +13,7 @@ struct $str$class {
   $Super$class $superclass;
   void (*__init__)($str, $struct);
   void (*__serialize__)($str,$Serial$state);
-  $str (*__deserialize__)($Serial$state);
+  $str (*__deserialize__)($str,$Serial$state);
   $bool (*__bool__)($str);
   $str (*__str__)($str);
   $str (*capitalize)($str s);
@@ -94,7 +94,7 @@ struct $Iterator$str$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$str, $str);
   void (*__serialize__)($Iterator$str,$Serial$state);
-  $Iterator$str (*__deserialize__)($Serial$state);
+  $Iterator$str (*__deserialize__)($Iterator$str,$Serial$state);
   $bool (*__bool__)($Iterator$str);
   $str (*__str__)($Iterator$str);
   $str (*__next__)($Iterator$str);
@@ -127,7 +127,7 @@ struct $bytearray$class {
   $Super$class $superclass;
   void (*__init__)($bytearray, $struct);
   void (*__serialize__)($bytearray,$Serial$state);
-  $bytearray (*__deserialize__)($Serial$state);
+  $bytearray (*__deserialize__)($bytearray,$Serial$state);
   $bool (*__bool__)($bytearray);
   $str (*__str__)($bytearray);
   $bytearray (*capitalize)($bytearray s);
@@ -200,7 +200,7 @@ struct $Iterator$bytearray$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$bytearray, $bytearray);
   void (*__serialize__)($Iterator$bytearray,$Serial$state);
-  $Iterator$bytearray (*__deserialize__)($Serial$state);
+  $Iterator$bytearray (*__deserialize__)($Iterator$bytearray,$Serial$state);
   $bool (*__bool__)($Iterator$bytearray);
   $str (*__str__)($Iterator$bytearray);
   $int (*__next__)($Iterator$bytearray);

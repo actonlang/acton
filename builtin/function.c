@@ -16,7 +16,7 @@ void $function$__serialize__($function self, $Serial$state state) {
     // TBD
 }
 
-$function $function$__deserialize__($Serial$state state) {
+$function $function$__deserialize__($function self, $Serial$state state) {
     // TBD
     return NULL;
 }

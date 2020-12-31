@@ -88,7 +88,7 @@ void $Plus$list$__serialize__($Plus$list self, $Serial$state state) {
   $step_serialize(self->w$Sequence, state);
 }
 
-$Plus$list $Plus$list$__deserialize__($Serial$state state) {
+$Plus$list $Plus$list$__deserialize__($Plus$list self, $Serial$state state) {
    $Plus$list res = $DNEW($Plus$list,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
@@ -102,7 +102,7 @@ void $Collection$list$__serialize__($Collection$list self, $Serial$state state) 
   $step_serialize(self->w$Sequence, state);
 }
 
-$Collection$list $Collection$list$__deserialize__($Serial$state state) {
+$Collection$list $Collection$list$__deserialize__($Collection$list self, $Serial$state state) {
    $Collection$list res = $DNEW($Collection$list,state);
    res->w$Sequence = ($Sequence)$step_deserialize(state);
    return res;
@@ -125,7 +125,7 @@ void $Sequence$list$__serialize__($Sequence$list self, $Serial$state state) {
   $step_serialize(self->w$Plus, state);
 }
 
-$Sequence$list $Sequence$list$__deserialize__($Serial$state state) {
+$Sequence$list $Sequence$list$__deserialize__($Sequence$list self, $Serial$state state) {
    $Sequence$list res = $DNEW($Sequence$list,state);
    res->w$Collection = ($Collection)$step_deserialize(state);
    res->w$Plus = ($Plus)$step_deserialize(state);
@@ -161,7 +161,7 @@ void $Container$list$__serialize__($Container$list self, $Serial$state state) {
   $step_serialize(self->w$Eq$A$Container$list, state);
 }
 
-$Container$list $Container$list$__deserialize__($Serial$state state) {
+$Container$list $Container$list$__deserialize__($Container$list self, $Serial$state state) {
    $Container$list res = $DNEW($Container$list,state);
    res->w$Eq$A$Container$list = ($Eq)$step_deserialize(state);
    return res;

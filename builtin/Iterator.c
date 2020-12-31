@@ -29,7 +29,7 @@ struct $Iterator *$Iterator$witness = &$Iterator_instance;
 void $Iterable$Iterator$__serialize__( $Iterable$Iterator self, $Serial$state state) {
 }
 
-$Iterable$Iterator $Iterable$Iterator$__deserialize__($Serial$state state) {
+$Iterable$Iterator $Iterable$Iterator$__deserialize__($Iterable$Iterator self, $Serial$state state) {
    $Iterable$Iterator res = $DNEW($Iterable$Iterator,state);
    return res;
 }

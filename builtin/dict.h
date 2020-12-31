@@ -4,7 +4,7 @@ struct $dict$class {
   $Super$class $superclass;
   void(*__init__)($dict, $Hashable, $Iterable, $WORD);
   void (*__serialize__)($dict,$Serial$state);
-  $dict (*__deserialize__)($Serial$state);
+  $dict (*__deserialize__)($dict,$Serial$state);
   $bool (*__bool__)($dict);
   $str (*__str__)($dict);
 };
@@ -37,7 +37,7 @@ struct $Iterator$dict$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict, $dict);
   void (*__serialize__)($Iterator$dict,$Serial$state);
-  $Iterator$dict (*__deserialize__)($Serial$state);
+  $Iterator$dict (*__deserialize__)($Iterator$dict,$Serial$state);
   $bool (*__bool__)($Iterator$dict);
   $str (*__str__)($Iterator$dict);
   $WORD(*__next__)($Iterator$dict);
@@ -62,7 +62,7 @@ struct $Iterator$dict$values$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$values, $dict);
   void (*__serialize__)($Iterator$dict$values,$Serial$state);
-  $Iterator$dict$values (*__deserialize__)($Serial$state);
+  $Iterator$dict$values (*__deserialize__)($Iterator$dict$values,$Serial$state);
   $bool (*__bool__)($Iterator$dict$values);
   $str (*__str__)($Iterator$dict$values);
   $WORD(*__next__)($Iterator$dict$values);
@@ -87,7 +87,7 @@ struct $Iterator$dict$items$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$dict$items, $dict);
   void (*__serialize__)($Iterator$dict$items,$Serial$state);
-  $Iterator$dict$items (*__deserialize__)($Serial$state);
+  $Iterator$dict$items (*__deserialize__)($Iterator$dict$items,$Serial$state);
   $bool (*__bool__)($Iterator$dict$items);
   $str (*__str__)($Iterator$dict$items);
   $WORD(*__next__)($Iterator$dict$items);

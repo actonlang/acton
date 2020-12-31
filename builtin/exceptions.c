@@ -20,7 +20,7 @@ void $BaseException$__serialize__($BaseException self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$BaseException $BaseException$__deserialize__($Serial$state state) {
+$BaseException $BaseException$__deserialize__($BaseException self, $Serial$state state) {
   $BaseException res = $DNEW($BaseException,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -53,7 +53,7 @@ void $SystemExit$__serialize__($SystemExit self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$SystemExit $SystemExit$__deserialize__($Serial$state state) {
+$SystemExit $SystemExit$__deserialize__($SystemExit self, $Serial$state state) {
   $SystemExit res = $DNEW($SystemExit,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -85,7 +85,7 @@ void $KeyboardInterrupt$__serialize__($KeyboardInterrupt self,$Serial$state stat
     $step_serialize(self->error_message,state);
 };
 
-$KeyboardInterrupt $KeyboardInterrupt$__deserialize__($Serial$state state) {
+$KeyboardInterrupt $KeyboardInterrupt$__deserialize__($KeyboardInterrupt self, $Serial$state state) {
   $KeyboardInterrupt res = $DNEW($KeyboardInterrupt,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -117,7 +117,7 @@ void $Exception$__serialize__($Exception self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$Exception $Exception$__deserialize__($Serial$state state) {
+$Exception $Exception$__deserialize__($Exception self, $Serial$state state) {
   $Exception res = $DNEW($Exception,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -149,7 +149,7 @@ void $AssertionError$__serialize__($AssertionError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$AssertionError $AssertionError$__deserialize__($Serial$state state) {
+$AssertionError $AssertionError$__deserialize__($AssertionError self, $Serial$state state) {
   $AssertionError res = $DNEW($AssertionError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -181,7 +181,7 @@ void $LookupError$__serialize__($LookupError self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$LookupError $LookupError$__deserialize__($Serial$state state) {
+$LookupError $LookupError$__deserialize__($LookupError self,$Serial$state state) {
   $LookupError res = $DNEW($LookupError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -213,7 +213,7 @@ void $IndexError$__serialize__($IndexError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$IndexError $IndexError$__deserialize__($Serial$state state) {
+$IndexError $IndexError$__deserialize__($IndexError self, $Serial$state state) {
   $IndexError res = $DNEW($IndexError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -244,7 +244,7 @@ void $KeyError$__serialize__($KeyError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$KeyError $KeyError$__deserialize__($Serial$state state) {
+$KeyError $KeyError$__deserialize__($KeyError self, $Serial$state state) {
   $KeyError res = $DNEW($KeyError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -277,7 +277,7 @@ void $MemoryError$__serialize__($MemoryError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$MemoryError $MemoryError$__deserialize__($Serial$state state) {
+$MemoryError $MemoryError$__deserialize__($MemoryError self, $Serial$state state) {
   $MemoryError res = $DNEW($MemoryError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -308,7 +308,7 @@ void $OSError$__serialize__($OSError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$OSError $OSError$__deserialize__($Serial$state state) {
+$OSError $OSError$__deserialize__($OSError self, $Serial$state state) {
   $OSError res = $DNEW($OSError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -335,7 +335,7 @@ void $RuntimeError$__serialize__($RuntimeError self, $Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$RuntimeError $RuntimeError$__deserialize__($Serial$state state) {
+$RuntimeError $RuntimeError$__deserialize__($RuntimeError self, $Serial$state state) {
   $RuntimeError res = $DNEW($RuntimeError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -362,7 +362,7 @@ void $NotImplementedError$__serialize__($NotImplementedError self, $Serial$state
     $step_serialize(self->error_message,state);
 };
 
-$NotImplementedError $NotImplementedError$__deserialize__($Serial$state state) {
+$NotImplementedError $NotImplementedError$__deserialize__($NotImplementedError self, $Serial$state state) {
   $NotImplementedError res = $DNEW($NotImplementedError,state);
   res->error_message = $step_deserialize(state);
   return res;
@@ -395,7 +395,7 @@ void $ValueError$__serialize__($ValueError self,$Serial$state state) {
     $step_serialize(self->error_message,state);
 };
 
-$ValueError $ValueError$__deserialize__($Serial$state state) {
+$ValueError $ValueError$__deserialize__($ValueError self,$Serial$state state) {
   $ValueError res = $DNEW($ValueError,state);
   res->error_message = $step_deserialize(state);
   return res;

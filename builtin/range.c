@@ -40,7 +40,7 @@ void $range$__serialize__($range self, $Serial$state state) {
   row->blob[2] = ($WORD)self->step;
 }
 
-$range $range$__deserialize__($Serial$state state) {
+$range $range$__deserialize__($range self, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
@@ -84,7 +84,7 @@ void $Iterator$range_serialize($Iterator$range self, $Serial$state state) {
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$range $Iterator$range$_deserialize($Serial$state state) {
+$Iterator$range $Iterator$range$_deserialize($Iterator$range self, $Serial$state state) {
    $Iterator$range res = $DNEW($Iterator$range,state);
    res->src = ($range)$step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
@@ -131,8 +131,9 @@ void $Iterable$range$__init__ ($Iterable$range wit){
 void $Iterable$range$__serialize__($Iterable$range self, $Serial$state state) {
 }
 
-$Iterable$range $Iterable$range$__deserialize__($Serial$state state) {
-   $Iterable$range res = $DNEW($Iterable$range,state);
+$Iterable$range $Iterable$range$__deserialize__($Iterable$range res, $Serial$state state) {
+   if(!res)
+      res = $DNEW($Iterable$range,state);
    return res;
 }
 

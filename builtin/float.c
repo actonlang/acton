@@ -28,7 +28,7 @@ void $float_serialize($float self, $Serial$state state) {
   $val_serialize(FLOAT_ID,&self->val,state);
 }
 
-$float $float_deserialize($Serial$state state) {
+$float $float_deserialize($float self, $Serial$state state) {
  $WORD w = $val_deserialize(state);
  double x;
  memcpy(&x,&w,sizeof($WORD));
@@ -74,7 +74,7 @@ void $Real$float$__serialize__($Real$float self, $Serial$state state) {
   $step_serialize(self->w$Minus, state);
 }
 
-$Real$float $Real$float$__deserialize__($Serial$state state) {
+$Real$float $Real$float$__deserialize__($Real$float self, $Serial$state state) {
    $Real$float res = $DNEW($Real$float,state);
    res->w$Minus = ($Minus)$step_deserialize(state);
    return res;
@@ -156,7 +156,7 @@ void $Minus$float$__serialize__($Minus$float self, $Serial$state state) {
   $step_serialize(self->w$Real, state);
 }
 
-$Minus$float $Minus$float$__deserialize__($Serial$state state) {
+$Minus$float $Minus$float$__deserialize__($Minus$float self, $Serial$state state) {
    $Minus$float res = $DNEW($Minus$float,state);
    res->w$Real = ($Real)$step_deserialize(state);
    return res;
@@ -171,7 +171,7 @@ $float $Minus$float$__sub__($Minus$float wit,  $float a, $float b) {
 void $Ord$float$__serialize__($Ord$float self, $Serial$state state) {
 }
 
-$Ord$float $Ord$float$__deserialize__($Serial$state state) {
+$Ord$float $Ord$float$__deserialize__($Ord$float self, $Serial$state state) {
    $Ord$float res = $DNEW($Ord$float,state);
    return res;
 }
@@ -206,7 +206,7 @@ $bool $Ord$float$__ge__ ($Ord$float wit, $float a, $float b) {
 void $Hashable$float$__serialize__($Hashable$float self, $Serial$state state) {
 }
 
-$Hashable$float $Hashable$float$__deserialize__($Serial$state state) {
+$Hashable$float $Hashable$float$__deserialize__($Hashable$float self, $Serial$state state) {
    $Hashable$float res = $DNEW($Hashable$float,state);
    return res;
 }

@@ -20,7 +20,7 @@ void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray wit, $Serial$
     $step_serialize(wit->w$Primitive$A$Integral$ndarray, state);
 }
 
-numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state state) {
+numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__(numpy$$Integral$ndarray wit, $Serial$state state) {
     numpy$$Integral$ndarray res = $DNEW(numpy$$Integral$ndarray,state);
     res->w$Logical = ($Logical)$step_deserialize(state);
     res->w$Minus = ($Minus)$step_deserialize(state);
@@ -104,7 +104,7 @@ void numpy$$Logical$ndarray$__serialize__(numpy$$Logical$ndarray wit, $Serial$st
     $step_serialize(wit->w$Integral, state);
 }
 
-numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__($Serial$state state) {
+numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__(numpy$$Logical$ndarray wit, $Serial$state state) {
     numpy$$Logical$ndarray res = $DNEW(numpy$$Logical$ndarray,state);
     res->w$Integral = ($Integral)$step_deserialize(state);
     return res;
@@ -137,7 +137,7 @@ void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray wit, $Serial$state 
     $step_serialize(wit->w$Integral, state);
 }
 
-numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__($Serial$state state) {
+numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__(numpy$$Minus$ndarray wit, $Serial$state state) {
     numpy$$Minus$ndarray res = $DNEW(numpy$$Minus$ndarray,state);
     res->w$Integral = ($Integral)$step_deserialize(state);
     return res;
@@ -161,7 +161,7 @@ numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$new() {
     return res;
 }
 
-numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$__deserialize__($Serial$state state) {
+numpy$$Sliceable$ndarray numpy$$Sliceable$ndarray$__deserialize__(numpy$$Sliceable$ndarray wit, $Serial$state state) {
     numpy$$Sliceable$ndarray res = $DNEW(numpy$$Sliceable$ndarray,state);
     return res;
 }
@@ -320,7 +320,7 @@ numpy$$Iterable$ndarray numpy$$Iterable$ndarray$new(numpy$$Primitive pwit) {
 void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray wit, $Serial$state state) {
 }
 
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state state) {
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__(numpy$$Iterable$ndarray wit, $Serial$state state) {
     numpy$$Iterable$ndarray res = $DNEW(numpy$$Iterable$ndarray,state);
     return res;
 }
@@ -357,7 +357,7 @@ $NoneType numpy$$RealFuns$math$ndarray$__serialize__(numpy$$RealFuns$math$ndarra
     return $None;
 }
 
-numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$__deserialize__($Serial$state state) {
+numpy$$RealFuns$math$ndarray numpy$$RealFuns$math$ndarray$__deserialize__(numpy$$RealFuns$math$ndarray wit, $Serial$state state) {
     numpy$$RealFuns$math$ndarray res = $DNEW(numpy$$RealFuns$math$ndarray,state);
     res->w$Primitive$A$RealFuns$math$ndarray = (numpy$$Primitive)$step_deserialize(state);
     res->w$RealFuns$math$A$RealFuns$math$ndarray = (math$$RealFuns)$step_deserialize(state);

@@ -40,7 +40,7 @@ struct numpy$$Integral$ndarray$class {
     $Super$class $superclass;
     void (*__init__)(numpy$$Integral$ndarray,numpy$$Primitive);
     void (*__serialize__)(numpy$$Integral$ndarray,$Serial$state); 
-    numpy$$Integral$ndarray (*__deserialize__)($Serial$state);
+    numpy$$Integral$ndarray (*__deserialize__)(numpy$$Integral$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Integral$ndarray);
     $str (*__str__)(numpy$$Integral$ndarray);
     numpy$$ndarray (*__add__)(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -82,7 +82,7 @@ struct numpy$$Integral$ndarray$class {
 
 void numpy$$Integral$ndarray$__init__ (numpy$$Integral$ndarray, numpy$$Primitive);
 void numpy$$Integral$ndarray$__serialize__(numpy$$Integral$ndarray,$Serial$state); 
-numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__($Serial$state);
+numpy$$Integral$ndarray numpy$$Integral$ndarray$__deserialize__(numpy$$Integral$ndarray,$Serial$state);
 numpy$$ndarray numpy$$Integral$ndarray$__add__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Integral$ndarray$__iadd__(numpy$$Integral$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Integral$ndarray$__fromatom__(numpy$$Integral$ndarray,$atom);
@@ -125,7 +125,7 @@ struct numpy$$Logical$ndarray$class {
     $Super$class $superclass;
     void (*__init__)(numpy$$Logical$ndarray, $Integral);
     void (*__serialize__)(numpy$$Logical$ndarray,$Serial$state); 
-    numpy$$Logical$ndarray (*__deserialize__)($Serial$state);
+    numpy$$Logical$ndarray (*__deserialize__)(numpy$$Logical$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Logical$ndarray);
     $str (*__str__)(numpy$$Logical$ndarray);
     numpy$$ndarray (*__and__)(numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -138,7 +138,7 @@ struct numpy$$Logical$ndarray$class {
 
 void numpy$$Logical$ndarray$__init__ (numpy$$Logical$ndarray, $Integral);
 void numpy$$Logical$ndarray$__serialize__(numpy$$Logical$ndarray,$Serial$state); 
-numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__($Serial$state);
+numpy$$Logical$ndarray numpy$$Logical$ndarray$__deserialize__(numpy$$Logical$ndarray,$Serial$state);
 numpy$$ndarray numpy$$Logical$ndarray$__and__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Logical$ndarray$__or__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
 numpy$$ndarray numpy$$Logical$ndarray$__xor__ (numpy$$Logical$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -156,7 +156,7 @@ struct numpy$$Minus$ndarray$class {
     $Super$class $superclass;
     void (*__init__)(numpy$$Minus$ndarray, $Integral);
     void (*__serialize__)(numpy$$Minus$ndarray,$Serial$state); 
-    numpy$$Minus$ndarray (*__deserialize__)($Serial$state);
+    numpy$$Minus$ndarray (*__deserialize__)(numpy$$Minus$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Minus$ndarray);
     $str (*__str__)(numpy$$Minus$ndarray);
     numpy$$ndarray (*__sub__)(numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
@@ -165,7 +165,7 @@ struct numpy$$Minus$ndarray$class {
 
 void numpy$$Minus$ndarray$__init__ (numpy$$Minus$ndarray, $Integral);
 void numpy$$Minus$ndarray$__serialize__(numpy$$Minus$ndarray,$Serial$state); 
-numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__($Serial$state);
+numpy$$Minus$ndarray numpy$$Minus$ndarray$__deserialize__(numpy$$Minus$ndarray,$Serial$state);
 numpy$$ndarray numpy$$Minus$ndarray$__sub__ (numpy$$Minus$ndarray, numpy$$ndarray, numpy$$ndarray);
 
 // numpy$$Sliceable$ndarray /////////////////////////////////////////////////////////////////
@@ -179,7 +179,7 @@ struct numpy$$Sliceable$ndarray$class {
     $Super$class $superclass;
     void (*__init__) (numpy$$Sliceable$ndarray);
     void (*__serialize__) (numpy$$Sliceable$ndarray, $Serial$state);
-    numpy$$Sliceable$ndarray (*__deserialize__) ($Serial$state);
+    numpy$$Sliceable$ndarray (*__deserialize__) (numpy$$Sliceable$ndarray, $Serial$state);
     $bool (*__bool__)(numpy$$Sliceable$ndarray);
     $str (*__str__)(numpy$$Sliceable$ndarray);
     numpy$$ndarray (*__getitem__) (numpy$$Sliceable$ndarray, numpy$$ndarray, $int);
@@ -207,7 +207,7 @@ struct numpy$$Iterable$ndarray$class {
     $Super$class $superclass;
     void (*__init__)(numpy$$Iterable$ndarray, numpy$$Primitive);
     void (*__serialize__)(numpy$$Iterable$ndarray,$Serial$state); 
-    numpy$$Iterable$ndarray (*__deserialize__)($Serial$state);
+    numpy$$Iterable$ndarray (*__deserialize__)(numpy$$Iterable$ndarray,$Serial$state);
     $bool (*__bool__)(numpy$$Iterable$ndarray);
     $str (*__str__)(numpy$$Iterable$ndarray);
     $Iterator (*__iter__)(numpy$$Iterable$ndarray, numpy$$ndarray);
@@ -215,7 +215,7 @@ struct numpy$$Iterable$ndarray$class {
 
 void numpy$$Iterable$ndarray$__init__ (numpy$$Iterable$ndarray, numpy$$Primitive);
 void numpy$$Iterable$ndarray$__serialize__(numpy$$Iterable$ndarray,$Serial$state); 
-numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__($Serial$state);
+numpy$$Iterable$ndarray numpy$$Iterable$ndarray$__deserialize__(numpy$$Iterable$ndarray,$Serial$state);
 $Iterator numpy$$Iterable$ndarray$__iter__ (numpy$$Iterable$ndarray, numpy$$ndarray);
 
 // numpy$$RealFloat$ndarray ////////////////////////////////////////////////////////
@@ -233,7 +233,7 @@ struct numpy$$RealFuns$math$ndarray$class {
     $Super$class $superclass;
     $NoneType (*__init__) (numpy$$RealFuns$math$ndarray, numpy$$Primitive, math$$RealFuns);
     $NoneType (*__serialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
-    numpy$$RealFuns$math$ndarray (*__deserialize__) ($Serial$state);
+    numpy$$RealFuns$math$ndarray (*__deserialize__) (numpy$$RealFuns$math$ndarray, $Serial$state);
     $bool (*__bool__)(numpy$$RealFuns$math$ndarray);
     $str (*__str__)(numpy$$RealFuns$math$ndarray);
     numpy$$ndarray (*sqrt) (numpy$$RealFuns$math$ndarray, numpy$$ndarray);

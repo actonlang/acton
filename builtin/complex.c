@@ -21,7 +21,7 @@ void $complex_serialize($complex c,$Serial$state state) {
   memcpy(row->blob+1,&im,sizeof(double));
 }
 
-$complex $complex_deserialize($Serial$state state) {
+$complex $complex_deserialize($complex self, $Serial$state state) {
   $ROW this = state->row;
   state->row =this->next;
   state->row_no++;
@@ -49,8 +49,9 @@ void $Number$complex$__serialize__($Number$complex self, $Serial$state state) {
   $step_serialize(self->w$Minus, state);
 }
 
-$Number$complex $Number$complex$__deserialize__($Serial$state state) {
-   $Number$complex res = $DNEW($Number$complex,state);
+$Number$complex $Number$complex$__deserialize__($Number$complex res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Number$complex,state);
    res->w$Minus = ($Minus)$step_deserialize(state);
    return res;
 }
@@ -105,7 +106,7 @@ void $Minus$complex$__serialize__($Minus$complex self, $Serial$state state) {
   $step_serialize(self->w$Number, state);
 }
 
-$Minus$complex $Minus$complex$__deserialize__($Serial$state state) {
+$Minus$complex $Minus$complex$__deserialize__($Minus$complex self, $Serial$state state) {
    $Minus$complex res = $DNEW($Minus$complex,state);
    res->w$Number = ($Number)$step_deserialize(state);
    return res;
@@ -119,7 +120,7 @@ $complex $Minus$complex$__sub__($Minus$complex wit, $complex a, $complex b) {
 void $Eq$complex$__serialize__($Eq$complex self, $Serial$state state) {
 }
 
-$Eq$complex $Eq$complex$__deserialize__($Serial$state state) {
+$Eq$complex $Eq$complex$__deserialize__($Eq$complex self, $Serial$state state) {
    $Eq$complex res = $DNEW($Eq$complex,state);
    return res;
 }
@@ -138,7 +139,7 @@ $bool $Eq$complex$__ne__ ($Eq$complex wit, $complex a, $complex b) {
 void $Hashable$complex$__serialize__($Hashable$complex self, $Serial$state state) {
 }
 
-$Hashable$complex $Hashable$complex$__deserialize__($Serial$state state) {
+$Hashable$complex $Hashable$complex$__deserialize__($Hashable$complex self, $Serial$state state) {
    $Hashable$complex res = $DNEW($Hashable$complex,state);
    return res;
 }

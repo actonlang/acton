@@ -6,7 +6,7 @@ struct $complex$class {
   $Super$class $superclass;
   void (*__init__)($complex, $Number, $WORD);
   void (*__serialize__)($complex,$Serial$state);
-  $complex (*__deserialize__)($Serial$state);
+  $complex (*__deserialize__)($complex,$Serial$state);
   $bool (*__bool__)($complex);
   $str (*__str__)($complex);
 };

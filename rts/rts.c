@@ -133,8 +133,9 @@ void $Msg$__serialize__($Msg self, $Serial$state state) {
 }
 
 
-$Msg $Msg$__deserialize__($Serial$state state) {
-  $Msg res = $DNEW($Msg,state);
+$Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($Msg,state);
     res->next = $step_deserialize(state);
     res->to = $step_deserialize(state);
     res->cont = $step_deserialize(state);
@@ -165,26 +166,19 @@ $str $Actor$__str__($Actor self) {
   return to$str(s);
 }
 
-void $Actor$serialize($Actor self, $Serial$state state) {
+void $Actor$__serialize__($Actor self, $Serial$state state) {
     $step_serialize(self->next,state);
     $step_serialize(self->msg,state);
     $step_serialize(self->catcher,state);
 }
 
-void $Actor$deserialize($Actor self, $Serial$state state) {
-    self->next = $step_deserialize(state);
-    self->msg = $step_deserialize(state);
-    self->catcher = $step_deserialize(state);
-    atomic_flag_clear(&self->msg_lock);
-}
-
-void $Actor$__serialize__($Actor self, $Serial$state state) {
-    $Actor$serialize(self, state);
-}
-
-$Actor $Actor$__deserialize__($Serial$state state) {
-    $Actor res = $DNEW($Actor,state);
-    $Actor$deserialize(res, state);
+$Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($Actor,state);
+    res->next = $step_deserialize(state);
+    res->msg = $step_deserialize(state);
+    res->catcher = $step_deserialize(state);
+    atomic_flag_clear(&res->msg_lock);
     return res;
 }
 
@@ -210,7 +204,7 @@ void $Catcher$__serialize__($Catcher self, $Serial$state state) {
     $step_serialize(self->cont,state);
 }
 
-$Catcher $Catcher$__deserialize__($Serial$state state) {
+$Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
     res->next = $step_deserialize(state);
     res->cont = $step_deserialize(state);
@@ -234,7 +228,7 @@ void $Cont$__serialize__($Cont self, $Serial$state state) {
     // TBD
 }
 
-$Cont $Cont$__deserialize__($Serial$state state) {
+$Cont $Cont$__deserialize__($Cont self, $Serial$state state) {
     // TBD
     return NULL;
 }
@@ -261,7 +255,7 @@ void $ConstCont$__serialize__($ConstCont self, $Serial$state state) {
       $step_serialize(self->cont,state);
 }
 
-$ConstCont $ConstCont$__deserialize__($Serial$state state) {
+$ConstCont $ConstCont$__deserialize__($ConstCont self, $Serial$state state) {
     $ConstCont res = $DNEW($ConstCont,state);
     res->val = $step_deserialize(state);
     res->cont = $step_deserialize(state);
@@ -528,7 +522,7 @@ void $Done__serialize__($Cont self, $Serial$state state) {
   return;
 }
 
-$Cont $Done__deserialize__($Serial$state state) {
+$Cont $Done__deserialize__($Cont self, $Serial$state state) {
   $Cont res = $DNEW($Cont,state);
   res->$class = &$Done$methods;
   return res;

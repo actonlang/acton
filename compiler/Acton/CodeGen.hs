@@ -149,7 +149,7 @@ qnSuperClass                        = GName mPrim (Derived (name "Super") (name 
 
 serialize env c                     = text "void" <+> parens (char '*' <> gen env serializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
-deserialize env c                   = gen env (tCon c) <+> parens (char '*' <> gen env deserializeKW) <+> parens (gen env tSerialstate) <> semi
+deserialize env c                   = gen env (tCon c) <+> parens (char '*' <> gen env deserializeKW) <+> parens (gen env c <> comma <+> gen env tSerialstate) <> semi
 
 classlink env n                     = text "struct" <+> classname env n <+> text "*" <> gen env classKW <> semi
 
@@ -170,8 +170,8 @@ newcon' env n                       = gen env $ conName n
 
 conName (GName m n)                 = GName m (Derived n $ name "new")
 
-serializeFun (GName m n)            = GName m (Derived n $ name "serialize")
-deserializeFun (GName m n)          = GName m (Derived n $ name "deserialize")
+serializeSup env c                  = methodtable' env c <> dot <> gen env serializeKW
+deserializeSup env c                = methodtable' env c <> dot <> gen env deserializeKW
 
 
 classKW                             = primKW "class"
@@ -257,7 +257,7 @@ declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodnam
   where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
         self                        = name "self"
-        super_step | [c] <- sup_c   = gen env (serializeFun $ tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
+        super_step | [c] <- sup_c   = serializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
         super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
         step i                      = gen env primStepSerialize <> parens (gen env self <> text "->" <> gen env i <> comma <+> gen env st) <> semi
@@ -265,12 +265,13 @@ declSerialize env n c props sup_c   = (text "void" <+> genTopName env (methodnam
 declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (methodname n deserializeKW) <+> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (create $+$ super_step $+$ vcat [ step i | i <- props \\ super_props ] $+$ ret) $+$
                                       char '}'
-  where pars                        = PosPar st (Just tSerialstate) Nothing PosNIL
+  where pars                        = PosPar self (Just $ tCon c) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
         st                          = name "state"
         self                        = name "self"
         env1                        = ldefine [(st, NVar tSerialstate)] env
-        create                      = genTopName env n <+> gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
-        super_step | [c] <- sup_c   = gen env (deserializeFun $ tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
+        create                      = text "if" <+> parens (text "!" <> gen env self) $+$
+                                      nest 4 (gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi)
+        super_step | [c] <- sup_c   = deserializeSup env (tcname c) <> parens (parens (gen env $ tcname c) <> gen env self <> comma <+> gen env st) <> semi
                    | otherwise      = empty
         super_props                 = [ i | c <- sup_c, (i,_) <- attrEnv env c ]
         step i                      = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi

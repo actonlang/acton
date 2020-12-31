@@ -4,7 +4,7 @@ struct $set$class {
   $Super$class $superclass;
   void (*__init__)($set, $Hashable, $Iterable, $WORD);
   void (*__serialize__)($set, $Serial$state);
-  $set (*__deserialize__)($Serial$state);
+  $set (*__deserialize__)($set, $Serial$state);
   $bool (*__bool__)($set);
   $str (*__str__)($set);
   $set(*copy)($set, $Hashable);
@@ -49,7 +49,7 @@ struct $Iterator$set$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$set, $set);
   void (*__serialize__)($Iterator$set, $Serial$state);
-  $Iterator$set (*__deserialize__)($Serial$state);
+  $Iterator$set (*__deserialize__)($Iterator$set, $Serial$state);
   $bool (*__bool__)($Iterator$set);
   $str (*__str__)($Iterator$set);
   $WORD(*__next__)($Iterator$set);

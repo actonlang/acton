@@ -10,7 +10,7 @@ struct math$$RealFuns$class {
     $Super$class $superclass;
     $NoneType (*__init__) (math$$RealFuns);
     $NoneType (*__serialize__) (math$$RealFuns, $Serial$state);
-    math$$RealFuns (*__deserialize__) ($Serial$state);
+    math$$RealFuns (*__deserialize__) (math$$RealFuns, $Serial$state);
     $bool (*__bool__)(math$$RealFuns);
     $str (*__str__)(math$$RealFuns);
     $WORD (*sqrt) (math$$RealFuns, $WORD);
@@ -42,7 +42,7 @@ struct math$$RealFuns$float$class {
     $Super$class $superclass;
     $NoneType (*__init__) (math$$RealFuns$float);
     $NoneType (*__serialize__) (math$$RealFuns$float, $Serial$state);
-    math$$RealFuns$float (*__deserialize__) ($Serial$state);
+    math$$RealFuns$float (*__deserialize__) (math$$RealFuns$float, $Serial$state);
     $bool (*__bool__)(math$$RealFuns$float);
     $str (*__str__)(math$$RealFuns$float);
     $float (*sqrt) (math$$RealFuns$float, $float);

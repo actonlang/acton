@@ -38,7 +38,7 @@ void $tuple_serialize($tuple self, $Serial$state state) {
   }
 }
 
-$tuple $tuple_deserialize($Serial$state state) {
+$tuple $tuple_deserialize($tuple self, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
@@ -93,8 +93,9 @@ void $Iterator$tuple_serialize($Iterator$tuple self,$Serial$state state) {
   $step_serialize(to$int(self->nxt),state);
 }
 
-$Iterator$tuple $Iterator$tuple$_deserialize($Serial$state state) {
-   $Iterator$tuple res = $DNEW($Iterator$tuple,state);
+$Iterator$tuple $Iterator$tuple$_deserialize($Iterator$tuple res, $Serial$state state) {
+   if (!res)
+      res = $DNEW($Iterator$tuple,state);
    res->src = $step_deserialize(state);
    res->nxt = from$int(($int)$step_deserialize(state));
    return res;
@@ -117,7 +118,7 @@ void $Iterable$tuple$__init__($Iterable$tuple self) {
 void $Iterable$tuple$__serialize__($Iterable$tuple self, $Serial$state state) {
 }
 
-$Iterable$tuple $Iterable$tuple$__deserialize__($Serial$state state) {
+$Iterable$tuple $Iterable$tuple$__deserialize__($Iterable$tuple self, $Serial$state state) {
    $Iterable$tuple res = $DNEW($Iterable$tuple,state);
    return res;
 }
@@ -140,7 +141,7 @@ struct $Iterable$tuple *$Iterable$tuple$witness = &$Iterable$tuple$instance;
 void $Sliceable$tuple$__serialize__($Sliceable$tuple self, $Serial$state state) {
 }
 
-$Sliceable$tuple $Sliceable$tuple$__deserialize__($Serial$state state) {
+$Sliceable$tuple $Sliceable$tuple$__deserialize__($Sliceable$tuple self, $Serial$state state) {
    $Sliceable$tuple res = $DNEW($Sliceable$tuple,state);
    return res;
 }
@@ -230,7 +231,7 @@ void $Hashable$tuple$__serialize__($Hashable$tuple self, $Serial$state state) {
   // we need to serialize the array of Hashables!!
 }
 
-$Hashable$tuple $Hashable$tuple$__deserialize__($Serial$state state) {
+$Hashable$tuple $Hashable$tuple$__deserialize__($Hashable$tuple self, $Serial$state state) {
    $Hashable$tuple res = $DNEW($Hashable$tuple,state);
    res->w$Hashable$tuple$size = (int)from$int($step_deserialize(state));
    res->w$Hashable = NULL; // We do not get hash functions for the tuple!

@@ -4,7 +4,7 @@ struct $atom$class {
   $Super$class $superclass;
   void (*__init__)($atom, $WORD);
   void (*__serialize__)($atom,$Serial$state);
-  $atom (*__deserialize__)($Serial$state);
+  $atom (*__deserialize__)($atom,$Serial$state);
   $bool (*__bool__)($atom);
   $str (*__str__)($atom);
 };

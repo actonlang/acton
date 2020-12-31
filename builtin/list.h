@@ -4,7 +4,7 @@ struct $list$class {
   $Super$class $superclass;
   void (*__init__)($list, $Iterable, $WORD);
   void (*__serialize__)($list,$Serial$state);
-  $list (*__deserialize__)($Serial$state);
+  $list (*__deserialize__)($list,$Serial$state);
   $bool (*__bool__)($list);
   $str (*__str__)($list);
   $list(*copy)($list);
@@ -45,7 +45,7 @@ struct $Iterator$list$class {
   $Super$class $superclass;
   void (*__init__)($Iterator$list, $list);
   void (*__serialize__)($Iterator$list,$Serial$state);
-  $Iterator$list (*__deserialize__)($Serial$state);
+  $Iterator$list (*__deserialize__)($Iterator$list,$Serial$state);
   $bool (*__bool__)($Iterator$list);
   $str (*__str__)($Iterator$list);
   $WORD(*__next__)($Iterator$list);

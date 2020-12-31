@@ -4,7 +4,7 @@ struct $NoneType$class {
   $Super$class $superclass;
   void (*__init__)($NoneType);
   void (*__serialize__)($NoneType,$Serial$state);
-  $NoneType (*__deserialize__)($Serial$state);
+  $NoneType (*__deserialize__)($NoneType,$Serial$state);
   $bool (*__bool__)($NoneType);
   $str (*__str__)($NoneType);
 };

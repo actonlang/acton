@@ -83,14 +83,15 @@ void  numpy$$ndarray$__serialize__(numpy$$ndarray self, $Serial$state state) {
   $step_serialize(self->strides, state);
 }
 
-numpy$$ndarray numpy$$ndarray$__deserialize__($Serial$state state) {
+numpy$$ndarray numpy$$ndarray$__deserialize__(numpy$$ndarray res, $Serial$state state) {
   $ROW this = state->row;
   state->row = this->next;
   state->row_no++;
   if (this->class_id < 0) {
     return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
   } else {
-    numpy$$ndarray res = malloc(sizeof(struct numpy$$ndarray));
+    if (!res)
+       res = malloc(sizeof(struct numpy$$ndarray));
     $dict_setitem(state->done,($Hashable)$Hashable$int$witness,to$int(state->row_no-1),res);
     res->$class = &numpy$$ndarray$methods;
     res->elem_type = (enum ElemType)this->blob[0];
@@ -794,7 +795,7 @@ void numpy$$Iterator$$serialize(numpy$$Iterator$ndarray self,$Serial$state state
   RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
 }
 
-numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize($Serial$state state) {
+numpy$$Iterator$ndarray numpy$$Iterator$ndarray$_deserialize(numpy$$Iterator$ndarray self,$Serial$state state) {
   RAISE(($BaseException)$NEW($ValueError,to$str("(de)serialization not implemented for ndarray iterators")));
    return NULL;
 }

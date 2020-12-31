@@ -35,7 +35,7 @@ void $int_serialize($int n,$Serial$state state) {
   $val_serialize(INT_ID,&n->val,state);
 }
 
-$int $int_deserialize($Serial$state state) {
+$int $int_deserialize($int n,$Serial$state state) {
   return to$int((long)$val_deserialize(state));
 }
 
@@ -80,7 +80,7 @@ void $Integral$int$__serialize__($Integral$int self, $Serial$state state) {
   $step_serialize(self->w$Minus, state);
 }
 
-$Integral$int $Integral$int$__deserialize__($Serial$state state) {
+$Integral$int $Integral$int$__deserialize__($Integral$int self, $Serial$state state) {
    $Integral$int res = $DNEW($Integral$int,state);
    res->w$Logical = ($Logical)$step_deserialize(state);
    res->w$Minus = ($Minus)$step_deserialize(state);
@@ -224,7 +224,7 @@ void $Logical$int$__serialize__($Logical$int self, $Serial$state state) {
   $step_serialize(self->w$Integral, state);
 }
 
-$Logical$int $Logical$int$__deserialize__($Serial$state state) {
+$Logical$int $Logical$int$__deserialize__($Logical$int self, $Serial$state state) {
    $Logical$int res = $DNEW($Logical$int,state);
    res->w$Integral = ($Integral)$step_deserialize(state);
    return res;
@@ -248,7 +248,7 @@ void $Minus$int$__serialize__($Minus$int self, $Serial$state state) {
   $step_serialize(self->w$Integral, state);
 }
 
-$Minus$int $Minus$int$__deserialize__($Serial$state state) {
+$Minus$int $Minus$int$__deserialize__($Minus$int self, $Serial$state state) {
    $Minus$int res = $DNEW($Minus$int,state);
    res->w$Integral = ($Integral)$step_deserialize(state);
    return res;
@@ -263,7 +263,7 @@ $int $Minus$int$__sub__($Minus$int wit,  $int a, $int b) {
 void $Ord$int$__serialize__($Ord$int self, $Serial$state state) {
 }
 
-$Ord$int $Ord$int$__deserialize__($Serial$state state) {
+$Ord$int $Ord$int$__deserialize__($Ord$int self, $Serial$state state) {
    $Ord$int res = $DNEW($Ord$int,state);
    return res;
 }
@@ -297,7 +297,7 @@ $bool $Ord$int$__ge__ ($Ord$int wit, $int a, $int b) {
 void $Hashable$int$__serialize__($Hashable$int self, $Serial$state state) {
 }
 
-$Hashable$int $Hashable$int$__deserialize__($Serial$state state) {
+$Hashable$int $Hashable$int$__deserialize__($Hashable$int self, $Serial$state state) {
    $Hashable$int res = $DNEW($Hashable$int,state);
    return res;
 }

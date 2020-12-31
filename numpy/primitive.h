@@ -43,7 +43,7 @@ struct numpy$$Primitive$class {
   $Super$class $superclass;
   void (*__init__)(numpy$$Primitive);
   void (*__serialize__)(numpy$$Primitive,$Serial$state); 
-  numpy$$Primitive (*__deserialize__)($Serial$state);
+  numpy$$Primitive (*__deserialize__)(numpy$$Primitive,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive);
   $str (*__str__)(numpy$$Primitive);
   enum ElemType elem_type;
@@ -100,7 +100,7 @@ struct numpy$$Primitive$int$class {
   $Super$class $superclass;
   void (*__init__)(numpy$$Primitive$int);
   void (*__serialize__)(numpy$$Primitive$int,$Serial$state); 
-  numpy$$Primitive$int (*__deserialize__)($Serial$state);
+  numpy$$Primitive$int (*__deserialize__)(numpy$$Primitive$int,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$int);
   $str (*__str__)(numpy$$Primitive$int);
   enum ElemType elem_type;
@@ -154,7 +154,7 @@ struct numpy$$Primitive$float$class {
   $Super$class $superclass;
   void (*__init__)(numpy$$Primitive$float);
   void (*__serialize__)(numpy$$Primitive$float,$Serial$state); 
-  numpy$$Primitive$float (*__deserialize__)($Serial$state);
+  numpy$$Primitive$float (*__deserialize__)(numpy$$Primitive$float,$Serial$state);
   $bool (*__bool__)(numpy$$Primitive$float);
   $str (*__str__)(numpy$$Primitive$float);
   enum ElemType elem_type;

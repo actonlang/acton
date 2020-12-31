@@ -22,7 +22,7 @@ void $enqueue2(struct $ROWLISTHEADER *header, $ROW elem) {
 void $Hashable$WORD$__serialize__($Hashable$WORD self, $Serial$state state) {
 }
 
-$Hashable$WORD $Hashable$WORD$__deserialize__($Serial$state state) {
+$Hashable$WORD $Hashable$WORD$__deserialize__($Hashable$WORD self, $Serial$state state) {
    $Hashable$WORD res = $DNEW($Hashable$WORD,state);
    return res;
 }
@@ -94,9 +94,9 @@ $WORD $step_deserialize($Serial$state state) {
     if (this->class_id < 0)
       return $dict_get(state->done,($Hashable)$Hashable$int$witness,to$int((long)this->blob[0]),NULL);
     else 
-      return $GET_METHODS(this->class_id)->__deserialize__(state);
+      return $GET_METHODS(this->class_id)->__deserialize__(NULL, state);
   } else
-    return $GET_METHODS(abs(state->row->class_id))->__deserialize__(state);
+    return $GET_METHODS(abs(state->row->class_id))->__deserialize__(NULL, state);
 }
 
 

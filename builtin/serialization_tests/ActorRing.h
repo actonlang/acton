@@ -24,7 +24,7 @@ struct lambda$1$class {
     $Super$class $superclass;
     void (*__init__)(lambda$1, $Cont);
     void (*__serialize__)(lambda$1, $Serial$state);
-    lambda$1 (*__deserialize__)($Serial$state);
+    lambda$1 (*__deserialize__)(lambda$1, $Serial$state);
     $bool (*__bool__)(lambda$1);
     $str (*__str__)(lambda$1);
     $R (*__call__)(lambda$1, $Msg);    
@@ -40,7 +40,7 @@ struct lambda$2$class {
     $Super$class $superclass;
     void (*__init__)(lambda$2, Act, $int, $list);
     void (*__serialize__)(lambda$2, $Serial$state);
-    lambda$2 (*__deserialize__)($Serial$state);
+    lambda$2 (*__deserialize__)(lambda$2, $Serial$state);
     $bool (*__bool__)(lambda$2);
     $str (*__str__)(lambda$2);
     $R (*__call__)(lambda$2, $Cont);    
@@ -58,7 +58,7 @@ struct Act$class {
     $Super$class $superclass;
     $R (*__init__)(Act, $int, $Cont);
     void (*__serialize__)(Act, $Serial$state);
-    Act (*__deserialize__)($Serial$state);
+    Act (*__deserialize__)(Act, $Serial$state);
     $bool (*__bool__)(Act);
     $str (*__str__)(Act);
     $R (*act$local)(Act, $int, $list, $Cont);
@@ -81,7 +81,7 @@ struct lambda$3$class {
     $Super$class $superclass;
     void (*__init__)(lambda$3, Root, $Iterator, $Cont);
     void (*__serialize__)(lambda$3, $Serial$state);
-    lambda$3 (*__deserialize__)($Serial$state);
+    lambda$3 (*__deserialize__)(lambda$3, $Serial$state);
     $bool (*__bool__)(lambda$3);
     $str (*__str__)(lambda$3);
     $R (*__call__)(lambda$3, Act);
@@ -99,7 +99,7 @@ struct lambda$4$class {
     $Super$class $superclass;
     void (*__init__)(lambda$4, $Cont);
     void (*__serialize__)(lambda$4, $Serial$state);
-    lambda$4 (*__deserialize__)($Serial$state);
+    lambda$4 (*__deserialize__)(lambda$4, $Serial$state);
     $bool (*__bool__)(lambda$4);
     $str (*__str__)(lambda$4);
     $R (*__call__)(lambda$4, $WORD);
@@ -115,7 +115,7 @@ struct Root$class {
     $Super$class $superclass;
     $R (*__init__)(Root, $Env, $Cont);
     void (*__serialize__)(Root, $Serial$state);
-    Root (*__deserialize__)($Serial$state);
+    Root (*__deserialize__)(Root, $Serial$state);
     $bool (*__bool__)(Root);
     $str (*__str__)(Root);
 };
