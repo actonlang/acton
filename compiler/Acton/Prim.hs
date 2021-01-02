@@ -35,6 +35,7 @@ primRERAISE         = gPrim "RERAISE"
 primRAISE           = gPrim "RAISE"
 primRAISEFROM       = gPrim "RAISEFROM"
 primASSERT          = gPrim "ASSERT"
+primNEWACT          = gPrim "NEWACT"
 
 primISINSTANCE      = gPrim "ISINSTANCE"
 primCAST            = gPrim "CAST"
@@ -85,6 +86,8 @@ primMkEnv cls def var sig =
                             (noq primRAISE,         def scRAISE NoDec),
                             (noq primRAISEFROM,     def scRAISEFROM NoDec),
                             (noq primASSERT,        def scASSERT NoDec),
+                            (noq primNEWACT,        def scNEWACT NoDec),
+
                             (noq primISINSTANCE,    def scISINSTANCE NoDec),
                             (noq primCAST,          def scCAST NoDec),
                             (noq primCONSTCONT,     def scCONSTCONT NoDec),
@@ -114,13 +117,16 @@ primMkEnv cls def var sig =
 
 --  class $Actor (): pass
 clActor cls def sig = cls [] [([Nothing],cStruct)] te
-  where te          = [ (primKW "next",     sig (monotype tActor) Property),
-                        (primKW "msg",      sig (monotype (tMsg tWild)) Property),
-                        (primKW "outgoing", sig (monotype (tMsg tWild)) Property),
-                        (primKW "catcher",  sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
-                        (primKW "msg_lock", sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
-                        (boolKW,            def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
-                        (strKW,             def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec)
+  where te          = [ (primKW "next",      sig (monotype tActor) Property),
+                        (primKW "msg",       sig (monotype (tMsg tWild)) Property),
+                        (primKW "outgoing",  sig (monotype (tMsg tWild)) Property),
+                        (primKW "offspring", sig (monotype tActor) Property),
+                        (primKW "waitsfor",  sig (monotype (tMsg tWild)) Property),
+                        (primKW "catcher",   sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
+                        (primKW "msg_lock",  sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
+                        (primKW "globkey",   sig (monotype tWild) Property),
+                        (boolKW,             def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
+                        (strKW,              def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec)
                       ]
         
 
@@ -227,8 +233,12 @@ scRAISEFROM         = tSchema [] tRAISEFROM
   where tRAISEFROM  = tFun fxPure (posRow tException $ posRow tException posNil) kwdNil tNone
 
 --  $ASSERT         : pure (bool, ?str) -> None
-scASSERT           = tSchema [] tASSERT
-  where tASSERT    = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
+scASSERT            = tSchema [] tASSERT
+  where tASSERT     = tFun fxPure (posRow tBool $ posRow (tOpt tStr) posNil) kwdNil tNone
+
+--  $NEWACT         : pure ($Actor) -> None
+scNEWACT            = tSchema [] tNEWACT
+  where tNEWACT     = tFun fxPure (posRow tActor posNil) kwdNil tNone
 
 --  $ISINSTANCE     : pure (struct,_) -> bool
 scISINSTANCE        = tSchema [] tISINSTANCE

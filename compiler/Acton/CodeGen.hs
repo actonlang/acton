@@ -269,11 +269,12 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
         st                          = name "state"
         self                        = name "self"
         env1                        = ldefine [(st, NVar tSerialstate)] env
-        optcreate                   = text "if" <+> parens (text "!" <> gen env self) $+$
+        optcreate                   = (text "if" <+> parens (text "!" <> gen env self) <+> char '{') $+$
                                       nest 4 ((text "if" <+> parens (text "!" <> gen env st) <+> char '{') $+$
                                               nest 4 (alloc $+$ text "return" <+> gen env self <> semi) $+$
                                               char '}' $+$
-                                              create)
+                                              create) $+$
+                                      char '}'
         create                      = gen env self <+> text "=" <+> gen env primDNEW <> parens (genTopName env n <> comma <+> gen env st) <> semi
         alloc                       = gen env self <+> equals <+> malloc env (gname env n) <> semi $+$
                                       gen env self <> text "->" <> gen env1 classKW <+> equals <+> char '&' <> methodtable env1 n <> semi

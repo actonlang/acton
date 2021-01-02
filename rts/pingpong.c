@@ -96,6 +96,7 @@ $R Pingpong$__init__(Pingpong self, $int i, $Cont then) {
     $Actor$methods.__init__(($Actor)self);
     self->i = i;
     self->count = i;
+    $NEWACT(($Actor)self);
     return self->$class->ping(self, i, then);
 }
 
@@ -148,7 +149,7 @@ $R Pingpong$new($int i, $Cont then) {
 struct lambda$1$class lambda$1$methods = {
     "lambda$1",
     UNASSIGNED,
-    NULL,
+    ($Super$class)&$Cont$methods,
     lambda$1$__init__,
     lambda$1$__serialize__,
     lambda$1$__deserialize__,
@@ -159,7 +160,7 @@ struct lambda$1$class lambda$1$methods = {
 struct lambda$2$class lambda$2$methods = {
     "lambda$2",
     UNASSIGNED,
-    NULL,
+    ($Super$class)&$Cont$methods,
     lambda$2$__init__,
     lambda$2$__serialize__,
     lambda$2$__deserialize__,
@@ -170,7 +171,7 @@ struct lambda$2$class lambda$2$methods = {
 struct Pingpong$class Pingpong$methods = {
     "Pingpong",
     UNASSIGNED,
-    NULL,
+    ($Super$class)&$Actor$methods,
     Pingpong$__init__,
     Pingpong$__serialize__,
     Pingpong$__deserialize__,

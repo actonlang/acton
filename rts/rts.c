@@ -86,6 +86,9 @@ $Lock readyQ_lock;
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
 
+int next_key = 0;
+$Lock next_key_lock;
+
 $list args = NULL;
 
 pthread_key_t self_key;
@@ -101,6 +104,13 @@ static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
 }
 
+int get_next_key() {
+    spinlock_lock(&next_key_lock);
+    int res = --next_key;
+    spinlock_unlock(&next_key_lock);
+    return res;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) {
@@ -111,6 +121,7 @@ void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) 
     m->baseline = baseline;
     m->value = value;
     atomic_flag_clear(&m->wait_lock);
+    m->globkey = get_next_key();
 }
 
 $bool $Msg$__bool__($Msg self) {
@@ -124,25 +135,34 @@ $str $Msg$__str__($Msg self) {
 }
 
 void $Msg$__serialize__($Msg self, $Serial$state state) {
-    $step_serialize(self->next,state);
+    $step_serialize(self->next,state);          // REMOVE!
     $step_serialize(self->to,state);
     $step_serialize(self->cont,state);
-    $step_serialize(self->waiting,state);
     $val_serialize(ITEM_ID,&self->baseline,state);
     $step_serialize(self->value,state);
+    $WORD tmp = ($WORD)(long)self->globkey;
+    $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
 
 $Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
-    if (!res)
+    if (!res) {
+        if (!state) {
+            res = malloc(sizeof (struct $Msg));
+            res->$class = &$Msg$methods;
+            return res;
+        }
         res = $DNEW($Msg,state);
-    res->next = $step_deserialize(state);
+    }
+    res->next = $step_deserialize(state);       // REMOVE!
     res->to = $step_deserialize(state);
     res->cont = $step_deserialize(state);
-    res->waiting = $step_deserialize(state);
+    res->waiting = NULL;
     res->baseline = (time_t)$val_deserialize(state);
     res->value = $step_deserialize(state);
     atomic_flag_clear(&res->wait_lock);
+    $WORD tmp = $val_deserialize(state);        // REMOVE!
+    res->globkey = (int)tmp;
     return res;
 }
 
@@ -152,8 +172,11 @@ void $Actor$__init__($Actor a) {
     a->next = NULL;
     a->msg = NULL;
     a->outgoing = NULL;
+    a->offspring = NULL;
+    a->waitsfor = NULL;
     a->catcher = NULL;
     atomic_flag_clear(&a->msg_lock);
+    a->globkey = get_next_key();
 }
 
 $bool $Actor$__bool__($Actor self) {
@@ -167,18 +190,32 @@ $str $Actor$__str__($Actor self) {
 }
 
 void $Actor$__serialize__($Actor self, $Serial$state state) {
-    $step_serialize(self->next,state);
-    $step_serialize(self->msg,state);
+    $step_serialize(self->next,state);          // REMOVE!
+    $step_serialize(self->msg,state);           // REMOVE!
+    $step_serialize(self->waitsfor,state);
     $step_serialize(self->catcher,state);
+    $WORD tmp = ($WORD)(long)self->globkey;
+    $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
 $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
-    if (!res)
-        res = $DNEW($Actor,state);
-    res->next = $step_deserialize(state);
-    res->msg = $step_deserialize(state);
+    if (!res) {
+        if (!state) {
+            res = malloc(sizeof(struct $Actor));
+            res->$class = &$Actor$methods;
+            return res;
+        }
+        res = $DNEW($Actor, state);
+    }
+    res->next = $step_deserialize(state);       // REMOVE!
+    res->msg = $step_deserialize(state);        // REMOVE!
+    res->outgoing = NULL;
+    res->offspring = NULL;
+    res->waitsfor = $step_deserialize(state);
     res->catcher = $step_deserialize(state);
     atomic_flag_clear(&res->msg_lock);
+    $WORD tmp = $val_deserialize(state);        // REMOVE!
+    res->globkey = (int)tmp;
     return res;
 }
 
@@ -494,6 +531,20 @@ void FLUSH_outgoing($Actor self) {
     }
 }
 
+// Just clear the list of created actors and the links between them.
+// Not protected (never exposed to data races).
+void CLEAR_offspring($Actor current) {
+    $Actor a = current->offspring;
+    while (a) {
+        //printf("## Actor %p created offpring %p of class %s\n", current, a, a->$class->$GCINFO);
+        $Actor b = a;
+        a = a->next;
+        b->next = NULL;
+    }
+    current->offspring = NULL;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////
 char *RTAG_name($RTAG tag) {
     switch (tag) {
@@ -642,6 +693,12 @@ $R $AWAIT($Msg m, $Cont cont) {
     return $R_WAIT(cont, m);
 }
 
+void $NEWACT($Actor a) {
+    $Actor self = ($Actor)pthread_getspecific(self_key);
+    a->next = self->offspring;
+    self->offspring = a;
+}
+
 void $PUSH($Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
     $Catcher c = $NEW($Catcher, cont);
@@ -671,10 +728,12 @@ void *main_loop(void *arg) {
             switch (r.tag) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
+                    CLEAR_offspring(current);
                     m->value = r.value;
                     $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL now that m->value holds the response
                     while (b) {
                         b->msg->value = r.value;
+                        b->waitsfor = NULL;
                         ENQ_ready(b);
                         b = b->next;
                     }
@@ -698,9 +757,12 @@ void *main_loop(void *arg) {
                 }
                 case $RWAIT: {
                     FLUSH_outgoing(current);
+                    CLEAR_offspring(current);
                     m->cont = r.cont;
                     $Msg x = ($Msg)r.value;
-                    if (!ADD_waiting(current, x)) {     // If x->cont == NULL then x->value holds the response
+                    if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed
+                        current->waitsfor = x;
+                    } else {                            // x->cont == NULL: x->value holds the final response
                         m->value = x->value;
                         ENQ_ready(current);
                     }
@@ -749,12 +811,39 @@ void *main_loop(void *arg) {
 
 // we assume that (de)serialization takes place without need for spinlock protection.
 
+$dict glob_dict;
+
+$WORD try_glob_attr($WORD obj) {
+    $Serializable$class c = (($Serializable)obj)->$class;
+    if (c->$class_id == MSG_ID) {
+        int key = (($Msg)obj)->globkey;
+        //printf("## try_glob_attr Msg %p = %d\n", obj, key);
+        $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
+        return 0;
+        //return ($WORD)(long)key;
+    } else if (c->$class_id == ACTOR_ID || c->$superclass && c->$superclass->$class_id == ACTOR_ID) {
+        int key = (($Actor)obj)->globkey;
+        //printf("## try_glob_attr Actor %p = %d\n", obj, key);
+        $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
+        return 0;
+        //return ($WORD)(long)key;
+    }
+    return 0;
+}
+
 $ROW $serialize_rts() {
-  return $serialize(($Serializable)$NEW($tuple,3,root_actor,readyQ,timerQ));
+  glob_dict = $NEW($dict,($Hashable)$Hashable$int$witness,NULL,NULL);
+  return $serialize(($Serializable)$NEW($tuple,3,root_actor,readyQ,timerQ), try_glob_attr);
+}
+
+$WORD try_glob_dict($WORD w) {
+    int key = (int)w;
+    $WORD obj = $dict_get(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), try_glob_dict);
+    return obj;
 }
 
 void $deserialize_rts($ROW row) {
-  $tuple t = ($tuple)$deserialize(row);
+  $tuple t = ($tuple)$deserialize(row, NULL);
   root_actor = t->components[0];
   readyQ = t->components[1];
   timerQ = t->components[2];

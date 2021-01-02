@@ -26,6 +26,7 @@ struct $ROWLISTHEADER {
 struct $Serial$state {
   char *$GCINFO;
   $dict done;
+  $WORD (*globmap)($WORD);
   long row_no;
   $ROW row;
   $ROW fst; //not used in deserialization
@@ -43,12 +44,12 @@ $ROW $add_header(int class_id, int blob_size, $Serial$state state);
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 
-$ROW $serialize($Serializable s);
+$ROW $serialize($Serializable s, $WORD (*globmap)($WORD));
 void $write_serialized($ROW row, char *file);
 // $serialize_file just calls the above two functions
 void $serialize_file($Serializable s, char *file);
 
-$Serializable $deserialize($ROW row);
+$Serializable $deserialize($ROW row, $WORD (*globmap)($WORD));
 $ROW $read_serialized(char *file);
 // $deserialize_file just calls the above two functions
 $Serializable $deserialize_file(char *file);

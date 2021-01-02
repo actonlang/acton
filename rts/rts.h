@@ -78,6 +78,7 @@ struct $Msg {
     time_t baseline;
     $Lock wait_lock;
     $WORD value;
+    int globkey;
 };
 
 struct $Actor$class {
@@ -95,8 +96,11 @@ struct $Actor {
     $Actor next;
     $Msg msg;
     $Msg outgoing;
+    $Actor offspring;
+    $Msg waitsfor;
     $Catcher catcher;
     $Lock msg_lock;
+    int globkey;
 };
 
 struct $Catcher$class {
@@ -152,6 +156,8 @@ $Cont $CONSTCONT($WORD, $Cont);
 $Msg $ASYNC($Actor, $Cont);
 $Msg $AFTER($int, $Cont);
 $R $AWAIT($Msg, $Cont);
+
+void $NEWACT($Actor);
 
 void $PUSH($Cont);
 void $POP();

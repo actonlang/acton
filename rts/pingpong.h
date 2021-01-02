@@ -64,6 +64,8 @@ struct Pingpong {
     $Actor next;
     $Msg msg;
     $Msg outgoing;
+    $Actor offspring;
+    $Msg waitsfor;
     $Catcher catcher;
     $Lock msg_lock;
     $int i;
