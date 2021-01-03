@@ -124,7 +124,7 @@ clActor cls def sig = cls [] [([Nothing],cStruct)] te
                         (primKW "waitsfor",  sig (monotype (tMsg tWild)) Property),
                         (primKW "catcher",   sig (monotype $ tCon $ TC (gPrim "Catcher") []) Property),
                         (primKW "msg_lock",  sig (monotype $ tCon $ TC (gPrim "Lock") []) Property),
-                        (primKW "globkey",   sig (monotype tWild) Property),
+                        (primKW "globkey",   sig (monotype $ tCon $ TC (gPrim "long") []) Property),
                         (boolKW,             def (monotype $ tFun fxPure posNil kwdNil tBool) NoDec),
                         (strKW,              def (monotype $ tFun fxPure posNil kwdNil tStr) NoDec)
                       ]

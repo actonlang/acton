@@ -68,6 +68,7 @@ struct Pingpong {
     $Msg waitsfor;
     $Catcher catcher;
     $Lock msg_lock;
+    $long globkey;
     $int i;
     $int count;
 };

@@ -2,6 +2,8 @@
 typedef void *$WORD;
 #define $None ($WORD)0
 
+#define $long long
+
 void $default__init__($WORD);
 
 

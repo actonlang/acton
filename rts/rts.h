@@ -71,14 +71,14 @@ struct $Msg$class {
 };
 struct $Msg {
     struct $Msg$class *$class;
-    $Msg next;
-    $Actor to;
-    $Cont cont;
-    $Actor waiting;
-    time_t baseline;
-    $Lock wait_lock;
-    $WORD value;
-    int globkey;
+    $Msg $next;
+    $Actor $to;
+    $Cont $cont;
+    $Actor $waiting;
+    time_t $baseline;
+    $Lock $wait_lock;
+    $WORD $value;
+    long $globkey;
 };
 
 struct $Actor$class {
@@ -93,14 +93,14 @@ struct $Actor$class {
 };
 struct $Actor {
     struct $Actor$class *$class;
-    $Actor next;
-    $Msg msg;
-    $Msg outgoing;
-    $Actor offspring;
-    $Msg waitsfor;
-    $Catcher catcher;
-    $Lock msg_lock;
-    int globkey;
+    $Actor $next;
+    $Msg $msg;
+    $Msg $outgoing;
+    $Actor $offspring;
+    $Msg $waitsfor;
+    $Catcher $catcher;
+    $Lock $msg_lock;
+    $long $globkey;
 };
 
 struct $Catcher$class {
@@ -115,8 +115,8 @@ struct $Catcher$class {
 };
 struct $Catcher {
     struct $Catcher$class *$class;
-    $Catcher next;
-    $Cont cont;
+    $Catcher $next;
+    $Cont $cont;
 };
 
 

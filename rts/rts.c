@@ -86,7 +86,7 @@ $Lock readyQ_lock;
 $Msg timerQ = NULL;
 $Lock timerQ_lock;
 
-int next_key = 0;
+int64_t next_key = 0;
 $Lock next_key_lock;
 
 $list args = NULL;
@@ -104,9 +104,9 @@ static inline void spinlock_unlock($Lock *f) {
     atomic_flag_clear(f);
 }
 
-int get_next_key() {
+int64_t get_next_key() {
     spinlock_lock(&next_key_lock);
-    int res = --next_key;
+    int64_t res = --next_key;
     spinlock_unlock(&next_key_lock);
     return res;
 }
@@ -114,14 +114,14 @@ int get_next_key() {
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Msg$__init__($Msg m, $Actor to, $Cont cont, time_t baseline, $WORD value) {
-    m->next = NULL;
-    m->to = to;
-    m->cont = cont;
-    m->waiting = NULL;
-    m->baseline = baseline;
-    m->value = value;
-    atomic_flag_clear(&m->wait_lock);
-    m->globkey = get_next_key();
+    m->$next = NULL;
+    m->$to = to;
+    m->$cont = cont;
+    m->$waiting = NULL;
+    m->$baseline = baseline;
+    m->$value = value;
+    atomic_flag_clear(&m->$wait_lock);
+    m->$globkey = get_next_key();
 }
 
 $bool $Msg$__bool__($Msg self) {
@@ -135,12 +135,12 @@ $str $Msg$__str__($Msg self) {
 }
 
 void $Msg$__serialize__($Msg self, $Serial$state state) {
-    $step_serialize(self->next,state);          // REMOVE!
-    $step_serialize(self->to,state);
-    $step_serialize(self->cont,state);
-    $val_serialize(ITEM_ID,&self->baseline,state);
-    $step_serialize(self->value,state);
-    $WORD tmp = ($WORD)(long)self->globkey;
+    $step_serialize(self->$next,state);          // REMOVE!
+    $step_serialize(self->$to,state);
+    $step_serialize(self->$cont,state);
+    $val_serialize(ITEM_ID,&self->$baseline,state);
+    $step_serialize(self->$value,state);
+    $WORD tmp = ($WORD)(long)self->$globkey;
     $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
@@ -154,29 +154,29 @@ $Msg $Msg$__deserialize__($Msg res, $Serial$state state) {
         }
         res = $DNEW($Msg,state);
     }
-    res->next = $step_deserialize(state);       // REMOVE!
-    res->to = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
-    res->waiting = NULL;
-    res->baseline = (time_t)$val_deserialize(state);
-    res->value = $step_deserialize(state);
-    atomic_flag_clear(&res->wait_lock);
+    res->$next = $step_deserialize(state);       // REMOVE!
+    res->$to = $step_deserialize(state);
+    res->$cont = $step_deserialize(state);
+    res->$waiting = NULL;
+    res->$baseline = (time_t)$val_deserialize(state);
+    res->$value = $step_deserialize(state);
+    atomic_flag_clear(&res->$wait_lock);
     $WORD tmp = $val_deserialize(state);        // REMOVE!
-    res->globkey = (int)tmp;
+    res->$globkey = (int)tmp;
     return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Actor$__init__($Actor a) {
-    a->next = NULL;
-    a->msg = NULL;
-    a->outgoing = NULL;
-    a->offspring = NULL;
-    a->waitsfor = NULL;
-    a->catcher = NULL;
-    atomic_flag_clear(&a->msg_lock);
-    a->globkey = get_next_key();
+    a->$next = NULL;
+    a->$msg = NULL;
+    a->$outgoing = NULL;
+    a->$offspring = NULL;
+    a->$waitsfor = NULL;
+    a->$catcher = NULL;
+    atomic_flag_clear(&a->$msg_lock);
+    a->$globkey = get_next_key();
 }
 
 $bool $Actor$__bool__($Actor self) {
@@ -190,11 +190,11 @@ $str $Actor$__str__($Actor self) {
 }
 
 void $Actor$__serialize__($Actor self, $Serial$state state) {
-    $step_serialize(self->next,state);          // REMOVE!
-    $step_serialize(self->msg,state);           // REMOVE!
-    $step_serialize(self->waitsfor,state);
-    $step_serialize(self->catcher,state);
-    $WORD tmp = ($WORD)(long)self->globkey;
+    $step_serialize(self->$next,state);          // REMOVE!
+    $step_serialize(self->$msg,state);           // REMOVE!
+    $step_serialize(self->$waitsfor,state);
+    $step_serialize(self->$catcher,state);
+    $WORD tmp = ($WORD)(long)self->$globkey;
     $val_serialize(INT_ID,&tmp,state);          // REMOVE!
 }
 
@@ -207,23 +207,23 @@ $Actor $Actor$__deserialize__($Actor res, $Serial$state state) {
         }
         res = $DNEW($Actor, state);
     }
-    res->next = $step_deserialize(state);       // REMOVE!
-    res->msg = $step_deserialize(state);        // REMOVE!
-    res->outgoing = NULL;
-    res->offspring = NULL;
-    res->waitsfor = $step_deserialize(state);
-    res->catcher = $step_deserialize(state);
-    atomic_flag_clear(&res->msg_lock);
+    res->$next = $step_deserialize(state);       // REMOVE!
+    res->$msg = $step_deserialize(state);        // REMOVE!
+    res->$outgoing = NULL;
+    res->$offspring = NULL;
+    res->$waitsfor = $step_deserialize(state);
+    res->$catcher = $step_deserialize(state);
+    atomic_flag_clear(&res->$msg_lock);
     $WORD tmp = $val_deserialize(state);        // REMOVE!
-    res->globkey = (int)tmp;
+    res->$globkey = (int)tmp;
     return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
 void $Catcher$__init__($Catcher c, $Cont cont) {
-    c->next = NULL;
-    c->cont = cont;
+    c->$next = NULL;
+    c->$cont = cont;
 }
 
 $bool $Catcher$__bool__($Catcher self) {
@@ -237,14 +237,14 @@ $str $Catcher$__str__($Catcher self) {
 }
 
 void $Catcher$__serialize__($Catcher self, $Serial$state state) {
-    $step_serialize(self->next,state);
-    $step_serialize(self->cont,state);
+    $step_serialize(self->$next,state);
+    $step_serialize(self->$cont,state);
 }
 
 $Catcher $Catcher$__deserialize__($Catcher self, $Serial$state state) {
     $Catcher res = $DNEW($Catcher,state);
-    res->next = $step_deserialize(state);
-    res->cont = $step_deserialize(state);
+    res->$next = $step_deserialize(state);
+    res->$cont = $step_deserialize(state);
     return res;
 }
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -377,13 +377,13 @@ void ENQ_ready($Actor a) {
     spinlock_lock(&readyQ_lock);
     if (readyQ) {
         $Actor x = readyQ;
-        while (x->next)
-            x = x->next;
-        x->next = a;
+        while (x->$next)
+            x = x->$next;
+        x->$next = a;
     } else {
         readyQ = a;
     }
-    a->next = NULL;
+    a->$next = NULL;
     spinlock_unlock(&readyQ_lock);
 }
 
@@ -393,8 +393,8 @@ $Actor DEQ_ready() {
     spinlock_lock(&readyQ_lock);
     $Actor res = readyQ;
     if (res) {
-        readyQ = res->next;
-        res->next = NULL;
+        readyQ = res->$next;
+        res->$next = NULL;
     }
     spinlock_unlock(&readyQ_lock);
     return res;
@@ -404,18 +404,18 @@ $Actor DEQ_ready() {
 // return true if the queue was previously empty.
 bool ENQ_msg($Msg m, $Actor a) {
     bool did_enq = true;
-    spinlock_lock(&a->msg_lock);
-    m->next = NULL;
-    if (a->msg) {
-        $Msg x = a->msg;
-        while (x->next)
-            x = x->next;
-        x->next = m;
+    spinlock_lock(&a->$msg_lock);
+    m->$next = NULL;
+    if (a->$msg) {
+        $Msg x = a->$msg;
+        while (x->$next)
+            x = x->$next;
+        x->$next = m;
         did_enq = false;
     } else {
-        a->msg = m;
+        a->$msg = m;
     }
-    spinlock_unlock(&a->msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return did_enq;
 }
 
@@ -423,14 +423,14 @@ bool ENQ_msg($Msg m, $Actor a) {
 // return true if the queue still holds messages.
 bool DEQ_msg($Actor a) {
     bool has_more = false;
-    spinlock_lock(&a->msg_lock);
-    if (a->msg) {
-        $Msg x = a->msg;
-        a->msg = x->next;
-        x->next = NULL;
-        has_more = a->msg != NULL;
+    spinlock_lock(&a->$msg_lock);
+    if (a->$msg) {
+        $Msg x = a->$msg;
+        a->$msg = x->$next;
+        x->$next = NULL;
+        has_more = a->$msg != NULL;
     }
-    spinlock_unlock(&a->msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return has_more;
 }
 
@@ -438,43 +438,43 @@ bool DEQ_msg($Actor a) {
 // else immediately return false.
 bool ADD_waiting($Actor a, $Msg m) {
     bool did_add = false;
-    spinlock_lock(&m->wait_lock);
-    if (m->cont) {
-        a->next = m->waiting;
-        m->waiting = a;
+    spinlock_lock(&m->$wait_lock);
+    if (m->$cont) {
+        a->$next = m->$waiting;
+        m->$waiting = a;
         did_add = true;
     }
-    spinlock_unlock(&m->wait_lock);
+    spinlock_unlock(&m->$wait_lock);
     return did_add;
 }
 
 // Atomically freeze message "m" and return its list of waiting actors. 
 $Actor FREEZE_waiting($Msg m) {
-    spinlock_lock(&m->wait_lock);
-    m->cont = NULL;
-    spinlock_unlock(&m->wait_lock);
-    $Actor res = m->waiting;
-    m->waiting = NULL;
+    spinlock_lock(&m->$wait_lock);
+    m->$cont = NULL;
+    spinlock_unlock(&m->$wait_lock);
+    $Actor res = m->$waiting;
+    m->$waiting = NULL;
     return res;
 }
 
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
 void ENQ_timed($Msg m) {
-    time_t m_baseline = m->baseline;
+    time_t m_baseline = m->$baseline;
     spinlock_lock(&timerQ_lock);
     $Msg x = timerQ;
-    if (x && x->baseline <= m_baseline) {
-        $Msg next = x->next;
-        while (next && next->baseline <= m_baseline) {
+    if (x && x->$baseline <= m_baseline) {
+        $Msg next = x->$next;
+        while (next && next->$baseline <= m_baseline) {
             x = next;
-            next = x->next;
+            next = x->$next;
         }
-        x->next = m;
-        m->next = next;
+        x->$next = m;
+        m->$next = next;
     } else {
         timerQ = m;
-        m->next = x;
+        m->$next = x;
     }
     spinlock_unlock(&timerQ_lock);
 }
@@ -485,9 +485,9 @@ $Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
     $Msg res = timerQ;
     if (res) {
-        if (res->baseline <= now) {
-            timerQ = res->next;
-            res->next = NULL;
+        if (res->$baseline <= now) {
+            timerQ = res->$next;
+            res->$next = NULL;
         } else {
             res = NULL;
         }
@@ -499,28 +499,28 @@ $Msg DEQ_timed(time_t now) {
 // Place a message in the outgoing buffer of the sender. Not protected (never
 // exposed to data races).
 void PUSH_outgoing($Actor self, $Msg m) {
-    m->next = self->outgoing;
-    self->outgoing = m;
+    m->$next = self->$outgoing;
+    self->$outgoing = m;
 }
 
 // Actually send all buffered messages of the sender. Not protected (never
 // exposed to data races).
 void FLUSH_outgoing($Actor self) {
     $Msg prev = NULL;
-    $Msg m = self->outgoing;
-    self->outgoing = NULL;
+    $Msg m = self->$outgoing;
+    self->$outgoing = NULL;
     while (m) {
-        $Msg next = m->next;
-        m->next = prev;
+        $Msg next = m->$next;
+        m->$next = prev;
         prev = m;
         m = next;
     }
     m = prev;
     while (m) {
-        $Msg next = m->next;
-        m->next = NULL;
-        if (m->baseline == self->msg->baseline) {
-            $Actor to = m->to;
+        $Msg next = m->$next;
+        m->$next = NULL;
+        if (m->$baseline == self->$msg->$baseline) {
+            $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
                 ENQ_ready(to);
             }
@@ -534,14 +534,14 @@ void FLUSH_outgoing($Actor self) {
 // Just clear the list of created actors and the links between them.
 // Not protected (never exposed to data races).
 void CLEAR_offspring($Actor current) {
-    $Actor a = current->offspring;
+    $Actor a = current->$offspring;
     while (a) {
         //printf("## Actor %p created offpring %p of class %s\n", current, a, a->$class->$GCINFO);
         $Actor b = a;
-        a = a->next;
-        b->next = NULL;
+        a = a->$next;
+        b->$next = NULL;
     }
-    current->offspring = NULL;
+    current->$offspring = NULL;
 }
 
 
@@ -648,14 +648,14 @@ void BOOTSTRAP() {
 }
 
 void PUSH_catcher($Actor a, $Catcher c) {
-    c->next = a->catcher;
-    a->catcher = c;
+    c->$next = a->$catcher;
+    a->$catcher = c;
 }
 
 $Catcher POP_catcher($Actor a) {
-    $Catcher c = a->catcher;
-    a->catcher = c->next;
-    c->next = NULL;
+    $Catcher c = a->$catcher;
+    a->$catcher = c->$next;
+    c->$next = NULL;
     return c;
 }
 
@@ -664,12 +664,12 @@ $Msg $ASYNC($Actor to, $Cont cont) {
     time_t baseline = 0;
     $Msg m = $NEW($Msg, to, cont, baseline, &$Done$instance);
     if (self) {
-        m->baseline = self->msg->baseline;
+        m->$baseline = self->$msg->$baseline;
         PUSH_outgoing(self, m);
     } else {
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
-        m->baseline = now.tv_sec;
+        m->$baseline = now.tv_sec;
         if (ENQ_msg(m, to)) {
            ENQ_ready(to);
         }
@@ -682,7 +682,7 @@ $Msg $ASYNC($Actor to, $Cont cont) {
 
 $Msg $AFTER($int sec, $Cont cont) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    time_t baseline = self->msg->baseline + sec->val;
+    time_t baseline = self->$msg->$baseline + sec->val;
     $Msg m = $NEW($Msg, self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
 //    ENQ_timed(m);
@@ -695,8 +695,8 @@ $R $AWAIT($Msg m, $Cont cont) {
 
 void $NEWACT($Actor a) {
     $Actor self = ($Actor)pthread_getspecific(self_key);
-    a->next = self->offspring;
-    self->offspring = a;
+    a->$next = self->$offspring;
+    self->$offspring = a;
 }
 
 void $PUSH($Cont cont) {
@@ -720,22 +720,22 @@ void *main_loop(void *arg) {
         $Actor current = DEQ_ready();
         if (current) {
             pthread_setspecific(self_key, current);
-            $Msg m = current->msg;
-            $Cont cont = m->cont;
-            $WORD val = m->value;
+            $Msg m = current->$msg;
+            $Cont cont = m->$cont;
+            $WORD val = m->$value;
             
             $R r = cont->$class->__call__(cont, val);
             switch (r.tag) {
                 case $RDONE: {
                     FLUSH_outgoing(current);
                     CLEAR_offspring(current);
-                    m->value = r.value;
+                    m->$value = r.value;
                     $Actor b = FREEZE_waiting(m);        // Sets m->cont = NULL now that m->value holds the response
                     while (b) {
-                        b->msg->value = r.value;
-                        b->waitsfor = NULL;
+                        b->$msg->$value = r.value;
+                        b->$waitsfor = NULL;
                         ENQ_ready(b);
-                        b = b->next;
+                        b = b->$next;
                     }
                     if (DEQ_msg(current)) {
                         ENQ_ready(current);
@@ -743,27 +743,27 @@ void *main_loop(void *arg) {
                     break;
                 }
                 case $RCONT: {
-                    m->cont = r.cont;
-                    m->value = r.value;
+                    m->$cont = r.cont;
+                    m->$value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case $RFAIL: {
                     $Catcher c = POP_catcher(current);
-                    m->cont = c->cont;
-                    m->value = r.value;
+                    m->$cont = c->$cont;
+                    m->$value = r.value;
                     ENQ_ready(current);
                     break;
                 }
                 case $RWAIT: {
                     FLUSH_outgoing(current);
                     CLEAR_offspring(current);
-                    m->cont = r.cont;
+                    m->$cont = r.cont;
                     $Msg x = ($Msg)r.value;
                     if (ADD_waiting(current, x)) {      // x->cont != NULL: x is still being processed
-                        current->waitsfor = x;
+                        current->$waitsfor = x;
                     } else {                            // x->cont == NULL: x->value holds the final response
-                        m->value = x->value;
+                        m->$value = x->$value;
                         ENQ_ready(current);
                     }
                     break;
@@ -774,8 +774,8 @@ void *main_loop(void *arg) {
             clock_gettime(CLOCK_MONOTONIC, &now);
             $Msg m = DEQ_timed(now.tv_sec);
             if (m) {
-                if (ENQ_msg(m, m->to)) {
-                    ENQ_ready(m->to);
+                if (ENQ_msg(m, m->$to)) {
+                    ENQ_ready(m->$to);
                 }
             } else {
 #ifdef EXPERIMENT
@@ -816,13 +816,13 @@ $dict glob_dict;
 $WORD try_glob_attr($WORD obj) {
     $Serializable$class c = (($Serializable)obj)->$class;
     if (c->$class_id == MSG_ID) {
-        int key = (($Msg)obj)->globkey;
+        int64_t key = (($Msg)obj)->$globkey;
         //printf("## try_glob_attr Msg %p = %d\n", obj, key);
         $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
         return 0;
         //return ($WORD)(long)key;
     } else if (c->$class_id == ACTOR_ID || c->$superclass && c->$superclass->$class_id == ACTOR_ID) {
-        int key = (($Actor)obj)->globkey;
+        int64_t key = (($Actor)obj)->$globkey;
         //printf("## try_glob_attr Actor %p = %d\n", obj, key);
         $dict_setitem(glob_dict, ($Hashable)$Hashable$int$witness, to$int(key), obj);
         return 0;
@@ -902,56 +902,3 @@ int main(int argc, char **argv) {
     }
     return 0;
 }
-
-/*
-
-int selector_fd = kqueue()
-
-handler[MAX_FD] = empty
-event_spec[MAX_FD] = empty
-sock_addr[MAX_FD] = empty
-data_buffer[MAX_FD] = empty
-
-for each thread:
-    while (1):
-        event_t event
-        int nready = kevent_WAIT(selector_fd, &event, 1)
-        int fd = (int)event.ident
-        handler[fd](fd):
-            handle_listen(fd):
-                sockaddr
-                while (int fd2 = accept(fd, &sockaddr)):
-                    set_non_blocking(fd2)
-                    try:
-                        handler[fd2] = handle_connect
-                        sock_addr[fd2] = sockaddr
-                        bzero(&data_buffer[fd2])
-                        EV_SET(event_spec[fd2], fd2, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL)
-                        kevent_CHANGE(selector_fd, &event_spec[fd2], 1)
-                    catch:
-                        event_spec[fd2].flags = EV_DELETE
-                        kevent_CHANGE(selector_fd, &event_spec[fd2], 1)
-            handle_connect(fd):
-                if event_spec[fd].filter == EVFILT_READ:
-                    count = read(&data_buffer[fd])
-                elif event_spec[fd].filter == EVFILT_WRITE:
-                    count = write(&data_buffer[fd])
-
-
-to listen:
-    try:
-        fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-        handler[fd] = handle_listen
-        sock_addr[fd] = { AF_INET, address, htons(port) }
-        bind(fd, sock_addr[fd])
-        listen(fd, 65535)
-        EV_SET(event_spec[fd], fd, EVFILT_READ, EV_ADD, 0, 0, NULL)
-        kevent_CHANGE(selector_fd, &event_spec[fd], 1)
-    catch:
-        event_spec[fd].flags = EV_DELETE
-        kevent_CHANGE(selector_fd, &event_spec[fd], 1)
-
-    
-
-*/
-
