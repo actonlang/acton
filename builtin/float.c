@@ -113,34 +113,34 @@ $float $Real$float$__pos__($Real$float wit, $float a) {
   return a;
 }
 
-$WORD $Real$float$real($Real$float wit, $Real wit2, $float a) {
+$WORD $Real$float$real($Real$float wit, $float a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)a);
 }
 
-$WORD $Real$float$imag($Real$float wit, $Real wit2,  $float a) {
+$WORD $Real$float$imag($Real$float wit, $float a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$float(0.0));
 }
 
-$WORD $Real$float$__abs__($Real$float wit, $Real wit2,  $float a) {
+$WORD $Real$float$__abs__($Real$float wit, $float a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$float(fabs(from$float(a))));
 }
 
-$float $Real$float$conjugate($Real$float wit,  $float a) {
+$float $Real$float$conjugate($Real$float wit, $float a) {
   return a;
 }
 $float $Real$float$__float__ ($Real$float wit, $float x) {
   return x;
 }
 
-$WORD $Real$float$__trunc__ ($Real$float wit, $Integral wit2, $float x) {
+$WORD $Real$float$__trunc__ ($Real$float wit, $float x, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int((long)trunc(from$float(x))));
 }
   
-$WORD $Real$float$__floor__ ($Real$float wit, $Integral wit2, $float x) {
+$WORD $Real$float$__floor__ ($Real$float wit, $float x, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int((long)floor(from$float(x))));
 }
   
-$WORD $Real$float$__ceil__ ($Real$float wit, $Integral wit2, $float x) {
+$WORD $Real$float$__ceil__ ($Real$float wit, $float x, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int((long)ceil(from$float(x))));
 }
   

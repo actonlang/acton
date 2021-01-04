@@ -126,15 +126,15 @@ $int $Integral$int$__pos__($Integral$int wit,  $int a) {
   return a;
 }
 
-$WORD $Integral$int$real($Integral$int wit, $Real wit2, $int a) {
+$WORD $Integral$int$real($Integral$int wit, $int a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)a);
 }
 
-$WORD $Integral$int$imag($Integral$int wit, $Real wit2,  $int a) {
+$WORD $Integral$int$imag($Integral$int wit, $int a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int(0L));
 }
 
-$WORD $Integral$int$__abs__($Integral$int wit, $Real wit2,  $int a) {
+$WORD $Integral$int$__abs__($Integral$int wit, $int a, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int(labs(a->val)));
 }
 
@@ -146,15 +146,15 @@ $float $Integral$int$__float__ ($Integral$int wit, $int n) {
   return to$float((double)n->val);
 }
 
-$WORD $Integral$int$__trunc__ ($Integral$int wit, $Integral wit2, $int n) {
+$WORD $Integral$int$__trunc__ ($Integral$int wit, $int n, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
-$WORD $Integral$int$__floor__ ($Integral$int wit, $Integral wit2, $int n) {
+$WORD $Integral$int$__floor__ ($Integral$int wit, $int n, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
-$WORD $Integral$int$__ceil__ ($Integral$int wit, $Integral wit2, $int n) {
+$WORD $Integral$int$__ceil__ ($Integral$int wit, $int n, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
@@ -172,11 +172,11 @@ $int $Integral$int$__round__ ($Integral$int wit, $int n, $int p) {
   return to$int (res * p10);
 }
   
-$WORD $Integral$int$numerator ($Integral$int wit, $Integral wit2, $int n) {
+$WORD $Integral$int$numerator ($Integral$int wit, $int n, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)n);
 }
   
-$WORD $Integral$int$denominator ($Integral$int wit, $Integral wit2, $int n) {
+$WORD $Integral$int$denominator ($Integral$int wit, $int n, $Integral wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$int(1L));
 }
   
