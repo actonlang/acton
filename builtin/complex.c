@@ -84,15 +84,15 @@ $complex $Number$complex$__pos__ ($Number$complex wit, $complex c) {
   return c;
 }
 
-$WORD $Number$complex$real ($Number$complex wit, $Real wit2, $complex c) {
+$WORD $Number$complex$real ($Number$complex wit, $complex c, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$float(creal(c->val)));
 }
 
-$WORD $Number$complex$imag ($Number$complex wit, $Real wit2, $complex c) {
+$WORD $Number$complex$imag ($Number$complex wit, $complex c, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$float(cimag(c->val)));
 }
 
-$WORD $Number$complex$__abs__ ($Number$complex wit, $Real wit2, $complex c) {
+$WORD $Number$complex$__abs__ ($Number$complex wit, $complex c, $Real wit2) {
   return wit2->$class->__fromatom__(wit2,($atom)to$float(cabs(c->val)));
 }
 

@@ -62,21 +62,21 @@ numpy$$ndarray numpy$$Integral$ndarray$__pos__(numpy$$Integral$ndarray wit, nump
   return a;
 }
 
-$WORD numpy$$Integral$ndarray$real(numpy$$Integral$ndarray wit, $Real wit2, numpy$$ndarray a) {
+$WORD numpy$$Integral$ndarray$real(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2) {
   return a;
 }
-$WORD numpy$$Integral$ndarray$imag(numpy$$Integral$ndarray wit, $Real wit2, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$__abs__(numpy$$Integral$ndarray wit, $Real wit2, numpy$$ndarray a) {
+$WORD numpy$$Integral$ndarray$imag(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2);
+$WORD numpy$$Integral$ndarray$__abs__(numpy$$Integral$ndarray wit, numpy$$ndarray a, $Real wit2) {
     return numpy$$func(wit->w$Primitive$A$Integral$ndarray->$class->$abs,a);
 }
 numpy$$ndarray numpy$$Integral$ndarray$conjugate(numpy$$Integral$ndarray wit, numpy$$ndarray a);
 $float numpy$$Integral$ndarray$__float__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$__trunc__ (numpy$$Integral$ndarray wit, $Integral wit2, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$__floor__ (numpy$$Integral$ndarray wit, $Integral wit2, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$__ceil__ (numpy$$Integral$ndarray wit, $Integral wit2, numpy$$ndarray a);
+$WORD numpy$$Integral$ndarray$__trunc__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$__floor__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$__ceil__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
 numpy$$ndarray numpy$$Integral$ndarray$__round__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
-$WORD numpy$$Integral$ndarray$numerator (numpy$$Integral$ndarray wit, $Integral wit2, numpy$$ndarray a);
-$WORD numpy$$Integral$ndarray$denominator (numpy$$Integral$ndarray wit, $Integral wit2, numpy$$ndarray a);
+$WORD numpy$$Integral$ndarray$numerator (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
+$WORD numpy$$Integral$ndarray$denominator (numpy$$Integral$ndarray wit, numpy$$ndarray a, $Integral wit2);
 numpy$$ndarray numpy$$Integral$ndarray$__int__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
 numpy$$ndarray numpy$$Integral$ndarray$__index__ (numpy$$Integral$ndarray wit, numpy$$ndarray a);
 $tuple numpy$$Integral$ndarray$__divmod__ (numpy$$Integral$ndarray wit, numpy$$ndarray a, numpy$$ndarray b);
