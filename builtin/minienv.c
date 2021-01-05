@@ -366,6 +366,8 @@ void minienv$$__init__ () {
     { 
         $Env$methods.$GCINFO = "$Env";
         $Env$methods.$superclass = ($Super$class)&$Actor$methods;
+        $Env$methods.__serialize__ = ($NoneType (*) ($Env, $Serial$state))$Actor$methods.__serialize__;
+        $Env$methods.__deserialize__ = ($Env (*) ($Env, $Serial$state))$Actor$methods.__deserialize__;
         $Env$methods.__bool__ = ($bool (*) ($Env))$Actor$methods.__bool__;
         $Env$methods.__str__ = ($str (*) ($Env))$Actor$methods.__str__;
         $Env$methods.__init__ = $Env$__init__;

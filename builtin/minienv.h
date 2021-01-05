@@ -17,7 +17,7 @@
 
 #define SOCK_BUF_SIZE 1024
 
-#define MAX_FD  10
+#define MAX_FD  100
 
 struct minienv$$l$1lambda;
 struct minienv$$l$2lambda;
