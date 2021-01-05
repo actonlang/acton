@@ -19,26 +19,6 @@
 
 #define MAX_FD  10
 
-typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
-
-struct FileDescriptorData {
-  HandlerCase kind;
-  $function rhandler;
-  $function errhandler;
-  $function chandler;
-  struct sockaddr_in sock_addr;
-  struct kevent event_spec;
-  char buffer[SOCK_BUF_SIZE];
-};
-
-struct FileDescriptorData fd_data[MAX_FD];
-int kq;
-
-void setupConnection (int fd);
-$str $getName(int fd);
-void $eventloop();
-
-//////////////////////////////////////////////////////////////////////////////////////
 struct minienv$$l$1lambda;
 struct minienv$$l$2lambda;
 struct minienv$$l$3lambda;
@@ -59,6 +39,29 @@ typedef struct minienv$$l$7lambda *minienv$$l$7lambda;
 typedef struct minienv$$l$8lambda *minienv$$l$8lambda;
 typedef struct $Env *$Env;
 typedef struct $Connection *$Connection;
+
+//////////////////////////////////////////////////////////////////////////////////////
+typedef enum HandlerCase {nohandler, readhandler, connecthandler} HandlerCase;
+
+struct FileDescriptorData {
+  HandlerCase kind;
+  $function rhandler;
+  $function errhandler;
+  $function chandler;
+  $Connection conn;
+  struct sockaddr_in sock_addr;
+  struct kevent event_spec;
+  char buffer[SOCK_BUF_SIZE];
+};
+
+struct FileDescriptorData fd_data[MAX_FD];
+int kq;
+
+void setupConnection (int fd);
+$str $getName(int fd);
+void $eventloop();
+
+//////////////////////////////////////////////////////////////////////////////////////
 struct minienv$$l$1lambda$class {
     char *$GCINFO;
     $int $class_id;
